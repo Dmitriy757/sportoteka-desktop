@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 16.0.4, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd" [
+	<!ENTITY ns_flows "http://ns.adobe.com/Flows/1.0/">
+	<!ENTITY ns_extend "http://ns.adobe.com/Extensibility/1.0/">
+	<!ENTITY ns_ai "http://ns.adobe.com/AdobeIllustrator/10.0/">
+	<!ENTITY ns_graphs "http://ns.adobe.com/Graphs/1.0/">
+]>
+<svg version="1.1" id="Ebene_1" xmlns:x="&ns_extend;" xmlns:i="&ns_ai;" xmlns:graph="&ns_graphs;"
+	 xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:a="http://ns.adobe.com/AdobeSVGViewerExtensions/3.0/"
+	 x="0px" y="0px" width="14px" height="42.4px" viewBox="0 0 14 42.4" style="enable-background:new 0 0 14 42.4;"
+	 xml:space="preserve">
+<style type="text/css">
+<![CDATA[
+	.st0{fill:#EE7110;}
+	.st1{fill:#080200;}
+]]>
+</style>
+<rect id="pole_1_" x="0.66" y="0.57" class="st0" width="1.61" height="41.26"/>
+<polygon id="flag_1_" class="st0" points="2.27,2.28 13.3,6.78 2.27,10.07 "/>
+<path class="st1" d="M13.37,6.62L2.44,2.16V0.57c0-0.09-0.07-0.17-0.17-0.17H0.66c-0.09,0-0.17,0.07-0.17,0.17v41.26
+	c0,0.09,0.07,0.17,0.17,0.17h1.61c0.1,0,0.17-0.07,0.17-0.17V10.2l10.92-3.25c0.07-0.02,0.12-0.09,0.12-0.16S13.44,6.65,13.37,6.62z
+	 M2.1,41.66H0.83V0.74H2.1v1.54v7.79V41.66z M2.44,9.83V2.54l10.33,4.21L2.44,9.83z"/>
+</svg>

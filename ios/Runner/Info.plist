@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+
+
+
+  <!-- Фото/камера/микрофон -->
+  <key>NSPhotoLibraryUsageDescription</key>
+  <string>Разрешите доступ к галерее для загрузки фото и видео тренировок.</string>
+  <key>NSCameraUsageDescription</key>
+  <string>Разрешите доступ к камере для съемки тренировок и загрузки фото/видео.</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Разрешите доступ к микрофону для записи звука в видео и звонках.</string>
+  
+  <key>UIBackgroundModes</key>
+<array>
+    <string>remote-notification</string>
+</array>
+  
+
+  <!-- Геолокация -->
+  <key>NSLocationWhenInUseUsageDescription</key>
+  <string>Ваше местоположение используется для отображения ближайших спортивных площадок и школ на карте.</string>
+  <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+  <string>Мы используем вашу геопозицию для показа ближайших площадок и событий и улучшения маршрутов тренировок даже при свернутом приложении.</string>
+  <!-- Не обязателен на современных iOS, но можно оставить для совместимости -->
+  <key>NSLocationAlwaysUsageDescription</key>
+  <string>Геопозиция нужна для корректной работы функций, связанных с локацией.</string>
+
+  <!-- Производительность анимаций -->
+  <key>CADisableMinimumFrameDurationOnPhone</key>
+  <true/>
+
+  <key>CFBundleDevelopmentRegion</key>
+  <string>$(DEVELOPMENT_LANGUAGE)</string>
+  <key>CFBundleDisplayName</key>
+  <string>Спортотека</string>
+  <key>CFBundleExecutable</key>
+  <string>$(EXECUTABLE_NAME)</string>
+  <key>CFBundleIdentifier</key>
+  <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>Спортотека</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>$(FLUTTER_BUILD_NAME)</string>
+  <key>CFBundleSignature</key>
+  <string>????</string>
+  <key>CFBundleVersion</key>
+  <string>$(FLUTTER_BUILD_NUMBER)</string>
+  <key>LSRequiresIPhoneOS</key>
+  <true/>
+
+  <key>UIApplicationSupportsIndirectInputEvents</key>
+  <true/>
+
+
+  <key>NSBluetoothAlwaysUsageDescription</key>
+  <string>Приложение использует Bluetooth для подключения к спортивным трекерам и устройствам для анализа тренировок.</string>
+  <key>UILaunchStoryboardName</key>
+  <string>LaunchScreen</string>
+  <key>UIMainStoryboardFile</key>
+  <string>Main</string>
+
+  <key>UISupportedInterfaceOrientations</key>
+  <array>
+    <string>UIInterfaceOrientationPortrait</string>
+    <string>UIInterfaceOrientationLandscapeLeft</string>
+    <string>UIInterfaceOrientationLandscapeRight</string>
+  </array>
+  <key>UISupportedInterfaceOrientations~ipad</key>
+  <array>
+    <string>UIInterfaceOrientationPortrait</string>
+    <string>UIInterfaceOrientationPortraitUpsideDown</string>
+    <string>UIInterfaceOrientationLandscapeLeft</string>
+    <string>UIInterfaceOrientationLandscapeRight</string>
+  </array>
+
+  <!-- ATS: у вас подключение к своим доменам -->
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsArbitraryLoads</key>
+    <true/>
+    <key>NSExceptionDomains</key>
+    <dict>
+      <key>sportoteka.by</key>
+      <dict>
+        <key>NSIncludesSubdomains</key>
+        <true/>
+        <key>NSExceptionAllowsInsecureHTTPLoads</key>
+        <true/>
+      </dict>
+      <key>sportotekaapp.ru</key>
+      <dict>
+        <key>NSIncludesSubdomains</key>
+        <true/>
+        <key>NSExceptionAllowsInsecureHTTPLoads</key>
+        <true/>
+      </dict>
+    </dict>
+  </dict>
+
+</dict>
+</plist>
