@@ -39,7 +39,7 @@ dependencies:
   fl_chart: ^0.64.0
   font_awesome_flutter: 10.9.0
   flutter_colorpicker: ^1.0.3
-  syncfusion_flutter_calendar: 28.2.12
+  syncfusion_flutter_calendar: 28.1.37
   image_picker: ^1.0.7
   animate_do: ^3.0.2
   dio: ^5.4.0
