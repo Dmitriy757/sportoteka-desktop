@@ -52,6 +52,8 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
   bool _infoPanelCollapsed = false;
   String _positionFilter = 'all';
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _mobilePlayersScrollController = ScrollController();
+  bool _mobileToolsCollapsed = false;
 
   List<Map<String, dynamic>> stages = [];
   List<Map<String, dynamic>> categories = [];
@@ -66,6 +68,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     super.initState();
     stage = _initialStageForTeam();
     _selectedDate = _parseDate(widget.initialDate) ?? DateTime.now();
+    _mobilePlayersScrollController.addListener(_handleMobilePlayersScroll);
     _load();
   }
 
@@ -74,8 +77,23 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     for (final c in _controllers.values) {
       c.dispose();
     }
+    _mobilePlayersScrollController.removeListener(_handleMobilePlayersScroll);
+    _mobilePlayersScrollController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _handleMobilePlayersScroll() {
+    if (!mounted || !_mobilePlayersScrollController.hasClients) return;
+    final shouldCollapse = _mobilePlayersScrollController.offset > 28;
+    if (shouldCollapse != _mobileToolsCollapsed) {
+      setState(() => _mobileToolsCollapsed = shouldCollapse);
+    }
+  }
+
+  void _expandMobileTools() {
+    if (!_mobileToolsCollapsed) return;
+    setState(() => _mobileToolsCollapsed = false);
   }
 
   String _key(int playerId, String testCode) => '${playerId}_$testCode';
@@ -425,14 +443,101 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
   }
 
   String _categoryTitle(String code) {
-    for (final c in categories) {
-      if (_asStr(c['code']) == code) return _asStr(c['title']);
-    }
     switch (code) {
-      case 'technical': return 'Техническая подготовка';
-      case 'tactical': return 'Тактическая подготовка';
-      default: return 'Физическая подготовка';
+      case 'physical':
+        return 'Физическая подготовка';
+      case 'technical':
+        return 'Техническая подготовка';
+      case 'tactical':
+        return 'Тактическая подготовка';
+      case 'psychological':
+      case 'mental':
+        return 'Психологическая подготовка';
+      case 'theory':
+      case 'theoretical':
+        return 'Теория';
+      case 'medical':
+      case 'functional':
+        return 'Функциональное состояние';
+      default:
+        for (final c in categories) {
+          if (_asStr(c['code']) == code) {
+            final title = _asStr(c['title']);
+            if (title.isNotEmpty && title != code) return _ruCategoryTitle(title);
+          }
+        }
+        return 'Раздел подготовки';
     }
+  }
+
+  String _ruCategoryTitle(String raw) {
+    final t = raw.trim();
+    final l = t.toLowerCase();
+    if (l.contains('physical') || l.contains('fitness')) return 'Физическая подготовка';
+    if (l.contains('technical') || l.contains('technique')) return 'Техническая подготовка';
+    if (l.contains('tactical') || l.contains('tactic')) return 'Тактическая подготовка';
+    if (l.contains('psych') || l.contains('mental')) return 'Психологическая подготовка';
+    if (l.contains('theory') || l.contains('theoretical')) return 'Теория';
+    if (l.contains('medical') || l.contains('functional')) return 'Функциональное состояние';
+    return t;
+  }
+
+  IconData _categoryIcon(String code) {
+    switch (code) {
+      case 'physical':
+        return Icons.directions_run_rounded;
+      case 'technical':
+        return Icons.sports_soccer_rounded;
+      case 'tactical':
+        return Icons.account_tree_rounded;
+      case 'psychological':
+      case 'mental':
+        return Icons.psychology_rounded;
+      case 'theory':
+      case 'theoretical':
+        return Icons.menu_book_rounded;
+      case 'medical':
+      case 'functional':
+        return Icons.monitor_heart_rounded;
+      default:
+        return Icons.fact_check_rounded;
+    }
+  }
+
+  String _categoryHint(String code) {
+    switch (code) {
+      case 'physical':
+        return 'скорость, прыжки, выносливость';
+      case 'technical':
+        return 'ведение, пас, удар, мяч';
+      case 'tactical':
+        return 'игровые решения и взаимодействия';
+      case 'psychological':
+      case 'mental':
+        return 'концентрация и устойчивость';
+      case 'theory':
+      case 'theoretical':
+        return 'знания и понимание игры';
+      case 'medical':
+      case 'functional':
+        return 'самочувствие и контроль';
+      default:
+        return 'тесты выбранного раздела';
+    }
+  }
+
+  List<Map<String, dynamic>> get _categoryItems {
+    final List<Map<String, dynamic>> base = categories.isEmpty
+        ? [
+            {'code': 'physical'},
+            {'code': 'technical'},
+            {'code': 'tactical'},
+          ]
+        : categories;
+    return base
+        .map((e) => Map<String, dynamic>.from(e))
+        .where((e) => _asStr(e['code']).isNotEmpty)
+        .toList();
   }
 
   _Rating _ratingFor(String testCode, String text) {
@@ -558,28 +663,49 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
             _filterBar(compact: false),
             const SizedBox(width: 10),
           ],
+          if (!mobile) ...[
+            IconButton.filled(
+              style: IconButton.styleFrom(
+                backgroundColor: _C.greenDark,
+                foregroundColor: Colors.white,
+                fixedSize: const Size(42, 42),
+                minimumSize: const Size(42, 42),
+                shape: const CircleBorder(),
+                elevation: 2,
+                shadowColor: _C.greenDark.withOpacity(.25),
+              ),
+              onPressed: _openFullscreen,
+              tooltip: 'Открыть тестирование во весь экран',
+              icon: const Icon(Icons.open_in_full_rounded, size: 20),
+            ),
+            const SizedBox(width: 8),
+          ],
+          _exportButton(mobile: mobile),
+          const SizedBox(width: 8),
           IconButton.filled(
             style: IconButton.styleFrom(
               backgroundColor: _C.greenDark,
               foregroundColor: Colors.white,
+              disabledBackgroundColor: _C.greenDark.withOpacity(.45),
+              disabledForegroundColor: Colors.white.withOpacity(.85),
               fixedSize: const Size(42, 42),
               minimumSize: const Size(42, 42),
               shape: const CircleBorder(),
               elevation: 2,
               shadowColor: _C.greenDark.withOpacity(.25),
             ),
-            onPressed: _openFullscreen,
-            tooltip: 'Открыть тестирование во весь экран',
-            icon: const Icon(Icons.open_in_full_rounded, size: 20),
-          ),
-          const SizedBox(width: 8),
-          _exportButton(mobile: mobile),
-          const SizedBox(width: 8),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(backgroundColor: _C.greenDark, foregroundColor: Colors.white),
             onPressed: saving ? null : _save,
-            icon: const Icon(Icons.save_rounded, size: 18),
-            label: Text(mobile ? 'Сохранить' : 'Сохранить результаты'),
+            tooltip: 'Сохранить результаты',
+            icon: saving
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.save_rounded, size: 20),
           ),
         ],
       ),
@@ -587,28 +713,111 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
   }
 
   Widget _filterBar({required bool compact}) {
+    if (compact) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Выберите раздел подготовки', style: _C.caption.copyWith(fontWeight: FontWeight.w900, color: _C.muted)),
+          const SizedBox(height: 8),
+          _categorySegment(compact: true),
+          const SizedBox(height: 8),
+          _stageChip(compact: true),
+        ],
+      );
+    }
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _drop(
-          value: category,
-          items: categories.isEmpty
-              ? const [
-                  {'code': 'physical', 'title': 'Физическая подготовка'},
-                  {'code': 'technical', 'title': 'Техническая подготовка'},
-                  {'code': 'tactical', 'title': 'Тактическая подготовка'},
-                ]
-              : categories,
-          onChanged: (v) {
-            if (v == null) return;
-            setState(() { category = v; sessionId = 0; });
-            _load();
-          },
-          compact: compact,
-        ),
+        _categorySegment(compact: false),
         const SizedBox(width: 8),
         _stageChip(compact: compact),
       ],
+    );
+  }
+
+  Widget _categorySegment({required bool compact}) {
+    final items = _categoryItems;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: items.map((e) {
+          final code = _asStr(e['code']);
+          final active = category == code;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(compact ? 18 : 16),
+              onTap: () {
+                if (category == code) return;
+                setState(() {
+                  category = code;
+                  sessionId = 0;
+                });
+                _load();
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                width: compact ? 178 : null,
+                constraints: compact ? const BoxConstraints(minHeight: 76) : const BoxConstraints(minHeight: 42),
+                padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 13, vertical: compact ? 10 : 9),
+                decoration: BoxDecoration(
+                  color: active ? _C.greenDark : _C.input,
+                  borderRadius: BorderRadius.circular(compact ? 18 : 16),
+                  border: Border.all(color: active ? _C.greenDark : _C.line),
+                  boxShadow: active
+                      ? [BoxShadow(color: _C.greenDark.withOpacity(.18), blurRadius: 14, offset: const Offset(0, 6))]
+                      : null,
+                ),
+                child: Row(
+                  mainAxisSize: compact ? MainAxisSize.max : MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: compact ? 34 : 28,
+                      height: compact ? 34 : 28,
+                      decoration: BoxDecoration(
+                        color: active ? Colors.white.withOpacity(.18) : Colors.white,
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: Icon(_categoryIcon(code), size: compact ? 19 : 17, color: active ? Colors.white : _C.greenDark),
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _categoryTitle(code),
+                            maxLines: compact ? 2 : 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _C.body.copyWith(
+                              fontSize: compact ? 12.5 : 13,
+                              color: active ? Colors.white : _C.text,
+                              fontWeight: FontWeight.w900,
+                              height: 1.05,
+                            ),
+                          ),
+                          if (compact) ...[
+                            const SizedBox(height: 3),
+                            Text(
+                              _categoryHint(code),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _C.caption.copyWith(color: active ? Colors.white.withOpacity(.84) : _C.muted, fontSize: 10.5),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 
@@ -634,26 +843,6 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     );
   }
 
-  Widget _drop({required String value, required List<Map<String, dynamic>> items, required ValueChanged<String?> onChanged, required bool compact}) {
-    return Container(
-      height: 42,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(color: _C.input, borderRadius: BorderRadius.circular(14)),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          borderRadius: BorderRadius.circular(16),
-          style: _C.body.copyWith(fontSize: compact ? 12 : 13),
-          onChanged: onChanged,
-          items: items.map((e) => DropdownMenuItem<String>(
-            value: _asStr(e['code']),
-            child: Text(compact ? _asStr(e['code']) : _asStr(e['title']), overflow: TextOverflow.ellipsis),
-          )).toList(),
-        ),
-      ),
-    );
-  }
-
   Widget _desktopBody() {
     return Row(
       children: [
@@ -672,10 +861,89 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
   Widget _mobileBody() {
     return Column(
       children: [
-        Container(color: Colors.white, padding: const EdgeInsets.all(10), child: _filterBar(compact: true)),
-        const Divider(height: 1, color: _C.line),
-        Expanded(child: _tableArea()),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 190),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: _mobileToolsCollapsed
+              ? _mobileCollapsedTestingTools()
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      color: Colors.white,
+                      padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+                      child: _filterBar(compact: true),
+                    ),
+                    const Divider(height: 1, color: _C.line),
+                    _dateCalendarBar(compact: true),
+                    const Divider(height: 1, color: _C.line),
+                    _tableToolbar(),
+                    const Divider(height: 1, color: _C.line),
+                  ],
+                ),
+        ),
+        Expanded(child: _table()),
       ],
+    );
+  }
+
+  Widget _mobileCollapsedTestingTools() {
+    final visible = _visiblePlayers.length;
+    return Material(
+      color: Colors.white,
+      child: InkWell(
+        onTap: _expandMobileTools,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(10, 7, 10, 7),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: _C.line, width: 1)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                height: 36,
+                width: 36,
+                decoration: BoxDecoration(
+                  color: _C.greenSoft,
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: const Icon(Icons.tune_rounded, color: _C.greenDark, size: 18),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${_categoryTitle(category)} • $stage',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _C.body.copyWith(fontWeight: FontWeight.w900, fontSize: 12.5),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      '${_dateRu(_selectedDate)} • показано $visible из ${players.length}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _C.caption.copyWith(fontSize: 10.8),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: _expandMobileTools,
+                tooltip: 'Показать фильтры',
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: _C.greenDark),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -1318,7 +1586,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
           decoration: InputDecoration(
             isDense: true,
             prefixIcon: const Icon(Icons.search_rounded, size: 19),
-            hintText: 'Поиск по игроку...',
+            hintText: 'Быстро найти игрока, номер или амплуа...',
             filled: true,
             fillColor: _C.input,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
@@ -1389,6 +1657,9 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
       return const Center(child: Text('По выбранному поиску или амплуа игроков не найдено'));
     }
 
+    final isMobile = MediaQuery.sizeOf(context).width < 760;
+    if (isMobile) return _mobileTestingCards(tablePlayers);
+
     return Container(
       color: Colors.white,
       child: Scrollbar(
@@ -1413,6 +1684,149 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
         ),
       ),
     );
+  }
+
+  Widget _mobileTestingCards(List<Map<String, dynamic>> tablePlayers) {
+    return ListView.separated(
+      controller: _mobilePlayersScrollController,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 20),
+      itemCount: tablePlayers.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (_, index) => _mobilePlayerCard(tablePlayers[index], index + 1),
+    );
+  }
+
+  Widget _mobilePlayerCard(Map<String, dynamic> p, int index) {
+    final playerId = _playerId(p);
+    final finalRating = _finalFor(p);
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _C.line.withOpacity(.85)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(.035), blurRadius: 16, offset: const Offset(0, 8))],
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+            child: Row(
+              children: [
+                _playerAvatar(p),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _shortPlayerName(p).isEmpty ? 'Игрок #$playerId' : _shortPlayerName(p),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _C.body.copyWith(fontWeight: FontWeight.w900, fontSize: 15),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(_playerPosition(p), maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.caption),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _ratingPill(finalRating),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: _C.line),
+          Padding(
+            padding: const EdgeInsets.all(10),
+            child: GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                childAspectRatio: 1.5,
+              ),
+              itemCount: tests.length,
+              itemBuilder: (_, i) {
+                final t = tests[i];
+                final code = _asStr(t['code']);
+                final results = p['results'];
+                final old = results is Map ? (results[code] is Map ? results[code]['value'] : null) : null;
+                final c = _ctrl(playerId, code, old);
+                return _mobileValueTile(t, c, code);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _mobileValueTile(Map<String, dynamic> test, TextEditingController c, String testCode) {
+    return StatefulBuilder(builder: (context, localSetState) {
+      final r = _ratingFor(testCode, c.text);
+      final hasRating = r.label.isNotEmpty;
+      return Container(
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+        decoration: BoxDecoration(
+          color: hasRating ? r.color.withOpacity(.12) : _C.input,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: hasRating ? r.color.withOpacity(.32) : _C.line.withOpacity(.65)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _asStr(test['short_title']).isEmpty ? _asStr(test['title']) : _asStr(test['short_title']),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _C.caption.copyWith(fontWeight: FontWeight.w900, color: _C.text),
+                  ),
+                ),
+                Text(_unitForTest(test), style: _C.caption.copyWith(fontSize: 10, fontWeight: FontWeight.w800)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Expanded(
+              child: TextField(
+                controller: c,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                textInputAction: TextInputAction.next,
+                onChanged: (_) {
+                  localSetState(() {});
+                  setState(() {});
+                },
+                textAlign: TextAlign.center,
+                style: _C.body.copyWith(fontWeight: FontWeight.w900, fontSize: 18),
+                decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  hintText: '0',
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              hasRating ? r.label : 'ввод результата',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _C.caption.copyWith(
+                fontSize: 10.5,
+                color: hasRating ? _darken(r.color) : _C.muted,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      );
+    });
   }
 
   DataRow _row(Map<String, dynamic> p) {
@@ -1487,10 +1901,16 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
   Widget _ratingPill(_Rating r) {
     if (r.label.isEmpty) return const Text('—', style: _C.caption);
     return Container(
-      width: 150,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      constraints: const BoxConstraints(minWidth: 86, maxWidth: 150),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
       decoration: BoxDecoration(color: r.color.withOpacity(.16), borderRadius: BorderRadius.circular(999)),
-      child: Text(r.label, textAlign: TextAlign.center, style: TextStyle(color: _darken(r.color), fontWeight: FontWeight.w900, fontSize: 12)),
+      child: Text(
+        r.label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+        style: TextStyle(color: _darken(r.color), fontWeight: FontWeight.w900, fontSize: 11.5),
+      ),
     );
   }
 

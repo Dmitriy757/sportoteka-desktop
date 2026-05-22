@@ -32,8 +32,8 @@ class _Ui {
   static const Color line = Color(0xFFE5E7EB);
   static const Color danger = Color(0xFFDC2626);
 
-  static bool isTablet(BuildContext context) => MediaQuery.of(context).size.width >= 760;
-  static bool isWide(BuildContext context) => MediaQuery.of(context).size.width >= 1080;
+  static bool isTablet(BuildContext context) => MediaQuery.sizeOf(context).width >= 760;
+  static bool isWide(BuildContext context) => MediaQuery.sizeOf(context).width >= 1080;
 
   static TextStyle title(double size) => TextStyle(
         fontSize: size,
@@ -243,8 +243,18 @@ class _TeamTrainersScreenState extends State<TeamTrainersScreen> {
 
   Future<void> _loadClubLogo() async {
     try {
-      final response = await http.get(Uri.parse('${_ApiEndpoints.getClubProfile}?club_id=${widget.clubId}'));
+      final response = await http
+          .get(Uri.parse('${_ApiEndpoints.getClubProfile}?club_id=${widget.clubId}'))
+          .timeout(const Duration(seconds: 10));
+
+      // На сервере этот endpoint иногда может отсутствовать и возвращать HTML/404.
+      // Для экрана тренеров логотип клуба не критичен, поэтому просто молча
+      // оставляем логотип из widget.clubLogoUrl или заглушку.
+      if (response.statusCode < 200 || response.statusCode >= 300) return;
+
       final data = _Utils.decodeResponse(response);
+      if (data['status'] == 'error') return;
+
       final club = data['club'] is Map ? Map<String, dynamic>.from(data['club'] as Map) : data;
       final rawLogo = _Utils.asString(club['photo_url'] ?? club['photo'] ?? club['logo_url'] ?? club['logo']);
       final resolvedLogo = _Utils.normalizeImage(rawLogo);
@@ -488,12 +498,14 @@ class _TeamTrainersScreenState extends State<TeamTrainersScreen> {
     return null;
   }
 
-  Future<Map<String, dynamic>?> _showTeamPicker(List<dynamic> teams) async {
+    Future<Map<String, dynamic>?> _showTeamPicker(List<dynamic> teams) async {
+    if (!mounted) return null;
     return showModalBottomSheet<Map<String, dynamic>>(
       context: context,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (context) => _TeamPickerSheet(
+      builder: (sheetContext) => _TeamPickerSheet(
         teams: teams,
         teamIdExtractor: _getTeamId,
         teamNameExtractor: _getTeamName,
@@ -502,134 +514,194 @@ class _TeamTrainersScreenState extends State<TeamTrainersScreen> {
     );
   }
 
-  Future<void> _addTrainer() async {
+    Future<void> _addTrainer() async {
     if (widget.teams.isEmpty) {
       Get.snackbar('Команды', 'Сначала добавьте команду');
       return;
     }
 
+    final pickedTrainer = await _pickTrainerByEmailSheet();
+    if (!mounted || pickedTrainer == null) return;
+
+    final trainerId = _Utils.asInt(
+      pickedTrainer['id'] ?? pickedTrainer['trainer_id'] ?? pickedTrainer['user_id'],
+    );
+    if (trainerId <= 0) {
+      Get.snackbar('Ошибка', 'Не удалось определить ID тренера');
+      return;
+    }
+
+    // Важно: команду выбираем уже после закрытия первого bottom sheet.
+    // Нельзя открывать второй showModalBottomSheet поверх StatefulBuilder первого:
+    // именно это часто вызывает framework assertion `_dependents.isEmpty`.
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    if (!mounted) return;
+
+    final selectedTeam = await _showTeamPicker(widget.teams);
+    if (!mounted || selectedTeam == null) return;
+
+    final teamId = _getTeamId(selectedTeam);
+    if (teamId <= 0) {
+      Get.snackbar('Ошибка', 'Не удалось определить команду');
+      return;
+    }
+
+    try {
+      final data = await _Utils.postJson(_ApiEndpoints.linkTrainerToTeam, {
+        'team_id': teamId,
+        'trainer_id': trainerId,
+        'profile': 'extra',
+      });
+
+      if (!mounted) return;
+
+      if (data['status'] == 'success' || data['success'] == true) {
+        await _loadTrainers();
+        if (!mounted) return;
+        Get.snackbar('Готово', 'Тренер привязан к команде');
+      } else {
+        final message = _Utils.asString(data['message']).trim();
+        Get.snackbar('Ошибка', message.isEmpty ? 'Не удалось привязать тренера' : message);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      Get.snackbar('Ошибка', 'Не удалось привязать тренера');
+    }
+  }
+
+  Future<Map<String, dynamic>?> _pickTrainerByEmailSheet() async {
     final emailController = TextEditingController();
     final foundTrainers = <Map<String, dynamic>>[];
     bool isSearching = false;
 
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            Future<void> searchTrainer() async {
-              final email = emailController.text.trim();
-              if (email.isEmpty) return;
-              setSheetState(() => isSearching = true);
-              try {
-                var response = await http.post(Uri.parse(_ApiEndpoints.searchTrainerByEmail), body: {'email': email});
-                var data = _Utils.decodeResponse(response);
-                if (_extractTrainerList(data).isEmpty && data['trainer'] is Map) data = {'trainers': [data['trainer']]};
-                final trainers = _extractTrainerList(data).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
-                setSheetState(() {
-                  foundTrainers
-                    ..clear()
-                    ..addAll(trainers);
-                });
-              } catch (_) {
-                setSheetState(() => foundTrainers.clear());
+    try {
+      return await showModalBottomSheet<Map<String, dynamic>>(
+        context: context,
+        useSafeArea: true,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (sheetContext) {
+          return StatefulBuilder(
+            builder: (innerContext, setSheetState) {
+              Future<void> searchTrainer() async {
+                final email = emailController.text.trim();
+                if (email.isEmpty) {
+                  setSheetState(() => foundTrainers.clear());
+                  return;
+                }
+
+                setSheetState(() => isSearching = true);
+
+                try {
+                  var response = await http
+                      .post(Uri.parse(_ApiEndpoints.searchTrainerByEmail), body: {'email': email})
+                      .timeout(const Duration(seconds: 16));
+
+                  if (!innerContext.mounted) return;
+
+                  var data = _Utils.decodeResponse(response);
+                  if (_extractTrainerList(data).isEmpty && data['trainer'] is Map) {
+                    data = {'trainers': [data['trainer']]};
+                  }
+
+                  final trainers = _extractTrainerList(data)
+                      .whereType<Map>()
+                      .map((e) => Map<String, dynamic>.from(e))
+                      .toList();
+
+                  setSheetState(() {
+                    foundTrainers
+                      ..clear()
+                      ..addAll(trainers);
+                    isSearching = false;
+                  });
+                } catch (_) {
+                  if (!innerContext.mounted) return;
+                  setSheetState(() {
+                    foundTrainers.clear();
+                    isSearching = false;
+                  });
+                }
               }
-              setSheetState(() => isSearching = false);
-            }
 
-            Future<void> linkTrainerToTeam(Map<String, dynamic> trainer) async {
-              final trainerId = _Utils.asInt(trainer['id'] ?? trainer['trainer_id'] ?? trainer['user_id']);
-              if (trainerId <= 0) return;
+              return _BottomPanel(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _SheetHandle(),
+                    Row(
+                      children: [
+                        _IconBox(icon: Icons.person_add_alt_1_rounded, color: _Ui.primary, size: 46),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Добавить тренера', style: _Ui.title(20)),
+                              const SizedBox(height: 3),
+                              Text('Найдите сотрудника по email, затем выберите команду', style: _Ui.body(12.5)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    _InputBox(
+                      controller: emailController,
+                      hint: 'Email тренера',
+                      icon: Icons.alternate_email_rounded,
+                      keyboardType: TextInputType.emailAddress,
+                      onSubmitted: (_) => searchTrainer(),
+                      suffix: IconButton(
+                        icon: const Icon(Icons.search_rounded, color: _Ui.primary),
+                        onPressed: searchTrainer,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    if (isSearching)
+                      const Padding(
+                        padding: EdgeInsets.all(20),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (foundTrainers.isEmpty)
+                      _SoftNotice(
+                        icon: Icons.search_rounded,
+                        title: 'Введите email',
+                        text: 'После поиска здесь появится найденный тренер.',
+                      )
+                    else
+                      ConstrainedBox(
+                        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(innerContext).height * 0.46),
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: foundTrainers.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 8),
+                          itemBuilder: (_, index) {
+                            final trainer = foundTrainers[index];
+                            final name = _Utils.getTrainerName(trainer);
+                            final email = _Utils.asString(trainer['email']).trim();
+                            final photo = _Utils.normalizeImage(_Utils.trainerPhoto(trainer));
 
-              final selectedTeam = await _showTeamPicker(widget.teams);
-              if (selectedTeam == null) return;
-              final teamId = _getTeamId(selectedTeam);
-              if (teamId <= 0) return;
-
-              final data = await _Utils.postJson(_ApiEndpoints.linkTrainerToTeam, {
-                'team_id': teamId,
-                'trainer_id': trainerId,
-                'profile': 'extra',
-              });
-
-              if (data['status'] == 'success' || data['success'] == true) {
-                if (mounted) Navigator.pop(context);
-                await _loadTrainers();
-                Get.snackbar('Готово', 'Тренер привязан к команде');
-              } else {
-                Get.snackbar('Ошибка', _Utils.asString(data['message']).isEmpty ? 'Не удалось привязать тренера' : _Utils.asString(data['message']));
-              }
-            }
-
-            return _BottomPanel(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _SheetHandle(),
-                  Row(
-                    children: [
-                      _IconBox(icon: Icons.person_add_alt_1_rounded, color: _Ui.primary, size: 46),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Добавить тренера', style: _Ui.title(20)),
-                            const SizedBox(height: 3),
-                            Text('Найдите сотрудника по email и выберите команду', style: _Ui.body(12.5)),
-                          ],
+                            return _MiniTrainerResult(
+                              name: name,
+                              email: email,
+                              photo: photo,
+                              onTap: () => Navigator.of(sheetContext).pop(trainer),
+                            );
+                          },
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  _InputBox(
-                    controller: emailController,
-                    hint: 'Email тренера',
-                    icon: Icons.alternate_email_rounded,
-                    keyboardType: TextInputType.emailAddress,
-                    onSubmitted: (_) => searchTrainer(),
-                    suffix: IconButton(
-                      icon: const Icon(Icons.search_rounded, color: _Ui.primary),
-                      onPressed: searchTrainer,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  if (isSearching)
-                    const Padding(
-                      padding: EdgeInsets.all(20),
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  else if (foundTrainers.isEmpty)
-                    _SoftNotice(
-                      icon: Icons.search_rounded,
-                      title: 'Введите email',
-                      text: 'После поиска здесь появится найденный тренер.',
-                    )
-                  else
-                    ...foundTrainers.map((trainer) {
-                      final name = _Utils.getTrainerName(trainer);
-                      final email = _Utils.asString(trainer['email']).trim();
-                      final photo = _Utils.normalizeImage(_Utils.trainerPhoto(trainer));
-                      return _MiniTrainerResult(
-                        name: name,
-                        email: email,
-                        photo: photo,
-                        onTap: () => linkTrainerToTeam(trainer),
-                      );
-                    }),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-
-    emailController.dispose();
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      emailController.dispose();
+    }
   }
 
   Future<void> _unlinkTrainer(Map<String, dynamic> trainer) async {
@@ -915,7 +987,7 @@ class _TeamTrainersScreenState extends State<TeamTrainersScreen> {
     List<Map<String, dynamic>> visible,
     Map<StaffRoleGroup, List<Map<String, dynamic>>> grouped,
   ) {
-    final maxWidth = MediaQuery.of(context).size.width;
+    final maxWidth = MediaQuery.sizeOf(context).width;
     return Padding(
       padding: EdgeInsets.fromLTRB(maxWidth >= 1100 ? 28 : 20, 8, maxWidth >= 1100 ? 28 : 20, 110),
       child: Row(
@@ -1606,9 +1678,10 @@ class _ClubTrainerCardScreenState extends State<ClubTrainerCardScreen> {
 
     final selectedTeam = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (context) => _TeamPickerSheet(
+      builder: (sheetContext) => _TeamPickerSheet(
         teams: widget.clubTeams,
         teamIdExtractor: _getClubTeamId,
         teamNameExtractor: _getClubTeamName,
@@ -1911,7 +1984,7 @@ class _TeamPickerSheet extends StatelessWidget {
           Text('Тренер будет привязан к выбранной команде.', style: _Ui.body(13)),
           const SizedBox(height: 14),
           ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.55),
+            constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.55),
             child: ListView.separated(
               shrinkWrap: true,
               itemCount: teams.length,
@@ -2194,7 +2267,7 @@ class _BottomPanel extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),

@@ -234,114 +234,165 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
   }
 
   Future<void> _searchAndAddTrainer() async {
+    if (!mounted) return;
+
     final emailC = TextEditingController();
     final found = <Map<String, dynamic>>[];
     bool searching = false;
 
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setSheet) {
-            Future<void> search() async {
-              final email = emailC.text.trim();
-              if (email.isEmpty) return;
-              setSheet(() => searching = true);
-              try {
-                final data = await _postForm(searchTrainerByEmailUrl, {'email': email});
-                final list = _extractList(data, const ['trainers', 'trainer', 'users', 'data', 'items']);
-                found
-                  ..clear()
-                  ..addAll(list);
-              } catch (_) {
-                found.clear();
+    try {
+      final action = await showModalBottomSheet<Map<String, dynamic>>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        builder: (sheetContext) {
+          return StatefulBuilder(
+            builder: (sheetContext, setSheet) {
+              Future<void> search() async {
+                final email = emailC.text.trim();
+                if (email.isEmpty) {
+                  if (!sheetContext.mounted) return;
+                  setSheet(() {
+                    searching = false;
+                    found.clear();
+                  });
+                  return;
+                }
+
+                if (!sheetContext.mounted) return;
+                setSheet(() => searching = true);
+
+                try {
+                  final data = await _postForm(searchTrainerByEmailUrl, {'email': email});
+                  final list = _extractList(data, const ['trainers', 'trainer', 'users', 'data', 'items']);
+                  if (!sheetContext.mounted) return;
+                  setSheet(() {
+                    found
+                      ..clear()
+                      ..addAll(list);
+                    searching = false;
+                  });
+                } catch (_) {
+                  if (!sheetContext.mounted) return;
+                  setSheet(() {
+                    found.clear();
+                    searching = false;
+                  });
+                }
               }
-              setSheet(() => searching = false);
-            }
 
-            Future<void> addToClub(Map<String, dynamic> trainer) async {
-              final trainerId = _trainerId(trainer);
-              if (trainerId <= 0) return;
-              final ok = await _saveAction(() => _postForm(linkTrainerToClubUrl, {
-                    'club_id': '${widget.clubId}',
-                    'trainer_id': '$trainerId',
-                  }));
-              if (ok) {
-                if (mounted) Navigator.pop(context);
-                await _afterMutation('Тренер добавлен в клуб');
+              void closeWithAction(String type, Map<String, dynamic> trainer) {
+                Navigator.of(sheetContext).pop(<String, dynamic>{
+                  'type': type,
+                  'trainer': Map<String, dynamic>.from(trainer),
+                });
               }
-            }
 
-            Future<void> assignToTeam(Map<String, dynamic> trainer) async {
-              final trainerId = _trainerId(trainer);
-              if (trainerId <= 0) return;
-              final team = await _pickTeam();
-              if (team == null) return;
-              final profile = await _pickProfileType();
-              if (profile == null) return;
-              final ok = await _linkTrainerToTeam(trainerId, _teamId(team), profile);
-              if (ok) {
-                if (mounted) Navigator.pop(context);
-                await _afterMutation('Тренер назначен в команду');
-              }
-            }
+              return _CmrBottomPanel(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const _CmrSheetHandle(),
+                    _CmrSheetTitle(
+                      icon: Icons.person_add_alt_1_rounded,
+                      title: 'Добавить тренера',
+                      subtitle: 'Найдите пользователя по email, добавьте в клуб или сразу назначьте в команду.',
+                    ),
+                    const SizedBox(height: 16),
+                    _CmrInput(
+                      controller: emailC,
+                      hint: 'Email тренера',
+                      icon: Icons.alternate_email_rounded,
+                      keyboardType: TextInputType.emailAddress,
+                      onSubmitted: (_) => search(),
+                      suffix: IconButton(onPressed: search, icon: const Icon(Icons.search_rounded)),
+                    ),
+                    const SizedBox(height: 14),
+                    if (searching)
+                      const Padding(
+                        padding: EdgeInsets.all(22),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (found.isEmpty)
+                      const _CmrNotice(
+                        icon: Icons.search_rounded,
+                        title: 'Введите email',
+                        text: 'После поиска здесь появятся найденные пользователи с ролью тренера.',
+                      )
+                    else
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: MediaQuery.sizeOf(sheetContext).height * .42,
+                        ),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: found.length,
+                          itemBuilder: (_, index) {
+                            final trainer = found[index];
+                            final name = _trainerName(trainer);
+                            final email = _trainerEmail(trainer);
+                            final photo = _trainerPhoto(trainer);
+                            return _CmrSearchTrainerTile(
+                              name: name,
+                              email: email,
+                              photo: photo,
+                              onAddClub: () => closeWithAction('club', trainer),
+                              onAssignTeam: () => closeWithAction('team', trainer),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      );
 
-            return _CmrBottomPanel(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const _CmrSheetHandle(),
-                  _CmrSheetTitle(
-                    icon: Icons.person_add_alt_1_rounded,
-                    title: 'Добавить тренера',
-                    subtitle: 'Найдите пользователя по email, добавьте в клуб или сразу назначьте в команду.',
-                  ),
-                  const SizedBox(height: 16),
-                  _CmrInput(
-                    controller: emailC,
-                    hint: 'Email тренера',
-                    icon: Icons.alternate_email_rounded,
-                    keyboardType: TextInputType.emailAddress,
-                    onSubmitted: (_) => search(),
-                    suffix: IconButton(onPressed: search, icon: const Icon(Icons.search_rounded)),
-                  ),
-                  const SizedBox(height: 14),
-                  if (searching)
-                    const Padding(
-                      padding: EdgeInsets.all(22),
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  else if (found.isEmpty)
-                    const _CmrNotice(
-                      icon: Icons.search_rounded,
-                      title: 'Введите email',
-                      text: 'После поиска здесь появятся найденные пользователи с ролью тренера.',
-                    )
-                  else
-                    ...found.map((trainer) {
-                      final name = _trainerName(trainer);
-                      final email = _trainerEmail(trainer);
-                      final photo = _trainerPhoto(trainer);
-                      return _CmrSearchTrainerTile(
-                        name: name,
-                        email: email,
-                        photo: photo,
-                        onAddClub: () => addToClub(trainer),
-                        onAssignTeam: () => assignToTeam(trainer),
-                      );
-                    }),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
+      if (!mounted || action == null) return;
 
-    emailC.dispose();
+      // Важно: все следующие окна открываем только после закрытия окна поиска.
+      // Это убирает падение Flutter `_dependents.isEmpty`, которое возникало
+      // из-за открытия showModalBottomSheet поверх активного bottom sheet.
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      if (!mounted) return;
+
+      final trainerRaw = action['trainer'];
+      if (trainerRaw is! Map) return;
+      final trainer = Map<String, dynamic>.from(trainerRaw);
+      final trainerId = _trainerId(trainer);
+      if (trainerId <= 0) return;
+
+      final type = _s(action['type']);
+
+      if (type == 'club') {
+        final ok = await _saveAction(() => _postForm(linkTrainerToClubUrl, {
+              'club_id': '${widget.clubId}',
+              'trainer_id': '$trainerId',
+            }));
+        if (ok) await _afterMutation('Тренер добавлен в клуб');
+        return;
+      }
+
+      if (type == 'team') {
+        final team = await _pickTeam();
+        if (!mounted || team == null) return;
+
+        await Future<void>.delayed(const Duration(milliseconds: 80));
+        if (!mounted) return;
+
+        final profile = await _pickProfileType();
+        if (!mounted || profile == null) return;
+
+        final ok = await _linkTrainerToTeam(trainerId, _teamId(team), profile);
+        if (ok) await _afterMutation('Тренер назначен в команду');
+      }
+    } finally {
+      emailC.dispose();
+    }
   }
 
   Future<void> _editTrainer(Map<String, dynamic> trainer) async {
@@ -1734,8 +1785,8 @@ class _CmrBottomPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).viewInsets.bottom;
-    final h = MediaQuery.of(context).size.height;
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    final h = MediaQuery.sizeOf(context).height;
     return Padding(
       padding: EdgeInsets.only(bottom: bottom),
       child: Container(

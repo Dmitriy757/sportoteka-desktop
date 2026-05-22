@@ -1205,15 +1205,30 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
           const SizedBox(width: 6),
         ],
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              controller: _scrollController,
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final screenWidth = constraints.maxWidth;
+          final articleMaxWidth = screenWidth >= 1180
+              ? 820.0
+              : (screenWidth >= 720 ? 760.0 : screenWidth);
+
+          return Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: _scrollController,
+                  padding: EdgeInsets.fromLTRB(
+                    screenWidth >= 720 ? 24 : 16,
+                    12,
+                    screenWidth >= 720 ? 24 : 16,
+                    16,
+                  ),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: articleMaxWidth),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                   if (cover.isNotEmpty)
                     GestureDetector(
                       onTap: () => _openImageFullScreen(cover, heroNews),
@@ -1225,7 +1240,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                             width: double.infinity,
                             color: Colors.black,
                             child: AspectRatio(
-                              aspectRatio: 16 / 9,
+                              aspectRatio: screenWidth >= 720 ? 2.1 : 16 / 9,
                               child: Image.network(
                                 cover,
                                 fit: BoxFit.cover,
@@ -1335,24 +1350,27 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                       formatDate: _formatDateTime,
                       quoteFor: (m) => _buildQuote(m),
                     ),
-                ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
-          Container(
-            padding: EdgeInsets.only(
-              left: 12,
-              right: 12,
-              top: 10,
-              bottom: 10 + MediaQuery.of(context).padding.bottom,
-            ),
-            decoration: BoxDecoration(
-              color: NewsPalette.white,
-              border: Border(top: BorderSide(color: NewsPalette.border)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: NewsPalette.white,
+                  border: Border(top: BorderSide(color: NewsPalette.border)),
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: articleMaxWidth),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
                 if (_replyToCommentId != null || _editingCommentId != null)
                   Container(
                     margin: const EdgeInsets.only(bottom: 8),
@@ -1547,10 +1565,16 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                           ),
                   ],
                 ),
-              ],
-            ),
-          ),
-        ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
