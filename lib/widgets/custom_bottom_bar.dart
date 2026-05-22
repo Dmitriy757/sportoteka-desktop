@@ -5,14 +5,13 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
-import 'package:sportoteka/presentation/home_page/home_page.dart';
-import 'package:sportoteka/presentation/add_personal_training_screen/add_personal_training_screen.dart';
-import 'package:sportoteka/presentation/service_screens/calendar_event_screen.dart';
-import 'package:sportoteka/presentation/chat_screen/chat_screen.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
-import 'package:sportoteka/presentation/community_screen/sport_community_screen.dart';
-import 'package:sportoteka/presentation/community_screen/create_post_editor_screen.dart';
+import 'package:sportoteka/presentation/chat_screen/chat_screen.dart';
 
+// Оставляем старые значения enum, чтобы не ломать home_container_screen.dart.
+// Важно: на HomeScreen мобильное меню теперь встроено прямо в home_screen.dart.
+// Там переходы полностью совпадают с боковым меню планшета/ПК.
+// Поэтому для home-вкладок этот внешний бар скрывается, чтобы не было двух меню.
 enum BottomBarTab { Home, Community, Add, Booking, Profile }
 
 class CustomBottomBar extends StatefulWidget {
@@ -37,15 +36,26 @@ class _CustomBottomBarState extends State<CustomBottomBar>
   static const String _unreadTotalUrl = '$_apiBase/get_unread_total.php';
 
   int _unreadChats = 0;
-
   Timer? _pollTimer;
   bool _pollingEnabled = true;
+
+  static const List<BottomBarTab> _tabs = [
+    BottomBarTab.Home,
+    BottomBarTab.Booking,
+    BottomBarTab.Add,
+    BottomBarTab.Profile,
+  ];
+
+  int get _currentVisualIndex {
+    final i = _tabs.indexOf(widget.currentTab);
+    if (i >= 0) return i;
+    return 0;
+  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-
     _bootstrapUnread();
     _startPolling();
   }
@@ -57,7 +67,6 @@ class _CustomBottomBarState extends State<CustomBottomBar>
     super.dispose();
   }
 
-  /// ✅ Пауза/возобновление опроса (чтобы не спамить в фоне)
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -76,28 +85,22 @@ class _CustomBottomBarState extends State<CustomBottomBar>
     final cached = await PrefUtils.getUnreadChatsCount() ?? 0;
     if (!mounted) return;
     setState(() => _unreadChats = cached);
-
     await _refreshUnreadFromServer();
   }
 
-  /// ✅ callback от ChatScreen — пришёл новый total
   Future<void> _handleUnreadChanged(int total) async {
     if (!mounted) return;
     if (total != _unreadChats) {
       setState(() => _unreadChats = total);
     }
-    // на всякий фиксируем кеш
     await PrefUtils.setUnreadChatsCount(total);
   }
 
   void _startPolling() {
     if (!_pollingEnabled) return;
     _pollTimer?.cancel();
-
     _pollTimer = Timer.periodic(const Duration(seconds: 12), (_) {
-      if (_pollingEnabled) {
-        _refreshUnreadFromServer();
-      }
+      if (_pollingEnabled) _refreshUnreadFromServer();
     });
   }
 
@@ -111,274 +114,222 @@ class _CustomBottomBarState extends State<CustomBottomBar>
     if (uid == 0) return;
 
     try {
-      final uri = Uri.parse('$_unreadTotalUrl?user_id=$uid');
-      final r = await http.get(uri);
+      final r = await http.get(Uri.parse('$_unreadTotalUrl?user_id=$uid'));
       if (r.statusCode != 200) return;
 
       final data = jsonDecode(r.body);
       if (data is Map && data['success'] == true) {
         final total = int.tryParse('${data['unread_total'] ?? 0}') ?? 0;
-
         await PrefUtils.setUnreadChatsCount(total);
-
         if (!mounted) return;
         if (total != _unreadChats) {
           setState(() => _unreadChats = total);
         }
       }
-    } catch (_) {
-      // тихо — оставляем текущее значение
+    } catch (_) {}
+  }
+
+  Future<void> _onTap(int visualIndex) async {
+    final tab = _tabs[visualIndex];
+
+    if (tab == BottomBarTab.Booking) {
+      final uid = await PrefUtils.getUserId() ?? 0;
+      if (uid == 0) return;
+
+      _pollingEnabled = false;
+      _stopPolling();
+
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatScreen(
+            userId: uid,
+            onUnreadChanged: _handleUnreadChanged,
+          ),
+        ),
+      );
+
+      _pollingEnabled = true;
+      _startPolling();
+      await _refreshUnreadFromServer();
+      return;
     }
+
+    // ВАЖНО: BottomBarTab.Add теперь НЕ открывает меню добавления.
+    // Это вкладка "Сервисы". Контейнер должен показать HomeScreen(initialHomeModeIndex: 2).
+    widget.onTabSelected(tab);
   }
 
   @override
   Widget build(BuildContext context) {
-    return BottomNavigationBar(
-      type: BottomNavigationBarType.fixed,
-      currentIndex: widget.currentTab.index,
-      onTap: (index) async {
-        final tab = BottomBarTab.values[index];
+    final media = MediaQuery.of(context);
+    final width = media.size.width;
 
-        // ✅ меню "+"
-        if (tab == BottomBarTab.Add) {
-          _showExtendedMenu(context);
-          return;
-        }
+    // На ПК и планшетах основная навигация находится слева.
+    // На мобильном HomeScreen нижнее меню встроено прямо в home_screen.dart.
+    // Поэтому для home-вкладок скрываем внешний бар, чтобы не было дубля.
+    if (width >= 720 ||
+        widget.currentTab == BottomBarTab.Home ||
+        widget.currentTab == BottomBarTab.Community ||
+        widget.currentTab == BottomBarTab.Add) {
+      return const SizedBox.shrink();
+    }
 
-        // ✅ Лента
-        if (tab == BottomBarTab.Community) {
-          final sport =
-              widget.selectedSport.isNotEmpty ? widget.selectedSport : 'Футбол';
+    final bottomInset = media.padding.bottom;
 
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => SportCommunityScreen(sportName: sport),
-            ),
-          );
-          return;
-        }
-
-        // ✅ Чат
-        if (tab == BottomBarTab.Booking) {
-          final uid = await PrefUtils.getUserId() ?? 0;
-          if (uid == 0) return;
-
-          _pollingEnabled = false;
-          _stopPolling();
-
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ChatScreen(
-                userId: uid,
-                onUnreadChanged: _handleUnreadChanged, // ✅ (int total)
-              ),
-            ),
-          );
-
-          _pollingEnabled = true;
-          _startPolling();
-          await _refreshUnreadFromServer();
-          return;
-        }
-
-        // остальные вкладки — как раньше
-        widget.onTabSelected(tab);
-      },
-      items: [
-        const BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Главная'),
-        const BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Лента'),
-        const BottomNavigationBarItem(icon: Icon(Icons.add), label: 'Добавить'),
-        BottomNavigationBarItem(
-          label: 'Чат',
-          icon: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              const Icon(Icons.chat),
-              _Badge(count: _unreadChats),
-            ],
-          ),
-        ),
-        const BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Профиль'),
-      ],
-    );
-  }
-
-  void _navigateToHomePage(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const HomePage()),
-    );
-  }
-
-  void _showExtendedMenu(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) {
-        return Container(
-          padding: const EdgeInsets.all(20),
-          height: MediaQuery.of(context).size.height * 0.6,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Center(
-                child: Text(
-                  'Добавить новый элемент',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-              ),
-              const SizedBox(height: 20),
-              _buildMenuOption(
-                context,
-                icon: Icons.fitness_center,
-                title: 'Тренировку',
-                subtitle: 'Создать новую программу тренировок',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => AddPersonalTrainingScreen(),
-                    ),
-                  );
-                },
-              ),
-              _buildMenuOption(
-                context,
-                icon: Icons.post_add,
-                title: 'Пост',
-                subtitle: 'Поделиться своими мыслями',
-                onTap: () {
-                  final sport = widget.selectedSport.isNotEmpty
-                      ? widget.selectedSport
-                      : 'Футбол';
-
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => CreatePostEditorScreen(sportName: sport),
-                    ),
-                  );
-                },
-              ),
-              _buildMenuOption(
-                context,
-                icon: Icons.event,
-                title: 'Событие',
-                subtitle: 'Организовать спортивное мероприятие',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ScheduleScreen(sport: widget.selectedSport),
-                    ),
-                  );
-                },
-              ),
-              _buildMenuOption(
-                context,
-                icon: Icons.group_add,
-                title: 'Группу',
-                subtitle: 'Открыть чаты/группы',
-                onTap: () async {
-                  final uid = await PrefUtils.getUserId() ?? 0;
-                  if (uid == 0) return;
-
-                  _pollingEnabled = false;
-                  _stopPolling();
-
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ChatScreen(
-                        userId: uid,
-                        onUnreadChanged: _handleUnreadChanged, // ✅ (int total)
-                      ),
-                    ),
-                  );
-
-                  _pollingEnabled = true;
-                  _startPolling();
-                  await _refreshUnreadFromServer();
-                },
-              ),
-              const Spacer(),
-              OutlinedButton(
-                onPressed: () => Navigator.pop(context),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 50),
-                  side: BorderSide(color: Theme.of(context).primaryColor),
-                ),
-                child: const Text('Отмена'),
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(16, 0, 16, bottomInset > 0 ? 8 : 12),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: const Color(0xFFE7EDF5)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 24,
+                offset: const Offset(0, 10),
               ),
             ],
           ),
-        );
-      },
-    );
-  }
-
-  Widget _buildMenuOption(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: Container(
-        width: 50,
-        height: 50,
-        decoration: BoxDecoration(
-          color: Theme.of(context).primaryColor.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _RoundNavButton(
+                  label: 'Новости',
+                  icon: Icons.article_rounded,
+                  selected: _currentVisualIndex == 0,
+                  onTap: () => _onTap(0),
+                ),
+                _RoundNavButton(
+                  label: 'Чат',
+                  icon: Icons.chat_bubble_rounded,
+                  selected: _currentVisualIndex == 1,
+                  badgeCount: _unreadChats,
+                  onTap: () => _onTap(1),
+                ),
+                _RoundNavButton(
+                  label: 'Сервисы',
+                  icon: Icons.apps_rounded,
+                  selected: _currentVisualIndex == 2,
+                  onTap: () => _onTap(2),
+                ),
+                _RoundNavButton(
+                  label: 'Профиль',
+                  icon: Icons.person_rounded,
+                  selected: _currentVisualIndex == 3,
+                  onTap: () => _onTap(3),
+                ),
+              ],
+            ),
+          ),
         ),
-        child: Icon(icon, color: Theme.of(context).primaryColor),
       ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-      subtitle: Text(subtitle),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: () {
-        Navigator.pop(context);
-        onTap();
-      },
     );
   }
 }
 
-class _Badge extends StatelessWidget {
-  final int count;
-  const _Badge({required this.count});
+class _RoundNavButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final int badgeCount;
+  final VoidCallback onTap;
+
+  const _RoundNavButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+    this.badgeCount = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
-    if (count <= 0) return const SizedBox.shrink();
+    const active = Color(0xFF0877FF);
+    const inactive = Color(0xFF6B7280);
 
-    return Positioned(
-      right: -3,
-      top: -3,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(
-          color: Colors.red,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: Colors.white, width: 2),
-        ),
-        constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-        child: Text(
-          '$count',
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            height: 1.1,
-          ),
+    return InkWell(
+      borderRadius: BorderRadius.circular(24),
+      onTap: onTap,
+      child: SizedBox(
+        width: 72,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: selected ? active : const Color(0xFFF3F6FA),
+                    border: Border.all(
+                      color: selected ? active : const Color(0xFFE3EAF3),
+                    ),
+                    boxShadow: selected
+                        ? [
+                            BoxShadow(
+                              color: active.withOpacity(0.24),
+                              blurRadius: 14,
+                              offset: const Offset(0, 6),
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: Icon(
+                    icon,
+                    color: selected ? Colors.white : inactive,
+                    size: 22,
+                  ),
+                ),
+                if (badgeCount > 0)
+                  Positioned(
+                    right: -4,
+                    top: -4,
+                    child: Container(
+                      constraints: const BoxConstraints(minWidth: 18),
+                      height: 18,
+                      padding: const EdgeInsets.symmetric(horizontal: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE53935),
+                        borderRadius: BorderRadius.circular(99),
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        badgeCount > 99 ? '99+' : '$badgeCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 5),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: selected ? active : inactive,
+                fontSize: 11,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                height: 1,
+              ),
+            ),
+          ],
         ),
       ),
     );

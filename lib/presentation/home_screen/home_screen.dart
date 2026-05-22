@@ -7,6 +7,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:pool/pool.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/data/models/video_folder_model.dart';
 import 'package:sportoteka/data/services/video_lessons_service.dart';
@@ -25,6 +26,7 @@ import 'package:sportoteka/presentation/home_screen/home_customizer_screen.dart'
 import 'package:sportoteka/presentation/home_screen/home_screen_design.dart';
 import 'package:sportoteka/presentation/home_screen/widget/tracking_hero_widget.dart';
 import 'package:sportoteka/presentation/player_screen/player_dashboard_screen.dart';
+import 'package:sportoteka/presentation/profile_screen/profile_screen.dart';
 import 'package:sportoteka/presentation/reels_screen/reels_screen.dart';
 import 'package:sportoteka/presentation/service_screens/event_detail_screen.dart';
 import 'package:sportoteka/presentation/service_screens/generic_service_screen.dart';
@@ -52,6 +54,7 @@ import 'package:sportoteka/presentation/club_attendance/attendance_screen.dart';
 import 'package:sportoteka/presentation/club_trainers/team_trainers_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/chat_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/chat_room_screen.dart';
+import 'package:sportoteka/presentation/cmr/cmr_dashboard_panel.dart';
 
 const String apiBaseUrl = 'https://sportotekaapp.ru/api/';
 const Duration cacheDuration = Duration(minutes: 10);
@@ -290,10 +293,162 @@ Map<String, dynamic> _extractPostPreviewFromBody(String rawBody) {
   };
 }
 
+
+class _HomeQuickAction {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _HomeQuickAction({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+}
+
+class _HomeSideMenuItem {
+  final String id;
+  final String title;
+  final IconData icon;
+
+  const _HomeSideMenuItem({
+    required this.id,
+    required this.title,
+    required this.icon,
+  });
+}
+
+class _HomeSideRailButton extends StatefulWidget {
+  final _HomeSideMenuItem item;
+  final bool active;
+  final bool danger;
+  final Color primaryColor;
+  final Color textColor;
+  final Color mutedColor;
+  final Color backgroundColor;
+  final VoidCallback onTap;
+
+  const _HomeSideRailButton({
+    required this.item,
+    required this.active,
+    required this.primaryColor,
+    required this.textColor,
+    required this.mutedColor,
+    required this.backgroundColor,
+    required this.onTap,
+    this.danger = false,
+  });
+
+  @override
+  State<_HomeSideRailButton> createState() => _HomeSideRailButtonState();
+}
+
+class _HomeSideRailButtonState extends State<_HomeSideRailButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final showLabel = _hovered;
+    final bgColor = widget.active
+        ? widget.primaryColor
+        : showLabel
+            ? widget.backgroundColor
+            : Colors.transparent;
+    final iconColor = widget.active
+        ? Colors.white
+        : widget.danger
+            ? widget.primaryColor
+            : widget.mutedColor;
+    final labelColor = widget.active ? Colors.white : widget.textColor;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Tooltip(
+        message: widget.item.title,
+        waitDuration: const Duration(milliseconds: 250),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            width: showLabel ? 190 : 58,
+            height: 48,
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: widget.active
+                    ? widget.primaryColor.withOpacity(0.20)
+                    : showLabel
+                        ? widget.primaryColor.withOpacity(0.12)
+                        : Colors.transparent,
+              ),
+              boxShadow: showLabel
+                  ? [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 18,
+                        offset: const Offset(0, 8),
+                      ),
+                    ]
+                  : const [],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: widget.onTap,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(widget.item.icon, size: 22, color: iconColor),
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 160),
+                        curve: Curves.easeOut,
+                        child: showLabel
+                            ? Padding(
+                                padding: const EdgeInsets.only(left: 12),
+                                child: Text(
+                                  widget.item.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w900,
+                                    color: labelColor,
+                                  ),
+                                ),
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class HomeScreen extends StatefulWidget {
   final void Function(String)? onSportChanged;
+  final int initialHomeModeIndex;
 
-  const HomeScreen({super.key, this.onSportChanged});
+  const HomeScreen({
+    super.key,
+    this.onSportChanged,
+    this.initialHomeModeIndex = 1,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -356,7 +511,8 @@ String _selectedWorkspaceTeamName = '';
 
   bool _collapsedHeader = false;
   int _quickActionPage = 0;
-  int _homeModeIndex = 0;
+  int _homeModeIndex = 1;
+  String _homeWorkspaceTab = 'profile';
   int _dashboardPreviewPage = 0;
 
   bool get _isClubRole => _currentRole == 'club' || _currentRole == 'federation';
@@ -375,6 +531,8 @@ bool get _hasCoachOwnedTeams =>
   void initState() {
     super.initState();
 
+    _homeModeIndex = widget.initialHomeModeIndex.clamp(0, 3).toInt();
+
     _scrollController = ScrollController()
       ..addListener(() {
         final collapsed =
@@ -392,7 +550,7 @@ bool get _hasCoachOwnedTeams =>
     }
   });
   
-    _homeModeController = PageController()
+    _homeModeController = PageController(initialPage: _homeModeIndex)
       ..addListener(() {
         final value = _homeModeController.page?.round() ?? 0;
         if (value != _homeModeIndex && mounted) {
@@ -447,22 +605,26 @@ bool get _hasCoachOwnedTeams =>
   }
 
   double _contentMaxWidth(BuildContext context) {
-  final width = MediaQuery.of(context).size.width;
+    final width = MediaQuery.of(context).size.width;
 
-  if (width >= 1400) return width - 28;
-  if (width >= 1100) return width - 20;
-  if (width >= 700) return width - 12;
+    // На desktop/macOS экран не должен растягиваться бесконечно:
+    // держим рабочую область как аккуратный кабинет с читаемой шириной.
+    if (width >= 1500) return 1420;
+    if (width >= 1200) return width - 56;
+    if (width >= 900) return width - 36;
+    if (width >= 700) return width - 24;
 
-  return width;
-}
+    return width;
+  }
 
-double _adaptiveHorizontalPadding(BuildContext context) {
-  final width = MediaQuery.of(context).size.width;
+  double _adaptiveHorizontalPadding(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
 
-  if (width >= 1200) return 10;
-  if (width >= 900) return 8;
-  return 12;
-}
+    if (width >= 1200) return 18;
+    if (width >= 900) return 14;
+    if (width >= 700) return 12;
+    return 12;
+  }
 
 double _hubPreviewHeight(BuildContext context) {
   final isTools = _homeModeIndex == 0;
@@ -2163,6 +2325,17 @@ Future<void> _loadRoleWorkspaceData() async {
 
   void _openVideoLessons() {
     if (!mounted) return;
+
+    final width = MediaQuery.of(context).size.width;
+
+    // На планшетах и ПК видеоуроки открываем внутри правой рабочей области,
+    // как при нажатии на пункт бокового меню. Так левое меню не пропадает.
+    if (width >= 720) {
+      _selectHomeWorkspaceTab('video_lessons');
+      return;
+    }
+
+    // На телефоне оставляем обычный полноэкранный переход.
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -2269,15 +2442,699 @@ Future<void> _loadRoleWorkspaceData() async {
     }
   }
 
+
+  void _selectHomeWorkspaceTab(String tab) {
+    if (!mounted) return;
+
+    setState(() {
+      _homeWorkspaceTab = tab;
+
+      if (tab == 'overview') {
+        _homeModeIndex = 1; // Обзор открывает текущую новостную ленту.
+      } else if (tab == 'dashboard') {
+        _homeModeIndex = 0; // Приборная панель открывает рабочую панель.
+      } else if (tab == 'services') {
+        _homeModeIndex = 2;
+      } else if (tab == 'tips') {
+        _homeModeIndex = 3;
+      }
+    });
+  }
+
+  Future<void> _logoutToLogin() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(PrefUtils.userIdKey);
+    await prefs.remove(PrefUtils.teamIdKey);
+    await prefs.remove(PrefUtils.userRole);
+    await prefs.remove(PrefUtils.userFirstName);
+    await prefs.remove(PrefUtils.userLastName);
+    await prefs.remove(PrefUtils.userEmail);
+    await prefs.remove(PrefUtils.signIn);
+
+    if (!mounted) return;
+    Get.offAllNamed(AppRoutes.loginScreen);
+  }
+
+  List<_HomeSideMenuItem> _homeSideMenuItems() {
+    return const [
+      _HomeSideMenuItem(
+        id: 'overview',
+        title: 'Обзор',
+        icon: Icons.newspaper_rounded,
+      ),
+      _HomeSideMenuItem(
+        id: 'dashboard',
+        title: 'События',
+        icon: Icons.dashboard_customize_rounded,
+      ),
+      _HomeSideMenuItem(
+        id: 'services',
+        title: 'Сервисы',
+        icon: Icons.apps_rounded,
+      ),
+      _HomeSideMenuItem(
+        id: 'video_lessons',
+        title: 'Видеоуроки',
+        icon: Icons.school_rounded,
+      ),
+      _HomeSideMenuItem(
+        id: 'chat',
+        title: 'Чат',
+        icon: Icons.forum_rounded,
+      ),
+      _HomeSideMenuItem(
+        id: 'live',
+        title: 'Эфир',
+        icon: Icons.live_tv_rounded,
+      ),
+    ];
+  }
+
+  Widget _buildDesktopTabletHomeShell(BuildContext context) {
+    final horizontalPadding = _adaptiveHorizontalPadding(context);
+    final maxWidth = _contentMaxWidth(context);
+
+    return SafeArea(
+      child: Row(
+        children: [
+          _buildVerticalHomeMenu(context),
+          Expanded(
+            child: _homeWorkspaceTab == 'overview' ||
+                    _homeWorkspaceTab == 'dashboard' ||
+                    _homeWorkspaceTab == 'services' ||
+                    _homeWorkspaceTab == 'tips'
+                ? RefreshIndicator(
+                    color: _homeDesign.primaryColor,
+                    onRefresh: _loadInitialData,
+                    child: CustomScrollView(
+                      controller: _scrollController,
+                      physics: const BouncingScrollPhysics(),
+                      slivers: [
+                        SliverToBoxAdapter(
+                          child: Center(
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(maxWidth: maxWidth),
+                              child: Padding(
+                                padding: EdgeInsets.fromLTRB(
+                                  horizontalPadding,
+                                  12,
+                                  horizontalPadding,
+                                  0,
+                                ),
+                                child: _buildAdaptiveHomeContent(context),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : _buildEmbeddedWorkspacePage(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileHomeShell(BuildContext context) {
+    final horizontalPadding = _adaptiveHorizontalPadding(context);
+    final maxWidth = _contentMaxWidth(context);
+
+    return SafeArea(
+      child: RefreshIndicator(
+        color: _homeDesign.primaryColor,
+        onRefresh: _loadInitialData,
+        child: CustomScrollView(
+          controller: _scrollController,
+          physics: const BouncingScrollPhysics(),
+          slivers: [
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _SportotekaHeaderDelegate(
+                collapsed: _collapsedHeader,
+                minExtentValue: _isPhoneLandscape(context) ? 58 : 65,
+                maxExtentValue: _isPhoneLandscape(context) ? 92 : 140,
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: maxWidth),
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        horizontalPadding,
+                        6,
+                        horizontalPadding,
+                        6,
+                      ),
+                      child: _buildCollapsibleHeader(context),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxWidth),
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      horizontalPadding,
+                      10,
+                      horizontalPadding,
+                      0,
+                    ),
+                    child: _buildAdaptiveHomeContent(context),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmbeddedWorkspacePage(BuildContext context) {
+    Widget page;
+
+    switch (_homeWorkspaceTab) {
+      case 'video_lessons':
+        page = const VideoLessonsHubScreen();
+        break;
+      case 'chat':
+        page = ChatScreen(userId: _userId ?? 0);
+        break;
+      case 'live':
+        page = const ReelsScreen();
+        break;
+      case 'profile':
+        page = const ProfileScreen();
+        break;
+      default:
+        page = _buildAdaptiveHomeContent(context);
+    }
+
+    return Container(
+      color: _homeDesign.backgroundColor,
+      child: page,
+    );
+  }
+
+  Widget _buildVerticalHomeMenu(BuildContext context) {
+    final items = _homeSideMenuItems();
+
+    return Container(
+      width: 78,
+      margin: const EdgeInsets.fromLTRB(10, 10, 0, 10),
+      decoration: BoxDecoration(
+        color: _homeDesign.cardColor,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _homeDesign.borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(_homeDesign.shadowOpacity),
+            blurRadius: _homeDesign.shadowBlur,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 10),
+          Tooltip(
+            message: 'Профиль',
+            waitDuration: const Duration(milliseconds: 250),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(18),
+              onTap: () => _selectHomeWorkspaceTab('profile'),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: _homeWorkspaceTab == 'profile'
+                      ? _homeDesign.primaryColor
+                      : _homeDesign.primaryColor.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Center(
+                  child: Text(
+                    _currentFullName.trim().isEmpty
+                        ? 'С'
+                        : _currentFullName.trim().characters.first.toUpperCase(),
+                    style: TextStyle(
+                      color: _homeWorkspaceTab == 'profile'
+                          ? Colors.white
+                          : _homeDesign.primaryColor,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 18,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              physics: const BouncingScrollPhysics(),
+              clipBehavior: Clip.none,
+              itemCount: items.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final item = items[index];
+                return _HomeSideRailButton(
+                  item: item,
+                  active: _homeWorkspaceTab == item.id,
+                  primaryColor: _homeDesign.primaryColor,
+                  textColor: _homeDesign.textColor,
+                  mutedColor: _homeDesign.mutedTextColor,
+                  backgroundColor: _homeDesign.backgroundColor,
+                  onTap: () => _selectHomeWorkspaceTab(item.id),
+                );
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+            child: _HomeSideRailButton(
+              item: const _HomeSideMenuItem(
+                id: 'tips',
+                title: 'Советы',
+                icon: Icons.tips_and_updates_rounded,
+              ),
+              active: _homeWorkspaceTab == 'tips',
+              primaryColor: _homeDesign.primaryColor,
+              textColor: _homeDesign.textColor,
+              mutedColor: _homeDesign.mutedTextColor,
+              backgroundColor: _homeDesign.backgroundColor,
+              onTap: () => _selectHomeWorkspaceTab('tips'),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
+            child: _HomeSideRailButton(
+              item: const _HomeSideMenuItem(
+                id: 'logout',
+                title: 'Выйти',
+                icon: Icons.logout_rounded,
+              ),
+              active: false,
+              danger: true,
+              primaryColor: const Color(0xFFDC2626),
+              textColor: _homeDesign.textColor,
+              mutedColor: const Color(0xFFDC2626),
+              backgroundColor: const Color(0xFFFFEDED),
+              onTap: _logoutToLogin,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+  bool _isEmbeddedHomeTab(String tab) {
+    return tab == 'video_lessons' ||
+        tab == 'chat' ||
+        tab == 'live' ||
+        tab == 'profile';
+  }
+
+  void _handleMobileBottomTap(int index) {
+    switch (index) {
+      case 0:
+        _selectHomeWorkspaceTab('overview');
+        break;
+      case 1:
+        _selectHomeWorkspaceTab('dashboard');
+        break;
+      case 2:
+        _selectHomeWorkspaceTab('chat');
+        break;
+      case 3:
+        _selectHomeWorkspaceTab('profile');
+        break;
+      case 4:
+        _openMobileMoreMenu();
+        break;
+    }
+  }
+
+  void _handleMobileMoreAction(String id) {
+    if (!mounted) return;
+
+    switch (id) {
+      case 'profile':
+      case 'video_lessons':
+      case 'chat':
+      case 'live':
+      case 'tips':
+      case 'overview':
+      case 'dashboard':
+      case 'services':
+        _selectHomeWorkspaceTab(id);
+        break;
+      case 'search':
+        _openSearch();
+        break;
+      case 'tracking':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const TrackingModeScreen()),
+        );
+        break;
+      case 'clubs':
+        _openClubsAll();
+        break;
+      case 'venues':
+        _openVenuesAll();
+        break;
+      case 'schedule':
+        _openScheduleAll();
+        break;
+      case 'events':
+        _openEventsAll();
+        break;
+      case 'tickets':
+        _openTicketsAll();
+        break;
+      case 'subscription':
+        _openSubscription();
+        break;
+      case 'settings':
+        _openHomeCustomizer();
+        break;
+      case 'logout':
+        _logoutToLogin();
+        break;
+    }
+  }
+
+  int _mobileBottomMenuIndex() {
+    switch (_homeWorkspaceTab) {
+      case 'overview':
+        return 0;
+      case 'dashboard':
+        return 1;
+      case 'chat':
+        return 2;
+      case 'profile':
+        return 3;
+      default:
+        return 4;
+    }
+  }
+
+  Widget _buildMobileBottomMenu(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+        decoration: BoxDecoration(
+          color: _homeDesign.cardColor,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: _homeDesign.borderColor),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.10),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(22),
+          child: BottomNavigationBar(
+            currentIndex: _mobileBottomMenuIndex(),
+            type: BottomNavigationBarType.fixed,
+            backgroundColor: _homeDesign.cardColor,
+            selectedItemColor: _homeDesign.primaryColor,
+            unselectedItemColor: _homeDesign.mutedTextColor,
+            selectedFontSize: 10.5,
+            unselectedFontSize: 10.2,
+            selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w900),
+            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700),
+            elevation: 0,
+            onTap: _handleMobileBottomTap,
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.newspaper_rounded),
+                label: 'Обзор',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.dashboard_customize_rounded),
+                label: 'События',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.forum_rounded),
+                label: 'Чат',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.person_rounded),
+                label: 'Профиль',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.more_horiz_rounded),
+                label: 'Ещё',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openMobileMoreMenu() {
+    final items = <_HomeSideMenuItem>[
+      const _HomeSideMenuItem(
+        id: 'services',
+        title: 'Сервисы',
+        icon: Icons.apps_rounded,
+      ),
+      ..._homeSideMenuItems().where(
+        (item) => item.id != 'overview' &&
+            item.id != 'dashboard' &&
+            item.id != 'services' &&
+            item.id != 'chat',
+      ),
+      const _HomeSideMenuItem(
+        id: 'tips',
+        title: 'Советы',
+        icon: Icons.tips_and_updates_rounded,
+      ),
+      const _HomeSideMenuItem(
+        id: 'search',
+        title: 'Поиск',
+        icon: Icons.search_rounded,
+      ),
+      const _HomeSideMenuItem(
+        id: 'tracking',
+        title: 'Трекинг',
+        icon: Icons.monitor_heart_rounded,
+      ),
+      const _HomeSideMenuItem(
+        id: 'clubs',
+        title: 'Клубы и команды',
+        icon: Icons.groups_rounded,
+      ),
+      const _HomeSideMenuItem(
+        id: 'venues',
+        title: 'Площадки',
+        icon: Icons.stadium_rounded,
+      ),
+      const _HomeSideMenuItem(
+        id: 'schedule',
+        title: 'Расписание',
+        icon: Icons.calendar_month_rounded,
+      ),
+      const _HomeSideMenuItem(
+        id: 'events',
+        title: 'Мероприятия',
+        icon: Icons.event_rounded,
+      ),
+      const _HomeSideMenuItem(
+        id: 'tickets',
+        title: 'Билеты',
+        icon: Icons.confirmation_number_rounded,
+      ),
+      const _HomeSideMenuItem(
+        id: 'subscription',
+        title: 'PRO подписка',
+        icon: Icons.workspace_premium_rounded,
+      ),
+      const _HomeSideMenuItem(
+        id: 'settings',
+        title: 'Настройки экрана',
+        icon: Icons.tune_rounded,
+      ),
+      const _HomeSideMenuItem(
+        id: 'logout',
+        title: 'Выйти',
+        icon: Icons.logout_rounded,
+      ),
+    ];
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return SafeArea(
+          top: false,
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(sheetContext).size.height * 0.74,
+            ),
+            decoration: BoxDecoration(
+              color: _homeDesign.backgroundColor,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: _homeDesign.borderColor),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.16),
+                  blurRadius: 28,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 42,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: _homeDesign.borderColor,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Ещё разделы',
+                        style: TextStyle(
+                          color: _homeDesign.textColor,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(sheetContext),
+                      icon: Icon(
+                        Icons.close_rounded,
+                        color: _homeDesign.mutedTextColor,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Flexible(
+                  child: GridView.builder(
+                    shrinkWrap: true,
+                    physics: const BouncingScrollPhysics(),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 3,
+                      mainAxisSpacing: 10,
+                      crossAxisSpacing: 10,
+                      childAspectRatio: 0.98,
+                    ),
+                    itemCount: items.length,
+                    itemBuilder: (context, index) {
+                      final item = items[index];
+                      final active = _homeWorkspaceTab == item.id;
+                      final isLogout = item.id == 'logout';
+                      final color = isLogout
+                          ? const Color(0xFFDC2626)
+                          : _homeDesign.primaryColor;
+
+                      return Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(18),
+                          onTap: () {
+                            Navigator.pop(sheetContext);
+                            _handleMobileMoreAction(item.id);
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 160),
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: active
+                                  ? color.withOpacity(0.12)
+                                  : _homeDesign.cardColor,
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: active
+                                    ? color.withOpacity(0.55)
+                                    : _homeDesign.borderColor,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.035),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: color.withOpacity(0.10),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  child: Icon(
+                                    item.icon,
+                                    color: color,
+                                    size: 20,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  item.title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: isLogout
+                                        ? color
+                                        : _homeDesign.textColor,
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w800,
+                                    height: 1.08,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _openDrawer() {
     _scaffoldKey.currentState?.openDrawer();
   }
 
   @override
   Widget build(BuildContext context) {
-    final horizontalPadding = _adaptiveHorizontalPadding(context);
-    final maxWidth = _contentMaxWidth(context);
-
     if (hasError) {
       return Scaffold(
         key: _scaffoldKey,
@@ -2331,154 +3188,435 @@ Future<void> _loadRoleWorkspaceData() async {
       );
     }
 
+    final width = MediaQuery.of(context).size.width;
+    final useSideMenu = width >= 720;
+    final isEmbeddedMobileTab = _isEmbeddedHomeTab(_homeWorkspaceTab);
+
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: _homeDesign.backgroundColor,
-      drawer: _CustomDrawer(
-        design: _homeDesign,
-        userName: _currentFullName,
-        userRole: _currentRole,
-        teamOrClubName: _getDashboardTargetName().trim().isNotEmpty
-            ? _getDashboardTargetName().trim()
-            : _currentFullName,
-        teamLogoUrl: _currentTeamLogoUrl,
-        onMenuItemTap: (route) {
-          Navigator.pop(context);
+      body: useSideMenu
+          ? _buildDesktopTabletHomeShell(context)
+          : (isEmbeddedMobileTab
+              ? SafeArea(child: _buildEmbeddedWorkspacePage(context))
+              : _buildMobileHomeShell(context)),
+      // На телефоне показываем одно нижнее меню HomeScreen.
+      // На планшете и ПК остаётся боковое меню.
+      bottomNavigationBar: useSideMenu ? null : _buildMobileBottomMenu(context),
+    );
+  }
+  
 
-          switch (route) {
-            case 'home':
-              break;
-            case 'search':
-              _openSearch();
-              break;
-            case 'tracking':
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const TrackingModeScreen(),
+  Widget _buildAdaptiveHomeContent(BuildContext context) {
+    if (isLoading) {
+      return _buildLoadingPlaceholder();
+    }
+
+    final width = MediaQuery.of(context).size.width;
+    final isDesktop = width >= 1180;
+    final isTablet = width >= 720 && width < 1180;
+    final currentHub = _buildCurrentHomeHubPage(context);
+    final currentSections = _buildCurrentHomeSections(context);
+    final showCurrentHub = _homeModeIndex != 2;
+
+    if (isDesktop) {
+      return Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1180),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (showCurrentHub) ...[
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  child: currentHub,
                 ),
-              );
-              break;
-            case 'clubs':
-              _openClubsAll();
-              break;
-            case 'venues':
-              _openVenuesAll();
-              break;
-            case 'schedule':
-              _openScheduleAll();
-              break;
-            case 'video_lessons':
-              _openVideoLessons();
-              break;
-            case 'reels':
-              _openReels();
-              break;
-            case 'events':
-              _openEventsAll();
-              break;
-            case 'tickets':
-              _openTicketsAll();
-              break;
-            case 'subscription':
-              _openSubscription();
-              break;
-            case 'settings':
-              _openHomeCustomizer();
-              break;
-            case 'help':
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => GenericServiceScreen(
-                    title: 'Помощь',
-                    sport: selectedSport ?? 'Футбол',
-                  ),
+                if (currentSections.isNotEmpty) const SizedBox(height: 12),
+              ],
+              ...currentSections,
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (isTablet) {
+      return Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 920),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (showCurrentHub) ...[
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  child: currentHub,
                 ),
-              );
-              break;
-          }
+                if (currentSections.isNotEmpty) const SizedBox(height: 12),
+              ],
+              ...currentSections,
+            ],
+          ),
+        ),
+      );
+    }
+
+    // На мобильной версии верхний переключатель-хаб не показываем,
+    // чтобы не дублировать нижнее меню.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (showCurrentHub) ...[
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            child: currentHub,
+          ),
+          if (currentSections.isNotEmpty) const SizedBox(height: 10),
+        ] else if (currentSections.isNotEmpty)
+          const SizedBox(height: 10),
+        ...currentSections,
+      ],
+    );
+  }
+
+  Widget _buildCurrentHomeHubPage(BuildContext context) {
+    if (_homeModeIndex == 0) return _buildToolsHubPage(context);
+    if (_homeModeIndex == 1) return _buildNewsHubPage(context);
+    if (_homeModeIndex == 3) return _buildTipsHubPage(context);
+    return _buildServicesHubPage(context);
+  }
+
+  List<Widget> _buildCurrentHomeSections(BuildContext context) {
+    if (_homeModeIndex == 0) return _buildToolsSections(context);
+    if (_homeModeIndex == 1) return _buildNewsSections(context);
+    if (_homeModeIndex == 3) return const <Widget>[];
+    return _buildServicesSections(context);
+  }
+
+  Widget _buildDesktopQuickPanel(BuildContext context) {
+    final items = _mainHomeQuickActions(context).take(6).toList();
+
+    return _adaptiveSurface(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _adaptiveSurfaceTitle(
+            icon: Icons.apps_rounded,
+            title: 'Быстрые действия',
+            subtitle: 'Основные разделы без лишних баннеров',
+          ),
+          const SizedBox(height: 12),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: items.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+              childAspectRatio: 1.42,
+            ),
+            itemBuilder: (context, index) => _buildQuickActionTile(items[index]),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabletQuickStrip(BuildContext context) {
+    final items = _mainHomeQuickActions(context).take(4).toList();
+
+    return _adaptiveSurface(
+      padding: const EdgeInsets.all(10),
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: items.length,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 4,
+          mainAxisSpacing: 8,
+          crossAxisSpacing: 8,
+          childAspectRatio: 1.05,
+        ),
+        itemBuilder: (context, index) => _buildQuickActionTile(items[index], compact: true),
+      ),
+    );
+  }
+
+  Widget _buildMobileQuickStrip(BuildContext context) {
+    final items = _mainHomeQuickActions(context).take(4).toList();
+
+    return SizedBox(
+      height: 88,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        itemCount: items.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          return SizedBox(
+            width: 118,
+            child: _buildQuickActionTile(items[index], compact: true),
+          );
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: _homeDesign.primaryColor,
-        onPressed: _openHomeCustomizer,
-        child: const Icon(Icons.tune_rounded, color: Colors.white),
+    );
+  }
+
+  Widget _buildDesktopAccountPanel(BuildContext context) {
+    final name = _currentFullName.trim().isNotEmpty ? _currentFullName.trim() : 'Профиль';
+    final role = _currentRole.trim().isNotEmpty ? _currentRole.trim() : 'Пользователь';
+    final target = _getDashboardTargetName().trim();
+
+    return _adaptiveSurface(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _adaptiveSurfaceTitle(
+            icon: Icons.account_circle_rounded,
+            title: name,
+            subtitle: target.isNotEmpty ? target : role,
+          ),
+          const SizedBox(height: 10),
+          _buildSmallInfoRow(Icons.verified_user_outlined, 'Роль', role),
+          const SizedBox(height: 7),
+          _buildSmallInfoRow(Icons.sports_soccer_rounded, 'Вид спорта', selectedSport ?? 'Футбол'),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _openHomeCustomizer,
+              icon: const Icon(Icons.tune_rounded, size: 17),
+              label: const Text('Настроить главную'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _homeDesign.primaryColor,
+                side: BorderSide(color: _homeDesign.primaryColor.withOpacity(0.28)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+        ],
       ),
-      body: SafeArea(
-        child: RefreshIndicator(
-          color: _homeDesign.primaryColor,
-          onRefresh: _loadInitialData,
-          child: CustomScrollView(
-            controller: _scrollController,
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              SliverPersistentHeader(
-                pinned: true,
-                delegate: _SportotekaHeaderDelegate(
-                  collapsed: _collapsedHeader,
-                  minExtentValue: _isPhoneLandscape(context) ? 58 : 65,
-                  maxExtentValue: _isPhoneLandscape(context) ? 92 : 140,
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: maxWidth),
-                      child: Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          horizontalPadding,
-                          6,
-                          horizontalPadding,
-                          6,
-                        ),
-                        child: _buildCollapsibleHeader(context),
-                      ),
-                    ),
-                  ),
+    );
+  }
+
+  Widget _adaptiveSurface({
+    required Widget child,
+    EdgeInsetsGeometry padding = const EdgeInsets.all(12),
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: _homeDesign.cardColor,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _homeDesign.borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity((_homeDesign.shadowOpacity * 0.8).clamp(0, 0.18).toDouble()),
+            blurRadius: (_homeDesign.shadowBlur * 0.8).clamp(0, 24).toDouble(),
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  Widget _adaptiveSurfaceTitle({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    return Row(
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: _homeDesign.primaryColor.withOpacity(0.10),
+            borderRadius: BorderRadius.circular(11),
+          ),
+          child: Icon(icon, color: _homeDesign.primaryColor, size: 18),
+        ),
+        const SizedBox(width: 9),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                  color: _homeDesign.textColor,
+                  height: 1.1,
                 ),
               ),
-              SliverToBoxAdapter(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: maxWidth),
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        horizontalPadding,
-                        10,
-                        horizontalPadding,
-                        0,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                  
-                          _buildHomeHubSwitcher(context),
-                          const SizedBox(height: 10),
-                   AnimatedSwitcher(
-  duration: const Duration(milliseconds: 220),
-  child: isLoading
-      ? _buildLoadingPlaceholder()
-      : (_homeModeIndex == 0
-          ? _buildToolsHubPage(context)
-          : _homeModeIndex == 1
-              ? _buildNewsHubPage(context)
-              : _buildServicesHubPage(context)),
-),
-const SizedBox(height: 12),
-if (!isLoading && _homeModeIndex == 0) ..._buildToolsSections(context),
-if (!isLoading && _homeModeIndex == 1) ..._buildNewsSections(context),
-if (!isLoading && _homeModeIndex == 2) ..._buildServicesSections(context),
-       ],
-                      ),
-                    ),
-                  ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: _homeDesign.mutedTextColor,
+                  height: 1.15,
                 ),
               ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSmallInfoRow(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: _homeDesign.mutedTextColor),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: _homeDesign.mutedTextColor,
+            ),
+          ),
+        ),
+        Flexible(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w900,
+              color: _homeDesign.textColor,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  List<_HomeQuickAction> _mainHomeQuickActions(BuildContext context) {
+    return [
+      _HomeQuickAction(
+        title: 'Календарь',
+        subtitle: 'Матчи и события',
+        icon: Icons.calendar_today_rounded,
+        color: const Color(0xFF2563EB),
+        onTap: _openScheduleAll,
+      ),
+      _HomeQuickAction(
+        title: 'Площадки',
+        subtitle: 'Бронирование',
+        icon: Icons.location_on_outlined,
+        color: const Color(0xFF0891B2),
+        onTap: _openVenuesAll,
+      ),
+      _HomeQuickAction(
+        title: 'Клубы',
+        subtitle: 'Команды',
+        icon: Icons.groups_2_outlined,
+        color: const Color(0xFF0F766E),
+        onTap: _openClubsAll,
+      ),
+      _HomeQuickAction(
+        title: 'Видео',
+        subtitle: 'Reels',
+        icon: Icons.play_circle_fill_rounded,
+        color: const Color(0xFF7C3AED),
+        onTap: _openReels,
+      ),
+      _HomeQuickAction(
+        title: 'Уроки',
+        subtitle: 'Обучение',
+        icon: Icons.ondemand_video_rounded,
+        color: const Color(0xFFEA580C),
+        onTap: _openVideoLessons,
+      ),
+      _HomeQuickAction(
+        title: 'Подписка',
+        subtitle: 'Возможности',
+        icon: Icons.workspace_premium_rounded,
+        color: const Color(0xFFDB2777),
+        onTap: _openSubscription,
+      ),
+    ];
+  }
+
+  Widget _buildQuickActionTile(_HomeQuickAction item, {bool compact = false}) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(15),
+      clipBehavior: Clip.hardEdge,
+      child: InkWell(
+        onTap: item.onTap,
+        child: Ink(
+          padding: EdgeInsets.all(compact ? 9 : 10),
+          decoration: BoxDecoration(
+            color: item.color.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: item.color.withOpacity(0.14)),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: compact ? 30 : 34,
+                height: compact ? 30 : 34,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.78),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(item.icon, size: compact ? 16 : 18, color: item.color),
+              ),
+              SizedBox(height: compact ? 7 : 9),
+              Text(
+                item.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: compact ? 11 : 12,
+                  fontWeight: FontWeight.w900,
+                  color: _homeDesign.textColor,
+                  height: 1.05,
+                ),
+              ),
+              if (!compact || item.subtitle.length <= 12) ...[
+                const SizedBox(height: 2),
+                Text(
+                  item.subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: compact ? 9.5 : 10.5,
+                    fontWeight: FontWeight.w600,
+                    color: _homeDesign.mutedTextColor,
+                    height: 1.05,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
       ),
     );
   }
-  
+
+
 Widget _buildPlayerHomeEntrySection(
   BuildContext context, {
   EdgeInsetsGeometry margin = const EdgeInsets.only(bottom: 12),
@@ -3690,8 +4828,8 @@ Widget _buildNewsHubPage(BuildContext context) {
                       _buildFeaturedNewsCard(
                         featured,
                         _postsConfig,
-                        customImageHeight: 220,
-                        customTextLines: 3,
+                        customImageHeight: 180,
+                        customTextLines: 2,
                       ),
                       if (secondary != null) ...[
                         const SizedBox(height: 10),
@@ -3726,8 +4864,8 @@ Widget _buildNewsHubPage(BuildContext context) {
                 _buildFeaturedNewsCard(
                   featured,
                   _postsConfig,
-                  customImageHeight: 190,
-                  customTextLines: 3,
+                  customImageHeight: _isTablet(context) ? 180 : 190,
+                  customTextLines: _isTablet(context) ? 2 : 3,
                 ),
                 if (secondary != null) ...[
                   const SizedBox(height: 10),
@@ -4166,7 +5304,7 @@ Widget _buildClubCmrEntryCard(BuildContext context) {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Панель клуба CMR',
+                  'Рабочая панель клуба',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -4178,7 +5316,7 @@ Widget _buildClubCmrEntryCard(BuildContext context) {
                 ),
                 const SizedBox(height: 5),
                 const Text(
-                  'Матчи, составы, календарь, чаты, ТТД и аналитика клуба в одном рабочем экране.',
+                  'Составы, матчи, календарь, тренеры и аналитика клуба в одном рабочем окне.',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -4328,7 +5466,7 @@ Widget _buildClubOverviewInlineCard() {
     final avg = ((structurePct + staffPct + calendarPct + reportsPct) / 4).round();
     if (avg >= 75) return 'система заполнена хорошо';
     if (avg >= 45) return 'нужно немного данных';
-    return 'нужно заполнить CMR';
+    return 'нужно заполнить панель';
   }
 
   final hints = <String>[
@@ -4352,7 +5490,7 @@ Widget _buildClubOverviewInlineCard() {
           children: [
             Expanded(
               child: Text(
-                'CMR-готовность клуба',
+                'Готовность клуба',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -4391,38 +5529,110 @@ Widget _buildClubOverviewInlineCard() {
         _buildCmrReadinessLine(title: 'Матчевые отчёты', value: reportsPct, icon: Icons.analytics_outlined),
         const SizedBox(height: 12),
         Expanded(
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: _buildClubTipsShortcutCard(hints),
+        ),
+      ],
+    ),
+  );
+}
+
+
+Widget _buildClubTipsShortcutCard(List<String> hints) {
+  final text = hints.isEmpty
+      ? 'Открыть инструкции по работе клуба'
+      : hints.take(2).join(' • ');
+
+  return InkWell(
+    borderRadius: BorderRadius.circular(15),
+    onTap: _openClubTipsInsideHome,
+    child: Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: const Color(0xFFE4EFE8)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(color: const Color(0xFFE4EFE8)),
+              color: _homeDesign.primaryColor.withOpacity(.10),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Row(
+            child: Icon(
+              Icons.tips_and_updates_outlined,
+              color: _homeDesign.primaryColor,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.tips_and_updates_outlined, color: _homeDesign.primaryColor, size: 18),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    hints.isEmpty ? 'Клубная карточка выглядит готовой для работы' : hints.take(2).join(' • '),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFF475569),
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w800,
-                      height: 1.25,
-                    ),
+                const Text(
+                  'Советы и подсказки',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Color(0xFF0F172A),
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w900,
+                    height: 1.05,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  text,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF475569),
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    height: 1.25,
                   ),
                 ),
               ],
             ),
           ),
-        ),
-      ],
+          const SizedBox(width: 8),
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: _homeDesign.primaryColor.withOpacity(.10),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.arrow_forward_rounded,
+              color: _homeDesign.primaryColor,
+              size: 17,
+            ),
+          ),
+        ],
+      ),
     ),
   );
+}
+
+void _openClubTipsInsideHome() {
+  if (!mounted) return;
+  setState(() {
+    _homeWorkspaceTab = 'dashboard';
+    _homeModeIndex = 3;
+  });
+  if (_scrollController.hasClients) {
+    _scrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+    );
+  }
 }
 
 Widget _buildCmrReadinessLine({
@@ -4781,111 +5991,108 @@ Widget _buildHeroStatCardHome({
     );
   }
 
-  Widget _buildCollapsibleHeader(BuildContext context) {
-    final compact = _collapsedHeader && !_isTablet(context);
-    final logoUrl = _currentTeamLogoUrl.trim();
-    final targetName = _getDashboardTargetName().trim();
+ Widget _buildCollapsibleHeader(BuildContext context) {
+  final compact = _collapsedHeader && !_isTablet(context);
+  final logoUrl = _currentTeamLogoUrl.trim();
+  final targetName = _getDashboardTargetName().trim();
 
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            _homeDesign.headerStartColor,
-            _homeDesign.headerMidColor,
-            _homeDesign.headerEndColor,
-          ],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
+  return Container(
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(18),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          _homeDesign.headerStartColor,
+          _homeDesign.headerMidColor,
+          _homeDesign.headerEndColor,
         ],
       ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: _isTablet(context) ? 14 : 12,
-          vertical: compact ? 8 : 10,
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.08),
+          blurRadius: 14,
+          offset: const Offset(0, 4),
         ),
-        child: Row(
-          children: [
-            _headerActionButton(
-              icon: Icons.menu_rounded,
-              onTap: _openDrawer,
-            ),
-            const SizedBox(width: 10),
-            _buildHeaderBrandLogo(
-              logoUrl: logoUrl,
-              compact: compact,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+      ],
+    ),
+    child: Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: _isTablet(context) ? 14 : 12,
+        vertical: compact ? 8 : 10,
+      ),
+      child: Row(
+        children: [
+          _buildHeaderBrandLogo(
+            logoUrl: logoUrl,
+            compact: compact,
+          ),
+          const SizedBox(width: 10),
+
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Спортотека',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: _responsiveFont(
+                      context,
+                      mobile: compact ? 17 : 18,
+                      tablet: compact ? 18 : 19,
+                      landscapeDelta: -0.2,
+                    ),
+                    letterSpacing: -0.45,
+                    height: 1.05,
+                  ),
+                ),
+                if (!compact) ...[
+                  const SizedBox(height: 2),
                   Text(
-                    'Спортотека',
+                    targetName.isNotEmpty
+                        ? targetName
+                        : 'Вместе к победам!',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
+                      color: Colors.white.withOpacity(0.86),
                       fontSize: _responsiveFont(
                         context,
-                        mobile: compact ? 17 : 18,
-                        tablet: compact ? 18 : 19,
+                        mobile: 10.5,
+                        tablet: 11.5,
                         landscapeDelta: -0.2,
                       ),
-                      letterSpacing: -0.45,
-                      height: 1.05,
+                      fontWeight: FontWeight.w600,
+                      height: 1.15,
                     ),
                   ),
-                  if (!compact) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      targetName.isNotEmpty
-                          ? targetName
-                          : 'Вместе к победам!',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.86),
-                        fontSize: _responsiveFont(
-                          context,
-                          mobile: 10.5,
-                          tablet: 11.5,
-                          landscapeDelta: -0.2,
-                        ),
-                        fontWeight: FontWeight.w600,
-                        height: 1.15,
-                      ),
-                    ),
-                  ],
                 ],
-              ),
+              ],
             ),
-            if (!_isPhoneLandscape(context)) ...[
-              _headerInfoPill(
-                icon: Icons.sports_soccer_rounded,
-                text: selectedSport ?? 'Футбол',
-              ),
-              const SizedBox(width: 6),
-            ],
-            _headerActionButton(
-              icon: Icons.search_rounded,
-              onTap: _openSearch,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+          ),
 
+          if (!_isPhoneLandscape(context)) ...[
+            _headerInfoPill(
+              icon: Icons.sports_soccer_rounded,
+              text: selectedSport ?? 'Футбол',
+            ),
+            const SizedBox(width: 6),
+          ],
+
+          _headerActionButton(
+            icon: Icons.search_rounded,
+            onTap: _openSearch,
+          ),
+        ],
+      ),
+    ),
+  );
+}
   Widget _headerActionButton({
     required IconData icon,
     required VoidCallback onTap,
@@ -5005,6 +6212,11 @@ Widget _buildHeroStatCardHome({
       title = 'Сервисы';
       subtitle = 'Площадки, клубы, билеты';
       icon = Icons.dashboard_outlined;
+      break;
+    case 3:
+      title = 'Советы';
+      subtitle = 'Инструкции по работе в приложении';
+      icon = Icons.tips_and_updates_rounded;
       break;
     default:
       title = 'Обзор';
@@ -5157,307 +6369,1763 @@ Widget _buildHeroStatCardHome({
   );
 }
 
-Widget _buildToolsHubPage(BuildContext context) {
-  return LayoutBuilder(
-    builder: (context, constraints) {
-      final width = constraints.maxWidth;
-      return SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        child: Column(
-          children: _buildResponsiveToolsHubContent(context, width),
+
+Widget _buildTipsHubPage(BuildContext context) {
+  HomeSectionConfig? tipsConfig;
+  for (final section in _homeDesign.sections) {
+    if (section.visible && section.type == HomeSectionType.tips) {
+      tipsConfig = section;
+      break;
+    }
+  }
+
+  final config = tipsConfig ?? _homeDesign.sections.first;
+  final width = MediaQuery.of(context).size.width;
+
+  return Padding(
+    key: const ValueKey('home_tips_page_banners'),
+    padding: EdgeInsets.symmetric(
+      horizontal: width >= 760 ? 4 : 0,
+      vertical: width >= 760 ? 4 : 0,
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: _homeDesign.primaryColor.withOpacity(.10),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                Icons.tips_and_updates_rounded,
+                color: _homeDesign.primaryColor,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Советы',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: _homeDesign.textColor,
+                      fontSize: width >= 760 ? 20 : 17,
+                      fontWeight: FontWeight.w900,
+                      height: 1.08,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Инструкции по работе в приложении',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: _homeDesign.mutedTextColor,
+                      fontSize: width >= 760 ? 13 : 12,
+                      fontWeight: FontWeight.w600,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            InkWell(
+              borderRadius: BorderRadius.circular(999),
+              onTap: () {
+                if (!mounted) return;
+                setState(() {
+                  _homeWorkspaceTab = 'dashboard';
+                  _homeModeIndex = 0;
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+                decoration: BoxDecoration(
+                  color: _homeDesign.primaryColor.withOpacity(.10),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: _homeDesign.primaryColor.withOpacity(.16)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.arrow_back_rounded,
+                      color: _homeDesign.primaryColor,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      width >= 560 ? 'К панели' : 'Назад',
+                      style: TextStyle(
+                        color: _homeDesign.primaryColor,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
-      );
-    },
+        const SizedBox(height: 14),
+        TipsSection(
+          grid: true,
+          cardWidth: config.cardWidth,
+          cardHeight: config.cardHeight,
+          borderRadius: _homeDesign.cardRadius,
+          cardColor: _homeDesign.cardColor,
+          textColor: _homeDesign.textColor,
+          mutedColor: _homeDesign.mutedTextColor,
+          shadowOpacity: _homeDesign.shadowOpacity,
+          shadowBlur: _homeDesign.shadowBlur,
+        ),
+      ],
+    ),
+  );
+}
+
+
+Widget _buildToolsHubPage(BuildContext context) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: CmrDashboardPanel(
+      apiBaseUrl: 'https://sportotekaapp.ru/api/',
+      userId: _userId ?? 0,
+      role: _currentRole,
+      coachId: _isCoachRole ? (_userId ?? 0) : 0,
+      clubId: _currentClubId,
+      teamId: _selectedWorkspaceTeamId ?? _currentTeamId,
+      onOpenWorkspace: _openWorkspacePrimary,
+      onOpenModule: (moduleId) {
+        if (moduleId == 'chats') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => ChatScreen(userId: _userId ?? 0)),
+          );
+          return;
+        }
+        _runWorkspaceModuleById(moduleId);
+      },
+      onOpenChat: (chatId, chatName) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ChatRoomScreen(
+              chatId: chatId,
+              userId: _userId ?? 0,
+              chatName: chatName,
+            ),
+          ),
+        );
+      },
+    ),
   );
 }
 
 
 List<Widget> _buildResponsiveToolsHubContent(BuildContext context, double width) {
-  final isHugeTablet = width >= 1360;
-  final isWideTablet = width >= 1040;
-  final isTablet = width >= 760;
+  return _buildProfessionalDashboardContent(context, width);
+}
 
-  if (_isClubRole) {
-    if (isHugeTablet || isWideTablet) {
-      return [
-        _buildWorkspaceHeroSection(
-          context,
-          margin: const EdgeInsets.fromLTRB(0, 0, 0, 12),
+List<Widget> _buildProfessionalDashboardContent(BuildContext context, double width) {
+  final isWide = width >= 980;
+
+  return [
+    _buildDashboardTopWorkspace(
+      context,
+      margin: const EdgeInsets.fromLTRB(0, 0, 0, 12),
+    ),
+    _buildDashboardTeamsAccessSection(
+      context,
+      margin: const EdgeInsets.fromLTRB(0, 0, 0, 12),
+    ),
+
+    if (isWide)
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              children: [
+                _buildDashboardEventsSection(context),
+                _buildDashboardMatchesSection(context),
+                _buildDashboardPlansSection(context),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              children: [
+                _buildDashboardReportsSection(context),
+                _buildDashboardChatsSection(context),
+                _buildDashboardTestingSection(context),
+              ],
+            ),
+          ),
+        ],
+      )
+    else ...[
+      _buildDashboardEventsSection(context),
+      _buildDashboardMatchesSection(context),
+      _buildDashboardReportsSection(context),
+      _buildDashboardChatsSection(context),
+      _buildDashboardPlansSection(context),
+      _buildDashboardTestingSection(context),
+    ],
+  ];
+}
+
+Widget _buildDashboardTopWorkspace(
+  BuildContext context, {
+  EdgeInsetsGeometry margin = const EdgeInsets.only(bottom: 12),
+}) {
+  final targetName = _getDashboardTargetName().trim().isNotEmpty
+      ? _getDashboardTargetName().trim()
+      : (_currentFullName.trim().isNotEmpty ? _currentFullName.trim() : 'Спортотека');
+
+  final title = _isClubRole
+      ? 'Приборная панель клуба'
+      : _isCoachRole
+          ? 'Приборная панель тренера'
+          : _isPlayerRole
+              ? 'Приборная панель игрока'
+              : _isParentRole
+                  ? 'Приборная панель родителя'
+                  : 'Приборная панель';
+
+  return Container(
+    margin: margin,
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(24),
+      border: Border.all(color: const Color(0xFFE5EAF1)),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.04),
+          blurRadius: 18,
+          offset: const Offset(0, 8),
         ),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      ],
+    ),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 760;
+
+        final header = Row(
           children: [
-            Expanded(
-              flex: 8,
-              child: Column(
-                children: [
-                  _buildWorkspaceCommandCenterSection(
-                    context,
-                    margin: const EdgeInsets.only(bottom: 12),
-                  ),
-                ],
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: _homeDesign.primaryColor.withOpacity(0.10),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: _homeDesign.primaryColor.withOpacity(0.14)),
+              ),
+              child: Icon(
+                Icons.dashboard_customize_rounded,
+                color: _homeDesign.primaryColor,
+                size: 23,
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
-              flex: 4,
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildWorkspaceActivitySection(
-                    context,
-                    margin: const EdgeInsets.only(bottom: 12),
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF0F172A),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      height: 1.05,
+                    ),
                   ),
-                  _buildWorkspaceRecentChatsSection(
-                    context,
-                    margin: const EdgeInsets.only(bottom: 12),
+                  const SizedBox(height: 5),
+                  Text(
+                    targetName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               ),
             ),
           ],
-        ),
-      ];
-    }
+        );
 
-    if (isTablet) {
-      return [
-        _buildWorkspaceHeroSection(
-          context,
-          margin: const EdgeInsets.fromLTRB(0, 0, 0, 12),
+        final button = _buildDashboardOpenButton(context);
+
+        if (wide) {
+          return Row(
+            children: [
+              Expanded(child: header),
+              const SizedBox(width: 12),
+              SizedBox(width: 220, child: button),
+            ],
+          );
+        }
+
+        return Column(
+          children: [
+            header,
+            const SizedBox(height: 12),
+            button,
+          ],
+        );
+      },
+    ),
+  );
+}
+
+Widget _buildDashboardTeamsAccessSection(
+  BuildContext context, {
+  EdgeInsetsGeometry margin = const EdgeInsets.only(bottom: 12),
+}) {
+  final teams = _dashboardAccessTeams();
+  final isWide = MediaQuery.of(context).size.width >= 760;
+  final visibleTeams = teams.take(isWide ? 4 : 3).toList();
+
+  final title = _isClubRole
+      ? 'Команды клуба'
+      : _isCoachRole
+          ? 'Мои команды'
+          : _isPlayerRole
+              ? 'Моя команда'
+              : 'Команды';
+
+  final subtitle = teams.isEmpty
+      ? (_isCoachRole ? 'Создайте команду или дождитесь назначения от клуба' : 'Команды появятся после привязки аккаунта')
+      : 'Быстрый переход в рабочий экран команды';
+
+  return Container(
+    margin: margin,
+    padding: EdgeInsets.all(isWide ? 14 : 12),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(24),
+      border: Border.all(color: const Color(0xFFE5EAF1)),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.035),
+          blurRadius: 18,
+          offset: const Offset(0, 8),
         ),
-        _buildWorkspaceCommandCenterSection(
-          context,
-          margin: const EdgeInsets.only(bottom: 12),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(color: const Color(0xFFDCEBFF)),
+              ),
+              child: Icon(
+                Icons.groups_2_rounded,
+                color: _homeDesign.primaryColor,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF0F172A),
+                      fontSize: 16.5,
+                      fontWeight: FontWeight.w900,
+                      height: 1.05,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            _buildDashboardTeamsCountBadge(teams.length),
+          ],
         ),
-        IntrinsicHeight(
+        const SizedBox(height: 12),
+        if (teams.isEmpty)
+          _buildDashboardTeamEmptyCard()
+        else if (isWide)
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: visibleTeams.length,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: MediaQuery.of(context).size.width >= 1180 ? 4 : 2,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              mainAxisExtent: 98,
+            ),
+            itemBuilder: (_, index) => _buildDashboardTeamCard(visibleTeams[index], compact: false),
+          )
+        else
+          SizedBox(
+            height: 104,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: visibleTeams.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (_, index) => SizedBox(
+                width: 252,
+                child: _buildDashboardTeamCard(visibleTeams[index], compact: true),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+Widget _buildDashboardTeamsCountBadge(int count) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+    decoration: BoxDecoration(
+      color: _homeDesign.primaryColor.withOpacity(0.10),
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: _homeDesign.primaryColor.withOpacity(0.14)),
+    ),
+    child: Text(
+      count > 0 ? '$count' : '0',
+      style: TextStyle(
+        color: _homeDesign.primaryColor,
+        fontSize: 12,
+        fontWeight: FontWeight.w900,
+      ),
+    ),
+  );
+}
+
+Widget _buildDashboardTeamEmptyCard() {
+  return InkWell(
+    onTap: _isCoachRole ? () => Get.toNamed(AppRoutes.createTeamScreen) : _openWorkspacePrimary,
+    borderRadius: BorderRadius.circular(18),
+    child: Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE5EAF1)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE5EAF1)),
+            ),
+            child: Icon(Icons.add_rounded, color: _homeDesign.primaryColor),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _isCoachRole ? 'Команда ещё не создана' : 'Команда не выбрана',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF0F172A),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _isCoachRole ? 'Нажмите, чтобы создать команду' : 'Откройте рабочую панель для настройки доступа',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(Icons.arrow_forward_rounded, color: _homeDesign.primaryColor, size: 20),
+        ],
+      ),
+    ),
+  );
+}
+
+Widget _buildDashboardTeamCard(Map<String, dynamic> team, {required bool compact}) {
+  final teamId = _teamIdFromMap(team);
+  final name = _teamNameFromMap(team);
+  final category = _teamCategoryFromMap(team);
+  final logoUrl = _teamLogoFromMap(team);
+  final selected = teamId > 0 && teamId == (_selectedWorkspaceTeamId ?? _currentTeamId);
+
+  return Material(
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: () => _openDashboardTeamFromMap(team),
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: EdgeInsets.all(compact ? 12 : 13),
+        decoration: BoxDecoration(
+          color: selected ? _homeDesign.primaryColor.withOpacity(0.08) : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: selected ? _homeDesign.primaryColor.withOpacity(0.35) : const Color(0xFFE5EAF1),
+          ),
+        ),
+        child: Row(
+          children: [
+            _buildDashboardTeamAvatar(name: name, logoUrl: logoUrl, size: compact ? 46 : 50),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF0F172A),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      height: 1.05,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    category.isEmpty ? 'Панель команды' : category,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  Text(
+                    selected ? 'Выбрана сейчас' : 'Открыть экран команды',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: _homeDesign.primaryColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(Icons.arrow_forward_ios_rounded, color: _homeDesign.primaryColor, size: 15),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+Widget _buildDashboardTeamAvatar({
+  required String name,
+  required String logoUrl,
+  required double size,
+}) {
+  final initial = name.trim().isEmpty ? 'С' : name.trim().characters.first.toUpperCase();
+  final normalizedLogo = logoUrl.trim().isEmpty ? '' : _normalizeMediaUrl(logoUrl);
+
+  return Container(
+    width: size,
+    height: size,
+    clipBehavior: Clip.antiAlias,
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: const Color(0xFFE5EAF1)),
+    ),
+    child: normalizedLogo.isNotEmpty
+        ? Image.network(
+            normalizedLogo,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Center(child: _buildDashboardTeamInitial(initial)),
+          )
+        : Center(child: _buildDashboardTeamInitial(initial)),
+  );
+}
+
+Widget _buildDashboardTeamInitial(String initial) {
+  return Text(
+    initial,
+    style: TextStyle(
+      color: _homeDesign.primaryColor,
+      fontSize: 17,
+      fontWeight: FontWeight.w900,
+    ),
+  );
+}
+
+List<Map<String, dynamic>> _dashboardAccessTeams() {
+  final Map<int, Map<String, dynamic>> byId = {};
+  final fallback = <Map<String, dynamic>>[];
+
+  void addTeam(Map<String, dynamic> raw) {
+    final map = Map<String, dynamic>.from(raw);
+    final id = _teamIdFromMap(map);
+    if (id > 0) {
+      byId[id] = map;
+    } else if (_teamNameFromMap(map).trim().isNotEmpty) {
+      fallback.add(map);
+    }
+  }
+
+  if (_isClubRole) {
+    for (final team in _clubTeams) addTeam(team);
+  }
+
+  if (_isCoachRole) {
+    for (final team in _myTeams) addTeam(team);
+    for (final team in _clubTeams) addTeam(team);
+  }
+
+  if (_isPlayerRole && _currentTeamId > 0) {
+    addTeam({
+      'id': _currentTeamId,
+      'name': _currentTeamName.isNotEmpty ? _currentTeamName : _getDashboardTargetName(),
+      'category': selectedSport ?? '',
+      'logo': _currentTeamLogoUrl,
+    });
+  }
+
+  final result = byId.values.toList(growable: true)..addAll(fallback);
+  result.sort((a, b) => _teamNameFromMap(a).toLowerCase().compareTo(_teamNameFromMap(b).toLowerCase()));
+  return result;
+}
+
+int _teamIdFromMap(Map<String, dynamic> team) {
+  return int.tryParse('${team['id'] ?? team['team_id'] ?? team['teamId'] ?? 0}') ?? 0;
+}
+
+String _teamNameFromMap(Map<String, dynamic> team) {
+  return _pickMapString(team, ['name', 'team_name', 'teamName', 'title'], fallback: 'Команда');
+}
+
+String _teamCategoryFromMap(Map<String, dynamic> team) {
+  return _pickMapString(team, ['category', 'sport_type', 'sport', 'team_category'], fallback: '');
+}
+
+String _teamLogoFromMap(Map<String, dynamic> team) {
+  return _pickMapString(team, ['logo', 'logo_url', 'team_logo', 'teamLogo'], fallback: '');
+}
+
+void _openDashboardTeamFromMap(Map<String, dynamic> team) {
+  final teamId = _teamIdFromMap(team);
+  final teamName = _teamNameFromMap(team);
+
+  if (teamId <= 0) {
+    _openWorkspacePrimary();
+    return;
+  }
+
+  if (mounted) {
+    setState(() {
+      _selectedWorkspaceTeamId = teamId;
+      _selectedWorkspaceTeamName = teamName;
+    });
+  }
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => TeamDashboardScreen(
+        teamId: teamId,
+        teamName: teamName,
+        clubId: _currentClubId,
+        clubName: _currentClubName.isNotEmpty ? _currentClubName : teamName,
+      ),
+    ),
+  );
+}
+
+
+Widget _buildDashboardOpenButton(BuildContext context) {
+  return InkWell(
+    onTap: _openWorkspacePrimary,
+    borderRadius: BorderRadius.circular(16),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      decoration: BoxDecoration(
+        color: _homeDesign.primaryColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: _homeDesign.primaryColor.withOpacity(0.18),
+            blurRadius: 14,
+            offset: const Offset(0, 7),
+          ),
+        ],
+      ),
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.open_in_new_rounded, color: Colors.white, size: 18),
+          SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              'Открыть рабочее окно',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+
+Widget _buildDashboardEventsSection(
+  BuildContext context, {
+  EdgeInsetsGeometry margin = const EdgeInsets.only(bottom: 12),
+}) {
+  final rows = _dashboardSortedByDate(
+    _clubEvents,
+    ['event_date', 'date', 'start_at', 'created_at'],
+    futureFirst: true,
+  ).take(3).toList();
+
+  return _buildDashboardSettingsLikeSection(
+    title: 'БЛИЖАЙШИЕ СОБЫТИЯ',
+    rightText: rows.isEmpty ? 'нет данных' : 'календарь',
+    margin: margin,
+    children: rows.isEmpty
+        ? [
+            _buildDashboardEmptyRow(
+              icon: Icons.calendar_month_outlined,
+              title: 'Событий пока нет',
+              subtitle: 'Ближайшие игры, тренировки и встречи появятся здесь.',
+              onTap: () => _runWorkspaceModuleById('calendar'),
+            ),
+          ]
+        : rows.map((event) {
+            final title = _pickMapString(
+              event,
+              ['title', 'name', 'event_title', 'type'],
+              fallback: 'Событие',
+            );
+            final date = _pickMapString(
+              event,
+              ['event_date', 'date', 'start_at', 'created_at'],
+              fallback: '',
+            );
+            final subtitle = _pickMapString(
+              event,
+              ['description', 'comment', 'location', 'subtitle'],
+              fallback: date.isNotEmpty ? date : 'Календарь клуба',
+            );
+
+            return _buildDashboardListRow(
+              icon: Icons.event_available_rounded,
+              title: title,
+              subtitle: subtitle,
+              trailing: _compactDashboardDate(date),
+              color: const Color(0xFF16A34A),
+              onTap: () => _runWorkspaceModuleById('calendar'),
+            );
+          }).toList(),
+  );
+}
+
+Widget _buildDashboardMatchesSection(
+  BuildContext context, {
+  EdgeInsetsGeometry margin = const EdgeInsets.only(bottom: 12),
+}) {
+  final rows = _dashboardSortedByDate(
+    _recentMatches,
+    ['match_date', 'date', 'game_date', 'created_at'],
+    futureFirst: true,
+  ).take(3).toList();
+
+  return _buildDashboardSettingsLikeSection(
+    title: 'МАТЧИ',
+    rightText: rows.isEmpty ? 'нет данных' : 'игры',
+    margin: margin,
+    children: rows.isEmpty
+        ? [
+            _buildDashboardEmptyRow(
+              icon: Icons.sports_soccer_outlined,
+              title: 'Матчей пока нет',
+              subtitle: 'Ближайшие и последние матчи будут отображаться здесь.',
+              onTap: () => _runWorkspaceModuleById('matches'),
+            ),
+          ]
+        : rows.map((match) {
+            final date = _pickMapString(
+              match,
+              ['match_date', 'date', 'game_date', 'created_at'],
+              fallback: '',
+            );
+
+            final score = _matchValueText(match).trim();
+
+            return _buildDashboardListRow(
+              icon: Icons.sports_soccer_rounded,
+              title: _matchMainText(match),
+              subtitle: _matchSubText(match),
+              trailing: score.isNotEmpty ? score : _compactDashboardDate(date),
+              color: const Color(0xFF2563EB),
+              onTap: () => _runWorkspaceModuleById('matches'),
+            );
+          }).toList(),
+  );
+}
+
+Widget _buildDashboardReportsSection(
+  BuildContext context, {
+  EdgeInsetsGeometry margin = const EdgeInsets.only(bottom: 12),
+}) {
+  final rows = _dashboardSortedByDate(
+    _workspaceReports,
+    ['created_at', 'date', 'report_date', 'updated_at'],
+    futureFirst: false,
+  ).take(3).toList();
+
+  return _buildDashboardSettingsLikeSection(
+    title: 'КОММЕНТАРИИ И ОЦЕНКИ',
+    rightText: rows.isEmpty ? 'нет данных' : 'отчёты',
+    margin: margin,
+    children: rows.isEmpty
+        ? [
+            _buildDashboardEmptyRow(
+              icon: Icons.rate_review_outlined,
+              title: 'Комментариев пока нет',
+              subtitle: 'Оценки, замечания тренера и отчёты появятся здесь.',
+              onTap: _openWorkspacePrimary,
+            ),
+          ]
+        : rows.map((report) {
+            final author = _pickMapString(
+              report,
+              ['coach_name', 'trainer_name', 'author_name', 'author'],
+              fallback: 'Тренер',
+            );
+            final text = _pickMapString(
+              report,
+              ['coach_comment', 'trainer_comment', 'comment', 'notes', 'description'],
+              fallback: _reportMainText(report),
+            );
+            final date = _pickMapString(
+              report,
+              ['created_at', 'date', 'report_date', 'updated_at'],
+              fallback: '',
+            );
+
+            return _buildDashboardListRow(
+              icon: Icons.rate_review_rounded,
+              title: author,
+              subtitle: text,
+              trailing: _compactDashboardDate(date),
+              color: const Color(0xFF0F766E),
+              onTap: _openWorkspacePrimary,
+            );
+          }).toList(),
+  );
+}
+
+Widget _buildDashboardChatsSection(
+  BuildContext context, {
+  EdgeInsetsGeometry margin = const EdgeInsets.only(bottom: 12),
+}) {
+  final rows = _dashboardSortedByDate(
+    _recentChats,
+    ['last_message_at', 'updated_at', 'created_at', 'time'],
+    futureFirst: false,
+  ).take(3).toList();
+
+  return _buildDashboardSettingsLikeSection(
+    title: 'ПОСЛЕДНИЕ ЧАТЫ',
+    rightText: rows.isEmpty ? 'нет сообщений' : 'чат',
+    margin: margin,
+    children: rows.isEmpty
+        ? [
+            _buildDashboardEmptyRow(
+              icon: Icons.forum_outlined,
+              title: 'Нет активных чатов',
+              subtitle: 'Последние сообщения команд и тренеров появятся здесь.',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ChatScreen(userId: _userId ?? 0),
+                  ),
+                );
+              },
+            ),
+          ]
+        : rows.map((chat) {
+            final chatId = int.tryParse('${chat['id'] ?? chat['chat_id'] ?? 0}') ?? 0;
+            final chatName = (chat['title'] ?? chat['name'] ?? 'Чат').toString().trim();
+            final lastMessage = (chat['last_message'] ??
+                    chat['message'] ??
+                    chat['last_text'] ??
+                    'Нет сообщений')
+                .toString()
+                .trim();
+            final unread = int.tryParse('${chat['unread_count'] ?? 0}') ?? 0;
+            final time = _pickMapString(
+              chat,
+              ['last_message_at', 'updated_at', 'created_at', 'time'],
+              fallback: '',
+            );
+
+            return _buildDashboardListRow(
+              icon: Icons.forum_rounded,
+              title: chatName.isNotEmpty ? chatName : 'Чат команды',
+              subtitle: lastMessage.isNotEmpty ? lastMessage : 'Нет сообщений',
+              trailing: unread > 0 ? '$unread' : _compactDashboardDate(time),
+              color: const Color(0xFF7C3AED),
+              onTap: chatId <= 0
+                  ? () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ChatScreen(userId: _userId ?? 0),
+                        ),
+                      );
+                    }
+                  : () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ChatRoomScreen(
+                            chatId: chatId,
+                            userId: _userId ?? 0,
+                            chatName: chatName.isNotEmpty ? chatName : 'Чат',
+                          ),
+                        ),
+                      );
+                    },
+            );
+          }).toList(),
+  );
+}
+
+Widget _buildDashboardPlansSection(
+  BuildContext context, {
+  EdgeInsetsGeometry margin = const EdgeInsets.only(bottom: 12),
+}) {
+  final rows = _dashboardSortedByDate(
+    _clubPlans,
+    ['created_at', 'date', 'updated_at'],
+    futureFirst: false,
+  ).take(3).toList();
+
+  return _buildDashboardSettingsLikeSection(
+    title: 'ПЛАНЫ И КОНСПЕКТЫ',
+    rightText: rows.isEmpty ? 'нет планов' : 'планы',
+    margin: margin,
+    children: rows.isEmpty
+        ? [
+            _buildDashboardEmptyRow(
+              icon: Icons.menu_book_outlined,
+              title: 'Планов пока нет',
+              subtitle: 'Последние конспекты и планы тренировок будут здесь.',
+              onTap: () => _runWorkspaceModuleById('plans'),
+            ),
+          ]
+        : rows.map((plan) {
+            final title = _pickMapString(
+              plan,
+              ['title', 'name', 'plan_title'],
+              fallback: 'План тренировки',
+            );
+            final subtitle = _pickMapString(
+              plan,
+              ['folder_name', 'category', 'description', 'type'],
+              fallback: 'План-конспект',
+            );
+            final date = _pickMapString(
+              plan,
+              ['created_at', 'date', 'updated_at'],
+              fallback: '',
+            );
+
+            return _buildDashboardListRow(
+              icon: Icons.menu_book_rounded,
+              title: title,
+              subtitle: subtitle,
+              trailing: _compactDashboardDate(date),
+              color: const Color(0xFF0891B2),
+              onTap: () => _runWorkspaceModuleById('plans'),
+            );
+          }).toList(),
+  );
+}
+
+Widget _buildDashboardTestingSection(
+  BuildContext context, {
+  EdgeInsetsGeometry margin = const EdgeInsets.only(bottom: 12),
+}) {
+  return _buildDashboardSettingsLikeSection(
+    title: 'ТЕСТИРОВАНИЕ',
+    rightText: 'контроль',
+    margin: margin,
+    children: [
+      _buildDashboardListRow(
+        icon: Icons.fact_check_rounded,
+        title: 'Контрольные тесты',
+        subtitle: 'Откройте модуль тестирования для оценок игроков.',
+        trailing: 'перейти',
+        color: const Color(0xFFEA580C),
+        onTap: () => _runWorkspaceModuleById('testing'),
+      ),
+      _buildDashboardListRow(
+        icon: Icons.insights_rounded,
+        title: 'Оценки и динамика',
+        subtitle: 'Результаты тестов будут отображаться после загрузки данных.',
+        trailing: 'скоро',
+        color: const Color(0xFF0F766E),
+        onTap: () => _runWorkspaceModuleById('testing'),
+      ),
+    ],
+  );
+}
+
+Widget _buildDashboardSettingsLikeSection({
+  required String title,
+  required String rightText,
+  required List<Widget> children,
+  EdgeInsetsGeometry margin = const EdgeInsets.only(bottom: 12),
+}) {
+  return Container(
+    margin: margin,
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(22),
+      border: Border.all(color: const Color(0xFFE7ECF2)),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.035),
+          blurRadius: 16,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    ),
+    child: Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 13, 14, 8),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
-                child: _buildWorkspaceActivitySection(
-                  context,
-                  margin: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF94A3B8),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.7,
+                  ),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildWorkspaceRecentChatsSection(
-                  context,
-                  margin: const EdgeInsets.only(bottom: 12),
+              Text(
+                rightText,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF64748B),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ],
           ),
         ),
-      ];
+        ...children.asMap().entries.map((entry) {
+          final index = entry.key;
+          final child = entry.value;
+
+          return Column(
+            children: [
+              if (index > 0)
+                const Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: Color(0xFFEFF3F7),
+                  indent: 68,
+                ),
+              child,
+            ],
+          );
+        }),
+        const SizedBox(height: 6),
+      ],
+    ),
+  );
+}
+
+Widget _buildDashboardListRow({
+  required IconData icon,
+  required String title,
+  required String subtitle,
+  required String trailing,
+  required Color color,
+  VoidCallback? onTap,
+}) {
+  final row = Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+    child: Row(
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.10),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(icon, color: color, size: 20),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title.trim().isEmpty ? 'Без названия' : title.trim(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF111827),
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w900,
+                  height: 1.12,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle.trim().isEmpty ? 'Нет описания' : subtitle.trim(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF6B7280),
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  height: 1.15,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        if (trailing.trim().isNotEmpty)
+          Container(
+            constraints: const BoxConstraints(maxWidth: 82),
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.09),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: color.withOpacity(0.14)),
+            ),
+            child: Text(
+              trailing.trim(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          )
+        else
+          const Icon(
+            Icons.chevron_right_rounded,
+            color: Color(0xFFCBD5E1),
+            size: 22,
+          ),
+      ],
+    ),
+  );
+
+  if (onTap == null) return row;
+
+  return InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(16),
+    child: row,
+  );
+}
+
+Widget _buildDashboardEmptyRow({
+  required IconData icon,
+  required String title,
+  required String subtitle,
+  VoidCallback? onTap,
+}) {
+  return _buildDashboardListRow(
+    icon: icon,
+    title: title,
+    subtitle: subtitle,
+    trailing: '',
+    color: const Color(0xFF94A3B8),
+    onTap: onTap,
+  );
+}
+
+List<Map<String, dynamic>> _dashboardSortedByDate(
+  List<Map<String, dynamic>> source,
+  List<String> dateKeys, {
+  required bool futureFirst,
+}) {
+  final now = DateTime.now();
+
+  final rows = source.map((e) => Map<String, dynamic>.from(e)).toList();
+
+  rows.sort((a, b) {
+    final ad = _extractDateFromMap(a, dateKeys);
+    final bd = _extractDateFromMap(b, dateKeys);
+
+    if (ad == null && bd == null) return 0;
+    if (ad == null) return 1;
+    if (bd == null) return -1;
+
+    if (futureFirst) {
+      final aFuture = !ad.isBefore(now);
+      final bFuture = !bd.isBefore(now);
+
+      if (aFuture && !bFuture) return -1;
+      if (!aFuture && bFuture) return 1;
+
+      if (aFuture && bFuture) return ad.compareTo(bd);
+      return bd.compareTo(ad);
     }
 
-    return [
-      _buildWorkspaceHeroSection(
-        context,
-        margin: const EdgeInsets.fromLTRB(0, 0, 0, 12),
-      ),
-      _buildWorkspaceCommandCenterSection(
-        context,
-        margin: const EdgeInsets.only(bottom: 12),
-      ),
-      _buildWorkspaceActivitySection(
-        context,
-        margin: const EdgeInsets.only(bottom: 12),
-      ),
-      _buildWorkspaceRecentChatsSection(
-        context,
-        margin: const EdgeInsets.only(bottom: 12),
-      ),
-    ];
+    return bd.compareTo(ad);
+  });
+
+  return rows;
+}
+
+String _compactDashboardDate(String raw) {
+  final value = raw.trim();
+  if (value.isEmpty) return '';
+
+  final parsed = _tryParseLooseDate(value);
+  if (parsed == null) {
+    if (value.length <= 12) return value;
+    return value.substring(0, 10);
   }
 
-  if (_isPlayerLikeRole) {
-    return [
-      _buildWorkspaceHeroSection(
-        context,
-        margin: const EdgeInsets.fromLTRB(0, 0, 0, 12),
-      ),
-      _buildPlayerHomeEntrySection(
-        context,
-        margin: const EdgeInsets.only(bottom: 12),
-      ),
-      _buildWorkspaceOverviewSection(
-        context,
-        margin: const EdgeInsets.only(bottom: 12),
-      ),
-    ];
-  }
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final day = DateTime(parsed.year, parsed.month, parsed.day);
 
-  if (isHugeTablet) {
-    return [
-      _buildWorkspaceHeroSection(
-        context,
-        margin: const EdgeInsets.fromLTRB(0, 0, 0, 12),
-      ),
-      Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            flex: 8,
-            child: Column(
-              children: [
-                _buildWorkspaceTeamPickerSection(
-                  context,
-                  margin: const EdgeInsets.only(bottom: 12),
-                ),
-                _buildCoachQuickModesSection(
-                  context,
-                  margin: const EdgeInsets.only(bottom: 12),
-                ),
-                _buildWorkspaceOverviewSection(
-                  context,
-                  margin: const EdgeInsets.only(bottom: 12),
-                ),
-                _buildWorkspaceCommandCenterSection(
-                  context,
-                  margin: const EdgeInsets.only(bottom: 12),
-                ),
-              ],
+  final hh = parsed.hour.toString().padLeft(2, '0');
+  final mm = parsed.minute.toString().padLeft(2, '0');
+  final time = parsed.hour == 0 && parsed.minute == 0 ? '' : ' $hh:$mm';
+
+  if (day == today) return 'сегодня$time';
+  if (day == today.add(const Duration(days: 1))) return 'завтра$time';
+  if (day == today.subtract(const Duration(days: 1))) return 'вчера$time';
+
+  final dd = parsed.day.toString().padLeft(2, '0');
+  final month = parsed.month.toString().padLeft(2, '0');
+
+  return '$dd.$month$time';
+}
+
+Widget _buildDashboardSplitBlocks(
+  BuildContext context, {
+  EdgeInsetsGeometry margin = const EdgeInsets.only(bottom: 12),
+}) {
+  return Container(
+    margin: margin,
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 900;
+
+        if (!wide) {
+          return Column(
+            children: [
+              _buildDashboardPrimaryBlock(context),
+              const SizedBox(height: 12),
+              _buildDashboardStatusBlock(),
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(flex: 7, child: _buildDashboardPrimaryBlock(context)),
+            const SizedBox(width: 12),
+            Expanded(flex: 5, child: _buildDashboardStatusBlock()),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+Widget _buildDashboardPrimaryBlock(BuildContext context) {
+  final teamName = _selectedWorkspaceTeamName.isNotEmpty
+      ? _selectedWorkspaceTeamName
+      : (_currentTeamName.isNotEmpty ? _currentTeamName : 'Команда не выбрана');
+
+  return _buildDashboardPanel(
+    title: _isClubRole ? 'Управление клубом' : 'Рабочая команда',
+    subtitle: _isClubRole
+        ? 'Команды, составы, тренеры и календарь в одном месте'
+        : teamName,
+    icon: _isClubRole ? Icons.apartment_rounded : Icons.groups_2_rounded,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (!_isClubRole && _isCoachRole) ...[
+          _buildDashboardTeamLine(context),
+          const SizedBox(height: 12),
+        ],
+        _buildDashboardCompactActions(context),
+      ],
+    ),
+  );
+}
+
+Widget _buildDashboardTeamLine(BuildContext context) {
+  final source = _isCoachRole
+      ? (_myTeams.isNotEmpty ? _myTeams : _clubTeams)
+      : _clubTeams;
+
+  final teamName = _selectedWorkspaceTeamName.isNotEmpty
+      ? _selectedWorkspaceTeamName
+      : (_currentTeamName.isNotEmpty ? _currentTeamName : 'Команда не выбрана');
+
+  return Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF8FAFC),
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: const Color(0xFFE7ECF2)),
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: const Color(0xFFEAF2FF),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(Icons.shield_outlined, color: Color(0xFF2563EB), size: 18),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            teamName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xFF0F172A),
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            flex: 4,
-            child: Column(
-              children: [
-                _buildWorkspaceActivitySection(
-                  context,
-                  margin: const EdgeInsets.only(bottom: 12),
-                ),
-              ],
-            ),
+        ),
+        if (source.isNotEmpty) ...[
+          const SizedBox(width: 8),
+          _buildTeamPickerActionChip(
+            icon: Icons.swap_horiz_rounded,
+            label: 'Сменить',
+            filled: false,
+            onTap: () => _pickWorkspaceTeam(context, source),
           ),
         ],
-      ),
-    ];
-  }
+      ],
+    ),
+  );
+}
 
-  if (isWideTablet) {
-    return [
-      _buildWorkspaceHeroSection(
-        context,
-        margin: const EdgeInsets.fromLTRB(0, 0, 0, 12),
-      ),
-      Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            flex: 7,
-            child: Column(
-              children: [
-                _buildWorkspaceTeamPickerSection(
-                  context,
-                  margin: const EdgeInsets.only(bottom: 12),
-                ),
-                _buildCoachQuickModesSection(
-                  context,
-                  margin: const EdgeInsets.only(bottom: 12),
-                ),
-                _buildWorkspaceCommandCenterSection(
-                  context,
-                  margin: const EdgeInsets.only(bottom: 12),
-                ),
-              ],
+Widget _buildDashboardCompactActions(BuildContext context) {
+  final actions = _isClubRole
+      ? <Map<String, dynamic>>[
+          {
+            'title': 'Команды',
+            'subtitle': 'Составы клуба',
+            'icon': Icons.groups_2_outlined,
+            'color': const Color(0xFF2563EB),
+            'onTap': _openClubsAll,
+          },
+          {
+            'title': 'Тренеры',
+            'subtitle': 'Штаб клуба',
+            'icon': Icons.people_outline_rounded,
+            'color': const Color(0xFF16A34A),
+            'onTap': _openWorkspacePrimary,
+          },
+          {
+            'title': 'Матчи',
+            'subtitle': 'Календарь игр',
+            'icon': Icons.sports_soccer_outlined,
+            'color': const Color(0xFFEA580C),
+            'onTap': _openWorkspacePrimary,
+          },
+          {
+            'title': 'Календарь',
+            'subtitle': 'События клуба',
+            'icon': Icons.calendar_month_outlined,
+            'color': const Color(0xFF0EA5E9),
+            'onTap': _openWorkspacePrimary,
+          },
+        ]
+      : <Map<String, dynamic>>[
+          {
+            'title': 'Состав',
+            'subtitle': 'Игроки',
+            'icon': Icons.groups_2_outlined,
+            'color': const Color(0xFF2563EB),
+            'onTap': () => _runWorkspaceModuleById('roster'),
+          },
+          {
+            'title': 'Календарь',
+            'subtitle': 'События',
+            'icon': Icons.calendar_month_outlined,
+            'color': const Color(0xFF16A34A),
+            'onTap': () => _runWorkspaceModuleById('calendar'),
+          },
+          {
+            'title': 'Матчи',
+            'subtitle': 'Игры',
+            'icon': Icons.sports_soccer_outlined,
+            'color': const Color(0xFFEA580C),
+            'onTap': () => _runWorkspaceModuleById('matches'),
+          },
+          {
+            'title': 'Видео',
+            'subtitle': 'Разбор',
+            'icon': Icons.video_camera_back_outlined,
+            'color': const Color(0xFFDC2626),
+            'onTap': () => _runWorkspaceModuleById('videoanalysis'),
+          },
+        ];
+
+  return _HomeQuickActionsGrid(actions: actions);
+}
+
+Widget _buildDashboardStatusBlock() {
+  final stats = _isClubRole
+      ? <Map<String, dynamic>>[
+          {
+            'title': 'Команды',
+            'value': '${_clubTeams.length}',
+            'icon': Icons.groups_2_outlined,
+            'color': const Color(0xFF2563EB),
+          },
+          {
+            'title': 'Тренеры',
+            'value': '${_clubTrainers.length}',
+            'icon': Icons.people_outline_rounded,
+            'color': const Color(0xFF16A34A),
+          },
+          {
+            'title': 'Матчи',
+            'value': '${_recentMatches.length}',
+            'icon': Icons.sports_soccer_outlined,
+            'color': const Color(0xFFEA580C),
+          },
+          {
+            'title': 'События',
+            'value': '${_clubEvents.length}',
+            'icon': Icons.calendar_month_outlined,
+            'color': const Color(0xFF0EA5E9),
+          },
+        ]
+      : <Map<String, dynamic>>[
+          {
+            'title': 'Матчи',
+            'value': '${_recentMatches.length}',
+            'icon': Icons.sports_soccer_outlined,
+            'color': const Color(0xFFEA580C),
+          },
+          {
+            'title': 'Отчёты',
+            'value': '${_workspaceReports.length}',
+            'icon': Icons.analytics_outlined,
+            'color': const Color(0xFFE11D48),
+          },
+          {
+            'title': 'Чаты',
+            'value': '${_recentChats.length}',
+            'icon': Icons.forum_outlined,
+            'color': const Color(0xFF7C3AED),
+          },
+          {
+            'title': 'Планы',
+            'value': '${_clubPlans.length}',
+            'icon': Icons.menu_book_outlined,
+            'color': const Color(0xFF0F766E),
+          },
+        ];
+
+  return _buildDashboardPanel(
+    title: 'Состояние системы',
+    subtitle: 'Короткая сводка без лишних баннеров',
+    icon: Icons.insights_rounded,
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 420 ? 2 : 1;
+        final spacing = 10.0;
+        final itemWidth = (constraints.maxWidth - spacing * (columns - 1)) / columns;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: stats.map((item) {
+            return SizedBox(
+              width: itemWidth,
+              child: _buildOverviewMiniCardHome(
+                title: item['title'] as String,
+                value: item['value'] as String,
+                icon: item['icon'] as IconData,
+                color: item['color'] as Color,
+              ),
+            );
+          }).toList(),
+        );
+      },
+    ),
+  );
+}
+
+Widget _buildDashboardCleanModulesSection(
+  BuildContext context, {
+  EdgeInsetsGeometry margin = const EdgeInsets.only(bottom: 12),
+}) {
+  final actions = _isClubRole
+      ? <Map<String, dynamic>>[
+          {
+            'title': 'Команды',
+            'subtitle': 'Все составы',
+            'icon': Icons.groups_2_outlined,
+            'color': const Color(0xFF2563EB),
+            'onTap': _openClubsAll,
+          },
+          {
+            'title': 'Тренеры',
+            'subtitle': 'Штаб клуба',
+            'icon': Icons.people_outline_rounded,
+            'color': const Color(0xFF16A34A),
+            'onTap': _openWorkspacePrimary,
+          },
+          {
+            'title': 'Календарь',
+            'subtitle': 'События',
+            'icon': Icons.calendar_month_outlined,
+            'color': const Color(0xFF0EA5E9),
+            'onTap': _openWorkspacePrimary,
+          },
+          {
+            'title': 'Матчи',
+            'subtitle': 'Игры клуба',
+            'icon': Icons.sports_soccer_outlined,
+            'color': const Color(0xFFEA580C),
+            'onTap': _openWorkspacePrimary,
+          },
+          {
+            'title': 'Чаты',
+            'subtitle': 'Связь',
+            'icon': Icons.forum_outlined,
+            'color': const Color(0xFF7C3AED),
+            'onTap': () => _selectHomeWorkspaceTab('chat'),
+          },
+          {
+            'title': 'Профиль',
+            'subtitle': 'Настройки',
+            'icon': Icons.account_circle_outlined,
+            'color': const Color(0xFF2563EB),
+            'onTap': () => _selectHomeWorkspaceTab('profile'),
+          },
+        ]
+      : <Map<String, dynamic>>[
+          {
+            'title': 'Планы',
+            'subtitle': 'Конспекты',
+            'icon': Icons.menu_book_outlined,
+            'color': const Color(0xFF7C3AED),
+            'onTap': () => _runWorkspaceModuleById('plans'),
+          },
+          {
+            'title': 'Посещаемость',
+            'subtitle': 'Журнал',
+            'icon': Icons.fact_check_outlined,
+            'color': const Color(0xFF0891B2),
+            'onTap': () => _runWorkspaceModuleById('attendance'),
+          },
+          {
+            'title': 'Графика',
+            'subtitle': 'Схемы',
+            'icon': Icons.draw_outlined,
+            'color': const Color(0xFFE11D48),
+            'onTap': () => _runWorkspaceModuleById('graphics'),
+          },
+          {
+            'title': 'Аналитика',
+            'subtitle': 'ТТД',
+            'icon': Icons.analytics_outlined,
+            'color': const Color(0xFF0F766E),
+            'onTap': () => _runWorkspaceModuleById('videoanalysis'),
+          },
+          {
+            'title': 'Чаты',
+            'subtitle': 'Коммуникации',
+            'icon': Icons.forum_outlined,
+            'color': const Color(0xFF7C3AED),
+            'onTap': () => _selectHomeWorkspaceTab('chat'),
+          },
+          {
+            'title': 'Профиль',
+            'subtitle': 'Настройки',
+            'icon': Icons.account_circle_outlined,
+            'color': const Color(0xFF2563EB),
+            'onTap': () => _selectHomeWorkspaceTab('profile'),
+          },
+        ];
+
+  return _buildHomeSectionShell(
+    title: 'Рабочие разделы',
+    rightText: 'модули',
+    margin: margin,
+    child: _HomeQuickActionsGrid(actions: actions),
+  );
+}
+
+Widget _buildDashboardPanel({
+  required String title,
+  required String subtitle,
+  required IconData icon,
+  required Widget child,
+}) {
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(22),
+      border: Border.all(color: const Color(0xFFE5EAF1)),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.035),
+          blurRadius: 16,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: _homeDesign.primaryColor.withOpacity(0.10),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: _homeDesign.primaryColor, size: 19),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            flex: 4,
-            child: IntrinsicHeight(
+            const SizedBox(width: 10),
+            Expanded(
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildWorkspaceOverviewSection(
-                    context,
-                    margin: const EdgeInsets.only(bottom: 12),
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF0F172A),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                      height: 1.1,
+                    ),
                   ),
-                  _buildWorkspaceActivitySection(
-                    context,
-                    margin: const EdgeInsets.only(bottom: 12),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      height: 1.15,
+                    ),
                   ),
                 ],
               ),
             ),
-          ),
-        ],
-      ),
-    ];
-  }
-
-  if (isTablet) {
-    return [
-      _buildWorkspaceHeroSection(
-        context,
-        margin: const EdgeInsets.fromLTRB(0, 0, 0, 12),
-      ),
-      _buildWorkspaceTeamPickerSection(
-        context,
-        margin: const EdgeInsets.only(bottom: 12),
-      ),
-      _buildCoachQuickModesSection(
-        context,
-        margin: const EdgeInsets.only(bottom: 12),
-      ),
-      IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: _buildWorkspaceOverviewSection(
-                context,
-                margin: const EdgeInsets.only(bottom: 12),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildWorkspaceActivitySection(
-                context,
-                margin: const EdgeInsets.only(bottom: 12),
-              ),
-            ),
           ],
         ),
-      ),
-      _buildWorkspaceCommandCenterSection(
-        context,
-        margin: const EdgeInsets.only(bottom: 12),
-      ),
-    ];
-  }
-
-  return [
-    _buildWorkspaceHeroSection(
-      context,
-      margin: const EdgeInsets.fromLTRB(0, 0, 0, 12),
+        const SizedBox(height: 12),
+        child,
+      ],
     ),
-    _buildWorkspaceTeamPickerSection(
-      context,
-      margin: const EdgeInsets.only(bottom: 12),
-    ),
-    _buildCoachQuickModesSection(
-      context,
-      margin: const EdgeInsets.only(bottom: 12),
-    ),
-    _buildWorkspaceOverviewSection(
-      context,
-      margin: const EdgeInsets.only(bottom: 12),
-    ),
-    _buildWorkspaceCommandCenterSection(
-      context,
-      margin: const EdgeInsets.only(bottom: 12),
-    ),
-    _buildWorkspaceActivitySection(
-      context,
-      margin: const EdgeInsets.only(bottom: 12),
-    ),
-  ];
+  );
 }
-
 
 Widget _buildHomeSectionShell({
   required String title,
@@ -11287,9 +13955,7 @@ Widget _buildWorkspaceGlassCard({
         break;
 
       case HomeSectionType.promo:
-        if (_homeDesign.showPromoBanner) {
-          builtSection = _buildPromoSection(config);
-        }
+        builtSection = null;
         break;
 
       case HomeSectionType.innovations:
@@ -11326,24 +13992,7 @@ Widget _buildWorkspaceGlassCard({
     }
   }
 
-  final HomeSectionConfig? tipsConfig = _homeDesign.sections
-      .where((s) => s.visible && s.type == HomeSectionType.tips)
-      .cast<HomeSectionConfig?>()
-      .firstWhere((s) => s != null, orElse: () => null);
-
-  if (tipsConfig != null) {
-    sections.add(const SizedBox(height: 8));
-    sections.add(
-      Padding(
-        padding: EdgeInsets.symmetric(horizontal: tipsConfig.innerPadding),
-        child: _buildTipsSection(tipsConfig),
-      ),
-    );
-    sections.add(SizedBox(height: tipsConfig.bottomSpacing));
-    sections.add(SizedBox(height: _homeDesign.sectionGap));
-  }
-
-  if (sections.isNotEmpty) {
+   if (sections.isNotEmpty) {
     sections.removeLast();
   }
 
@@ -13544,7 +16193,7 @@ class _CustomDrawer extends StatelessWidget {
                     ),
                     _buildDrawerItem(
                       icon: Icons.event_rounded,
-                      title: 'События',
+                      title: 'Мероприятия',
                       routeKey: 'events',
                     ),
                     _buildDrawerItem(

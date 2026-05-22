@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
+import 'package:cached_network_image/cached_network_image.dart';
 
 import 'package:sportoteka/core/utils/pref_utils.dart';
 
@@ -13,6 +14,7 @@ class CmrAttendancePanel extends StatefulWidget {
   final String teamName;
   final int clubId;
   final String clubName;
+  final String teamLogoUrl;
   final bool fullScreen;
 
   const CmrAttendancePanel({
@@ -21,6 +23,7 @@ class CmrAttendancePanel extends StatefulWidget {
     required this.teamName,
     required this.clubId,
     required this.clubName,
+    this.teamLogoUrl = '',
     this.fullScreen = false,
   });
 
@@ -34,6 +37,7 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
   static const String getTeamEventsUrl = '$apiBase/get_team_events.php';
   static const String getAttendanceUrl = '$apiBase/get_team_attendance.php';
   static const String setAttendanceUrl = '$apiBase/set_team_attendance.php';
+  static const String getTeamProfileUrl = '$apiBase/get_team_profile.php';
 
   static const String kStatusUnset = 'unset';
 
@@ -45,6 +49,7 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
   bool loading = true;
   bool saving = false;
   String? error;
+  String? teamLogoUrl;
 
   DateTime selectedMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
   int? selectedEventId;
@@ -71,6 +76,7 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
   @override
   void initState() {
     super.initState();
+    teamLogoUrl = _cacheBust(_normalizeTeamLogo(widget.teamLogoUrl));
     searchC.addListener(() {
       if (mounted) setState(() {});
     });
@@ -97,6 +103,50 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
     if (starts.isEmpty) return {};
     final start = starts.reduce((a, b) => a < b ? a : b);
     return jsonDecode(clear.substring(start));
+  }
+
+
+  String? _normalizeTeamLogo(dynamic raw) {
+    final value = (raw ?? '').toString().trim();
+    if (value.isEmpty || value == 'null') return null;
+    if (value.startsWith('http://') || value.startsWith('https://')) return value;
+    if (value.startsWith('//')) return 'https:$value';
+    if (value.startsWith('sportotekaapp.ru/')) return 'https://$value';
+    if (value.startsWith('www.sportotekaapp.ru/')) return 'https://$value';
+    if (value.startsWith('/')) return 'https://sportotekaapp.ru$value';
+    if (value.startsWith('uploads/')) return 'https://sportotekaapp.ru/$value';
+    return 'https://sportotekaapp.ru/$value';
+  }
+
+  String? _cacheBust(String? url) {
+    if (url == null || url.trim().isEmpty) return null;
+    final sep = url.contains('?') ? '&' : '?';
+    return '$url${sep}v=${DateTime.now().millisecondsSinceEpoch}';
+  }
+
+  Future<void> _loadTeamProfileSilent() async {
+    try {
+      final res = await http
+          .post(
+            Uri.parse(getTeamProfileUrl),
+            body: {'team_id': widget.teamId.toString()},
+          )
+          .timeout(const Duration(seconds: 10));
+
+      final data = _decode(res.body);
+      if (data is! Map) return;
+
+      final ok = data['success'] == true || data['status'] == 'success';
+      final team = data['team'];
+      if (!ok || team is! Map) return;
+
+      final rawLogo = team['logo'] ?? team['logo_url'] ?? team['photo'] ?? team['image'];
+      final logo = _cacheBust(_normalizeTeamLogo(rawLogo));
+      if (logo == null || logo.trim().isEmpty) return;
+
+      teamLogoUrl = logo;
+      if (mounted) setState(() {});
+    } catch (_) {}
   }
 
   int _daysInMonth(DateTime month) {
@@ -176,7 +226,7 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
     });
 
     try {
-      await Future.wait([_fetchPlayers(), _fetchEventsForMonth()]);
+      await Future.wait([_loadTeamProfileSilent(), _fetchPlayers(), _fetchEventsForMonth()]);
       await _fetchAttendanceForEvents();
       _calculateStats();
     } catch (e) {
@@ -517,6 +567,7 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
           teamName: widget.teamName,
           clubId: widget.clubId,
           clubName: widget.clubName,
+          teamLogoUrl: teamLogoUrl ?? widget.teamLogoUrl,
           fullScreen: true,
         ),
       ),
@@ -531,7 +582,12 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
 
   @override
   Widget build(BuildContext context) {
-    if (loading) return const _LoadingPanel();
+    if (loading) {
+      return _LoadingPanel(
+        teamName: widget.teamName,
+        teamLogoUrl: teamLogoUrl ?? widget.teamLogoUrl,
+      );
+    }
     if (error != null) return _ErrorPanel(text: error!, onRetry: _loadAll);
 
     final content = Container(
@@ -578,7 +634,11 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
           final compact = constraints.maxWidth < 760;
           final title = Row(
             children: [
-              const _MiniFootballMark(),
+              _TeamLogoMark(
+                logoUrl: teamLogoUrl ?? widget.teamLogoUrl,
+                teamName: widget.teamName,
+                size: 36,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -907,59 +967,71 @@ class _C {
       );
 }
 
-class _FootballMark extends StatelessWidget {
-  const _FootballMark();
+
+class _TeamLogoMark extends StatelessWidget {
+  final String? logoUrl;
+  final String teamName;
+  final double size;
+
+  const _TeamLogoMark({
+    required this.logoUrl,
+    required this.teamName,
+    this.size = 36,
+  });
+
+  String? _normalizeImage(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return null;
+    var url = raw.trim();
+    if (url == 'null') return null;
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    if (url.startsWith('//')) return 'https:$url';
+    if (url.startsWith('sportotekaapp.ru/')) return 'https://$url';
+    if (url.startsWith('www.sportotekaapp.ru/')) return 'https://$url';
+    if (url.startsWith('/')) return 'https://sportotekaapp.ru$url';
+    if (url.startsWith('uploads/')) return 'https://sportotekaapp.ru/$url';
+    return 'https://sportotekaapp.ru/$url';
+  }
+
+  Widget _fallback(String letter) {
+    return Container(
+      color: _C.softGreen,
+      alignment: Alignment.center,
+      child: Text(
+        letter,
+        style: TextStyle(
+          color: _C.green,
+          fontSize: size * .42,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final url = _normalizeImage(logoUrl);
+    final cleanName = teamName.trim();
+    final letter = cleanName.isNotEmpty ? cleanName.characters.first.toUpperCase() : 'К';
+
     return Container(
-      width: 48,
-      height: 48,
-      decoration: BoxDecoration(color: _C.softGreen, borderRadius: BorderRadius.circular(16)),
-      child: CustomPaint(painter: _FootballPainter()),
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: _C.softGreen,
+        borderRadius: BorderRadius.circular(size * .33),
+        border: Border.all(color: _C.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: url == null
+          ? _fallback(letter)
+          : CachedNetworkImage(
+              imageUrl: url,
+              fit: BoxFit.cover,
+              placeholder: (_, __) => _fallback(letter),
+              errorWidget: (_, __, ___) => _fallback(letter),
+            ),
     );
   }
-}
-
-
-class _MiniFootballMark extends StatelessWidget {
-  const _MiniFootballMark();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(color: _C.softGreen, borderRadius: BorderRadius.circular(12)),
-      child: CustomPaint(painter: _FootballPainter()),
-    );
-  }
-}
-
-class _FootballPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final green = Paint()..color = _C.green..style = PaintingStyle.stroke..strokeWidth = 2.2;
-    final fill = Paint()..color = Colors.white..style = PaintingStyle.fill;
-    final c = Offset(size.width / 2, size.height / 2);
-    canvas.drawCircle(c, size.width * .25, fill);
-    canvas.drawCircle(c, size.width * .25, green);
-    final pentagon = Path();
-    for (var i = 0; i < 5; i++) {
-      final a = -1.57 + i * 1.256;
-      final p = Offset(c.dx + size.width * .085 * math.cos(a), c.dy + size.width * .085 * math.sin(a));
-      if (i == 0) pentagon.moveTo(p.dx, p.dy); else pentagon.lineTo(p.dx, p.dy);
-    }
-    pentagon.close();
-    canvas.drawPath(pentagon, Paint()..color = _C.green..style = PaintingStyle.fill);
-    canvas.drawLine(Offset(c.dx - 13, c.dy - 2), Offset(c.dx - 20, c.dy - 10), green);
-    canvas.drawLine(Offset(c.dx + 13, c.dy - 2), Offset(c.dx + 20, c.dy - 10), green);
-    canvas.drawLine(Offset(c.dx - 8, c.dy + 12), Offset(c.dx - 13, c.dy + 20), green);
-    canvas.drawLine(Offset(c.dx + 8, c.dy + 12), Offset(c.dx + 13, c.dy + 20), green);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _StatusCircle extends StatelessWidget {
@@ -1149,7 +1221,13 @@ class _AccentButton extends StatelessWidget {
 }
 
 class _LoadingPanel extends StatefulWidget {
-  const _LoadingPanel();
+  final String teamName;
+  final String teamLogoUrl;
+
+  const _LoadingPanel({
+    this.teamName = '',
+    this.teamLogoUrl = '',
+  });
 
   @override
   State<_LoadingPanel> createState() => _LoadingPanelState();
@@ -1184,7 +1262,11 @@ class _LoadingPanelState extends State<_LoadingPanel> with SingleTickerProviderS
             children: [
               RotationTransition(
                 turns: _controller,
-                child: Container(width: 78,height: 78,decoration: BoxDecoration(color: Colors.white,borderRadius: BorderRadius.circular(22),border: Border.all(color: _C.softGreen,width: 2)),child: Icon(Icons.shield_rounded,size: 42,color: _C.green)),
+                child: _TeamLogoMark(
+                  logoUrl: widget.teamLogoUrl,
+                  teamName: widget.teamName,
+                  size: 78,
+                ),
               ),
               const SizedBox(height: 14),
               const Text('Загружаем журнал посещаемости', textAlign: TextAlign.center, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: _C.text)),
@@ -1235,7 +1317,16 @@ class _EmptyPanel extends StatelessWidget {
     return Container(
       decoration: _C.card,
       child: Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [const _FootballMark(), const SizedBox(height: 14), Text(text, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: _C.text)), const SizedBox(height: 6), const Text('Проверьте выбранный месяц или состав команды', style: TextStyle(fontWeight: FontWeight.w700, color: _C.muted))]),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: _C.softGreen,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(Icons.groups_rounded, color: _C.green, size: 28),
+                ),
+                const SizedBox(height: 14), Text(text, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: _C.text)), const SizedBox(height: 6), const Text('Проверьте выбранный месяц или состав команды', style: TextStyle(fontWeight: FontWeight.w700, color: _C.muted))]),
       ),
     );
   }

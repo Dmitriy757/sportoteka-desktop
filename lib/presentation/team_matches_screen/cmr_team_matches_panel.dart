@@ -251,8 +251,11 @@ class _CmrTeamMatchesPanelState extends State<CmrTeamMatchesPanel> {
       () => const TeamMatchDetailScreen(),
       arguments: {
         'match': match,
-        'match_id': _i(match['id']),
+        'match_id': _i(match['id'] ?? match['match_id']),
         'team_id': widget.teamId,
+        'team_name': widget.teamName,
+        'club_id': widget.clubId,
+        'club_name': widget.clubName,
       },
     );
   }

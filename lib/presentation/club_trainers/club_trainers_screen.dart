@@ -55,9 +55,8 @@ class _ClubTrainersScreenState extends State<ClubTrainersScreen> {
     super.dispose();
   }
 
-  bool get _isTablet {
-    final width = MediaQuery.of(context).size.shortestSide;
-    return width >= 700;
+  bool _isTabletLayout(BuildContext context) {
+    return MediaQuery.sizeOf(context).shortestSide >= 700;
   }
 
   void _applyFilter() {
@@ -150,159 +149,180 @@ class _ClubTrainersScreenState extends State<ClubTrainersScreen> {
 
   Future<Map<String, dynamic>?> _pickTrainerByEmailSheet() async {
     final emailCtrl = TextEditingController();
-    List<Map<String, dynamic>> results = [];
-    bool searching = false;
+    final isTablet = _isTabletLayout(context);
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
 
-    final picked = await showModalBottomSheet<Map<String, dynamic>>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setSB) {
-            Future<void> doSearch() async {
-              final q = emailCtrl.text.trim();
-              if (q.isEmpty) {
-                setSB(() => results = []);
-                return;
+    try {
+      List<Map<String, dynamic>> results = [];
+      bool searching = false;
+
+      final picked = await showModalBottomSheet<Map<String, dynamic>>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        builder: (modalContext) {
+          return StatefulBuilder(
+            builder: (sheetContext, setSB) {
+              Future<void> doSearch() async {
+                final q = emailCtrl.text.trim();
+
+                if (q.isEmpty) {
+                  if (!sheetContext.mounted) return;
+                  setSB(() {
+                    searching = false;
+                    results = [];
+                  });
+                  return;
+                }
+
+                if (!sheetContext.mounted) return;
+                setSB(() => searching = true);
+
+                final r = await _searchTrainerByEmail(q);
+
+                if (!sheetContext.mounted) return;
+                setSB(() {
+                  searching = false;
+                  results = r;
+                });
               }
-              setSB(() => searching = true);
-              final r = await _searchTrainerByEmail(q);
-              if (!context.mounted) return;
-              setSB(() {
-                searching = false;
-                results = r;
-              });
-            }
 
-            return _BottomSheetShell(
-              maxWidth: _isTablet ? 620 : null,
-              child: Padding(
-                padding: EdgeInsets.only(
-                  left: 16,
-                  right: 16,
-                  top: 10,
-                  bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
-                ),
-                child: SafeArea(
-                  top: false,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const _SheetHandle(),
-                      Row(
-                        children: [
-                          const _RoundIcon(icon: Icons.person_add_alt_1_rounded),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: const [
-                                Text(
-                                  'Добавить тренера',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w900,
-                                    color: _text,
+              return _BottomSheetShell(
+                maxWidth: isTablet ? 620 : null,
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    left: 16,
+                    right: 16,
+                    top: 10,
+                    bottom: 16 + bottomInset,
+                  ),
+                  child: SafeArea(
+                    top: false,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const _SheetHandle(),
+                        Row(
+                          children: [
+                            const _RoundIcon(icon: Icons.person_add_alt_1_rounded),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: const [
+                                  Text(
+                                    'Добавить тренера',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w900,
+                                      color: _text,
+                                    ),
                                   ),
-                                ),
-                                SizedBox(height: 3),
-                                Text(
-                                  'Найдите тренера по точному email',
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: _muted,
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w700,
+                                  SizedBox(height: 3),
+                                  Text(
+                                    'Найдите тренера по точному email',
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: _muted,
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        TextField(
+                          controller: emailCtrl,
+                          keyboardType: TextInputType.emailAddress,
+                          textInputAction: TextInputAction.search,
+                          onSubmitted: (_) => doSearch(),
+                          decoration: InputDecoration(
+                            labelText: 'Email тренера',
+                            hintText: 'coach@mail.com',
+                            prefixIcon: const Icon(Icons.alternate_email_rounded),
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.search_rounded),
+                              onPressed: doSearch,
+                            ),
+                            filled: true,
+                            fillColor: _bg,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide.none,
                             ),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      TextField(
-                        controller: emailCtrl,
-                        keyboardType: TextInputType.emailAddress,
-                        textInputAction: TextInputAction.search,
-                        onSubmitted: (_) => doSearch(),
-                        decoration: InputDecoration(
-                          labelText: 'Email тренера',
-                          hintText: 'coach@mail.com',
-                          prefixIcon: const Icon(Icons.alternate_email_rounded),
-                          suffixIcon: IconButton(
-                            icon: const Icon(Icons.search_rounded),
-                            onPressed: doSearch,
-                          ),
-                          filled: true,
-                          fillColor: _bg,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: BorderSide.none,
-                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      if (searching)
-                        const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(18),
-                            child: CircularProgressIndicator(color: _primary),
+                        const SizedBox(height: 12),
+                        if (searching)
+                          const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(18),
+                              child: CircularProgressIndicator(color: _primary),
+                            ),
+                          )
+                        else if (results.isEmpty)
+                          const _CompactHint(
+                            icon: Icons.manage_search_rounded,
+                            title: 'Введите email',
+                            text: 'После поиска выберите тренера из найденных пользователей.',
+                          )
+                        else
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.42,
+                            ),
+                            child: ListView.separated(
+                              shrinkWrap: true,
+                              itemCount: results.length,
+                              separatorBuilder: (_, __) => const SizedBox(height: 8),
+                              itemBuilder: (itemContext, i) {
+                                final t = results[i];
+                                final id = _asInt(t['id']);
+                                final email = _asStr(t['email']);
+                                final name = _trainerName(t, fallback: 'Тренер #$id');
+
+                                return _PickTrainerCard(
+                                  name: name,
+                                  email: email,
+                                  onTap: () {
+                                    Navigator.of(modalContext).pop({
+                                      'id': id,
+                                      'name': name,
+                                      'email': email,
+                                    });
+                                  },
+                                );
+                              },
+                            ),
                           ),
-                        )
-                      else if (results.isEmpty)
-                        const _CompactHint(
-                          icon: Icons.manage_search_rounded,
-                          title: 'Введите email',
-                          text: 'После поиска выберите тренера из найденных пользователей.',
-                        )
-                      else
-                        ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxHeight: MediaQuery.of(context).size.height * 0.42,
-                          ),
-                          child: ListView.separated(
-                            shrinkWrap: true,
-                            itemCount: results.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 8),
-                            itemBuilder: (context, i) {
-                              final t = results[i];
-                              final id = _asInt(t['id']);
-                              final email = _asStr(t['email']);
-                              final name = _trainerName(t, fallback: 'Тренер #$id');
-                              return _PickTrainerCard(
-                                name: name,
-                                email: email,
-                                onTap: () => Navigator.pop(sheetContext, {
-                                  'id': id,
-                                  'name': name,
-                                  'email': email,
-                                }),
-                              );
-                            },
-                          ),
-                        ),
-                      const SizedBox(height: 8),
-                    ],
+                        const SizedBox(height: 8),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
-        );
-      },
-    );
+              );
+            },
+          );
+        },
+      );
 
-    emailCtrl.dispose();
-    return picked;
+      return picked;
+    } finally {
+      emailCtrl.dispose();
+    }
   }
 
   Future<void> _linkTrainer(int trainerId) async {
+    if (!mounted) return;
+
     try {
       final resp = await http.post(
         Uri.parse(linkTrainerUrl),
@@ -311,6 +331,9 @@ class _ClubTrainersScreenState extends State<ClubTrainersScreen> {
           'trainer_id': trainerId.toString(),
         },
       );
+
+      if (!mounted) return;
+
       final data = _decode(resp.body);
 
       if (data['success'] == true) {
@@ -320,12 +343,15 @@ class _ClubTrainersScreenState extends State<ClubTrainersScreen> {
           snackPosition: SnackPosition.BOTTOM,
           margin: const EdgeInsets.all(12),
         );
+
+        if (!mounted) return;
         await _load();
       } else {
         final msg = _asStr(data['message']);
         Get.snackbar('Ошибка', msg.isEmpty ? 'Не удалось добавить тренера' : msg);
       }
     } catch (e) {
+      if (!mounted) return;
       Get.snackbar('Сеть', 'Ошибка соединения');
       debugPrint('Link trainer error: $e');
     }
@@ -387,7 +413,7 @@ class _ClubTrainersScreenState extends State<ClubTrainersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isTablet = _isTablet;
+    final isTablet = _isTabletLayout(context);
 
     return Scaffold(
       backgroundColor: _bg,
@@ -551,10 +577,19 @@ class _ClubTrainersScreenState extends State<ClubTrainersScreen> {
   }
 
   Future<void> _onAddTrainer() async {
+    if (!mounted) return;
+
     final picked = await _pickTrainerByEmailSheet();
+
+    if (!mounted) return;
     if (picked == null) return;
+
     final id = _asInt(picked['id']);
     if (id <= 0) return;
+
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+
+    if (!mounted) return;
     await _linkTrainer(id);
   }
 
@@ -664,7 +699,7 @@ class TrainerCardScreen extends StatelessWidget {
     return 'https://sportotekaapp.ru$s';
   }
 
-  bool _isTablet(BuildContext context) => MediaQuery.of(context).size.shortestSide >= 700;
+  bool _isTablet(BuildContext context) => MediaQuery.sizeOf(context).shortestSide >= 700;
 
   @override
   Widget build(BuildContext context) {
