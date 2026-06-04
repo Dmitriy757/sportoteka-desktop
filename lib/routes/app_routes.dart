@@ -12,7 +12,7 @@ import 'package:sportoteka/presentation/app_navigation_screen/binding/app_naviga
 import 'package:sportoteka/presentation/booking_details_one_screen/binding/booking_details_one_binding.dart';
 import 'package:sportoteka/presentation/edit_player_screen/edit_player_screen.dart';
 import 'package:sportoteka/presentation/profile_screen/my_programs_screen.dart';
-import 'package:sportoteka/presentation/player_profile_screen/player_profile_screen.dart';
+import 'package:sportoteka/presentation/player_profile_screen/cmr_player_profile_screen.dart';
 import 'package:sportoteka/presentation/my_team_screen/my_team_screen.dart';
 import 'package:sportoteka/presentation/my_team_screen/binding/my_team_binding.dart';
 import 'package:sportoteka/presentation/booking_details_one_screen/booking_details_one_screen.dart';
@@ -719,8 +719,19 @@ GetPage(
 ),
 
     GetPage(
-  name: playerProfileScreen,
-  page: () => PlayerProfileScreen(player: Get.arguments),
+  transition: Transition.rightToLeft,
+  name: AppRoutes.playerProfileScreen,
+  page: () {
+    final args = Get.arguments;
+
+    final Map<String, dynamic> player = args is Map<String, dynamic>
+        ? args
+        : args is Map
+            ? Map<String, dynamic>.from(args)
+            : <String, dynamic>{};
+
+    return CmrPlayerProfileScreen(player: player);
+  },
 ),
 GetPage(
   name: AppRoutes.editPlayerScreen,

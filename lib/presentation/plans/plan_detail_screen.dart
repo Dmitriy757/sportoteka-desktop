@@ -32,7 +32,7 @@ class ClubDashboardPalette {
   static const text = Color(0xFF1A1A1A);
   static const textMuted = Color(0xFF666666);
   static const textLight = Color(0xFF999999);
-  static const background = Color(0xFFF8F9FA);
+  static const background = Colors.white;
   static const border = Color(0xFFE5E7EB);
 
   static const greenGradient = LinearGradient(
@@ -53,51 +53,238 @@ class RealClubConstants {
 class PlanApi {
   static const String base = "https://sportotekaapp.ru/api";
 
-  /// ✅ Получение плана (детали + упражнения) — строго JSON
   static Future<Map<String, dynamic>> getPlan(int planId) async {
     final r = await http.post(
       Uri.parse("$base/get_training_plan_detail.php"),
       headers: {"Content-Type": "application/json; charset=utf-8"},
-      body: jsonEncode({"plan_id": planId, "planId": planId}),
+      body: jsonEncode({"plan_id": planId, "planId": planId, "id": planId}),
     );
     return _decode(r);
   }
 
   static Future<Map<String, dynamic>> createPlan(Map<String, dynamic> body) async {
-    final r = await http.post(
-      Uri.parse("$base/create_training_plan.php"),
-      headers: {"Content-Type": "application/json; charset=utf-8"},
-      body: json.encode(body),
-    );
-    return _decode(r);
+    // ВАЖНО: create_training_plan.php используется и для создания, и для обновления.
+    // Создание и обновление отправляем в create_training_plan.php: этот endpoint принимает plan_id = 0/>0
+    // как черновик без plan_id, но с маркерами create/action для PHP.
+    final payload = _normalizePlanPayload(body, create: true);
+    payload["action"] = "create";
+    payload["mode"] = "create";
+    payload["is_new"] = 1;
+    payload["draft"] = 1;
+
+    final jsonResult = await _postJson("create_training_plan.php", payload);
+    if (_isOk(jsonResult)) return _markOk(jsonResult);
+
+    final formResult = await _postForm("create_training_plan.php", payload);
+    if (_isOk(formResult)) return _markOk(formResult);
+
+    return _betterError(jsonResult, formResult);
   }
 
   static Future<Map<String, dynamic>> updatePlan(Map<String, dynamic> body) async {
-    final r = await http.post(
-      Uri.parse("$base/update_training_plan.php"),
-      headers: {"Content-Type": "application/json; charset=utf-8"},
-      body: json.encode(body),
-    );
-    return _decode(r);
+    final payload = _normalizePlanPayload(body, create: false);
+
+    final jsonResult = await _postJson("create_training_plan.php", payload);
+    if (_isOk(jsonResult)) return _markOk(jsonResult);
+
+    final formResult = await _postForm("create_training_plan.php", payload);
+    if (_isOk(formResult)) return _markOk(formResult);
+
+    return _betterError(jsonResult, formResult);
+  }
+
+  static bool _isOk(Map<String, dynamic> r) {
+    final s = r["success"];
+    final status = r["status"];
+    return s == true || s == 1 || s == "1" || s == "true" || status == "success" || status == true;
+  }
+
+  static Map<String, dynamic> _markOk(Map<String, dynamic> r) {
+    return {...r, "success": true};
+  }
+
+  static Map<String, dynamic> _betterError(Map<String, dynamic> a, Map<String, dynamic> b) {
+    // Не маскируем полезную диагностику JSON-ответа form-ответом.
+    final aDetails = (a["details"] ?? a["debug"] ?? "").toString().trim();
+    if (aDetails.isNotEmpty) return a;
+
+    final aCode = _asIntStatic(a["statusCode"]);
+    final bCode = _asIntStatic(b["statusCode"]);
+    if (aCode == 404 && bCode != 404) return b;
+    if ((a["message"] ?? "").toString().toLowerCase().contains("html") && bCode != 404) return b;
+
+    final bDetails = (b["details"] ?? b["debug"] ?? "").toString().trim();
+    if (bDetails.isNotEmpty) return b;
+    if ((b["message"] ?? "").toString().isNotEmpty) return b;
+    return a;
+  }
+
+  static Future<Map<String, dynamic>> _postJson(String endpoint, Map<String, dynamic> payload) async {
+    try {
+      final r = await http
+          .post(
+            Uri.parse("$base/$endpoint"),
+            headers: {"Content-Type": "application/json; charset=utf-8"},
+            body: jsonEncode(payload),
+          )
+          .timeout(const Duration(seconds: 15));
+      final decoded = _decode(r);
+      decoded["endpoint"] = endpoint;
+      decoded["transport"] = "json";
+      return decoded;
+    } catch (e) {
+      return {"success": false, "message": "$e", "endpoint": endpoint, "transport": "json"};
+    }
+  }
+
+  static Future<Map<String, dynamic>> _postForm(String endpoint, Map<String, dynamic> payload) async {
+    try {
+      final fields = <String, String>{};
+      payload.forEach((key, value) {
+        if (value == null) return;
+        if (value is Map || value is List) {
+          fields[key] = jsonEncode(value);
+        } else {
+          fields[key] = value.toString();
+        }
+      });
+
+      final r = await http
+          .post(Uri.parse("$base/$endpoint"), body: fields)
+          .timeout(const Duration(seconds: 15));
+      final decoded = _decode(r);
+      decoded["endpoint"] = endpoint;
+      decoded["transport"] = "form";
+      return decoded;
+    } catch (e) {
+      return {"success": false, "message": "$e", "endpoint": endpoint, "transport": "form"};
+    }
+  }
+
+  static Map<String, dynamic> _normalizePlanPayload(Map<String, dynamic> body, {required bool create}) {
+    final payload = Map<String, dynamic>.from(body);
+
+    final planId = _asIntStatic(payload["plan_id"] ?? payload["planId"] ?? payload["id"]);
+    if (!create && planId > 0) {
+      payload["id"] = planId;
+      payload["plan_id"] = planId;
+      payload["planId"] = planId;
+    } else {
+      payload.remove("id");
+      payload.remove("plan_id");
+      payload.remove("planId");
+    }
+
+    final clubId = _asIntStatic(payload["club_id"] ?? payload["clubId"]);
+    final teamId = _asIntStatic(payload["team_id"] ?? payload["teamId"]);
+    final folderId = _asIntStatic(payload["folder_id"] ?? payload["folderId"]);
+    final coachId = _asIntStatic(payload["coach_id"] ?? payload["trainer_id"] ?? payload["created_by"] ?? payload["user_id"]);
+
+    payload["club_id"] = clubId;
+    payload["clubId"] = clubId;
+    payload["team_id"] = teamId;
+    payload["teamId"] = teamId;
+    payload["folder_id"] = folderId;
+    payload["folderId"] = folderId;
+
+    if (coachId > 0) {
+      payload["coach_id"] = coachId;
+      payload["trainer_id"] = coachId;
+      payload["created_by"] = coachId;
+      payload["user_id"] = coachId;
+    }
+
+    final title = _firstString(payload, ["theme", "title", "name"]);
+    payload["theme"] = title.isEmpty ? "Новый план" : title;
+    payload["title"] = payload["theme"];
+    payload["name"] = payload["theme"];
+
+    final date = _firstString(payload, ["plan_date", "date", "created_at"]);
+    payload["plan_date"] = date.isEmpty ? _todayIsoStatic() : date;
+    payload["date"] = payload["plan_date"];
+
+    final cycle = _firstString(payload, ["cycle_title", "cycle"]);
+    payload["cycle_title"] = cycle.isEmpty ? "Недельный цикл" : cycle;
+    payload["cycle"] = payload["cycle_title"];
+
+    final location = _firstString(payload, ["location", "place", "training_place"]);
+    payload["location"] = location.isEmpty ? "Тренировочное поле" : location;
+    payload["place"] = payload["location"];
+    payload["training_place"] = payload["location"];
+
+    final duration = _asIntStatic(payload["duration_min"] ?? payload["duration"] ?? payload["minutes"]);
+    payload["duration_min"] = duration > 0 ? duration : 90;
+    payload["duration"] = payload["duration_min"];
+    payload["minutes"] = payload["duration_min"];
+
+    final players = _asIntStatic(payload["players_count"] ?? payload["players"]);
+    payload["players_count"] = players > 0 ? players : 0;
+    payload["players"] = payload["players_count"];
+
+    final desc = _firstString(payload, ["description", "plan_description", "comment", "notes"]);
+    payload["description"] = desc;
+    payload["plan_description"] = desc;
+    payload["comment"] = desc;
+    payload["notes"] = desc;
+
+    final exercises = payload["exercises"];
+    if (exercises is List) {
+      payload["exercises"] = exercises;
+      payload["items"] = exercises;
+      payload["exercises_json"] = jsonEncode(exercises);
+      payload["items_json"] = jsonEncode(exercises);
+    } else if (exercises is String && exercises.trim().isNotEmpty) {
+      payload["exercises_json"] = exercises;
+      payload["items_json"] = exercises;
+    } else {
+      payload["exercises"] = <Map<String, dynamic>>[];
+      payload["items"] = <Map<String, dynamic>>[];
+      payload["exercises_json"] = "[]";
+      payload["items_json"] = "[]";
+    }
+
+    final goals = payload["goals"];
+    if (goals is Map || goals is List) payload["goals_json"] = jsonEncode(goals);
+
+    final equipment = payload["equipment"];
+    if (equipment is Map || equipment is List) payload["equipment_json"] = jsonEncode(equipment);
+
+    payload["source"] = "cmr_plans_panel";
+    return payload;
+  }
+
+  static String _firstString(Map<String, dynamic> payload, List<String> keys) {
+    for (final key in keys) {
+      final text = (payload[key] ?? "").toString().trim();
+      if (text.isNotEmpty && text != "null") return text;
+    }
+    return "";
+  }
+
+  static int _asIntStatic(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse("${v ?? 0}") ?? 0;
+  }
+
+  static String _todayIsoStatic() {
+    final d = DateTime.now();
+    return "${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
   }
 
   static Map<String, dynamic> _decode(http.Response r) {
     final body = r.body.trim();
 
     if (body.isEmpty) {
-      return {"success": false, "message": "Empty response", "statusCode": r.statusCode};
+      return {"success": false, "message": "Пустой ответ сервера", "statusCode": r.statusCode};
     }
 
-    // ✅ сервер вернул HTML (PHP warning/notice/фатал) → показываем как есть
     final lower = body.toLowerCase();
-    if (body.startsWith("<") ||
-        lower.contains("<br") ||
-        lower.contains("<b>") ||
-        lower.contains("<html")) {
+    if (body.startsWith("<") || lower.contains("<br") || lower.contains("<b>") || lower.contains("<html")) {
       return {
         "success": false,
-        "message": "Server returned HTML instead of JSON",
-        "raw": body.length > 2000 ? body.substring(0, 2000) : body,
+        "message": "HTTP ${r.statusCode}: сервер вернул HTML вместо JSON",
+        "raw": body.length > 1800 ? body.substring(0, 1800) : body,
         "statusCode": r.statusCode,
       };
     }
@@ -105,13 +292,14 @@ class PlanApi {
     try {
       final j = json.decode(body);
       if (j is Map<String, dynamic>) return j;
+      if (j is Map) return Map<String, dynamic>.from(j);
       return {"success": false, "message": "Bad JSON: not a map", "raw": body, "statusCode": r.statusCode};
     } catch (e) {
       return {
         "success": false,
         "message": "Bad JSON: $e",
-        "raw": body.length > 2000 ? body.substring(0, 2000) : body,
-        "statusCode": r.statusCode
+        "raw": body.length > 1800 ? body.substring(0, 1800) : body,
+        "statusCode": r.statusCode,
       };
     }
   }
@@ -1101,8 +1289,24 @@ if (userId > 0) {
       if (planId != null && planId! > 0) {
         await _load();
       } else {
-        dateCtrl.text = _todayIso();
-        cycleCtrl.text = "Недельный цикл ${_rangeWeekTitle()}";
+        dateCtrl.text = _asStr(args["date"] ?? args["plan_date"]).isNotEmpty
+            ? _asStr(args["date"] ?? args["plan_date"])
+            : _todayIso();
+        cycleCtrl.text = _asStr(args["cycle_title"] ?? args["cycle"]).isNotEmpty
+            ? _asStr(args["cycle_title"] ?? args["cycle"])
+            : "Недельный цикл ${_rangeWeekTitle()}";
+        themeCtrl.text = _asStr(args["theme"] ?? args["title"] ?? args["name"]).isNotEmpty
+            ? _asStr(args["theme"] ?? args["title"] ?? args["name"])
+            : "Новый план";
+        locationCtrl.text = _asStr(args["location"] ?? args["place"]).isNotEmpty
+            ? _asStr(args["location"] ?? args["place"])
+            : "Тренировочное поле";
+        playersCtrl.text = _asStr(args["players_count"] ?? args["players"]).isNotEmpty
+            ? _asStr(args["players_count"] ?? args["players"])
+            : playersCtrl.text;
+        durationCtrl.text = _asStr(args["duration_min"] ?? args["duration"] ?? args["minutes"]).isNotEmpty
+            ? _asStr(args["duration_min"] ?? args["duration"] ?? args["minutes"])
+            : durationCtrl.text;
         exercises = [_emptyExercise(1)];
         for (final e in exercises) {
           e["schemes"] = _asIntList(e["schemes"]);
@@ -1360,10 +1564,16 @@ Future<void> _pickSchemesForExercise(int exerciseIndex) async {
         "trainer": trainerName,
         "cycle_title": cycleCtrl.text.trim(),
         "date": dateCtrl.text.trim(),
-        "location": locationCtrl.text.trim(),
+        "plan_date": dateCtrl.text.trim(),
+        "location": locationCtrl.text.trim().isEmpty ? "Тренировочное поле" : locationCtrl.text.trim(),
+        "place": locationCtrl.text.trim().isEmpty ? "Тренировочное поле" : locationCtrl.text.trim(),
         "players_count": int.tryParse(playersCtrl.text.trim()) ?? 0,
         "duration_min": int.tryParse(durationCtrl.text.trim()) ?? 90,
+        "duration": int.tryParse(durationCtrl.text.trim()) ?? 90,
+        "minutes": int.tryParse(durationCtrl.text.trim()) ?? 90,
         "theme": themeCtrl.text.trim(),
+        "title": themeCtrl.text.trim(),
+        "name": themeCtrl.text.trim(),
         "goals": {
           "technique": goalTechCtrl.text.trim(),
           "tactics": goalTactCtrl.text.trim(),
@@ -1392,9 +1602,23 @@ Future<void> _pickSchemesForExercise(int exerciseIndex) async {
 
       final r = (effectivePlanId == 0) ? await PlanApi.createPlan(payload) : await PlanApi.updatePlan(payload);
 
-      if (r["success"] == true) {
-        final newId = _asInt(r["plan_id"]);
-        if (planId == null && newId > 0) planId = newId;
+      final saveOk = r["success"] == true ||
+          r["success"] == 1 ||
+          r["success"] == "1" ||
+          r["success"] == "true" ||
+          r["status"] == "success" ||
+          r["status"] == true;
+
+      if (saveOk) {
+        final newId = _asInt(
+          r["plan_id"] ??
+              r["id"] ??
+              r["new_id"] ??
+              r["insert_id"] ??
+              (r["plan"] is Map ? r["plan"]["id"] : null) ??
+              (r["data"] is Map ? r["data"]["id"] : null),
+        );
+        if ((planId == null || planId! <= 0) && newId > 0) planId = newId;
 
         Get.snackbar(
           "Готово",
@@ -1414,9 +1638,19 @@ Future<void> _pickSchemesForExercise(int exerciseIndex) async {
         return;
       }
 
+      final endpoint = (r["endpoint"] ?? "").toString();
+      final transport = (r["transport"] ?? "").toString();
+      final raw = (r["raw"] ?? "").toString();
+      final details = (r["details"] ?? r["debug"] ?? "").toString();
+      final tech = [
+        if (endpoint.isNotEmpty) endpoint,
+        if (transport.isNotEmpty) transport,
+      ].join(" • ");
+      final rawShort = raw.isEmpty ? "" : "\n${raw.length > 260 ? raw.substring(0, 260) : raw}";
+      final detailsShort = details.isEmpty ? "" : "\n${details.length > 360 ? details.substring(0, 360) : details}";
       Get.snackbar(
         "Ошибка",
-        (r["message"] ?? "Не удалось сохранить").toString(),
+        "${(r["message"] ?? "Не удалось сохранить").toString()}${tech.isNotEmpty ? " ($tech)" : ""}$detailsShort$rawShort",
         snackPosition: SnackPosition.BOTTOM,
         margin: const EdgeInsets.all(12),
       );
@@ -1685,7 +1919,6 @@ Future<void> _pickSchemesForExercise(int exerciseIndex) async {
       padding: EdgeInsets.fromLTRB(compact ? 12 : 16, compact ? 10 : 12, compact ? 12 : 16, compact ? 10 : 12),
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(bottom: BorderSide(color: ClubDashboardPalette.border)),
       ),
       child: Row(
         children: [
@@ -2203,7 +2436,7 @@ Future<void> _pickSchemesForExercise(int exerciseIndex) async {
   Widget build(BuildContext context) {
     if (widget.embedded) {
       return Material(
-        color: const Color(0xFFF8FAFC),
+        color: Colors.white,
         child: FadeTransition(
           opacity: CurvedAnimation(parent: _anim, curve: Curves.easeInOut),
           child: _buildCmrBody(embedded: true),

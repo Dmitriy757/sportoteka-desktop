@@ -402,6 +402,7 @@ class TeamVideoAnalysisScreen extends StatefulWidget {
   final String teamName;
   final int clubId;
   final String clubName;
+  final bool embedded;
 
   const TeamVideoAnalysisScreen({
     super.key,
@@ -409,6 +410,7 @@ class TeamVideoAnalysisScreen extends StatefulWidget {
     required this.teamName,
     required this.clubId,
     required this.clubName,
+    this.embedded = false,
   });
 
   @override
@@ -2212,6 +2214,38 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
   Widget build(BuildContext context) {
     final isTablet = MediaQuery.of(context).size.width >= 900;
 
+    final content = FadeTransition(
+  opacity: _animationController,
+  child: _loading
+      ? const Center(child: CircularProgressIndicator())
+      : RefreshIndicator(
+          onRefresh: () async {
+            await _loadTeamProfile();
+            await _loadMatches();
+            await _checkPendingUpload();
+          },
+          child: ListView(
+            padding: const EdgeInsets.only(bottom: 90),
+            children: [
+              _searchAndToolbar(),
+              _sectionLabel(),
+              if (_filteredMatches.isEmpty)
+                _buildEmpty()
+              else if (_view == TeamVideoCatalogView.grid)
+                _gridBody(isTablet)
+              else
+                _listBody(),
+            ],
+          ),
+        ),
+);
+    if (widget.embedded) {
+      return ColoredBox(
+        color: FeedPalette.background,
+        child: content,
+      );
+    }
+
     return Scaffold(
       backgroundColor: FeedPalette.background,
       appBar: AppBar(
@@ -2242,31 +2276,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
           const SizedBox(width: 4),
         ],
       ),
-      body: FadeTransition(
-        opacity: _animationController,
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : RefreshIndicator(
-                onRefresh: () async {
-                  await _loadTeamProfile();
-                  await _loadMatches();
-                  await _checkPendingUpload();
-                },
-                child: ListView(
-                  padding: const EdgeInsets.only(bottom: 90),
-                  children: [
-                    _searchAndToolbar(),
-                    _sectionLabel(),
-                    if (_filteredMatches.isEmpty)
-                      _buildEmpty()
-                    else if (_view == TeamVideoCatalogView.grid)
-                      _gridBody(isTablet)
-                    else
-                      _listBody(),
-                  ],
-                ),
-              ),
-      ),
+      body: content,
     );
   }
 }
@@ -2415,4 +2425,5 @@ class FeedPalette {
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
+  
 }

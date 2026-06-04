@@ -14,6 +14,7 @@ import 'package:sportoteka/presentation/training_screen/add_training_screen.dart
 import 'package:sportoteka/widgets/training_history_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:sportoteka/presentation/player_screen/player_match_detail_screen.dart';
+import 'package:sportoteka/presentation/edit_player_screen/edit_player_screen.dart';
 
 // =============================
 // БАЗОВЫЕ ЦВЕТА (fallback)
@@ -21,28 +22,29 @@ import 'package:sportoteka/presentation/player_screen/player_match_detail_screen
 class _AppColors {
   // Единая спокойная палитра как в club_workspace_screen.dart:
   // белая база + мягкие цветовые акценты из HomeScreen.
-  static const Color primaryGreen = Color(0xFF00A750);
-  static const Color primaryGradientStart = Color(0xFF111827);
-  static const Color primaryGradientEnd = Color(0xFF178A45);
+  static const Color primaryGreen = Color(0xFF1F7A4D);
+  static const Color primaryGradientStart = Color(0xFFF8FAF9);
+  static const Color primaryGradientEnd = Color(0xFFF2F7F4);
 
-  static const Color background = Color(0xFFFBFBFA);
+  static const Color background = Colors.white;
   static const Color card = Color(0xFFFFFFFF);
   static const Color textPrimary = Color(0xFF0F172A);
   static const Color textSecondary = Color(0xFF64748B);
   static const Color textTertiary = Color(0xFF94A3B8);
 
   static const Color error = Color(0xFFDC2626);
-  static const Color success = Color(0xFF178A45);
+  static const Color success = Color(0xFF2FA86B);
   static const Color warning = Color(0xFFEA580C);
   static const Color info = Color(0xFF2563EB);
   static const Color white = Colors.white;
-  static const Color surfaceLight = Color(0xFFF8FAFC);
+  static const Color surfaceLight = Colors.white;
 
-  static const Color cmrDark = Color(0xFF111827);
-  static const Color cmrGreen = Color(0xFF178A45);
-  static const Color cmrSoft = Color(0xFFEAF5EE);
-  static const Color cmrBorder = Color(0xFFE7ECF2);
-  static const Color cmrPanel = Color(0xFFFAFCFB);
+  static const Color cmrDark = Color(0xFF0F172A);
+  static const Color cmrGreen = Color(0xFF1F7A4D);
+  static const Color cmrSoft = Color(0xFFF2F7F4);
+  static const Color cmrBorder = Color(0xFFEAF0EC);
+  static const Color cmrPanel = Colors.white;
+  static const Color cmrSoftPanel = Color(0xFFF6F8FA);
 
   static const Color blue = Color(0xFF2563EB);
   static const Color blueSoft = Color(0xFFEFF6FF);
@@ -171,9 +173,9 @@ class _PlayerProfileDesign {
       avatarSize: 92,
       titleFontSize: 22,
       bodyFontSize: 14.5,
-      primaryColorValue: 0xFF00A750,
-      secondaryColorValue: 0xFF178A45,
-      backgroundColorValue: 0xFFFBFBFA,
+      primaryColorValue: 0xFF3FBF7F,
+      secondaryColorValue: 0xFF2FA86B,
+      backgroundColorValue: 0xFFFFFFFF,
       cardColorValue: 0xFFFFFFFF,
       textPrimaryColorValue: 0xFF111827,
       textSecondaryColorValue: 0xFF64748B,
@@ -187,7 +189,7 @@ class _PlayerProfileDesign {
 
   Color get primaryColor => Color(primaryColorValue);
   Color get secondaryColor => Color(secondaryColorValue);
-  Color get backgroundColor => Color(backgroundColorValue);
+  Color get backgroundColor => Colors.white;
   Color get cardColor => Color(cardColorValue);
   Color get textPrimaryColor => Color(textPrimaryColorValue);
   Color get textSecondaryColor => Color(textSecondaryColorValue);
@@ -227,7 +229,7 @@ class _PlayerProfileDesign {
       secondaryColorValue:
           (json['secondaryColorValue'] as num?)?.toInt() ?? 0xFF1D4ED8,
       backgroundColorValue:
-          (json['backgroundColorValue'] as num?)?.toInt() ?? 0xFFF8FAFC,
+          (json['backgroundColorValue'] as num?)?.toInt() ?? 0xFFFFFFFF,
       cardColorValue:
           (json['cardColorValue'] as num?)?.toInt() ?? 0xFFFFFFFF,
       textPrimaryColorValue:
@@ -316,6 +318,7 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen>
 
   int _selectedTabIndex = 0;
   bool _mobileHeroCollapsed = false;
+  bool _showInlinePlayerEditor = false;
 
   Color _actionAccent(IconData icon, String label) {
     final text = label.toLowerCase();
@@ -384,6 +387,8 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen>
   bool playerTtdLoading = false;
   String? playerTtdError;
   Map<String, dynamic>? selectedTtdMatch;
+  int _openingPlayerMatchId = 0;
+  StateSetter? _activeSectionSheetSetState;
   List<Map<String, dynamic>> playerTtdMainRows = [];
   List<Map<String, dynamic>> playerTtdPassRows = [];
   List<Map<String, dynamic>> playerTtdGoalkeeperRows = [];
@@ -401,7 +406,8 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen>
   DateTime? _calendarFrom;
   DateTime? _calendarTo;
 
-  bool _trainingCalendarExpanded = true;
+  bool _trainingCalendarExpanded = false;
+  bool _cmrGuideCollapsed = true;
   bool _diaryCalendarExpanded = false;
   bool _matchesCalendarExpanded = false;
   bool _testingCalendarExpanded = false;
@@ -409,6 +415,16 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen>
   DateTime? _selectedDiaryDay;
   DateTime? _selectedMatchDay;
   DateTime? _selectedTestingDay;
+
+  void _rebuildOpenSectionSheet() {
+    final updater = _activeSectionSheetSetState;
+    if (updater == null) return;
+    try {
+      updater(() {});
+    } catch (_) {
+      _activeSectionSheetSetState = null;
+    }
+  }
 
   bool playerTestingLoading = false;
   String? playerTestingError;
@@ -427,11 +443,11 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen>
   int _trainerUserId = 0;
 
   final List<_CategoryTab> _categoryTabs = const [
-    _CategoryTab(0, "Общие", "Основная информация", Icons.person_outline_rounded),
+    _CategoryTab(0, "Обзор", "Основная информация", Icons.person_outline_rounded),
     _CategoryTab(1, "Метрики", "Спортивные показатели", Icons.show_chart_rounded),
     _CategoryTab(2, "Достижения", "Награды и медиа", Icons.military_tech_rounded),
     _CategoryTab(3, "Медкарта", "Медицинские записи", Icons.medical_information_rounded),
-    _CategoryTab(4, "Тренировки", "PRO / История", Icons.sports_soccer_rounded),
+    _CategoryTab(4, "Тренировки", "История и задания", Icons.sports_soccer_rounded),
     _CategoryTab(5, "Матчи", "Игровая история", Icons.table_chart_rounded),
     _CategoryTab(6, "Дневник", "Самооценка игрока", Icons.menu_book_rounded),
     _CategoryTab(7, "Тестирование", "История тестов", Icons.fact_check_rounded),
@@ -505,6 +521,59 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen>
       fontWeight: weight,
       color: color ?? _textSecondary,
       height: 1.3,
+    );
+  }
+
+
+
+  bool _isDesktopOrTablet(BuildContext context) => MediaQuery.of(context).size.width >= 720;
+
+  double _adaptiveFont(BuildContext context, {required double mobile, required double wide}) {
+    return _isDesktopOrTablet(context) ? wide : mobile;
+  }
+
+  TextStyle _cmrTitleText(
+    BuildContext context, {
+    double mobile = 18.0,
+    double wide = 19.0,
+    Color color = const Color(0xFF0F172A),
+    FontWeight weight = FontWeight.w900,
+  }) {
+    return _titleStyle(
+      size: _adaptiveFont(context, mobile: mobile, wide: wide),
+      color: color,
+      weight: weight,
+    );
+  }
+
+  TextStyle _cmrSubtitleText(
+    BuildContext context, {
+    double mobile = 12.5,
+    double wide = 13.6,
+    Color color = const Color(0xFF64748B),
+    FontWeight weight = FontWeight.w700,
+  }) {
+    return _bodyStyle(
+      size: _adaptiveFont(context, mobile: mobile, wide: wide),
+      color: color,
+      weight: weight,
+    );
+  }
+
+  TextStyle _cmrBodyText(
+    BuildContext context, {
+    double mobile = 12.0,
+    double wide = 13.0,
+    Color color = const Color(0xFF64748B),
+    FontWeight weight = FontWeight.w700,
+    double height = 1.3,
+  }) {
+    return TextStyle(
+      fontFamily: _fontFamily,
+      fontSize: _adaptiveFont(context, mobile: mobile, wide: wide),
+      fontWeight: weight,
+      color: color,
+      height: height,
     );
   }
 
@@ -589,6 +658,37 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen>
     _parseMedia();
     _design = _PlayerProfileDesign.defaults();
     if (mounted) setState(() {});
+
+    // На ПК и планшетах правая рабочая зона видна сразу, поэтому прогреваем
+    // тренировки заранее. Без этого список появлялся только после ручного обновления.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final wide = MediaQuery.of(context).size.width >= 720;
+      if (wide || _selectedTabIndex == 4) {
+        _loadTrainingSectionData(force: false);
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant PlayerProfileScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldId = _asInt(
+      oldWidget.player["id"] ??
+          oldWidget.player["player_id"] ??
+          oldWidget.player["playerId"] ??
+          oldWidget.player["user_id"],
+    );
+    if (oldId != _playerId) {
+      teamEvents = [];
+      attendanceLog = [];
+      calendarEvents = [];
+      selectedEvent = null;
+      selectedEventPlayerInfo = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadTrainingSectionData(force: true);
+      });
+    }
   }
 
   @override
@@ -643,7 +743,7 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen>
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             decoration: BoxDecoration(
-              color: const Color(0xFFFBFBFA),
+              color: Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.grey.shade200),
             ),
@@ -979,6 +1079,17 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen>
     return out;
   }
 
+  Future<void> _loadTrainingSectionData({bool force = false}) async {
+    if (_teamId <= 0) return;
+
+    await _loadTeamCalendar(force: force);
+    await _loadPlayerTrainingHistory(force: force);
+
+    if (_trainingSubTab == 1) {
+      await _loadAttendanceLog(force: force);
+    }
+  }
+
   Future<void> _loadPlayerTrainingHistory({bool force = false}) async {
     if (eventsLoading) return;
     if (!force && teamEvents.isNotEmpty) return;
@@ -997,12 +1108,11 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen>
 
       final now = DateTime.now();
       final selectedDay = _selectedTrainingDay ?? _eventFilterDate;
-      final from = selectedDay != null
-          ? DateTime(selectedDay.year, selectedDay.month, selectedDay.day)
-          : DateTime(now.year, now.month, 1);
-      final to = selectedDay != null
-          ? DateTime(selectedDay.year, selectedDay.month, selectedDay.day).add(const Duration(days: 1))
-          : DateTime(now.year, now.month + 1, 0);
+      // Важно: даже при выбранной дате загружаем весь месяц.
+      // Иначе календарь внутри открытого профиля начинает показывать только записи выбранного дня.
+      final monthBase = selectedDay ?? now;
+      final from = DateTime(monthBase.year, monthBase.month, 1);
+      final to = DateTime(monthBase.year, monthBase.month + 1, 1);
 
       List<Map<String, dynamic>> list = [];
 
@@ -1113,6 +1223,7 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen>
 
   Future<void> _loadPlayerInfoForEvent(int eventId) async {
     setState(() => selectedEventPlayerInfo = null);
+    _rebuildOpenSectionSheet();
 
     try {
       final playerId = await _resolvePlayerId();
@@ -1136,11 +1247,13 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen>
 
       if (!mounted) return;
       setState(() => selectedEventPlayerInfo = info);
+      _rebuildOpenSectionSheet();
     } catch (e) {
       if (!mounted) return;
       setState(() {
         selectedEventPlayerInfo = {"error": e.toString()};
       });
+      _rebuildOpenSectionSheet();
     }
   }
 
@@ -1162,12 +1275,11 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen>
 
       final now = DateTime.now();
       final selectedDay = _selectedTrainingDay ?? _eventFilterDate;
-      final from = selectedDay != null
-          ? DateTime(selectedDay.year, selectedDay.month, selectedDay.day)
-          : DateTime(now.year, now.month, 1);
-      final to = selectedDay != null
-          ? DateTime(selectedDay.year, selectedDay.month, selectedDay.day).add(const Duration(days: 1))
-          : DateTime(now.year, now.month + 1, 0);
+      // Важно: даже при выбранной дате загружаем весь месяц.
+      // Иначе календарь внутри открытого профиля начинает показывать только записи выбранного дня.
+      final monthBase = selectedDay ?? now;
+      final from = DateTime(monthBase.year, monthBase.month, 1);
+      final to = DateTime(monthBase.year, monthBase.month + 1, 1);
 
       final url = Uri.parse(
         "$_apiBase/get_player_attendance_log.php"
@@ -1267,7 +1379,7 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen>
     }
   }
 
-  void _openCoachNoteSheet() async {
+  Future<void> _openCoachNoteSheet() async {
     final ev = selectedEvent;
     if (ev == null) return;
 
@@ -1337,7 +1449,7 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen>
                 const SizedBox(height: 12),
                 Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: TextField(
@@ -1764,6 +1876,7 @@ Widget _buildCircleNetworkImage({
         playerTtdGoalkeeperRows = [];
         playerTtdSummary = {};
       });
+      _rebuildOpenSectionSheet();
       return;
     }
 
@@ -1776,6 +1889,7 @@ Widget _buildCircleNetworkImage({
       playerTtdGoalkeeperRows = [];
       playerTtdSummary = {};
     });
+    _rebuildOpenSectionSheet();
 
     try {
       // Важно: используем тот же рабочий API, что и экран детального разбора матча
@@ -1909,12 +2023,14 @@ Widget _buildCircleNetworkImage({
         playerTtdLoading = false;
         playerTtdError = null;
       });
+      _rebuildOpenSectionSheet();
     } catch (e) {
       if (!mounted) return;
       setState(() {
         playerTtdLoading = false;
         playerTtdError = e.toString();
       });
+      _rebuildOpenSectionSheet();
     }
   }
 
@@ -2115,7 +2231,7 @@ Widget _buildCircleNetworkImage({
           Row(
             children: [
               const Icon(Icons.shield_outlined, size: 17, color: Color(0xFF2563EB)),
-              const SizedBox(width: 7),
+              SizedBox(width: _isDesktopOrTablet(context) ? 12 : 7),
               Expanded(
                 child: Text(
                   clubText,
@@ -2157,11 +2273,11 @@ Widget _buildCircleNetworkImage({
         _buildCircleNetworkImage(
           imageUrl: photo,
           size: avatarSize,
-          borderColor: const Color(0xFFE7ECF2),
+          borderColor: _AppColors.cmrBorder,
           borderWidth: 2,
           glow: const Color(0xFF0F172A).withOpacity(0.04),
           fallback: Container(
-            color: const Color(0xFFF8FAFC),
+            color: Colors.white,
             child: Icon(Icons.person_outline_rounded, color: const Color(0xFF178A45), size: avatarSize * 0.42),
           ),
         ),
@@ -2191,7 +2307,7 @@ Widget _buildCircleNetworkImage({
     );
 
     return Container(
-      color: const Color(0xFFFBFBFA),
+      color: Colors.white,
       child: Align(
         alignment: Alignment.bottomCenter,
         child: ConstrainedBox(
@@ -2203,7 +2319,7 @@ Widget _buildCircleNetworkImage({
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(cardRadius),
-              border: Border.all(color: const Color(0xFFE7ECF2)),
+              border: Border.all(color: _AppColors.cmrBorder),
               boxShadow: [
                 BoxShadow(
                   color: const Color(0xFF0F172A).withOpacity(showDetails ? 0.045 : 0.025),
@@ -2256,7 +2372,7 @@ Widget _buildCircleNetworkImage({
           width: 56,
           height: 56,
           alignment: Alignment.center,
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0xFFE7ECF2))),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), border: Border.all(color: _AppColors.cmrBorder)),
           child: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF2563EB), size: 27),
         ),
       ),
@@ -2269,12 +2385,12 @@ Widget _buildCircleNetworkImage({
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
-        onTap: () => Get.toNamed(AppRoutes.editPlayerScreen, arguments: widget.player),
+        onTap: _openPlayerEditorPanel,
         child: Container(
           width: 52,
           height: 52,
           alignment: Alignment.center,
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0xFFE7ECF2))),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), border: Border.all(color: _AppColors.cmrBorder)),
           child: const Icon(Icons.edit_outlined, color: Color(0xFF2563EB), size: 22),
         ),
       ),
@@ -2292,7 +2408,7 @@ Widget _buildCircleNetworkImage({
           width: 42,
           height: 42,
           alignment: Alignment.center,
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE7ECF2))),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: _AppColors.cmrBorder)),
           child: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF2563EB), size: 20),
         ),
       ),
@@ -2306,14 +2422,14 @@ Widget _buildCircleNetworkImage({
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onTap: () => Get.toNamed(AppRoutes.editPlayerScreen, arguments: widget.player),
+        onTap: _openPlayerEditorPanel,
         child: Container(
           width: 42,
           height: 42,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFE7ECF2)),
+            border: Border.all(color: _AppColors.cmrBorder),
           ),
           child: const Icon(Icons.edit_outlined, color: Color(0xFF2563EB), size: 20),
         ),
@@ -2326,7 +2442,7 @@ Widget _buildCircleNetworkImage({
     return Container(
       constraints: const BoxConstraints(minHeight: 74),
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 13),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0xFFE7ECF2))),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: _AppColors.cmrBorder)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -2698,9 +2814,9 @@ Widget _buildCircleNetworkImage({
       constraints: const BoxConstraints(minHeight: 58),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
       decoration: BoxDecoration(
-        color: const Color(0xFFF7FAFC),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5EAF0)),
+        border: Border.all(color: _AppColors.cmrBorder),
       ),
       child: Row(
         children: [
@@ -2770,13 +2886,13 @@ Widget _buildCircleNetworkImage({
           decoration: BoxDecoration(
             color: const Color(0xFFEAF5EE),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE7ECF2)),
+            border: Border.all(color: _AppColors.cmrBorder),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon, color: const Color(0xFF178A45), size: 16),
-              const SizedBox(width: 7),
+              SizedBox(width: _isDesktopOrTablet(context) ? 12 : 7),
               Flexible(
                 child: Text(
                   label,
@@ -2835,9 +2951,7 @@ Widget _buildCircleNetworkImage({
                         }
 
                         if (tab.index == 4) {
-                          if (_trainingSubTab == 0) await _loadPlayerTrainingHistory(force: true);
-                          if (_trainingSubTab == 1) await _loadAttendanceLog(force: true);
-                          await _loadTeamCalendar(force: false);
+                          await _loadTrainingSectionData(force: true);
                         }
 
                         if (tab.index == 5) await _loadMatches();
@@ -2853,7 +2967,7 @@ Widget _buildCircleNetworkImage({
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(18),
                           color: isActive ? const Color(0xFF334155) : Colors.white,
-                          border: Border.all(color: isActive ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                          border: Border.all(color: isActive ? const Color(0xFF334155) : _AppColors.cmrBorder),
                           boxShadow: [
                             BoxShadow(
                               color: const Color(0xFF0F172A).withOpacity(isActive ? 0.10 : 0.035),
@@ -2985,7 +3099,7 @@ Widget _buildCircleNetworkImage({
     }
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 22),
       children: [
         _buildCoachWorkspaceOverview(),
         const SizedBox(height: 14),
@@ -3006,75 +3120,125 @@ Widget _buildCircleNetworkImage({
     );
   }
 
+
+  String _ruTrainingType(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) return '';
+    final key = value.toLowerCase().replaceAll('_', ' ').replaceAll('-', ' ');
+
+    if (key == 'theory' || key.contains('теор')) return 'Теория';
+    if (key == 'practice' || key == 'practical' || key.contains('практ')) return 'Практика';
+    if (key == 'training' || key == 'train' || key.contains('трен')) return 'Тренировка';
+    if (key == 'match' || key == 'game' || key.contains('матч') || key.contains('игр')) return 'Матч';
+    if (key == 'meeting' || key == 'meet' || key.contains('собран')) return 'Собрание';
+    if (key == 'test' || key == 'testing' || key.contains('тест')) return 'Тестирование';
+    if (key == 'fitness' || key.contains('physical') || key.contains('физ')) return 'Физическая подготовка';
+    if (key == 'technical' || key.contains('tech') || key.contains('техн')) return 'Техническая подготовка';
+    if (key == 'tactical' || key.contains('tactic') || key.contains('такт')) return 'Тактическая подготовка';
+    if (key == 'recovery' || key.contains('recover') || key.contains('восстанов')) return 'Восстановление';
+    if (key == 'medical' || key.contains('мед')) return 'Медицинское событие';
+    if (key == 'individual' || key.contains('индив')) return 'Индивидуальная работа';
+    if (key == 'group' || key.contains('групп')) return 'Групповая работа';
+
+    return value;
+  }
+
+  String _displayValue(String value) {
+    final v = value.trim();
+    if (v.isEmpty || v == '-') return 'Не указано';
+    return v;
+  }
+
+  Widget _buildCharacteristicsGrid(List<_InfoItem> items) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 860 ? 3 : constraints.maxWidth >= 560 ? 2 : 1;
+        final itemWidth = columns == 1 ? constraints.maxWidth : (constraints.maxWidth - (columns - 1) * 10) / columns;
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: items.map((item) {
+            final empty = item.value.trim().isEmpty || item.value == '-';
+            final accent = _AppColors.accentForIcon(item.icon);
+            return SizedBox(
+              width: itemWidth,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(color: empty ? const Color(0xFFF6F8FA) : _AppColors.softFor(accent), borderRadius: BorderRadius.circular(14)),
+                      child: Icon(item.icon, size: 20, color: empty ? const Color(0xFF98A2B3) : accent),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(item.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 11, height: 1, color: const Color(0xFF667085), fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 5),
+                          Text(_displayValue(item.value), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 15, height: 1.05, color: empty ? const Color(0xFF98A2B3) : const Color(0xFF101828), fontWeight: FontWeight.w800, letterSpacing: -0.15)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+
   Widget _buildMainInfoSection() {
     final age = _playerAge();
     final birthDate = _playerBirthDate();
-    final nationality = _firstNotEmpty([
-      widget.player["nationality"],
-      widget.player["country"],
-      widget.player["citizenship"],
-    ]);
-    final position = _firstNotEmpty([
-      widget.player["position"],
-      widget.player["player_position"],
-    ]);
-    final jerseyNumber = _firstNotEmpty([
-      widget.player["jersey_number"],
-      widget.player["number"],
-      widget.player["player_number"],
-    ]);
-    final height = _firstNotEmpty([
-      widget.player["height"],
-      widget.player["player_height"],
-    ]);
-    final weight = _firstNotEmpty([
-      widget.player["weight"],
-      widget.player["player_weight"],
-    ]);
-    final foot = _firstNotEmpty([
-      widget.player["foot"],
-      widget.player["preferred_foot"],
-    ]);
-
-    return _buildStyledSectionCard(
-      title: "Основная информация",
-      icon: Icons.person_outline_rounded,
-      child: _buildInfoGrid([
-        _InfoItem(
-            icon: Icons.cake_rounded,
-            label: "Возраст",
-            value: age.isNotEmpty ? "$age лет" : "-"),
-        _InfoItem(
-            icon: Icons.calendar_today_rounded,
-            label: "Дата рождения",
-            value: birthDate.isNotEmpty ? birthDate : "-"),
-        _InfoItem(
-            icon: Icons.flag_rounded,
-            label: "Гражданство",
-            value: nationality.isNotEmpty ? nationality : "-"),
-        _InfoItem(
-            icon: Icons.sports_soccer_rounded,
-            label: "Позиция",
-            value: position.isNotEmpty ? position : "-"),
-        _InfoItem(
-            icon: Icons.format_list_numbered_rounded,
-            label: "Номер",
-            value: jerseyNumber.isNotEmpty ? "#$jerseyNumber" : "-"),
-        _InfoItem(
-            icon: Icons.height_rounded,
-            label: "Рост",
-            value: height.isNotEmpty ? "$height см" : "-"),
-        _InfoItem(
-            icon: Icons.monitor_weight_rounded,
-            label: "Вес",
-            value: weight.isNotEmpty ? "$weight кг" : "-"),
-        _InfoItem(
-            icon: Icons.directions_run_rounded,
-            label: "Нога",
-            value: foot.isNotEmpty ? foot : "-"),
-      ]),
+    final nationality = _firstNotEmpty([widget.player["nationality"], widget.player["country"], widget.player["citizenship"]]);
+    final position = _firstNotEmpty([widget.player["position"], widget.player["player_position"]]);
+    final jerseyNumber = _firstNotEmpty([widget.player["jersey_number"], widget.player["number"], widget.player["player_number"]]);
+    final height = _firstNotEmpty([widget.player["height"], widget.player["player_height"]]);
+    final weight = _firstNotEmpty([widget.player["weight"], widget.player["player_weight"]]);
+    final foot = _firstNotEmpty([widget.player["foot"], widget.player["preferred_foot"]]);
+    final items = [
+      _InfoItem(icon: Icons.cake_rounded, label: "Возраст", value: age.isNotEmpty ? "$age лет" : "-"),
+      _InfoItem(icon: Icons.calendar_today_rounded, label: "Дата рождения", value: birthDate.isNotEmpty ? birthDate : "-"),
+      _InfoItem(icon: Icons.flag_rounded, label: "Гражданство", value: nationality.isNotEmpty ? nationality : "-"),
+      _InfoItem(icon: Icons.sports_soccer_rounded, label: "Позиция", value: position.isNotEmpty ? position : "-"),
+      _InfoItem(icon: Icons.format_list_numbered_rounded, label: "Номер", value: jerseyNumber.isNotEmpty ? "#$jerseyNumber" : "-"),
+      _InfoItem(icon: Icons.height_rounded, label: "Рост", value: height.isNotEmpty ? "$height см" : "-"),
+      _InfoItem(icon: Icons.monitor_weight_rounded, label: "Вес", value: weight.isNotEmpty ? "$weight кг" : "-"),
+      _InfoItem(icon: Icons.directions_run_rounded, label: "Рабочая нога", value: foot.isNotEmpty ? foot : "-"),
+    ];
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: _AppColors.cmrSoftPanel, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: const Color(0xFF101828).withOpacity(0.018), blurRadius: 18, offset: const Offset(0, 8))]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(width: 44, height: 44, decoration: BoxDecoration(color: _AppColors.cmrSoft, borderRadius: BorderRadius.circular(16)), child: const Icon(Icons.tune_rounded, color: _AppColors.primaryGreen, size: 22)),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Основные характеристики', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 18, height: 1.05, fontWeight: FontWeight.w800, color: const Color(0xFF101828), letterSpacing: -0.25)),
+                const SizedBox(height: 4),
+                Text('Ключевые данные игрока без лишних вложенных рамок', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 11.5, height: 1.1, fontWeight: FontWeight.w600, color: const Color(0xFF667085))),
+              ])),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _buildCharacteristicsGrid(items),
+        ],
+      ),
     );
   }
+
 
   Widget _buildClubInfoSection() {
     final club = _playerClub();
@@ -3120,9 +3284,9 @@ Widget _buildCircleNetworkImage({
         width: double.infinity,
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: const Color(0xFFFAFCFB),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: const Color(0xFFE7ECF2)),
+          border: Border.all(color: _AppColors.cmrBorder),
         ),
         child: Text(
           bio,
@@ -3143,77 +3307,30 @@ Widget _buildCircleNetworkImage({
     return LayoutBuilder(
       builder: (context, constraints) {
         final columns = constraints.maxWidth >= 760 ? 2 : 1;
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: columns,
-            childAspectRatio: columns == 2 ? 3.25 : 4.25,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
-          itemCount: items.length,
-          itemBuilder: (context, index) {
-            final item = items[index];
-            final empty = item.value.trim().isEmpty || item.value == '-';
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFAFCFB),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFFE7ECF2)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(15),
-                      border: Border.all(color: const Color(0xFFE7ECF2)),
-                    ),
-                    child: Icon(item.icon, size: 21, color: const Color(0xFF178A45)),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          item.label,
-                          style: TextStyle(
-                            fontFamily: _fontFamily,
-                            fontSize: 11.5,
-                            height: 1.0,
-                            color: const Color(0xFF64748B),
-                            fontWeight: FontWeight.w800,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          empty ? 'Не указано' : item.value,
-                          style: TextStyle(
-                            fontFamily: _fontFamily,
-                            fontSize: 15.5,
-                            height: 1.05,
-                            fontWeight: FontWeight.w900,
-                            color: empty ? const Color(0xFF94A3B8) : const Color(0xFF111827),
-                            letterSpacing: -0.15,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+        final gap = 10.0;
+        final itemWidth = columns == 1 ? constraints.maxWidth : (constraints.maxWidth - gap) / 2;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: items.map((item) {
+            final accent = _AppColors.accentForIcon(item.icon);
+            return SizedBox(
+              width: itemWidth,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
+                child: Row(children: [
+                  Container(width: 36, height: 36, decoration: BoxDecoration(color: _AppColors.softFor(accent), borderRadius: BorderRadius.circular(14)), child: Icon(item.icon, color: accent, size: 19)),
+                  const SizedBox(width: 10),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(item.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 11.2, color: const Color(0xFF667085), weight: FontWeight.w700)),
+                    const SizedBox(height: 4),
+                    Text(_displayValue(item.value), maxLines: 2, overflow: TextOverflow.ellipsis, style: _titleStyle(size: 14.4, color: const Color(0xFF101828), weight: FontWeight.w800)),
+                  ])),
+                ]),
               ),
             );
-          },
+          }).toList(),
         );
       },
     );
@@ -3228,64 +3345,22 @@ Widget _buildCircleNetworkImage({
     required IconData icon,
     required Widget child,
   }) {
+    final accent = _AppColors.accentForIcon(icon);
     return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: const Color(0xFFE7ECF2)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF111827).withOpacity(0.035),
-            blurRadius: 22,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEAF5EE),
-                  borderRadius: BorderRadius.circular(17),
-                  border: Border.all(color: const Color(0xFFE7ECF2)),
-                ),
-                child: Icon(icon, color: const Color(0xFF178A45), size: 24),
-              ),
-              const SizedBox(width: 13),
-              Expanded(
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontFamily: _fontFamily,
-                    fontSize: 18.5,
-                    height: 1.05,
-                    fontWeight: FontWeight.w900,
-                    color: const Color(0xFF111827),
-                    letterSpacing: -0.25,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          child,
-        ],
-      ),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: _AppColors.cmrSoftPanel, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: const Color(0xFF101828).withOpacity(0.018), blurRadius: 18, offset: const Offset(0, 8))]),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(width: 42, height: 42, decoration: BoxDecoration(color: _AppColors.softFor(accent), borderRadius: BorderRadius.circular(16)), child: Icon(icon, color: accent, size: 21)),
+          const SizedBox(width: 12),
+          Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _titleStyle(size: 17, color: const Color(0xFF101828), weight: FontWeight.w800))),
+        ]),
+        const SizedBox(height: 14),
+        child,
+      ]),
     );
   }
 
-
-  // =============================
-  // CMR-ПАНЕЛЬ ТРЕНЕРА ПО ИГРОКУ
-  // =============================
   Widget _buildCoachWorkspaceOverview() {
     final width = MediaQuery.of(context).size.width;
     final isTablet = width >= 720;
@@ -3300,7 +3375,7 @@ Widget _buildCircleNetworkImage({
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFE4EAF2)),
+        border: Border.all(color: _AppColors.cmrBorder),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF0F172A).withOpacity(0.045),
@@ -3389,15 +3464,15 @@ Widget _buildCircleNetworkImage({
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
-        color: const Color(0xFFFBFBFA),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: _AppColors.cmrBorder),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Text('$percent%', style: TextStyle(fontFamily: _fontFamily, fontSize: 16, height: 1, fontWeight: FontWeight.w900, color: const Color(0xFF178A45))),
+          Text('$percent%', style: TextStyle(fontFamily: _fontFamily, fontSize: _adaptiveFont(context, mobile: 16, wide: 16.2), height: 1, fontWeight: FontWeight.w900, color: const Color(0xFF178A45))),
           const SizedBox(height: 4),
           Text('заполнено', style: TextStyle(fontFamily: _fontFamily, fontSize: 10.5, fontWeight: FontWeight.w800, color: const Color(0xFF64748B))),
         ],
@@ -3409,16 +3484,16 @@ Widget _buildCircleNetworkImage({
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFFBFBFA),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE7EDF5)),
+        border: Border.all(color: _AppColors.cmrBorder),
       ),
       child: Row(
         children: [
           Container(
             width: 34,
             height: 34,
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: _AppColors.cmrBorder)),
             child: Icon(icon, size: 18, color: const Color(0xFF178A45)),
           ),
           const SizedBox(width: 10),
@@ -3519,7 +3594,7 @@ Widget _buildCircleNetworkImage({
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: const Color(0xFFE7ECF2)),
+        border: Border.all(color: _AppColors.cmrBorder),
         boxShadow: [BoxShadow(color: const Color(0xFF111827).withOpacity(0.035), blurRadius: 22, offset: const Offset(0, 10))],
       ),
       child: Column(
@@ -3534,7 +3609,7 @@ Widget _buildCircleNetworkImage({
                 decoration: BoxDecoration(
                   color: const Color(0xFFEAF5EE),
                   borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: const Color(0xFFE7ECF2)),
+                  border: Border.all(color: _AppColors.cmrBorder),
                 ),
                 child: Icon(icon, size: 24, color: const Color(0xFF178A45)),
               ),
@@ -3628,10 +3703,10 @@ Widget _buildCircleNetworkImage({
           onTap: onTap,
           child: Container(
             padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(color: const Color(0xFFFAFCFB), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFE7ECF2))),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: _AppColors.cmrBorder)),
             child: Row(
               children: [
-                Container(width: 42, height: 42, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: const Color(0xFFE7ECF2))), child: Icon(icon, size: 21, color: const Color(0xFF178A45))),
+                Container(width: 42, height: 42, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: _AppColors.cmrBorder)), child: Icon(icon, size: 21, color: const Color(0xFF178A45))),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -3659,7 +3734,7 @@ Widget _buildCircleNetworkImage({
         onTap: onTap,
         child: Ink(
           padding: const EdgeInsets.all(15),
-          decoration: BoxDecoration(color: const Color(0xFFFAFCFB), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFE7ECF2))),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: _AppColors.cmrBorder)),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -3705,119 +3780,60 @@ Widget _buildCircleNetworkImage({
     List<Widget> actions = const [],
     List<Widget> stats = const [],
   }) {
+    final isMobile = MediaQuery.of(context).size.width < 720;
+    final sidePadding = isMobile ? 4.0 : 0.0;
+    final accent = _AppColors.accentForIcon(icon);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(0, 0, 0, 16),
+      padding: EdgeInsets.fromLTRB(sidePadding, 0, sidePadding, isMobile ? 12 : 16),
+      physics: const BouncingScrollPhysics(),
       children: [
         Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: _card,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFFE7ECF2)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.035),
-                blurRadius: 18,
-                offset: const Offset(0, 8),
-              ),
+          padding: EdgeInsets.all(isMobile ? 12 : 16),
+          decoration: BoxDecoration(color: _AppColors.cmrSoftPanel, borderRadius: BorderRadius.circular(isMobile ? 22 : 26), boxShadow: [BoxShadow(color: const Color(0xFF101828).withOpacity(0.018), blurRadius: 18, offset: const Offset(0, 8))]),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Container(width: isMobile ? 42 : 46, height: isMobile ? 42 : 46, decoration: BoxDecoration(color: _AppColors.softFor(accent), borderRadius: BorderRadius.circular(16)), child: Icon(icon, color: accent, size: isMobile ? 20 : 22)),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(title, maxLines: isMobile ? 2 : 1, overflow: TextOverflow.ellipsis, style: _cmrTitleText(context, mobile: 17.2, wide: 19.2, color: const Color(0xFF101828), weight: FontWeight.w800)),
+                const SizedBox(height: 4),
+                Text(subtitle, maxLines: isMobile ? 3 : 2, overflow: TextOverflow.ellipsis, style: _cmrSubtitleText(context, mobile: 12.1, wide: 13.4, color: const Color(0xFF667085), weight: FontWeight.w600)),
+              ])),
+            ]),
+            if (stats.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              LayoutBuilder(builder: (context, c) {
+                final wide = c.maxWidth > 520;
+                return GridView.count(crossAxisCount: wide ? 4 : 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), mainAxisSpacing: 8, crossAxisSpacing: 8, childAspectRatio: wide ? 3.8 : 2.95, children: stats);
+              }),
             ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 46,
-                    height: 46,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                    ),
-                    child: Icon(icon, color: const Color(0xFF2563EB), size: 22),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: _titleStyle(size: 18, color: const Color(0xFF0F172A)),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          subtitle,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: _bodyStyle(size: 12.5, color: const Color(0xFF64748B), weight: FontWeight.w700),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              if (stats.isNotEmpty) ...[
-                const SizedBox(height: 14),
-                LayoutBuilder(
-                  builder: (context, c) {
-                    final wide = c.maxWidth > 460;
-                    return GridView.count(
-                      crossAxisCount: wide ? 4 : 2,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      mainAxisSpacing: 8,
-                      crossAxisSpacing: 8,
-                      childAspectRatio: wide ? 3.9 : 3.25,
-                      children: stats,
-                    );
-                  },
-                ),
-              ],
-              if (actions.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Wrap(spacing: 7, runSpacing: 7, children: actions),
-              ],
-            ],
-          ),
+            if (actions.isNotEmpty) ...[const SizedBox(height: 12), Wrap(spacing: 7, runSpacing: 7, children: actions)],
+          ]),
         ),
-        const SizedBox(height: 14),
+        SizedBox(height: isMobile ? 10 : 14),
         ...children,
       ],
     );
   }
 
+
   Widget _buildCmrMiniStat(String title, String value, IconData icon) {
+    final accent = _AppColors.accentForIcon(icon);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFBFBFA),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 15, color: const Color(0xFF2563EB)),
-          const SizedBox(width: 7),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _titleStyle(size: 13.2, color: const Color(0xFF0F172A))),
-                const SizedBox(height: 1),
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 9.6, color: const Color(0xFF64748B), weight: FontWeight.w800)),
-              ],
-            ),
-          ),
-        ],
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      child: Row(children: [
+        Container(width: 28, height: 28, decoration: BoxDecoration(color: _AppColors.softFor(accent), borderRadius: BorderRadius.circular(11)), child: Icon(icon, size: 15, color: accent)),
+        const SizedBox(width: 8),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _cmrTitleText(context, mobile: 13.0, wide: 15.0, color: const Color(0xFF101828), weight: FontWeight.w800)),
+          const SizedBox(height: 1),
+          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _cmrSubtitleText(context, mobile: 9.4, wide: 11.2, color: const Color(0xFF667085), weight: FontWeight.w700)),
+        ])),
+      ]),
     );
   }
+
 
   Widget _buildCmrActionChip({
     required IconData icon,
@@ -3828,63 +3844,26 @@ Widget _buildCircleNetworkImage({
   }) {
     final accent = _actionAccent(icon, label);
     final bg = primary ? accent : _AppColors.softFor(accent);
-    final fg = primary ? Colors.white : const Color(0xFF111827);
+    final fg = primary ? Colors.white : const Color(0xFF101828);
     final iconColor = primary ? Colors.white : accent;
-
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
         onTap: onTap,
         child: Ink(
-          padding: EdgeInsets.symmetric(
-            horizontal: compact ? 11 : 14,
-            vertical: compact ? 8 : 10,
-          ),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: accent.withOpacity(primary ? .30 : .18),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: accent.withOpacity(primary ? .16 : .07),
-                blurRadius: primary ? 16 : 10,
-                offset: Offset(0, primary ? 7 : 4),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: compact ? 26 : 28,
-                height: compact ? 26 : 28,
-                decoration: BoxDecoration(
-                  color: primary ? Colors.white.withOpacity(.16) : Colors.white.withOpacity(.78),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: primary ? Colors.white.withOpacity(.12) : accent.withOpacity(.08)),
-                ),
-                child: Icon(icon, size: compact ? 15 : 16, color: iconColor),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: _bodyStyle(
-                  size: compact ? 11.5 : 12.5,
-                  color: fg,
-                  weight: FontWeight.w900,
-                ),
-              ),
-            ],
-          ),
+          padding: EdgeInsets.symmetric(horizontal: compact ? 11 : 14, vertical: compact ? 8 : 10),
+          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999), boxShadow: [BoxShadow(color: accent.withOpacity(primary ? .13 : .035), blurRadius: primary ? 16 : 8, offset: Offset(0, primary ? 7 : 3))]),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Container(width: compact ? 26 : 28, height: compact ? 26 : 28, decoration: BoxDecoration(color: primary ? Colors.white.withOpacity(.16) : Colors.white.withOpacity(.82), shape: BoxShape.circle), child: Icon(icon, size: compact ? 15 : 16, color: iconColor)),
+            const SizedBox(width: 8),
+            Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: compact ? 11.5 : _adaptiveFont(context, mobile: 12.5, wide: 13.4), color: fg, weight: FontWeight.w800))),
+          ]),
         ),
       ),
     );
   }
+
 
   Widget _buildCmrEditButton({
     required String label,
@@ -3901,20 +3880,15 @@ Widget _buildCircleNetworkImage({
   }
 
   Widget _buildCmrCard({required Widget child}) {
+    final isMobile = MediaQuery.of(context).size.width < 720;
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFE7ECF2)),
-        boxShadow: [
-          BoxShadow(color: const Color(0xFF111827).withOpacity(0.03), blurRadius: 18, offset: const Offset(0, 8)),
-        ],
-      ),
+      margin: EdgeInsets.only(bottom: isMobile ? 10 : 14),
+      padding: EdgeInsets.all(isMobile ? 12 : 18),
+      decoration: BoxDecoration(color: _AppColors.cmrSoftPanel, borderRadius: BorderRadius.circular(isMobile ? 22 : 26), boxShadow: [BoxShadow(color: const Color(0xFF101828).withOpacity(0.018), blurRadius: 16, offset: const Offset(0, 7))]),
       child: child,
     );
   }
+
 
   // =============================
   // МЕТРИКИ
@@ -3983,7 +3957,7 @@ Widget _buildCircleNetworkImage({
             decoration: BoxDecoration(
               color: const Color(0xFFF1F5F9),
               borderRadius: BorderRadius.circular(15),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
+              border: Border.all(color: _AppColors.cmrBorder),
             ),
             child: Icon(icon, color: const Color(0xFF178A45), size: 21),
           ),
@@ -4078,9 +4052,9 @@ Widget _buildCircleNetworkImage({
         onTap: () => launchUrl(Uri.parse(norm), mode: LaunchMode.externalApplication),
         child: Ink(
           decoration: BoxDecoration(
-            color: const Color(0xFFFBFBFA),
+            color: Colors.white,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
+            border: Border.all(color: _AppColors.cmrBorder),
             image: isImage ? DecorationImage(image: NetworkImage(norm), fit: BoxFit.cover) : null,
           ),
           child: Stack(
@@ -4173,7 +4147,7 @@ Widget _buildCircleNetworkImage({
               Container(
                 width: 42,
                 height: 42,
-                decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE2E8F0))),
+                decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(14), border: Border.all(color: _AppColors.cmrBorder)),
                 child: Icon(type == 'Травма' ? Icons.healing_rounded : type == 'Осмотр' ? Icons.health_and_safety_rounded : Icons.medical_information_rounded, color: const Color(0xFF178A45), size: 20),
               ),
               const SizedBox(width: 10),
@@ -4196,7 +4170,7 @@ Widget _buildCircleNetworkImage({
           ),
           if (value.isNotEmpty) ...[
             const SizedBox(height: 10),
-            Container(width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: const Color(0xFFFBFBFA), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE2E8F0))), child: Text(value, maxLines: 3, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 12.5, color: const Color(0xFF334155), weight: FontWeight.w700))),
+            Container(width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: _AppColors.cmrBorder)), child: Text(value, maxLines: 3, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 12.5, color: const Color(0xFF334155), weight: FontWeight.w700))),
           ],
           if (comment.isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -4230,8 +4204,8 @@ Widget _buildCircleNetworkImage({
   // =============================
   Widget _buildTrainingTab() {
     return _buildCmrSectionShell(
-      title: 'Тренировочный центр',
-      subtitle: 'Тренировки, журнал посещаемости и индивидуальные задания игрока',
+      title: 'Тренировки',
+      subtitle: 'История тренировок, посещаемость и индивидуальные задания игрока',
       icon: Icons.sports_soccer_rounded,
       stats: [
         _buildCmrMiniStat('Тренировки', '${teamEvents.length}', Icons.event_note_outlined),
@@ -4245,6 +4219,7 @@ Widget _buildCircleNetworkImage({
           await _loadPlayerTrainingHistory(force: true);
           await _loadAttendanceLog(force: true);
           await _loadTeamCalendar(force: true);
+          _rebuildOpenSectionSheet();
         }),
       ],
       children: [
@@ -4252,7 +4227,10 @@ Widget _buildCircleNetworkImage({
           title: 'Календарь тренировок',
           subtitle: 'Дни с тренировками подсвечены. Нажмите дату, чтобы отфильтровать список.',
           expanded: _trainingCalendarExpanded,
-          onToggle: () => setState(() => _trainingCalendarExpanded = !_trainingCalendarExpanded),
+          onToggle: () {
+            setState(() => _trainingCalendarExpanded = !_trainingCalendarExpanded);
+            _rebuildOpenSectionSheet();
+          },
         ),
         if (_trainingCalendarExpanded) ...[
           const SizedBox(height: 10),
@@ -4260,15 +4238,19 @@ Widget _buildCircleNetworkImage({
             items: _trainingCalendarItems(),
             dateOf: _trainingDateOf,
             selectedDay: _selectedTrainingDay,
-            onSelect: (d) async {
+            onSelect: (d) {
               setState(() {
                 _selectedTrainingDay = d;
                 _eventFilterDate = d;
                 selectedEvent = null;
                 selectedEventPlayerInfo = null;
               });
-              await _loadPlayerTrainingHistory(force: true);
-              await _loadAttendanceLog(force: true);
+              // Не перезагружаем список по одному дню: фильтруем уже загруженный месяц,
+              // чтобы календарь сразу показывал все события месяца и не "схлопывался" до 1-2 записей.
+              _rebuildOpenSectionSheet();
+            },
+            onDayWithItemsTap: (day, dayItems) {
+              _showTrainingDayDetailsSheet(day, dayItems);
             },
           ),
         ],
@@ -4284,8 +4266,10 @@ Widget _buildCircleNetworkImage({
                 selectedEvent = null;
                 selectedEventPlayerInfo = null;
               });
+              _rebuildOpenSectionSheet();
               await _loadPlayerTrainingHistory(force: true);
               await _loadAttendanceLog(force: true);
+              _rebuildOpenSectionSheet();
             },
           ),
         ],
@@ -4312,7 +4296,7 @@ Widget _buildCircleNetworkImage({
           crossAxisCount: 3,
           mainAxisSpacing: 8,
           crossAxisSpacing: 8,
-          childAspectRatio: isTablet ? 4.8 : 2.35,
+          childAspectRatio: isTablet ? 4.2 : 2.35,
           children: [
             _buildTrainingTabItem(
               title: 'Тренировки',
@@ -4345,70 +4329,86 @@ Widget _buildCircleNetworkImage({
     required int index,
   }) {
     final active = _trainingSubTab == index;
+    final isWide = _isDesktopOrTablet(context);
+    final accent = _AppColors.accentForIcon(icon);
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: () async {
-        setState(() => _trainingSubTab = index);
-        if (index == 0) await _loadPlayerTrainingHistory(force: true);
-        if (index == 1) await _loadAttendanceLog(force: true);
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-        decoration: BoxDecoration(
-          color: active ? _primary.withOpacity(0.10) : Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: active ? _primary.withOpacity(0.30) : const Color(0xFFE2E8F0),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(isWide ? 22 : 18),
+        onTap: () async {
+          setState(() => _trainingSubTab = index);
+          _rebuildOpenSectionSheet();
+          if (index == 0) await _loadPlayerTrainingHistory(force: true);
+          if (index == 1) await _loadAttendanceLog(force: true);
+          _rebuildOpenSectionSheet();
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: EdgeInsets.symmetric(
+            horizontal: isWide ? 16 : 10,
+            vertical: isWide ? 14 : 10,
           ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: _primary.withOpacity(active ? 0.16 : 0.08),
-                borderRadius: BorderRadius.circular(9),
-              ),
-              child: Icon(icon, color: _primary, size: 15),
-            ),
-            const SizedBox(width: 7),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontFamily: _fontFamily,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 10.5,
-                      color: _textPrimary,
-                      height: 1.05,
+          decoration: BoxDecoration(
+            color: active ? _AppColors.softFor(accent) : _AppColors.cmrSoftPanel,
+            borderRadius: BorderRadius.circular(isWide ? 22 : 18),
+            boxShadow: active
+                ? [
+                    BoxShadow(
+                      color: accent.withOpacity(0.08),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
                     ),
-                  ),
-                  const SizedBox(height: 1),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontFamily: _fontFamily,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 8.8,
-                      color: _textSecondary,
-                      height: 1.05,
-                    ),
-                  ),
-                ],
+                  ]
+                : const [],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: isWide ? 42 : 34,
+                height: isWide ? 42 : 34,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(active ? 0.95 : 0.86),
+                  borderRadius: BorderRadius.circular(isWide ? 15 : 13),
+                ),
+                child: Icon(icon, color: accent, size: isWide ? 21 : 17),
               ),
-            ),
-          ],
+              SizedBox(width: isWide ? 12 : 8),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: _fontFamily,
+                        fontWeight: FontWeight.w900,
+                        fontSize: _adaptiveFont(context, mobile: 11.2, wide: 15.0),
+                        color: const Color(0xFF101828),
+                        height: 1.05,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: _fontFamily,
+                        fontWeight: FontWeight.w700,
+                        fontSize: _adaptiveFont(context, mobile: 9.2, wide: 12.2),
+                        color: const Color(0xFF667085),
+                        height: 1.05,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -4501,12 +4501,12 @@ Widget _buildCircleNetworkImage({
                 style: TextStyle(
                   fontFamily: _fontFamily,
                   fontWeight: FontWeight.w900,
-                  fontSize: 13,
+                  fontSize: _adaptiveFont(context, mobile: 13, wide: 15.2),
                   color: _textPrimary,
                 ),
               ),
               const SizedBox(width: 8),
-              Expanded(child: Divider(color: Colors.grey.shade200, height: 1)),
+              Expanded(child: const SizedBox(height: 8)),
             ],
           ),
         ),
@@ -4531,8 +4531,15 @@ Widget _buildCircleNetworkImage({
                 setState(() {
                   selectedEvent = e;
                   selectedEventPlayerInfo = null;
+                  final d = _parseEventDate(e);
+                  if (d != null) {
+                    _selectedTrainingDay = DateTime(d.year, d.month, d.day);
+                    _eventFilterDate = _selectedTrainingDay;
+                  }
                 });
+                _rebuildOpenSectionSheet();
                 await _loadPlayerInfoForEvent(id);
+                _rebuildOpenSectionSheet();
               },
               child: Container(
                 padding: const EdgeInsets.all(14),
@@ -4548,8 +4555,8 @@ Widget _buildCircleNetworkImage({
                 child: Row(
                   children: [
                     Container(
-                      width: 44,
-                      height: 44,
+                      width: _isDesktopOrTablet(context) ? 52 : 44,
+                      height: _isDesktopOrTablet(context) ? 52 : 44,
                       decoration: BoxDecoration(
                         color: _primary.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(14),
@@ -4568,7 +4575,7 @@ Widget _buildCircleNetworkImage({
                             style: TextStyle(
                               fontFamily: _fontFamily,
                               fontWeight: FontWeight.w900,
-                              fontSize: 13,
+                              fontSize: _adaptiveFont(context, mobile: 13, wide: 15.2),
                               color: _textPrimary,
                               height: 1.2,
                             ),
@@ -4581,7 +4588,7 @@ Widget _buildCircleNetworkImage({
                             style: TextStyle(
                               fontFamily: _fontFamily,
                               fontWeight: FontWeight.w600,
-                              fontSize: 11,
+                              fontSize: _adaptiveFont(context, mobile: 11, wide: 12.6),
                               color: _textSecondary,
                             ),
                           ),
@@ -4605,7 +4612,7 @@ Widget _buildCircleNetworkImage({
                         style: TextStyle(
                           fontFamily: _fontFamily,
                           fontWeight: FontWeight.w900,
-                          fontSize: 10,
+                          fontSize: _adaptiveFont(context, mobile: 10, wide: 12.2),
                           color: rating > 0
                               ? Colors.amber.shade800
                               : _textSecondary,
@@ -4614,7 +4621,7 @@ Widget _buildCircleNetworkImage({
                     ),
                     const SizedBox(width: 6),
                     Icon(Icons.chevron_right_rounded,
-                        size: 16, color: _textSecondary),
+                        size: _isDesktopOrTablet(context) ? 22 : 16, color: _textSecondary),
                   ],
                 ),
               ),
@@ -4625,6 +4632,275 @@ Widget _buildCircleNetworkImage({
     }
 
     return out;
+  }
+
+
+  Future<void> _showTrainingDayDetailsSheet(DateTime day, List<Map<String, dynamic>> rawItems) async {
+    final rows = rawItems
+        .map((x) => Map<String, dynamic>.from(x))
+        .where((x) => _parseEventDate(x) != null)
+        .toList();
+
+    if (!mounted || rows.isEmpty) return;
+
+    setState(() {
+      _selectedTrainingDay = DateTime(day.year, day.month, day.day);
+      _eventFilterDate = _selectedTrainingDay;
+      selectedEvent = null;
+      selectedEventPlayerInfo = null;
+    });
+    _rebuildOpenSectionSheet();
+
+    final changed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useRootNavigator: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return DraggableScrollableSheet(
+          initialChildSize: rows.length > 1 ? 0.78 : 0.62,
+          minChildSize: 0.42,
+          maxChildSize: 0.94,
+          builder: (context, controller) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              child: ListView(
+                controller: controller,
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 22),
+                children: [
+                  Center(
+                    child: Container(
+                      width: 44,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: _AppColors.cmrBorder,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          color: _primary.withOpacity(0.10),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: _primary.withOpacity(0.16)),
+                        ),
+                        child: Icon(Icons.fitness_center_rounded, color: _primary, size: 23),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              rows.length == 1
+                                  ? 'Тренировка за ${DateFormat('dd.MM.yyyy').format(day)}'
+                                  : 'Тренировки за ${DateFormat('dd.MM.yyyy').format(day)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _cmrTitleText(context, mobile: 18, wide: 19.2, color: const Color(0xFF0F172A)),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              rows.length == 1
+                                  ? 'Подробности, посещаемость, оценки и комментарии'
+                                  : 'На эту дату найдено записей: ${rows.length}',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: _bodyStyle(size: 12, color: const Color(0xFF64748B), weight: FontWeight.w700),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(sheetContext).pop(false),
+                        icon: const Icon(Icons.close_rounded),
+                        color: const Color(0xFF64748B),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  ...rows.map((e) => _buildTrainingDetailsSheetCard(e, sheetContext)).toList(),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (!mounted) return;
+
+    if (changed == true) {
+      await _loadPlayerTrainingHistory(force: true);
+      await _loadAttendanceLog(force: true);
+    }
+    _rebuildOpenSectionSheet();
+  }
+
+  Widget _buildTrainingDetailsSheetCard(Map<String, dynamic> e, BuildContext sheetContext) {
+    final id = _asInt(e["event_id"] ?? e["id"]);
+    final title = _firstNotEmpty([e["title"], e["event_title"], e["name"]]).trim();
+    final date = _anyDateStr(e);
+    final type = _firstNotEmpty([e["type"], e["training_type"], e["category"]]).trim();
+    final typeLabel = _ruTrainingType(type);
+    final description = _firstNotEmpty([e["description"], e["body"], e["details"]]).trim();
+    final status = _attendanceStatusOf(e);
+    final lateMin = _asInt(e["late_minutes"] ?? e["late"]);
+    final meta = _statusMeta(status, lateMin);
+
+    final playerRating = _firstRatingValue(e, const [
+      "player_rating",
+      "self_rating",
+      "rating",
+      "player_mark",
+    ]);
+    final coachRating = _firstRatingValue(e, const [
+      "coach_rating",
+      "trainer_rating",
+      "coach_mark",
+      "trainer_mark",
+      "mark",
+    ]);
+    final coachComment = _firstNotEmpty([
+      e["coach_comment"],
+      e["trainer_comment"],
+      e["comment"],
+    ]).trim();
+    final note = _firstNotEmpty([
+      e["coach_note"],
+      e["trainer_note"],
+      e["note_coach"],
+      e["note"],
+      e["attendance_note"],
+    ]).trim();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _AppColors.cmrSoftPanel,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: meta.color.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: meta.color.withOpacity(0.18)),
+                ),
+                child: Icon(meta.icon, color: meta.color, size: 21),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title.isEmpty ? 'Тренировка' : title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: _titleStyle(size: 15, color: const Color(0xFF0F172A)),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      [
+                        if (date.isNotEmpty) date,
+                        if (typeLabel.isNotEmpty) typeLabel,
+                      ].join(' • '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _bodyStyle(size: 11.2, color: const Color(0xFF64748B), weight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 13),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _matchDetailPill(meta.icon, 'Статус', meta.text, color: meta.color),
+              _matchDetailPill(Icons.star_rounded, 'Оценка игрока', playerRating == null ? '—' : '★ ${_asInt(playerRating)}/5', color: Colors.amber.shade700),
+              _matchDetailPill(Icons.workspace_premium_rounded, 'Оценка тренера', coachRating == null ? '—' : '★ ${_asInt(coachRating)}/5', color: Colors.blue.shade700),
+              if (typeLabel.isNotEmpty) _matchDetailPill(Icons.category_rounded, 'Тип', typeLabel),
+            ],
+          ),
+          if (description.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _matchDetailTextBlock(Icons.description_outlined, 'Описание тренировки', description),
+          ],
+          if (coachComment.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _matchDetailTextBlock(Icons.chat_bubble_outline_rounded, 'Комментарий тренера', coachComment),
+          ],
+          if (note.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _matchDetailTextBlock(Icons.sticky_note_2_outlined, 'Заметка', note),
+          ],
+          const SizedBox(height: 13),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _compactActionButton(
+                icon: Icons.visibility_rounded,
+                label: 'Показать в списке',
+                onTap: () async {
+                  setState(() {
+                    selectedEvent = e;
+                    selectedEventPlayerInfo = null;
+                    final d = _parseEventDate(e);
+                    if (d != null) {
+                      _selectedTrainingDay = DateTime(d.year, d.month, d.day);
+                      _eventFilterDate = _selectedTrainingDay;
+                    }
+                  });
+                  _rebuildOpenSectionSheet();
+                  Navigator.of(sheetContext).pop(false);
+                  if (id > 0) await _loadPlayerInfoForEvent(id);
+                  _rebuildOpenSectionSheet();
+                },
+                compact: false,
+              ),
+              _compactActionButton(
+                icon: Icons.edit_note_rounded,
+                label: 'Заметка',
+                onTap: id <= 0
+                    ? null
+                    : () async {
+                        setState(() {
+                          selectedEvent = e;
+                          selectedEventPlayerInfo = null;
+                        });
+                        _rebuildOpenSectionSheet();
+                        Navigator.of(sheetContext).pop(false);
+                        await _loadPlayerInfoForEvent(id);
+                        if (mounted) await _openCoachNoteSheet();
+                        _rebuildOpenSectionSheet();
+                      },
+                compact: false,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildEventsSubTab() {
@@ -4653,9 +4929,9 @@ Widget _buildCircleNetworkImage({
               child: Container(
                 height: 42,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  border: Border.all(color: _AppColors.cmrBorder),
                 ),
                 child: TextField(
                   controller: _eventSearchC,
@@ -4703,7 +4979,8 @@ Widget _buildCircleNetworkImage({
                   selectedEvent = null;
                   selectedEventPlayerInfo = null;
                 });
-                _loadPlayerTrainingHistory(force: true);
+                _rebuildOpenSectionSheet();
+                _loadPlayerTrainingHistory(force: true).then((_) => _rebuildOpenSectionSheet());
               },
               style: TextButton.styleFrom(foregroundColor: _primary),
               child: const Text("Сбросить фильтры"),
@@ -4774,14 +5051,14 @@ Widget _buildCircleNetworkImage({
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _card,
-        borderRadius: BorderRadius.circular(_design.cardRadius),
-        border: Border.all(color: _primary.withOpacity(0.12)),
+        color: _AppColors.cmrSoftPanel,
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 12,
-              offset: const Offset(0, 4))
+            color: const Color(0xFF101828).withOpacity(0.014),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
         ],
       ),
       child: Column(
@@ -4795,19 +5072,32 @@ Widget _buildCircleNetworkImage({
                   style: _titleStyle(size: 14, color: _textPrimary),
                 ),
               ),
-              TextButton.icon(
-                onPressed: _openCoachNoteSheet,
-                icon: const Icon(Icons.edit_note_rounded, size: 18),
-                label: const Text("Заметка",
-                    style: TextStyle(fontWeight: FontWeight.w900)),
-                style: TextButton.styleFrom(
-                  foregroundColor: _primary,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  backgroundColor: _primary.withOpacity(0.08),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
+              Builder(
+                builder: (context) {
+                  final wide = MediaQuery.of(context).size.width >= 720;
+                  return TextButton.icon(
+                    onPressed: _openCoachNoteSheet,
+                    icon: Icon(Icons.edit_note_rounded, size: wide ? 21 : 18),
+                    label: Text(
+                      "Заметка",
+                      style: TextStyle(
+                        fontFamily: _fontFamily,
+                        fontSize: wide ? 13.5 : 12,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      foregroundColor: _primary,
+                      padding: EdgeInsets.symmetric(horizontal: wide ? 15 : 10, vertical: wide ? 10 : 6),
+                      backgroundColor: _primary.withOpacity(0.10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(wide ? 16 : 12),
+                        side: BorderSide(color: _primary.withOpacity(.18)),
+                      ),
+                      elevation: 0,
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -4816,7 +5106,7 @@ Widget _buildCircleNetworkImage({
             spacing: 8,
             runSpacing: 8,
             children: [
-              _pillInfo(Icons.fact_check_rounded, "Статус", statusText),
+              _pillInfo(meta.icon, "Статус", statusText, color: meta.color),
               _pillInfo(
                 Icons.star_rounded,
                 "Оценка игрока",
@@ -4860,42 +5150,58 @@ Widget _buildCircleNetworkImage({
 
     switch (s) {
       case "present":
+      case "присутствует":
+      case "был":
+      case "на тренировке":
         return (
           text: "Присутствует",
           color: const Color(0xFF178A45),
           icon: Icons.check_circle_rounded,
         );
       case "absent":
+      case "отсутствует":
+      case "не был":
+      case "пропуск":
         return (
           text: "Отсутствует",
           color: const Color(0xFFEF4444),
           icon: Icons.cancel_rounded,
         );
       case "late":
+      case "опоздал":
+      case "опоздание":
         return (
           text: lateMinutes > 0 ? "Опоздал на ${lateMinutes} мин" : "Опоздал",
           color: const Color(0xFFF59E0B),
           icon: Icons.schedule_rounded,
         );
       case "sick":
+      case "болен":
+      case "болезнь":
         return (
           text: "Болен",
           color: const Color(0xFFF59E0B),
           icon: Icons.sick_rounded,
         );
       case "injured":
+      case "травма":
+      case "травмирован":
         return (
           text: "Травма",
           color: const Color(0xFF8B5CF6),
           icon: Icons.healing_rounded,
         );
       case "individual":
+      case "индивидуально":
+      case "индивид.":
         return (
           text: "Индивид.",
           color: const Color(0xFF0EA5E9),
           icon: Icons.person_rounded,
         );
       case "dayoff":
+      case "выходной":
+      case "отдых":
         return (
           text: "Выходной",
           color: const Color(0xFF9CA3AF),
@@ -4904,6 +5210,7 @@ Widget _buildCircleNetworkImage({
       case "unset":
       case "":
       case "none":
+      case "не отмечено":
         return (
           text: "Не отмечено",
           color: const Color(0xFF64748B),
@@ -4916,6 +5223,248 @@ Widget _buildCircleNetworkImage({
           icon: Icons.help_outline_rounded,
         );
     }
+  }
+
+
+  Widget _buildActivityProRatingsCalendar() {
+    final now = DateTime.now();
+    final base = _selectedTrainingDay ?? now;
+    final month = DateTime(base.year, base.month, 1);
+    final first = DateTime(month.year, month.month, 1);
+    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
+    final leading = (first.weekday + 6) % 7;
+    final total = ((leading + daysInMonth + 6) ~/ 7) * 7;
+
+    final byDay = <String, List<Map<String, dynamic>>>{};
+    for (final row in attendanceLog) {
+      final d = _parseEventDate(row);
+      if (d == null) continue;
+      final key = DateFormat('yyyy-MM-dd').format(DateTime(d.year, d.month, d.day));
+      byDay.putIfAbsent(key, () => []).add(row);
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _AppColors.cmrBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _calendarArrow(Icons.chevron_left_rounded, () {
+                setState(() {
+                  _selectedTrainingDay = DateTime(month.year, month.month - 1, 1);
+                  _eventFilterDate = _selectedTrainingDay;
+                });
+                _rebuildOpenSectionSheet();
+              }),
+              Expanded(
+                child: Center(
+                  child: Text(
+                    DateFormat('LLLL yyyy', 'ru').format(month),
+                    style: _titleStyle(size: 14.5, color: const Color(0xFF0F172A)),
+                  ),
+                ),
+              ),
+              _calendarArrow(Icons.chevron_right_rounded, () {
+                setState(() {
+                  _selectedTrainingDay = DateTime(month.year, month.month + 1, 1);
+                  _eventFilterDate = _selectedTrainingDay;
+                });
+                _rebuildOpenSectionSheet();
+              }),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+                .map((d) => Expanded(child: Center(child: Text(d, style: _bodyStyle(size: 10.5, color: const Color(0xFF64748B), weight: FontWeight.w900)))))
+                .toList(),
+          ),
+          const SizedBox(height: 6),
+          GridView.builder(
+            itemCount: total,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 7, mainAxisSpacing: 6, crossAxisSpacing: 6),
+            itemBuilder: (context, i) {
+              final dayNum = i - leading + 1;
+              if (dayNum < 1 || dayNum > daysInMonth) return const SizedBox.shrink();
+
+              final day = DateTime(month.year, month.month, dayNum);
+              final key = DateFormat('yyyy-MM-dd').format(day);
+              final rows = byDay[key] ?? const <Map<String, dynamic>>[];
+              final selected = _selectedTrainingDay != null && _sameDateOnly(day, _selectedTrainingDay!);
+              final today = _sameDateOnly(day, now);
+
+              int coachSum = 0;
+              int coachCnt = 0;
+              int playerSum = 0;
+              int playerCnt = 0;
+              String status = '';
+
+              for (final row in rows) {
+                final st = _attendanceStatusOf(row);
+                if (status.isEmpty || st == 'absent' || st == 'late' || st == 'injured') status = st;
+
+                final coach = _firstRatingValue(row, const ["coach_rating", "trainer_rating", "coach_mark", "trainer_mark", "mark"]);
+                if (coach != null) {
+                  coachSum += _asInt(coach);
+                  coachCnt++;
+                }
+
+                final player = _firstRatingValue(row, const ["player_rating", "self_rating", "rating", "player_mark"]);
+                if (player != null) {
+                  playerSum += _asInt(player);
+                  playerCnt++;
+                }
+              }
+
+              final int coachAvg = coachCnt == 0
+                  ? 0
+                  : ((coachSum / coachCnt).round() < 1
+                      ? 1
+                      : ((coachSum / coachCnt).round() > 5 ? 5 : (coachSum / coachCnt).round()));
+              final int playerAvg = playerCnt == 0
+                  ? 0
+                  : ((playerSum / playerCnt).round() < 1
+                      ? 1
+                      : ((playerSum / playerCnt).round() > 5 ? 5 : (playerSum / playerCnt).round()));
+              final meta = _statusMeta(status, 0);
+
+              return InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () {
+                  setState(() {
+                    _selectedTrainingDay = day;
+                    _eventFilterDate = day;
+                    selectedEvent = null;
+                    selectedEventPlayerInfo = null;
+                  });
+                  _rebuildOpenSectionSheet();
+                  if (rows.isNotEmpty) _showTrainingDayDetailsSheet(day, rows);
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? _primary.withOpacity(0.12)
+                        : rows.isNotEmpty
+                            ? Colors.white
+                            : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: selected
+                          ? _primary.withOpacity(0.45)
+                          : today
+                              ? const Color(0xFFBFDBFE)
+                              : _AppColors.cmrBorder,
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        '$dayNum',
+                        style: TextStyle(
+                          fontFamily: _fontFamily,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w900,
+                          color: selected ? _primary : const Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      if (rows.isNotEmpty) ...[
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: meta.color,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (coachAvg > 0) _ratingTinyBadge('Т', coachAvg, Colors.blue.shade700),
+                            if (coachAvg > 0 && playerAvg > 0) const SizedBox(width: 2),
+                            if (playerAvg > 0) _ratingTinyBadge('И', playerAvg, Colors.amber.shade800),
+                          ],
+                        ),
+                      ] else
+                        const SizedBox(height: 20),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _activityLegendDot(const Color(0xFF178A45), 'Присутствие'),
+              _activityLegendDot(const Color(0xFFF59E0B), 'Опоздание/болезнь'),
+              _activityLegendDot(const Color(0xFFEF4444), 'Пропуск'),
+              _activityLegendBadge('Т', 'оценка тренера'),
+              _activityLegendBadge('И', 'оценка игрока'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _ratingTinyBadge(String prefix, int rating, Color color) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 21),
+      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(99),
+        border: Border.all(color: color.withOpacity(0.22)),
+      ),
+      child: Text(
+        '$prefix$rating',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontFamily: _fontFamily,
+          fontSize: 7.4,
+          fontWeight: FontWeight.w900,
+          color: color,
+          height: 1.0,
+        ),
+      ),
+    );
+  }
+
+  Widget _activityLegendDot(Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 5),
+        Text(label, style: _bodyStyle(size: 10.5, color: const Color(0xFF64748B), weight: FontWeight.w800)),
+      ],
+    );
+  }
+
+  Widget _activityLegendBadge(String prefix, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _ratingTinyBadge(prefix, 5, prefix == 'Т' ? Colors.blue.shade700 : Colors.amber.shade800),
+        const SizedBox(width: 5),
+        Text(label, style: _bodyStyle(size: 10.5, color: const Color(0xFF64748B), weight: FontWeight.w800)),
+      ],
+    );
   }
 
   Widget _buildAttendanceSubTab() {
@@ -4965,7 +5514,7 @@ Widget _buildCircleNetworkImage({
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildInfoCard(
-          title: "Календарь активности PRO",
+          title: "Активность игрока",
           icon: Icons.fact_check_rounded,
           children: [
             Wrap(
@@ -4990,6 +5539,8 @@ Widget _buildCircleNetworkImage({
                     color: Colors.blueGrey.shade700),
               ],
             ),
+            // Календарь уже расположен выше в разделе тренировок.
+            // Здесь оставляем только сводку PRO, чтобы на странице не было двух календарей.
           ],
         ),
         const SizedBox(height: 12),
@@ -5022,9 +5573,15 @@ Widget _buildCircleNetworkImage({
               margin: const EdgeInsets.only(bottom: 10),
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: _card,
-                borderRadius: BorderRadius.circular(_design.cardRadius),
-                border: Border.all(color: Colors.grey.shade200),
+                color: _AppColors.cmrSoftPanel,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF101828).withOpacity(0.014),
+                    blurRadius: 14,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -5032,15 +5589,15 @@ Widget _buildCircleNetworkImage({
                   Row(
                     children: [
                       Container(
-                        width: 40,
-                        height: 40,
+                        width: 42,
+                        height: 42,
                         decoration: BoxDecoration(
-                          color: meta.color.withOpacity(0.10),
-                          borderRadius: BorderRadius.circular(12),
+                          color: _AppColors.softFor(meta.color),
+                          borderRadius: BorderRadius.circular(15),
                         ),
-                        child: Icon(meta.icon, color: meta.color),
+                        child: Icon(meta.icon, color: meta.color, size: 21),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 11),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -5051,46 +5608,44 @@ Widget _buildCircleNetworkImage({
                                 fontFamily: _fontFamily,
                                 fontWeight: FontWeight.w900,
                                 color: _textPrimary,
-                                fontSize: 13,
+                                fontSize: 14,
                               ),
                             ),
                             if (eventTitle.isNotEmpty) ...[
-                              const SizedBox(height: 2),
+                              const SizedBox(height: 3),
                               Text(
                                 eventTitle,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontFamily: _fontFamily,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w700,
                                   color: _textSecondary,
-                                  fontSize: 11,
+                                  fontSize: 12,
                                 ),
                               ),
                             ],
-                            const SizedBox(height: 2),
-                            Text(
-                              meta.text,
-                              style: TextStyle(
-                                fontFamily: _fontFamily,
-                                fontWeight: FontWeight.w700,
-                                color: _textSecondary,
-                                fontSize: 11,
-                              ),
-                            ),
                           ],
                         ),
                       ),
+                      const SizedBox(width: 8),
                       Container(
-                        width: 34,
-                        height: 34,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                         decoration: BoxDecoration(
-                          color: meta.color.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(12),
-                          border:
-                              Border.all(color: meta.color.withOpacity(0.20)),
+                          color: _AppColors.softFor(meta.color),
+                          borderRadius: BorderRadius.circular(999),
                         ),
-                        child: Icon(meta.icon, color: meta.color, size: 18),
+                        child: Text(
+                          meta.text,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: _fontFamily,
+                            fontWeight: FontWeight.w900,
+                            color: meta.color,
+                            fontSize: 11,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -5148,7 +5703,7 @@ Widget _buildCircleNetworkImage({
                     decoration: BoxDecoration(
                       color: const Color(0xFFF1F5F9),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                      border: Border.all(color: _AppColors.cmrBorder),
                     ),
                     child: const Icon(Icons.fitness_center_rounded, color: Color(0xFF2563EB), size: 21),
                   ),
@@ -5198,12 +5753,11 @@ Widget _buildCircleNetworkImage({
         ),
         const SizedBox(height: 12),
         ClipRRect(
-          borderRadius: BorderRadius.circular(_design.cardRadius),
+          borderRadius: BorderRadius.circular(24),
           child: Container(
             decoration: BoxDecoration(
-              color: _card,
-              borderRadius: BorderRadius.circular(_design.cardRadius),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
+              color: _AppColors.cmrSoftPanel,
+              borderRadius: BorderRadius.circular(24),
             ),
             child: TrainingHistoryWidget(playerId: playerId),
           ),
@@ -5216,14 +5770,14 @@ Widget _buildCircleNetworkImage({
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _card,
-        borderRadius: BorderRadius.circular(_design.cardRadius),
-        border: Border.all(color: Colors.grey.shade200),
+        color: _AppColors.cmrSoftPanel,
+        borderRadius: BorderRadius.circular(26),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 12,
-              offset: const Offset(0, 4))
+            color: const Color(0xFF101828).withOpacity(0.018),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
         ],
       ),
       child: Column(
@@ -5306,7 +5860,7 @@ Widget _buildCircleNetworkImage({
           const SizedBox(height: 10),
           Container(
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
+              color: Colors.white,
               borderRadius: BorderRadius.circular(14),
             ),
             child: TextField(
@@ -5355,6 +5909,7 @@ Widget _buildCircleNetworkImage({
 
   Widget _buildCalendarEventCard(Map<String, dynamic> e) {
     final type = _asStr(e["type"]).trim();
+    final typeLabel = _ruTrainingType(type);
     final title =
         _asStr(e["title"]).trim().isEmpty ? "Событие" : _asStr(e["title"]).trim();
     final startAt = _fmtTime(_asStr(e["start_at"]));
@@ -5371,9 +5926,15 @@ Widget _buildCircleNetworkImage({
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _card,
-        borderRadius: BorderRadius.circular(_design.cardRadius),
-        border: Border.all(color: Colors.grey.shade200),
+        color: _AppColors.cmrSoftPanel,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF101828).withOpacity(0.014),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -5425,7 +5986,7 @@ Widget _buildCircleNetworkImage({
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
-                if (type.isNotEmpty) ...[
+                if (typeLabel.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Container(
                     padding:
@@ -5435,7 +5996,7 @@ Widget _buildCircleNetworkImage({
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      type,
+                      typeLabel,
                       style: TextStyle(
                           fontFamily: _fontFamily,
                           fontWeight: FontWeight.w700,
@@ -5493,7 +6054,10 @@ Widget _buildCircleNetworkImage({
           title: 'Календарь матчей',
           subtitle: 'Даты с матчами отмечены. Выбор даты фильтрует таблицу.',
           expanded: _matchesCalendarExpanded,
-          onToggle: () => setState(() => _matchesCalendarExpanded = !_matchesCalendarExpanded),
+          onToggle: () {
+            setState(() => _matchesCalendarExpanded = !_matchesCalendarExpanded);
+            _rebuildOpenSectionSheet();
+          },
         ),
         if (_matchesCalendarExpanded) ...[
           const SizedBox(height: 10),
@@ -5501,7 +6065,13 @@ Widget _buildCircleNetworkImage({
             items: matches,
             dateOf: _matchDateOf,
             selectedDay: _selectedMatchDay,
-            onSelect: (d) => setState(() => _selectedMatchDay = d),
+            onSelect: (d) {
+              setState(() => _selectedMatchDay = d);
+              _rebuildOpenSectionSheet();
+            },
+            onDayWithItemsTap: (day, dayMatches) {
+              _showMatchDayDetailsSheet(day, dayMatches);
+            },
           ),
         ],
         if (_selectedMatchDay != null) ...[
@@ -5509,7 +6079,10 @@ Widget _buildCircleNetworkImage({
           _buildSelectedDayFilterChip(
             date: _selectedMatchDay!,
             label: 'Показаны матчи за дату',
-            onClear: () => setState(() => _selectedMatchDay = null),
+            onClear: () {
+              setState(() => _selectedMatchDay = null);
+              _rebuildOpenSectionSheet();
+            },
           ),
         ],
         const SizedBox(height: 12),
@@ -5535,14 +6108,344 @@ Widget _buildCircleNetworkImage({
     );
   }
 
+
+  Future<void> _showMatchDayDetailsSheet(DateTime day, List<Map<String, dynamic>> dayMatches) async {
+    final rows = dayMatches
+        .map((x) => Map<String, dynamic>.from(x))
+        .toList();
+
+    if (!mounted || rows.isEmpty) return;
+
+    setState(() {
+      _selectedMatchDay = day;
+      selectedTtdMatch = rows.first;
+    });
+    _rebuildOpenSectionSheet();
+
+    final changed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useRootNavigator: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return DraggableScrollableSheet(
+          initialChildSize: rows.length > 1 ? 0.78 : 0.64,
+          minChildSize: 0.42,
+          maxChildSize: 0.94,
+          builder: (context, controller) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              child: ListView(
+                controller: controller,
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 22),
+                children: [
+                  Center(
+                    child: Container(
+                      width: 44,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: _AppColors.cmrBorder,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          color: _primary.withOpacity(0.10),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: _primary.withOpacity(0.16)),
+                        ),
+                        child: Icon(Icons.sports_score_rounded, color: _primary, size: 23),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              rows.length == 1 ? 'Матч за ${DateFormat('dd.MM.yyyy').format(day)}' : 'Матчи за ${DateFormat('dd.MM.yyyy').format(day)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _cmrTitleText(context, mobile: 18, wide: 19.2, color: const Color(0xFF0F172A)),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              rows.length == 1 ? 'Подробная информация по выбранной игре' : 'На эту дату найдено матчей: ${rows.length}',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: _bodyStyle(size: 12, color: const Color(0xFF64748B), weight: FontWeight.w700),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(sheetContext).pop(false),
+                        icon: const Icon(Icons.close_rounded),
+                        color: const Color(0xFF64748B),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  ...rows.map((m) => _buildMatchDetailsSheetCard(m, sheetContext)).toList(),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (!mounted) return;
+
+    if (changed == true) {
+      await _loadMatches(force: true);
+      _rebuildOpenSectionSheet();
+    } else {
+      setState(() {});
+      _rebuildOpenSectionSheet();
+    }
+  }
+
+  Widget _buildMatchDetailsSheetCard(Map<String, dynamic> m, BuildContext sheetContext) {
+    final matchId = _asInt(m['match_id'] ?? m['id']);
+    final opponent = _asStr(m['opponent']).trim().isEmpty ? 'Соперник не указан' : _asStr(m['opponent']).trim();
+    final tournament = _asStr(m['competition_name'] ?? m['tournament']).trim();
+    final date = _formatMatchDate(_asStr(m['match_date'] ?? m['date'] ?? m['start_at']));
+    final score = _matchScore(m).isEmpty ? '—' : _matchScore(m);
+    final video = _asStr(m['video_url']).trim();
+    final ttdText = _asStr(m['ttd_text']).trim();
+    final notes = _asStr(m['notes'] ?? m['coach_comment'] ?? m['comment']).trim();
+    final isOpening = _openingPlayerMatchId == matchId && matchId > 0;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _AppColors.cmrBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.035),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: _primary.withOpacity(0.09),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: _primary.withOpacity(0.14)),
+                ),
+                child: Icon(Icons.sports_soccer_rounded, color: _primary, size: 21),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      opponent,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _titleStyle(size: 15, color: const Color(0xFF0F172A)),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      [
+                        if (date.isNotEmpty) date,
+                        if (tournament.isNotEmpty) tournament,
+                      ].join(' • '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _bodyStyle(size: 11.2, color: const Color(0xFF64748B), weight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                constraints: const BoxConstraints(minWidth: 54),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: _primary.withOpacity(0.09),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: _primary.withOpacity(0.12)),
+                ),
+                child: Text(
+                  score,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: _fontFamily,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    color: _primary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 13),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _matchDetailPill(Icons.event_rounded, 'Дата', date.isEmpty ? '—' : date),
+              _matchDetailPill(Icons.emoji_events_outlined, 'Турнир', tournament.isEmpty ? '—' : tournament),
+              _matchDetailPill(Icons.analytics_outlined, 'ТТД', ttdText.isEmpty ? 'нет' : 'есть'),
+              _matchDetailPill(Icons.play_circle_outline_rounded, 'Видео', video.isEmpty ? 'нет' : 'есть'),
+            ],
+          ),
+          if (ttdText.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _matchDetailTextBlock(Icons.analytics_outlined, 'ТТД игрока', ttdText),
+          ],
+          if (notes.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _matchDetailTextBlock(Icons.chat_bubble_outline_rounded, 'Комментарий тренера', notes),
+          ],
+          const SizedBox(height: 13),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _compactActionButton(
+                icon: isOpening ? Icons.hourglass_top_rounded : Icons.fact_check_outlined,
+                label: isOpening ? 'Открываю...' : 'Показать ТТД',
+                onTap: matchId <= 0 || isOpening
+                    ? null
+                    : () async {
+                        setState(() {
+                          _openingPlayerMatchId = matchId;
+                          selectedTtdMatch = m;
+                        });
+                        _rebuildOpenSectionSheet();
+                        Navigator.of(sheetContext).pop(false);
+                        await _loadPlayerTtdForMatch(m);
+                        if (mounted) {
+                          setState(() => _openingPlayerMatchId = 0);
+                          _rebuildOpenSectionSheet();
+                        }
+                      },
+                compact: false,
+              ),
+              if (video.isNotEmpty)
+                _compactActionButton(
+                  icon: Icons.play_circle_outline_rounded,
+                  label: 'Видео',
+                  onTap: () => launchUrl(Uri.parse(video), mode: LaunchMode.externalApplication),
+                  compact: false,
+                ),
+              _compactActionButton(
+                icon: Icons.edit_outlined,
+                label: 'Редактировать',
+                onTap: () async {
+                  Navigator.of(sheetContext).pop(false);
+                  await _showEditMatchDialog(m);
+                },
+                compact: false,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _matchDetailPill(IconData icon, String title, String value, {Color? color}) {
+    final c = color ?? _primary;
+    final wide = MediaQuery.of(context).size.width >= 720;
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: wide ? 13 : 9, vertical: wide ? 10 : 7),
+      decoration: BoxDecoration(
+        color: c.withOpacity(0.09),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: c.withOpacity(0.24), width: wide ? 1.2 : 1),
+        boxShadow: wide
+            ? [
+                BoxShadow(
+                  color: c.withOpacity(0.08),
+                  blurRadius: 12,
+                  offset: const Offset(0, 5),
+                ),
+              ]
+            : const [],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: wide ? 17 : 14, color: c),
+          SizedBox(width: wide ? 7 : 5),
+          Text(
+            '$title: ',
+            style: _bodyStyle(size: wide ? 12.2 : 10.8, color: const Color(0xFF475569), weight: FontWeight.w900),
+          ),
+          Text(
+            value,
+            style: _bodyStyle(size: wide ? 12.2 : 10.8, color: c, weight: FontWeight.w900),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _matchDetailTextBlock(IconData icon, String title, String text) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _AppColors.cmrBorder),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: _primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: _bodyStyle(size: 11.5, color: const Color(0xFF334155), weight: FontWeight.w700),
+                children: [
+                  TextSpan(
+                    text: '$title: ',
+                    style: _bodyStyle(size: 11.5, color: const Color(0xFF0F172A), weight: FontWeight.w900),
+                  ),
+                  TextSpan(text: text),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMatchesTable(List<Map<String, dynamic>> rows) {
     return Container(
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFE2E8F0))),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: _AppColors.cmrBorder)),
       child: Column(
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: const BoxDecoration(color: Color(0xFFF8FAFC), borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+            decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
             child: Row(
               children: const [
                 Expanded(flex: 2, child: Text('Дата', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF64748B)))),
@@ -5569,12 +6472,16 @@ Widget _buildCircleNetworkImage({
 
     return InkWell(
       onTap: () {
-        setState(() => selectedTtdMatch = m);
-        _loadPlayerTtdForMatch(m);
+        final day = _matchDateOf(m);
+        if (day != null) {
+          setState(() => _selectedMatchDay = day);
+          _rebuildOpenSectionSheet();
+        }
+        _showMatchDayDetailsSheet(day ?? DateTime.now(), [m]);
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-        decoration: const BoxDecoration(border: Border(top: BorderSide(color: Color(0xFFE2E8F0)))),
+        decoration: const BoxDecoration(border: Border(top: BorderSide(color: _AppColors.cmrBorder))),
         child: Row(
           children: [
             Expanded(flex: 2, child: Text(date.isEmpty ? '—' : date, style: _bodyStyle(size: 12.5, color: const Color(0xFF0F172A), weight: FontWeight.w800))),
@@ -5603,9 +6510,9 @@ Widget _buildCircleNetworkImage({
       width: 26,
       height: 26,
       decoration: BoxDecoration(
-        color: active ? const Color(0xFFEFF6FF) : const Color(0xFFF8FAFC),
+        color: active ? const Color(0xFFEFF6FF) : Colors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: active ? const Color(0xFFBFDBFE) : const Color(0xFFE2E8F0)),
+        border: Border.all(color: active ? const Color(0xFFBFDBFE) : _AppColors.cmrBorder),
       ),
       child: Icon(icon, size: 15, color: active ? const Color(0xFF2563EB) : const Color(0xFF94A3B8)),
     );
@@ -5649,7 +6556,7 @@ Widget _buildCircleNetworkImage({
     decoration: BoxDecoration(
       color: _card,
       borderRadius: BorderRadius.circular(compact ? 16 : 18),
-      border: Border.all(color: const Color(0xFFE2E8F0)),
+      border: Border.all(color: _AppColors.cmrBorder),
       boxShadow: [
         BoxShadow(
           color: Colors.black.withOpacity(0.025),
@@ -5764,9 +6671,9 @@ Widget _buildCircleNetworkImage({
       width: double.infinity,
       padding: EdgeInsets.symmetric(horizontal: compact ? 9 : 10, vertical: compact ? 8 : 9),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: _AppColors.cmrBorder),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -5823,20 +6730,37 @@ Widget _buildCircleNetworkImage({
   }
 
   Widget _compactActionButton({required IconData icon, required String label, required VoidCallback? onTap, required bool compact}) {
+    final wide = MediaQuery.of(context).size.width >= 720;
+    final horizontal = compact ? 9.0 : (wide ? 14.0 : 11.0);
+    final vertical = compact ? 7.0 : (wide ? 10.0 : 8.0);
+    final fg = onTap == null ? _textTertiary : _primary;
     return Material(
-      color: onTap == null ? const Color(0xFFF1F5F9) : _primary.withOpacity(0.08),
+      color: onTap == null ? const Color(0xFFF1F5F9) : _primary.withOpacity(wide ? 0.10 : 0.08),
       borderRadius: BorderRadius.circular(999),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(999),
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: compact ? 9 : 11, vertical: compact ? 7 : 8),
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: horizontal, vertical: vertical),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: onTap == null ? _AppColors.cmrBorder : _primary.withOpacity(wide ? .20 : .12)),
+            boxShadow: wide && !compact && onTap != null
+                ? [
+                    BoxShadow(
+                      color: _primary.withOpacity(.07),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : const [],
+          ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: compact ? 14 : 15, color: onTap == null ? _textTertiary : _primary),
-              const SizedBox(width: 5),
-              Text(label, style: _bodyStyle(size: compact ? 10.8 : 11.2, color: onTap == null ? _textTertiary : _primary, weight: FontWeight.w900)),
+              Icon(icon, size: compact ? 14 : (wide ? 18 : 15), color: fg),
+              SizedBox(width: wide && !compact ? 7 : 5),
+              Text(label, style: _bodyStyle(size: compact ? 10.8 : (wide ? 12.6 : 11.2), color: fg, weight: FontWeight.w900)),
             ],
           ),
         ),
@@ -5939,8 +6863,8 @@ Widget _buildCircleNetworkImage({
                 color: active ? Colors.white : _textPrimary,
               ),
               selectedColor: _primary,
-              backgroundColor: const Color(0xFFF8FAFC),
-              side: BorderSide(color: active ? _primary : const Color(0xFFE2E8F0)),
+              backgroundColor: Colors.white,
+              side: BorderSide(color: active ? _primary : _AppColors.cmrBorder),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
             ),
           );
@@ -6089,9 +7013,9 @@ Widget _buildCircleNetworkImage({
     return Container(
       padding: EdgeInsets.symmetric(horizontal: compact ? 9 : 10, vertical: compact ? 8 : 9),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: _AppColors.cmrBorder),
       ),
       child: Row(
         children: [
@@ -6125,9 +7049,9 @@ Widget _buildCircleNetworkImage({
       margin: EdgeInsets.only(bottom: tablet ? 0 : 10),
       padding: EdgeInsets.all(compact ? 10 : 11),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: _AppColors.cmrBorder),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -6211,7 +7135,7 @@ Widget _buildCircleNetworkImage({
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: _AppColors.cmrBorder),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -6238,7 +7162,7 @@ Widget _buildCircleNetworkImage({
                 value: parsed[2] == 0 ? 0 : parsed[0] / parsed[2],
                 minHeight: tablet ? 4 : 4.5,
                 color: _primary,
-                backgroundColor: const Color(0xFFE2E8F0),
+                backgroundColor: _AppColors.cmrBorder,
               ),
             ),
           ],
@@ -6586,7 +7510,7 @@ Widget _buildCircleNetworkImage({
                 decoration: BoxDecoration(
                   color: const Color(0xFFF1F5F9),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  border: Border.all(color: _AppColors.cmrBorder),
                 ),
                 child: const Icon(Icons.menu_book_rounded, color: Color(0xFF2563EB), size: 21),
               ),
@@ -6604,9 +7528,9 @@ Widget _buildCircleNetworkImage({
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFBFBFA),
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  border: Border.all(color: _AppColors.cmrBorder),
                 ),
                 child: Text('$rating/5', style: _bodyStyle(size: 11.5, color: const Color(0xFF0F172A), weight: FontWeight.w900)),
               ),
@@ -6713,7 +7637,7 @@ Widget _buildCircleNetworkImage({
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  border: Border.all(color: _AppColors.cmrBorder),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withOpacity(0.035),
@@ -6798,8 +7722,8 @@ Widget _buildCircleNetworkImage({
                 builder: (context, scrollController) {
                   return Container(
                     decoration: const BoxDecoration(
-                      color: Color(0xFFFBFBFA),
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+                      color: Colors.white,
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
                     ),
                     child: ListView(
                       controller: scrollController,
@@ -6809,7 +7733,7 @@ Widget _buildCircleNetworkImage({
                           child: Container(
                             width: 42,
                             height: 5,
-                            decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(999)),
+                            decoration: BoxDecoration(color: _AppColors.cmrBorder, borderRadius: BorderRadius.circular(999)),
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -6821,7 +7745,7 @@ Widget _buildCircleNetworkImage({
                               decoration: BoxDecoration(
                                 color: const Color(0xFFEAF5EE),
                                 borderRadius: BorderRadius.circular(17),
-                                border: Border.all(color: const Color(0xFFDCEBE1)),
+                                border: Border.all(color: _AppColors.cmrBorder),
                               ),
                               child: const Icon(Icons.query_stats_rounded, color: Color(0xFF178A45), size: 24),
                             ),
@@ -6849,7 +7773,7 @@ Widget _buildCircleNetworkImage({
                           decoration: BoxDecoration(
                             color: const Color(0xFFEAF5EE),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: const Color(0xFFDCEBE1)),
+                            border: Border.all(color: _AppColors.cmrBorder),
                           ),
                           child: Row(
                             children: [
@@ -6878,7 +7802,7 @@ Widget _buildCircleNetworkImage({
                           label: const Text('Добавить показатель', style: TextStyle(fontWeight: FontWeight.w900)),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: const Color(0xFF178A45),
-                            side: const BorderSide(color: Color(0xFFDCEBE1)),
+                            side: const BorderSide(color: _AppColors.cmrBorder),
                             padding: const EdgeInsets.symmetric(vertical: 13),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           ),
@@ -6891,7 +7815,7 @@ Widget _buildCircleNetworkImage({
                                 onPressed: saving ? null : () => Navigator.of(sheetContext).pop(null),
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: const Color(0xFF334155),
-                                  side: const BorderSide(color: Color(0xFFE2E8F0)),
+                                  side: const BorderSide(color: _AppColors.cmrBorder),
                                   padding: const EdgeInsets.symmetric(vertical: 14),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                 ),
@@ -6985,7 +7909,7 @@ Widget _buildCircleNetworkImage({
                   decoration: BoxDecoration(
                     color: selected ? const Color(0xFFEAF5EE) : Colors.white,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: selected ? const Color(0xFF178A45) : const Color(0xFFE2E8F0)),
+                    border: Border.all(color: selected ? const Color(0xFF178A45) : _AppColors.cmrBorder),
                     boxShadow: selected
                         ? [BoxShadow(color: const Color(0xFF178A45).withOpacity(0.08), blurRadius: 14, offset: const Offset(0, 8))]
                         : null,
@@ -6994,7 +7918,7 @@ Widget _buildCircleNetworkImage({
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(item['icon'] as IconData, size: 17, color: selected ? const Color(0xFF178A45) : const Color(0xFF64748B)),
-                      const SizedBox(width: 7),
+                      SizedBox(width: _isDesktopOrTablet(context) ? 12 : 7),
                       Text(title, style: _bodyStyle(size: 12, color: selected ? const Color(0xFF0F172A) : const Color(0xFF64748B), weight: FontWeight.w900)),
                     ],
                   ),
@@ -7009,9 +7933,9 @@ Widget _buildCircleNetworkImage({
                   width: double.infinity,
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                    border: Border.all(color: _AppColors.cmrBorder),
                   ),
                   child: Row(
                     children: [
@@ -7304,35 +8228,51 @@ Widget _buildCircleNetworkImage({
     required VoidCallback onToggle,
   }) {
     return InkWell(
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(24),
       onTap: onToggle,
       child: Container(
-        padding: const EdgeInsets.all(13),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFE2E8F0))),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _AppColors.cmrSoftPanel,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF101828).withOpacity(0.014),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
         child: Row(
           children: [
             Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFBFDBFE))),
-              child: const Icon(Icons.calendar_month_rounded, color: Color(0xFF2563EB), size: 18),
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: _AppColors.cmrSoft,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Icon(Icons.calendar_month_rounded, color: _AppColors.cmrGreen, size: 20),
             ),
-            const SizedBox(width: 11),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _titleStyle(size: 14, color: const Color(0xFF0F172A))),
+                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _titleStyle(size: 15, color: const Color(0xFF0F172A))),
                   const SizedBox(height: 3),
-                  Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 11.5, color: const Color(0xFF64748B), weight: FontWeight.w700)),
+                  Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 11.8, color: const Color(0xFF64748B), weight: FontWeight.w700)),
                 ],
               ),
             ),
             const SizedBox(width: 8),
             Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(.92),
+                borderRadius: BorderRadius.circular(14),
+              ),
               child: Icon(expanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded, color: const Color(0xFF334155)),
             ),
           ],
@@ -7341,11 +8281,13 @@ Widget _buildCircleNetworkImage({
     );
   }
 
+
   Widget _buildMarkedCalendar({
     required List<Map<String, dynamic>> items,
     required DateTime? Function(Map<String, dynamic>) dateOf,
     required DateTime? selectedDay,
     required ValueChanged<DateTime> onSelect,
+    void Function(DateTime day, List<Map<String, dynamic>> dayItems)? onDayWithItemsTap,
   }) {
     final now = DateTime.now();
     final base = selectedDay ?? now;
@@ -7357,7 +8299,17 @@ Widget _buildCircleNetworkImage({
 
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: const Color(0xFFFBFBFA), borderRadius: BorderRadius.circular(22), border: Border.all(color: const Color(0xFFE2E8F0))),
+      decoration: BoxDecoration(
+        color: _AppColors.cmrSoftPanel,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF101828).withOpacity(0.014),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
       child: Column(
         children: [
           Row(
@@ -7385,35 +8337,115 @@ Widget _buildCircleNetworkImage({
               final day = DateTime(month.year, month.month, dayNum);
               final selected = selectedDay != null && _sameDateOnly(day, selectedDay);
               final today = _sameDateOnly(day, now);
-              final count = _itemsOnDayCount(items, dateOf, day);
+              final dayItems = items.where((item) {
+                final d = dateOf(item);
+                return d != null && _sameDateOnly(d, day);
+              }).toList();
+              final count = dayItems.length;
               final has = count > 0;
+
+              int coachSum = 0;
+              int coachCnt = 0;
+              int playerSum = 0;
+              int playerCnt = 0;
+              String status = '';
+
+              for (final item in dayItems) {
+                final st = _attendanceStatusOf(item);
+                if (status.isEmpty || st == 'absent' || st == 'late' || st == 'injured' || st == 'sick') {
+                  status = st;
+                }
+
+                final coach = _firstRatingValue(item, const [
+                  'coach_rating',
+                  'trainer_rating',
+                  'coach_mark',
+                  'trainer_mark',
+                  'mark',
+                ]);
+                if (coach != null) {
+                  coachSum += _asInt(coach);
+                  coachCnt++;
+                }
+
+                final player = _firstRatingValue(item, const [
+                  'player_rating',
+                  'self_rating',
+                  'rating',
+                  'player_mark',
+                ]);
+                if (player != null) {
+                  playerSum += _asInt(player);
+                  playerCnt++;
+                }
+              }
+
+              final int coachAvg = coachCnt == 0
+                  ? 0
+                  : ((coachSum / coachCnt).round() < 1
+                      ? 1
+                      : ((coachSum / coachCnt).round() > 5 ? 5 : (coachSum / coachCnt).round()));
+              final int playerAvg = playerCnt == 0
+                  ? 0
+                  : ((playerSum / playerCnt).round() < 1
+                      ? 1
+                      : ((playerSum / playerCnt).round() > 5 ? 5 : (playerSum / playerCnt).round()));
+              final meta = _statusMeta(status, 0);
 
               return InkWell(
                 borderRadius: BorderRadius.circular(14),
-                onTap: () => onSelect(day),
+                onTap: () {
+                  onSelect(day);
+                  if (has) {
+                    onDayWithItemsTap?.call(day, dayItems);
+                  }
+                },
                 child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
                   decoration: BoxDecoration(
-                    color: selected ? const Color(0xFF2563EB) : has ? const Color(0xFFEFF6FF) : Colors.white,
+                    color: selected ? _AppColors.cmrGreen : has ? _AppColors.cmrSoft : Colors.white,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: selected ? const Color(0xFF2563EB) : today ? const Color(0xFFBFDBFE) : const Color(0xFFE2E8F0)),
+                    border: Border.all(color: selected ? _AppColors.cmrGreen : today ? _AppColors.cmrGreen.withOpacity(0.20) : Colors.transparent),
                   ),
-                  child: Stack(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Center(
-                        child: Text('$dayNum', style: TextStyle(color: selected ? Colors.white : const Color(0xFF0F172A), fontSize: 12.5, fontWeight: FontWeight.w900)),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text('$dayNum', style: TextStyle(color: selected ? Colors.white : const Color(0xFF0F172A), fontSize: 12.2, fontWeight: FontWeight.w900)),
+                          if (has) ...[
+                            const SizedBox(width: 3),
+                            Container(
+                              constraints: const BoxConstraints(minWidth: 14),
+                              height: 14,
+                              padding: const EdgeInsets.symmetric(horizontal: 3),
+                              decoration: BoxDecoration(color: selected ? Colors.white : _AppColors.cmrGreen, borderRadius: BorderRadius.circular(99)),
+                              child: Center(child: Text('$count', style: TextStyle(color: selected ? _AppColors.cmrGreen : Colors.white, fontSize: 8.2, fontWeight: FontWeight.w900))),
+                            ),
+                          ],
+                        ],
                       ),
-                      if (has)
-                        Positioned(
-                          right: 5,
-                          bottom: 4,
-                          child: Container(
-                            constraints: const BoxConstraints(minWidth: 14),
-                            height: 14,
-                            padding: const EdgeInsets.symmetric(horizontal: 3),
-                            decoration: BoxDecoration(color: selected ? Colors.white : const Color(0xFF2563EB), borderRadius: BorderRadius.circular(99)),
-                            child: Center(child: Text('$count', style: TextStyle(color: selected ? const Color(0xFF2563EB) : Colors.white, fontSize: 8.5, fontWeight: FontWeight.w900))),
-                          ),
+                      if (has) ...[
+                        const SizedBox(height: 3),
+                        Container(
+                          width: 7,
+                          height: 7,
+                          decoration: BoxDecoration(color: selected ? Colors.white : meta.color, shape: BoxShape.circle),
                         ),
+                        if (coachAvg > 0 || playerAvg > 0) ...[
+                          const SizedBox(height: 3),
+                          Wrap(
+                            alignment: WrapAlignment.center,
+                            spacing: 2,
+                            runSpacing: 2,
+                            children: [
+                              if (coachAvg > 0) _ratingTinyBadge('Т', coachAvg, selected ? Colors.white : Colors.blue.shade700),
+                              if (playerAvg > 0) _ratingTinyBadge('И', playerAvg, selected ? Colors.white : Colors.amber.shade800),
+                            ],
+                          ),
+                        ],
+                      ],
                     ],
                   ),
                 ),
@@ -7432,7 +8464,7 @@ Widget _buildCircleNetworkImage({
       child: Container(
         width: 34,
         height: 34,
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: _AppColors.cmrBorder)),
         child: Icon(icon, color: const Color(0xFF334155), size: 20),
       ),
     );
@@ -7444,16 +8476,44 @@ Widget _buildCircleNetworkImage({
     required VoidCallback onClear,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
-      decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(999), border: Border.all(color: const Color(0xFFBFDBFE))),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: _AppColors.cmrSoft,
+        borderRadius: BorderRadius.circular(22),
+      ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.filter_alt_rounded, color: Color(0xFF2563EB), size: 16),
-          const SizedBox(width: 7),
-          Text('$label: ${DateFormat('dd.MM.yyyy').format(date)}', style: _bodyStyle(size: 11.5, color: const Color(0xFF1D4ED8), weight: FontWeight.w900)),
-          const SizedBox(width: 7),
-          InkWell(borderRadius: BorderRadius.circular(99), onTap: onClear, child: const Icon(Icons.close_rounded, color: Color(0xFF1D4ED8), size: 16)),
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(.9),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.filter_alt_rounded, color: _AppColors.cmrGreen, size: 15),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              '$label: ${DateFormat('dd.MM.yyyy').format(date)}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _bodyStyle(
+                size: 12.4,
+                color: const Color(0xFF1F7A4D),
+                weight: FontWeight.w900,
+              ),
+            ),
+          ),
+          InkWell(
+            borderRadius: BorderRadius.circular(99),
+            onTap: onClear,
+            child: const Padding(
+              padding: EdgeInsets.all(4),
+              child: Icon(Icons.close_rounded, color: _AppColors.cmrGreen, size: 18),
+            ),
+          ),
         ],
       ),
     );
@@ -7692,12 +8752,12 @@ Widget _buildCircleNetworkImage({
 
   Widget _buildTestingResultsTable(List<Map<String, dynamic>> rows) {
     return Container(
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22), border: Border.all(color: const Color(0xFFE2E8F0))),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22), border: Border.all(color: _AppColors.cmrBorder)),
       child: Column(
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: const BoxDecoration(color: Color(0xFFF8FAFC), borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+            decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
             child: Row(
               children: const [
                 Expanded(flex: 4, child: Text('Тест', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF64748B)))),
@@ -7712,7 +8772,7 @@ Widget _buildCircleNetworkImage({
             final value = '${baseValue.isEmpty ? '—' : baseValue}${unit.isEmpty || baseValue.isEmpty ? '' : ' $unit'}';
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-              decoration: const BoxDecoration(border: Border(top: BorderSide(color: Color(0xFFE2E8F0)))),
+              decoration: const BoxDecoration(border: Border(top: BorderSide(color: _AppColors.cmrBorder))),
               child: Row(
                 children: [
                   Expanded(flex: 4, child: Text(_asStr(r['title']), maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 12.8, color: const Color(0xFF0F172A), weight: FontWeight.w900))),
@@ -7755,7 +8815,7 @@ Widget _buildCircleNetworkImage({
                     decoration: BoxDecoration(
                       color: const Color(0xFFEAF5EE),
                       borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: const Color(0xFFE7ECF2)),
+                      border: Border.all(color: _AppColors.cmrBorder),
                     ),
                     child: const Icon(Icons.verified_rounded, color: Color(0xFF178A45), size: 26),
                   ),
@@ -7849,7 +8909,7 @@ Widget _buildCircleNetworkImage({
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
+          border: Border.all(color: _AppColors.cmrBorder),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.025),
@@ -7885,21 +8945,21 @@ Widget _buildCircleNetworkImage({
         maxChildSize: 0.94,
         builder: (context, controller) => Container(
           decoration: const BoxDecoration(
-            color: Color(0xFFFBFBFA),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: ListView(
             controller: controller,
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
             children: [
-              Center(child: Container(width: 42, height: 5, decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(999)))),
+              Center(child: Container(width: 42, height: 5, decoration: BoxDecoration(color: _AppColors.cmrBorder, borderRadius: BorderRadius.circular(999)))),
               const SizedBox(height: 16),
               Row(
                 children: [
                   Container(
                     width: 46,
                     height: 46,
-                    decoration: BoxDecoration(color: const Color(0xFFEAF5EE), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE7ECF2))),
+                    decoration: BoxDecoration(color: const Color(0xFFEAF5EE), borderRadius: BorderRadius.circular(16), border: Border.all(color: _AppColors.cmrBorder)),
                     child: Icon(icon, color: const Color(0xFF178A45), size: 23),
                   ),
                   const SizedBox(width: 12),
@@ -7925,7 +8985,7 @@ Widget _buildCircleNetworkImage({
                       onPressed: () => Navigator.pop(context, false),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFF334155),
-                        side: const BorderSide(color: Color(0xFFE2E8F0)),
+                        side: const BorderSide(color: _AppColors.cmrBorder),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
@@ -7962,8 +9022,8 @@ Widget _buildCircleNetworkImage({
       filled: true,
       fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: _AppColors.cmrBorder)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: _AppColors.cmrBorder)),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF178A45), width: 1.4)),
     );
   }
@@ -8030,43 +9090,53 @@ Widget _buildCircleNetworkImage({
 }
 
   Widget _pillInfo(IconData icon, String title, String value, {Color? color}) {
-  final c = color ?? _primary;
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    decoration: BoxDecoration(
-      color: c.withOpacity(0.08),
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: c.withOpacity(0.18)),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 12, color: c),
-        const SizedBox(width: 4),
-        Text(
-          "$title: ",
-          style: TextStyle(
-            fontFamily: _fontFamily,
-            fontSize: 10,
-            color: _textSecondary,
-            fontWeight: FontWeight.w600,
+    final c = color ?? _AppColors.cmrGreen;
+    final wide = MediaQuery.of(context).size.width >= 720;
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: wide ? 13 : 10, vertical: wide ? 9 : 7),
+      decoration: BoxDecoration(
+        color: _AppColors.softFor(c),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: wide ? 24 : 21,
+            height: wide ? 24 : 21,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(.86),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: wide ? 14 : 12, color: c),
           ),
-        ),
-        Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontFamily: _fontFamily,
-            fontSize: 10,
-            color: c,
-            fontWeight: FontWeight.w900,
+          SizedBox(width: wide ? 7 : 5),
+          Text(
+            "$title: ",
+            style: TextStyle(
+              fontFamily: _fontFamily,
+              fontSize: wide ? 12.4 : 10.6,
+              color: const Color(0xFF475569),
+              fontWeight: FontWeight.w900,
+            ),
           ),
-        ),
-      ],
-    ),
-  );
-}
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: _fontFamily,
+              fontSize: wide ? 12.4 : 10.6,
+              color: c,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
 
  Widget _buildSectionBanner({
   required String title,
@@ -8138,75 +9208,103 @@ Widget _buildCircleNetworkImage({
   );
 }
 
- Widget _buildInfoCard({
-  required String title,
-  required IconData icon,
-  required List<Widget> children,
-}) {
-  return Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: _card,
-      borderRadius: BorderRadius.circular(_design.cardRadius),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.03),
-          blurRadius: 12,
-          offset: const Offset(0, 4),
-        ),
-      ],
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: _primary.withOpacity(0.10),
-                borderRadius: BorderRadius.circular(10),
+  Widget _buildInfoCard({
+    required String title,
+    required IconData icon,
+    required List<Widget> children,
+  }) {
+    final accent = _AppColors.accentForIcon(icon);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _AppColors.cmrSoftPanel,
+        borderRadius: BorderRadius.circular(26),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF101828).withOpacity(0.018),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: _AppColors.softFor(accent),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Icon(icon, color: accent, size: 22),
               ),
-              child: Icon(icon, color: _primary, size: 18),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              title,
-              style: _titleStyle(size: 15, color: _textPrimary),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        ...children,
-      ],
-    ),
-  );
-}
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: _cmrTitleText(
+                    context,
+                    mobile: 17.0,
+                    wide: 19.0,
+                    color: const Color(0xFF101828),
+                    weight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ...children,
+        ],
+      ),
+    );
+  }
 
   Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 3,
-            height: 18,
-            margin: const EdgeInsets.only(right: 8, top: 2),
-            decoration: BoxDecoration(
-              color: _AppColors.primaryGreen,
-              borderRadius: BorderRadius.circular(2),
+          Expanded(
+            flex: 42,
+            child: Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12,
+                color: _AppColors.textSecondary,
+                height: 1.2,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
+          const SizedBox(width: 10),
           Expanded(
-            child: RichText(
-              text: TextSpan(
-                style: const TextStyle(fontSize: 13, color: _AppColors.textSecondary, height: 1.3),
-                children: [
-                  TextSpan(text: "$label: ", style: const TextStyle(fontWeight: FontWeight.w900, color: _AppColors.textPrimary)),
-                  TextSpan(text: value),
-                ],
+            flex: 58,
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontSize: 13,
+                color: _AppColors.textPrimary,
+                height: 1.28,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ),
@@ -8388,7 +9486,7 @@ Widget _buildCircleNetworkImage({
                   child: Container(
                     decoration: const BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
                     ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -8398,7 +9496,7 @@ Widget _buildCircleNetworkImage({
                           width: 42,
                           height: 4,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFE2E8F0),
+                            color: _AppColors.cmrBorder,
                             borderRadius: BorderRadius.circular(99),
                           ),
                         ),
@@ -8545,7 +9643,7 @@ Widget _buildCircleNetworkImage({
                                   onPressed: isUploading ? null : () => Navigator.of(sheetContext).pop(),
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: _AppColors.textPrimary,
-                                    side: const BorderSide(color: Color(0xFFE2E8F0)),
+                                    side: const BorderSide(color: _AppColors.cmrBorder),
                                     minimumSize: const Size.fromHeight(50),
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                   ),
@@ -8604,9 +9702,9 @@ Widget _buildCircleNetworkImage({
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: _AppColors.cmrBorder),
       ),
       child: Row(
         children: [
@@ -8664,7 +9762,7 @@ Widget _buildCircleNetworkImage({
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                border: Border.all(color: _AppColors.cmrBorder),
               ),
               child: const Icon(Icons.close_rounded, color: _AppColors.textSecondary, size: 20),
             ),
@@ -8684,7 +9782,7 @@ Widget _buildCircleNetworkImage({
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: _AppColors.cmrBorder),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(.025),
@@ -8730,9 +9828,9 @@ Widget _buildCircleNetworkImage({
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
         decoration: BoxDecoration(
-          color: active ? _AppColors.primaryGreen : const Color(0xFFF8FAFC),
+          color: active ? _AppColors.primaryGreen : Colors.white,
           borderRadius: BorderRadius.circular(99),
-          border: Border.all(color: active ? _AppColors.primaryGreen : const Color(0xFFE2E8F0)),
+          border: Border.all(color: active ? _AppColors.primaryGreen : _AppColors.cmrBorder),
         ),
         child: Text(
           label,
@@ -8772,15 +9870,15 @@ Widget _buildCircleNetworkImage({
         ),
         prefixIconConstraints: const BoxConstraints(minWidth: 40),
         filled: true,
-        fillColor: const Color(0xFFF8FAFC),
+        fillColor: Colors.white,
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+          borderSide: const BorderSide(color: _AppColors.cmrBorder),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+          borderSide: const BorderSide(color: _AppColors.cmrBorder),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
@@ -8800,9 +9898,9 @@ Widget _buildCircleNetworkImage({
       child: Container(
         padding: const EdgeInsets.all(13),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
+          border: Border.all(color: _AppColors.cmrBorder),
         ),
         child: Row(
           children: [
@@ -8851,9 +9949,9 @@ Widget _buildCircleNetworkImage({
       child: Container(
         padding: const EdgeInsets.all(13),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
+          border: Border.all(color: _AppColors.cmrBorder),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -8921,10 +10019,15 @@ Widget _buildCircleNetworkImage({
   }
 
 
-  void _assignTraining() {
+  Future<void> _assignTraining() async {
     final playerId = widget.player['user_id'];
     if (playerId != null) {
-      Navigator.push(context, MaterialPageRoute(builder: (context) => AddTrainingScreen(playerId: playerId)));
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => AddTrainingScreen(playerId: playerId)),
+      );
+      if (!mounted) return;
+      await _loadTrainingSectionData(force: true);
     }
   }
 
@@ -8937,9 +10040,7 @@ Widget _buildCircleNetworkImage({
     if (_selectedTabIndex == 6) await _loadDiary();
 
     if (_selectedTabIndex == 4) {
-      if (_trainingSubTab == 0) await _loadPlayerTrainingHistory(force: true);
-      if (_trainingSubTab == 1) await _loadAttendanceLog(force: true);
-      await _loadTeamCalendar(force: true);
+      await _loadTrainingSectionData(force: true);
     }
 
     if (_selectedTabIndex == 5) await _loadMatches(force: true);
@@ -8955,9 +10056,7 @@ Widget _buildCircleNetworkImage({
     }
 
     if (index == 4) {
-      if (_trainingSubTab == 0) await _loadPlayerTrainingHistory(force: false);
-      if (_trainingSubTab == 1) await _loadAttendanceLog(force: false);
-      await _loadTeamCalendar(force: false);
+      await _loadTrainingSectionData(force: true);
     }
 
     if (index == 5) await _loadMatches();
@@ -9005,194 +10104,414 @@ Widget _buildCircleNetworkImage({
 
   Color _cmrTabSoft(int index) => _AppColors.softFor(_cmrTabAccent(index));
 
+  void _openPlayerEditorPanel() {
+    final isTablet = MediaQuery.of(context).size.width >= 720;
+    if (!isTablet) {
+      Get.toNamed(AppRoutes.editPlayerScreen, arguments: widget.player)?.then((_) {
+        if (mounted) _refreshCmrProfile();
+      });
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _selectedTabIndex = 0;
+      _showInlinePlayerEditor = true;
+    });
+  }
+
+  Future<void> _closePlayerEditorPanel({bool refresh = false}) async {
+    if (!mounted) return;
+    setState(() => _showInlinePlayerEditor = false);
+    if (refresh) {
+      await _refreshCmrProfile();
+    }
+  }
+
+  void _closePlayerProfileScreen() {
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) navigator.pop();
+  }
+
+  Widget _buildCmrProfileExitButton({required bool compact}) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: _closePlayerProfileScreen,
+          child: Ink(
+            padding: EdgeInsets.symmetric(horizontal: compact ? 11 : 14, vertical: compact ? 10 : 11),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF6F8FA),
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [BoxShadow(color: const Color(0xFF101828).withOpacity(.018), blurRadius: 16, offset: const Offset(0, 7))],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.close_rounded, size: 18, color: Color(0xFF667085)),
+                ),
+                if (!compact) ...[
+                  const SizedBox(width: 9),
+                  const Text('Закрыть профиль', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Color(0xFF101828), fontSize: 13, fontWeight: FontWeight.w800, height: 1)),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildCmrShellSidebar({required bool compact}) {
-    final photo = _normalizeImage(widget.player["photo"]);
+    final photo = _normalizeImage(widget.player["photo"]) ?? '';
     final name = _cmrFullName();
     final team = _playerClub().isEmpty
         ? _firstNotEmpty([widget.player["team_name"], widget.player["teamName"]])
         : _playerClub();
+    final position = _firstNotEmpty([
+      widget.player["position"],
+      widget.player["role"],
+      widget.player["amplua"],
+    ]);
 
     return Container(
-      width: compact ? 86 : 274,
+      width: compact ? 96 : 286,
       margin: const EdgeInsets.all(12),
-      padding: EdgeInsets.all(compact ? 10 : 16),
+      padding: EdgeInsets.fromLTRB(compact ? 10 : 14, 14, compact ? 10 : 14, 14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: const Color(0xFFE7ECF2)),
+        borderRadius: BorderRadius.circular(30),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.055),
-            blurRadius: 30,
-            offset: const Offset(0, 18),
+            color: const Color(0xFF0F172A).withOpacity(.045),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
       child: Column(
         children: [
-          if (compact)
-            _buildPhotoPreviewTap(
-              imageUrl: photo,
-              child: _buildCircleNetworkImage(
-                imageUrl: photo,
-                size: 52,
-                borderColor: const Color(0xFFE7ECF2),
-                borderWidth: 1,
-                fallback: const Icon(Icons.person_rounded, color: Color(0xFF2563EB)),
-              ),
-            )
-          else
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFAFCFB),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: const Color(0xFFE7ECF2)),
-              ),
-              child: Row(
-                children: [
-                  _buildPhotoPreviewTap(
-                    imageUrl: photo,
-                    child: _buildCircleNetworkImage(
-                      imageUrl: photo,
-                      size: 54,
-                      borderColor: const Color(0xFFE7ECF2),
-                      borderWidth: 1,
-                      fallback: const Icon(Icons.person_rounded, color: Color(0xFF2563EB)),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFF111827),
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          team.isEmpty ? 'Карточка CMR' : team,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFF64748B),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          if (!compact) ...[
-            const SizedBox(height: 14),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEAF5EE),
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: const Color(0xFF178A45).withOpacity(.16)),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.verified_rounded, size: 18, color: Color(0xFF178A45)),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Профиль игрока',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Color(0xFF111827),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-          const SizedBox(height: 14),
+          _buildPlayerSidebarHeader(
+            compact: compact,
+            photo: photo,
+            name: name,
+            team: team,
+            position: position,
+          ),
+          const SizedBox(height: 12),
+          if (!compact) _buildPlayerSidebarStatusCard(),
+          if (!compact) const SizedBox(height: 12),
           Expanded(
             child: ListView.separated(
+              padding: EdgeInsets.zero,
+              physics: const BouncingScrollPhysics(),
               itemCount: _categoryTabs.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 7),
+              separatorBuilder: (_, __) => SizedBox(height: compact ? 6 : 7),
               itemBuilder: (_, index) {
                 final tab = _categoryTabs[index];
                 final active = tab.index == _selectedTabIndex;
                 final accent = _cmrTabAccent(tab.index);
 
-                return InkWell(
-                  borderRadius: BorderRadius.circular(18),
-                  onTap: () => _handleCmrSidebarTabTap(tab),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 160),
-                    padding: EdgeInsets.symmetric(
-                      horizontal: compact ? 0 : 12,
-                      vertical: 11,
-                    ),
-                    decoration: BoxDecoration(
-                      color: active ? _cmrTabSoft(tab.index) : Colors.transparent,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color: active ? accent.withOpacity(.16) : Colors.transparent,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment:
-                          compact ? MainAxisAlignment.center : MainAxisAlignment.start,
-                      children: [
-                        Icon(
-                          tab.icon,
-                          size: 21,
-                          color: active ? accent : const Color(0xFF64748B),
-                        ),
-                        if (!compact) ...[
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              tab.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: active ? const Color(0xFF111827) : const Color(0xFF334155),
-                                fontWeight: active ? FontWeight.w900 : FontWeight.w700,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
+                final tile = _buildPlayerSidebarTab(
+                  tab: tab,
+                  active: active,
+                  accent: accent,
+                  compact: compact,
                 );
+
+                if (compact) {
+                  return Tooltip(
+                    message: '${tab.title}\n${tab.subtitle}',
+                    waitDuration: const Duration(milliseconds: 350),
+                    child: tile,
+                  );
+                }
+
+                return tile;
               },
             ),
           ),
           const SizedBox(height: 12),
-          if (compact)
-            _buildCmrSidebarIconButton(
-              icon: Icons.edit_outlined,
-              onTap: () => Get.toNamed(AppRoutes.editPlayerScreen, arguments: widget.player),
-            )
-          else
-            _buildCmrSidebarButton(
-              icon: Icons.edit_outlined,
-              label: 'Редактировать профиль',
-              onTap: () => Get.toNamed(AppRoutes.editPlayerScreen, arguments: widget.player),
-            ),
+          compact
+              ? _buildCmrSidebarIconButton(
+                  icon: Icons.edit_outlined,
+                  onTap: _openPlayerEditorPanel,
+                )
+              : _buildCmrSidebarButton(
+                  icon: Icons.edit_outlined,
+                  label: 'Редактировать профиль',
+                  onTap: _openPlayerEditorPanel,
+                ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPlayerSidebarHeader({
+    required bool compact,
+    required String photo,
+    required String name,
+    required String team,
+    required String position,
+  }) {
+    if (compact) {
+      return Column(
+        children: [
+          _buildPhotoPreviewTap(
+            imageUrl: photo,
+            child: _buildCircleNetworkImage(
+              imageUrl: photo,
+              size: 54,
+              borderColor: _AppColors.cmrBorder,
+              borderWidth: 1,
+              fallback: const Icon(Icons.person_rounded, color: _AppColors.primaryGreen),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            name,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: _AppColors.textPrimary,
+              fontSize: 11.5,
+              height: 1.08,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAF9),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Row(
+        children: [
+          _buildPhotoPreviewTap(
+            imageUrl: photo,
+            child: _buildCircleNetworkImage(
+              imageUrl: photo,
+              size: 54,
+              borderColor: _AppColors.cmrBorder,
+              borderWidth: 1,
+              fallback: const Icon(Icons.person_rounded, color: _AppColors.primaryGreen),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _AppColors.textPrimary,
+                    fontSize: 16,
+                    height: 1.1,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  team.isEmpty ? 'Профиль игрока' : team,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _AppColors.textSecondary,
+                    fontSize: 12,
+                    height: 1.12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (position.trim().isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _AppColors.cmrSoft,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: _AppColors.primaryGreen.withOpacity(.14)),
+                    ),
+                    child: Text(
+                      position,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _AppColors.primaryGreen,
+                        fontSize: 10.5,
+                        height: 1,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlayerSidebarStatusCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1FAF5),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(color: _AppColors.primaryGreen.withOpacity(.12)),
+            ),
+            child: const Icon(Icons.verified_rounded, size: 18, color: _AppColors.primaryGreen),
+          ),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Меню игрока',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: _AppColors.textPrimary,
+                    fontSize: 13,
+                    height: 1.08,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'Все разделы профиля',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: _AppColors.textSecondary,
+                    fontSize: 11,
+                    height: 1.1,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlayerSidebarTab({
+    required _CategoryTab tab,
+    required bool active,
+    required Color accent,
+    required bool compact,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => _handleCmrSidebarTabTap(tab),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          constraints: BoxConstraints(minHeight: compact ? 54 : 56),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 0 : 12,
+            vertical: compact ? 8 : 9,
+          ),
+          decoration: BoxDecoration(
+            color: active ? const Color(0xFFEAF7F0) : const Color(0xFFF8FAF9),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            mainAxisAlignment: compact ? MainAxisAlignment.center : MainAxisAlignment.start,
+            children: [
+              Container(
+                width: compact ? 42 : 38,
+                height: compact ? 42 : 38,
+                decoration: BoxDecoration(
+                  color: active ? Colors.white : _AppColors.softFor(accent),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Icon(
+                  tab.icon,
+                  size: compact ? 21 : 20,
+                  color: active ? accent : _AppColors.textSecondary,
+                ),
+              ),
+              if (!compact) ...[
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        tab.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: active ? _AppColors.textPrimary : const Color(0xFF334155),
+                          fontWeight: active ? FontWeight.w900 : FontWeight.w800,
+                          fontSize: 13.2,
+                          height: 1.05,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        tab.subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: active ? accent : _AppColors.textSecondary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 10.8,
+                          height: 1.05,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                AnimatedOpacity(
+                  duration: const Duration(milliseconds: 160),
+                  opacity: active ? 1 : .45,
+                  child: Icon(
+                    active ? Icons.check_circle_rounded : Icons.chevron_right_rounded,
+                    color: active ? accent : _AppColors.textTertiary,
+                    size: active ? 18 : 20,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -9202,43 +10521,46 @@ Widget _buildCircleNetworkImage({
     required String label,
     required VoidCallback onTap,
   }) {
-    const accent = _AppColors.blue;
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        decoration: BoxDecoration(
-          color: const Color(0xFF111827),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: accent.withOpacity(.20),
-              blurRadius: 18,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: Colors.white, size: 18),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 13,
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Ink(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          decoration: BoxDecoration(
+            color: _AppColors.primaryGreen,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: _AppColors.primaryGreen.withOpacity(.16),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13.5,
+                    height: 1,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -9248,24 +10570,31 @@ Widget _buildCircleNetworkImage({
     required IconData icon,
     required VoidCallback onTap,
   }) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: onTap,
-      child: Container(
-        width: 52,
-        height: 52,
-        decoration: BoxDecoration(
-          color: const Color(0xFF111827),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: _AppColors.blue.withOpacity(.18),
-              blurRadius: 16,
-              offset: const Offset(0, 7),
+    return Tooltip(
+      message: 'Редактировать профиль',
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: onTap,
+          child: Ink(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: _AppColors.primaryGreen,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: _AppColors.primaryGreen.withOpacity(.16),
+                  blurRadius: 16,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
-          ],
+            child: Icon(icon, color: Colors.white, size: 20),
+          ),
         ),
-        child: Icon(icon, color: Colors.white, size: 20),
       ),
     );
   }
@@ -9273,20 +10602,153 @@ Widget _buildCircleNetworkImage({
 
   Widget _buildCmrTabletWorkspace({required bool compact}) {
     final tab = _categoryTabs.firstWhere((e) => e.index == _selectedTabIndex, orElse: () => _categoryTabs.first);
+
+    final workspace = _showInlinePlayerEditor
+        ? _buildCmrWorkspaceWithInlineEditor(tab: tab, compact: compact)
+        : _buildCmrWorkspaceContent(tab: tab, compact: compact);
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeOutCubic,
+      child: workspace,
+    );
+  }
+
+  Widget _buildCmrWorkspaceContent({required _CategoryTab tab, required bool compact}) {
     final rightWidth = compact ? 560.0 : 660.0;
 
+    if (tab.index == 0) {
+      return Row(
+        key: const ValueKey('player-workspace-profile'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: _buildCmrCenterPane(tab)),
+          const SizedBox(width: 12),
+          SizedBox(width: rightWidth, child: _buildCmrDetailsPane(tab)),
+        ],
+      );
+    }
+
+    final guideWidth = _cmrGuideCollapsed ? (compact ? 56.0 : 64.0) : (compact ? 300.0 : 340.0);
+
     return Row(
+      key: ValueKey('player-workspace-tab-${tab.index}'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(width: guideWidth, child: _buildCmrCenterPane(tab)),
+        const SizedBox(width: 12),
+        Expanded(child: _buildCmrDetailsPane(tab)),
+      ],
+    );
+  }
+
+  Widget _buildCmrWorkspaceWithInlineEditor({required _CategoryTab tab, required bool compact}) {
+    final leftFlex = compact ? 6 : 7;
+    final editorWidth = compact ? 470.0 : 540.0;
+
+    return Row(
+      key: const ValueKey('player-workspace-editor'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
-          child: _buildCmrCenterPane(tab),
+          flex: leftFlex,
+          child: _buildCmrWorkspaceContent(tab: tab, compact: true),
         ),
         const SizedBox(width: 12),
         SizedBox(
-          width: rightWidth,
-          child: _buildCmrDetailsPane(tab),
+          width: editorWidth,
+          child: _buildInlinePlayerEditorPanel(),
         ),
       ],
+    );
+  }
+
+  Widget _buildInlinePlayerEditorPanel() {
+    final name = _cmrFullName();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F172A).withOpacity(.045),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 14, 10, 12),
+            decoration: const BoxDecoration(
+              color: Color(0xFFF8FAF9),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: _AppColors.tealSoft,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: _AppColors.teal.withOpacity(.14)),
+                  ),
+                  child: const Icon(Icons.edit_rounded, color: _AppColors.teal, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Редактор игрока',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Color(0xFF111827),
+                          fontSize: 17,
+                          height: 1.08,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF64748B),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Tooltip(
+                  message: 'Закрыть редактор',
+                  child: IconButton(
+                    onPressed: () => _closePlayerEditorPanel(),
+                    icon: const Icon(Icons.close_rounded),
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: EditPlayerScreen(
+              initialPlayer: widget.player,
+              embedded: true,
+              onSaved: () => _closePlayerEditorPanel(refresh: true),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -9314,9 +10776,8 @@ Widget _buildCircleNetworkImage({
         Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: const Color(0xFFF8FAF9),
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFFE7ECF2)),
           ),
           child: Row(
             children: [
@@ -9325,7 +10786,7 @@ Widget _buildCircleNetworkImage({
                 child: _buildCircleNetworkImage(
                   imageUrl: photo,
                   size: 64,
-                  borderColor: const Color(0xFFE7ECF2),
+                  borderColor: _AppColors.cmrBorder,
                   borderWidth: 1,
                   fallback: const Icon(Icons.person_rounded, color: Color(0xFF2563EB)),
                 ),
@@ -9350,7 +10811,7 @@ Widget _buildCircleNetworkImage({
                 ),
               ),
               const SizedBox(width: 10),
-              _SmallCardEditButton(label: 'Профиль', icon: Icons.open_in_new_rounded, onTap: () => Get.toNamed(AppRoutes.editPlayerScreen, arguments: widget.player)),
+              _SmallCardEditButton(label: 'Профиль', icon: Icons.open_in_new_rounded, onTap: _openPlayerEditorPanel),
             ],
           ),
         ),
@@ -9365,7 +10826,7 @@ Widget _buildCircleNetworkImage({
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  _buildCmrActionChip(icon: Icons.edit_outlined, label: 'Редактировать', onTap: () => Get.toNamed(AppRoutes.editPlayerScreen, arguments: widget.player), compact: true),
+                  _buildCmrActionChip(icon: Icons.edit_outlined, label: 'Редактировать', onTap: _openPlayerEditorPanel, compact: true),
                   _buildCmrActionChip(icon: Icons.chat_bubble_outline_rounded, label: 'Написать', onTap: _openPrivateChat, compact: true),
                   _buildCmrActionChip(icon: Icons.event_available_outlined, label: 'Тренировка', onTap: _assignTraining, compact: true),
                 ],
@@ -9385,9 +10846,8 @@ Widget _buildCircleNetworkImage({
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: const Color(0xFFF8FAF9),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.w900)),
     );
@@ -9441,6 +10901,69 @@ Widget _buildCircleNetworkImage({
     final accent = _cmrTabAccent(tab.index);
     final steps = _cmrGuideSteps(tab.index);
 
+    if (_cmrGuideCollapsed) {
+      return Align(
+        alignment: Alignment.topCenter,
+        child: Tooltip(
+          message: 'Открыть помощь',
+          child: InkWell(
+            borderRadius: BorderRadius.circular(22),
+            onTap: () => setState(() => _cmrGuideCollapsed = false),
+            child: Container(
+              width: double.infinity,
+              constraints: const BoxConstraints(minHeight: 176),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: accent.withOpacity(.24), width: 1.2),
+                boxShadow: [
+                  BoxShadow(
+                    color: accent.withOpacity(.10),
+                    blurRadius: 18,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: _cmrTabSoft(tab.index),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: accent.withOpacity(.18)),
+                    ),
+                    child: Icon(Icons.question_mark_rounded, color: accent, size: 20),
+                  ),
+                  const SizedBox(height: 10),
+                  RotatedBox(
+                    quarterTurns: 3,
+                    child: Text(
+                      'Помощь',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: _fontFamily,
+                        color: const Color(0xFF0F172A),
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: .2,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Icon(Icons.keyboard_arrow_right_rounded, color: accent, size: 24),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(0, 0, 0, 12),
       children: [
@@ -9449,7 +10972,7 @@ Widget _buildCircleNetworkImage({
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(26),
-            border: Border.all(color: const Color(0xFFE7ECF2)),
+            border: Border.all(color: _AppColors.cmrBorder),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -9461,11 +10984,11 @@ Widget _buildCircleNetworkImage({
                     width: 42,
                     height: 42,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(15),
-                      border: Border.all(color: const Color(0xFFE7ECF2)),
+                      border: Border.all(color: _AppColors.cmrBorder),
                     ),
-                    child: Icon(Icons.tips_and_updates_outlined, color: accent, size: 20),
+                    child: Icon(Icons.help_outline_rounded, color: accent, size: 22),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -9473,17 +10996,35 @@ Widget _buildCircleNetworkImage({
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Как работать с разделом «${tab.title}»',
+                          'Помощь: «${tab.title}»',
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontFamily: _fontFamily, color: const Color(0xFF0F172A), fontSize: 18, fontWeight: FontWeight.w900, height: 1.1),
+                          style: TextStyle(fontFamily: _fontFamily, color: const Color(0xFF0F172A), fontSize: _adaptiveFont(context, mobile: 18, wide: 19.2), fontWeight: FontWeight.w900, height: 1.1),
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'В центральной зоне только подсказки. Все данные, цифры, редакторы и кнопки действий находятся справа — без дублирования.',
-                          style: TextStyle(fontFamily: _fontFamily, color: const Color(0xFF64748B), fontSize: 12.5, height: 1.35, fontWeight: FontWeight.w700),
+                          'Подсказки можно свернуть. Все данные, цифры, редакторы и кнопки действий находятся справа.',
+                          style: TextStyle(fontFamily: _fontFamily, color: const Color(0xFF64748B), fontSize: _adaptiveFont(context, mobile: 12.5, wide: 13.2), height: 1.35, fontWeight: FontWeight.w700),
                         ),
                       ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Tooltip(
+                    message: 'Свернуть помощь',
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(14),
+                      onTap: () => setState(() => _cmrGuideCollapsed = true),
+                      child: Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: _AppColors.cmrBorder),
+                        ),
+                        child: const Icon(Icons.keyboard_arrow_left_rounded, color: Color(0xFF64748B), size: 22),
+                      ),
                     ),
                   ),
                 ],
@@ -9565,9 +11106,9 @@ Widget _buildCircleNetworkImage({
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: const Color(0xFFFBFBFA),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE7ECF2)),
+        border: Border.all(color: _AppColors.cmrBorder),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -9575,7 +11116,7 @@ Widget _buildCircleNetworkImage({
           Container(
             width: 30,
             height: 30,
-            decoration: BoxDecoration(color: const Color(0xFFF1F5F9), shape: BoxShape.circle, border: Border.all(color: const Color(0xFFE2E8F0))),
+            decoration: BoxDecoration(color: const Color(0xFFF1F5F9), shape: BoxShape.circle, border: Border.all(color: _AppColors.cmrBorder)),
             child: Center(child: Text('$number', style: TextStyle(color: accent, fontSize: 12, fontWeight: FontWeight.w900))),
           ),
           const SizedBox(width: 11),
@@ -9583,9 +11124,9 @@ Widget _buildCircleNetworkImage({
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: TextStyle(fontFamily: _fontFamily, color: const Color(0xFF0F172A), fontSize: 13.5, fontWeight: FontWeight.w900)),
+                Text(title, style: _cmrTitleText(context, mobile: 13.5, wide: 15.0, color: const Color(0xFF0F172A))),
                 const SizedBox(height: 4),
-                Text(text, style: TextStyle(fontFamily: _fontFamily, color: const Color(0xFF64748B), fontSize: 12.2, fontWeight: FontWeight.w700, height: 1.35)),
+                Text(text, style: _cmrBodyText(context, mobile: 12.2, wide: 13.2, color: const Color(0xFF64748B), weight: FontWeight.w700, height: 1.35)),
               ],
             ),
           ),
@@ -9604,7 +11145,7 @@ Widget _buildCircleNetworkImage({
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFE7ECF2)),
+        border: Border.all(color: _AppColors.cmrBorder),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(.035), blurRadius: 20, offset: const Offset(0, 10))],
       ),
       child: Row(
@@ -9619,21 +11160,21 @@ Widget _buildCircleNetworkImage({
                   tab.title == 'Общие' ? 'Профиль игрока' : tab.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontFamily: _fontFamily, fontSize: compact ? 19 : 24, fontWeight: FontWeight.w900, color: const Color(0xFF111827)),
+                  style: TextStyle(fontFamily: _fontFamily, fontSize: compact ? 19 : 23, fontWeight: FontWeight.w900, color: const Color(0xFF111827)),
                 ),
                 const SizedBox(height: 3),
                 Text(
                   team.isEmpty ? tab.subtitle : '$team • ${tab.subtitle}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontFamily: _fontFamily, color: const Color(0xFF64748B), fontSize: compact ? 12 : 13, fontWeight: FontWeight.w700),
+                  style: TextStyle(fontFamily: _fontFamily, color: const Color(0xFF64748B), fontSize: compact ? 12 : 13.4, fontWeight: FontWeight.w700),
                 ),
               ],
             ),
           ),
           if (!compact) ...[
             const SizedBox(width: 10),
-            _buildCmrHeaderAction(icon: Icons.edit_outlined, label: 'Редактировать', onTap: () => Get.toNamed(AppRoutes.editPlayerScreen, arguments: widget.player)),
+            _buildCmrHeaderAction(icon: Icons.edit_outlined, label: 'Профиль', onTap: _openPlayerEditorPanel),
             const SizedBox(width: 10),
             _buildCmrHeaderAction(icon: Icons.chat_bubble_outline_rounded, label: 'Написать', onTap: _openPrivateChat),
             const SizedBox(width: 10),
@@ -9671,11 +11212,10 @@ Widget _buildCircleNetworkImage({
         width: 48,
         height: 48,
         decoration: BoxDecoration(
-          color: const Color(0xFFEAF5EE),
+          color: const Color(0xFFEAF7F0),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFE7ECF2)),
         ),
-        child: Icon(icon, color: const Color(0xFF178A45)),
+        child: Icon(icon, color: _AppColors.primaryGreen),
       ),
     );
   }
@@ -9695,10 +11235,6 @@ Widget _buildCircleNetworkImage({
         decoration: BoxDecoration(
           color: _AppColors.softFor(accent),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: accent.withOpacity(.17)),
-          boxShadow: [
-            BoxShadow(color: accent.withOpacity(.055), blurRadius: 12, offset: const Offset(0, 5)),
-          ],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -9733,7 +11269,7 @@ Widget _buildCircleNetworkImage({
                   style: const TextStyle(
                     color: Color(0xFF111827),
                     fontWeight: FontWeight.w900,
-                    fontSize: 12.4,
+                    fontSize: 13.0,
                     height: 1,
                   ),
                 ),
@@ -9758,9 +11294,9 @@ Widget _buildCircleNetworkImage({
       margin: EdgeInsets.fromLTRB(0, 0, compact ? 12 : 12, 12),
       padding: EdgeInsets.all(compact ? 16 : 20),
       decoration: BoxDecoration(
-        color: const Color(0xFF111827),
+        color: const Color(0xFFF1FAF5),
         borderRadius: BorderRadius.circular(32),
-        boxShadow: [BoxShadow(color: const Color(0xFF111827).withOpacity(.13), blurRadius: 24, offset: const Offset(0, 14))],
+        boxShadow: [BoxShadow(color: const Color(0xFF0F172A).withOpacity(.045), blurRadius: 22, offset: const Offset(0, 10))],
       ),
       child: Row(
         children: [
@@ -9769,9 +11305,9 @@ Widget _buildCircleNetworkImage({
             child: _buildCircleNetworkImage(
               imageUrl: photo,
               size: compact ? 72 : 92,
-              borderColor: Colors.white.withOpacity(.35),
+              borderColor: _AppColors.cmrBorder,
               borderWidth: 2,
-              fallback: const Icon(Icons.person_rounded, color: Colors.white),
+              fallback: const Icon(Icons.person_rounded, color: _AppColors.primaryGreen),
             ),
           ),
           SizedBox(width: compact ? 12 : 18),
@@ -9783,7 +11319,7 @@ Widget _buildCircleNetworkImage({
                   name,
                   maxLines: compact ? 1 : 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontFamily: _fontFamily, color: Colors.white, fontSize: compact ? 20 : 26, height: 1.05, fontWeight: FontWeight.w900),
+                  style: TextStyle(fontFamily: _fontFamily, color: const Color(0xFF0F172A), fontSize: compact ? 20 : 26, height: 1.05, fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 10),
                 Wrap(
@@ -9804,11 +11340,11 @@ Widget _buildCircleNetworkImage({
             Container(
               width: 118,
               padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(color: Colors.white.withOpacity(.10), borderRadius: BorderRadius.circular(22), border: Border.all(color: Colors.white.withOpacity(.12))),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22)),
               child: Column(
                 children: [
-                  Text('$readiness%', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900)),
-                  Text('заполнено', style: TextStyle(color: Colors.white.withOpacity(.66), fontSize: 11, fontWeight: FontWeight.w700)),
+                  Text('$readiness%', style: const TextStyle(color: Color(0xFF0F172A), fontSize: 24, fontWeight: FontWeight.w900)),
+                  Text('заполнено', style: TextStyle(color: _AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w700)),
                 ],
               ),
             ),
@@ -9822,11 +11358,10 @@ Widget _buildCircleNetworkImage({
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(.10),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(99),
-        border: Border.all(color: Colors.white.withOpacity(.12)),
       ),
-      child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800)),
+      child: Text(text, style: const TextStyle(color: Color(0xFF2FA86B), fontSize: 12, fontWeight: FontWeight.w800)),
     );
   }
 
@@ -9839,131 +11374,37 @@ Widget _buildCircleNetworkImage({
     final position = _firstNotEmpty([widget.player["position"], widget.player["player_position"]]);
     final number = _firstNotEmpty([widget.player["jersey_number"], widget.player["number"], widget.player["player_number"]]);
     final age = _playerAge();
-    final team = _playerClub().isEmpty
-        ? _firstNotEmpty([widget.player["team_name"], widget.player["teamName"]])
-        : _playerClub();
-    final readiness = _profileReadinessPercent();
-
-    final avatarSize = collapsed ? 42.0 : 64.0;
-    final titleSize = collapsed ? 15.0 : 18.0;
-    final meta = [
-      if (position.isNotEmpty) position,
-      if (number.isNotEmpty) '№ $number',
-      if (!collapsed && age.isNotEmpty) '$age лет',
-      if (!collapsed && team.isNotEmpty) team,
-    ].join(' • ');
-
+    final team = _playerClub().isEmpty ? _firstNotEmpty([widget.player["team_name"], widget.player["teamName"]]) : _playerClub();
+    final avatarSize = collapsed ? 40.0 : 58.0;
+    final titleSize = collapsed ? 14.5 : 17.2;
+    final meta = [if (position.isNotEmpty) position, if (number.isNotEmpty) '№ $number', if (!collapsed && age.isNotEmpty) '$age лет', if (!collapsed && team.isNotEmpty) team].join(' • ');
     return AnimatedContainer(
       key: key,
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
-      margin: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-      padding: EdgeInsets.all(collapsed ? 10 : 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(collapsed ? 20 : 24),
-        border: Border.all(color: const Color(0xFFE7ECF2)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF111827).withOpacity(collapsed ? .03 : .045),
-            blurRadius: collapsed ? 10 : 18,
-            offset: Offset(0, collapsed ? 4 : 8),
-          ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          _buildPhotoPreviewTap(
-            imageUrl: photo,
-            child: _buildCircleNetworkImage(
-              imageUrl: photo,
-              size: avatarSize,
-              borderColor: const Color(0xFFE7ECF2),
-              borderWidth: 1.5,
-              fallback: const Icon(Icons.person_rounded, color: Color(0xFF2563EB)),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  name,
-                  maxLines: collapsed ? 1 : 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontFamily: _fontFamily,
-                    color: const Color(0xFF111827),
-                    fontSize: titleSize,
-                    height: 1.08,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -.2,
-                  ),
-                ),
-                SizedBox(height: collapsed ? 3 : 6),
-                Text(
-                  meta.isEmpty ? 'Амплуа не указано' : meta,
-                  maxLines: collapsed ? 1 : 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF64748B),
-                    fontSize: 11.5,
-                    height: 1.25,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                if (!collapsed) ...[
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildCmrMobileAction(
-                          icon: Icons.chat_bubble_outline_rounded,
-                          label: 'Написать',
-                          onTap: _openPrivateChat,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _buildCmrMobileAction(
-                          icon: Icons.event_available_outlined,
-                          label: 'Тренировка',
-                          onTap: _assignTraining,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
+      margin: const EdgeInsets.fromLTRB(4, 4, 4, 6),
+      padding: EdgeInsets.all(collapsed ? 9 : 12),
+      decoration: BoxDecoration(color: _AppColors.cmrSoftPanel, borderRadius: BorderRadius.circular(collapsed ? 18 : 22), boxShadow: [BoxShadow(color: const Color(0xFF101828).withOpacity(collapsed ? .014 : .02), blurRadius: collapsed ? 10 : 16, offset: Offset(0, collapsed ? 4 : 7))]),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+        _buildPhotoPreviewTap(imageUrl: photo, child: _buildCircleNetworkImage(imageUrl: photo, size: avatarSize, borderColor: Colors.white, borderWidth: 2, fallback: const Icon(Icons.person_rounded, color: _AppColors.primaryGreen))),
+        const SizedBox(width: 11),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          Text(name, maxLines: collapsed ? 1 : 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: const Color(0xFF101828), fontSize: titleSize, height: 1.08, fontWeight: FontWeight.w800, letterSpacing: -.2)),
+          SizedBox(height: collapsed ? 3 : 5),
+          Text(meta.isEmpty ? 'Амплуа не указано' : meta, maxLines: collapsed ? 1 : 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFF667085), fontSize: 11.3, height: 1.25, fontWeight: FontWeight.w600)),
           if (!collapsed) ...[
-            const SizedBox(width: 8),
-            Container(
-              width: 54,
-              padding: const EdgeInsets.symmetric(vertical: 9),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(17),
-                border: Border.all(color: const Color(0xFFE7ECF2)),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('$readiness%', style: const TextStyle(color: Color(0xFF111827), fontSize: 15, fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 2),
-                  const Text('проф.', style: TextStyle(color: Color(0xFF64748B), fontSize: 9.5, fontWeight: FontWeight.w800)),
-                ],
-              ),
-            ),
+            const SizedBox(height: 9),
+            Row(children: [
+              Expanded(child: _buildCmrMobileAction(icon: Icons.chat_bubble_outline_rounded, label: 'Написать', onTap: _openPrivateChat)),
+              const SizedBox(width: 7),
+              Expanded(child: _buildCmrMobileAction(icon: Icons.event_available_outlined, label: 'Тренировка', onTap: _assignTraining)),
+            ]),
           ],
-        ],
-      ),
+        ])),
+      ]),
     );
   }
+
 
   Widget _buildCmrMobileAction({required IconData icon, required String label, required VoidCallback onTap}) {
     final accent = _actionAccent(icon, label);
@@ -9984,15 +11425,15 @@ Widget _buildCircleNetworkImage({
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 28,
-              height: 28,
+              width: _isDesktopOrTablet(context) ? 42 : 28,
+              height: _isDesktopOrTablet(context) ? 42 : 28,
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(.78),
                 borderRadius: BorderRadius.circular(11),
               ),
               child: Icon(icon, size: 15, color: accent),
             ),
-            const SizedBox(width: 7),
+            SizedBox(width: _isDesktopOrTablet(context) ? 12 : 7),
             Flexible(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -10035,9 +11476,8 @@ Widget _buildCircleNetworkImage({
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFFF8FAF9),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE7ECF2)),
       ),
       child: Row(
         children: [
@@ -10086,302 +11526,371 @@ Widget _buildCircleNetworkImage({
   }
 
   Widget _buildCmrMobileBottomMenu() {
-    final visibleTabs = <_CategoryTab>[
-      _categoryTabs[1], // Метрики
-      _categoryTabs[2], // Достижения
-      _categoryTabs[3], // Медкарта
-      _categoryTabs[4], // Тренировки
-    ];
-
     return SafeArea(
       top: false,
       child: Container(
-        margin: const EdgeInsets.fromLTRB(12, 6, 12, 10),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(26),
-          border: Border.all(color: const Color(0xFFE7ECF2)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(.07),
-              blurRadius: 24,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            for (final tab in visibleTabs)
-              Expanded(
-                child: _buildMobileBottomItem(
-                  tab: tab,
-                  onTap: () => _openCmrMobileTabSheet(tab),
-                ),
-              ),
-            Expanded(
-              child: _buildMobileBottomMoreItem(),
-            ),
-          ],
+        margin: const EdgeInsets.fromLTRB(4, 0, 4, 4),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: const Color(0xFF101828).withOpacity(0.030), blurRadius: 18, offset: const Offset(0, 8))]),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(22),
+          child: BottomNavigationBar(
+            currentIndex: _cmrMobileBottomIndex(),
+            type: BottomNavigationBarType.fixed,
+            backgroundColor: Colors.white,
+            selectedItemColor: _AppColors.primaryGreen,
+            unselectedItemColor: _AppColors.textSecondary,
+            selectedFontSize: 10.8,
+            unselectedFontSize: 10.2,
+            selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w800),
+            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
+            elevation: 0,
+            onTap: _handleCmrMobileBottomTap,
+            items: const [
+              BottomNavigationBarItem(icon: Icon(Icons.person_outline_rounded), label: 'Обзор'),
+              BottomNavigationBarItem(icon: Icon(Icons.show_chart_rounded), label: 'Метрики'),
+              BottomNavigationBarItem(icon: Icon(Icons.military_tech_rounded), label: 'Достижения'),
+              BottomNavigationBarItem(icon: Icon(Icons.medical_information_rounded), label: 'Медкарта'),
+              BottomNavigationBarItem(icon: Icon(Icons.more_horiz_rounded), label: 'Ещё'),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildMobileBottomItem({
-    required _CategoryTab tab,
-    required VoidCallback onTap,
-  }) {
-    final accent = _cmrTabAccent(tab.index);
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: _cmrTabSoft(tab.index),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: accent.withOpacity(.10)),
-              ),
-              child: Icon(tab.icon, color: accent, size: 18),
-            ),
-            const SizedBox(height: 5),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                tab.title,
-                maxLines: 1,
-                softWrap: false,
-                style: const TextStyle(
-                  color: Color(0xFF111827),
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w900,
-                  height: 1,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  int _cmrMobileBottomIndex() {
+    switch (_selectedTabIndex) {
+      case 0:
+        return 0;
+      case 1:
+        return 1;
+      case 2:
+        return 2;
+      case 3:
+        return 3;
+      default:
+        return 4;
+    }
   }
 
-  Widget _buildMobileBottomMoreItem() {
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: _openCmrMobileMoreSheet,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFE7ECF2)),
-              ),
-              child: const Icon(Icons.more_horiz_rounded, color: Color(0xFF334155), size: 20),
-            ),
-            const SizedBox(height: 5),
-            const FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                'Ещё',
-                maxLines: 1,
-                softWrap: false,
-                style: TextStyle(
-                  color: Color(0xFF111827),
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w900,
-                  height: 1,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  Future<void> _handleCmrMobileBottomTap(int index) async {
+    if (index == 0) {
+      if (mounted) setState(() => _selectedTabIndex = 0);
+      return;
+    }
+
+    if (index == 4) {
+      await _openCmrMobileMoreSheet();
+      return;
+    }
+
+    final tab = _categoryTabs[index];
+    await _openCmrMobileTabSheet(tab);
   }
 
   Future<void> _openCmrMobileMoreSheet() async {
-    final moreTabs = <_CategoryTab>[
-      _categoryTabs[5], // Матчи
-      _categoryTabs[6], // Дневник
-      _categoryTabs[7], // Тестирование
-      _categoryTabs[8], // Экспорт
+    final items = <_PlayerMobileMoreSheetItem>[
+      _PlayerMobileMoreSheetItem.fromTab(_categoryTabs[4], accent: _AppColors.primaryGreen), // Тренировки
+      _PlayerMobileMoreSheetItem.fromTab(_categoryTabs[5], accent: _AppColors.orange), // Матчи
+      _PlayerMobileMoreSheetItem.fromTab(_categoryTabs[6], accent: _AppColors.teal), // Дневник
+      _PlayerMobileMoreSheetItem.fromTab(_categoryTabs[7], accent: _AppColors.purple), // Тестирование
+      _PlayerMobileMoreSheetItem.fromTab(_categoryTabs[8], accent: _AppColors.blue), // Экспорт
+      const _PlayerMobileMoreSheetItem(
+        index: -1,
+        icon: Icons.edit_outlined,
+        title: 'Редактировать',
+        subtitle: 'Изменить данные игрока',
+        accent: _AppColors.blue,
+      ),
     ];
+
+    final playerName = _firstNotEmpty([
+      widget.player['fullName'],
+      widget.player['full_name'],
+      widget.player['name'],
+    ]);
+    final teamName = _playerClub().isEmpty
+        ? _firstNotEmpty([widget.player['team_name'], widget.player['teamName']])
+        : _playerClub();
 
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
-        return FractionallySizedBox(
-          heightFactor: .62,
-          child: Container(
-            decoration: const BoxDecoration(
-              color: Color(0xFFFBFBFA),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-            ),
-            child: SafeArea(
-              top: false,
-              child: Column(
-                children: [
-                  const SizedBox(height: 8),
-                  Container(
-                    width: 44,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE2E8F0),
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF8FAFC),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xFFE7ECF2)),
-                          ),
-                          child: const Icon(Icons.dashboard_customize_rounded, color: Color(0xFF334155), size: 21),
-                        ),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Дополнительные разделы',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(color: Color(0xFF111827), fontSize: 18, fontWeight: FontWeight.w900),
-                              ),
-                              SizedBox(height: 3),
-                              Text(
-                                'Матчи, дневник и экспорт карточки игрока',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(color: Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.w700),
-                              ),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () => Navigator.of(sheetContext).pop(),
-                          icon: const Icon(Icons.close_rounded),
-                          color: const Color(0xFF64748B),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: GridView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        crossAxisSpacing: 10,
-                        mainAxisSpacing: 10,
-                        childAspectRatio: 1.45,
-                      ),
-                      itemCount: moreTabs.length + 1,
-                      itemBuilder: (_, index) {
-                        if (index == moreTabs.length) {
-                          return _buildMobileMoreTile(
-                            icon: Icons.edit_outlined,
-                            title: 'Редактировать',
-                            subtitle: 'Изменить данные',
-                            accent: _AppColors.blue,
-                            onTap: () {
-                              Navigator.of(sheetContext).pop();
-                              Get.toNamed(AppRoutes.editPlayerScreen, arguments: widget.player);
-                            },
-                          );
-                        }
+        final h = MediaQuery.of(sheetContext).size.height;
+        final bottom = MediaQuery.of(sheetContext).padding.bottom;
 
-                        final tab = moreTabs[index];
-                        return _buildMobileMoreTile(
-                          icon: tab.icon,
-                          title: tab.title,
-                          subtitle: tab.subtitle,
-                          accent: _cmrTabAccent(tab.index),
-                          onTap: () {
-                            Navigator.of(sheetContext).pop();
-                            _openCmrMobileTabSheet(tab);
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ],
+        return Container(
+          constraints: BoxConstraints(maxHeight: h * .90),
+          margin: EdgeInsets.zero,
+          padding: EdgeInsets.fromLTRB(8, 8, 8, 10 + bottom),
+          decoration: BoxDecoration(
+            color: _AppColors.background,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(.18),
+                blurRadius: 28,
+                offset: const Offset(0, 14),
               ),
-            ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 42,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD0D5DD),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _buildPlayerMobileMoreHeaderCard(
+                playerName: playerName.isEmpty ? 'Карточка игрока' : playerName,
+                teamName: teamName,
+              ),
+              const SizedBox(height: 12),
+              Flexible(
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(color: _AppColors.cmrBorder.withOpacity(.9)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(.035),
+                        blurRadius: 14,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Разделы',
+                              style: TextStyle(
+                                color: _AppColors.textPrimary,
+                                fontSize: 16,
+                                height: 1.1,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: _AppColors.primaryGreen.withOpacity(.10),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              '${items.length}',
+                              style: const TextStyle(
+                                color: _AppColors.primaryGreen,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Flexible(
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          padding: EdgeInsets.zero,
+                          physics: const BouncingScrollPhysics(),
+                          itemCount: items.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 8),
+                          itemBuilder: (context, index) {
+                            final item = items[index];
+                            final active = item.index >= 0 && item.index == _selectedTabIndex;
+                            return _buildWorkspaceMobileMoreTile(
+                              item: item,
+                              active: active,
+                              onTap: () {
+                                Navigator.of(sheetContext).pop();
+                                if (item.index == -1) {
+                                  _openPlayerEditorPanel();
+                                  return;
+                                }
+                                final tab = _categoryTabs.firstWhere((t) => t.index == item.index);
+                                _openCmrMobileTabSheet(tab);
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         );
       },
     );
   }
 
-  Widget _buildMobileMoreTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Color accent,
+  Widget _buildPlayerMobileMoreHeaderCard({
+    required String playerName,
+    required String teamName,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _AppColors.cmrBorder.withOpacity(.9)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.035),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: _AppColors.primaryGreen.withOpacity(.10),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(
+              Icons.person_outline_rounded,
+              color: _AppColors.primaryGreen,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  playerName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _AppColors.textPrimary,
+                    fontSize: 17,
+                    height: 1.08,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  teamName.trim().isEmpty ? 'Профиль игрока и разделы анализа' : 'Команда: $teamName',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _AppColors.textSecondary,
+                    fontSize: 12,
+                    height: 1.15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWorkspaceMobileMoreTile({
+    required _PlayerMobileMoreSheetItem item,
+    required bool active,
     required VoidCallback onTap,
   }) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(22),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(13),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: const Color(0xFFE7ECF2)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(.025), blurRadius: 12, offset: const Offset(0, 6))],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: _AppColors.softFor(accent),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: accent.withOpacity(.12)),
+    final titleColor = active ? item.accent : _AppColors.textPrimary;
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          decoration: BoxDecoration(
+            color: active ? item.accent.withOpacity(.08) : _AppColors.cmrSoftPanel,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: active ? Colors.white : _AppColors.softFor(item.accent),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Icon(item.icon, color: item.accent, size: 22),
               ),
-              child: Icon(icon, color: accent, size: 19),
-            ),
-            const Spacer(),
-            Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Color(0xFF111827), fontSize: 13.5, fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              subtitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Color(0xFF64748B), fontSize: 10.8, fontWeight: FontWeight.w700),
-            ),
-          ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: titleColor,
+                        fontSize: 15,
+                        height: 1.05,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      item.subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _AppColors.textSecondary,
+                        fontSize: 12,
+                        height: 1.18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(active ? 1 : .72),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  active ? Icons.check_rounded : Icons.chevron_right_rounded,
+                  color: active ? item.accent : _AppColors.textSecondary,
+                  size: active ? 18 : 21,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -10497,7 +12006,7 @@ Widget _buildCircleNetworkImage({
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(34),
                 child: Material(
-                  color: const Color(0xFFFBFBFA),
+                  color: Colors.white,
                   child: Column(
                     children: [
                       Container(
@@ -10505,7 +12014,7 @@ Widget _buildCircleNetworkImage({
                         decoration: const BoxDecoration(
                           color: Colors.white,
                           border: Border(
-                            bottom: BorderSide(color: Color(0xFFE7ECF2)),
+                            bottom: BorderSide(color: _AppColors.cmrBorder),
                           ),
                         ),
                         child: Row(
@@ -10560,7 +12069,12 @@ Widget _buildCircleNetworkImage({
                         ),
                       ),
                       Expanded(
-                        child: _buildTabContentByIndex(tab.index),
+                        child: StatefulBuilder(
+                          builder: (context, modalSetState) {
+                            _activeSectionSheetSetState = modalSetState;
+                            return _buildTabContentByIndex(tab.index);
+                          },
+                        ),
                       ),
                     ],
                   ),
@@ -10571,6 +12085,8 @@ Widget _buildCircleNetworkImage({
         );
       },
     );
+
+    _activeSectionSheetSetState = null;
 
     if (mounted && MediaQuery.of(context).size.width >= 720) {
       setState(() => _selectedTabIndex = 0);
@@ -10597,11 +12113,12 @@ Widget _buildCircleNetworkImage({
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         return FractionallySizedBox(
-          heightFactor: .92,
+          widthFactor: 1,
+          heightFactor: .96,
           child: Container(
             decoration: const BoxDecoration(
-              color: Color(0xFFFBFBFA),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
             ),
             child: SafeArea(
               top: false,
@@ -10612,7 +12129,7 @@ Widget _buildCircleNetworkImage({
                     width: 44,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE2E8F0),
+                      color: _AppColors.cmrBorder,
                       borderRadius: BorderRadius.circular(99),
                     ),
                   ),
@@ -10659,9 +12176,13 @@ Widget _buildCircleNetworkImage({
                       ],
                     ),
                   ),
-                  const Divider(height: 1, color: Color(0xFFE7ECF2)),
                   Expanded(
-                    child: _buildTabContentByIndex(tab.index),
+                    child: StatefulBuilder(
+                      builder: (context, modalSetState) {
+                        _activeSectionSheetSetState = modalSetState;
+                        return _buildTabContentByIndex(tab.index);
+                      },
+                    ),
                   ),
                 ],
               ),
@@ -10670,6 +12191,8 @@ Widget _buildCircleNetworkImage({
         );
       },
     );
+
+    _activeSectionSheetSetState = null;
 
     if (mounted && MediaQuery.of(context).size.width < 720) {
       setState(() => _selectedTabIndex = 0);
@@ -10692,8 +12215,10 @@ Widget _buildCircleNetworkImage({
     final compact = width < 980;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFBFBFA),
+      backgroundColor: Colors.white,
       body: SafeArea(
+        top: true,
+        bottom: isTablet,
         child: isTablet
             ? Row(
                 children: [
@@ -10701,7 +12226,13 @@ Widget _buildCircleNetworkImage({
                   Expanded(
                     child: Padding(
                       padding: EdgeInsets.fromLTRB(0, 12, compact ? 12 : 12, 12),
-                      child: _buildCmrTabletWorkspace(compact: compact),
+                      child: Column(
+                        children: [
+                          _buildCmrProfileExitButton(compact: compact),
+                          const SizedBox(height: 8),
+                          Expanded(child: _buildCmrTabletWorkspace(compact: compact)),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -10727,10 +12258,10 @@ Widget _buildCircleNetworkImage({
                       ),
                     ),
                   ),
-                  _buildCmrMobileBottomMenu(),
                 ],
               ),
       ),
+      bottomNavigationBar: isTablet ? null : _buildCmrMobileBottomMenu(),
     );
   }
 
@@ -10926,6 +12457,36 @@ class _CategoryTab {
 }
 
 
+class _PlayerMobileMoreSheetItem {
+  final int index;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color accent;
+
+  const _PlayerMobileMoreSheetItem({
+    required this.index,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.accent,
+  });
+
+  factory _PlayerMobileMoreSheetItem.fromTab(
+    _CategoryTab tab, {
+    required Color accent,
+  }) {
+    return _PlayerMobileMoreSheetItem(
+      index: tab.index,
+      icon: tab.icon,
+      title: tab.title,
+      subtitle: tab.subtitle,
+      accent: accent,
+    );
+  }
+}
+
+
 class _SmallCardEditButton extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -10947,9 +12508,9 @@ class _SmallCardEditButton extends StatelessWidget {
         child: Ink(
           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
           decoration: BoxDecoration(
-            color: const Color(0xFFF8FAFC),
+            color: Colors.white,
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
+            border: Border.all(color: _AppColors.cmrBorder),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -10996,7 +12557,7 @@ class _ExportBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFEAF5EE),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFE7ECF2)),
+        border: Border.all(color: _AppColors.cmrBorder),
       ),
       child: Text(
         label,

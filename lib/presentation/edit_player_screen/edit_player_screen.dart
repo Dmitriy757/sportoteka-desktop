@@ -9,7 +9,16 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 class EditPlayerScreen extends StatefulWidget {
-  const EditPlayerScreen({super.key});
+  final Map<String, dynamic>? initialPlayer;
+  final bool embedded;
+  final VoidCallback? onSaved;
+
+  const EditPlayerScreen({
+    super.key,
+    this.initialPlayer,
+    this.embedded = false,
+    this.onSaved,
+  });
 
   @override
   State<EditPlayerScreen> createState() => _EditPlayerScreenState();
@@ -32,7 +41,6 @@ class _EditPlayerScreenState extends State<EditPlayerScreen>
   String? uploadedPhotoUrl;
 
   late Map<String, dynamic> player;
-
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
@@ -56,19 +64,16 @@ class _EditPlayerScreenState extends State<EditPlayerScreen>
   @override
   void initState() {
     super.initState();
-
-    player = Map<String, dynamic>.from(Get.arguments ?? {});
+    player = Map<String, dynamic>.from(widget.initialPlayer ?? Get.arguments ?? {});
 
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 260),
     );
-
     _fadeAnimation = CurvedAnimation(
       parent: _animationController,
       curve: Curves.easeOut,
     );
-
     _animationController.forward();
 
     _fillFields();
@@ -81,17 +86,13 @@ class _EditPlayerScreenState extends State<EditPlayerScreen>
     } else if (player.containsKey('fullName')) {
       final parts = '${player['fullName']}'.trim().split(' ');
       firstNameController.text = parts.isNotEmpty ? parts.first : '';
-      lastNameController.text =
-          parts.length > 1 ? parts.sublist(1).join(' ') : '';
+      lastNameController.text = parts.length > 1 ? parts.sublist(1).join(' ') : '';
     }
 
-    birthDateController.text =
-        '${player['birth_date'] ?? player['birthDate'] ?? ''}';
+    birthDateController.text = '${player['birth_date'] ?? player['birthDate'] ?? ''}';
     nationalityController.text = '${player['nationality'] ?? ''}';
     positionController.text = '${player['position'] ?? ''}';
-    jerseyNumberController.text =
-        '${player['jersey_number'] ?? player['number'] ?? ''}';
-
+    jerseyNumberController.text = '${player['jersey_number'] ?? player['number'] ?? ''}';
     uploadedPhotoUrl = '${player['photo'] ?? player['photo_url'] ?? ''}';
 
     final rawSportData = '${player['sport_data'] ?? ''}'.trim();
@@ -120,16 +121,22 @@ class _EditPlayerScreenState extends State<EditPlayerScreen>
   }
 
   int _playerId() {
-    return int.tryParse(
-          '${player['player_id'] ?? player['id'] ?? player['user_id'] ?? 0}',
-        ) ??
-        0;
+    return int.tryParse('${player['player_id'] ?? player['id'] ?? player['user_id'] ?? 0}') ?? 0;
   }
 
   String _fullName() {
-    final full = '${firstNameController.text.trim()} ${lastNameController.text.trim()}'
-        .trim();
+    final full = '${firstNameController.text.trim()} ${lastNameController.text.trim()}'.trim();
     return full.isEmpty ? 'Игрок' : full;
+  }
+
+  bool _isCompact(BuildContext context) => MediaQuery.of(context).size.width < 720;
+
+  EdgeInsets _pageInsets(BuildContext context) {
+    final w = MediaQuery.of(context).size.width;
+    if (widget.embedded) return EdgeInsets.fromLTRB(w < 480 ? 10 : 14, 10, w < 480 ? 10 : 14, 16);
+    if (w < 480) return const EdgeInsets.fromLTRB(10, 8, 10, 22);
+    if (w < 900) return const EdgeInsets.fromLTRB(14, 10, 14, 24);
+    return const EdgeInsets.all(22);
   }
 
   Future<void> _pickImage() async {
@@ -137,9 +144,7 @@ class _EditPlayerScreenState extends State<EditPlayerScreen>
       source: ImageSource.gallery,
       imageQuality: 85,
     );
-    if (picked != null) {
-      setState(() => selectedImage = File(picked.path));
-    }
+    if (picked != null) setState(() => selectedImage = File(picked.path));
   }
 
   Future<void> _selectDate() async {
@@ -152,13 +157,13 @@ class _EditPlayerScreenState extends State<EditPlayerScreen>
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: _C.blue,
+              primary: _C.green,
               onPrimary: Colors.white,
               surface: Colors.white,
               onSurface: _C.text,
             ),
             textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(foregroundColor: _C.blue),
+              style: TextButton.styleFrom(foregroundColor: _C.green),
             ),
           ),
           child: child!,
@@ -167,9 +172,7 @@ class _EditPlayerScreenState extends State<EditPlayerScreen>
     );
 
     if (picked != null) {
-      setState(() {
-        birthDateController.text = DateFormat('yyyy-MM-dd').format(picked);
-      });
+      setState(() => birthDateController.text = DateFormat('yyyy-MM-dd').format(picked));
     }
   }
 
@@ -191,9 +194,7 @@ class _EditPlayerScreenState extends State<EditPlayerScreen>
     }
   }
 
-  void _removeStat(String key) {
-    setState(() => playerStats.remove(key));
-  }
+  void _removeStat(String key) => setState(() => playerStats.remove(key));
 
   Future<void> _savePlayer() async {
     final firstName = firstNameController.text.trim();
@@ -202,8 +203,7 @@ class _EditPlayerScreenState extends State<EditPlayerScreen>
     final nationality = nationalityController.text.trim();
     final position = positionController.text.trim();
     final jerseyNumber = int.tryParse(jerseyNumberController.text.trim()) ?? 0;
-    final sportData =
-        playerStats.entries.map((e) => "${e.key}: ${e.value}").join(", ");
+    final sportData = playerStats.entries.map((e) => '${e.key}: ${e.value}').join(', ');
     final playerId = _playerId();
 
     if (playerId <= 0) {
@@ -236,18 +236,11 @@ class _EditPlayerScreenState extends State<EditPlayerScreen>
           'POST',
           Uri.parse('https://sportotekaapp.ru/api/upload_player_photo.php'),
         );
-
-        request.files.add(
-          await http.MultipartFile.fromPath('photo', selectedImage!.path),
-        );
-
+        request.files.add(await http.MultipartFile.fromPath('photo', selectedImage!.path));
         final response = await request.send();
         final body = await response.stream.bytesToString();
         final jsonResp = jsonDecode(body);
-
-        if (jsonResp['status'] == 'success') {
-          uploadedPhotoUrl = jsonResp['url'];
-        }
+        if (jsonResp['status'] == 'success') uploadedPhotoUrl = jsonResp['url'];
       }
 
       final response = await http.post(
@@ -267,19 +260,17 @@ class _EditPlayerScreenState extends State<EditPlayerScreen>
       );
 
       final json = jsonDecode(response.body);
-
       if (json['status'] == 'success') {
         Get.snackbar(
           'Успех',
           'Данные игрока обновлены',
           snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: _C.primaryGreen,
+          backgroundColor: _C.green,
           colorText: Colors.white,
         );
-
-        await Future.delayed(const Duration(milliseconds: 500));
-
-        if (mounted) Get.back(result: true);
+        await Future.delayed(const Duration(milliseconds: 300));
+        widget.onSaved?.call();
+        if (mounted && !widget.embedded) Get.back(result: true);
       } else {
         Get.snackbar(
           'Ошибка',
@@ -304,21 +295,60 @@ class _EditPlayerScreenState extends State<EditPlayerScreen>
 
   @override
   Widget build(BuildContext context) {
-    final isWide = MediaQuery.of(context).size.width >= 900;
+    final width = MediaQuery.of(context).size.width;
+    final isWide = width >= 980 && !widget.embedded;
+
+    final content = FadeTransition(
+      opacity: _fadeAnimation,
+      child: SafeArea(
+        top: !widget.embedded,
+        bottom: !widget.embedded,
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1160),
+            child: SingleChildScrollView(
+              padding: _pageInsets(context),
+              child: isWide
+                  ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(width: 360, child: _buildSideCard()),
+                        const SizedBox(width: 16),
+                        Expanded(child: _buildFormContent()),
+                      ],
+                    )
+                  : Column(
+                      children: [
+                        _buildSideCard(),
+                        const SizedBox(height: 14),
+                        _buildFormContent(),
+                      ],
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (widget.embedded) {
+      return Material(color: _C.panel, child: content);
+    }
 
     return Scaffold(
-      backgroundColor: _C.bg,
+      backgroundColor: _C.panel,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: _C.panel,
         elevation: 0,
-        surfaceTintColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
         foregroundColor: _C.text,
+        titleSpacing: 0,
         title: const Text(
           'Редактировать игрока',
           style: TextStyle(
             color: _C.text,
-            fontWeight: FontWeight.w900,
-            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            fontSize: 19,
           ),
         ),
         actions: [
@@ -326,41 +356,19 @@ class _EditPlayerScreenState extends State<EditPlayerScreen>
             padding: const EdgeInsets.only(right: 10),
             child: _IconButtonBox(
               icon: Icons.photo_camera_rounded,
-              color: _C.blue,
+              color: _C.green,
               onTap: _pickImage,
             ),
           ),
         ],
       ),
-      body: FadeTransition(
-        opacity: _fadeAnimation,
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(18),
-            child: isWide
-                ? Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(width: 360, child: _buildSideCard()),
-                      const SizedBox(width: 16),
-                      Expanded(child: _buildFormContent()),
-                    ],
-                  )
-                : Column(
-                    children: [
-                      _buildSideCard(),
-                      const SizedBox(height: 16),
-                      _buildFormContent(),
-                    ],
-                  ),
-          ),
-        ),
-      ),
+      body: content,
     );
   }
 
   Widget _buildSideCard() {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: _cardDecoration(radius: 30),
       child: Column(
@@ -374,31 +382,23 @@ class _EditPlayerScreenState extends State<EditPlayerScreen>
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: _C.text,
-              fontSize: 24,
-              height: 1.05,
-              fontWeight: FontWeight.w900,
+              fontSize: 25,
+              height: 1.08,
+              fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            positionController.text.trim().isEmpty
-                ? 'Амплуа не указано'
-                : positionController.text.trim(),
+            positionController.text.trim().isEmpty ? 'Амплуа не указано' : positionController.text.trim(),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: _C.muted,
+              fontSize: 15,
               fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 18),
-          _InfoTile(
-            icon: Icons.badge_rounded,
-            title: 'ID игрока',
-            value: '${_playerId()}',
-            color: _C.blue,
-          ),
-          const SizedBox(height: 10),
           _InfoTile(
             icon: Icons.analytics_rounded,
             title: 'Метрики',
@@ -409,8 +409,8 @@ class _EditPlayerScreenState extends State<EditPlayerScreen>
           _InfoTile(
             icon: Icons.save_rounded,
             title: 'Сохранение',
-            value: 'Обновление через API',
-            color: _C.primaryGreen,
+            value: 'Данные обновляются через API',
+            color: _C.green,
           ),
         ],
       ),
@@ -423,33 +423,22 @@ class _EditPlayerScreenState extends State<EditPlayerScreen>
         alignment: Alignment.bottomRight,
         children: [
           Container(
-            width: 124,
-            height: 124,
+            width: 126,
+            height: 126,
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
-              color: _C.blueSoft,
+              color: _C.greenSoft,
               borderRadius: BorderRadius.circular(42),
-              border: Border.all(color: _C.blue.withOpacity(.16), width: 1.2),
             ),
             child: selectedImage != null
                 ? Image.file(selectedImage!, fit: BoxFit.cover)
-                : (uploadedPhotoUrl != null &&
-                        uploadedPhotoUrl!.trim().isNotEmpty &&
-                        uploadedPhotoUrl != 'null'
+                : (uploadedPhotoUrl != null && uploadedPhotoUrl!.trim().isNotEmpty && uploadedPhotoUrl != 'null'
                     ? Image.network(
                         uploadedPhotoUrl!,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(
-                          Icons.person_rounded,
-                          color: _C.blue,
-                          size: 48,
-                        ),
+                        errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded, color: _C.green, size: 50),
                       )
-                    : const Icon(
-                        Icons.person_rounded,
-                        color: _C.blue,
-                        size: 48,
-                      )),
+                    : const Icon(Icons.person_rounded, color: _C.green, size: 50)),
           ),
           InkWell(
             borderRadius: BorderRadius.circular(18),
@@ -458,22 +447,17 @@ class _EditPlayerScreenState extends State<EditPlayerScreen>
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: _C.primaryGreen,
+                color: _C.green,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white, width: 3),
                 boxShadow: [
                   BoxShadow(
-                    color: _C.primaryGreen.withOpacity(.24),
+                    color: _C.green.withOpacity(.22),
                     blurRadius: 18,
                     offset: const Offset(0, 8),
                   ),
                 ],
               ),
-              child: const Icon(
-                Icons.camera_alt_rounded,
-                size: 19,
-                color: Colors.white,
-              ),
+              child: const Icon(Icons.camera_alt_rounded, size: 19, color: Colors.white),
             ),
           ),
         ],
@@ -488,48 +472,26 @@ class _EditPlayerScreenState extends State<EditPlayerScreen>
           title: 'Основная информация',
           subtitle: 'ФИО, дата рождения и гражданство',
           icon: Icons.person_outline_rounded,
-          color: _C.blue,
+          color: _C.green,
           child: Column(
             children: [
-              Row(
+              _fieldGroup(
                 children: [
-                  Expanded(
-                    child: _buildTextField(
-                      controller: firstNameController,
-                      label: 'Имя',
-                      icon: Icons.person_rounded,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildTextField(
-                      controller: lastNameController,
-                      label: 'Фамилия',
-                      icon: Icons.person_rounded,
-                    ),
-                  ),
+                  _buildTextField(controller: firstNameController, label: 'Имя', icon: Icons.person_rounded),
+                  _buildTextField(controller: lastNameController, label: 'Фамилия', icon: Icons.person_rounded),
                 ],
               ),
-              Row(
+              _fieldGroup(
                 children: [
-                  Expanded(
-                    child: _buildTextField(
-                      controller: birthDateController,
-                      label: 'Дата рождения',
-                      icon: Icons.cake_rounded,
-                      readOnly: true,
-                      onTap: _selectDate,
-                      suffixIcon: Icons.calendar_today_rounded,
-                    ),
+                  _buildTextField(
+                    controller: birthDateController,
+                    label: 'Дата рождения',
+                    icon: Icons.cake_rounded,
+                    readOnly: true,
+                    onTap: _selectDate,
+                    suffixIcon: Icons.calendar_today_rounded,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildTextField(
-                      controller: nationalityController,
-                      label: 'Гражданство',
-                      icon: Icons.flag_rounded,
-                    ),
-                  ),
+                  _buildTextField(controller: nationalityController, label: 'Гражданство', icon: Icons.flag_rounded),
                 ],
               ),
             ],
@@ -540,26 +502,12 @@ class _EditPlayerScreenState extends State<EditPlayerScreen>
           title: 'Игровая информация',
           subtitle: 'Амплуа и игровой номер',
           icon: Icons.sports_soccer_rounded,
-          color: _C.primaryGreen,
-          child: Row(
+          color: _C.green,
+          child: _fieldGroup(
+            flexes: const [2, 1],
             children: [
-              Expanded(
-                flex: 2,
-                child: _buildTextField(
-                  controller: positionController,
-                  label: 'Позиция на поле',
-                  icon: Icons.sports_soccer_rounded,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildTextField(
-                  controller: jerseyNumberController,
-                  label: 'Игровой номер',
-                  icon: Icons.tag_rounded,
-                  isNumber: true,
-                ),
-              ),
+              _buildTextField(controller: positionController, label: 'Позиция на поле', icon: Icons.sports_soccer_rounded),
+              _buildTextField(controller: jerseyNumberController, label: 'Игровой номер', icon: Icons.tag_rounded, isNumber: true),
             ],
           ),
         ),
@@ -571,45 +519,7 @@ class _EditPlayerScreenState extends State<EditPlayerScreen>
           color: _C.orange,
           child: Column(
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: DropdownButtonFormField<String>(
-                      value: selectedMetric,
-                      isExpanded: true,
-                      decoration: _inputDecoration(
-                        'Выберите метрику',
-                        icon: Icons.tune_rounded,
-                      ),
-                      items: availableMetrics
-                          .map(
-                            (m) => DropdownMenuItem(
-                              value: m,
-                              child: Text(m),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (v) => setState(() => selectedMetric = v),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildTextField(
-                      controller: statValueController,
-                      label: 'Значение',
-                      icon: Icons.edit_rounded,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  _CompactButton(
-                    icon: Icons.add_rounded,
-                    text: 'Добавить',
-                    color: _C.orange,
-                    onTap: _addStat,
-                  ),
-                ],
-              ),
+              _metricEditor(),
               const SizedBox(height: 14),
               if (playerStats.isEmpty)
                 const _EmptyMetrics()
@@ -634,13 +544,64 @@ class _EditPlayerScreenState extends State<EditPlayerScreen>
         ),
         const SizedBox(height: 18),
         Align(
-          alignment: Alignment.centerRight,
-          child: _PrimarySubmitButton(
-            onTap: _savePlayer,
-            loading: saving,
-          ),
+          alignment: _isCompact(context) ? Alignment.center : Alignment.centerRight,
+          child: _PrimarySubmitButton(onTap: _savePlayer, loading: saving),
         ),
         const SizedBox(height: 12),
+      ],
+    );
+  }
+
+  Widget _fieldGroup({required List<Widget> children, List<int>? flexes}) {
+    if (_isCompact(context)) {
+      return Column(children: children);
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (int i = 0; i < children.length; i++) ...[
+          Expanded(flex: flexes != null && i < flexes.length ? flexes[i] : 1, child: children[i]),
+          if (i != children.length - 1) const SizedBox(width: 12),
+        ],
+      ],
+    );
+  }
+
+  Widget _metricEditor() {
+    final selector = DropdownButtonFormField<String>(
+      value: selectedMetric,
+      isExpanded: true,
+      style: const TextStyle(color: _C.text, fontSize: 15, fontWeight: FontWeight.w800),
+      decoration: _inputDecoration('Выберите метрику', icon: Icons.tune_rounded),
+      items: availableMetrics
+          .map((m) => DropdownMenuItem(
+                value: m,
+                child: Text(m, overflow: TextOverflow.ellipsis),
+              ))
+          .toList(),
+      onChanged: (v) => setState(() => selectedMetric = v),
+    );
+
+    if (_isCompact(context)) {
+      return Column(
+        children: [
+          selector,
+          const SizedBox(height: 12),
+          _buildTextField(controller: statValueController, label: 'Значение', icon: Icons.edit_rounded),
+          const SizedBox(height: 2),
+          SizedBox(width: double.infinity, child: _AddMetricButton(onTap: _addStat)),
+        ],
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(flex: 2, child: selector),
+        const SizedBox(width: 12),
+        Expanded(child: _buildTextField(controller: statValueController, label: 'Значение', icon: Icons.edit_rounded)),
+        const SizedBox(width: 12),
+        _AddMetricButton(onTap: _addStat),
       ],
     );
   }
@@ -662,43 +623,40 @@ class _EditPlayerScreenState extends State<EditPlayerScreen>
         onTap: onTap,
         onChanged: (_) => setState(() {}),
         keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-        style: const TextStyle(
-          color: _C.text,
-          fontWeight: FontWeight.w800,
-        ),
+        style: const TextStyle(color: _C.text, fontSize: 15, fontWeight: FontWeight.w800),
         decoration: _inputDecoration(label, icon: icon, suffixIcon: suffixIcon),
       ),
     );
   }
 
-  InputDecoration _inputDecoration(
-    String label, {
-    IconData? icon,
-    IconData? suffixIcon,
-  }) {
+  InputDecoration _inputDecoration(String label, {IconData? icon, IconData? suffixIcon}) {
     return InputDecoration(
       labelText: label,
-      prefixIcon: icon == null ? null : Icon(icon, color: _C.muted, size: 20),
-      suffixIcon:
-          suffixIcon == null ? null : Icon(suffixIcon, color: _C.blue, size: 18),
+      prefixIcon: icon == null ? null : Icon(icon, color: _C.muted, size: 21),
+      suffixIcon: suffixIcon == null ? null : Icon(suffixIcon, color: _C.green, size: 20),
       filled: true,
-      fillColor: _C.soft2,
-      labelStyle: const TextStyle(
-        color: _C.muted,
-        fontWeight: FontWeight.w700,
-      ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+      fillColor: _C.soft,
+      labelStyle: const TextStyle(color: _C.muted, fontSize: 14, fontWeight: FontWeight.w700),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(18),
-        borderSide: const BorderSide(color: _C.border),
+        borderSide: BorderSide.none,
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(18),
-        borderSide: const BorderSide(color: _C.blue, width: 1.4),
+        borderSide: const BorderSide(color: _C.greenBorder, width: 1.2),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: _C.redSoft, width: 1.2),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: _C.red, width: 1.2),
       ),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(18),
-        borderSide: const BorderSide(color: _C.border),
+        borderSide: BorderSide.none,
       ),
     );
   }
@@ -717,30 +675,22 @@ class _EditPlayerScreenState extends State<EditPlayerScreen>
 }
 
 class _C {
-  static const Color bg = Color(0xFFFBFBFA);
-  static const Color text = Color(0xFF0F172A);
-  static const Color muted = Color(0xFF64748B);
-  static const Color border = Color(0xFFE7ECF2);
-  static const Color soft = Color(0xFFF8FAFC);
-  static const Color soft2 = Color(0xFFFAFCFB);
-
-  static const Color primaryGreen = Color(0xFF00A750);
-  static const Color footballGreenSoft = Color(0xFFEAF5EE);
-
-  static const Color blue = Color(0xFF2563EB);
-  static const Color blueSoft = Color(0xFFEFF6FF);
-
-  static const Color orange = Color(0xFFEA580C);
-  static const Color orangeSoft = Color(0xFFFFF1E8);
-
-  static const Color red = Color(0xFFDC2626);
-  static const Color redSoft = Color(0xFFFEE2E2);
+  static const Color panel = Colors.white;
+  static const Color soft = Color(0xFFF6F8FA);
+  static const Color text = Color(0xFF101828);
+  static const Color muted = Color(0xFF667085);
+  static const Color green = Color(0xFF1F7A4D);
+  static const Color greenSoft = Color(0xFFF2F7F4);
+  static const Color greenBorder = Color(0xFFD7E8DE);
+  static const Color orange = Color(0xFFB85C00);
+  static const Color orangeSoft = Color(0xFFFFF4E8);
+  static const Color red = Color(0xFFD92D20);
+  static const Color redSoft = Color(0xFFFFF1F0);
 
   static Color softFor(Color color) {
-    if (color == blue) return blueSoft;
     if (color == orange) return orangeSoft;
     if (color == red) return redSoft;
-    return footballGreenSoft;
+    return greenSoft;
   }
 }
 
@@ -748,12 +698,11 @@ BoxDecoration _cardDecoration({double radius = 28}) {
   return BoxDecoration(
     color: Colors.white,
     borderRadius: BorderRadius.circular(radius),
-    border: Border.all(color: _C.border),
     boxShadow: [
       BoxShadow(
-        color: Colors.black.withOpacity(.035),
-        blurRadius: 22,
-        offset: const Offset(0, 12),
+        color: Colors.black.withOpacity(.018),
+        blurRadius: 20,
+        offset: const Offset(0, 8),
       ),
     ],
   );
@@ -777,6 +726,7 @@ class _FormSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: _cardDecoration(radius: 28),
       child: Column(
@@ -792,20 +742,24 @@ class _FormSection extends StatelessWidget {
                   children: [
                     Text(
                       title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: _C.text,
                         fontSize: 18,
-                        fontWeight: FontWeight.w900,
+                        height: 1.15,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                     const SizedBox(height: 3),
                     Text(
                       subtitle,
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: _C.muted,
-                        fontSize: 12,
+                        fontSize: 14,
+                        height: 1.25,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -826,10 +780,7 @@ class _IconBox extends StatelessWidget {
   final IconData icon;
   final Color color;
 
-  const _IconBox({
-    required this.icon,
-    required this.color,
-  });
+  const _IconBox({required this.icon, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -839,7 +790,6 @@ class _IconBox extends StatelessWidget {
       decoration: BoxDecoration(
         color: _C.softFor(color),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(.16)),
       ),
       child: Icon(icon, color: color, size: 23),
     );
@@ -862,11 +812,10 @@ class _InfoTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(13),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: _C.softFor(color),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: color.withOpacity(.14)),
       ),
       child: Row(
         children: [
@@ -878,22 +827,14 @@ class _InfoTile extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    color: _C.text,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 13,
-                  ),
+                  style: const TextStyle(color: _C.text, fontWeight: FontWeight.w800, fontSize: 14),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   value,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _C.muted,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 11,
-                  ),
+                  style: const TextStyle(color: _C.muted, fontWeight: FontWeight.w700, fontSize: 13),
                 ),
               ],
             ),
@@ -909,11 +850,7 @@ class _IconButtonBox extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
 
-  const _IconButtonBox({
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
+  const _IconButtonBox({required this.icon, required this.color, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -926,7 +863,6 @@ class _IconButtonBox extends StatelessWidget {
         decoration: BoxDecoration(
           color: _C.softFor(color),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(.14)),
         ),
         child: Icon(icon, color: color, size: 20),
       ),
@@ -934,54 +870,41 @@ class _IconButtonBox extends StatelessWidget {
   }
 }
 
-class _CompactButton extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  final Color color;
+class _AddMetricButton extends StatelessWidget {
   final VoidCallback onTap;
 
-  const _CompactButton({
-    required this.icon,
-    required this.text,
-    required this.color,
-    required this.onTap,
-  });
+  const _AddMetricButton({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        child: Container(
-          height: 54,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: color.withOpacity(.18),
-                blurRadius: 18,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: Colors.white, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                text,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ],
-          ),
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: Container(
+        height: 56,
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        decoration: BoxDecoration(
+          color: _C.orange,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: _C.orange.withOpacity(.16),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.add_rounded, color: Colors.white, size: 22),
+            SizedBox(width: 8),
+            Text(
+              'Добавить',
+              style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800),
+            ),
+          ],
         ),
       ),
     );
@@ -992,10 +915,7 @@ class _PrimarySubmitButton extends StatelessWidget {
   final VoidCallback onTap;
   final bool loading;
 
-  const _PrimarySubmitButton({
-    required this.onTap,
-    required this.loading,
-  });
+  const _PrimarySubmitButton({required this.onTap, required this.loading});
 
   @override
   Widget build(BuildContext context) {
@@ -1003,14 +923,14 @@ class _PrimarySubmitButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       onTap: loading ? null : onTap,
       child: Container(
-        height: 54,
-        padding: const EdgeInsets.symmetric(horizontal: 22),
+        constraints: const BoxConstraints(minHeight: 56),
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 15),
         decoration: BoxDecoration(
-          color: _C.primaryGreen,
+          color: _C.green,
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
-              color: _C.primaryGreen.withOpacity(.24),
+              color: _C.green.withOpacity(.22),
               blurRadius: 20,
               offset: const Offset(0, 10),
             ),
@@ -1018,24 +938,23 @@ class _PrimarySubmitButton extends StatelessWidget {
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             if (loading)
               const SizedBox(
                 width: 18,
                 height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
               )
             else
               const Icon(Icons.save_rounded, color: Colors.white),
             const SizedBox(width: 10),
-            const Text(
-              'Сохранить изменения',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
+            const Flexible(
+              child: Text(
+                'Сохранить изменения',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800),
               ),
             ),
           ],
@@ -1061,32 +980,27 @@ class _MetricChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.only(left: 10, right: 6, top: 7, bottom: 7),
+      padding: const EdgeInsets.only(left: 12, right: 7, top: 8, bottom: 8),
       decoration: BoxDecoration(
         color: _C.orangeSoft,
         borderRadius: BorderRadius.circular(99),
-        border: Border.all(color: _C.orange.withOpacity(.16)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: _C.orange, size: 16),
-          const SizedBox(width: 6),
+          Icon(icon, color: _C.orange, size: 17),
+          const SizedBox(width: 7),
           Text(
             '$title: $value',
-            style: const TextStyle(
-              color: _C.text,
-              fontWeight: FontWeight.w800,
-              fontSize: 13,
-            ),
+            style: const TextStyle(color: _C.text, fontWeight: FontWeight.w800, fontSize: 14),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 7),
           InkWell(
             borderRadius: BorderRadius.circular(99),
             onTap: onRemove,
             child: const Padding(
-              padding: EdgeInsets.all(3),
-              child: Icon(Icons.close_rounded, size: 16, color: _C.red),
+              padding: EdgeInsets.all(4),
+              child: Icon(Icons.close_rounded, size: 17, color: _C.red),
             ),
           ),
         ],
@@ -1106,7 +1020,6 @@ class _EmptyMetrics extends StatelessWidget {
       decoration: BoxDecoration(
         color: _C.soft,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _C.border),
       ),
       child: const Column(
         children: [
@@ -1114,11 +1027,7 @@ class _EmptyMetrics extends StatelessWidget {
           SizedBox(height: 8),
           Text(
             'Нет добавленных метрик',
-            style: TextStyle(
-              color: _C.muted,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-            ),
+            style: TextStyle(color: _C.muted, fontSize: 14, fontWeight: FontWeight.w700),
           ),
         ],
       ),

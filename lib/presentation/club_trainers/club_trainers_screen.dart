@@ -404,11 +404,254 @@ class _ClubTrainersScreenState extends State<ClubTrainersScreen> {
     }
   }
 
+  String? _normalizeTrainerPhoto(String? raw) {
+    if (raw == null) return null;
+    var s = raw.trim();
+    if (s.isEmpty || s.toLowerCase() == 'null') return null;
+    if (s.startsWith('http://') || s.startsWith('https://')) return s;
+    if (!s.startsWith('/')) s = '/$s';
+    return 'https://sportotekaapp.ru$s';
+  }
+
   void _openTrainerCard(Map<String, dynamic> t) {
-    Get.to(() => TrainerCardScreen(
-          clubName: widget.clubName,
-          trainer: Map<String, dynamic>.from(t),
-        ));
+    final trainer = Map<String, dynamic>.from(t);
+    final isTablet = _isTabletLayout(context);
+
+    final id = _asInt(trainer['id']);
+    final name = _trainerName(trainer, fallback: 'Тренер #$id');
+    final email = _asStr(trainer['email']).trim();
+    final phone = _pickAnyStr(trainer, ['phone', 'telephone']);
+    final position = _pickAnyStr(trainer, ['position', 'role_title', 'title']);
+    final bio = _pickAnyStr(trainer, ['bio', 'about', 'description']);
+    final born = _pickAnyStr(trainer, ['born', 'birth_date', 'birthday']);
+    final career = _pickAnyStr(trainer, ['career', 'experience', 'history']);
+    final photo = _normalizeTrainerPhoto(_asStr(trainer['photo']).trim());
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final media = MediaQuery.of(sheetContext);
+        final bottomInset = media.viewInsets.bottom;
+        final maxHeight = media.size.height * (isTablet ? 0.86 : 0.94);
+
+        return Padding(
+          padding: EdgeInsets.only(bottom: bottomInset),
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: isTablet ? 760 : double.infinity,
+                maxHeight: maxHeight,
+              ),
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: _bg,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+                ),
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 10, 10, 8),
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 46,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: _muted.withOpacity(0.28),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Карточка тренера',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w900,
+                                        color: _text,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Листайте карточку вверх и вниз',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: _muted,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: () => Navigator.of(sheetContext).pop(),
+                                icon: const Icon(Icons.close_rounded),
+                                color: _text,
+                                tooltip: 'Закрыть',
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        padding: EdgeInsets.fromLTRB(
+                          isTablet ? 22 : 14,
+                          0,
+                          isTablet ? 22 : 14,
+                          22 + media.padding.bottom,
+                        ),
+                        child: isTablet
+                            ? Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SizedBox(
+                                    width: 330,
+                                    child: _TrainerHeroCard(
+                                      name: name,
+                                      clubName: widget.clubName,
+                                      photo: photo,
+                                      position: position,
+                                      email: email,
+                                      phone: phone,
+                                      compact: false,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: _MiniFact(
+                                                title: 'Должность',
+                                                value: position.isEmpty ? 'Тренер' : position,
+                                                icon: Icons.workspace_premium_rounded,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: _MiniFact(
+                                                title: 'Клуб',
+                                                value: widget.clubName,
+                                                icon: Icons.shield_rounded,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 12),
+                                        if (born.isNotEmpty) ...[
+                                          _InfoSection(
+                                            title: 'Дата рождения',
+                                            text: born,
+                                            icon: Icons.cake_rounded,
+                                          ),
+                                          const SizedBox(height: 12),
+                                        ],
+                                        if (career.isNotEmpty) ...[
+                                          _InfoSection(
+                                            title: 'Опыт / карьера',
+                                            text: career,
+                                            icon: Icons.timeline_rounded,
+                                          ),
+                                          const SizedBox(height: 12),
+                                        ],
+                                        _InfoSection(
+                                          title: 'Описание',
+                                          text: bio.isNotEmpty
+                                              ? bio
+                                              : 'Описание тренера пока не заполнено.',
+                                          icon: Icons.article_rounded,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : Column(
+                                children: [
+                                  _TrainerHeroCard(
+                                    name: name,
+                                    clubName: widget.clubName,
+                                    photo: photo,
+                                    position: position,
+                                    email: email,
+                                    phone: phone,
+                                    compact: true,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: _MiniFact(
+                                          title: 'Должность',
+                                          value: position.isEmpty ? 'Тренер' : position,
+                                          icon: Icons.workspace_premium_rounded,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: _MiniFact(
+                                          title: 'Клуб',
+                                          value: widget.clubName,
+                                          icon: Icons.shield_rounded,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  if (born.isNotEmpty) ...[
+                                    _InfoSection(
+                                      title: 'Дата рождения',
+                                      text: born,
+                                      icon: Icons.cake_rounded,
+                                    ),
+                                    const SizedBox(height: 12),
+                                  ],
+                                  if (career.isNotEmpty) ...[
+                                    _InfoSection(
+                                      title: 'Опыт / карьера',
+                                      text: career,
+                                      icon: Icons.timeline_rounded,
+                                    ),
+                                    const SizedBox(height: 12),
+                                  ],
+                                  _InfoSection(
+                                    title: 'Описание',
+                                    text: bio.isNotEmpty
+                                        ? bio
+                                        : 'Описание тренера пока не заполнено.',
+                                    icon: Icons.article_rounded,
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -1301,7 +1544,7 @@ class _TrainerCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      'Открыть карточку',
+                      'Подробнее',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -1311,7 +1554,7 @@ class _TrainerCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const Icon(Icons.arrow_forward_ios_rounded, size: 13, color: _ClubTrainersScreenState._primary),
+                  const Icon(Icons.expand_less_rounded, size: 20, color: _ClubTrainersScreenState._primary),
                 ],
               ),
             ],

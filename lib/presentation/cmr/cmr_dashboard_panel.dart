@@ -1,10 +1,73 @@
 import 'dart:convert';
 
-import 'package:dio/dio.dart';
+import 'package:dio/dio.dart' as dio;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:sportoteka/core/app_export.dart';
+
+
+// ==================== CMR clean style ====================
+
+class _CmrDashColors {
+  static const Color panel = Colors.white;
+  static const Color soft = Color(0xFFF6F8FA);
+  static const Color text = Color(0xFF101828);
+  static const Color muted = Color(0xFF667085);
+  static const Color green = Color(0xFF1F7A4D);
+  static const Color greenSoft = Color(0xFFF2F7F4);
+  static const Color orange = Color(0xFFEA580C);
+  static const Color violet = Color(0xFF7C3AED);
+}
+
+class _CmrDashText {
+  static TextStyle title(double size) => TextStyle(
+        color: _CmrDashColors.text,
+        fontSize: size,
+        fontWeight: FontWeight.w800,
+        height: 1.12,
+      );
+
+  static TextStyle section() => const TextStyle(
+        color: _CmrDashColors.text,
+        fontSize: 15,
+        fontWeight: FontWeight.w800,
+        height: 1.18,
+      );
+
+  static TextStyle value(double size) => TextStyle(
+        color: _CmrDashColors.text,
+        fontSize: size,
+        fontWeight: FontWeight.w700,
+        height: 1.25,
+      );
+
+  static TextStyle muted(double size) => TextStyle(
+        color: _CmrDashColors.muted,
+        fontSize: size,
+        fontWeight: FontWeight.w600,
+        height: 1.35,
+      );
+}
+
+class _CmrDashDecor {
+  static BoxDecoration panel() => BoxDecoration(
+        color: _CmrDashColors.panel,
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.018),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      );
+
+  static BoxDecoration softCard({double radius = 22}) => BoxDecoration(
+        color: _CmrDashColors.soft,
+        borderRadius: BorderRadius.circular(radius),
+      );
+}
 
 class CmrDashboardPanel extends StatefulWidget {
   final String apiBaseUrl;
@@ -37,7 +100,7 @@ class CmrDashboardPanel extends StatefulWidget {
 }
 
 class _CmrDashboardPanelState extends State<CmrDashboardPanel> {
-  late final Dio _dio;
+  late final dio.Dio _dio;
   bool _loading = true;
   String _error = '';
   Map<String, dynamic> _data = {};
@@ -97,11 +160,11 @@ class _CmrDashboardPanelState extends State<CmrDashboardPanel> {
   @override
   void initState() {
     super.initState();
-    _dio = Dio(BaseOptions(
+    _dio = dio.Dio(dio.BaseOptions(
       baseUrl: widget.apiBaseUrl.endsWith('/') ? widget.apiBaseUrl : '${widget.apiBaseUrl}/',
       connectTimeout: const Duration(seconds: 12),
       receiveTimeout: const Duration(seconds: 20),
-      responseType: ResponseType.plain,
+      responseType: dio.ResponseType.plain,
     ));
     _load();
   }
@@ -152,244 +215,175 @@ class _CmrDashboardPanelState extends State<CmrDashboardPanel> {
     final sections = _asMap(_data['sections']);
     final summary = _asMap(_data['summary']);
     final teams = _asList(_data['teams']);
-    final title = _isPlayer ? 'Моя приборная панель' : 'Приборная панель тренера';
+    final title = _isPlayer ? 'Панель игрока' : 'Рабочая панель';
     final subtitle = _isPlayer
         ? _playerSubtitle()
         : teams.isEmpty
-            ? 'Команды не найдены'
-            : 'Последние события по ${teams.length} командам';
+            ? 'Ключевые события команды'
+            : 'Команды: ${teams.length}';
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: _cardDecoration(radius: 26),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _Header(
-            title: title,
-            subtitle: subtitle,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 600;
+        
+        return SingleChildScrollView(
+          padding: EdgeInsets.all(isMobile ? 12 : 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _Header(
+                title: title,
+                subtitle: subtitle,
+                isMobile: isMobile,
+              ),
+              SizedBox(height: isMobile ? 16 : 20),
+              _SummaryStrip(
+                summary: summary,
+                isPlayer: _isPlayer,
+                isMobile: isMobile,
+              ),
+              SizedBox(height: isMobile ? 16 : 20),
+              _buildSectionsVertical(sections, isMobile),
+            ],
           ),
-          const SizedBox(height: 12),
-          _SummaryStrip(summary: summary, isPlayer: _isPlayer),
-          const SizedBox(height: 12),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final wide = constraints.maxWidth >= 860;
-              final cards = _buildCards(sections);
-              if (!wide) {
-                return Column(children: cards.map((w) => Padding(padding: const EdgeInsets.only(bottom: 12), child: w)).toList());
-              }
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: Column(children: cards.where((e) => cards.indexOf(e).isEven).map((w) => Padding(padding: const EdgeInsets.only(bottom: 12), child: w)).toList())),
-                  const SizedBox(width: 12),
-                  Expanded(child: Column(children: cards.where((e) => cards.indexOf(e).isOdd).map((w) => Padding(padding: const EdgeInsets.only(bottom: 12), child: w)).toList())),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  List<Widget> _buildCards(Map<String, dynamic> sections) {
+  /// Вертикальные секции - каждая идёт последовательно сверху вниз
+  Widget _buildSectionsVertical(Map<String, dynamic> sections, bool isMobile) {
+    final sectionList = _getSectionList(sections);
+    
+    return Column(
+      children: sectionList.asMap().entries.map((entry) {
+        final section = entry.value;
+        return Padding(
+          padding: EdgeInsets.only(bottom: entry.key == sectionList.length - 1 ? 0 : (isMobile ? 16 : 20)),
+          child: _SectionWithRows(
+            title: section.title,
+            icon: section.icon,
+            color: section.color,
+            rows: section.rows,
+            emptyTitle: section.emptyTitle,
+            emptySubtitle: section.emptySubtitle,
+            actionText: section.actionText,
+            onTapAll: section.onTapAll,
+            builder: section.builder,
+            isMobile: isMobile,
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  List<_SectionData> _getSectionList(Map<String, dynamic> sections) {
+    final items = <_SectionData>[];
+
     if (_isPlayer) {
-      return [
-        _sectionCard(
-          title: 'МОИ СОБЫТИЯ',
+      items.addAll([
+        _SectionData(
+          title: 'События',
           icon: Icons.event_available_rounded,
-          color: const Color(0xFF2563EB),
+          color: _CmrDashColors.green,
           rows: _asList(sections['events']),
           emptyTitle: 'Событий пока нет',
           emptySubtitle: 'Тренировки и игры появятся здесь.',
           builder: (row) => _eventRow(row),
-          onTapAll: null,
         ),
-        _sectionCard(
-          title: 'МОИ МАТЧИ',
+        _SectionData(
+          title: 'Матчи',
           icon: Icons.sports_soccer_rounded,
-          color: const Color(0xFF16A34A),
+          color: _CmrDashColors.green,
           rows: _asList(sections['matches']),
           emptyTitle: 'Матчей пока нет',
-          emptySubtitle: 'Здесь будут ближайшие и прошедшие игры.',
+          emptySubtitle: 'Ближайшие и прошедшие игры будут здесь.',
           builder: (row) => _matchRow(row),
-          onTapAll: null,
         ),
-        _sectionCard(
-          title: 'ПОСЕЩЕНИЯ',
+        _SectionData(
+          title: 'Посещаемость',
           icon: Icons.check_circle_rounded,
-          color: const Color(0xFF0891B2),
+          color: _CmrDashColors.green,
           rows: _asList(sections['attendance']),
           emptyTitle: 'Отметок пока нет',
-          emptySubtitle: 'Последние отметки посещаемости появятся здесь.',
+          emptySubtitle: 'Отметки посещаемости появятся здесь.',
           builder: (row) => _attendanceRow(row),
-          onTapAll: null,
         ),
-        _sectionCard(
-          title: 'ОЦЕНКИ И ТЕСТЫ',
-          actionText: 'контроль',
+        _SectionData(
+          title: 'Оценки и тесты',
+          actionText: 'Открыть',
           icon: Icons.fact_check_rounded,
-          color: const Color(0xFFEA580C),
+          color: _CmrDashColors.orange,
           rows: [..._asList(sections['ratings']), ..._asList(sections['testing'])].take(5).toList(),
-          emptyTitle: 'Оценок пока нет',
+          emptyTitle: 'Данных пока нет',
           emptySubtitle: 'Оценки тренера и тестирования будут здесь.',
-          builder: (row) => row.containsKey('rating') ? _ratingRow(row) : _testingRow(row),
           onTapAll: () => widget.onOpenModule?.call('testing'),
+          builder: (row) => row.containsKey('rating') ? _ratingRow(row) : _testingRow(row),
         ),
-        _sectionCard(
-          title: 'ЧАТЫ',
-          actionText: 'чат',
-          icon: Icons.forum_rounded,
-          color: const Color(0xFF7C3AED),
-          rows: _asList(sections['chats']),
-          emptyTitle: 'Нет сообщений',
-          emptySubtitle: 'Последние сообщения появятся здесь.',
-          builder: (row) => _chatRow(row),
-          onTapAll: () => widget.onOpenModule?.call('chats'),
+      ]);
+    } else {
+      items.addAll([
+        _SectionData(
+          title: 'Ближайшие события',
+          icon: Icons.event_available_rounded,
+          color: _CmrDashColors.green,
+          rows: _asList(sections['events']),
+          emptyTitle: 'Событий пока нет',
+          emptySubtitle: 'Тренировки, игры и встречи появятся здесь.',
+          builder: (row) => _eventRow(row),
         ),
-      ];
+        _SectionData(
+          title: 'Матчи',
+          icon: Icons.sports_soccer_rounded,
+          color: _CmrDashColors.green,
+          rows: _asList(sections['matches']),
+          emptyTitle: 'Матчей пока нет',
+          emptySubtitle: 'Ближайшие и последние матчи будут здесь.',
+          builder: (row) => _matchRow(row),
+        ),
+        _SectionData(
+          title: 'Посещаемость',
+          icon: Icons.how_to_reg_rounded,
+          color: _CmrDashColors.green,
+          rows: _asList(sections['attendance']),
+          emptyTitle: 'Отметок пока нет',
+          emptySubtitle: 'Последние отметки игроков появятся здесь.',
+          builder: (row) => _attendanceRow(row),
+        ),
+        _SectionData(
+          title: 'Оценки',
+          actionText: 'Открыть',
+          icon: Icons.star_rounded,
+          color: _CmrDashColors.orange,
+          rows: _asList(sections['ratings']),
+          emptyTitle: 'Оценок пока нет',
+          emptySubtitle: 'Оценки игроков появятся здесь.',
+          builder: (row) => _ratingRow(row),
+        ),
+        _SectionData(
+          title: 'Тестирование',
+          actionText: 'Открыть',
+          icon: Icons.fact_check_rounded,
+          color: _CmrDashColors.orange,
+          rows: _asList(sections['testing']),
+          emptyTitle: 'Тестов пока нет',
+          emptySubtitle: 'Последние тестирования появятся здесь.',
+          onTapAll: () => widget.onOpenModule?.call('testing'),
+          builder: (row) => _testingRow(row),
+        ),
+      ]);
     }
 
-    return [
-      _sectionCard(
-        title: 'БЛИЖАЙШИЕ СОБЫТИЯ',
-        icon: Icons.event_available_rounded,
-        color: const Color(0xFF2563EB),
-        rows: _asList(sections['events']),
-        emptyTitle: 'Событий пока нет',
-        emptySubtitle: 'Тренировки, игры и встречи появятся здесь.',
-        builder: (row) => _eventRow(row),
-        onTapAll: null,
-      ),
-      _sectionCard(
-        title: 'МАТЧИ',
-        icon: Icons.sports_soccer_rounded,
-        color: const Color(0xFF16A34A),
-        rows: _asList(sections['matches']),
-        emptyTitle: 'Матчей пока нет',
-        emptySubtitle: 'Ближайшие и последние матчи будут здесь.',
-        builder: (row) => _matchRow(row),
-        onTapAll: null,
-      ),
-      _sectionCard(
-        title: 'ПОСЕЩЕНИЯ',
-        icon: Icons.how_to_reg_rounded,
-        color: const Color(0xFF0891B2),
-        rows: _asList(sections['attendance']),
-        emptyTitle: 'Отметок пока нет',
-        emptySubtitle: 'Последние отметки игроков появятся здесь.',
-        builder: (row) => _attendanceRow(row),
-        onTapAll: null,
-      ),
-      _sectionCard(
-        title: 'ОЦЕНКИ',
-        actionText: 'оценки',
-        icon: Icons.star_rounded,
-        color: const Color(0xFFF59E0B),
-        rows: _asList(sections['ratings']),
-        emptyTitle: 'Оценок пока нет',
-        emptySubtitle: 'Последние оценки игроков будут здесь.',
-        builder: (row) => _ratingRow(row),
-        onTapAll: null,
-      ),
-      _sectionCard(
-        title: 'ТЕСТИРОВАНИЕ',
-        actionText: 'контроль',
-        icon: Icons.fact_check_rounded,
-        color: const Color(0xFFEA580C),
-        rows: _asList(sections['testing']),
-        emptyTitle: 'Тестов пока нет',
-        emptySubtitle: 'Последние тестирования появятся здесь.',
-        builder: (row) => _testingRow(row),
-        onTapAll: () => widget.onOpenModule?.call('testing'),
-      ),
-      _sectionCard(
-        title: 'ЧАТЫ',
-        actionText: 'чат',
-        icon: Icons.forum_rounded,
-        color: const Color(0xFF7C3AED),
-        rows: _asList(sections['chats']),
-        emptyTitle: 'Нет сообщений',
-        emptySubtitle: 'Последние командные и личные сообщения будут здесь.',
-        builder: (row) => _chatRow(row),
-        onTapAll: () => widget.onOpenModule?.call('chats'),
-      ),
-    ];
+    final withData = items.where((e) => e.rows.isNotEmpty).toList();
+    return withData.isNotEmpty ? withData : items.take(3).toList();
   }
 
-  Widget _sectionCard({
-    required String title,
-    String? actionText,
-    required IconData icon,
-    required Color color,
-    required List<Map<String, dynamic>> rows,
-    required String emptyTitle,
-    required String emptySubtitle,
-    required Widget Function(Map<String, dynamic>) builder,
-    VoidCallback? onTapAll,
-  }) {
-    return Container(
-      decoration: _cardDecoration(radius: 22),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 13, 14, 8),
-            child: Row(
-              children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(color: color.withOpacity(.10), borderRadius: BorderRadius.circular(12)),
-                  child: Icon(icon, color: color, size: 18),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: .65, color: Color(0xFF64748B)),
-                  ),
-                ),
-                if (actionText != null && actionText.trim().isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                    child: Text(
-                      actionText,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w900,
-                        color: onTapAll == null ? const Color(0xFF94A3B8) : color,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          if (rows.isEmpty)
-            _DashboardRow(
-              icon: icon,
-              color: const Color(0xFF94A3B8),
-              title: emptyTitle,
-              subtitle: emptySubtitle,
-              trailing: '',
-              teamName: '',
-              onTap: onTapAll,
-            )
-          else
-            ...rows.map((row) => Column(children: [const Divider(height: 1, color: Color(0xFFEFF3F7), indent: 66), builder(row)])),
-          const SizedBox(height: 6),
-        ],
-      ),
-    );
-  }
-
+  // ==================== СТРОКИ ДЛЯ РАЗНЫХ ТИПОВ ДАННЫХ ====================
+  
   Widget _eventRow(Map<String, dynamic> row) {
     return _DashboardRow(
       icon: Icons.event_available_rounded,
-      color: const Color(0xFF2563EB),
+      color: _CmrDashColors.green,
       title: _s(row['title'], fallback: 'Событие'),
       subtitle: _firstNotEmpty([row['location'], row['subtitle'], row['notes'], _eventType(row['type'])]),
       trailing: _shortDate(_s(row['date'])),
@@ -404,7 +398,7 @@ class _CmrDashboardPanelState extends State<CmrDashboardPanel> {
     final score = '${_s(row['our_score'], fallback: '0')}:${_s(row['opponent_score'], fallback: '0')}';
     return _DashboardRow(
       icon: Icons.sports_soccer_rounded,
-      color: const Color(0xFF16A34A),
+      color: _CmrDashColors.green,
       title: '$team — $opponent',
       subtitle: _firstNotEmpty([row['competition_name'], row['stadium'], row['event_type']], fallback: 'Матч'),
       trailing: score == '0:0' ? _shortDate(_s(row['date'])) : score,
@@ -416,7 +410,7 @@ class _CmrDashboardPanelState extends State<CmrDashboardPanel> {
   Widget _attendanceRow(Map<String, dynamic> row) {
     return _DashboardRow(
       icon: Icons.how_to_reg_rounded,
-      color: const Color(0xFF0891B2),
+      color: _CmrDashColors.green,
       title: _firstNotEmpty([row['player_name'], row['event_title']], fallback: 'Посещаемость'),
       subtitle: _firstNotEmpty([row['event_title'], row['note']], fallback: _attendanceStatus(row['status'])),
       trailing: _attendanceStatus(row['status']),
@@ -428,7 +422,7 @@ class _CmrDashboardPanelState extends State<CmrDashboardPanel> {
   Widget _ratingRow(Map<String, dynamic> row) {
     return _DashboardRow(
       icon: Icons.star_rounded,
-      color: const Color(0xFFF59E0B),
+      color: _CmrDashColors.orange,
       title: _firstNotEmpty([row['player_name'], row['event_title']], fallback: 'Оценка'),
       subtitle: _firstNotEmpty([row['event_title']], fallback: 'Оценка тренера'),
       trailing: '${_s(row['rating'], fallback: '0')}/5',
@@ -441,7 +435,7 @@ class _CmrDashboardPanelState extends State<CmrDashboardPanel> {
     final count = int.tryParse('${row['results_count'] ?? 0}') ?? 0;
     return _DashboardRow(
       icon: Icons.fact_check_rounded,
-      color: const Color(0xFFEA580C),
+      color: _CmrDashColors.orange,
       title: _s(row['title'], fallback: 'Тестирование'),
       subtitle: '${_s(row['category_code'], fallback: 'контроль')} • ${_s(row['stage_code'], fallback: 'этап')}',
       trailing: count > 0 ? '$count рез.' : _shortDate(_s(row['date'])),
@@ -455,7 +449,7 @@ class _CmrDashboardPanelState extends State<CmrDashboardPanel> {
     final title = _s(row['title'], fallback: 'Чат');
     return _DashboardRow(
       icon: Icons.forum_rounded,
-      color: const Color(0xFF7C3AED),
+      color: _CmrDashColors.violet,
       title: title,
       subtitle: _firstNotEmpty([row['last_message'], row['sender_name']], fallback: 'Нет сообщений'),
       trailing: _shortDate(_s(row['date'])),
@@ -464,41 +458,21 @@ class _CmrDashboardPanelState extends State<CmrDashboardPanel> {
     );
   }
 
-  void _openTeamFromDashboard(Map<String, dynamic> team) {
-    final teamId = _asInt(team['id'] ?? team['team_id']);
-    if (teamId <= 0) {
-      _openWorkspaceFromPanel();
-      return;
-    }
-
-    final clubId = _asInt(team['club_id'] ?? team['clubId'] ?? widget.clubId);
-    final mode = _isPlayer
-        ? 'player_team'
-        : _isCoach
-            ? 'coach_my'
-            : _isClub
-                ? 'club_assigned'
-                : 'dashboard';
-
-    Get.toNamed(
-      '/myTeamScreen',
-      arguments: {
-        'team_id': teamId,
-        if (clubId > 0) 'club_id': clubId,
-        'mode': mode,
-      },
-    );
-  }
+  // ==================== ВСПОМОГАТЕЛЬНЫЕ ВИДЖЕТЫ ====================
 
   Widget _loadingView() {
     return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: _cardDecoration(radius: 26),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(26),
+      ),
       child: const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.4)),
+          SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5)),
           SizedBox(width: 12),
-          Expanded(child: Text('Загружаем приборную панель...', style: TextStyle(fontWeight: FontWeight.w800))),
+          Text('Загрузка панели...', style: TextStyle(fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -506,16 +480,37 @@ class _CmrDashboardPanelState extends State<CmrDashboardPanel> {
 
   Widget _errorView() {
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: _cardDecoration(radius: 26),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(26),
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Панель не загрузилась', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF0F172A))),
-          const SizedBox(height: 6),
-          Text(_error, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w700)),
+          const Icon(Icons.error_outline, color: Color(0xFFEF4444), size: 48),
           const SizedBox(height: 12),
-          ElevatedButton.icon(onPressed: _load, icon: const Icon(Icons.refresh_rounded), label: const Text('Повторить')),
+          const Text(
+            'Не удалось загрузить панель',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _error,
+            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: _load,
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: const Text('Повторить'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _CmrDashColors.green,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
         ],
       ),
     );
@@ -529,353 +524,254 @@ class _CmrDashboardPanelState extends State<CmrDashboardPanel> {
     if (team.isNotEmpty) return team;
     return 'Последние события игрока';
   }
+}
 
-  BoxDecoration _cardDecoration({required double radius}) {
-    return BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(radius),
-      border: Border.all(color: const Color(0xFFE5EAF1)),
-      boxShadow: [BoxShadow(color: Colors.black.withOpacity(.04), blurRadius: 18, offset: const Offset(0, 8))],
+// ==================== ДАННЫЕ СЕКЦИИ ====================
+
+class _SectionData {
+  final String title;
+  final IconData icon;
+  final Color color;
+  final List<Map<String, dynamic>> rows;
+  final String emptyTitle;
+  final String emptySubtitle;
+  final String? actionText;
+  final VoidCallback? onTapAll;
+  final Widget Function(Map<String, dynamic>) builder;
+
+  _SectionData({
+    required this.title,
+    required this.icon,
+    required this.color,
+    required this.rows,
+    required this.emptyTitle,
+    required this.emptySubtitle,
+    this.actionText,
+    this.onTapAll,
+    required this.builder,
+  });
+}
+
+// ==================== ВИДЖЕТ СЕКЦИИ СО СТРОКАМИ ====================
+
+class _SectionWithRows extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Color color;
+  final List<Map<String, dynamic>> rows;
+  final String emptyTitle;
+  final String emptySubtitle;
+  final String? actionText;
+  final VoidCallback? onTapAll;
+  final Widget Function(Map<String, dynamic>) builder;
+  final bool isMobile;
+
+  const _SectionWithRows({
+    required this.title,
+    required this.icon,
+    required this.color,
+    required this.rows,
+    required this.emptyTitle,
+    required this.emptySubtitle,
+    this.actionText,
+    this.onTapAll,
+    required this.builder,
+    this.isMobile = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.018),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: _CmrDashColors.greenSoft,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(icon, color: color, size: 19),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: _CmrDashText.section(),
+                  ),
+                ),
+                if (actionText != null && actionText!.isNotEmpty)
+                  _ActionButton(
+                    text: actionText!,
+                    color: color,
+                    onTap: onTapAll,
+                  ),
+              ],
+            ),
+          ),
+
+          if (rows.isEmpty)
+            _EmptyState(
+              icon: icon,
+              title: emptyTitle,
+              subtitle: emptySubtitle,
+            )
+          else
+            ...rows.asMap().entries.map((entry) => Column(
+                  children: [
+                    builder(entry.value),
+                    if (entry.key != rows.length - 1)
+                      const SizedBox(height: 2),
+                  ],
+                )),
+        ],
+      ),
     );
   }
 }
 
+class _ActionButton extends StatelessWidget {
+  final String text;
+  final Color color;
+  final VoidCallback? onTap;
 
-class _TeamsOverviewPanel extends StatelessWidget {
-  final List<Map<String, dynamic>> teams;
-  final int activeTeamId;
+  const _ActionButton({
+    required this.text,
+    required this.color,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: onTap == null ? const Color(0xFF94A3B8) : color,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final IconData icon;
   final String title;
   final String subtitle;
-  final void Function(Map<String, dynamic> team) onOpenTeam;
-  final VoidCallback? onOpenWorkspace;
 
-  const _TeamsOverviewPanel({
-    required this.teams,
-    required this.activeTeamId,
+  const _EmptyState({
+    required this.icon,
     required this.title,
     required this.subtitle,
-    required this.onOpenTeam,
-    this.onOpenWorkspace,
   });
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final compact = width < 620;
-        final tablet = width >= 620 && width < 980;
-        final visibleTeams = teams.take(compact ? 8 : 12).toList();
-
-        return Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8FAFC),
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: const Color(0xFFE5EAF1)),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
+      child: Column(
+        children: [
+          Icon(icon, color: _CmrDashColors.green.withOpacity(.35), size: 34),
+          const SizedBox(height: 10),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF64748B),
+            ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF16A34A).withOpacity(.10),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(Icons.groups_2_rounded, color: Color(0xFF16A34A), size: 20),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 15.5,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF0F172A),
-                            height: 1.1,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF64748B),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (onOpenWorkspace != null) ...[
-                    const SizedBox(width: 8),
-                    InkWell(
-                      onTap: onOpenWorkspace,
-                      borderRadius: BorderRadius.circular(999),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: const Color(0xFFE5EAF1)),
-                        ),
-                        child: const Text(
-                          'панель',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF2563EB),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-              const SizedBox(height: 12),
-              if (compact)
-                SizedBox(
-                  height: 96,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: visibleTeams.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 10),
-                    itemBuilder: (_, index) {
-                      final team = visibleTeams[index];
-                      return SizedBox(
-                        width: 238,
-                        child: _TeamDashboardTile(
-                          team: team,
-                          selected: _teamId(team) == activeTeamId && activeTeamId > 0,
-                          compact: true,
-                          onTap: () => onOpenTeam(team),
-                        ),
-                      );
-                    },
-                  ),
-                )
-              else
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: visibleTeams.length,
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: width >= 1280 ? 4 : (tablet ? 2 : 3),
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                    mainAxisExtent: 92,
-                  ),
-                  itemBuilder: (_, index) {
-                    final team = visibleTeams[index];
-                    return _TeamDashboardTile(
-                      team: team,
-                      selected: _teamId(team) == activeTeamId && activeTeamId > 0,
-                      compact: false,
-                      onTap: () => onOpenTeam(team),
-                    );
-                  },
-                ),
-            ],
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF94A3B8),
+            ),
+            textAlign: TextAlign.center,
           ),
-        );
-      },
-    );
-  }
-
-  static int _teamId(Map<String, dynamic> team) => _asInt(team['id'] ?? team['team_id']);
-}
-
-class _TeamDashboardTile extends StatelessWidget {
-  final Map<String, dynamic> team;
-  final bool selected;
-  final bool compact;
-  final VoidCallback onTap;
-
-  const _TeamDashboardTile({
-    required this.team,
-    required this.selected,
-    required this.compact,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final name = _firstNotEmpty([team['name'], team['team_name'], team['title']], fallback: 'Команда');
-    final category = _firstNotEmpty([team['category'], team['sport'], team['sport_name']], fallback: 'Экран команды');
-    final logoUrl = _firstNotEmpty([team['logo'], team['team_logo'], team['logo_url'], team['image']]);
-    final color = selected ? const Color(0xFF16A34A) : const Color(0xFF2563EB);
-
-    return Material(
-      color: selected ? const Color(0xFFEFFDF4) : Colors.white,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          padding: EdgeInsets.all(compact ? 11 : 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: selected ? color.withOpacity(.35) : const Color(0xFFE5EAF1)),
-          ),
-          child: Row(
-            children: [
-              _TeamDashboardAvatar(
-                logoUrl: logoUrl,
-                name: name,
-                color: color,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF0F172A),
-                        height: 1.12,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      category,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF64748B),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Открыть экран команды',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w900,
-                        color: color,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 6),
-              Icon(Icons.chevron_right_rounded, size: 20, color: color.withOpacity(.72)),
-            ],
-          ),
-        ),
+        ],
       ),
     );
   }
 }
 
-class _TeamDashboardAvatar extends StatelessWidget {
-  final String logoUrl;
-  final String name;
-  final Color color;
-
-  const _TeamDashboardAvatar({
-    required this.logoUrl,
-    required this.name,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final normalizedLogo = _normalizeImageUrl(logoUrl);
-
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: color.withOpacity(.10),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: color.withOpacity(.14)),
-      ),
-      child: normalizedLogo.isNotEmpty
-          ? ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: Image.network(
-                normalizedLogo,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _fallback(),
-              ),
-            )
-          : _fallback(),
-    );
-  }
-
-  Widget _fallback() {
-    final trimmedName = name.trim();
-    final letter = trimmedName.isEmpty ? 'К' : trimmedName.substring(0, 1).toUpperCase();
-    return Center(
-      child: Text(
-        letter,
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w900,
-          color: color,
-        ),
-      ),
-    );
-  }
-}
-
+// ==================== ОСТАЛЬНЫЕ ВИДЖЕТЫ (Header, Summary, DashboardRow) ====================
 
 class _Header extends StatelessWidget {
   final String title;
   final String subtitle;
+  final bool isMobile;
 
-  const _Header({required this.title, required this.subtitle});
+  const _Header({
+    required this.title,
+    required this.subtitle,
+    this.isMobile = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 620;
-
-        final titleBlock = Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(color: const Color(0xFF2563EB).withOpacity(.10), borderRadius: BorderRadius.circular(16)),
-              child: const Icon(Icons.dashboard_customize_rounded, color: Color(0xFF2563EB), size: 23),
+    return Container(
+      padding: EdgeInsets.all(isMobile ? 16 : 20),
+      decoration: _CmrDashDecor.panel(),
+      child: Row(
+        children: [
+          Container(
+            width: isMobile ? 46 : 52,
+            height: isMobile ? 46 : 52,
+            decoration: BoxDecoration(
+              color: _CmrDashColors.greenSoft,
+              borderRadius: BorderRadius.circular(isMobile ? 16 : 18),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF0F172A), height: 1.05)),
-                  const SizedBox(height: 5),
-                  Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF64748B))),
-                ],
-              ),
+            child: const Icon(Icons.dashboard_customize_rounded, color: _CmrDashColors.green, size: 24),
+          ),
+          SizedBox(width: isMobile ? 12 : 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: _CmrDashText.title(isMobile ? 20 : 23),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  subtitle,
+                  style: _CmrDashText.muted(isMobile ? 12 : 13),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
-          ],
-        );
-
-        return titleBlock;
-      },
+          ),
+        ],
+      ),
     );
   }
 }
@@ -883,47 +779,75 @@ class _Header extends StatelessWidget {
 class _SummaryStrip extends StatelessWidget {
   final Map<String, dynamic> summary;
   final bool isPlayer;
+  final bool isMobile;
 
-  const _SummaryStrip({required this.summary, required this.isPlayer});
+  const _SummaryStrip({
+    required this.summary,
+    required this.isPlayer,
+    this.isMobile = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     final items = isPlayer
         ? [
-            ['События', summary['events']],
-            ['Матчи', summary['matches']],
-            ['Отметки', summary['attendance']],
-            ['Оценки', summary['ratings']],
-            ['Тесты', summary['testing']],
+            ['События', summary['events'], Icons.event_available_rounded],
+            ['Матчи', summary['matches'], Icons.sports_soccer_rounded],
+            ['Отметки', summary['attendance'], Icons.how_to_reg_rounded],
+            ['Оценки', summary['ratings'], Icons.star_rounded],
           ]
         : [
-            ['Команды', summary['teams']],
-            ['События', summary['events']],
-            ['Матчи', summary['matches']],
-            ['Отметки', summary['attendance']],
-            ['Оценки', summary['ratings']],
-            ['Тесты', summary['testing']],
+            ['Команды', summary['teams'], Icons.groups_rounded],
+            ['События', summary['events'], Icons.event_available_rounded],
+            ['Матчи', summary['matches'], Icons.sports_soccer_rounded],
+            ['Отметки', summary['attendance'], Icons.how_to_reg_rounded],
+            ['Оценки', summary['ratings'], Icons.star_rounded],
           ];
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: items.map((e) {
-          return Container(
-            margin: const EdgeInsets.only(right: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-            decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE5EAF1))),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('${e[1] ?? 0}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF0F172A))),
-                const SizedBox(width: 6),
-                Text('${e[0]}', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFF64748B))),
-              ],
-            ),
-          );
-        }).toList(),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 900 ? items.length : (constraints.maxWidth >= 560 ? 3 : 2);
+        final gap = isMobile ? 10.0 : 12.0;
+        final itemWidth = (constraints.maxWidth - gap * (columns - 1)) / columns;
+
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: items.map((e) {
+            return SizedBox(
+              width: itemWidth,
+              child: Container(
+                padding: EdgeInsets.all(isMobile ? 12 : 14),
+                decoration: _CmrDashDecor.softCard(radius: 22),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: _CmrDashColors.greenSoft,
+                        borderRadius: BorderRadius.circular(13),
+                      ),
+                      child: Icon(e[2] as IconData, color: _CmrDashColors.green, size: 18),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('${e[1] ?? 0}', style: _CmrDashText.title(isMobile ? 18 : 20)),
+                          const SizedBox(height: 2),
+                          Text('${e[0]}', style: _CmrDashText.muted(11), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        );
+      },
     );
   }
 }
@@ -949,47 +873,77 @@ class _DashboardRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final content = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-      child: Row(
-        children: [
-          Container(width: 42, height: 42, decoration: BoxDecoration(color: color.withOpacity(.10), borderRadius: BorderRadius.circular(14)), child: Icon(icon, color: color, size: 20)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title.trim().isEmpty ? 'Без названия' : title.trim(), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w900, color: Color(0xFF111827), height: 1.12)),
-                const SizedBox(height: 4),
-                Text(subtitle.trim().isEmpty ? 'Нет описания' : subtitle.trim(), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF64748B), height: 1.15)),
-                if (teamName.trim().isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(999)),
-                    child: Text(teamName.trim(), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900, color: Color(0xFF475569))),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: _CmrDashDecor.softCard(radius: 20),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: _CmrDashColors.greenSoft,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: color, size: 19),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: _CmrDashText.value(13.5),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (subtitle.trim().isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle,
+                        style: _CmrDashText.muted(11.5),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (trailing.trim().isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                ],
+                  child: Text(
+                    trailing,
+                    style: const TextStyle(
+                      color: _CmrDashColors.green,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
-            ),
+            ],
           ),
-          const SizedBox(width: 10),
-          if (trailing.trim().isNotEmpty)
-            Container(
-              constraints: const BoxConstraints(maxWidth: 92),
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-              decoration: BoxDecoration(color: color.withOpacity(.09), borderRadius: BorderRadius.circular(999), border: Border.all(color: color.withOpacity(.14))),
-              child: Text(trailing.trim(), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w900)),
-            ),
-        ],
+        ),
       ),
     );
-
-    if (onTap == null) return content;
-    return InkWell(onTap: onTap, borderRadius: BorderRadius.circular(16), child: content);
   }
 }
 
+// ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
 Map<String, dynamic> _decodeServerMap(dynamic raw) {
   if (raw is Map) return Map<String, dynamic>.from(raw);
@@ -1001,8 +955,6 @@ Map<String, dynamic> _decodeServerMap(dynamic raw) {
     if (decoded is Map) return Map<String, dynamic>.from(decoded);
   } catch (_) {}
 
-  // На сервере иногда вместе с JSON прилетает предупреждение PHP/HTML.
-  // Берём JSON от первой фигурной скобки до последней.
   final start = text.indexOf('{');
   final end = text.lastIndexOf('}');
   if (start >= 0 && end > start) {
@@ -1050,14 +1002,6 @@ int _asInt(dynamic value) {
   if (value is int) return value;
   if (value is num) return value.toInt();
   return int.tryParse('${value ?? ''}'.trim()) ?? 0;
-}
-
-String _normalizeImageUrl(String raw) {
-  var value = raw.trim();
-  if (value.isEmpty || value == 'null') return '';
-  if (value.startsWith('http://') || value.startsWith('https://')) return value;
-  if (!value.startsWith('/')) value = '/$value';
-  return 'https://sportotekaapp.ru$value';
 }
 
 String _attendanceStatus(dynamic raw) {

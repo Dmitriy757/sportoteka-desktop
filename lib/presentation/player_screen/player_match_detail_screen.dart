@@ -30,12 +30,11 @@ class PlayerMatchDetailScreen extends StatefulWidget {
   });
 
   @override
-  State<PlayerMatchDetailScreen> createState() =>
-      _PlayerMatchDetailScreenState();
+  State<PlayerMatchDetailScreen> createState() => _PlayerMatchDetailScreenState();
 }
 
 class _PlayerMatchDetailScreenState extends State<PlayerMatchDetailScreen> {
-  static const String _apiBase = "https://sportotekaapp.ru/api";
+  static const String _apiBase = 'https://sportotekaapp.ru/api';
 
   bool isLoading = true;
   String? error;
@@ -53,14 +52,8 @@ class _PlayerMatchDetailScreenState extends State<PlayerMatchDetailScreen> {
   Map<String, dynamic>? selectedPlayerTotals;
   List<Map<String, dynamic>> selectedPlayerEpisodes = [];
 
-  int _asInt(dynamic v) => v is int ? v : int.tryParse("${v ?? 0}") ?? 0;
-  String _asStr(dynamic v) => (v ?? "").toString();
-
-  Color get primary => const Color(0xFF00C853);
-  Color get bg => const Color(0xFFF3F5F8);
-  Color get cardBg => Colors.white;
-  Color get textPrimary => const Color(0xFF1E293B);
-  Color get textSecondary => const Color(0xFF64748B);
+  int _asInt(dynamic v) => v is int ? v : int.tryParse('${v ?? 0}') ?? 0;
+  String _asStr(dynamic v) => (v ?? '').toString();
 
   @override
   void initState() {
@@ -72,15 +65,15 @@ class _PlayerMatchDetailScreenState extends State<PlayerMatchDetailScreen> {
     if (raw == null) return null;
     final s = raw.trim();
     if (s.isEmpty) return null;
-    if (s.startsWith("http://") || s.startsWith("https://")) return s;
-    return "https://sportotekaapp.ru${s.startsWith('/') ? s : '/$s'}";
+    if (s.startsWith('http://') || s.startsWith('https://')) return s;
+    return 'https://sportotekaapp.ru${s.startsWith('/') ? s : '/$s'}';
   }
 
   void _watchVideo() {
-    final normalized = _normalizeUrl(widget.videoUrl) ?? "";
+    final normalized = _normalizeUrl(widget.videoUrl) ?? '';
     if (normalized.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Видео отсутствует")),
+        const SnackBar(content: Text('Видео отсутствует')),
       );
       return;
     }
@@ -88,7 +81,7 @@ class _PlayerMatchDetailScreenState extends State<PlayerMatchDetailScreen> {
     Get.to(
       () => MatchVideoPlayerScreen(
         videoUrl: normalized,
-        title: "Матч — ${widget.playerName}",
+        title: 'Матч — ${widget.playerName}',
       ),
     );
   }
@@ -100,56 +93,45 @@ class _PlayerMatchDetailScreenState extends State<PlayerMatchDetailScreen> {
     });
 
     try {
-      final uri = Uri.parse(
-        "$_apiBase/get_match_ttd_report.php?match_id=${widget.matchId}",
-      );
-
+      final uri = Uri.parse('$_apiBase/get_match_ttd_report.php?match_id=${widget.matchId}');
       final res = await http.get(uri).timeout(const Duration(seconds: 20));
 
       if (res.statusCode != 200) {
-        throw "Ошибка сервера: ${res.statusCode}";
+        throw 'Ошибка сервера: ${res.statusCode}';
       }
 
       final body = res.body.trim();
-      if (body.isEmpty) {
-        throw "Сервер вернул пустой ответ";
-      }
+      if (body.isEmpty) throw 'Сервер вернул пустой ответ';
 
       final data = jsonDecode(body);
-
-      if (data is! Map || data["success"] != true) {
+      if (data is! Map || data['success'] != true) {
         throw (data is Map
-                ? (data["message"] ?? "Ошибка загрузки отчёта")
-                : "Ошибка загрузки отчёта")
+                ? (data['message'] ?? 'Ошибка загрузки отчёта')
+                : 'Ошибка загрузки отчёта')
             .toString();
       }
 
-      players = ((data["players"] ?? []) as List)
+      players = ((data['players'] ?? []) as List)
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
-
-      episodes = ((data["episodes"] ?? []) as List)
+      episodes = ((data['episodes'] ?? []) as List)
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
-
-      mainReport = ((data["main_report"] ?? []) as List)
+      mainReport = ((data['main_report'] ?? []) as List)
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
-
-      passReport = ((data["pass_report"] ?? []) as List)
+      passReport = ((data['pass_report'] ?? []) as List)
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
-
-      goalkeeperReport = ((data["goalkeeper_report"] ?? []) as List)
+      goalkeeperReport = ((data['goalkeeper_report'] ?? []) as List)
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
-
-      playerVideoTotals = ((data["player_video_totals"] ?? []) as List)
+      playerVideoTotals = ((data['player_video_totals'] ?? []) as List)
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
@@ -157,9 +139,7 @@ class _PlayerMatchDetailScreenState extends State<PlayerMatchDetailScreen> {
       _bindSelectedPlayerData();
 
       if (!mounted) return;
-      setState(() {
-        isLoading = false;
-      });
+      setState(() => isLoading = false);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -177,44 +157,44 @@ class _PlayerMatchDetailScreenState extends State<PlayerMatchDetailScreen> {
     selectedPlayerEpisodes = [];
 
     for (final row in mainReport) {
-      if (_asInt(row["player_id"]) == widget.playerId) {
+      if (_asInt(row['player_id']) == widget.playerId) {
         selectedPlayerMain = row;
         break;
       }
     }
 
     for (final row in passReport) {
-      if (_asInt(row["player_id"]) == widget.playerId) {
+      if (_asInt(row['player_id']) == widget.playerId) {
         selectedPlayerPass = row;
         break;
       }
     }
 
     for (final row in goalkeeperReport) {
-      if (_asInt(row["player_id"]) == widget.playerId) {
+      if (_asInt(row['player_id']) == widget.playerId) {
         selectedPlayerGoalkeeper = row;
         break;
       }
     }
 
     for (final row in playerVideoTotals) {
-      if (_asInt(row["player_id"]) == widget.playerId) {
+      if (_asInt(row['player_id']) == widget.playerId) {
         selectedPlayerTotals = row;
         break;
       }
     }
 
     selectedPlayerEpisodes = episodes.where((e) {
-      final pid = _asInt(e["player_id"]);
-      final playerMap = e["player"];
-      final nestedPlayerId = playerMap is Map ? _asInt(playerMap["id"]) : 0;
+      final pid = _asInt(e['player_id']);
+      final playerMap = e['player'];
+      final nestedPlayerId = playerMap is Map ? _asInt(playerMap['id']) : 0;
       return pid == widget.playerId || nestedPlayerId == widget.playerId;
     }).map((e) => Map<String, dynamic>.from(e)).toList();
   }
 
   String _prettyDate(String? raw) {
-    final s = (raw ?? "").trim();
-    if (s.isEmpty) return "-";
+    final s = (raw ?? '').trim();
+    if (s.isEmpty) return '-';
     final d = DateTime.tryParse(s.replaceAll(' ', 'T'));
     if (d == null) return s;
     return DateFormat('dd.MM.yyyy').format(d);
@@ -269,35 +249,41 @@ class _PlayerMatchDetailScreenState extends State<PlayerMatchDetailScreen> {
     return map[key] ?? key;
   }
 
-  Widget _matteSurface({required Widget child, VoidCallback? onTap}) {
+  EdgeInsets _pagePadding(BuildContext context) {
+    final w = MediaQuery.of(context).size.width;
+    if (w < 420) return const EdgeInsets.fromLTRB(10, 8, 10, 20);
+    if (w < 720) return const EdgeInsets.fromLTRB(12, 10, 12, 22);
+    return const EdgeInsets.fromLTRB(20, 14, 20, 28);
+  }
+
+  Widget _matteSurface({required Widget child, VoidCallback? onTap, double radius = 28}) {
     final content = Container(
-      padding: const EdgeInsets.all(16),
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: const [
+        color: _CmrColors.panel,
+        borderRadius: BorderRadius.circular(radius),
+        boxShadow: [
           BoxShadow(
-            color: Color(0x11000000),
-            blurRadius: 16,
-            offset: Offset(0, 6),
+            color: Colors.black.withOpacity(.018),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: child,
     );
 
-    if (onTap != null) {
-      return Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: onTap,
-          child: content,
-        ),
-      );
-    }
-    return content;
+    if (onTap == null) return content;
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(radius),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(radius),
+        onTap: onTap,
+        child: content,
+      ),
+    );
   }
 
   Widget _sectionCard({
@@ -312,27 +298,24 @@ class _PlayerMatchDetailScreenState extends State<PlayerMatchDetailScreen> {
           Row(
             children: [
               Container(
-                width: 38,
-                height: 38,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
-                  color: primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
+                  color: _CmrColors.greenSoft,
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                child: Icon(icon, color: primary, size: 20),
+                child: Icon(icon, color: _CmrColors.green, size: 22),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 15,
-                  ),
+                  style: _CmrText.section(),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           child,
         ],
       ),
@@ -340,26 +323,23 @@ class _PlayerMatchDetailScreenState extends State<PlayerMatchDetailScreen> {
   }
 
   Widget _pill(String title, String value, {Color? color}) {
-    final c = color ?? primary;
+    final c = color ?? _CmrColors.green;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
       decoration: BoxDecoration(
-        color: c.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: c.withOpacity(0.18)),
+        color: _softFor(c),
+        borderRadius: BorderRadius.circular(99),
       ),
       child: RichText(
         text: TextSpan(
-          style: TextStyle(fontSize: 12, color: textSecondary),
+          style: _CmrText.muted(13),
           children: [
-            TextSpan(
-              text: "$title: ",
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
+            TextSpan(text: '$title: '),
             TextSpan(
               text: value,
               style: TextStyle(
                 color: c,
+                fontSize: 13,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -370,33 +350,30 @@ class _PlayerMatchDetailScreenState extends State<PlayerMatchDetailScreen> {
   }
 
   Widget _metricTile(String title, String value, {Color? accentColor}) {
-    final c = accentColor ?? primary;
+    final c = accentColor ?? _CmrColors.green;
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: c.withOpacity(0.03),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: c.withOpacity(0.1)),
+        color: _CmrColors.soft,
+        borderRadius: BorderRadius.circular(18),
       ),
       child: Row(
         children: [
           Expanded(
             child: Text(
               title,
-              style: TextStyle(
-                color: textPrimary,
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-              ),
+              style: _CmrText.value(14),
             ),
           ),
+          const SizedBox(width: 10),
           Text(
             value,
             style: TextStyle(
               color: c,
-              fontSize: 13,
+              fontSize: 15,
               fontWeight: FontWeight.w900,
+              height: 1.2,
             ),
           ),
         ],
@@ -406,26 +383,16 @@ class _PlayerMatchDetailScreenState extends State<PlayerMatchDetailScreen> {
 
   Widget _buildOverview() {
     return _sectionCard(
-      title: "Общая информация",
+      title: 'Общая информация',
       icon: Icons.emoji_events_rounded,
       child: Wrap(
         spacing: 8,
         runSpacing: 8,
         children: [
-          _pill(
-            "Соперник",
-            widget.opponent?.isNotEmpty == true ? widget.opponent! : "-",
-          ),
-          _pill(
-            "Турнир",
-            widget.tournament?.isNotEmpty == true ? widget.tournament! : "-",
-          ),
-          _pill("Дата", _prettyDate(widget.matchDate)),
-          _pill(
-            "Счёт",
-            widget.score?.isNotEmpty == true ? widget.score! : "-",
-            color: Colors.blue.shade700,
-          ),
+          _pill('Соперник', widget.opponent?.isNotEmpty == true ? widget.opponent! : '-'),
+          _pill('Турнир', widget.tournament?.isNotEmpty == true ? widget.tournament! : '-'),
+          _pill('Дата', _prettyDate(widget.matchDate)),
+          _pill('Счёт', widget.score?.isNotEmpty == true ? widget.score! : '-', color: _CmrColors.blue),
         ],
       ),
     );
@@ -433,15 +400,11 @@ class _PlayerMatchDetailScreenState extends State<PlayerMatchDetailScreen> {
 
   Widget _buildPlayerMainStats() {
     final row = selectedPlayerMain;
-
     if (row == null) {
       return _sectionCard(
-        title: "Основные ТТД",
+        title: 'Основные ТТД',
         icon: Icons.analytics_rounded,
-        child: Text(
-          "Нет данных по ТТД игрока",
-          style: TextStyle(color: textSecondary, fontWeight: FontWeight.w600),
-        ),
+        child: Text('Нет данных по ТТД игрока', style: _CmrText.muted(14)),
       );
     }
 
@@ -457,7 +420,7 @@ class _PlayerMatchDetailScreenState extends State<PlayerMatchDetailScreen> {
     ];
 
     return _sectionCard(
-      title: "Основные ТТД",
+      title: 'Основные ТТД',
       icon: Icons.analytics_rounded,
       child: Column(
         children: [
@@ -465,19 +428,12 @@ class _PlayerMatchDetailScreenState extends State<PlayerMatchDetailScreen> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _pill("Всего", _asStr(row["ttd_total"])),
-              _pill(
-                "Эффективность",
-                "${_asStr(row["effect_percent"])}%",
-                color: Colors.blue.shade700,
-              ),
+              _pill('Всего', _asStr(row['ttd_total'])),
+              _pill('Эффективность', '${_asStr(row['effect_percent'])}%', color: _CmrColors.blue),
             ],
           ),
-          const SizedBox(height: 12),
-          ...keys.map((key) => _metricTile(
-                _normalizeMetricTitle(key),
-                _asStr(row[key]),
-              )),
+          const SizedBox(height: 14),
+          ...keys.map((key) => _metricTile(_normalizeMetricTitle(key), _asStr(row[key]))),
         ],
       ),
     );
@@ -485,10 +441,7 @@ class _PlayerMatchDetailScreenState extends State<PlayerMatchDetailScreen> {
 
   Widget _buildPassStats() {
     final row = selectedPlayerPass;
-
-    if (row == null) {
-      return const SizedBox.shrink();
-    }
+    if (row == null) return const SizedBox.shrink();
 
     final keys = [
       'forward_short',
@@ -503,7 +456,7 @@ class _PlayerMatchDetailScreenState extends State<PlayerMatchDetailScreen> {
     ];
 
     return _sectionCard(
-      title: "Передачи",
+      title: 'Передачи',
       icon: Icons.compare_arrows_rounded,
       child: Column(
         children: [
@@ -511,19 +464,15 @@ class _PlayerMatchDetailScreenState extends State<PlayerMatchDetailScreen> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _pill("Всего", _asStr(row["total"])),
-              _pill(
-                "Эффективность",
-                "${_asStr(row["effect_percent"])}%",
-                color: Colors.deepPurple.shade700,
-              ),
+              _pill('Всего', _asStr(row['total'])),
+              _pill('Эффективность', '${_asStr(row['effect_percent'])}%', color: _CmrColors.purple),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           ...keys.map((key) => _metricTile(
                 _normalizeMetricTitle(key),
                 _asStr(row[key]),
-                accentColor: Colors.deepPurple.shade700,
+                accentColor: _CmrColors.purple,
               )),
         ],
       ),
@@ -548,7 +497,7 @@ class _PlayerMatchDetailScreenState extends State<PlayerMatchDetailScreen> {
     ];
 
     return _sectionCard(
-      title: "Вратарская статистика",
+      title: 'Вратарская статистика',
       icon: Icons.shield_rounded,
       child: Column(
         children: [
@@ -556,19 +505,15 @@ class _PlayerMatchDetailScreenState extends State<PlayerMatchDetailScreen> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _pill("Всего", _asStr(row["ttd_total"])),
-              _pill(
-                "Эффективность",
-                "${_asStr(row["effect_percent"])}%",
-                color: Colors.orange.shade700,
-              ),
+              _pill('Всего', _asStr(row['ttd_total'])),
+              _pill('Эффективность', '${_asStr(row['effect_percent'])}%', color: _CmrColors.orange),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           ...keys.map((key) => _metricTile(
                 _normalizeMetricTitle(key),
                 _asStr(row[key]),
-                accentColor: Colors.orange.shade700,
+                accentColor: _CmrColors.orange,
               )),
         ],
       ),
@@ -579,41 +524,26 @@ class _PlayerMatchDetailScreenState extends State<PlayerMatchDetailScreen> {
     final row = selectedPlayerTotals;
     if (row == null) return const SizedBox.shrink();
 
-    final success = (row["success"] is Map)
-        ? Map<String, dynamic>.from(row["success"])
+    final success = (row['success'] is Map)
+        ? Map<String, dynamic>.from(row['success'])
+        : <String, dynamic>{};
+    final fail = (row['fail'] is Map)
+        ? Map<String, dynamic>.from(row['fail'])
+        : <String, dynamic>{};
+    final single = (row['single'] is Map)
+        ? Map<String, dynamic>.from(row['single'])
         : <String, dynamic>{};
 
-    final fail = (row["fail"] is Map)
-        ? Map<String, dynamic>.from(row["fail"])
-        : <String, dynamic>{};
-
-    final single = (row["single"] is Map)
-        ? Map<String, dynamic>.from(row["single"])
-        : <String, dynamic>{};
-
-    final keys = <String>{
-      ...success.keys,
-      ...fail.keys,
-      ...single.keys,
-    }.toList();
-
-    keys.sort();
+    final keys = <String>{...success.keys, ...fail.keys, ...single.keys}.toList()..sort();
 
     return _sectionCard(
-      title: "Видеоотчёт",
+      title: 'Видеоотчёт',
       icon: Icons.video_collection_rounded,
       child: Column(
         children: keys.map((key) {
           final hasPair = success.containsKey(key) || fail.containsKey(key);
-          final value = hasPair
-              ? "${_asInt(success[key])}/${_asInt(fail[key])}"
-              : _asStr(single[key]);
-
-          return _metricTile(
-            _normalizeMetricTitle(key),
-            value,
-            accentColor: const Color(0xFF00BFA5),
-          );
+          final value = hasPair ? '${_asInt(success[key])}/${_asInt(fail[key])}' : _asStr(single[key]);
+          return _metricTile(_normalizeMetricTitle(key), value, accentColor: _CmrColors.teal);
         }).toList(),
       ),
     );
@@ -621,191 +551,130 @@ class _PlayerMatchDetailScreenState extends State<PlayerMatchDetailScreen> {
 
   Widget _buildEpisodes() {
     return _sectionCard(
-      title: "Моменты игрока",
+      title: 'Моменты игрока',
       icon: Icons.movie_creation_outlined,
       child: selectedPlayerEpisodes.isEmpty
-          ? Text(
-              "По этому игроку эпизоды пока не найдены",
-              style: TextStyle(
-                color: textSecondary,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            )
+          ? Text('По этому игроку эпизоды пока не найдены', style: _CmrText.muted(14))
           : Column(
               children: selectedPlayerEpisodes.map((episode) {
-                final title = _asStr(episode["event_title"]).isNotEmpty
-                    ? _asStr(episode["event_title"])
-                    : (_asStr(episode["event_type"]).isNotEmpty
-                        ? _normalizeMetricTitle(_asStr(episode["event_type"]))
-                        : "Эпизод");
-
-                final note = _asStr(episode["note"]);
-                final minute = _asInt(episode["minute"]);
-                final second = _asInt(episode["second"]);
-                final snapshotUrl = _asStr(episode["snapshot_url"]);
-                final children = (episode["children"] is List)
-                    ? List<Map<String, dynamic>>.from(
-                        (episode["children"] as List).whereType<Map>(),
-                      )
+                final title = _asStr(episode['event_title']).isNotEmpty
+                    ? _asStr(episode['event_title'])
+                    : (_asStr(episode['event_type']).isNotEmpty
+                        ? _normalizeMetricTitle(_asStr(episode['event_type']))
+                        : 'Эпизод');
+                final note = _asStr(episode['note']);
+                final minute = _asInt(episode['minute']);
+                final second = _asInt(episode['second']);
+                final snapshotUrl = _asStr(episode['snapshot_url']);
+                final children = (episode['children'] is List)
+                    ? List<Map<String, dynamic>>.from((episode['children'] as List).whereType<Map>())
                     : <Map<String, dynamic>>[];
 
                 return Container(
+                  width: double.infinity,
                   margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: cardBg,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                    color: _CmrColors.soft,
+                    borderRadius: BorderRadius.circular(22),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (snapshotUrl.isNotEmpty)
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Image.network(
-                              snapshotUrl,
-                              width: double.infinity,
-                              height: 180,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                height: 120,
-                                color: Colors.grey.shade100,
-                                child: const Center(
-                                  child: Icon(Icons.broken_image_outlined),
-                                ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (snapshotUrl.isNotEmpty) ...[
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(18),
+                          child: Image.network(
+                            snapshotUrl,
+                            width: double.infinity,
+                            height: MediaQuery.of(context).size.width < 520 ? 170 : 220,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              height: 150,
+                              color: _CmrColors.greenSoft,
+                              child: const Center(child: Icon(Icons.broken_image_outlined)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              style: _CmrText.value(15),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: _CmrColors.greenSoft,
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                            child: Text(
+                              "${minute.toString().padLeft(2, '0')}:${second.toString().padLeft(2, '0')}",
+                              style: const TextStyle(
+                                color: _CmrColors.green,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w900,
                               ),
                             ),
                           ),
-                        if (snapshotUrl.isNotEmpty) const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                title,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 14,
-                                ),
+                        ],
+                      ),
+                      if (note.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(Icons.notes_rounded, size: 18, color: _CmrColors.muted),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(note, style: _CmrText.body(14)),
                               ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: primary.withOpacity(0.08),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                "${minute.toString().padLeft(2, '0')}:${second.toString().padLeft(2, '0')}",
-                                style: TextStyle(
-                                  color: primary,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                        if (note.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(10),
+                      ],
+                      if (children.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Text('Действия в эпизоде', style: _CmrText.value(14)),
+                        const SizedBox(height: 8),
+                        ...children.map((child) {
+                          final rawType = _asStr(child['event_type']);
+                          final childTitle = rawType.isNotEmpty ? _normalizeMetricTitle(rawType) : 'Действие';
+                          final isPositive = _asInt(child['is_positive']) > 0;
+                          final color = isPositive ? _CmrColors.green : _CmrColors.red;
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: primary.withOpacity(0.04),
-                              borderRadius: BorderRadius.circular(10),
-                              border:
-                                  Border.all(color: primary.withOpacity(0.1)),
+                              color: _softFor(color),
+                              borderRadius: BorderRadius.circular(16),
                             ),
                             child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Icon(
-                                  Icons.notes_rounded,
-                                  size: 16,
-                                  color: textSecondary,
+                                  isPositive ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                                  size: 19,
+                                  color: color,
                                 ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    note,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      height: 1.3,
-                                      color: textPrimary,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
+                                const SizedBox(width: 9),
+                                Expanded(child: Text(childTitle, style: _CmrText.value(14))),
                               ],
                             ),
-                          ),
-                        ],
-                        if (children.isNotEmpty) ...[
-                          const SizedBox(height: 10),
-                          const Text(
-                            "Действия в эпизоде",
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          ...children.map((child) {
-                            final rawType = _asStr(child["event_type"]);
-                            final childTitle = rawType.isNotEmpty
-                                ? _normalizeMetricTitle(rawType)
-                                : "Действие";
-                            final isPositive =
-                                _asInt(child["is_positive"]) > 0;
-
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color:
-                                    (isPositive ? Colors.green : Colors.red)
-                                        .withOpacity(0.05),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color:
-                                      (isPositive ? Colors.green : Colors.red)
-                                          .withOpacity(0.15),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    isPositive
-                                        ? Icons.check_circle_rounded
-                                        : Icons.cancel_rounded,
-                                    size: 16,
-                                    color: isPositive
-                                        ? Colors.green.shade700
-                                        : Colors.red.shade700,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      childTitle,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }),
-                        ],
+                          );
+                        }),
                       ],
-                    ),
+                    ],
                   ),
                 );
               }).toList(),
@@ -824,19 +693,38 @@ class _PlayerMatchDetailScreenState extends State<PlayerMatchDetailScreen> {
           onPressed: _watchVideo,
           icon: const Icon(Icons.play_circle_fill_rounded, color: Colors.white),
           label: const Text(
-            "Смотреть видео матча",
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-            ),
+            'Смотреть видео матча',
+            style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w900),
           ),
           style: ElevatedButton.styleFrom(
-            backgroundColor: primary,
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
+            backgroundColor: _CmrColors.green,
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(vertical: 15),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStateMessage({required IconData icon, required String text, bool loading = false}) {
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(22),
+        decoration: BoxDecoration(
+          color: _CmrColors.soft,
+          borderRadius: BorderRadius.circular(26),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            loading
+                ? const CircularProgressIndicator(color: _CmrColors.green)
+                : Icon(icon, color: _CmrColors.green, size: 34),
+            const SizedBox(height: 12),
+            Text(text, textAlign: TextAlign.center, style: _CmrText.muted(15)),
+          ],
         ),
       ),
     );
@@ -845,71 +733,130 @@ class _PlayerMatchDetailScreenState extends State<PlayerMatchDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: bg,
+      backgroundColor: _CmrColors.panel,
       appBar: AppBar(
-        backgroundColor: bg,
+        backgroundColor: _CmrColors.panel,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        iconTheme: IconThemeData(color: textPrimary),
+        foregroundColor: _CmrColors.text,
+        titleSpacing: 0,
         title: Text(
-          "Матч — ${widget.playerName}",
-          style: const TextStyle(
-            fontWeight: FontWeight.w900,
-            fontSize: 18,
-          ),
+          'Матч — ${widget.playerName}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: _CmrText.title(19),
         ),
         actions: [
           IconButton(
+            tooltip: 'Обновить',
             onPressed: _loadMatchDetail,
-            icon: Icon(Icons.refresh_rounded, color: primary),
+            icon: const Icon(Icons.refresh_rounded, color: _CmrColors.green),
           ),
         ],
       ),
       body: RefreshIndicator(
         onRefresh: _loadMatchDetail,
-        color: primary,
+        color: _CmrColors.green,
         child: isLoading
-            ? Center(child: CircularProgressIndicator(color: primary))
+            ? _buildStateMessage(icon: Icons.analytics_rounded, text: 'Загружаем данные матча', loading: true)
             : error != null
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Text(
-                        error!,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: textSecondary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
+                ? _buildStateMessage(icon: Icons.error_outline_rounded, text: error!)
+                : Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1040),
+                      child: ListView(
+                        padding: _pagePadding(context),
+                        children: [
+                          _buildOverview(),
+                          const SizedBox(height: 12),
+                          _buildVideoButton(),
+                          const SizedBox(height: 12),
+                          _buildPlayerMainStats(),
+                          if (selectedPlayerPass != null) ...[
+                            const SizedBox(height: 12),
+                            _buildPassStats(),
+                          ],
+                          if (selectedPlayerGoalkeeper != null) ...[
+                            const SizedBox(height: 12),
+                            _buildGoalkeeperStats(),
+                          ],
+                          if (selectedPlayerTotals != null) ...[
+                            const SizedBox(height: 12),
+                            _buildVideoTotals(),
+                          ],
+                          const SizedBox(height: 12),
+                          _buildEpisodes(),
+                        ],
                       ),
                     ),
-                  )
-                : ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                    children: [
-                      _buildOverview(),
-                      const SizedBox(height: 12),
-                      _buildVideoButton(),
-                      const SizedBox(height: 12),
-                      _buildPlayerMainStats(),
-                      if (selectedPlayerPass != null) ...[
-                        const SizedBox(height: 12),
-                        _buildPassStats(),
-                      ],
-                      if (selectedPlayerGoalkeeper != null) ...[
-                        const SizedBox(height: 12),
-                        _buildGoalkeeperStats(),
-                      ],
-                      if (selectedPlayerTotals != null) ...[
-                        const SizedBox(height: 12),
-                        _buildVideoTotals(),
-                      ],
-                      const SizedBox(height: 12),
-                      _buildEpisodes(),
-                    ],
                   ),
       ),
     );
   }
+
+  Color _softFor(Color color) {
+    if (color == _CmrColors.blue) return _CmrColors.blueSoft;
+    if (color == _CmrColors.purple) return _CmrColors.purpleSoft;
+    if (color == _CmrColors.orange) return _CmrColors.orangeSoft;
+    if (color == _CmrColors.teal) return _CmrColors.tealSoft;
+    if (color == _CmrColors.red) return _CmrColors.redSoft;
+    return _CmrColors.greenSoft;
+  }
+}
+
+class _CmrColors {
+  static const Color panel = Colors.white;
+  static const Color soft = Color(0xFFF6F8FA);
+  static const Color text = Color(0xFF101828);
+  static const Color muted = Color(0xFF667085);
+  static const Color green = Color(0xFF1F7A4D);
+  static const Color greenSoft = Color(0xFFF2F7F4);
+  static const Color blue = Color(0xFF2563EB);
+  static const Color blueSoft = Color(0xFFEFF6FF);
+  static const Color purple = Color(0xFF6D5BD0);
+  static const Color purpleSoft = Color(0xFFF3F1FF);
+  static const Color orange = Color(0xFFB85C00);
+  static const Color orangeSoft = Color(0xFFFFF4E8);
+  static const Color teal = Color(0xFF008C7A);
+  static const Color tealSoft = Color(0xFFEAF8F6);
+  static const Color red = Color(0xFFD92D20);
+  static const Color redSoft = Color(0xFFFFF1F0);
+}
+
+class _CmrText {
+  static TextStyle title(double size) => TextStyle(
+        color: _CmrColors.text,
+        fontSize: size,
+        fontWeight: FontWeight.w800,
+        height: 1.15,
+      );
+
+  static TextStyle section() => const TextStyle(
+        color: _CmrColors.text,
+        fontSize: 17,
+        fontWeight: FontWeight.w800,
+        height: 1.2,
+      );
+
+  static TextStyle value(double size) => TextStyle(
+        color: _CmrColors.text,
+        fontSize: size,
+        fontWeight: FontWeight.w800,
+        height: 1.3,
+      );
+
+  static TextStyle body(double size) => TextStyle(
+        color: _CmrColors.text,
+        fontSize: size,
+        fontWeight: FontWeight.w600,
+        height: 1.35,
+      );
+
+  static TextStyle muted(double size) => TextStyle(
+        color: _CmrColors.muted,
+        fontSize: size,
+        fontWeight: FontWeight.w700,
+        height: 1.38,
+      );
 }

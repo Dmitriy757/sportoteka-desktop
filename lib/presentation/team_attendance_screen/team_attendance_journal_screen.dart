@@ -2237,9 +2237,9 @@ class _TeamAttendanceJournalScreenState
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F5F8),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF3F5F8),
+        backgroundColor: Colors.white,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         title: Text(

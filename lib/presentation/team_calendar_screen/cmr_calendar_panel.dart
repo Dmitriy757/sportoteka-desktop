@@ -1,8 +1,10 @@
+import 'dart:math' as math;
+import 'dart:ui' show FontFeature;
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:sportoteka/core/utils/pref_utils.dart';
-import 'package:sportoteka/presentation/team_calendar_screen/calendar_month_grid.dart';
 import 'package:sportoteka/presentation/team_calendar_screen/calendar_week_view.dart';
 import 'package:sportoteka/presentation/team_calendar_screen/event_editor_sheet.dart';
 import 'package:sportoteka/presentation/team_calendar_screen/team_calendar_api.dart';
@@ -49,7 +51,6 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
   Map<DateTime, List<TeamEvent>> eventsByDay = {};
 
   String _role = '';
-
   _CalendarWorkPanel _workPanel = _CalendarWorkPanel.calendar;
   TeamEvent? _selectedEventForPanel;
   TeamEvent? _editingEventForPanel;
@@ -93,9 +94,8 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
       error = null;
     });
 
-    DateTime from;
-    DateTime to;
-
+    final DateTime from;
+    final DateTime to;
     if (mode == CmrCalendarMode.month) {
       from = firstDayOfMonth(cursor);
       to = lastDayOfMonth(cursor);
@@ -107,16 +107,13 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
     try {
       final list = await api.fetch(teamId: widget.teamId, from: from, to: to);
       final grouped = <DateTime, List<TeamEvent>>{};
-
       for (final e in list) {
-        final k = dateOnly(e.startAt);
-        (grouped[k] ??= []).add(e);
+        final key = dateOnly(e.startAt);
+        (grouped[key] ??= <TeamEvent>[]).add(e);
       }
-
       for (final entry in grouped.entries) {
         entry.value.sort((a, b) => a.startAt.compareTo(b.startAt));
       }
-
       if (!mounted) return;
       setState(() {
         events = list;
@@ -164,12 +161,134 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
     return '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
   }
 
+  String _pluralEvent(int count) {
+    final mod10 = count % 10;
+    final mod100 = count % 100;
+    if (mod10 == 1 && mod100 != 11) return 'событие';
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+      return 'события';
+    }
+    return 'событий';
+  }
+
+  void _previousPeriod() {
+    setState(() {
+      if (mode == CmrCalendarMode.month) {
+        cursor = DateTime(cursor.year, cursor.month - 1, 1);
+        selectedDay = DateTime(cursor.year, cursor.month, 1);
+      } else {
+        cursor = cursor.subtract(const Duration(days: 7));
+        selectedDay = cursor;
+      }
+      _workPanel = _CalendarWorkPanel.calendar;
+      _selectedEventForPanel = null;
+    });
+    _fetch();
+  }
+
+  void _nextPeriod() {
+    setState(() {
+      if (mode == CmrCalendarMode.month) {
+        cursor = DateTime(cursor.year, cursor.month + 1, 1);
+        selectedDay = DateTime(cursor.year, cursor.month, 1);
+      } else {
+        cursor = cursor.add(const Duration(days: 7));
+        selectedDay = cursor;
+      }
+      _workPanel = _CalendarWorkPanel.calendar;
+      _selectedEventForPanel = null;
+    });
+    _fetch();
+  }
+
+  void _today() {
+    final now = DateTime.now();
+    setState(() {
+      cursor = now;
+      selectedDay = now;
+      _workPanel = _CalendarWorkPanel.calendar;
+      _selectedEventForPanel = null;
+    });
+    _fetch();
+  }
+
+  Future<void> _pickMonth() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: selectedDay,
+      firstDate: DateTime(now.year - 5, 1, 1),
+      lastDate: DateTime(now.year + 5, 12, 31),
+      helpText: 'Выберите дату календаря',
+      cancelText: 'Отмена',
+      confirmText: 'Выбрать',
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+                  primary: _C.green,
+                  secondary: _C.greenDark,
+                ),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
+    );
+    if (picked == null) return;
+    setState(() {
+      cursor = mode == CmrCalendarMode.month
+          ? DateTime(picked.year, picked.month, 1)
+          : startOfWeekMonday(picked);
+      selectedDay = DateTime(picked.year, picked.month, picked.day);
+      _workPanel = _CalendarWorkPanel.calendar;
+      _selectedEventForPanel = null;
+    });
+    _fetch();
+  }
+
+  void _openFullCalendar() {
+    Get.to(
+      () => TeamCalendarScreen(
+        teamId: widget.teamId,
+        teamName: widget.teamName,
+      ),
+      transition: Transition.fadeIn,
+      duration: const Duration(milliseconds: 220),
+    );
+  }
+
+  void _selectCalendarDay(DateTime day) {
+    final nextCursor = mode == CmrCalendarMode.month
+        ? DateTime(day.year, day.month, 1)
+        : startOfWeekMonday(day);
+    final needReload = mode == CmrCalendarMode.month
+        ? nextCursor.year != cursor.year || nextCursor.month != cursor.month
+        : dateOnly(nextCursor) != dateOnly(startOfWeekMonday(cursor));
+
+    setState(() {
+      selectedDay = day;
+      if (needReload) cursor = nextCursor;
+    });
+
+    if (needReload) _fetch();
+  }
+
+  void _selectCalendarDayAndSyncPane(DateTime day) {
+    _selectCalendarDay(day);
+    final dayEvents = (eventsByDay[dateOnly(day)] ?? const <TeamEvent>[]).toList()
+      ..sort((a, b) => a.startAt.compareTo(b.startAt));
+    setState(() {
+      _editingEventForPanel = null;
+      _createDateForPanel = null;
+      _selectedEventForPanel = dayEvents.isEmpty ? null : dayEvents.first;
+      _workPanel = dayEvents.isEmpty ? _CalendarWorkPanel.calendar : _CalendarWorkPanel.details;
+    });
+  }
+
   Future<void> _openCreate(DateTime day) async {
     if (!canEdit) return;
-
     final createdBy = await PrefUtils.getUserId() ?? 0;
     if (!mounted) return;
-
     setState(() {
       selectedDay = day;
       _editorCreatedBy = createdBy;
@@ -180,36 +299,77 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
     });
   }
 
-  Future<void> _openEdit(TeamEvent current) async {
+  Future<void> _openEdit(TeamEvent event) async {
     if (!canEdit) return;
-
     final createdBy = await PrefUtils.getUserId() ?? 0;
     if (!mounted) return;
-
     setState(() {
-      selectedDay = current.startAt;
+      selectedDay = event.startAt;
       _editorCreatedBy = createdBy;
-      _editingEventForPanel = current;
-      _createDateForPanel = current.startAt;
-      _selectedEventForPanel = current;
+      _createDateForPanel = event.startAt;
+      _editingEventForPanel = event;
+      _selectedEventForPanel = event;
       _workPanel = _CalendarWorkPanel.editor;
     });
   }
 
-  Future<void> _openDetails(TeamEvent e) async {
-    if (!mounted) return;
-
+  void _openDetails(TeamEvent event) {
     setState(() {
-      selectedDay = e.startAt;
-      _selectedEventForPanel = e;
+      selectedDay = event.startAt;
+      _selectedEventForPanel = event;
       _editingEventForPanel = null;
       _createDateForPanel = null;
       _workPanel = _CalendarWorkPanel.details;
     });
   }
 
-  void _closeWorkPanel() {
+  bool _canRateEvent(TeamEvent event) {
+    return event.type == TeamEventType.training || event.type == TeamEventType.gym;
+  }
+
+  Future<void> _openTrainingRatings(TeamEvent event) async {
+    if (!canEdit) return;
+
+    if (!_canRateEvent(event)) {
+      Get.snackbar(
+        'Оценка',
+        'Оценка доступна только для тренировок и ОФП.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    final coachId = await PrefUtils.getUserId() ?? 0;
+    if (coachId <= 0) {
+      Get.snackbar(
+        'Оценка',
+        'Не найден userId тренера.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
     if (!mounted) return;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => TrainingRatingSheet(
+        apiBase: apiBase,
+        teamId: event.teamId,
+        eventId: event.id,
+        coachId: coachId,
+        title: event.title,
+      ),
+    );
+
+    if (mounted) {
+      await _fetch();
+    }
+  }
+
+  void _closeWorkPanel() {
     setState(() {
       _workPanel = _CalendarWorkPanel.calendar;
       _selectedEventForPanel = null;
@@ -220,7 +380,6 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
 
   Future<void> _handleEditorSubmit(TeamEvent event) async {
     if (!canEdit) return;
-
     try {
       if (_editingEventForPanel == null) {
         await api.add(event: event, createdBy: _editorCreatedBy);
@@ -229,7 +388,6 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
         await api.update(event: event);
         Get.snackbar('Готово', 'Событие обновлено', snackPosition: SnackPosition.BOTTOM);
       }
-
       await _fetch();
       if (!mounted) return;
       setState(() {
@@ -246,7 +404,6 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
 
   Future<void> _handleAddMoreFromEditor(TeamEvent event) async {
     if (!canEdit) return;
-
     try {
       await api.add(event: event, createdBy: _editorCreatedBy);
       await _fetch();
@@ -261,24 +418,12 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
     }
   }
 
-  void _openFullCalendar() {
-    Get.to(
-      () => TeamCalendarScreen(
-        teamId: widget.teamId,
-        teamName: widget.teamName,
-      ),
-      transition: Transition.fadeIn,
-      duration: const Duration(milliseconds: 220),
-    );
-  }
-
-  Future<void> _delete(TeamEvent e) async {
+  Future<void> _delete(TeamEvent event) async {
     if (!canEdit) return;
-
     final ok = await Get.dialog<bool>(
       AlertDialog(
         title: const Text('Удалить событие?'),
-        content: Text('«${e.title}» будет удалено из календаря.'),
+        content: Text('«${event.title}» будет удалено из календаря.'),
         actions: [
           TextButton(onPressed: () => Get.back(result: false), child: const Text('Отмена')),
           TextButton(
@@ -289,117 +434,45 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
         ],
       ),
     );
-
     if (ok != true) return;
 
     try {
-      await api.remove(eventId: e.id, teamId: widget.teamId);
+      await api.remove(eventId: event.id, teamId: widget.teamId);
       await _fetch();
-      if (mounted && _selectedEventForPanel?.id == e.id) {
+      if (mounted && _selectedEventForPanel?.id == event.id) {
         _closeWorkPanel();
       }
-      Get.snackbar('Готово', 'Событие удалено');
-    } catch (err) {
-      Get.snackbar('Ошибка', err.toString(), snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar('Готово', 'Событие удалено', snackPosition: SnackPosition.BOTTOM);
+    } catch (e) {
+      Get.snackbar('Ошибка', e.toString(), snackPosition: SnackPosition.BOTTOM);
     }
   }
 
-  void _previousPeriod() {
-    setState(() {
-      if (mode == CmrCalendarMode.month) {
-        cursor = DateTime(cursor.year, cursor.month - 1, 1);
-        selectedDay = DateTime(cursor.year, cursor.month, 1);
-      } else {
-        cursor = cursor.subtract(const Duration(days: 7));
-        selectedDay = cursor;
-      }
-    });
-    _fetch();
+  TeamEvent? _eventForRightPane(List<TeamEvent> selectedList) {
+    if (_workPanel == _CalendarWorkPanel.details && _selectedEventForPanel != null) {
+      final current = _selectedEventForPanel!;
+      if (events.any((e) => e.id == current.id)) return current;
+    }
+    if (selectedList.isNotEmpty) return selectedList.first;
+    return null;
   }
 
-  void _nextPeriod() {
-    setState(() {
-      if (mode == CmrCalendarMode.month) {
-        cursor = DateTime(cursor.year, cursor.month + 1, 1);
-        selectedDay = DateTime(cursor.year, cursor.month, 1);
-      } else {
-        cursor = cursor.add(const Duration(days: 7));
-        selectedDay = cursor;
-      }
-    });
-    _fetch();
-  }
-
-  void _today() {
+  TeamEvent? _nextUpcomingEvent() {
     final now = DateTime.now();
-    setState(() {
-      cursor = now;
-      selectedDay = now;
-    });
-    _fetch();
-  }
-
-  Future<void> _pickMonth() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: cursor,
-      firstDate: DateTime(now.year - 5, 1, 1),
-      lastDate: DateTime(now.year + 5, 12, 31),
-      helpText: 'Выберите месяц календаря',
-      cancelText: 'Отмена',
-      confirmText: 'Выбрать',
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: Theme.of(context).colorScheme.copyWith(
-                  primary: _C.green,
-                  secondary: _C.greenDark,
-                ),
-          ),
-          child: child ?? const SizedBox.shrink(),
-        );
-      },
-    );
-
-    if (picked == null) return;
-
-    setState(() {
-      cursor = DateTime(picked.year, picked.month, 1);
-      selectedDay = DateTime(picked.year, picked.month, picked.day);
-      mode = CmrCalendarMode.month;
-    });
-    _fetch();
-  }
-
-  void _selectCalendarDay(DateTime day) {
-    final nextCursor = mode == CmrCalendarMode.month
-        ? DateTime(day.year, day.month, 1)
-        : startOfWeekMonday(day);
-
-    final needReload = mode == CmrCalendarMode.month
-        ? (nextCursor.year != cursor.year || nextCursor.month != cursor.month)
-        : dateOnly(nextCursor) != dateOnly(startOfWeekMonday(cursor));
-
-    setState(() {
-      selectedDay = day;
-      if (needReload) cursor = nextCursor;
-    });
-
-    if (needReload) _fetch();
+    final future = events.where((e) => e.startAt.isAfter(now)).toList()
+      ..sort((a, b) => a.startAt.compareTo(b.startAt));
+    if (future.isNotEmpty) return future.first;
+    final sorted = events.toList()..sort((a, b) => a.startAt.compareTo(b.startAt));
+    return sorted.isEmpty ? null : sorted.first;
   }
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    final isMobile = size.width < 700;
-
     if (loading) {
       return Container(
+        width: double.infinity,
         decoration: _C.cardDecoration,
-        child: const Center(
-          child: CircularProgressIndicator(color: _C.green),
-        ),
+        child: const Center(child: CircularProgressIndicator(color: _C.green)),
       );
     }
 
@@ -413,262 +486,333 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
       );
     }
 
-    final selectedList = (eventsByDay[dateOnly(selectedDay)] ?? const <TeamEvent>[])
-        .toList()
+    final selectedList = (eventsByDay[dateOnly(selectedDay)] ?? const <TeamEvent>[]).toList()
       ..sort((a, b) => a.startAt.compareTo(b.startAt));
-
     final weekStart = startOfWeekMonday(cursor);
 
-    if (isMobile) {
-      return _buildMobileLayout(selectedList, weekStart);
-    }
+    return DefaultTextStyle.merge(
+      style: const TextStyle(
+        fontFamily: _C.font,
+        color: _C.text,
+        height: 1.18,
+        letterSpacing: -0.08,
+      ),
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final isPhone = c.maxWidth < 720;
+          if (isPhone) {
+            return _buildMobileLayout(selectedList, weekStart, c);
+          }
 
-    return Row(
-      children: [
-        SizedBox(
-          width: size.width >= 1100 ? 390 : 340,
-          child: _buildAgendaColumn(selectedList),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _workPanel == _CalendarWorkPanel.calendar
-              ? _buildCalendarArea(weekStart)
-              : _buildWorkPanel(),
-        ),
-      ],
+          final selectedForDetails = _eventForRightPane(selectedList);
+
+          // Как в CMR-матчах: календарь остаётся слева, а список/детали/редактор
+          // всегда живут в правой колонке. Без нижнего дублирующего блока.
+          return _buildTabletKpiWorkspace(
+            selectedList: selectedList,
+            weekStart: weekStart,
+            selectedForDetails: selectedForDetails,
+            constraints: c,
+          );
+        },
+      ),
     );
   }
 
-  Widget _buildMobileLayout(List<TeamEvent> selectedList, DateTime weekStart) {
+  double _calendarColumnWidth(BoxConstraints constraints) {
+    // Геометрия как у панелей тренеров и игроков:
+    // левая рабочая колонка фиксируется до 480 px и занимает около 45% ширины,
+    // а правый информационный блок получает всё оставшееся пространство.
+    final width = constraints.maxWidth.isFinite ? constraints.maxWidth : 1180.0;
+    return math.min(480.0, width * .45);
+  }
+
+  Widget _buildTabletKpiWorkspace({
+    required List<TeamEvent> selectedList,
+    required DateTime weekStart,
+    required TeamEvent? selectedForDetails,
+    required BoxConstraints constraints,
+  }) {
+    final height = constraints.maxHeight.isFinite ? constraints.maxHeight : 780.0;
+    const gap = 12.0;
+    final showWorkPane = _workPanel == _CalendarWorkPanel.editor ||
+        (_workPanel == _CalendarWorkPanel.details && selectedForDetails != null);
+    final calendarWidth = _calendarColumnWidth(constraints);
+
+    return SizedBox(
+      width: double.infinity,
+      height: height,
+      child: Container(
+        color: _C.bg,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(width: calendarWidth, child: _buildStrictCalendarWindow(weekStart, selectedList)),
+            const SizedBox(width: gap),
+            Expanded(
+              child: showWorkPane
+                  ? _buildCalendarDetailsPane(selectedForDetails, selectedList, compact: true)
+                  : _buildCalendarRightOverviewPanel(selectedList),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCalendarMatchHeader(List<TeamEvent> selectedList) {
+    final next = _nextUpcomingEvent();
+    final period = mode == CmrCalendarMode.month ? _monthTitle(cursor) : _weekTitle(cursor);
+    final selectedText = _dateTitle(selectedDay);
+    final selectedCountText = '${selectedList.length} ${_pluralEvent(selectedList.length)}';
+
     return Container(
+      height: 58,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _C.border),
+        boxShadow: _C.softShadow,
       ),
-      child: Column(
-        children: [
-          _buildMobileHeader(selectedList),
-          Expanded(
-            child: RefreshIndicator(
-              color: _C.green,
-              onRefresh: () => _fetch(),
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 18),
-                children: [
-                  if (_workPanel == _CalendarWorkPanel.calendar) ...[
-                    _buildCalendarArea(weekStart),
-                    const SizedBox(height: 12),
-                    _SelectedDayHeader(
-                      title: _dateTitle(selectedDay),
-                      canEdit: canEdit,
-                      onAdd: () => _openCreate(selectedDay),
-                    ),
-                    const SizedBox(height: 10),
-                    if (selectedList.isEmpty)
-                      Container(
-                        padding: const EdgeInsets.all(22),
-                        decoration: _C.cardDecoration.copyWith(
-                          borderRadius: BorderRadius.circular(22),
-                          boxShadow: [],
-                        ),
-                        child: const Text(
-                          'На выбранный день событий нет',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: _C.muted,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      )
-                    else
-                      ...selectedList.map(
-                        (event) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: _CmrEventTile(
-                            event: event,
-                            canEdit: canEdit,
-                            onDetails: () => _openDetails(event),
-                            onEdit: () => _openEdit(event),
-                            onDelete: () => _delete(event),
-                          ),
-                        ),
-                      ),
-                  ] else
-                    SizedBox(
-                      height: MediaQuery.of(context).size.height * .76,
-                      child: _buildWorkPanel(),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMobileHeader(List<TeamEvent> selectedList) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const _CmrIconBox(icon: Icons.calendar_month_rounded, dark: true),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.teamName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: _C.title.copyWith(fontSize: 18),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      mode == CmrCalendarMode.month
-                          ? _monthTitle(cursor)
-                          : 'Неделя ${_weekTitle(cursor)}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: _C.muted,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              _HeaderIconButton(
-                icon: refreshing ? Icons.sync_rounded : Icons.refresh_rounded,
-                onTap: _fetch,
-              ),
-              const SizedBox(width: 8),
-              _HeaderIconButton(
-                icon: Icons.open_in_full_rounded,
-                onTap: _openFullCalendar,
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(child: _HeroStat(value: '${events.length}', title: 'событий')),
-              const SizedBox(width: 8),
-              Expanded(child: _HeroStat(value: '${selectedList.length}', title: 'на день')),
-              const SizedBox(width: 8),
-              Expanded(child: _HeroStat(value: canEdit ? 'Да' : 'Нет', title: 'редакт.')),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAgendaColumn(List<TeamEvent> selectedList) {
-    return Container(
-      decoration: _C.cardDecoration,
-      child: Column(
+      padding: const EdgeInsets.fromLTRB(10, 7, 8, 7),
+      child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(18),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: _C.surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: _C.border),
             ),
+            child: Stack(
+              children: const [
+                Center(child: Icon(Icons.calendar_month_rounded, color: _C.text, size: 19)),
+                Positioned(left: 0, top: 9, bottom: 9, child: _BrandAccentLine(height: 16)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 34,
             child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    const _CmrIconBox(icon: Icons.calendar_month_rounded, dark: true),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(widget.teamName, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.title.copyWith(fontSize: 19)),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Календарь команды',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: _C.muted, fontWeight: FontWeight.w700, fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
-                    _HeaderIconButton(icon: refreshing ? Icons.sync_rounded : Icons.refresh_rounded, onTap: _fetch),
-                    const SizedBox(width: 8),
-                    _HeaderIconButton(icon: Icons.open_in_full_rounded, onTap: _openFullCalendar),
-                  ],
+                Text(
+                  widget.teamName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: _C.text, fontSize: 14.6, fontWeight: FontWeight.w900, height: 1),
                 ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(child: _HeroStat(value: '${events.length}', title: 'событий')),
-                    const SizedBox(width: 8),
-                    Expanded(child: _HeroStat(value: '${selectedList.length}', title: 'на день')),
-                    const SizedBox(width: 8),
-                    Expanded(child: _HeroStat(value: canEdit ? 'Да' : 'Нет', title: 'редакт.')),
-                  ],
+                const SizedBox(height: 4),
+                Text(
+                  widget.clubName.trim().isEmpty ? 'Команда' : widget.clubName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: _C.muted, fontSize: 10.2, fontWeight: FontWeight.w800, height: 1),
                 ),
               ],
             ),
           ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 28,
+            child: _CalendarTopLine(
+              label: mode == CmrCalendarMode.month ? 'Месяц' : 'Неделя',
+              value: period,
+              subvalue: '$selectedText · $selectedCountText',
+              icon: Icons.date_range_rounded,
+              color: _C.green,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            flex: 26,
+            child: _CalendarTopLine(
+              label: 'Ближайшее',
+              value: next == null ? 'Нет событий' : next.title,
+              subvalue: next == null ? 'Добавьте событие на день' : '${_dateTitle(next.startAt)} · ${hhmm(next.startAt)}',
+              icon: next == null ? Icons.event_busy_rounded : Icons.event_available_rounded,
+              color: next == null ? const Color(0xFF64748B) : eventTypeColor(next.type),
+            ),
+          ),
+          const SizedBox(width: 8),
+          _ProfileRoundButton(icon: Icons.today_rounded, onTap: _today),
+          const SizedBox(width: 5),
+          _ProfileRoundButton(icon: refreshing ? Icons.sync_rounded : Icons.refresh_rounded, onTap: () => _fetch()),
+          const SizedBox(width: 5),
+          _ProfileRoundButton(icon: Icons.open_in_full_rounded, onTap: _openFullCalendar),
+          if (canEdit) ...[
+            const SizedBox(width: 5),
+            _ProfileRoundButton(icon: Icons.add_rounded, onTap: () => _openCreate(selectedDay)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabletDefaultGrid({
+    required List<TeamEvent> selectedList,
+    required DateTime weekStart,
+    required TeamEvent? selectedForDetails,
+    required double gap,
+  }) {
+    return LayoutBuilder(
+      builder: (context, c) {
+        final calendarWidth = _calendarColumnWidth(c);
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(width: calendarWidth, child: _buildStrictCalendarWindow(weekStart, selectedList)),
+            SizedBox(width: gap),
+            Expanded(
+              child: _buildCalendarRightOverviewPanel(selectedList),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildTabletWorkModeGrid({
+    required List<TeamEvent> selectedList,
+    required DateTime weekStart,
+    required TeamEvent? selectedForDetails,
+    required double gap,
+  }) {
+    return LayoutBuilder(
+      builder: (context, c) {
+        final calendarWidth = _calendarColumnWidth(c);
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(width: calendarWidth, child: _buildStrictCalendarWindow(weekStart, selectedList)),
+            SizedBox(width: gap),
+            Expanded(
+              child: _buildCalendarDetailsPane(selectedForDetails, selectedList),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildCalendarRightOverviewPanel(List<TeamEvent> selectedList) {
+    final matchCount = events
+        .where((e) => e.type == TeamEventType.leagueMatch || e.type == TeamEventType.friendlyMatch)
+        .length;
+    final trainingCount = events.where((e) => e.type == TeamEventType.training || e.type == TeamEventType.gym).length;
+    final theoryCount = events.where((e) => e.type == TeamEventType.theory).length;
+    final dayOffCount = events.where((e) => e.type == TeamEventType.dayOff).length;
+    final next = _nextUpcomingEvent();
+    final selectedTitle = _dateTitle(selectedDay);
+
+    return _StrictWorkspaceCard(
+      icon: Icons.view_agenda_rounded,
+      title: 'События дня',
+      subtitle: '$selectedTitle · ${selectedList.length} ${_pluralEvent(selectedList.length)}',
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ProfileRoundButton(icon: refreshing ? Icons.sync_rounded : Icons.refresh_rounded, onTap: () => _fetch()),
+          if (canEdit) ...[
+            const SizedBox(width: 7),
+            _ProfileRoundButton(icon: Icons.add_rounded, onTap: () => _openCreate(selectedDay)),
+          ],
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _CalendarSideKpi(
+                  icon: Icons.today_rounded,
+                  label: 'День',
+                  value: '${selectedList.length}',
+                  hint: 'на дату',
+                  color: _C.green,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _CalendarSideKpi(
+                  icon: Icons.fitness_center_rounded,
+                  label: 'Тренировки',
+                  value: '$trainingCount',
+                  hint: 'в периоде',
+                  color: _C.text,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _CalendarSideKpi(
+                  icon: Icons.sports_soccer_rounded,
+                  label: 'Матчи',
+                  value: '$matchCount',
+                  hint: 'в периоде',
+                  color: _C.text,
+                ),
+              ),
+            ],
+          ),
+          if (next != null) ...[
+            const SizedBox(height: 10),
+            _CalendarNextEventStrip(event: next, title: next.title.trim().isEmpty ? 'Ближайшее событие' : next.title),
+          ],
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _CalendarSideKpi(
+                  icon: Icons.psychology_alt_outlined,
+                  label: 'Теория',
+                  value: '$theoryCount',
+                  hint: 'разборы',
+                  color: const Color(0xFFB7791F),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _CalendarSideKpi(
+                  icon: Icons.beach_access_rounded,
+                  label: 'Выходные',
+                  value: '$dayOffCount',
+                  hint: 'в периоде',
+                  color: const Color(0xFF64748B),
+                ),
+              ),
+            ],
+          ),
           Padding(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.fromLTRB(0, 12, 0, 8),
             child: Row(
               children: [
                 Expanded(
-                  child: _ModeButton(
-                    text: 'Месяц',
-                    active: mode == CmrCalendarMode.month,
-                    onTap: () {
-                      if (mode == CmrCalendarMode.month) return;
-                      setState(() => mode = CmrCalendarMode.month);
-                      _fetch();
-                    },
+                  child: Text(
+                    'Список событий',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _C.section(),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _ModeButton(
-                    text: 'Неделя',
-                    active: mode == CmrCalendarMode.week,
-                    onTap: () {
-                      if (mode == CmrCalendarMode.week) return;
-                      setState(() => mode = CmrCalendarMode.week);
-                      _fetch();
-                    },
-                  ),
+                Text(
+                  selectedTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: _C.muted, fontSize: 11.2, fontWeight: FontWeight.w800),
                 ),
               ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-            child: _SelectedDayHeader(
-              title: _dateTitle(selectedDay),
-              canEdit: canEdit,
-              onAdd: () => _openCreate(selectedDay),
             ),
           ),
           Expanded(
             child: selectedList.isEmpty
                 ? const _MiniEmpty(text: 'На выбранный день событий нет')
                 : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                    padding: EdgeInsets.zero,
                     itemCount: selectedList.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    separatorBuilder: (_, __) => const SizedBox(height: 7),
                     itemBuilder: (_, index) {
                       final event = selectedList[index];
                       return _CmrEventTile(
@@ -677,6 +821,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                         onDetails: () => _openDetails(event),
                         onEdit: () => _openEdit(event),
                         onDelete: () => _delete(event),
+                        onRating: () => _openTrainingRatings(event),
                       );
                     },
                   ),
@@ -686,29 +831,538 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
     );
   }
 
-  Widget _buildWorkPanel() {
-    if (_workPanel == _CalendarWorkPanel.details && _selectedEventForPanel != null) {
-      final event = _selectedEventForPanel!;
-      return _InlineEventDetailsPanel(
-        event: event,
-        teamName: widget.teamName,
-        canEdit: canEdit,
-        onClose: _closeWorkPanel,
-        onBackToCalendar: _closeWorkPanel,
-        onEdit: () => _openEdit(event),
-        onDelete: () => _delete(event),
-      );
-    }
+  Widget _buildPeriodStructureCompact() {
+    final rows = [
+      _CalendarTypeData(TeamEventType.training, 'Тренировки'),
+      _CalendarTypeData(TeamEventType.leagueMatch, 'Матчи'),
+      _CalendarTypeData(TeamEventType.friendlyMatch, 'Товарищ.'),
+      _CalendarTypeData(TeamEventType.theory, 'Теория'),
+      _CalendarTypeData(TeamEventType.gym, 'Зал'),
+      _CalendarTypeData(TeamEventType.dayOff, 'Выходные'),
+    ];
 
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: _C.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _C.border),
+      ),
+      child: LayoutBuilder(
+        builder: (context, c) {
+          const gap = 6.0;
+          final columns = c.maxWidth >= 420 ? 3 : 2;
+          final width = (c.maxWidth - gap * (columns - 1)) / columns;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.query_stats_rounded, color: _C.greenDark, size: 16),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Text(
+                      'Структура периода',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _C.title.copyWith(fontSize: 13.2, fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                  Text(
+                    mode == CmrCalendarMode.month ? _monthTitle(cursor) : _weekTitle(cursor),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: _C.muted, fontSize: 10.4, fontWeight: FontWeight.w800),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: gap,
+                runSpacing: gap,
+                children: [
+                  for (final row in rows)
+                    SizedBox(
+                      width: width,
+                      child: _CalendarTypeTile(
+                        label: row.label,
+                        value: '${events.where((e) => e.type == row.type).length}',
+                        color: eventTypeColor(row.type),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildCalendarInfoRows(List<TeamEvent> selectedList) {
+    final matchCount = events.where((e) => e.type == TeamEventType.leagueMatch || e.type == TeamEventType.friendlyMatch).length;
+    final trainingCount = events.where((e) => e.type == TeamEventType.training || e.type == TeamEventType.gym).length;
+    final theoryCount = events.where((e) => e.type == TeamEventType.theory).length;
+    final dayOffCount = events.where((e) => e.type == TeamEventType.dayOff).length;
+    final next = _nextUpcomingEvent();
+
+    final items = [
+      _CalendarKpiData(label: 'Период', value: '${events.length}', icon: Icons.dashboard_customize_rounded, color: _C.green, hint: mode == CmrCalendarMode.month ? _monthTitle(cursor) : _weekTitle(cursor)),
+      _CalendarKpiData(label: 'День', value: '${selectedList.length}', icon: Icons.today_rounded, color: _C.text, hint: _dateTitle(selectedDay)),
+      _CalendarKpiData(label: 'Тренировки', value: '$trainingCount', icon: Icons.fitness_center_rounded, color: _C.text, hint: 'поле + зал'),
+      _CalendarKpiData(label: 'Матчи', value: '$matchCount', icon: Icons.sports_soccer_rounded, color: _C.text, hint: 'игры'),
+      _CalendarKpiData(label: 'Теория', value: '$theoryCount', icon: Icons.psychology_alt_outlined, color: const Color(0xFFB7791F), hint: dayOffCount > 0 ? 'выходных: $dayOffCount' : 'разбор'),
+      _CalendarKpiData(label: 'Следующее', value: next == null ? '—' : hhmm(next.startAt), icon: Icons.play_arrow_rounded, color: _C.text, hint: next == null ? 'нет' : next.title),
+    ];
+
+    return SizedBox(
+      height: 42,
+      child: LayoutBuilder(
+        builder: (context, c) {
+          const gap = 5.0;
+          final wide = c.maxWidth >= 1040;
+          if (wide) {
+            return Row(
+              children: [
+                for (var i = 0; i < items.length; i++) ...[
+                  Expanded(child: _CalendarInfoCell(item: items[i])),
+                  if (i != items.length - 1) const SizedBox(width: gap),
+                ],
+              ],
+            );
+          }
+
+          return ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            itemBuilder: (_, index) => SizedBox(width: 156, child: _CalendarInfoCell(item: items[index])),
+            separatorBuilder: (_, __) => const SizedBox(width: gap),
+            itemCount: items.length,
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildStrictCalendarWindow(DateTime weekStart, List<TeamEvent> selectedList) {
+    final title = mode == CmrCalendarMode.month ? _monthTitle(cursor) : 'Неделя • ${_weekTitle(cursor)}';
+
+    return _StrictWorkspaceCard(
+      icon: Icons.calendar_month_rounded,
+      title: title,
+      subtitle: '${widget.teamName} · ${_dateTitle(selectedDay)} · ${events.length} ${_pluralEvent(events.length)}',
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ProfileRoundButton(icon: Icons.chevron_left_rounded, onTap: _previousPeriod),
+          const SizedBox(width: 6),
+          _ProfileRoundButton(icon: Icons.chevron_right_rounded, onTap: _nextPeriod),
+          const SizedBox(width: 6),
+          _ProfileRoundButton(icon: Icons.today_rounded, onTap: _today),
+          const SizedBox(width: 6),
+          _ProfileRoundButton(icon: refreshing ? Icons.sync_rounded : Icons.refresh_rounded, onTap: () => _fetch()),
+          const SizedBox(width: 6),
+          _ProfileRoundButton(icon: Icons.open_in_full_rounded, onTap: _openFullCalendar),
+        ],
+      ),
+      child: Column(
+        children: [
+          _buildCalendarInfoRows(selectedList),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              SizedBox(width: 250, child: _buildModeSelector()),
+              const SizedBox(width: 8),
+              Expanded(child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: _legend())),
+              const SizedBox(width: 8),
+              if (canEdit) _ProfileActionButton(icon: Icons.add_rounded, text: 'Событие', onTap: () => _openCreate(selectedDay)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                width: double.infinity,
+                color: _C.soft2,
+                padding: const EdgeInsets.all(6),
+                child: LayoutBuilder(
+                  builder: (context, calendarBox) {
+                    return mode == CmrCalendarMode.month
+                        ? _buildInlineMonthCalendar(maxHeight: calendarBox.maxHeight)
+                        : CalendarWeekView(
+                            weekStartMonday: weekStart,
+                            eventsByDay: eventsByDay,
+                            selectedDay: selectedDay,
+                            onDayTap: _selectCalendarDayAndSyncPane,
+                            onDayLongPress: (d) {
+                              if (!canEdit) return;
+                              _selectCalendarDayAndSyncPane(d);
+                              _openCreate(d);
+                            },
+                            onEventTap: _openDetails,
+                            onEventLongPress: (e) {
+                              if (!canEdit) return;
+                              _openEdit(e);
+                            },
+                          );
+                  },
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectedDayEventsWindow(List<TeamEvent> selectedList) {
+    return _StrictWorkspaceCard(
+      icon: Icons.view_agenda_rounded,
+      title: 'События дня',
+      subtitle: _dateTitle(selectedDay),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ProfileRoundButton(icon: refreshing ? Icons.sync_rounded : Icons.refresh_rounded, onTap: () => _fetch()),
+          if (canEdit) ...[
+            const SizedBox(width: 6),
+            _ProfileRoundButton(icon: Icons.add_rounded, onTap: () => _openCreate(selectedDay)),
+          ],
+        ],
+      ),
+      child: selectedList.isEmpty
+          ? const _MiniEmpty(text: 'На выбранный день событий нет')
+          : ListView.separated(
+              padding: EdgeInsets.zero,
+              itemCount: selectedList.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 6),
+              itemBuilder: (_, index) {
+                final event = selectedList[index];
+                return _CmrEventTile(
+                  event: event,
+                  canEdit: canEdit,
+                  onDetails: () => _openDetails(event),
+                  onEdit: () => _openEdit(event),
+                  onDelete: () => _delete(event),
+                  onRating: () => _openTrainingRatings(event),
+                );
+              },
+            ),
+    );
+  }
+
+  Widget _buildPeriodTypeWindow() {
+    final rows = [
+      _CalendarTypeData(TeamEventType.training, 'Тренировки'),
+      _CalendarTypeData(TeamEventType.leagueMatch, 'Матчи'),
+      _CalendarTypeData(TeamEventType.friendlyMatch, 'Товарищ.'),
+      _CalendarTypeData(TeamEventType.theory, 'Теория'),
+      _CalendarTypeData(TeamEventType.gym, 'Зал'),
+      _CalendarTypeData(TeamEventType.dayOff, 'Выходные'),
+    ];
+
+    return _StrictWorkspaceCard(
+      icon: Icons.query_stats_rounded,
+      title: 'Структура периода',
+      subtitle: mode == CmrCalendarMode.month ? _monthTitle(cursor) : _weekTitle(cursor),
+      dense: true,
+      child: LayoutBuilder(
+        builder: (context, c) {
+          const gap = 6.0;
+          final columns = c.maxWidth >= 430 ? 3 : 2;
+          final width = (c.maxWidth - gap * (columns - 1)) / columns;
+          return Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            children: [
+              for (final row in rows)
+                SizedBox(
+                  width: width,
+                  child: _CalendarTypeTile(
+                    label: row.label,
+                    value: '${events.where((e) => e.type == row.type).length}',
+                    color: eventTypeColor(row.type),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildProfileCalendarCenter({
+    required List<TeamEvent> selectedList,
+    required DateTime weekStart,
+    required double maxWidth,
+  }) {
+    return RefreshIndicator(
+      color: _C.green,
+      onRefresh: () => _fetch(),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(0, 0, 0, 18),
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          _buildSlimCalendarBlock(weekStart),
+          const SizedBox(height: 10),
+          _buildModeSelector(),
+          const SizedBox(height: 10),
+          _legend(),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'События за ${_dateTitle(selectedDay)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _C.title.copyWith(fontSize: 18, fontWeight: FontWeight.w900),
+                ),
+              ),
+              if (canEdit) _ProfileActionButton(icon: Icons.add_rounded, text: 'Событие', onTap: () => _openCreate(selectedDay)),
+              const SizedBox(width: 6),
+              _ProfileRoundButton(icon: refreshing ? Icons.sync_rounded : Icons.refresh_rounded, onTap: () => _fetch()),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (selectedList.isEmpty)
+            const _MiniEmpty(text: 'На выбранный день событий нет')
+          else
+            _buildProfileEventCardsList(selectedList),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSlimCalendarBlock(DateTime weekStart) {
+    final title = mode == CmrCalendarMode.month ? _monthTitle(cursor) : 'Неделя • ${_weekTitle(cursor)}';
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _C.border),
+        boxShadow: _C.panelShadow,
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              _ProfileCalendarArrow(icon: Icons.chevron_left_rounded, onTap: _previousPeriod),
+              Expanded(
+                child: Center(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(6),
+                    onTap: _pickMonth,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+                      child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.title.copyWith(fontSize: 16, fontWeight: FontWeight.w900)),
+                    ),
+                  ),
+                ),
+              ),
+              _ProfileCalendarArrow(icon: Icons.chevron_right_rounded, onTap: _nextPeriod),
+              const SizedBox(width: 6),
+              _ProfileRoundButton(icon: Icons.today_rounded, onTap: _today),
+              const SizedBox(width: 6),
+              _ProfileRoundButton(icon: Icons.open_in_full_rounded, onTap: _openFullCalendar),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (mode == CmrCalendarMode.month)
+            _buildInlineMonthCalendar()
+          else
+            SizedBox(
+              height: 380,
+              child: CalendarWeekView(
+                weekStartMonday: weekStart,
+                eventsByDay: eventsByDay,
+                selectedDay: selectedDay,
+                onDayTap: _selectCalendarDayAndSyncPane,
+                onDayLongPress: (d) {
+                  if (!canEdit) return;
+                  _selectCalendarDayAndSyncPane(d);
+                  _openCreate(d);
+                },
+                onEventTap: _openDetails,
+                onEventLongPress: (e) {
+                  if (!canEdit) return;
+                  _openEdit(e);
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInlineMonthCalendar({double? maxHeight}) {
+    const weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+    final first = DateTime(cursor.year, cursor.month, 1);
+    final daysInMonth = DateTime(cursor.year, cursor.month + 1, 0).day;
+    final prevMonthDays = DateTime(cursor.year, cursor.month, 0).day;
+    final leading = first.weekday - 1;
+    final total = ((leading + daysInMonth + 6) ~/ 7) * 7;
+    final rowsCount = total ~/ 7;
+
+    return Column(
+      children: [
+        Row(
+          children: weekdays
+              .map(
+                (d) => Expanded(
+                  child: Center(
+                    child: Text(
+                      d,
+                      style: const TextStyle(color: _C.muted, fontSize: 11, fontWeight: FontWeight.w900, height: 1.15),
+                    ),
+                  ),
+                ),
+              )
+              .toList(),
+        ),
+        const SizedBox(height: 5),
+        LayoutBuilder(
+          builder: (context, gridBox) {
+            const gap = 5.0;
+            final availableWidth = gridBox.maxWidth.isFinite ? gridBox.maxWidth : MediaQuery.sizeOf(context).width;
+            final maxGridHeight = maxHeight != null && maxHeight!.isFinite ? math.max(180.0, maxHeight! - 20.0) : null;
+            final cellWidth = (availableWidth - gap * 6) / 7;
+            final naturalCellHeight = cellWidth / 1.22;
+            final fittedCellHeight = maxGridHeight == null
+                ? naturalCellHeight
+                : (maxGridHeight - gap * (rowsCount - 1)) / rowsCount;
+            final cellHeight = maxGridHeight == null
+                ? naturalCellHeight
+                : math.max(36.0, math.min(naturalCellHeight, fittedCellHeight));
+            final ratio = math.max(.82, math.min(2.75, cellWidth / cellHeight));
+
+            return GridView.builder(
+              key: ValueKey('cmr-calendar-${cursor.year}-${cursor.month}-${selectedDay.toIso8601String()}'),
+              itemCount: total,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 7,
+                mainAxisSpacing: gap,
+                crossAxisSpacing: gap,
+                childAspectRatio: ratio,
+              ),
+              itemBuilder: (_, index) {
+                final dayNumber = index - leading + 1;
+                late DateTime day;
+                var inMonth = true;
+                if (dayNumber < 1) {
+                  day = DateTime(cursor.year, cursor.month - 1, prevMonthDays + dayNumber);
+                  inMonth = false;
+                } else if (dayNumber > daysInMonth) {
+                  day = DateTime(cursor.year, cursor.month + 1, dayNumber - daysInMonth);
+                  inMonth = false;
+                } else {
+                  day = DateTime(cursor.year, cursor.month, dayNumber);
+                }
+
+                final list = eventsByDay[dateOnly(day)] ?? const <TeamEvent>[];
+                final has = list.isNotEmpty;
+                final now = DateTime.now();
+                final today = dateOnly(day) == dateOnly(now);
+                final selected = dateOnly(day) == dateOnly(selectedDay);
+
+                return Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () => _selectCalendarDayAndSyncPane(day),
+                    onLongPress: () {
+                      if (!canEdit) return;
+                      _selectCalendarDayAndSyncPane(day);
+                      _openCreate(day);
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 160),
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? _C.ink
+                            : has
+                                ? _C.greenSoft2
+                                : _C.soft,
+                        borderRadius: BorderRadius.circular(10),
+                        border: selected
+                            ? Border.all(color: _C.ink)
+                            : today
+                                ? Border.all(color: _C.green.withOpacity(.42))
+                                : has
+                                    ? Border.all(color: _C.greenBorder)
+                                    : Border.all(color: _C.border),
+                      ),
+                      child: Stack(
+                        children: [
+                          Center(
+                            child: Text(
+                              '${day.day}',
+                              style: TextStyle(
+                                color: selected
+                                    ? Colors.white
+                                    : inMonth
+                                        ? (today ? _C.greenDark : _C.text)
+                                        : _C.muted.withOpacity(.64),
+                                fontSize: maxHeight == null ? 13 : 12.5,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          if (has)
+                            Positioned(
+                              top: 2,
+                              right: 3,
+                              child: _SegmentedEventBadge(events: list, selected: selected, size: maxHeight == null ? 16 : 15),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProfileEventCardsList(List<TeamEvent> rows) {
+    return Column(
+      children: rows
+          .map(
+            (event) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _CmrEventTile(
+                event: event,
+                canEdit: canEdit,
+                onDetails: () => _openDetails(event),
+                onEdit: () => _openEdit(event),
+                onDelete: () => _delete(event),
+                onRating: () => _openTrainingRatings(event),
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  Widget _buildCalendarDetailsPane(TeamEvent? event, List<TeamEvent> selectedList, {bool compact = false}) {
     if (_workPanel == _CalendarWorkPanel.editor) {
       final editing = _editingEventForPanel;
       final day = _createDateForPanel ?? selectedDay;
       final base = editing?.startAt ?? DateTime(day.year, day.month, day.day, 18, 0);
       return _InlineEventEditorPanel(
         title: editing == null ? 'Добавить событие' : 'Редактировать событие',
-        subtitle: editing == null
-            ? 'Выбранная дата: ${_dateTitle(day)}'
-            : 'Измените данные события и сохраните обновления',
+        subtitle: editing == null ? 'Выбранная дата: ${_dateTitle(day)}' : 'Измените данные события и сохраните обновления',
         icon: editing == null ? Icons.add_rounded : Icons.edit_calendar_rounded,
         accent: editing == null ? _C.green : eventTypeColor(editing.type),
         onClose: _closeWorkPanel,
@@ -726,183 +1380,130 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
       );
     }
 
-    return const SizedBox.shrink();
+    if (_workPanel == _CalendarWorkPanel.details && event != null) {
+      return _InlineEventDetailsPanel(
+        event: event,
+        teamName: widget.teamName,
+        canEdit: canEdit,
+        onClose: _closeWorkPanel,
+        onBackToCalendar: _closeWorkPanel,
+        onEdit: () => _openEdit(event),
+        onDelete: () => _delete(event),
+        onOpenRating: () => _openTrainingRatings(event),
+      );
+    }
+
+    return _CalendarDetailsPlaceholder(
+      teamName: widget.teamName,
+      selectedDate: _dateTitle(selectedDay),
+      eventsCount: selectedList.length,
+      canEdit: canEdit,
+      onAdd: () => _openCreate(selectedDay),
+      onRefresh: () => _fetch(),
+    );
   }
 
-  Widget _buildCalendarArea(DateTime weekStart) {
+  Widget _buildMobileLayout(List<TeamEvent> selectedList, DateTime weekStart, BoxConstraints constraints) {
+    final height = constraints.maxHeight.isFinite ? constraints.maxHeight : MediaQuery.sizeOf(context).height * .84;
+    return SizedBox(
+      width: double.infinity,
+      height: height,
+      child: Container(
+        decoration: _C.cardDecoration,
+        padding: const EdgeInsets.all(10),
+        child: RefreshIndicator(
+          color: _C.green,
+          onRefresh: () => _fetch(),
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
+              _buildMobileHeader(selectedList),
+              const SizedBox(height: 10),
+              _buildModeSelector(),
+              const SizedBox(height: 10),
+              _buildSlimCalendarBlock(weekStart),
+              const SizedBox(height: 10),
+              _buildSelectedDayEventsWindow(selectedList),
+              if (_workPanel == _CalendarWorkPanel.editor || _workPanel == _CalendarWorkPanel.details) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: _workPanel == _CalendarWorkPanel.editor ? 560 : 360,
+                  child: _buildCalendarDetailsPane(_eventForRightPane(selectedList), selectedList, compact: true),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileHeader(List<TeamEvent> selectedList) {
     return Container(
+      padding: const EdgeInsets.all(12),
       decoration: _C.cardDecoration,
-      child: Column(
+      child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(14),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(color: _C.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: _C.border)),
+            child: const Icon(Icons.calendar_month_rounded, color: _C.text, size: 22),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_monthTitle(cursor), maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.title.copyWith(fontSize: 16.5, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 3),
+                Text('${_dateTitle(selectedDay)} · ${selectedList.length} ${_pluralEvent(selectedList.length)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 11.5, fontWeight: FontWeight.w800)),
+              ],
             ),
-            child: LayoutBuilder(
-              builder: (context, c) {
-                final compact = c.maxWidth < 620;
-                final title = mode == CmrCalendarMode.month
-                    ? _monthTitle(cursor)
-                    : 'Неделя • ${_weekTitle(cursor)}';
+          ),
+          if (canEdit) _ProfileRoundButton(icon: Icons.add_rounded, onTap: () => _openCreate(selectedDay)),
+        ],
+      ),
+    );
+  }
 
-                final titleBlock = Row(
-                  children: [
-                    const _CmrIconBox(icon: Icons.event_available_rounded),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: _C.title.copyWith(fontSize: compact ? 18 : 22),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Выбранный день: ${_dateTitle(selectedDay)}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: _C.muted,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-
-                final actions = Row(
-                  mainAxisSize: compact ? MainAxisSize.max : MainAxisSize.min,
-                  children: compact
-                      ? [
-                          Expanded(
-                            child: _TopActionButton(
-                              icon: Icons.calendar_month_rounded,
-                              text: 'Выбрать',
-                              onTap: _pickMonth,
-                              compact: true,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _TopActionButton(
-                              icon: Icons.today_rounded,
-                              text: 'Сегодня',
-                              onTap: _today,
-                              compact: true,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          _SquareButton(icon: Icons.open_in_full_rounded, onTap: _openFullCalendar),
-                          const SizedBox(width: 8),
-                          _SquareButton(icon: Icons.chevron_left_rounded, onTap: _previousPeriod),
-                          const SizedBox(width: 8),
-                          _SquareButton(icon: Icons.chevron_right_rounded, onTap: _nextPeriod),
-                        ]
-                      : [
-                          _TopActionButton(
-                            icon: Icons.calendar_month_rounded,
-                            text: 'Выбрать',
-                            onTap: _pickMonth,
-                          ),
-                          const SizedBox(width: 8),
-                          _TopActionButton(
-                            icon: Icons.today_rounded,
-                            text: 'Сегодня',
-                            onTap: _today,
-                          ),
-                          const SizedBox(width: 8),
-                          _TopActionButton(
-                            icon: Icons.open_in_full_rounded,
-                            text: 'На весь экран',
-                            onTap: _openFullCalendar,
-                          ),
-                          const SizedBox(width: 8),
-                          _SquareButton(icon: Icons.chevron_left_rounded, onTap: _previousPeriod),
-                          const SizedBox(width: 8),
-                          _SquareButton(icon: Icons.chevron_right_rounded, onTap: _nextPeriod),
-                        ],
-                );
-
-                if (compact) {
-                  return Column(
-                    children: [
-                      titleBlock,
-                      const SizedBox(height: 12),
-                      actions,
-                    ],
-                  );
-                }
-
-                return Row(
-                  children: [
-                    Expanded(child: titleBlock),
-                    const SizedBox(width: 12),
-                    actions,
-                  ],
-                );
+  Widget _buildModeSelector() {
+    return Container(
+      height: 38,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(14), border: Border.all(color: _C.border)),
+      child: Row(
+        children: [
+          Expanded(
+            child: _ModeButton(
+              text: 'Месяц',
+              active: mode == CmrCalendarMode.month,
+              onTap: () {
+                if (mode == CmrCalendarMode.month) return;
+                setState(() {
+                  mode = CmrCalendarMode.month;
+                  cursor = DateTime(selectedDay.year, selectedDay.month, 1);
+                  _workPanel = _CalendarWorkPanel.calendar;
+                  _selectedEventForPanel = null;
+                });
+                _fetch();
               },
             ),
           ),
-          const SizedBox(height: 1),
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: _legend(),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-            child: LayoutBuilder(
-              builder: (context, c) {
-                final isNarrow = MediaQuery.of(context).size.width < 700;
-                final child = mode == CmrCalendarMode.month
-                    ? CalendarMonthGrid(
-                        month: cursor,
-                        eventsByDay: eventsByDay,
-                        selectedDay: selectedDay,
-                        onDayTap: _selectCalendarDay,
-                        onDayLongPress: (d) {
-                          if (!canEdit) return;
-                          _selectCalendarDay(d);
-                          _openCreate(d);
-                        },
-                      )
-                    : CalendarWeekView(
-                        weekStartMonday: weekStart,
-                        eventsByDay: eventsByDay,
-                        selectedDay: selectedDay,
-                        onDayTap: _selectCalendarDay,
-                        onDayLongPress: (d) {
-                          if (!canEdit) return;
-                          _selectCalendarDay(d);
-                          _openCreate(d);
-                        },
-                        onEventTap: (e) => _openDetails(e),
-                        onEventLongPress: (e) {
-                          if (!canEdit) return;
-                          _openEdit(e);
-                        },
-                      );
-
-                if (isNarrow) {
-                  return SizedBox(
-                    height: mode == CmrCalendarMode.month ? 430 : 520,
-                    child: child,
-                  );
-                }
-
-                return SizedBox(
-                  height: (c.maxHeight.isFinite ? c.maxHeight : 620.0)
-    .clamp(430.0, 720.0)
-    .toDouble(),
-                  child: child,
-                );
+          const SizedBox(width: 4),
+          Expanded(
+            child: _ModeButton(
+              text: 'Неделя',
+              active: mode == CmrCalendarMode.week,
+              onTap: () {
+                if (mode == CmrCalendarMode.week) return;
+                setState(() {
+                  mode = CmrCalendarMode.week;
+                  cursor = startOfWeekMonday(selectedDay);
+                  _workPanel = _CalendarWorkPanel.calendar;
+                  _selectedEventForPanel = null;
+                });
+                _fetch();
               },
             ),
           ),
@@ -915,26 +1516,22 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
     Widget item(TeamEventType t) {
       final c = eventTypeColor(t);
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF9FAFB),
-          borderRadius: BorderRadius.circular(99),
-          border: Border.all(color: _C.border),
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(14), border: Border.all(color: _C.border)),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(width: 9, height: 9, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(3))),
-            const SizedBox(width: 7),
-            Text(eventTypeLabel(t), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: _C.text)),
+            Container(width: 7, height: 7, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(width: 6),
+            Text(eventTypeLabel(t), style: const TextStyle(fontSize: 11.2, fontWeight: FontWeight.w900, color: _C.text, height: 1)),
           ],
         ),
       );
     }
 
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: 6,
+      runSpacing: 6,
       children: [
         item(TeamEventType.training),
         item(TeamEventType.leagueMatch),
@@ -947,7 +1544,1164 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
   }
 }
 
+class _C {
+  // Премиальная CMR-палитра: база — графит/белый, зелёный — только как фирменный микро-акцент.
+  static const String font = 'Roboto';
 
+  static const Color ink = Color(0xFF101214);
+  static const Color ink2 = Color(0xFF181B1F);
+  static const Color inkSoft = Color(0xFF22262B);
+
+  static const Color bg = Color(0xFFF4F5F6);
+  static const Color workspace = Color(0xFFF4F5F6);
+  static const Color panel = Colors.white;
+  static const Color card = Colors.white;
+  static const Color surface = Color(0xFFF8F9FA);
+  static const Color soft = Color(0xFFF1F2F4);
+  static const Color soft2 = Color(0xFFFAFAFB);
+  static const Color border = Color(0xFFE5E7EB);
+  static const Color borderStrong = Color(0xFFD8DEE6);
+
+  static const Color text = Color(0xFF111827);
+  static const Color text2 = Color(0xFF111827);
+  static const Color muted = Color(0xFF475467);
+  static const Color muted2 = Color(0xFF6B7280);
+
+  static const Color green = Color(0xFF00A750);
+  static const Color greenDark = Color(0xFF047A3F);
+  static const Color darkGreen = Color(0xFF047A3F);
+  static const Color accentSoft = Color(0xFFF3FBF6);
+  static const Color greenSoft = Color(0xFFF3FBF6);
+  static const Color greenSoft2 = Color(0xFFFAFFFC);
+  static const Color accentBorder = Color(0xFFDCEFE5);
+  static const Color greenBorder = Color(0xFFDCEFE5);
+
+  static const Color blue = Color(0xFF344054);
+  static const Color blueSoft = Color(0xFFF2F4F7);
+  static const Color amber = Color(0xFFB7791F);
+  static const Color amberSoft = Color(0xFFFFF7E6);
+  static const Color red = Color(0xFFD92D20);
+  static const Color redSoft = Color(0xFFFFF1F1);
+
+  static double _compact(double size) => size <= 10 ? size : size - 1.2;
+
+  static TextStyle _base({
+    required double size,
+    required FontWeight weight,
+    required Color color,
+    double height = 1.18,
+    double letterSpacing = -0.12,
+    List<FontFeature>? features,
+  }) {
+    return TextStyle(
+      fontFamily: font,
+      color: color,
+      fontSize: _compact(size),
+      fontWeight: weight,
+      height: height,
+      letterSpacing: letterSpacing,
+      fontFeatures: features,
+    );
+  }
+
+  static List<BoxShadow> get softShadow => const [
+        BoxShadow(color: Color(0x070F172A), blurRadius: 16, offset: Offset(0, 6)),
+      ];
+
+  static List<BoxShadow> get microShadow => const [
+        BoxShadow(color: Color(0x050F172A), blurRadius: 10, offset: Offset(0, 3)),
+      ];
+
+  static List<BoxShadow> get panelShadow => const [
+        BoxShadow(color: Color(0x080F172A), blurRadius: 18, offset: Offset(0, 8)),
+      ];
+
+  static BoxDecoration get cardDecoration => BoxDecoration(
+        color: panel,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: border),
+        boxShadow: softShadow,
+      );
+
+  static BoxDecoration panelDecoration({double radius = 14}) => BoxDecoration(
+        color: panel,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: border),
+        boxShadow: softShadow,
+      );
+
+  static BoxDecoration softCard({double radius = 10}) => BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: border),
+      );
+
+  static TextStyle get title => _base(
+        size: 18,
+        weight: FontWeight.w900,
+        color: text,
+        height: 1.12,
+        letterSpacing: -0.25,
+      );
+
+  static TextStyle section() => _base(
+        size: 15.5,
+        weight: FontWeight.w900,
+        color: text,
+        height: 1.12,
+        letterSpacing: -0.22,
+      );
+
+  static TextStyle value(double size) => _base(
+        size: size,
+        weight: FontWeight.w800,
+        color: text,
+        height: 1.22,
+        features: const [FontFeature.tabularFigures()],
+      );
+
+  static TextStyle mutedStyle(double size, {FontWeight weight = FontWeight.w800}) => _base(
+        size: size,
+        weight: weight,
+        color: muted,
+        height: 1.34,
+        letterSpacing: -0.05,
+      );
+
+  static TextStyle caption() => _base(
+        size: 12,
+        weight: FontWeight.w800,
+        color: muted2,
+        height: 1.12,
+        letterSpacing: .08,
+      );
+
+  static TextStyle tab({bool active = false}) => _base(
+        size: 13,
+        weight: FontWeight.w900,
+        color: active ? Colors.white : text,
+        height: 1,
+      );
+
+  static TextStyle tabSelected() => tab(active: true);
+
+  static TextStyle action() => _base(
+        size: 13,
+        weight: FontWeight.w900,
+        color: green,
+        height: 1,
+      );
+
+  static TextStyle danger() => _base(
+        size: 13,
+        weight: FontWeight.w900,
+        color: red,
+        height: 1,
+      );
+}
+
+String? _calendarRatingText(dynamic value) {
+  if (value == null) return null;
+  if (value is num) {
+    if (!value.isFinite || value <= 0) return null;
+    return value % 1 == 0 ? value.toInt().toString() : value.toStringAsFixed(1);
+  }
+
+  final text = '$value'.trim();
+  if (text.isEmpty) return null;
+  final lower = text.toLowerCase();
+  if (lower == 'null' || lower == '—' || lower == '-' || lower == '0') return null;
+  return text;
+}
+
+String? _readCalendarRating(List<dynamic Function()> readers) {
+  for (final read in readers) {
+    try {
+      final value = _calendarRatingText(read());
+      if (value != null) return value;
+    } catch (_) {
+      // Поле может отсутствовать в TeamEvent после разных версий модели.
+    }
+  }
+  return null;
+}
+
+String? _eventCoachRatingText(TeamEvent event) {
+  final dynamic e = event;
+  return _readCalendarRating([
+    () => e.coachRating,
+    () => e.trainerRating,
+    () => e.coachScore,
+    () => e.trainerScore,
+    () => e.coachMark,
+    () => e.trainerMark,
+    () => e.coachEvaluation,
+    () => e.trainerEvaluation,
+    () => e.coachAssessment,
+    () => e.trainerAssessment,
+    () => e.coach_rating,
+    () => e.trainer_rating,
+    () => e.coach_score,
+    () => e.trainer_score,
+  ]);
+}
+
+
+class _BrandAccentLine extends StatelessWidget {
+  final double width;
+  final double height;
+  final double radius;
+
+  const _BrandAccentLine({this.width = 3, this.height = 18, this.radius = 99});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: _C.green,
+        borderRadius: BorderRadius.circular(radius),
+      ),
+    );
+  }
+}
+
+class _CalendarKpiData {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  final String hint;
+
+  const _CalendarKpiData({required this.label, required this.value, required this.icon, required this.color, required this.hint});
+}
+
+class _CalendarHeaderSide extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String metric;
+  final String metricLabel;
+  final Color accent;
+  final bool alignEnd;
+
+  const _CalendarHeaderSide({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.metric,
+    required this.metricLabel,
+    required this.accent,
+    this.alignEnd = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: alignEnd ? TextAlign.right : TextAlign.left, style: const TextStyle(color: _C.text, fontSize: 15.0, fontWeight: FontWeight.w900, height: 1.0)),
+        const SizedBox(height: 5),
+        Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: alignEnd ? TextAlign.right : TextAlign.left, style: const TextStyle(color: _C.muted, fontSize: 10.4, fontWeight: FontWeight.w800, height: 1.0)),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(color: Color.alphaBlend(accent.withOpacity(.08), Colors.white), borderRadius: BorderRadius.circular(6), border: Border.all(color: accent.withOpacity(.18))),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(metric, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: accent, fontSize: 11.6, fontWeight: FontWeight.w900, height: 1)),
+              const SizedBox(width: 6),
+              Text(metricLabel, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 9.4, fontWeight: FontWeight.w800, height: 1)),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    final badge = Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: _C.border, width: 1.2)),
+      child: Icon(icon, color: accent == _C.green ? _C.greenDark : accent, size: 21),
+    );
+
+    return Row(
+      mainAxisAlignment: alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
+      children: alignEnd ? [Expanded(child: content), const SizedBox(width: 6), badge] : [badge, const SizedBox(width: 6), Expanded(child: content)],
+    );
+  }
+}
+
+class _CalendarHeaderCenter extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final String status;
+  final String count;
+
+  const _CalendarHeaderCenter({required this.title, required this.subtitle, required this.status, required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+      decoration: BoxDecoration(color: _C.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: _C.border)),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(color: _C.text, fontSize: 17.2, fontWeight: FontWeight.w900, height: 1.05)),
+          const SizedBox(height: 5),
+          Text(status, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.greenDark, fontSize: 9.8, fontWeight: FontWeight.w900, letterSpacing: .25, height: 1)),
+          const SizedBox(height: 5),
+          Text('$subtitle · $count', maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(color: _C.muted, fontSize: 9.8, fontWeight: FontWeight.w800, height: 1.1)),
+        ],
+      ),
+    );
+  }
+}
+
+class _CalendarTopLine extends StatelessWidget {
+  final String label;
+  final String value;
+  final String subvalue;
+  final IconData icon;
+  final Color color;
+
+  const _CalendarTopLine({
+    required this.label,
+    required this.value,
+    required this.subvalue,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: _C.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _C.border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: _C.border),
+            ),
+            child: Icon(icon, color: color == _C.green ? _C.greenDark : color, size: 14),
+          ),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 8.8, fontWeight: FontWeight.w900, height: 1)),
+                const SizedBox(height: 3),
+                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 11.7, fontWeight: FontWeight.w900, height: 1)),
+                const SizedBox(height: 2),
+                Text(subvalue, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 8.8, fontWeight: FontWeight.w800, height: 1)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+class _CalendarRightHeader extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Widget? trailing;
+
+  const _CalendarRightHeader({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 60),
+      padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+      color: Colors.white,
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: _C.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: _C.border),
+            ),
+            child: Icon(icon, color: _C.text, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.title.copyWith(fontSize: 16.2)),
+                const SizedBox(height: 3),
+                Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.mutedStyle(11.4)),
+              ],
+            ),
+          ),
+          if (trailing != null) ...[
+            const SizedBox(width: 8),
+            trailing!,
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CalendarSideKpi extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final String hint;
+  final Color color;
+
+  const _CalendarSideKpi({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.hint,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 68,
+      padding: const EdgeInsets.all(9),
+      decoration: BoxDecoration(
+        color: _C.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _C.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: color, size: 16),
+              const Spacer(),
+              Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.value(17.2).copyWith(color: _C.text, fontWeight: FontWeight.w900)),
+            ],
+          ),
+          const Spacer(),
+          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.mutedStyle(10.5, weight: FontWeight.w900).copyWith(color: _C.text)),
+          const SizedBox(height: 2),
+          Text(hint, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.mutedStyle(9.3)),
+        ],
+      ),
+    );
+  }
+}
+
+class _CalendarNextEventStrip extends StatelessWidget {
+  final TeamEvent event;
+  final String title;
+
+  const _CalendarNextEventStrip({required this.event, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = eventTypeColor(event.type);
+    final date = '${event.startAt.day.toString().padLeft(2, '0')}.${event.startAt.month.toString().padLeft(2, '0')}.${event.startAt.year}';
+    final time = event.endAt == null ? hhmm(event.startAt) : '${hhmm(event.startAt)}–${hhmm(event.endAt!)}';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _C.border),
+        boxShadow: _C.microShadow,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: Color.alphaBlend(color.withOpacity(.12), Colors.white),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(Icons.event_available_rounded, color: color, size: 18),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Ближайшее', maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.mutedStyle(10.2, weight: FontWeight.w900).copyWith(color: _C.greenDark)),
+                const SizedBox(height: 3),
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.title.copyWith(fontSize: 13.3)),
+                const SizedBox(height: 3),
+                Text('$date · $time', maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.mutedStyle(10.8)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CalendarInfoCell extends StatelessWidget {
+  final _CalendarKpiData item;
+
+  const _CalendarInfoCell({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 38,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: _C.border), boxShadow: _C.microShadow),
+      child: Row(
+        children: [
+          Icon(item.icon, color: item.color, size: 15),
+          const SizedBox(width: 6),
+          Text(item.value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 13.4, fontWeight: FontWeight.w900, height: 1)),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(item.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 9.5, fontWeight: FontWeight.w900, height: 1)),
+                const SizedBox(height: 2),
+                Text(item.hint, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 8.8, fontWeight: FontWeight.w800, height: 1)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CalendarKpiTile extends StatelessWidget {
+  final _CalendarKpiData item;
+
+  const _CalendarKpiTile({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: _C.border), boxShadow: _C.microShadow),
+      child: Row(
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(color: Color.alphaBlend(item.color.withOpacity(.10), Colors.white), borderRadius: BorderRadius.circular(6), border: Border.all(color: item.color.withOpacity(.18))),
+            child: Icon(item.icon, color: item.color, size: 16),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(item.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 9.6, fontWeight: FontWeight.w900, height: 1)),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Text(item.value, maxLines: 1, style: const TextStyle(color: _C.text, fontSize: 15.5, fontWeight: FontWeight.w900, height: 1)),
+                    const SizedBox(width: 6),
+                    Expanded(child: Text(item.hint, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 9.1, fontWeight: FontWeight.w800, height: 1))),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StrictWorkspaceCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Widget child;
+  final Widget? trailing;
+  final bool dense;
+
+  const _StrictWorkspaceCard({required this.icon, required this.title, required this.subtitle, required this.child, this.trailing, this.dense = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final header = Container(
+      constraints: BoxConstraints(minHeight: dense ? 34 : 38),
+      padding: EdgeInsets.symmetric(horizontal: dense ? 8 : 10, vertical: dense ? 5 : 6),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: _C.border, width: 1)),
+      ),
+      child: Row(
+        children: [
+          _BrandAccentLine(height: dense ? 16 : 20),
+          const SizedBox(width: 8),
+          Icon(icon, color: _C.text, size: dense ? 15 : 17),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.title.copyWith(fontSize: dense ? 12.8 : 14.2, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 2),
+                Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _C.muted, fontSize: dense ? 9.4 : 10.0, fontWeight: FontWeight.w800, height: 1)),
+              ],
+            ),
+          ),
+          if (trailing != null) ...[const SizedBox(width: 6), trailing!],
+        ],
+      ),
+    );
+
+    return Container(
+      decoration: _C.panelDecoration(),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          header,
+          if (dense)
+            Padding(padding: const EdgeInsets.all(10), child: child)
+          else
+            Expanded(child: Padding(padding: const EdgeInsets.all(12), child: child)),
+        ],
+      ),
+    );
+  }
+}
+
+class _CalendarTypeData {
+  final TeamEventType type;
+  final String label;
+
+  const _CalendarTypeData(this.type, this.label);
+}
+
+class _CalendarTypeTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _CalendarTypeTile({required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 31,
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(7), border: Border.all(color: _C.border), boxShadow: _C.microShadow),
+      child: Row(
+        children: [
+          Container(width: 4, height: double.infinity, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(5))),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 13.2, fontWeight: FontWeight.w900, height: 1)),
+                const SizedBox(height: 2),
+                Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 9.0, fontWeight: FontWeight.w800, height: 1)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileCalendarArrow extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _ProfileCalendarArrow({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: _C.border)),
+        child: Icon(icon, color: _C.text, size: 20),
+      ),
+    );
+  }
+}
+
+class _ProfileRoundButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _ProfileRoundButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: _C.border)),
+        child: Icon(icon, color: _C.text, size: 21),
+      ),
+    );
+  }
+}
+
+class _ProfileActionButton extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final VoidCallback onTap;
+
+  const _ProfileActionButton({required this.icon, required this.text, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(color: _C.ink, borderRadius: BorderRadius.circular(999), border: Border.all(color: _C.ink)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 6, height: 6, decoration: BoxDecoration(color: _C.green, borderRadius: BorderRadius.circular(99))),
+            const SizedBox(width: 7),
+            Icon(icon, size: 16, color: Colors.white),
+            const SizedBox(width: 6),
+            Text(text, style: const TextStyle(color: Colors.white, fontSize: 12.2, fontWeight: FontWeight.w900)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ModeButton extends StatelessWidget {
+  final String text;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _ModeButton({required this.text, required this.active, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        decoration: BoxDecoration(
+          color: active ? _C.ink : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: active ? _C.microShadow : null,
+          border: active ? Border.all(color: _C.ink) : null,
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            if (active)
+              const Positioned(top: 4, child: _BrandAccentLine(width: 22, height: 3, radius: 99)),
+            Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: active ? Colors.white : _C.text, fontSize: 11.8, fontWeight: FontWeight.w900, height: 1),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SegmentedEventBadge extends StatelessWidget {
+  final List<TeamEvent> events;
+  final bool selected;
+  final double size;
+
+  const _SegmentedEventBadge({required this.events, required this.selected, this.size = 18});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = events.map((event) => eventTypeColor(event.type)).take(3).toList(growable: false);
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(
+        painter: _SegmentedEventBadgePainter(colors: colors, borderColor: Colors.white),
+        child: events.length > 1
+            ? Center(
+                child: Text(events.length > 9 ? '9+' : '${events.length}', style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900, height: 1, shadows: [Shadow(color: Color(0x66000000), blurRadius: 4)])),
+              )
+            : const SizedBox.shrink(),
+      ),
+    );
+  }
+}
+
+class _SegmentedEventBadgePainter extends CustomPainter {
+  final List<Color> colors;
+  final Color borderColor;
+
+  const _SegmentedEventBadgePainter({required this.colors, required this.borderColor});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
+    final rect = Offset.zero & size;
+    final safeColors = colors.isEmpty ? const [Color(0xFF008F62)] : colors;
+    final fill = Paint()..style = PaintingStyle.fill;
+    if (safeColors.length == 1) {
+      fill.color = safeColors.first;
+      canvas.drawOval(rect, fill);
+    } else {
+      final sweep = (math.pi * 2) / safeColors.length;
+      var start = -math.pi / 2;
+      for (final color in safeColors) {
+        fill.color = color;
+        canvas.drawArc(rect, start, sweep, true, fill);
+        start += sweep;
+      }
+    }
+    final border = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..color = borderColor;
+    canvas.drawOval(rect.deflate(.75), border);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SegmentedEventBadgePainter oldDelegate) {
+    if (oldDelegate.borderColor != borderColor) return true;
+    if (oldDelegate.colors.length != colors.length) return true;
+    for (var i = 0; i < colors.length; i++) {
+      if (oldDelegate.colors[i] != colors[i]) return true;
+    }
+    return false;
+  }
+}
+
+class _CmrEventTile extends StatelessWidget {
+  final TeamEvent event;
+  final bool canEdit;
+  final VoidCallback onDetails;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+  final VoidCallback? onRating;
+
+  const _CmrEventTile({required this.event, required this.canEdit, required this.onDetails, required this.onEdit, required this.onDelete, this.onRating});
+
+  String get _timeText {
+    if (event.endAt == null) return hhmm(event.startAt);
+    return '${hhmm(event.startAt)}–${hhmm(event.endAt!)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = eventTypeColor(event.type);
+    final location = event.location.trim();
+    final coachRating = _eventCoachRatingText(event);
+    final hasRatings = coachRating != null;
+    final isTrainingLike = event.type == TeamEventType.training || event.type == TeamEventType.gym;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(7),
+        onTap: onDetails,
+        child: Container(
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: _C.border), boxShadow: _C.microShadow),
+          padding: const EdgeInsets.all(8),
+          child: Row(
+            children: [
+              Container(width: 4, height: hasRatings ? 68 : 46, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(5))),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: Text(event.title.trim().isEmpty ? 'Событие календаря' : event.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 13.5, fontWeight: FontWeight.w900))),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          decoration: BoxDecoration(color: Color.alphaBlend(c.withOpacity(.10), Colors.white), borderRadius: BorderRadius.circular(5), border: Border.all(color: c.withOpacity(.16))),
+                          child: Text(eventTypeLabel(event.type), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c, fontSize: 9.1, fontWeight: FontWeight.w900, height: 1)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+                    Row(
+                      children: [
+                        Icon(Icons.schedule_rounded, color: c, size: 15),
+                        const SizedBox(width: 5),
+                        Text(_timeText, style: const TextStyle(color: _C.text, fontSize: 12, fontWeight: FontWeight.w800)),
+                        if (location.isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          const Icon(Icons.location_on_outlined, color: _C.muted, size: 14),
+                          const SizedBox(width: 4),
+                          Expanded(child: Text(location, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 11.5, fontWeight: FontWeight.w700))),
+                        ],
+                      ],
+                    ),
+                    if (hasRatings) ...[
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 5,
+                        runSpacing: 4,
+                        children: [
+                          if (coachRating != null)
+                            _CalendarRatingChip(icon: Icons.workspace_premium_rounded, label: 'Тренер', value: coachRating, color: _C.greenDark),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (canEdit) ...[
+                const SizedBox(width: 6),
+                if (isTrainingLike && onRating != null) ...[
+                  _MiniIconButton(icon: Icons.star_rate_rounded, onTap: onRating!),
+                  const SizedBox(width: 5),
+                ],
+                _MiniIconButton(icon: Icons.edit_rounded, onTap: onEdit),
+                const SizedBox(width: 5),
+                _MiniIconButton(icon: Icons.delete_outline_rounded, onTap: onDelete, danger: true),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+class _CalendarRatingChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  const _CalendarRatingChip({required this.icon, required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(color.withOpacity(.08), Colors.white),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withOpacity(.16)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 12),
+          const SizedBox(width: 4),
+          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 9.4, fontWeight: FontWeight.w800, height: 1)),
+          const SizedBox(width: 4),
+          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontSize: 10.2, fontWeight: FontWeight.w900, height: 1)),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool danger;
+
+  const _MiniIconButton({required this.icon, required this.onTap, this.danger = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = danger ? _C.red : _C.text;
+    return InkWell(
+      borderRadius: BorderRadius.circular(5),
+      onTap: onTap,
+      child: Container(
+        width: 26,
+        height: 26,
+        decoration: BoxDecoration(color: Color.alphaBlend(c.withOpacity(.08), Colors.white), borderRadius: BorderRadius.circular(5), border: Border.all(color: c.withOpacity(.14))),
+        child: Icon(icon, color: c, size: 14),
+      ),
+    );
+  }
+}
+
+class _CalendarDetailsPlaceholder extends StatelessWidget {
+  final String teamName;
+  final String selectedDate;
+  final int eventsCount;
+  final bool canEdit;
+  final VoidCallback onAdd;
+  final VoidCallback onRefresh;
+
+  const _CalendarDetailsPlaceholder({required this.teamName, required this.selectedDate, required this.eventsCount, required this.canEdit, required this.onAdd, required this.onRefresh});
+
+  @override
+  Widget build(BuildContext context) {
+    return _StrictWorkspaceCard(
+      icon: Icons.fact_check_outlined,
+      title: 'Детали дня',
+      subtitle: teamName,
+      trailing: _ProfileRoundButton(icon: Icons.refresh_rounded, onTap: onRefresh),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _InfoBox(icon: Icons.calendar_today_rounded, title: selectedDate, text: eventsCount == 0 ? 'На выбранный день событий пока нет. Можно добавить тренировку, матч, теорию или другой пункт расписания.' : 'Выберите событие в ленте дня, чтобы открыть подробности справа.'),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(child: _HeroStat(value: '$eventsCount', title: 'на день')),
+                const SizedBox(width: 6),
+                Expanded(child: _HeroStat(value: canEdit ? 'Да' : 'Нет', title: 'редакт.')),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (canEdit)
+              _SheetActionButton(icon: Icons.add_rounded, text: 'Добавить событие', onTap: onAdd)
+            else
+              const _MutedHint('Для роли игрока редактирование календаря отключено.'),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InlineEventDetailsPanel extends StatelessWidget {
+  final TeamEvent event;
+  final String teamName;
+  final bool canEdit;
+  final VoidCallback onClose;
+  final VoidCallback onBackToCalendar;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+  final VoidCallback onOpenRating;
+
+  const _InlineEventDetailsPanel({required this.event, required this.teamName, required this.canEdit, required this.onClose, required this.onBackToCalendar, required this.onEdit, required this.onDelete, required this.onOpenRating});
+
+  String get _dateText => '${event.startAt.day.toString().padLeft(2, '0')}.${event.startAt.month.toString().padLeft(2, '0')}.${event.startAt.year}';
+  String get _timeText => event.endAt == null ? hhmm(event.startAt) : '${hhmm(event.startAt)}–${hhmm(event.endAt!)}';
+
+  @override
+  Widget build(BuildContext context) {
+    final c = eventTypeColor(event.type);
+    final notes = event.notes.trim();
+    final location = event.location.trim();
+    final coachRating = _eventCoachRatingText(event);
+    final isTrainingLike = event.type == TeamEventType.training || event.type == TeamEventType.gym;
+    return _StrictWorkspaceCard(
+      icon: Icons.event_note_rounded,
+      title: event.title.trim().isEmpty ? 'Событие календаря' : event.title,
+      subtitle: '${eventTypeLabel(event.type)} · $_dateText · $_timeText',
+      trailing: _ProfileRoundButton(icon: Icons.close_rounded, onTap: onClose),
+      child: SingleChildScrollView(
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(child: _DetailMetric(icon: Icons.schedule_rounded, title: 'Время', value: _timeText, accent: c)),
+                const SizedBox(width: 6),
+                Expanded(child: _DetailMetric(icon: Icons.category_rounded, title: 'Тип', value: eventTypeLabel(event.type), accent: c)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(child: _DetailMetric(icon: Icons.calendar_month_rounded, title: 'Дата', value: _dateText, accent: c)),
+                const SizedBox(width: 6),
+                Expanded(child: _DetailMetric(icon: Icons.location_on_outlined, title: 'Место', value: location.isEmpty ? 'Не указано' : location, accent: c)),
+              ],
+            ),
+            if (coachRating != null) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _DetailMetric(
+                      icon: Icons.workspace_premium_rounded,
+                      title: 'Оценка тренера',
+                      value: coachRating,
+                      accent: _C.greenDark,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 10),
+            _InfoBox(icon: Icons.notes_rounded, title: 'Заметки', text: notes.isEmpty ? 'Заметки не добавлены.' : notes),
+            const SizedBox(height: 10),
+            if (canEdit && isTrainingLike) ...[
+              _SheetActionButton(
+                icon: Icons.star_rate_rounded,
+                text: 'Оценка игроков',
+                onTap: onOpenRating,
+              ),
+              const SizedBox(height: 8),
+            ] else if (canEdit) ...[
+              const _MutedHint('Оценка доступна только для тренировок и ОФП.'),
+              const SizedBox(height: 8),
+            ],
+            if (canEdit)
+              Row(
+                children: [
+                  Expanded(child: _SheetActionButton(icon: Icons.edit_rounded, text: 'Редактировать', onTap: onEdit)),
+                  const SizedBox(width: 6),
+                  Expanded(child: _SheetActionButton(icon: Icons.delete_outline_rounded, text: 'Удалить', onTap: onDelete, danger: true)),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _InlineEventEditorPanel extends StatelessWidget {
   final String title;
@@ -958,56 +2712,46 @@ class _InlineEventEditorPanel extends StatelessWidget {
   final VoidCallback onClose;
   final Future<void> Function(TeamEvent event) onSubmit;
 
-  const _InlineEventEditorPanel({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.accent,
-    required this.child,
-    required this.onClose,
-    required this.onSubmit,
-  });
+  const _InlineEventEditorPanel({required this.title, required this.subtitle, required this.icon, required this.accent, required this.child, required this.onClose, required this.onSubmit});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: _C.cardDecoration.copyWith(
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(.025),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
+      decoration: _C.panelDecoration(),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
-          _InlinePanelHeader(
-            title: title,
-            subtitle: subtitle,
-            icon: icon,
-            accent: accent,
-            onClose: onClose,
-            leading: _SmallPanelButton(
-              icon: Icons.calendar_month_rounded,
-              text: 'Календарь',
-              onTap: onClose,
+          Container(
+  constraints: const BoxConstraints(minHeight: 40),
+            padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
+            decoration: const BoxDecoration(color: Colors.white),
+            child: Row(
+              children: [
+                Icon(icon, color: accent, size: 17),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 14.2, fontWeight: FontWeight.w900)),
+                      const SizedBox(height: 2),
+                      Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 10.0, fontWeight: FontWeight.w800)),
+                    ],
+                  ),
+                ),
+                _ProfileRoundButton(icon: Icons.close_rounded, onTap: onClose),
+              ],
             ),
           ),
           Expanded(
             child: Container(
               color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(8),
                 child: Navigator(
-                  pages: [
-                    MaterialPage<void>(
-                      key: ValueKey('calendar-event-editor-$title-$subtitle'),
-                      child: child,
-                    ),
-                  ],
+                  pages: [MaterialPage<void>(key: ValueKey('calendar-event-editor-$title-$subtitle'), child: child)],
                   onPopPage: (route, result) {
                     if (!route.didPop(result)) return false;
                     if (result is TeamEvent) {
@@ -1027,1161 +2771,6 @@ class _InlineEventEditorPanel extends StatelessWidget {
   }
 }
 
-/// EventEditorSheet из основного календаря сделан как bottom-sheet:
-/// у него внутри есть серый фон, ручка перетаскивания и собственная шапка.
-/// Когда мы вставляем его внутрь CMR-панели, эта верхняя часть выглядит как
-/// «сползшее» окно. Адаптер аккуратно прячет bottom-sheet-обвязку и оставляет
-/// саму форму с кнопками «Добавить», «Добавить ещё» и штатной логикой.
-class _InlineEditorAdapter extends StatelessWidget {
-  final Widget child;
-
-  const _InlineEditorAdapter({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, c) {
-        final compact = c.maxWidth < 760;
-        final cutTop = compact ? 72.0 : 84.0;
-
-        return Container(
-          color: Colors.white,
-          child: ClipRect(
-            child: Transform.translate(
-              offset: Offset(0, -cutTop),
-              child: SizedBox(
-                width: double.infinity,
-                height: c.maxHeight + cutTop,
-                child: MediaQuery.removePadding(
-                  context: context,
-                  removeTop: true,
-                  removeBottom: true,
-                  child: Theme(
-                    data: Theme.of(context).copyWith(
-                      scaffoldBackgroundColor: Colors.white,
-                      canvasColor: Colors.white,
-                      cardColor: Colors.white,
-                    ),
-                    child: child,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _InlineEventDetailsPanel extends StatelessWidget {
-  final TeamEvent event;
-  final String teamName;
-  final bool canEdit;
-  final VoidCallback onClose;
-  final VoidCallback onBackToCalendar;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-
-  const _InlineEventDetailsPanel({
-    required this.event,
-    required this.teamName,
-    required this.canEdit,
-    required this.onClose,
-    required this.onBackToCalendar,
-    required this.onEdit,
-    required this.onDelete,
-  });
-
-  String get _dateText => '${event.startAt.day.toString().padLeft(2, '0')}.${event.startAt.month.toString().padLeft(2, '0')}.${event.startAt.year}';
-
-  String get _timeText {
-    if (event.endAt == null) return hhmm(event.startAt);
-    return '${hhmm(event.startAt)}–${hhmm(event.endAt!)}';
-  }
-
-  bool get _isTrainingLike => event.type == TeamEventType.training || event.type == TeamEventType.gym;
-
-  @override
-  Widget build(BuildContext context) {
-    final typeColor = eventTypeColor(event.type);
-    final notes = event.notes.trim();
-    final location = event.location.trim();
-
-    return Container(
-      decoration: _C.cardDecoration,
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          _InlinePanelHeader(
-            title: event.title.trim().isEmpty ? 'Событие календаря' : event.title,
-            subtitle: '${eventTypeLabel(event.type)} • $_dateText • $_timeText',
-            icon: Icons.event_note_rounded,
-            accent: typeColor,
-            onClose: onClose,
-            leading: _SmallPanelButton(
-              icon: Icons.calendar_month_rounded,
-              text: 'Календарь',
-              onTap: onBackToCalendar,
-            ),
-          ),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, c) {
-                final compact = c.maxWidth < 760;
-                final info = Column(
-                  children: [
-                    _eventInfoGrid(typeColor, location),
-                    const SizedBox(height: 12),
-                    _notesBlock(typeColor, notes),
-                  ],
-                );
-                final actions = _actionsBlock(context, typeColor);
-
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-                  child: compact
-                      ? Column(
-                          children: [
-                            info,
-                            const SizedBox(height: 12),
-                            actions,
-                          ],
-                        )
-                      : Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(flex: 6, child: info),
-                            const SizedBox(width: 14),
-                            Expanded(flex: 4, child: actions),
-                          ],
-                        ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _eventInfoGrid(Color typeColor, String location) {
-    final items = [
-      _DetailMetric(icon: Icons.schedule_rounded, title: 'Время', value: _timeText, accent: typeColor),
-      _DetailMetric(icon: Icons.calendar_month_rounded, title: 'Дата', value: _dateText, accent: typeColor),
-      _DetailMetric(icon: Icons.category_rounded, title: 'Тип', value: eventTypeLabel(event.type), accent: typeColor),
-      _DetailMetric(icon: Icons.location_on_outlined, title: 'Место', value: location.isEmpty ? 'Не указано' : location, accent: typeColor),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, c) {
-        final twoCols = c.maxWidth >= 460;
-        return Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: items
-              .map((item) => SizedBox(
-                    width: twoCols ? (c.maxWidth - 8) / 2 : c.maxWidth,
-                    child: item,
-                  ))
-              .toList(),
-        );
-      },
-    );
-  }
-
-  Widget _notesBlock(Color typeColor, String notes) {
-    return _SimplePanel(
-      icon: Icons.notes_rounded,
-      iconColor: typeColor,
-      title: 'Описание',
-      child: Text(
-        notes.isEmpty ? 'Описание не добавлено.' : notes,
-        style: const TextStyle(color: _C.muted, fontSize: 13, fontWeight: FontWeight.w700, height: 1.35),
-      ),
-    );
-  }
-
-  Widget _actionsBlock(BuildContext context, Color typeColor) {
-    return _SimplePanel(
-      icon: Icons.tune_rounded,
-      iconColor: typeColor,
-      title: 'Действия',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (canEdit) ...[
-            OutlinedButton.icon(
-              onPressed: () {
-                Get.snackbar(
-                  'Планы / конспекты',
-                  'Подключим выбор планов и схем из рабочего раздела.',
-                  snackPosition: SnackPosition.BOTTOM,
-                );
-              },
-              icon: const Icon(Icons.folder_open_rounded, size: 18),
-              label: const Text('Планы / конспекты'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: _C.greenDark,
-                side: const BorderSide(color: _C.accentBorder),
-                padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
-            ),
-            const SizedBox(height: 8),
-            if (_isTrainingLike)
-              ElevatedButton.icon(
-                onPressed: () async {
-                  final coachId = await PrefUtils.getUserId() ?? 0;
-                  if (coachId <= 0) {
-                    Get.snackbar('Оценка', 'Не найден userId', snackPosition: SnackPosition.BOTTOM);
-                    return;
-                  }
-                  await showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    backgroundColor: Colors.transparent,
-                    builder: (_) => TrainingRatingSheet(
-                      apiBase: _CmrCalendarPanelState.apiBase,
-                      teamId: event.teamId,
-                      eventId: event.id,
-                      coachId: coachId,
-                      title: event.title,
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.star_rate_rounded),
-                label: const Text('Оценка тренировки игроков'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _C.green,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-              )
-            else
-              const _MutedHintCompact('Оценка доступна только для тренировок и ОФП.'),
-            const SizedBox(height: 12),
-          ],
-          Row(
-            children: [
-              Expanded(
-                child: _SheetActionButton(
-                  icon: Icons.close_rounded,
-                  text: 'Закрыть',
-                  onTap: onClose,
-                  secondary: true,
-                ),
-              ),
-              if (canEdit) ...[
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _SheetActionButton(
-                    icon: Icons.edit_rounded,
-                    text: 'Изменить',
-                    onTap: onEdit,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _SheetIconButton(icon: Icons.delete_outline_rounded, onTap: onDelete),
-              ],
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InlinePanelHeader extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Color accent;
-  final VoidCallback onClose;
-  final Widget? leading;
-
-  const _InlinePanelHeader({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.accent,
-    required this.onClose,
-    this.leading,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 10, 12),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: _C.border)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: accent.withOpacity(.10),
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: Icon(icon, color: accent, size: 22),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _C.text, fontSize: 17, fontWeight: FontWeight.w900),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _C.muted, fontSize: 12.5, fontWeight: FontWeight.w700),
-                ),
-              ],
-            ),
-          ),
-          if (leading != null) ...[
-            const SizedBox(width: 8),
-            leading!,
-          ],
-          const SizedBox(width: 4),
-          IconButton(
-            onPressed: onClose,
-            tooltip: 'Закрыть',
-            icon: const Icon(Icons.close_rounded, color: _C.muted),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SmallPanelButton extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  final VoidCallback onTap;
-
-  const _SmallPanelButton({required this.icon, required this.text, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: onTap,
-      child: Container(
-        height: 38,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: _C.soft,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _C.border),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: _C.greenDark, size: 17),
-            const SizedBox(width: 6),
-            Text(text, style: const TextStyle(color: _C.text, fontSize: 12.5, fontWeight: FontWeight.w900)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _C {
-  static const Color green = Color(0xFF1F7A4D);
-  static const Color greenDark = Color(0xFF176B3A);
-  static const Color darkGreen = Color(0xFF10251C);
-  static const Color card = Colors.white;
-  static const Color soft = Color(0xFFF7FAF8);
-  static const Color accentSoft = Color(0xFFF2F7F4);
-  static const Color accentBorder = Color(0xFFD7E8DE);
-  static const Color text = Color(0xFF111827);
-  static const Color muted = Color(0xFF667085);
-  static const Color border = Color(0xFFE5E7EB);
-  static const Color red = Color(0xFFDC2626);
-
-  static BoxDecoration get cardDecoration => BoxDecoration(
-        color: card,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(.035), blurRadius: 22, offset: const Offset(0, 10))],
-      );
-
-  static const TextStyle title = TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w900, height: 1.15);
-  static const TextStyle darkTitle = TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, height: 1.05);
-}
-
-class _CmrIconBox extends StatelessWidget {
-  final IconData icon;
-  final bool dark;
-  const _CmrIconBox({required this.icon, this.dark = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 52,
-      height: 52,
-      decoration: BoxDecoration(
-        color: _C.soft,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _C.border),
-      ),
-      child: Icon(icon, color: _C.greenDark, size: 26),
-    );
-  }
-}
-
-class _HeroStat extends StatelessWidget {
-  final String value;
-  final String title;
-  const _HeroStat({required this.value, required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
-      decoration: BoxDecoration(color: const Color(0xFFF7FAF8), borderRadius: BorderRadius.circular(18)),
-      child: Column(
-        children: [
-          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 18, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 2),
-          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 10.5, fontWeight: FontWeight.w700)),
-        ],
-      ),
-    );
-  }
-}
-
-class _ModeButton extends StatelessWidget {
-  final String text;
-  final bool active;
-  final VoidCallback onTap;
-  const _ModeButton({required this.text, required this.active, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: active ? _C.darkGreen : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: active ? _C.darkGreen : _C.border),
-        ),
-        child: Center(
-          child: Text(text, style: TextStyle(color: active ? Colors.white : _C.text, fontSize: 13, fontWeight: FontWeight.w900)),
-        ),
-      ),
-    );
-  }
-}
-
-class _SelectedDayHeader extends StatelessWidget {
-  final String title;
-  final bool canEdit;
-  final VoidCallback onAdd;
-  const _SelectedDayHeader({required this.title, required this.canEdit, required this.onAdd});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: const Color(0xFFF9FAFB), borderRadius: BorderRadius.circular(20)),
-      child: Row(
-        children: [
-          const Icon(Icons.event_note_rounded, color: _C.greenDark, size: 22),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Выбранный день', style: TextStyle(color: _C.muted, fontSize: 11.5, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 3),
-                Text(title, style: const TextStyle(color: _C.text, fontSize: 15, fontWeight: FontWeight.w900)),
-              ],
-            ),
-          ),
-          if (canEdit) ...[
-            _CompactAddEventButton(onTap: onAdd),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-
-class _CmrEventEditorHost extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Widget child;
-
-  const _CmrEventEditorHost({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.child,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).viewInsets.bottom;
-    final size = MediaQuery.of(context).size;
-    final isMobile = size.width < 720;
-
-    return SafeArea(
-      child: AnimatedPadding(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
-        padding: EdgeInsets.fromLTRB(10, 10, 10, 10 + bottom),
-        child: Align(
-          alignment: Alignment.center,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: isMobile ? size.width - 20 : 1120,
-              maxHeight: size.height * .93,
-            ),
-            child: Material(
-              color: Colors.white,
-              elevation: 12,
-              shadowColor: Colors.black.withOpacity(.12),
-              borderRadius: BorderRadius.circular(22),
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _PlainModalHeader(
-                    title: title,
-                    subtitle: subtitle,
-                    icon: icon,
-                    onClose: () => Navigator.pop(context),
-                  ),
-                  Flexible(
-                    child: Container(
-                      width: double.infinity,
-                      color: Colors.white,
-                      child: child,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CmrEventDetailsSheet extends StatelessWidget {
-  final TeamEvent event;
-  final String teamName;
-  final bool canEdit;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-
-  const _CmrEventDetailsSheet({
-    required this.event,
-    required this.teamName,
-    required this.canEdit,
-    required this.onEdit,
-    required this.onDelete,
-  });
-
-  String get _dateText => '${event.startAt.day.toString().padLeft(2, '0')}.${event.startAt.month.toString().padLeft(2, '0')}.${event.startAt.year}';
-
-  String get _timeText {
-    if (event.endAt == null) return hhmm(event.startAt);
-    return '${hhmm(event.startAt)}–${hhmm(event.endAt!)}';
-  }
-
-  bool get _isTrainingLike => event.type == TeamEventType.training || event.type == TeamEventType.gym;
-
-  @override
-  Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).viewInsets.bottom;
-    final size = MediaQuery.of(context).size;
-    final isMobile = size.width < 760;
-    final typeColor = eventTypeColor(event.type);
-    final notes = event.notes.trim();
-    final location = event.location.trim();
-
-    return SafeArea(
-      child: AnimatedPadding(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
-        padding: EdgeInsets.fromLTRB(10, 10, 10, 10 + bottom),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: isMobile ? size.width - 20 : 1040,
-              maxHeight: size.height * .90,
-            ),
-            child: Material(
-              color: Colors.white,
-              elevation: 12,
-              shadowColor: Colors.black.withOpacity(.12),
-              borderRadius: BorderRadius.circular(22),
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _PlainModalHeader(
-                    title: event.title.trim().isEmpty ? 'Событие календаря' : event.title,
-                    subtitle: '${eventTypeLabel(event.type)} • $_dateText • $_timeText',
-                    icon: Icons.event_note_rounded,
-                    accent: typeColor,
-                    onClose: () => Navigator.pop(context),
-                  ),
-                  Flexible(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-                      child: isMobile
-                          ? Column(
-                              children: [
-                                _eventInfoGrid(typeColor, location),
-                                const SizedBox(height: 12),
-                                _notesBlock(typeColor, notes),
-                                const SizedBox(height: 12),
-                                _actionsBlock(context, typeColor),
-                              ],
-                            )
-                          : Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  flex: 6,
-                                  child: Column(
-                                    children: [
-                                      _eventInfoGrid(typeColor, location),
-                                      const SizedBox(height: 12),
-                                      _notesBlock(typeColor, notes),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  flex: 4,
-                                  child: _actionsBlock(context, typeColor),
-                                ),
-                              ],
-                            ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _eventInfoGrid(Color typeColor, String location) {
-    final items = [
-      _DetailMetric(icon: Icons.schedule_rounded, title: 'Время', value: _timeText, accent: typeColor),
-      _DetailMetric(icon: Icons.calendar_month_rounded, title: 'Дата', value: _dateText, accent: typeColor),
-      _DetailMetric(icon: Icons.category_rounded, title: 'Тип', value: eventTypeLabel(event.type), accent: typeColor),
-      _DetailMetric(icon: Icons.location_on_outlined, title: 'Место', value: location.isEmpty ? 'Не указано' : location, accent: typeColor),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, c) {
-        final twoCols = c.maxWidth >= 460;
-        return Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: items
-              .map((item) => SizedBox(
-                    width: twoCols ? (c.maxWidth - 8) / 2 : c.maxWidth,
-                    child: item,
-                  ))
-              .toList(),
-        );
-      },
-    );
-  }
-
-  Widget _notesBlock(Color typeColor, String notes) {
-    return _SimplePanel(
-      icon: Icons.notes_rounded,
-      iconColor: typeColor,
-      title: 'Описание',
-      child: Text(
-        notes.isEmpty ? 'Описание не добавлено.' : notes,
-        style: const TextStyle(color: _C.muted, fontSize: 13, fontWeight: FontWeight.w700, height: 1.35),
-      ),
-    );
-  }
-
-  Widget _actionsBlock(BuildContext context, Color typeColor) {
-    return _SimplePanel(
-      icon: Icons.tune_rounded,
-      iconColor: typeColor,
-      title: 'Действия',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (canEdit) ...[
-            OutlinedButton.icon(
-              onPressed: () {
-                Get.snackbar(
-                  'Планы / конспекты',
-                  'Подключим выбор планов и схем из рабочего раздела.',
-                  snackPosition: SnackPosition.BOTTOM,
-                );
-              },
-              icon: const Icon(Icons.folder_open_rounded, size: 18),
-              label: const Text('Планы / конспекты'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: _C.greenDark,
-                side: const BorderSide(color: _C.accentBorder),
-                padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
-            ),
-            const SizedBox(height: 8),
-            if (_isTrainingLike)
-              ElevatedButton.icon(
-                onPressed: () async {
-                  final coachId = await PrefUtils.getUserId() ?? 0;
-                  if (coachId <= 0) {
-                    Get.snackbar('Оценка', 'Не найден userId', snackPosition: SnackPosition.BOTTOM);
-                    return;
-                  }
-                  Navigator.pop(context);
-                  await showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    backgroundColor: Colors.transparent,
-                    builder: (_) => TrainingRatingSheet(
-                      apiBase: _CmrCalendarPanelState.apiBase,
-                      teamId: event.teamId,
-                      eventId: event.id,
-                      coachId: coachId,
-                      title: event.title,
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.star_rate_rounded),
-                label: const Text('Оценка тренировки игроков'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _C.green,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-              )
-            else
-              const _MutedHintCompact('Оценка доступна только для тренировок и ОФП.'),
-            const SizedBox(height: 12),
-          ],
-          Row(
-            children: [
-              Expanded(
-                child: _SheetActionButton(
-                  icon: Icons.close_rounded,
-                  text: 'Закрыть',
-                  onTap: () => Navigator.pop(context),
-                  secondary: true,
-                ),
-              ),
-              if (canEdit) ...[
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _SheetActionButton(
-                    icon: Icons.edit_rounded,
-                    text: 'Изменить',
-                    onTap: onEdit,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _SheetIconButton(icon: Icons.delete_outline_rounded, onTap: onDelete),
-              ],
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SoftInfoBlock extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final String title;
-  final String text;
-  final Widget? action;
-
-  const _SoftInfoBlock({
-    required this.icon,
-    required this.iconColor,
-    required this.title,
-    required this.text,
-    this.action,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _C.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(13),
-                  border: Border.all(color: _C.border),
-                ),
-                child: Icon(icon, color: iconColor, size: 18),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _C.text, fontSize: 14.5, fontWeight: FontWeight.w900),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            text,
-            style: const TextStyle(color: _C.muted, fontSize: 12.5, fontWeight: FontWeight.w700, height: 1.35),
-          ),
-          if (action != null) ...[
-            const SizedBox(height: 10),
-            SizedBox(width: double.infinity, child: action!),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _MutedHintCompact extends StatelessWidget {
-  final String text;
-  const _MutedHintCompact(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _C.border),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(color: _C.muted, fontSize: 12.5, fontWeight: FontWeight.w800),
-      ),
-    );
-  }
-}
-
-class _PlainModalHeader extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Color? accent;
-  final VoidCallback onClose;
-
-  const _PlainModalHeader({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.onClose,
-    this.accent,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final c = accent ?? _C.green;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 10, 12),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: _C.border)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: c.withOpacity(.10),
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: Icon(icon, color: c, size: 22),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _C.text, fontSize: 17, fontWeight: FontWeight.w900),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _C.muted, fontSize: 12.5, fontWeight: FontWeight.w700),
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            onPressed: onClose,
-            tooltip: 'Закрыть',
-            icon: const Icon(Icons.close_rounded, color: _C.muted),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SimplePanel extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final String title;
-  final Widget child;
-
-  const _SimplePanel({
-    required this.icon,
-    required this.iconColor,
-    required this.title,
-    required this.child,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _C.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: iconColor, size: 19),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _C.text, fontSize: 14, fontWeight: FontWeight.w900),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-class _CmrModalHero extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final String teamName;
-  final String dateText;
-  final Color? accent;
-  final VoidCallback onClose;
-  final bool compact;
-
-  const _CmrModalHero({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.teamName,
-    required this.dateText,
-    required this.onClose,
-    this.accent,
-    this.compact = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final a = accent ?? _C.green;
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.fromLTRB(18, compact ? 14 : 16, 14, compact ? 14 : 16),
-      decoration: BoxDecoration(
-        color: _C.darkGreen,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
-        gradient: LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [const Color(0xFF153529), Color.lerp(const Color(0xFF153529), a, .42) ?? _C.green],
-        ),
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            right: -22,
-            top: -28,
-            child: Container(
-              width: 118,
-              height: 118,
-              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(.08)),
-            ),
-          ),
-          Positioned(
-            right: 60,
-            bottom: -42,
-            child: Container(
-              width: 130,
-              height: 130,
-              decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white.withOpacity(.08), width: 18)),
-            ),
-          ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 54,
-                height: 54,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(.14),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: Colors.white.withOpacity(.16)),
-                ),
-                child: Icon(icon, color: Colors.white, size: 27),
-              ),
-              const SizedBox(width: 13),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 22, height: 1.08),
-                    ),
-                    const SizedBox(height: 7),
-                    Text(
-                      subtitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: Colors.white.withOpacity(.80), fontWeight: FontWeight.w700, fontSize: 12.5, height: 1.25),
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _HeroPill(icon: Icons.groups_rounded, text: teamName.trim().isEmpty ? 'Команда' : teamName),
-                        _HeroPill(icon: Icons.calendar_today_rounded, text: dateText),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: onClose,
-                child: Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(.12),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white.withOpacity(.14)),
-                  ),
-                  child: const Icon(Icons.close_rounded, color: Colors.white),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HeroPill extends StatelessWidget {
-  final IconData icon;
-  final String text;
-
-  const _HeroPill({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withOpacity(.13)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: Colors.white, size: 14),
-          const SizedBox(width: 6),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 220),
-            child: Text(
-              text,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w900),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _DetailMetric extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -2193,31 +2782,75 @@ class _DetailMetric extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _C.accentSoft,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _C.accentBorder),
-      ),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: _C.border), boxShadow: _C.microShadow),
       child: Row(
         children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: _C.accentBorder)),
-            child: Icon(icon, color: accent, size: 21),
-          ),
-          const SizedBox(width: 11),
+          Container(width: 30, height: 30, decoration: BoxDecoration(color: Color.alphaBlend(accent.withOpacity(.10), Colors.white), borderRadius: BorderRadius.circular(6)), child: Icon(icon, color: accent, size: 16)),
+          const SizedBox(width: 6),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 11.5, fontWeight: FontWeight.w800)),
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 10.5, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 3),
-                Text(value, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 14.5, fontWeight: FontWeight.w900, height: 1.15)),
+                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 12.5, fontWeight: FontWeight.w900)),
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoBox extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String text;
+
+  const _InfoBox({required this.icon, required this.title, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(color: _C.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: _C.border)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: _C.greenDark, size: 17),
+              const SizedBox(width: 7),
+              Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 12.5, fontWeight: FontWeight.w900))),
+            ],
+          ),
+          const SizedBox(height: 5),
+          Text(text, style: const TextStyle(color: _C.muted, fontSize: 12, fontWeight: FontWeight.w700, height: 1.35)),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroStat extends StatelessWidget {
+  final String value;
+  final String title;
+
+  const _HeroStat({required this.value, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: _C.border), boxShadow: _C.microShadow),
+      child: Column(
+        children: [
+          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 18, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 2),
+          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 10.5, fontWeight: FontWeight.w800)),
         ],
       ),
     );
@@ -2228,238 +2861,59 @@ class _SheetActionButton extends StatelessWidget {
   final IconData icon;
   final String text;
   final VoidCallback onTap;
-  final bool secondary;
+  final bool danger;
 
-  const _SheetActionButton({required this.icon, required this.text, required this.onTap, this.secondary = false});
+  const _SheetActionButton({required this.icon, required this.text, required this.onTap, this.danger = false});
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 48,
-      child: ElevatedButton.icon(
-        onPressed: onTap,
-        icon: Icon(icon, size: 19),
-        label: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis),
-        style: ElevatedButton.styleFrom(
-          elevation: 0,
-          backgroundColor: secondary ? _C.soft : _C.green,
-          foregroundColor: secondary ? _C.text : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    final color = danger ? _C.red : _C.ink;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: onTap,
+        child: Container(
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(6)),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (!danger) ...[
+                Container(width: 5, height: 5, decoration: BoxDecoration(color: _C.green, borderRadius: BorderRadius.circular(99))),
+                const SizedBox(width: 7),
+              ],
+              Icon(icon, color: Colors.white, size: 15),
+              const SizedBox(width: 6),
+              Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900))),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _SheetIconButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _SheetIconButton({required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: onTap,
-      child: Container(
-        width: 48,
-        height: 48,
-        decoration: BoxDecoration(color: const Color(0xFFFFF1F2), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFFECACA))),
-        child: const Icon(Icons.delete_outline_rounded, color: _C.red),
-      ),
-    );
-  }
-}
-
-class _CmrEventTile extends StatelessWidget {
-  final TeamEvent event;
-  final bool canEdit;
-  final VoidCallback onDetails;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-
-  const _CmrEventTile({
-    required this.event,
-    required this.canEdit,
-    required this.onDetails,
-    required this.onEdit,
-    required this.onDelete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final c = eventTypeColor(event.type);
-    final when = event.endAt == null ? hhmm(event.startAt) : '${hhmm(event.startAt)}–${hhmm(event.endAt!)}';
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(22),
-      onTap: onDetails,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: _C.accentSoft,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: _C.accentBorder),
-          boxShadow: const [BoxShadow(color: Color(0x0D000000), blurRadius: 14, offset: Offset(0, 6))],
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(width: 7, height: 58, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(99))),
-            const SizedBox(width: 11),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(event.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontWeight: FontWeight.w900, fontSize: 14.5, height: 1.15)),
-                  const SizedBox(height: 5),
-                  Text('${eventTypeLabel(event.type)} • $when', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: _C.muted, fontWeight: FontWeight.w700)),
-                  if (event.location.trim().isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text('📍 ${event.location}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: _C.text, fontWeight: FontWeight.w600)),
-                  ],
-                ],
-              ),
-            ),
-            if (canEdit)
-              PopupMenuButton<String>(
-                onSelected: (value) {
-                  if (value == 'details') onDetails();
-                  if (value == 'edit') onEdit();
-                  if (value == 'delete') onDelete();
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'details', child: Text('Подробнее')),
-                  PopupMenuItem(value: 'edit', child: Text('Редактировать')),
-                  PopupMenuItem(value: 'delete', child: Text('Удалить')),
-                ],
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CompactAddEventButton extends StatelessWidget {
-  final VoidCallback onTap;
-  const _CompactAddEventButton({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(15),
-      onTap: onTap,
-      child: Container(
-        height: 40,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: _C.green,
-          borderRadius: BorderRadius.circular(15),
-          boxShadow: [BoxShadow(color: _C.green.withOpacity(.18), blurRadius: 12, offset: const Offset(0, 6))],
-        ),
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.add_rounded, color: Colors.white, size: 19),
-            SizedBox(width: 6),
-            Text('Добавить', style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w900)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SmallAddButton extends StatelessWidget {
-  final VoidCallback onTap;
-  const _SmallAddButton({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: onTap,
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(color: _C.green, borderRadius: BorderRadius.circular(14)),
-        child: const Icon(Icons.add_rounded, color: Colors.white),
-      ),
-    );
-  }
-}
-
-class _HeaderIconButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  const _HeaderIconButton({required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: onTap,
-      child: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(color: const Color(0xFFF7FAF8), borderRadius: BorderRadius.circular(16)),
-        child: Icon(icon, color: _C.greenDark),
-      ),
-    );
-  }
-}
-
-class _SquareButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  const _SquareButton({required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: onTap,
-      child: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(16)),
-        child: Icon(icon, color: _C.greenDark),
-      ),
-    );
-  }
-}
-
-class _TopActionButton extends StatelessWidget {
-  final IconData icon;
+class _MutedHint extends StatelessWidget {
   final String text;
-  final VoidCallback onTap;
-  final bool compact;
-  const _TopActionButton({required this.icon, required this.text, required this.onTap, this.compact = false});
+
+  const _MutedHint(this.text);
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 13, vertical: 12),
-        decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(16)),
-        child: Row(
-          children: [
-            Icon(icon, color: _C.greenDark, size: 18),
-            const SizedBox(width: 7),
-            Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 12.5, fontWeight: FontWeight.w900))),
-          ],
-        ),
-      ),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(color: _C.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: _C.border)),
+      child: Text(text, style: const TextStyle(color: _C.muted, fontSize: 12, fontWeight: FontWeight.w800)),
     );
   }
 }
 
 class _MiniEmpty extends StatelessWidget {
   final String text;
+
   const _MiniEmpty({required this.text});
 
   @override
@@ -2504,12 +2958,7 @@ class _CmrEmptyState extends StatelessWidget {
                   onPressed: onAction,
                   icon: const Icon(Icons.refresh_rounded),
                   label: Text(actionText!),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _C.green,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                  ),
+                  style: ElevatedButton.styleFrom(backgroundColor: _C.ink, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                 ),
               ],
             ],

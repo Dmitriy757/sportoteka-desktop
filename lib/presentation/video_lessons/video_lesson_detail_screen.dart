@@ -13,18 +13,24 @@ import 'add_edit_video_lesson_screen.dart';
 class VideoLessonDetailPalette {
   static const primaryGreen = Color(0xFF00A750);
   static const primaryGreenDark = Color(0xFF008C40);
-  static const primaryGreenLight = Color(0xFF00C060);
-
-  static const lightGreen = Color(0xFFE8F5E9);
-  static const superLightGreen = Color(0xFFF2FFF5);
+  static const primaryGreenSoft = Color(0xFFEAF8EF);
 
   static const white = Color(0xFFFFFFFF);
-  static const text = Color(0xFF1A1A1A);
-  static const textMuted = Color(0xFF666666);
 
-  static const background = Color(0xFFF8F9FA);
-  static const border = Color(0xFFE5E7EB);
-  static const gold = Color(0xFFFFC83D);
+  /// Общий фон страницы — белый, как просили.
+  static const background = Color(0xFFFFFFFF);
+
+  /// Мягкий внутренний фон для полей, комментариев и пустых состояний.
+  static const surface = Color(0xFFF6F8F7);
+
+  static const card = Color(0xFFFFFFFF);
+  static const border = Color(0xFFE3E8E5);
+
+  static const text = Color(0xFF151A17);
+  static const textMuted = Color(0xFF66726B);
+  static const textLight = Color(0xFF8B9690);
+
+  static const videoBlack = Color(0xFF050505);
 
   static const greenGradient = LinearGradient(
     colors: [primaryGreen, primaryGreenDark],
@@ -36,9 +42,14 @@ class VideoLessonDetailPalette {
 class VideoLessonDetailScreen extends StatefulWidget {
   final int lessonId;
 
+  /// Если экран открыт из хаба по нажатию на карточку,
+  /// видео сразу начинает проигрываться как в YouTube/Rutube.
+  final bool autoPlay;
+
   const VideoLessonDetailScreen({
     super.key,
     required this.lessonId,
+    this.autoPlay = false,
   });
 
   @override
@@ -50,6 +61,7 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
     with WidgetsBindingObserver {
   VideoLessonModel? lesson;
   List<VideoLessonCommentModel> comments = [];
+
   VideoPlayerController? _videoController;
   final TextEditingController commentController = TextEditingController();
 
@@ -57,9 +69,13 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
   bool isCommentLoading = false;
   bool _isFullScreen = false;
   bool _isRefreshing = false;
+
   int userId = 0;
 
   bool get isOwner => lesson != null && lesson!.userId == userId;
+
+  bool get _hasReadyVideo =>
+      _videoController != null && _videoController!.value.isInitialized;
 
   @override
   void initState() {
@@ -71,18 +87,35 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
   @override
   void didChangeMetrics() {
     super.didChangeMetrics();
-    if (!_isFullScreen) {
-      _exitFullScreen();
-    }
+    // Не сбрасываем ориентацию здесь, чтобы после fullscreen планшет
+    // нормально возвращался к текущему положению.
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _restoreSystemUi();
+    _videoController?.removeListener(_videoTick);
     _videoController?.dispose();
     commentController.dispose();
     super.dispose();
+  }
+
+  Widget _withStableTextScale(Widget child) {
+    final media = MediaQuery.of(context);
+    final scale = media.textScaler.scale(1.0).clamp(1.0, 1.06).toDouble();
+
+    return MediaQuery(
+      data: media.copyWith(textScaler: TextScaler.linear(scale)),
+      child: child,
+    );
+  }
+
+  void _videoTick() {
+    if (!mounted) return;
+    final controller = _videoController;
+    if (controller == null || !controller.value.isInitialized) return;
+    setState(() {});
   }
 
   Future<void> _init() async {
@@ -109,6 +142,7 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
       );
 
       if (_videoController != null) {
+        _videoController!.removeListener(_videoTick);
         await _videoController!.dispose();
         _videoController = null;
       }
@@ -117,8 +151,15 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
         final controller = VideoPlayerController.networkUrl(
           Uri.parse(lessonData.videoUrl),
         );
+
+        controller.addListener(_videoTick);
         await controller.initialize();
         await controller.setLooping(false);
+
+        if (widget.autoPlay) {
+          await controller.play();
+        }
+
         _videoController = controller;
       }
 
@@ -135,35 +176,53 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
     });
   }
 
-  void _restoreSystemUi() {
-    SystemChrome.setPreferredOrientations([
+  Future<void> _restoreSystemUi() async {
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
+    await SystemChrome.setPreferredOrientations(const [
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
     ]);
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   }
 
-  void _enterFullScreen() {
-    setState(() {
-      _isFullScreen = true;
-    });
+  Future<void> _enterFullScreen() async {
+    if (_isFullScreen || !_hasReadyVideo) return;
 
-    SystemChrome.setPreferredOrientations([
+    if (mounted) {
+      setState(() => _isFullScreen = true);
+    }
+
+    await SystemChrome.setPreferredOrientations(const [
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
 
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   }
 
-  void _exitFullScreen() {
+  Future<void> _exitFullScreen() async {
     if (!_isFullScreen) return;
 
-    setState(() {
-      _isFullScreen = false;
-    });
+    if (mounted) {
+      setState(() => _isFullScreen = false);
+    }
 
-    _restoreSystemUi();
+    await _restoreSystemUi();
+  }
+
+  void _togglePlay() {
+    final controller = _videoController;
+    if (controller == null || !controller.value.isInitialized) return;
+
+    setState(() {
+      if (controller.value.isPlaying) {
+        controller.pause();
+      } else {
+        controller.play();
+      }
+    });
   }
 
   Future<void> _sendComment() async {
@@ -193,40 +252,41 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
     setState(() => isCommentLoading = false);
   }
 
- Future<void> _editLesson() async {
-  final l = lesson;
-  if (l == null) return;
+  Future<void> _editLesson() async {
+    final l = lesson;
+    if (l == null) return;
 
-  final result = await Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => AddEditVideoLessonScreen(
-        folderId: l.folderId,
-        userId: l.userId,
-        lessonId: l.id,
-        initialTitle: l.title,
-        initialDescription: l.description,
-        initialDuration: l.duration,
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddEditVideoLessonScreen(
+          folderId: l.folderId,
+          userId: l.userId,
+          lessonId: l.id,
+          initialTitle: l.title,
+          initialDescription: l.description,
+          initialDuration: l.duration,
+        ),
       ),
-    ),
-  );
+    );
 
-  if (result == true) {
-    await _loadData();
+    if (result == true) {
+      await _loadData();
+    }
   }
-}
 
   String _formatDuration(Duration duration) {
     String twoDigits(int n) => n.toString().padLeft(2, '0');
+
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
     final seconds = duration.inSeconds.remainder(60);
 
     if (hours > 0) {
       return '$hours:${twoDigits(minutes)}:${twoDigits(seconds)}';
-    } else {
-      return '${twoDigits(minutes)}:${twoDigits(seconds)}';
     }
+
+    return '${twoDigits(minutes)}:${twoDigits(seconds)}';
   }
 
   String _getDayWord(int days) {
@@ -242,9 +302,7 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
   }
 
   String _formatCommentTime(String? dateTimeString) {
-    if (dateTimeString == null || dateTimeString.isEmpty) {
-      return '';
-    }
+    if (dateTimeString == null || dateTimeString.isEmpty) return '';
 
     try {
       final dateTime = DateTime.parse(dateTimeString);
@@ -267,268 +325,389 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
     }
   }
 
-  Widget _whiteCard({
+  String _authorName(VideoLessonModel item) {
+    final fullName = '${item.authorName} ${item.authorSurname}'.trim();
+    return fullName.isEmpty ? 'Автор урока' : fullName;
+  }
+
+  Widget _card({
     required Widget child,
-    EdgeInsets? padding,
-    VoidCallback? onTap,
+    EdgeInsets padding = const EdgeInsets.all(16),
+    Color color = VideoLessonDetailPalette.card,
   }) {
-    final card = Container(
-      padding: padding ?? const EdgeInsets.all(14),
+    return Container(
+      width: double.infinity,
+      padding: padding,
       decoration: BoxDecoration(
-        color: VideoLessonDetailPalette.white,
-        borderRadius: BorderRadius.circular(18),
+        color: color,
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: VideoLessonDetailPalette.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 10),
+            color: Colors.black.withOpacity(0.025),
+            blurRadius: 14,
+            offset: const Offset(0, 7),
           ),
         ],
       ),
       child: child,
     );
-
-    if (onTap == null) return card;
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: onTap,
-      child: card,
-    );
   }
 
-  Widget _sectionTitle(String title, {String? action}) {
+  Widget _sectionHeader(
+    String title, {
+    String? counter,
+    IconData? icon,
+  }) {
     return Row(
       children: [
+        if (icon != null) ...[
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: VideoLessonDetailPalette.primaryGreenSoft,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              icon,
+              color: VideoLessonDetailPalette.primaryGreen,
+              size: 19,
+            ),
+          ),
+          const SizedBox(width: 10),
+        ],
         Expanded(
           child: Text(
             title,
             style: const TextStyle(
-              fontWeight: FontWeight.w900,
-              fontSize: 15,
+              fontSize: 17,
+              height: 1.12,
+              fontWeight: FontWeight.w700,
               color: VideoLessonDetailPalette.text,
             ),
           ),
         ),
-        if (action != null)
-          Text(
-            action,
-            style: const TextStyle(
-              color: VideoLessonDetailPalette.textMuted,
-              fontWeight: FontWeight.w800,
-              fontSize: 12,
+        if (counter != null)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: VideoLessonDetailPalette.primaryGreenSoft,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              counter,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: VideoLessonDetailPalette.primaryGreen,
+              ),
             ),
           ),
       ],
     );
   }
 
-  Widget _metricChip(IconData icon, String text) {
+  Widget _chip({
+    required IconData icon,
+    required String text,
+    Color color = VideoLessonDetailPalette.primaryGreen,
+  }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
-        color: VideoLessonDetailPalette.white,
+        color: color.withOpacity(0.08),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: VideoLessonDetailPalette.border),
+        border: Border.all(color: color.withOpacity(0.16)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: 14,
-            color: VideoLessonDetailPalette.primaryGreen,
-          ),
+          Icon(icon, size: 15, color: color),
           const SizedBox(width: 6),
           Text(
             text,
-            style: const TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 12,
-              color: VideoLessonDetailPalette.textMuted,
+            style: TextStyle(
+              fontSize: 12.5,
+              height: 1.1,
+              fontWeight: FontWeight.w500,
+              color: color,
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildTopBarTitle(VideoLessonModel? currentLesson) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            gradient: VideoLessonDetailPalette.greenGradient,
+            borderRadius: BorderRadius.circular(11),
+          ),
+          child: const Icon(
+            Icons.play_arrow_rounded,
+            color: Colors.white,
+            size: 22,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Flexible(
+          child: Text(
+            currentLesson?.title.trim().isNotEmpty == true
+                ? currentLesson!.title
+                : 'Видеоурок',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              color: VideoLessonDetailPalette.text,
+              fontSize: 16,
+              height: 1.1,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildVideoPlaceholder() {
-    return Container(
-      height: 230,
-      decoration: BoxDecoration(
-        color: VideoLessonDetailPalette.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: VideoLessonDetailPalette.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 16,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Center(
-        child: Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            gradient: VideoLessonDetailPalette.greenGradient,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: VideoLessonDetailPalette.primaryGreen.withOpacity(0.25),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: const Icon(
-            Icons.play_arrow_rounded,
-            size: 52,
-            color: Colors.white,
+    return AspectRatio(
+      aspectRatio: 16 / 9,
+      child: Container(
+        decoration: BoxDecoration(
+          color: VideoLessonDetailPalette.videoBlack,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Center(
+          child: Container(
+            width: 76,
+            height: 76,
+            decoration: BoxDecoration(
+              gradient: VideoLessonDetailPalette.greenGradient,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: VideoLessonDetailPalette.primaryGreen.withOpacity(0.28),
+                  blurRadius: 28,
+                  offset: const Offset(0, 14),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.play_arrow_rounded,
+              size: 52,
+              color: Colors.white,
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildVideoBlock() {
-    if (_videoController == null || !_videoController!.value.isInitialized) {
+  Widget _buildVideoSurface({
+    required bool compactControls,
+    required bool fullScreenMode,
+  }) {
+    if (!_hasReadyVideo) {
       return _buildVideoPlaceholder();
     }
 
+    final controller = _videoController!;
+    final value = controller.value;
+
     return GestureDetector(
-      onTap: _enterFullScreen,
+      onTap: _togglePlay,
       child: Container(
+        width: double.infinity,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(22),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.07),
-              blurRadius: 18,
-              offset: const Offset(0, 12),
-            ),
-          ],
+          color: VideoLessonDetailPalette.videoBlack,
+          borderRadius:
+              fullScreenMode ? BorderRadius.zero : BorderRadius.circular(24),
+          boxShadow: fullScreenMode
+              ? null
+              : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 24,
+                    offset: const Offset(0, 14),
+                  ),
+                ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius:
+              fullScreenMode ? BorderRadius.zero : BorderRadius.circular(24),
           child: Stack(
+            alignment: Alignment.center,
             children: [
-              AspectRatio(
-                aspectRatio: _videoController!.value.aspectRatio,
-                child: VideoPlayer(_videoController!),
+              Center(
+                child: AspectRatio(
+                  aspectRatio:
+                      value.aspectRatio <= 0 ? 16 / 9 : value.aspectRatio,
+                  child: VideoPlayer(controller),
+                ),
               ),
               Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        Colors.black.withOpacity(0.45),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 12,
-                right: 12,
-                child: GestureDetector(
-                  onTap: _enterFullScreen,
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
+                child: IgnorePointer(
+                  child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.38),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.fullscreen_rounded,
-                      color: Colors.white,
-                      size: 20,
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withOpacity(0.12),
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.58),
+                        ],
+                        stops: const [0.0, 0.48, 1.0],
+                      ),
                     ),
                   ),
                 ),
               ),
-              Positioned(
-                left: 14,
-                right: 14,
-                bottom: 14,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(999),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.18),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.16),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          IconButton(
-                            onPressed: () {
-                              setState(() {
-                                if (_videoController!.value.isPlaying) {
-                                  _videoController!.pause();
-                                } else {
-                                  _videoController!.play();
-                                }
-                              });
-                            },
-                            icon: Icon(
-                              _videoController!.value.isPlaying
-                                  ? Icons.pause_circle_filled_rounded
-                                  : Icons.play_circle_fill_rounded,
-                              color: Colors.white,
-                              size: 38,
-                            ),
-                          ),
-                          Expanded(
-                            child: VideoProgressIndicator(
-                              _videoController!,
-                              allowScrubbing: true,
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 8),
-                              colors: VideoProgressColors(
-                                playedColor:
-                                    VideoLessonDetailPalette.primaryGreen,
-                                bufferedColor: Colors.white.withOpacity(0.45),
-                                backgroundColor: Colors.white.withOpacity(0.18),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.26),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              _formatDuration(_videoController!.value.position),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+              if (!value.isPlaying)
+                Container(
+                  width: fullScreenMode ? 86 : 76,
+                  height: fullScreenMode ? 86 : 76,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.46),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.22),
                     ),
                   ),
+                  child: Icon(
+                    Icons.play_arrow_rounded,
+                    color: Colors.white,
+                    size: fullScreenMode ? 58 : 50,
+                  ),
+                ),
+              Positioned(
+                top: fullScreenMode ? 24 : 14,
+                right: fullScreenMode ? 24 : 14,
+                child: Row(
+                  children: [
+                    if (!fullScreenMode)
+                      _videoCircleButton(
+                        icon: Icons.fullscreen_rounded,
+                        onTap: _enterFullScreen,
+                      ),
+                    if (fullScreenMode)
+                      _videoCircleButton(
+                        icon: Icons.close_rounded,
+                        onTap: _exitFullScreen,
+                        iconSize: 28,
+                      ),
+                  ],
+                ),
+              ),
+              Positioned(
+                left: fullScreenMode ? 24 : 14,
+                right: fullScreenMode ? 24 : 14,
+                bottom: fullScreenMode ? 24 : 14,
+                child: _buildVideoControls(
+                  controller: controller,
+                  compact: compactControls,
+                  fullScreenMode: fullScreenMode,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _videoCircleButton({
+    required IconData icon,
+    required VoidCallback onTap,
+    double iconSize = 22,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.44),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white.withOpacity(0.14)),
+          ),
+          child: Icon(
+            icon,
+            color: Colors.white,
+            size: iconSize,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVideoControls({
+    required VideoPlayerController controller,
+    required bool compact,
+    required bool fullScreenMode,
+  }) {
+    final value = controller.value;
+    final position = _formatDuration(value.position);
+    final duration = _formatDuration(value.duration);
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 8 : 12,
+            vertical: compact ? 7 : 9,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.38),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: Colors.white.withOpacity(0.13)),
+          ),
+          child: Row(
+            children: [
+              InkWell(
+                onTap: _togglePlay,
+                borderRadius: BorderRadius.circular(999),
+                child: Icon(
+                  value.isPlaying
+                      ? Icons.pause_circle_filled_rounded
+                      : Icons.play_circle_fill_rounded,
+                  color: Colors.white,
+                  size: compact ? 36 : 42,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: VideoProgressIndicator(
+                  controller,
+                  allowScrubbing: true,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  colors: VideoProgressColors(
+                    playedColor: VideoLessonDetailPalette.primaryGreen,
+                    bufferedColor: Colors.white.withOpacity(0.38),
+                    backgroundColor: Colors.white.withOpacity(0.16),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                compact ? position : '$position / $duration',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: compact ? 11.5 : 12.5,
+                  height: 1.0,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ],
@@ -541,201 +720,41 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
   Widget _buildFullScreenVideo() {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          Center(
-            child: AspectRatio(
-              aspectRatio: _videoController!.value.aspectRatio,
-              child: VideoPlayer(_videoController!),
-            ),
+      body: SafeArea(
+        child: Center(
+          child: _buildVideoSurface(
+            compactControls: false,
+            fullScreenMode: true,
           ),
-          Positioned(
-            top: 28,
-            left: 16,
-            child: IconButton(
-              onPressed: _exitFullScreen,
-              icon: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.45),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.close_rounded,
-                  color: Colors.white,
-                  size: 28,
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 28,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.14),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.14),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        onPressed: () {
-                          setState(() {
-                            if (_videoController!.value.isPlaying) {
-                              _videoController!.pause();
-                            } else {
-                              _videoController!.play();
-                            }
-                          });
-                        },
-                        icon: Icon(
-                          _videoController!.value.isPlaying
-                              ? Icons.pause_circle_filled_rounded
-                              : Icons.play_circle_fill_rounded,
-                          color: Colors.white,
-                          size: 44,
-                        ),
-                      ),
-                      Expanded(
-                        child: VideoProgressIndicator(
-                          _videoController!,
-                          allowScrubbing: true,
-                          colors: VideoProgressColors(
-                            playedColor:
-                                VideoLessonDetailPalette.primaryGreen,
-                            bufferedColor: Colors.white.withOpacity(0.35),
-                            backgroundColor: Colors.white.withOpacity(0.12),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.28),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          '${_formatDuration(_videoController!.value.position)} / ${_formatDuration(_videoController!.value.duration)}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildHeaderCard(VideoLessonModel currentLesson) {
-    final authorFullName =
-        '${currentLesson.authorName} ${currentLesson.authorSurname}'.trim();
+  Widget _buildVideoBlock(bool isPhone) {
+    return _buildVideoSurface(
+      compactControls: isPhone,
+      fullScreenMode: false,
+    );
+  }
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            VideoLessonDetailPalette.primaryGreen.withOpacity(0.12),
-            VideoLessonDetailPalette.superLightGreen,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: VideoLessonDetailPalette.border),
-      ),
+  Widget _buildLessonInfo(VideoLessonModel currentLesson) {
+    final authorFullName = _authorName(currentLesson);
+
+    return _card(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                decoration: BoxDecoration(
-                  gradient: VideoLessonDetailPalette.greenGradient,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                padding: const EdgeInsets.all(10),
-                child: const Icon(
-                  Icons.ondemand_video_rounded,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Видеоурок',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 15,
-                        color: VideoLessonDetailPalette.text,
-                      ),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Просмотр урока, описание и комментарии',
-                      style: TextStyle(
-                        color: VideoLessonDetailPalette.textMuted,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (currentLesson.duration.isNotEmpty)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: VideoLessonDetailPalette.white,
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: VideoLessonDetailPalette.border),
-                  ),
-                  child: Text(
-                    currentLesson.duration,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 12,
-                      color: VideoLessonDetailPalette.textMuted,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
           Text(
-            currentLesson.title,
+            currentLesson.title.trim().isEmpty
+                ? 'Без названия'
+                : currentLesson.title,
             style: const TextStyle(
               fontSize: 24,
-              height: 1.15,
-              fontWeight: FontWeight.w900,
+              height: 1.12,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.3,
               color: VideoLessonDetailPalette.text,
             ),
           ),
@@ -744,12 +763,108 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
             spacing: 8,
             runSpacing: 8,
             children: [
-              _metricChip(Icons.person_rounded, authorFullName.isEmpty
-                  ? 'Автор'
-                  : authorFullName),
-              _metricChip(Icons.comment_rounded, 'Комментарии ${comments.length}'),
-              if (currentLesson.duration.isNotEmpty)
-                _metricChip(Icons.timer_rounded, currentLesson.duration),
+              _chip(
+                icon: Icons.person_rounded,
+                text: authorFullName,
+              ),
+              _chip(
+                icon: Icons.mode_comment_rounded,
+                text: '${comments.length} коммент.',
+              ),
+              if (currentLesson.duration.trim().isNotEmpty)
+                _chip(
+                  icon: Icons.schedule_rounded,
+                  text: currentLesson.duration,
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundImage: currentLesson.authorAvatar.isNotEmpty
+                    ? NetworkImage(currentLesson.authorAvatar)
+                    : null,
+                backgroundColor: VideoLessonDetailPalette.primaryGreenSoft,
+                child: currentLesson.authorAvatar.isEmpty
+                    ? const Icon(
+                        Icons.person_rounded,
+                        color: VideoLessonDetailPalette.primaryGreen,
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      authorFullName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        height: 1.1,
+                        fontWeight: FontWeight.w600,
+                        color: VideoLessonDetailPalette.text,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    const Text(
+                      'Автор видеоурока',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        height: 1.1,
+                        fontWeight: FontWeight.w400,
+                        color: VideoLessonDetailPalette.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (isOwner)
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: _editLesson,
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: VideoLessonDetailPalette.primaryGreenSoft,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: VideoLessonDetailPalette.primaryGreen
+                              .withOpacity(0.18),
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.edit_rounded,
+                            size: 17,
+                            color: VideoLessonDetailPalette.primaryGreen,
+                          ),
+                          SizedBox(width: 6),
+                          Text(
+                            'Изменить',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              height: 1.1,
+                              fontWeight: FontWeight.w600,
+                              color: VideoLessonDetailPalette.primaryGreen,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ],
@@ -757,109 +872,29 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
     );
   }
 
-  Widget _buildAuthorCard(VideoLessonModel currentLesson) {
-    final authorFullName =
-        '${currentLesson.authorName} ${currentLesson.authorSurname}'.trim();
-
-    return _whiteCard(
-      child: Row(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: VideoLessonDetailPalette.border,
-                width: 2,
-              ),
-            ),
-            child: CircleAvatar(
-              radius: 28,
-              backgroundImage: currentLesson.authorAvatar.isNotEmpty
-                  ? NetworkImage(currentLesson.authorAvatar)
-                  : null,
-              backgroundColor: VideoLessonDetailPalette.lightGreen,
-              child: currentLesson.authorAvatar.isEmpty
-                  ? const Icon(
-                      Icons.person,
-                      color: VideoLessonDetailPalette.primaryGreen,
-                      size: 28,
-                    )
-                  : null,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Автор урока',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: VideoLessonDetailPalette.textMuted,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  authorFullName.isEmpty ? 'Неизвестный автор' : authorFullName,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                    color: VideoLessonDetailPalette.text,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (currentLesson.duration.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: VideoLessonDetailPalette.superLightGreen,
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: VideoLessonDetailPalette.border),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.schedule_rounded,
-                    size: 16,
-                    color: VideoLessonDetailPalette.primaryGreen,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    currentLesson.duration,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                      color: VideoLessonDetailPalette.primaryGreen,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildDescriptionCard(VideoLessonModel currentLesson) {
-    return _whiteCard(
+    final description = currentLesson.description.trim();
+
+    return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _sectionTitle('Описание'),
-          const SizedBox(height: 10),
+          _sectionHeader(
+            'Описание',
+            icon: Icons.notes_rounded,
+          ),
+          const SizedBox(height: 12),
           Text(
-            currentLesson.description.trim().isEmpty
-                ? 'Описание пока не добавлено'
-                : currentLesson.description,
-            style: const TextStyle(
+            description.isEmpty
+                ? 'Описание пока не добавлено. Здесь можно указать цель урока, ключевые моменты, технику выполнения и рекомендации тренера.'
+                : description,
+            style: TextStyle(
               fontSize: 14.5,
-              height: 1.5,
-              color: VideoLessonDetailPalette.text,
-              fontWeight: FontWeight.w700,
+              height: 1.48,
+              fontWeight: FontWeight.w400,
+              color: description.isEmpty
+                  ? VideoLessonDetailPalette.textMuted
+                  : VideoLessonDetailPalette.text,
             ),
           ),
         ],
@@ -868,25 +903,36 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
   }
 
   Widget _buildCommentInputCard() {
-    return _whiteCard(
+    return _card(
+      padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _sectionTitle('Добавить комментарий'),
+          _sectionHeader(
+            'Комментарий',
+            icon: Icons.add_comment_rounded,
+          ),
           const SizedBox(height: 12),
           TextField(
             controller: commentController,
+            style: const TextStyle(
+              fontSize: 14,
+              height: 1.25,
+              color: VideoLessonDetailPalette.text,
+              fontWeight: FontWeight.w400,
+            ),
             minLines: 2,
             maxLines: 4,
             decoration: InputDecoration(
               hintText: 'Написать комментарий...',
               hintStyle: const TextStyle(
-                color: VideoLessonDetailPalette.textMuted,
-                fontWeight: FontWeight.w600,
+                color: VideoLessonDetailPalette.textLight,
+                fontWeight: FontWeight.w400,
+                fontSize: 14,
               ),
               filled: true,
-              fillColor: VideoLessonDetailPalette.background,
-              contentPadding: const EdgeInsets.all(16),
+              fillColor: VideoLessonDetailPalette.surface,
+              contentPadding: const EdgeInsets.all(14),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
                 borderSide: const BorderSide(
@@ -909,40 +955,45 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
             ),
           ),
           const SizedBox(height: 12),
-          Container(
+          SizedBox(
             width: double.infinity,
-            decoration: BoxDecoration(
-              gradient: VideoLessonDetailPalette.greenGradient,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: ElevatedButton.icon(
-              onPressed: isCommentLoading ? null : _sendComment,
-              style: ElevatedButton.styleFrom(
-                elevation: 0,
-                backgroundColor: Colors.transparent,
-                shadowColor: Colors.transparent,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
+            height: 46,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: VideoLessonDetailPalette.greenGradient,
+                borderRadius: BorderRadius.circular(15),
               ),
-              icon: isCommentLoading
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                  : const Icon(Icons.send_rounded),
-              label: Text(
-                isCommentLoading
-                    ? 'Отправка...'
-                    : 'Отправить комментарий',
-                style: const TextStyle(fontWeight: FontWeight.w900),
+              child: ElevatedButton.icon(
+                onPressed: isCommentLoading ? null : _sendComment,
+                style: ElevatedButton.styleFrom(
+                  elevation: 0,
+                  backgroundColor: Colors.transparent,
+                  disabledBackgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                ),
+                icon: isCommentLoading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Icon(Icons.send_rounded, size: 19),
+                label: Text(
+                  isCommentLoading ? 'Отправка...' : 'Отправить',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    height: 1.1,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ),
           ),
@@ -951,30 +1002,70 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
     );
   }
 
-  Widget _buildEmptyCommentsCard() {
-    return _whiteCard(
+  Widget _buildCommentsSection() {
+    return _card(
+      padding: const EdgeInsets.all(14),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
-            Icons.chat_bubble_outline_rounded,
-            size: 34,
-            color: VideoLessonDetailPalette.textMuted,
+          _sectionHeader(
+            'Комментарии',
+            counter: '${comments.length}',
+            icon: Icons.forum_rounded,
           ),
-          const SizedBox(height: 10),
-          const Text(
+          const SizedBox(height: 12),
+          if (comments.isEmpty)
+            _buildEmptyComments()
+          else
+            ...comments.map(_buildCommentItem),
+          if (_isRefreshing)
+            const Padding(
+              padding: EdgeInsets.only(top: 14),
+              child: Center(
+                child: CircularProgressIndicator(
+                  color: VideoLessonDetailPalette.primaryGreen,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyComments() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 22),
+      decoration: BoxDecoration(
+        color: VideoLessonDetailPalette.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: VideoLessonDetailPalette.border),
+      ),
+      child: const Column(
+        children: [
+          Icon(
+            Icons.chat_bubble_outline_rounded,
+            color: VideoLessonDetailPalette.textMuted,
+            size: 34,
+          ),
+          SizedBox(height: 10),
+          Text(
             'Комментариев пока нет',
             style: TextStyle(
-              fontWeight: FontWeight.w900,
+              fontSize: 14.5,
+              fontWeight: FontWeight.w600,
               color: VideoLessonDetailPalette.text,
             ),
           ),
-          const SizedBox(height: 4),
-          const Text(
-            'Будьте первым, кто оставит комментарий.',
+          SizedBox(height: 5),
+          Text(
+            'Оставьте первый комментарий к видеоуроку.',
             textAlign: TextAlign.center,
             style: TextStyle(
+              fontSize: 13,
+              height: 1.35,
+              fontWeight: FontWeight.w400,
               color: VideoLessonDetailPalette.textMuted,
-              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -982,122 +1073,158 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
     );
   }
 
-  Widget _buildCommentCard(VideoLessonCommentModel comment) {
+  Widget _buildCommentItem(VideoLessonCommentModel comment) {
     final authorFullName =
         '${comment.authorName} ${comment.authorSurname}'.trim();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      child: _whiteCard(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            CircleAvatar(
-              radius: 22,
-              backgroundImage: comment.authorAvatar.isNotEmpty
-                  ? NetworkImage(comment.authorAvatar)
-                  : null,
-              backgroundColor: VideoLessonDetailPalette.lightGreen,
-              child: comment.authorAvatar.isEmpty
-                  ? const Icon(
-                      Icons.person,
-                      color: VideoLessonDetailPalette.primaryGreen,
-                      size: 22,
-                    )
-                  : null,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          authorFullName.isEmpty
-                              ? 'Пользователь'
-                              : authorFullName,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 14.5,
-                            color: VideoLessonDetailPalette.text,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        _formatCommentTime(comment.createdAt),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: VideoLessonDetailPalette.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: VideoLessonDetailPalette.border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 21,
+            backgroundImage: comment.authorAvatar.isNotEmpty
+                ? NetworkImage(comment.authorAvatar)
+                : null,
+            backgroundColor: VideoLessonDetailPalette.primaryGreenSoft,
+            child: comment.authorAvatar.isEmpty
+                ? const Icon(
+                    Icons.person_rounded,
+                    color: VideoLessonDetailPalette.primaryGreen,
+                    size: 22,
+                  )
+                : null,
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        authorFullName.isEmpty
+                            ? 'Пользователь'
+                            : authorFullName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 12,
-                          color: VideoLessonDetailPalette.textMuted,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          height: 1.1,
+                          fontWeight: FontWeight.w600,
+                          color: VideoLessonDetailPalette.text,
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    comment.comment,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      height: 1.45,
-                      color: VideoLessonDetailPalette.text,
-                      fontWeight: FontWeight.w700,
                     ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _formatCommentTime(comment.createdAt),
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        height: 1.1,
+                        fontWeight: FontWeight.w400,
+                        color: VideoLessonDetailPalette.textLight,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  comment.comment,
+                  style: const TextStyle(
+                    fontSize: 13.8,
+                    height: 1.42,
+                    fontWeight: FontWeight.w400,
+                    color: VideoLessonDetailPalette.text,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildSkeletonCard() {
-    Widget bar({double? w, double h = 10}) => Container(
-          width: w,
-          height: h,
-          decoration: BoxDecoration(
-            color: Colors.grey.shade200,
-            borderRadius: BorderRadius.circular(999),
-          ),
-        );
+  Widget _buildSkeletonPage() {
+    Widget bar({
+      double? width,
+      double height = 12,
+      BorderRadius? radius,
+    }) {
+      return Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade200,
+          borderRadius: radius ?? BorderRadius.circular(999),
+        ),
+      );
+    }
 
-    return _whiteCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          bar(w: 170, h: 16),
-          const SizedBox(height: 12),
-          bar(w: double.infinity),
-          const SizedBox(height: 8),
-          bar(w: 220),
-          const SizedBox(height: 12),
-          Row(
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+      children: [
+        _buildVideoPlaceholder(),
+        const SizedBox(height: 14),
+        _card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade200,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              bar(width: 260, height: 22),
+              const SizedBox(height: 12),
+              bar(width: double.infinity),
+              const SizedBox(height: 8),
+              bar(width: 220),
+              const SizedBox(height: 18),
+              Row(
                 children: [
-                  bar(w: 120),
-                  const SizedBox(height: 8),
-                  bar(w: 80, h: 9),
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      bar(width: 150),
+                      const SizedBox(height: 8),
+                      bar(width: 100, height: 10),
+                    ],
+                  ),
                 ],
               ),
             ],
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 12),
+        _card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              bar(width: 160, height: 18),
+              const SizedBox(height: 14),
+              bar(width: double.infinity),
+              const SizedBox(height: 8),
+              bar(width: double.infinity),
+              const SizedBox(height: 8),
+              bar(width: 180),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -1105,10 +1232,10 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: _whiteCard(
-          child: Column(
+        child: _card(
+          child: const Column(
             mainAxisSize: MainAxisSize.min,
-            children: const [
+            children: [
               Icon(
                 Icons.video_library_rounded,
                 size: 54,
@@ -1118,7 +1245,7 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
               Text(
                 'Урок не найден',
                 style: TextStyle(
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                   fontSize: 16,
                   color: VideoLessonDetailPalette.text,
                 ),
@@ -1130,97 +1257,148 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
     );
   }
 
+  Widget _buildMobileLayout(VideoLessonModel currentLesson) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildVideoBlock(true),
+        const SizedBox(height: 12),
+        _buildLessonInfo(currentLesson),
+        const SizedBox(height: 12),
+        _buildDescriptionCard(currentLesson),
+        const SizedBox(height: 12),
+        _buildCommentInputCard(),
+        const SizedBox(height: 12),
+        _buildCommentsSection(),
+      ],
+    );
+  }
+
+  Widget _buildWideLayout(VideoLessonModel currentLesson) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          flex: 8,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildVideoBlock(false),
+              const SizedBox(height: 14),
+              _buildLessonInfo(currentLesson),
+              const SizedBox(height: 14),
+              _buildDescriptionCard(currentLesson),
+            ],
+          ),
+        ),
+        const SizedBox(width: 18),
+        Expanded(
+          flex: 4,
+          child: Column(
+            children: [
+              _buildCommentInputCard(),
+              const SizedBox(height: 14),
+              _buildCommentsSection(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_isFullScreen && _videoController != null) {
-      return _buildFullScreenVideo();
+    if (_isFullScreen && _hasReadyVideo) {
+      return _withStableTextScale(
+        WillPopScope(
+          onWillPop: () async {
+            await _exitFullScreen();
+            return false;
+          },
+          child: _buildFullScreenVideo(),
+        ),
+      );
     }
 
     final currentLesson = lesson;
 
-    return Scaffold(
-      backgroundColor: VideoLessonDetailPalette.background,
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: VideoLessonDetailPalette.white,
-        surfaceTintColor: Colors.transparent,
-        foregroundColor: Colors.black87,
-        centerTitle: true,
-        title: const Text(
-          'Видеоурок',
-          style: TextStyle(
-            fontWeight: FontWeight.w900,
-            color: VideoLessonDetailPalette.text,
-            fontSize: 16,
-          ),
-        ),
-        actions: [
-          if (isOwner)
-            IconButton(
-              tooltip: 'Редактировать',
-              onPressed: _editLesson,
-              icon: Container(
-                decoration: BoxDecoration(
-                  gradient: VideoLessonDetailPalette.greenGradient,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                padding: const EdgeInsets.all(8),
-                child: const Icon(Icons.edit_rounded, color: Colors.white),
-              ),
-            ),
-          if (isOwner) const SizedBox(width: 10),
-        ],
-      ),
-      body: isLoading
-          ? ListView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-              children: [
-                _buildVideoPlaceholder(),
-                const SizedBox(height: 12),
-                _buildSkeletonCard(),
-                const SizedBox(height: 12),
-                _buildSkeletonCard(),
-              ],
-            )
-          : currentLesson == null
-              ? _buildNotFoundState()
-              : RefreshIndicator(
-                  onRefresh: _loadData,
-                  color: VideoLessonDetailPalette.primaryGreen,
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-                    children: [
-                      _buildVideoBlock(),
-                      const SizedBox(height: 12),
-                      _buildHeaderCard(currentLesson),
-                      const SizedBox(height: 12),
-                      _buildAuthorCard(currentLesson),
-                      const SizedBox(height: 12),
-                      _buildDescriptionCard(currentLesson),
-                      const SizedBox(height: 12),
-                      _buildCommentInputCard(),
-                      const SizedBox(height: 12),
-                      _sectionTitle(
-                        'Комментарии',
-                        action: '${comments.length}',
+    return _withStableTextScale(
+      WillPopScope(
+        onWillPop: () async {
+          await _restoreSystemUi();
+          return true;
+        },
+        child: Scaffold(
+          backgroundColor: VideoLessonDetailPalette.background,
+          appBar: AppBar(
+            elevation: 0,
+            backgroundColor: VideoLessonDetailPalette.white,
+            surfaceTintColor: Colors.transparent,
+            foregroundColor: VideoLessonDetailPalette.text,
+            centerTitle: false,
+            titleSpacing: 0,
+            title: _buildTopBarTitle(currentLesson),
+            actions: [
+              if (isOwner)
+                Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: IconButton(
+                    tooltip: 'Редактировать',
+                    onPressed: _editLesson,
+                    icon: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        gradient: VideoLessonDetailPalette.greenGradient,
+                        borderRadius: BorderRadius.circular(13),
                       ),
-                      const SizedBox(height: 8),
-                      if (comments.isEmpty)
-                        _buildEmptyCommentsCard()
-                      else
-                        ...comments.map(_buildCommentCard),
-                      if (_isRefreshing)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 10),
-                          child: Center(
-                            child: CircularProgressIndicator(
-                              color: VideoLessonDetailPalette.primaryGreen,
-                            ),
-                          ),
-                        ),
-                    ],
+                      child: const Icon(
+                        Icons.edit_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
                   ),
                 ),
+            ],
+          ),
+          body: isLoading
+              ? _buildSkeletonPage()
+              : currentLesson == null
+                  ? _buildNotFoundState()
+                  : RefreshIndicator(
+                      onRefresh: _loadData,
+                      color: VideoLessonDetailPalette.primaryGreen,
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final width = constraints.maxWidth;
+                          final isWide = width >= 980;
+                          final isPhone = width < 640;
+
+                          final pagePadding = isWide
+                              ? const EdgeInsets.fromLTRB(24, 18, 24, 30)
+                              : isPhone
+                                  ? const EdgeInsets.fromLTRB(12, 10, 12, 22)
+                                  : const EdgeInsets.fromLTRB(18, 14, 18, 26);
+
+                          return SingleChildScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: pagePadding,
+                            child: Center(
+                              child: ConstrainedBox(
+                                constraints:
+                                    const BoxConstraints(maxWidth: 1360),
+                                child: isWide
+                                    ? _buildWideLayout(currentLesson)
+                                    : _buildMobileLayout(currentLesson),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+        ),
+      ),
     );
   }
 }

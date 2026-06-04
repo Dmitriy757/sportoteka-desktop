@@ -60,6 +60,30 @@ const String apiBaseUrl = 'https://sportotekaapp.ru/api/';
 const Duration cacheDuration = Duration(minutes: 10);
 const int maxConcurrentRequests = 3;
 
+// Единая светлая подложка главной.
+// Фон делаем белым, а мягкий серый оставляем только для внутренних плашек,
+// чтобы интерфейс не выглядел «грязным» и не спорил с белыми карточками.
+const Color _homePageBackground = Color(0xFFFFFFFF);
+const Color _homeSoftSurface = Color(0xFFF7F8FA);
+
+// Палитра бокового меню синхронизирована с ClubWorkspace:
+// белый фон, прозрачные обводки, спокойный зелёный активного пункта.
+const Color _workspaceMenuGreen = Color(0xFF178A45);
+const Color _workspaceMenuGraphite = Color(0xFF344054);
+const Color _workspaceMenuText = Color(0xFF111827);
+const Color _workspaceMenuMuted = Color(0xFF667085);
+const Color _workspaceMenuLightMuted = Color(0xFF98A2B3);
+const Color _workspaceMenuHover = Color(0xFFF0F2F5);
+const Color _workspaceMenuSoft = Colors.white;
+
+// Узкая боковая рейка как в ClubWorkspace: дорогой графитовый тон
+// + зелёный только как маленький фирменный акцент.
+const Color _workspaceRail = Color(0xFF101214);
+const Color _workspaceRailPanel = Color(0xFF181B1F);
+const Color _workspaceRailHover = Color(0xFF22262B);
+const Color _workspaceRailText = Color(0xFFF9FAFB);
+const Color _workspaceRailMuted = Color(0xFF9CA3AF);
+
 final Dio dio = Dio()
   ..options.baseUrl = apiBaseUrl
   ..options.connectTimeout = const Duration(seconds: 10)
@@ -313,13 +337,23 @@ class _HomeQuickAction {
 class _HomeSideMenuItem {
   final String id;
   final String title;
+  final String subtitle;
   final IconData icon;
+  final bool isGroup;
 
   const _HomeSideMenuItem({
     required this.id,
     required this.title,
     required this.icon,
+    this.subtitle = '',
+    this.isGroup = false,
   });
+
+  const _HomeSideMenuItem.group(this.title)
+      : id = '__group__',
+        subtitle = '',
+        icon = Icons.label_important_rounded,
+        isGroup = true;
 }
 
 class _HomeSideRailButton extends StatefulWidget {
@@ -352,82 +386,128 @@ class _HomeSideRailButtonState extends State<_HomeSideRailButton> {
 
   @override
   Widget build(BuildContext context) {
-    final showLabel = _hovered;
+    final effectiveAccent = widget.danger
+        ? const Color(0xFFDC2626)
+        : widget.active
+            ? _workspaceMenuGreen
+            : widget.primaryColor;
+    final hasSubtitle = widget.item.subtitle.trim().isNotEmpty;
     final bgColor = widget.active
-        ? widget.primaryColor
-        : showLabel
-            ? widget.backgroundColor
+        ? effectiveAccent.withOpacity(0.08)
+        : _hovered
+            ? _workspaceMenuHover.withOpacity(0.72)
             : Colors.transparent;
+    const borderColor = Colors.transparent;
+    final iconBgColor = widget.active
+        ? effectiveAccent.withOpacity(0.12)
+        : _hovered
+            ? Colors.white
+            : _workspaceMenuSoft;
     final iconColor = widget.active
-        ? Colors.white
+        ? effectiveAccent
         : widget.danger
-            ? widget.primaryColor
+            ? const Color(0xFFDC2626)
             : widget.mutedColor;
-    final labelColor = widget.active ? Colors.white : widget.textColor;
+    final titleColor = widget.active || widget.danger ? effectiveAccent : _workspaceMenuGraphite;
+    final subtitleColor = widget.active
+        ? _workspaceMenuMuted
+        : _workspaceMenuLightMuted;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: Tooltip(
-        message: widget.item.title,
+        message: hasSubtitle ? '${widget.item.title} — ${widget.item.subtitle}' : widget.item.title,
         waitDuration: const Duration(milliseconds: 250),
+        preferBelow: false,
         child: Align(
           alignment: Alignment.centerLeft,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             curve: Curves.easeOut,
-            width: showLabel ? 190 : 58,
-            height: 48,
+            width: double.infinity,
+            constraints: BoxConstraints(minHeight: hasSubtitle ? 50 : 42),
             decoration: BoxDecoration(
               color: bgColor,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: widget.active
-                    ? widget.primaryColor.withOpacity(0.20)
-                    : showLabel
-                        ? widget.primaryColor.withOpacity(0.12)
-                        : Colors.transparent,
-              ),
-              boxShadow: showLabel
-                  ? [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
-                        blurRadius: 18,
-                        offset: const Offset(0, 8),
-                      ),
-                    ]
-                  : const [],
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(color: borderColor),
             ),
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(15),
                 onTap: widget.onTap,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
                   child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                    mainAxisSize: MainAxisSize.max,
                     children: [
-                      Icon(widget.item.icon, size: 22, color: iconColor),
-                      AnimatedSize(
+                      AnimatedContainer(
                         duration: const Duration(milliseconds: 160),
-                        curve: Curves.easeOut,
-                        child: showLabel
-                            ? Padding(
-                                padding: const EdgeInsets.only(left: 12),
-                                child: Text(
-                                  widget.item.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w900,
-                                    color: labelColor,
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: iconBgColor,
+                          borderRadius: BorderRadius.circular(11),
+                          border: Border.all(color: Colors.transparent),
+                          boxShadow: widget.active || _hovered
+                              ? [
+                                  BoxShadow(
+                                    color: effectiveAccent.withOpacity(widget.active ? .10 : .055),
+                                    blurRadius: widget.active ? 12 : 9,
+                                    offset: const Offset(0, 4),
                                   ),
-                                ),
-                              )
-                            : const SizedBox.shrink(),
+                                ]
+                              : const [],
+                        ),
+                        child: Icon(widget.item.icon, size: 18, color: iconColor),
                       ),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              widget.item.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12.8,
+                                height: 1.05,
+                                fontWeight: widget.active ? FontWeight.w900 : FontWeight.w800,
+                                color: titleColor,
+                              ),
+                            ),
+                            if (hasSubtitle) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                widget.item.subtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 10.0,
+                                  height: 1.05,
+                                  fontWeight: FontWeight.w700,
+                                  color: subtitleColor,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      if (widget.active) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          width: 4,
+                          height: hasSubtitle ? 26 : 22,
+                          decoration: BoxDecoration(
+                            color: effectiveAccent,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -436,6 +516,413 @@ class _HomeSideRailButtonState extends State<_HomeSideRailButton> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _HomeCompactSidebarActionButton extends StatefulWidget {
+  final IconData icon;
+  final String label;
+  final Color accent;
+  final VoidCallback onTap;
+
+  const _HomeCompactSidebarActionButton({
+    required this.icon,
+    required this.label,
+    required this.accent,
+    required this.onTap,
+  });
+
+  @override
+  State<_HomeCompactSidebarActionButton> createState() =>
+      _HomeCompactSidebarActionButtonState();
+}
+
+class _HomeCompactSidebarActionButtonState
+    extends State<_HomeCompactSidebarActionButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final bgColor = _hovered ? widget.accent.withOpacity(.06) : Colors.transparent;
+    const borderColor = Colors.transparent;
+    final iconBgColor = _hovered ? Colors.white : _workspaceMenuSoft;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Tooltip(
+        message: widget.label == 'Меню' ? 'Полное меню' : widget.label,
+        waitDuration: const Duration(milliseconds: 250),
+        preferBelow: false,
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: widget.onTap,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              height: 38,
+              padding: const EdgeInsets.symmetric(horizontal: 9),
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: borderColor),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: iconBgColor,
+                      borderRadius: BorderRadius.circular(11),
+                      border: Border.all(color: Colors.transparent),
+                      boxShadow: _hovered
+                          ? [
+                              BoxShadow(
+                                color: widget.accent.withOpacity(.07),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ]
+                          : const [],
+                    ),
+                    child: Icon(widget.icon, color: widget.accent, size: 17),
+                  ),
+                  const SizedBox(width: 7),
+                  Flexible(
+                    child: Text(
+                      widget.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _workspaceMenuGraphite,
+                        fontSize: 11.8,
+                        fontWeight: FontWeight.w900,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+class _HomeClubRailUtilityButton extends StatefulWidget {
+  final IconData icon;
+  final String label;
+  final String tooltip;
+  final String? imageUrl;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _HomeClubRailUtilityButton({
+    required this.icon,
+    required this.label,
+    required this.tooltip,
+    this.imageUrl,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  State<_HomeClubRailUtilityButton> createState() =>
+      _HomeClubRailUtilityButtonState();
+}
+
+class _HomeClubRailUtilityButtonState
+    extends State<_HomeClubRailUtilityButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = widget.active;
+    final bgColor = selected
+        ? Colors.white
+        : _hovered
+            ? _workspaceRailHover
+            : Colors.transparent;
+    final iconColor = selected ? _workspaceRail : _workspaceRailText;
+    final textColor = selected ? _workspaceRail : _workspaceRailMuted;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Tooltip(
+        message: widget.tooltip,
+        waitDuration: const Duration(milliseconds: 250),
+        preferBelow: false,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            width: 54,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: selected
+                    ? Colors.white.withOpacity(.58)
+                    : _hovered
+                        ? Colors.white.withOpacity(.08)
+                        : Colors.transparent,
+              ),
+              boxShadow: selected
+                  ? [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(.08),
+                        blurRadius: 14,
+                        offset: const Offset(0, 6),
+                      ),
+                    ]
+                  : const [],
+            ),
+            child: SizedBox(
+              width: double.infinity,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: Center(
+                      child: widget.imageUrl != null && widget.imageUrl!.trim().isNotEmpty
+                          ? _HomeRailLogo(url: widget.imageUrl, size: 24)
+                          : Icon(widget.icon, color: iconColor, size: 21),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  SizedBox(
+                    width: double.infinity,
+                    child: Text(
+                      widget.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: 9.1,
+                        height: 1.0,
+                        fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeClubSideRailButton extends StatefulWidget {
+  final _HomeSideMenuItem item;
+  final String label;
+  final bool active;
+  final bool danger;
+  final VoidCallback onTap;
+
+  const _HomeClubSideRailButton({
+    required this.item,
+    required this.label,
+    required this.active,
+    required this.onTap,
+    this.danger = false,
+  });
+
+  @override
+  State<_HomeClubSideRailButton> createState() =>
+      _HomeClubSideRailButtonState();
+}
+
+class _HomeClubSideRailButtonState extends State<_HomeClubSideRailButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final danger = widget.danger;
+    final bgColor = widget.active
+        ? Colors.white
+        : _hovered
+            ? _workspaceRailHover
+            : Colors.transparent;
+    final iconColor = widget.active
+        ? _workspaceRail
+        : danger
+            ? const Color(0xFFFCA5A5)
+            : _workspaceRailText;
+    final textColor = widget.active
+        ? _workspaceRail
+        : danger
+            ? const Color(0xFFFCA5A5)
+            : _workspaceRailMuted;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Tooltip(
+        message: widget.item.subtitle.trim().isEmpty
+            ? widget.item.title
+            : '${widget.item.title} — ${widget.item.subtitle}',
+        waitDuration: const Duration(milliseconds: 250),
+        preferBelow: false,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOut,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: widget.active
+                    ? Colors.white.withOpacity(.62)
+                    : _hovered
+                        ? Colors.white.withOpacity(.08)
+                        : Colors.transparent,
+              ),
+              boxShadow: widget.active
+                  ? [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(.08),
+                        blurRadius: 14,
+                        offset: const Offset(0, 6),
+                      ),
+                    ]
+                  : const [],
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: Center(
+                          child: Icon(widget.item.icon, color: iconColor, size: 21),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      SizedBox(
+                        width: double.infinity,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 2),
+                          child: Text(
+                            widget.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: textColor,
+                              fontSize: 9.05,
+                              height: 1.0,
+                              fontWeight:
+                                  widget.active ? FontWeight.w900 : FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (widget.active)
+                  Positioned(
+                    right: 5,
+                    top: 5,
+                    child: Container(
+                      width: 5,
+                      height: 5,
+                      decoration: const BoxDecoration(
+                        color: _workspaceMenuGreen,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeRailLogo extends StatelessWidget {
+  final String? url;
+  final double size;
+  final String fallbackText;
+
+  const _HomeRailLogo({
+    this.url,
+    required this.size,
+    this.fallbackText = 'С',
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final value = url?.trim() ?? '';
+    final urls = value.isEmpty ? const <String>[] : <String>[value];
+
+    Widget fallback() => Container(
+          width: size,
+          height: size,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(size * .33),
+          ),
+          child: Text(
+            fallbackText.characters.first.toUpperCase(),
+            style: TextStyle(
+              color: _workspaceMenuGreen,
+              fontSize: size * .42,
+              fontWeight: FontWeight.w900,
+              height: 1,
+            ),
+          ),
+        );
+
+    return Container(
+      width: size,
+      height: size,
+      clipBehavior: Clip.hardEdge,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(size * .33),
+      ),
+      child: urls.isNotEmpty
+          ? _ResilientNetworkImage(
+              urls: urls,
+              fit: BoxFit.contain,
+              padding: EdgeInsets.all(size * .10),
+              fallback: fallback(),
+            )
+          : fallback(),
     );
   }
 }
@@ -455,7 +942,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  HomeScreenDesign _homeDesign = HomeScreenDesign.defaults();
+  HomeScreenDesign _homeDesign = HomeScreenDesign.defaults().copyWith(
+    backgroundColor: _homePageBackground,
+  );
 
   int? _userId;
   bool isLoading = true;
@@ -515,10 +1004,23 @@ String _selectedWorkspaceTeamName = '';
   String _homeWorkspaceTab = 'profile';
   int _dashboardPreviewPage = 0;
 
-  bool get _isClubRole => _currentRole == 'club' || _currentRole == 'federation';
-  bool get _isCoachRole => _currentRole == 'coach' || _currentRole == 'trainer';
-  bool get _isPlayerRole => _currentRole == 'player';
-  bool get _isParentRole => _currentRole == 'parent';
+  String get _roleKey => _currentRole.trim().toLowerCase();
+
+  bool get _isClubRole =>
+      _roleKey == 'club' ||
+      _roleKey == 'federation' ||
+      _roleKey == 'federation_admin' ||
+      _roleKey == 'club_admin' ||
+      _roleKey == 'клуб' ||
+      _roleKey == 'федерация';
+
+  bool get _isCoachRole =>
+      _roleKey == 'coach' ||
+      _roleKey == 'trainer' ||
+      _roleKey == 'тренер';
+
+  bool get _isPlayerRole => _roleKey == 'player' || _roleKey == 'игрок';
+  bool get _isParentRole => _roleKey == 'parent' || _roleKey == 'родитель';
 bool get _isPlayerLikeRole => _isPlayerRole || _isParentRole;
 
 bool get _isCoachWithoutTeam =>
@@ -662,14 +1164,84 @@ double _hubPreviewHeight(BuildContext context) {
     }
   }
 
-Future<void> _loadRecentChats() async {
-  print('LOAD RECENT CHATS CALLED');
+  List<Map<String, dynamic>> _asMapList(dynamic source) {
+    if (source is List) {
+      return source
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
 
+    if (source is Map) {
+      for (final key in const [
+        'items',
+        'data',
+        'list',
+        'rows',
+        'teams',
+        'matches',
+        'plans',
+        'chats',
+        'events',
+      ]) {
+        final value = source[key];
+        if (value is List) return _asMapList(value);
+      }
+    }
+
+    return <Map<String, dynamic>>[];
+  }
+
+  bool _looksLikeGenericPrivateChatName(String value) {
+    final normalized = value.trim().toLowerCase();
+    return normalized.isEmpty ||
+        normalized == 'чат' ||
+        normalized == 'личный чат' ||
+        normalized == 'private chat' ||
+        normalized == 'personal chat';
+  }
+
+  String _resolveChatDisplayName(Map<String, dynamic> chat) {
+    final isPrivate = chat['is_private'] == 1 ||
+        chat['is_private'] == '1' ||
+        chat['is_private'] == true;
+
+    String firstNonEmpty(List<String> keys) {
+      for (final key in keys) {
+        final value = (chat[key] ?? '').toString().trim();
+        if (value.isNotEmpty) return value;
+      }
+      return '';
+    }
+
+    if (isPrivate) {
+      final peerName = firstNonEmpty([
+        'peer_name',
+        'peer_full_name',
+        'participant_name',
+        'companion_name',
+        'interlocutor_name',
+        'other_user_name',
+        'other_name',
+        'user_name',
+        'full_name',
+      ]);
+      if (!_looksLikeGenericPrivateChatName(peerName)) return peerName;
+
+      final fallbackTitle = firstNonEmpty(['name', 'title', 'chat_name']);
+      if (!_looksLikeGenericPrivateChatName(fallbackTitle)) return fallbackTitle;
+
+      return 'Собеседник';
+    }
+
+    final groupName = firstNonEmpty(['name', 'title', 'chat_name', 'team_name']);
+    return groupName.isNotEmpty ? groupName : 'Групповой чат';
+  }
+
+Future<void> _loadRecentChats() async {
   final userId = _userId ?? await PrefUtils.getUserId() ?? 0;
-  print('LOAD RECENT CHATS userId=$userId');
 
   if (userId <= 0) {
-    print('LOAD RECENT CHATS STOP userId<=0');
     if (!mounted) return;
     setState(() => _recentChats = []);
     return;
@@ -680,12 +1252,7 @@ Future<void> _loadRecentChats() async {
       'https://sportotekaapp.ru/api/get_user_chats.php?user_id=$userId',
     );
 
-    print('LOAD RECENT CHATS uri=$uri');
-
     final res = await http.get(uri);
-
-    print('LOAD RECENT CHATS status=${res.statusCode}');
-    print('LOAD RECENT CHATS body=${res.body}');
 
     if (res.statusCode != 200) {
       if (!mounted) return;
@@ -693,54 +1260,53 @@ Future<void> _loadRecentChats() async {
       return;
     }
 
-    final data = json.decode(res.body);
-
-    final list = (data is List)
-        ? List<Map<String, dynamic>>.from(data)
-        : <Map<String, dynamic>>[];
-
-    print('LOAD RECENT CHATS listLength=${list.length}');
+    final decoded = json.decode(res.body);
+    final list = _asMapList(decoded);
 
     final chats = list.map<Map<String, dynamic>>((chat) {
       final map = Map<String, dynamic>.from(chat);
-
       final isPrivate = map['is_private'] == 1 ||
           map['is_private'] == '1' ||
           map['is_private'] == true;
 
-      final title = (() {
-        final t = (map['title'] ?? '').toString().trim();
-        final n = (map['name'] ?? '').toString().trim();
+      final peerPhoto = (map['peer_photo'] ??
+              map['avatar'] ??
+              map['photo'] ??
+              map['photo_url'] ??
+              '')
+          .toString()
+          .trim();
 
-        if (isPrivate) {
-          if (t.isNotEmpty) return t;
-          if (n.isNotEmpty) return n;
-          return 'Личный чат';
-        }
-
-        if (n.isNotEmpty) return n;
-        if (t.isNotEmpty) return t;
-        return 'Группа';
-      })();
-
-      final peerPhoto = (map['peer_photo'] ?? '').toString().trim();
       final avatar = peerPhoto.isEmpty
           ? ''
           : (peerPhoto.startsWith('http')
               ? peerPhoto
               : 'https://sportotekaapp.ru/uploads/$peerPhoto');
 
-      return {
-        'id': int.tryParse('${map['id'] ?? 0}') ?? 0,
-        'title': title,
-        'last_message': (map['last_message'] ?? '').toString().trim(),
+      final normalized = <String, dynamic>{
+        ...map,
+        'id': int.tryParse('${map['id'] ?? map['chat_id'] ?? 0}') ?? 0,
+        'is_private': isPrivate,
         'avatar': avatar,
-        'unread_count': int.tryParse('${map['unread_count'] ?? 0}') ?? 0,
-        'last_time': (map['last_time'] ?? map['last_message_time'] ?? '')
+        'last_message': (map['last_message'] ??
+                map['message'] ??
+                map['last_text'] ??
+                '')
             .toString()
             .trim(),
-        'is_private': isPrivate,
+        'unread_count': int.tryParse('${map['unread_count'] ?? 0}') ?? 0,
+        'last_time': (map['last_time'] ??
+                map['last_message_time'] ??
+                map['last_message_at'] ??
+                map['updated_at'] ??
+                map['created_at'] ??
+                '')
+            .toString()
+            .trim(),
       };
+
+      normalized['title'] = _resolveChatDisplayName(normalized);
+      return normalized;
     }).toList();
 
     chats.sort((a, b) {
@@ -751,26 +1317,25 @@ Future<void> _loadRecentChats() async {
 
     if (!mounted) return;
     setState(() {
-      _recentChats = chats.take(3).toList();
+      _recentChats = chats.take(5).toList();
     });
-
-    print('LOAD RECENT CHATS finalLength=${_recentChats.length}');
   } catch (e) {
-    print('LOAD RECENT CHATS ERROR=$e');
+    debugPrint('LOAD RECENT CHATS ERROR=$e');
     if (!mounted) return;
     setState(() => _recentChats = []);
   }
 }
+
 Future<void> _initAll() async {
   _ticketsData = _getDefaultTickets();
   _userId = await PrefUtils.getUserId();
 
   await _loadCurrentLoginContext();
   await _loadCurrentUserContext();
+  await _loadMyTeams();
   await _loadSavedHomeDesign();
   await _loadInitialData();
-  await _loadRecentChats(); // <- добавь
-  await _loadMyTeams();
+  await _loadRecentChats();
 
   WidgetsBinding.instance.addPostFrameCallback((_) {
     if (!mounted) return;
@@ -949,6 +1514,7 @@ String _buildClubPlanPreview() {
   if (!_isClubRole && !_isCoachRole) return;
 
   final clubId = _currentClubId;
+  final userId = _userId ?? await PrefUtils.getUserId() ?? 0;
   if (clubId <= 0 && !_isCoachRole) return;
 
   List<Map<String, dynamic>> clubTeams = [];
@@ -956,6 +1522,84 @@ String _buildClubPlanPreview() {
   List<Map<String, dynamic>> clubEvents = [];
   List<Map<String, dynamic>> clubPlans = [];
   Map<String, dynamic> clubProfile = {};
+
+  Future<List<Map<String, dynamic>>> loadPlans(Map<String, dynamic> params) async {
+    for (final endpoint in const [
+      'get_latest_training_plans.php',
+      'get_training_plans.php',
+    ]) {
+      try {
+        final resp = await dio.get(endpoint, queryParameters: params);
+        final rows = _asMapList(resp.data);
+        if (rows.isNotEmpty) return rows;
+      } catch (_) {}
+
+      try {
+        final resp = await dio.post(endpoint, data: params);
+        final rows = _asMapList(resp.data);
+        if (rows.isNotEmpty) return rows;
+      } catch (_) {}
+    }
+    return <Map<String, dynamic>>[];
+  }
+
+
+  List<Map<String, dynamic>> mergeUniqueRows(List<List<Map<String, dynamic>>> groups) {
+    final byKey = <String, Map<String, dynamic>>{};
+    for (final group in groups) {
+      for (final row in group) {
+        final id = '${row['id'] ?? row['team_id'] ?? row['chat_id'] ?? row['match_id'] ?? row['plan_id'] ?? ''}'.trim();
+        final name = '${row['name'] ?? row['team_name'] ?? row['title'] ?? ''}'.trim();
+        final key = id.isNotEmpty && id != '0' ? 'id:$id' : 'name:$name';
+        if (key.trim().isEmpty || key == 'name:') continue;
+        byKey[key] = {...?byKey[key], ...row};
+      }
+    }
+    return byKey.values.toList();
+  }
+
+  Future<List<Map<String, dynamic>>> loadClubTeamsLoose() async {
+    final groups = <List<Map<String, dynamic>>>[];
+    final variants = <Map<String, dynamic>>[
+      if (clubId > 0) {'club_id': clubId},
+      if (clubId > 0) {'id': clubId},
+      if (userId > 0) {'user_id': userId},
+      if (userId > 0) {'owner_id': userId},
+      if (clubId > 0 && userId > 0) {'club_id': clubId, 'user_id': userId},
+    ];
+
+    for (final params in variants) {
+      try {
+        final resp = await dio.get('get_club_teams.php', queryParameters: params);
+        groups.add(_asMapList(resp.data));
+      } catch (_) {}
+      try {
+        final resp = await dio.post('get_club_teams.php', data: params);
+        groups.add(_asMapList(resp.data));
+      } catch (_) {}
+    }
+
+    // Fallback: общий список команд по виду спорта, потом фильтр по club_id, если сервер его отдаёт.
+    try {
+      final resp = await dio.get(
+        'get_teams_by_sport.php',
+        queryParameters: {
+          'sport': selectedSport ?? 'Футбол',
+          if (clubId > 0) 'club_id': clubId,
+        },
+      );
+      final rows = _asMapList(resp.data);
+      final filtered = clubId > 0
+          ? rows.where((team) {
+              final rowClubId = int.tryParse('${team['club_id'] ?? team['clubId'] ?? team['owner_club_id'] ?? 0}') ?? 0;
+              return rowClubId == 0 || rowClubId == clubId;
+            }).toList()
+          : rows;
+      groups.add(filtered);
+    } catch (_) {}
+
+    return mergeUniqueRows(groups);
+  }
 
   try {
     if (_isClubRole && clubId > 0) {
@@ -970,34 +1614,14 @@ String _buildClubPlanPreview() {
         }
       } catch (_) {}
 
-      try {
-        final resp = await dio.post(
-          'get_club_teams.php',
-          data: {'club_id': clubId.toString()},
-        );
-        final data = resp.data;
-        final raw = data is Map ? (data['teams'] ?? []) : [];
-        if (raw is List) {
-          clubTeams = raw
-              .whereType<Map>()
-              .map((e) => Map<String, dynamic>.from(e))
-              .toList();
-        }
-      } catch (_) {}
+      clubTeams = await loadClubTeamsLoose();
 
       try {
         final resp = await dio.post(
           'get_club_trainers.php',
           data: {'club_id': clubId.toString()},
         );
-        final data = resp.data;
-        final raw = data is Map ? (data['trainers'] ?? []) : [];
-        if (raw is List) {
-          clubTrainers = raw
-              .whereType<Map>()
-              .map((e) => Map<String, dynamic>.from(e))
-              .toList();
-        }
+        clubTrainers = _asMapList(resp.data);
       } catch (_) {}
 
       try {
@@ -1005,37 +1629,55 @@ String _buildClubPlanPreview() {
           'get_club_events.php',
           data: {'club_id': clubId.toString()},
         );
-        final data = resp.data;
-        final raw = data is Map ? (data['events'] ?? []) : [];
-        if (raw is List) {
-          clubEvents = raw
-              .whereType<Map>()
-              .map((e) => Map<String, dynamic>.from(e))
-              .toList();
-        }
+        clubEvents = _asMapList(resp.data);
       } catch (_) {}
 
-      try {
-        final resp = await dio.post(
-          'get_training_plans.php',
-          data: {'club_id': clubId.toString()},
-        );
-        final data = resp.data;
-        final raw = data is Map ? (data['plans'] ?? []) : [];
-        if (raw is List) {
-          clubPlans = raw
-              .whereType<Map>()
-              .map((e) => Map<String, dynamic>.from(e))
-              .toList();
-        }
-      } catch (_) {}
+      clubPlans = await loadPlans({
+        'club_id': clubId,
+        'limit': 8,
+      });
     }
 
     if (_isCoachRole) {
       clubTeams = _myTeams.isNotEmpty
           ? List<Map<String, dynamic>>.from(_myTeams)
           : clubTeams;
+
+      final teamIds = clubTeams
+          .map((team) => int.tryParse('${team['id'] ?? team['team_id'] ?? 0}') ?? 0)
+          .where((id) => id > 0)
+          .toSet()
+          .toList();
+
+      if (teamIds.isEmpty && _currentTeamId > 0) {
+        teamIds.add(_currentTeamId);
+      }
+
+      final loadedPlans = <Map<String, dynamic>>[];
+      if (teamIds.isNotEmpty) {
+        for (final teamId in teamIds.take(8)) {
+          loadedPlans.addAll(await loadPlans({
+            'club_id': clubId,
+            'team_id': teamId,
+            'limit': 5,
+          }));
+        }
+      } else if (userId > 0) {
+        loadedPlans.addAll(await loadPlans({
+          'club_id': clubId,
+          'trainer_id': userId,
+          'limit': 8,
+        }));
+      }
+
+      clubPlans = loadedPlans;
     }
+
+    clubPlans.sort((a, b) {
+      final ad = _pickMapString(a, ['updated_at', 'created_at', 'plan_date', 'training_date', 'date']);
+      final bd = _pickMapString(b, ['updated_at', 'created_at', 'plan_date', 'training_date', 'date']);
+      return bd.compareTo(ad);
+    });
 
     if (!mounted) return;
 
@@ -1044,7 +1686,28 @@ String _buildClubPlanPreview() {
       _clubTeams = clubTeams;
       _clubTrainers = clubTrainers;
       _clubEvents = clubEvents;
-      _clubPlans = clubPlans;
+      _clubPlans = clubPlans.take(8).toList();
+
+      final loadedClubName = _pickMapString(
+        clubProfile,
+        ['name', 'club_name', 'title', 'full_name'],
+        fallback: '',
+      );
+      final loadedClubLogo = _teamLogoFromAnyKey({
+        'logo': clubProfile['logo'] ?? clubProfile['club_logo'] ?? clubProfile['photo'],
+        'logo_url': clubProfile['logo_url'] ?? clubProfile['club_logo_url'] ?? clubProfile['photo_url'],
+        'image': clubProfile['image'],
+        'image_url': clubProfile['image_url'],
+        'emblem': clubProfile['emblem'],
+        'badge': clubProfile['badge'],
+      });
+
+      if (_isClubRole && loadedClubName.isNotEmpty) {
+        _currentClubName = loadedClubName;
+      }
+      if (loadedClubLogo.isNotEmpty) {
+        _currentTeamLogoUrl = loadedClubLogo;
+      }
 
       if (_selectedWorkspaceTeamId == null) {
         if (_isCoachRole && _myTeams.isNotEmpty) {
@@ -1066,8 +1729,8 @@ String _buildClubPlanPreview() {
     debugPrint('Ошибка _loadClubWorkspaceExtras: $e');
   }
 }
-  
-  
+
+
   Future<void> _loadMyTeams() async {
   if (!_isCoachRole) return;
 
@@ -1075,23 +1738,37 @@ String _buildClubPlanPreview() {
   if (userId <= 0) return;
 
   try {
-    final response = await dio.get(
-      'get_my_teams.php',
-      queryParameters: {'user_id': userId},
-    );
+    final groups = <List<Map<String, dynamic>>>[];
+    final variants = <Map<String, dynamic>>[
+      {'user_id': userId},
+      {'trainer_id': userId},
+      {'coach_id': userId},
+      if (_currentClubId > 0) {'club_id': _currentClubId, 'trainer_id': userId},
+    ];
 
-    final data = response.data;
-
-    List raw = const [];
-    if (data is Map) {
-      raw = (data['teams'] ?? data['data'] ?? data['items'] ?? []) as List? ?? [];
-    } else if (data is List) {
-      raw = data;
+    for (final params in variants) {
+      try {
+        final response = await dio.get('get_my_teams.php', queryParameters: params);
+        groups.add(_asMapList(response.data));
+      } catch (_) {}
+      try {
+        final response = await dio.post('get_my_teams.php', data: params);
+        groups.add(_asMapList(response.data));
+      } catch (_) {}
     }
 
-    final teams = raw.map<Map<String, dynamic>>((e) {
-      return Map<String, dynamic>.from(e as Map);
-    }).toList();
+    final byKey = <String, Map<String, dynamic>>{};
+    for (final group in groups) {
+      for (final team in group) {
+        final id = '${team['id'] ?? team['team_id'] ?? ''}'.trim();
+        final name = '${team['name'] ?? team['team_name'] ?? ''}'.trim();
+        final key = id.isNotEmpty && id != '0' ? 'id:$id' : 'name:$name';
+        if (key == 'name:') continue;
+        byKey[key] = {...?byKey[key], ...team};
+      }
+    }
+
+    final teams = byKey.values.toList();
 
     if (!mounted) return;
     setState(() {
@@ -1148,24 +1825,31 @@ String _buildClubPlanPreview() {
       String teamLogo = '';
 
       if (role == 'club') {
-        clubId = int.tryParse('${user['id']}') ?? 0;
+        clubId = int.tryParse('${user['club_id'] ?? user['clubId'] ?? user['id'] ?? 0}') ?? 0;
         clubName = (user['club_name'] ?? user['name'] ?? '').toString().trim();
         teamLogo = _teamLogoFromAnyKey({
-          'logo': user['photo'] ?? user['photo_url'],
-          'logo_url': user['photo_url'] ?? user['photo'],
-          'image': user['photo'],
+          'logo': user['logo'] ?? user['club_logo'] ?? user['photo'] ?? user['photo_url'],
+          'logo_url': user['logo_url'] ?? user['club_logo_url'] ?? user['photo_url'] ?? user['photo'],
+          'club_logo': user['club_logo'],
+          'club_logo_url': user['club_logo_url'],
+          'image': user['image'] ?? user['photo'],
+          'image_url': user['image_url'],
         });
         if (clubName.isEmpty) {
           clubName = (user['first_name'] ?? '').toString().trim();
         }
       } else if (role == 'federation') {
-        clubId = int.tryParse('${user['id']}') ?? 0;
+        clubId = int.tryParse('${user['club_id'] ?? user['clubId'] ?? user['id'] ?? 0}') ?? 0;
         clubName = (user['club_name'] ?? user['name'] ?? user['first_name'] ?? '')
             .toString()
             .trim();
         teamLogo = _teamLogoFromAnyKey({
-          'logo': user['photo'] ?? user['photo_url'],
-          'logo_url': user['photo_url'] ?? user['photo'],
+          'logo': user['logo'] ?? user['club_logo'] ?? user['photo'] ?? user['photo_url'],
+          'logo_url': user['logo_url'] ?? user['club_logo_url'] ?? user['photo_url'] ?? user['photo'],
+          'club_logo': user['club_logo'],
+          'club_logo_url': user['club_logo_url'],
+          'image': user['image'] ?? user['photo'],
+          'image_url': user['image_url'],
         });
       } else if (role == 'coach' || role == 'trainer') {
         clubId = int.tryParse('${user['club_id'] ?? user['clubId'] ?? 0}') ?? 0;
@@ -1175,8 +1859,12 @@ String _buildClubPlanPreview() {
         teamName =
             (user['team_name'] ?? user['teamName'] ?? '').toString().trim();
         teamLogo = _teamLogoFromAnyKey({
-          'logo': user['logo'] ?? user['photo'],
-          'logo_url': user['logo_url'] ?? user['photo_url'],
+          'logo': user['logo'] ?? user['team_logo'] ?? user['club_logo'] ?? user['photo'],
+          'logo_url': user['logo_url'] ?? user['team_logo_url'] ?? user['club_logo_url'] ?? user['photo_url'],
+          'club_logo': user['club_logo'],
+          'club_logo_url': user['club_logo_url'],
+          'image': user['image'] ?? user['photo'],
+          'image_url': user['image_url'],
         });
       } else if (role == 'player' || role == 'parent') {
         final playerTeam = (data['player_team'] is Map)
@@ -1338,6 +2026,7 @@ String _buildClubPlanPreview() {
   }
 
   return design.copyWith(
+    backgroundColor: _homePageBackground,
     headerTitleSize: safeDouble(design.headerTitleSize, 20),
     headerSubtitleSize: safeDouble(design.headerSubtitleSize, 11),
     sectionTitleSize: safeDouble(design.sectionTitleSize, 14),
@@ -1567,13 +2256,64 @@ void _runWorkspaceModuleById(String id) {
     }
   }
   
+
+Future<List<Map<String, dynamic>>> _loadRecentMatchesByParams(
+  Map<String, dynamic> params,
+) async {
+  final all = <Map<String, dynamic>>[];
+
+  for (final endpoint in const [
+    'get_team_matches.php',
+    'get_matches.php',
+    'get_club_matches.php',
+  ]) {
+    try {
+      final response = await dio.get(endpoint, queryParameters: params);
+      all.addAll(_asMapList(response.data));
+    } catch (_) {}
+
+    try {
+      final response = await dio.post(endpoint, data: params);
+      all.addAll(_asMapList(response.data));
+    } catch (_) {}
+  }
+
+  final byKey = <String, Map<String, dynamic>>{};
+  for (final row in all) {
+    final id = '${row['id'] ?? row['match_id'] ?? ''}'.trim();
+    final date = _pickMapString(row, ['match_date', 'match_datetime', 'date', 'game_date', 'start_at', 'created_at']);
+    final title = _pickMapString(row, ['title', 'name', 'opponent', 'opponent_name', 'home_team']);
+    final key = id.isNotEmpty && id != '0' ? 'id:$id' : '$date|$title';
+    if (key.trim() == '|') continue;
+    byKey[key] = {...?byKey[key], ...row};
+  }
+
+  return byKey.values.toList();
+}
+
+Future<List<Map<String, dynamic>>> _loadReportsByParams(
+  Map<String, dynamic> params,
+) async {
+  for (final endpoint in const [
+    'get_match_reports.php',
+    'get_team_reports.php',
+  ]) {
+    try {
+      final response = await dio.get(endpoint, queryParameters: params);
+      final rows = _asMapList(response.data);
+      if (rows.isNotEmpty) return rows;
+    } catch (_) {}
+  }
+  return <Map<String, dynamic>>[];
+}
+
 Future<void> _loadRoleWorkspaceData() async {
   final List<Map<String, dynamic>> recentMatches = [];
   final List<Map<String, dynamic>> reports = [];
   Map<String, dynamic> tracker = {};
 
   try {
-    if (_isCoachRole && _currentTeamId <= 0) {
+    if (_isCoachRole && _currentTeamId <= 0 && _myTeams.isEmpty) {
       if (!mounted) return;
       setState(() {
         _recentMatches = [];
@@ -1585,37 +2325,39 @@ Future<void> _loadRoleWorkspaceData() async {
 
     if (_isClubRole) {
       if (_currentClubId > 0) {
-        try {
-          final response = await dio.get(
-            'get_team_matches.php',
-            queryParameters: {'club_id': _currentClubId, 'limit': 6},
-          );
-          final data = response.data;
-          final List raw = data is Map
-              ? (data['matches'] ?? data['data'] ?? data['items'] ?? [])
-                      as List? ??
-                  []
-              : (data is List ? data : const []);
-          recentMatches.addAll(
-            raw.map((e) => Map<String, dynamic>.from(e as Map)),
-          );
-        } catch (_) {}
+        recentMatches.addAll(await _loadRecentMatchesByParams({
+          'club_id': _currentClubId,
+          'limit': 12,
+        }));
 
-        try {
-          final response = await dio.get(
-            'get_match_reports.php',
-            queryParameters: {'club_id': _currentClubId, 'limit': 6},
-          );
-          final data = response.data;
-          final List raw = data is Map
-              ? (data['reports'] ?? data['data'] ?? data['items'] ?? [])
-                      as List? ??
-                  []
-              : (data is List ? data : const []);
-          reports.addAll(
-            raw.map((e) => Map<String, dynamic>.from(e as Map)),
-          );
-        } catch (_) {}
+        // Некоторые серверные методы матчей не принимают club_id.
+        // Поэтому дополнительно собираем матчи по всем командам клуба.
+        if (recentMatches.isEmpty && _clubTeams.isNotEmpty) {
+          for (final team in _clubTeams.take(12)) {
+            final teamId = int.tryParse('${team['id'] ?? team['team_id'] ?? 0}') ?? 0;
+            if (teamId <= 0) continue;
+            recentMatches.addAll(await _loadRecentMatchesByParams({
+              'team_id': teamId,
+              'limit': 6,
+            }));
+          }
+        }
+
+        reports.addAll(await _loadReportsByParams({
+          'club_id': _currentClubId,
+          'limit': 12,
+        }));
+
+        if (reports.isEmpty && _clubTeams.isNotEmpty) {
+          for (final team in _clubTeams.take(12)) {
+            final teamId = int.tryParse('${team['id'] ?? team['team_id'] ?? 0}') ?? 0;
+            if (teamId <= 0) continue;
+            reports.addAll(await _loadReportsByParams({
+              'team_id': teamId,
+              'limit': 6,
+            }));
+          }
+        }
 
         try {
           final response = await dio.get(
@@ -1631,39 +2373,29 @@ Future<void> _loadRoleWorkspaceData() async {
         } catch (_) {}
       }
     } else if (_isCoachRole) {
+      final teamIds = _myTeams
+          .map((team) => int.tryParse('${team['id'] ?? team['team_id'] ?? 0}') ?? 0)
+          .where((id) => id > 0)
+          .toSet()
+          .toList();
+
+      if (teamIds.isEmpty && _currentTeamId > 0) {
+        teamIds.add(_currentTeamId);
+      }
+
+      for (final teamId in teamIds.take(8)) {
+        recentMatches.addAll(await _loadRecentMatchesByParams({
+          'team_id': teamId,
+          'limit': 6,
+        }));
+
+        reports.addAll(await _loadReportsByParams({
+          'team_id': teamId,
+          'limit': 6,
+        }));
+      }
+
       if (_currentTeamId > 0) {
-        try {
-          final response = await dio.get(
-            'get_team_matches.php',
-            queryParameters: {'team_id': _currentTeamId, 'limit': 6},
-          );
-          final data = response.data;
-          final List raw = data is Map
-              ? (data['matches'] ?? data['data'] ?? data['items'] ?? [])
-                      as List? ??
-                  []
-              : (data is List ? data : const []);
-          recentMatches.addAll(
-            raw.map((e) => Map<String, dynamic>.from(e as Map)),
-          );
-        } catch (_) {}
-
-        try {
-          final response = await dio.get(
-            'get_match_reports.php',
-            queryParameters: {'team_id': _currentTeamId, 'limit': 6},
-          );
-          final data = response.data;
-          final List raw = data is Map
-              ? (data['reports'] ?? data['data'] ?? data['items'] ?? [])
-                      as List? ??
-                  []
-              : (data is List ? data : const []);
-          reports.addAll(
-            raw.map((e) => Map<String, dynamic>.from(e as Map)),
-          );
-        } catch (_) {}
-
         try {
           final response = await dio.get(
             'get_tracker_summary.php',
@@ -1681,37 +2413,15 @@ Future<void> _loadRoleWorkspaceData() async {
       final uid = _userId ?? 0;
 
       if (uid > 0) {
-        try {
-          final response = await dio.get(
-            'get_player_matches.php',
-            queryParameters: {'user_id': uid, 'limit': 6},
-          );
-          final data = response.data;
-          final List raw = data is Map
-              ? (data['matches'] ?? data['data'] ?? data['items'] ?? [])
-                      as List? ??
-                  []
-              : (data is List ? data : const []);
-          recentMatches.addAll(
-            raw.map((e) => Map<String, dynamic>.from(e as Map)),
-          );
-        } catch (_) {}
+        recentMatches.addAll(await _loadRecentMatchesByParams({
+          'user_id': uid,
+          'limit': 6,
+        }));
 
-        try {
-          final response = await dio.get(
-            'get_player_reports.php',
-            queryParameters: {'user_id': uid, 'limit': 6},
-          );
-          final data = response.data;
-          final List raw = data is Map
-              ? (data['reports'] ?? data['data'] ?? data['items'] ?? [])
-                      as List? ??
-                  []
-              : (data is List ? data : const []);
-          reports.addAll(
-            raw.map((e) => Map<String, dynamic>.from(e as Map)),
-          );
-        } catch (_) {}
+        reports.addAll(await _loadReportsByParams({
+          'user_id': uid,
+          'limit': 6,
+        }));
 
         try {
           final response = await dio.get(
@@ -1728,9 +2438,28 @@ Future<void> _loadRoleWorkspaceData() async {
       }
     }
 
+    recentMatches.sort((a, b) {
+      final ad = _pickMapString(a, ['match_date', 'date', 'event_date', 'created_at']);
+      final bd = _pickMapString(b, ['match_date', 'date', 'event_date', 'created_at']);
+      return bd.compareTo(ad);
+    });
+
+    reports.sort((a, b) {
+      final ad = _pickMapString(a, ['created_at', 'date', 'updated_at']);
+      final bd = _pickMapString(b, ['created_at', 'date', 'updated_at']);
+      return bd.compareTo(ad);
+    });
+
+    final seenMatchIds = <String>{};
+    final uniqueMatches = <Map<String, dynamic>>[];
+    for (final match in recentMatches) {
+      final key = '${match['id'] ?? match['match_id'] ?? match['title'] ?? ''}|${match['date'] ?? match['match_date'] ?? ''}';
+      if (seenMatchIds.add(key)) uniqueMatches.add(match);
+    }
+
     if (!_isCoachWithoutTeam) {
-      if (recentMatches.isEmpty) {
-        recentMatches.addAll(_buildFallbackRecentMatches());
+      if (uniqueMatches.isEmpty) {
+        uniqueMatches.addAll(_buildFallbackRecentMatches());
       }
 
       if (reports.isEmpty) {
@@ -1744,8 +2473,8 @@ Future<void> _loadRoleWorkspaceData() async {
 
     if (!mounted) return;
     setState(() {
-      _recentMatches = recentMatches.take(6).toList();
-      _workspaceReports = reports.take(6).toList();
+      _recentMatches = uniqueMatches.take(12).toList();
+      _workspaceReports = reports.take(12).toList();
       _trackerSummary = tracker;
     });
   } catch (e) {
@@ -2282,22 +3011,12 @@ Future<void> _loadRoleWorkspaceData() async {
 
   void _openClubsAll() {
     if (!mounted) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const TeamListScreen()),
-    );
+    _selectHomeWorkspaceTab('clubs');
   }
 
   void _openEventsAll() {
     if (!mounted) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => EventsListScreen(
-          initialSport: selectedSport ?? 'Футбол',
-        ),
-      ),
-    );
+    _selectHomeWorkspaceTab('events');
   }
 
   void _openTicketsAll() {
@@ -2449,10 +3168,10 @@ Future<void> _loadRoleWorkspaceData() async {
     setState(() {
       _homeWorkspaceTab = tab;
 
-      if (tab == 'overview') {
-        _homeModeIndex = 1; // Обзор открывает текущую новостную ленту.
+      if (tab == 'overview' || tab == 'news') {
+        _homeModeIndex = 1; // Главная область открывает текущую новостную ленту.
       } else if (tab == 'dashboard') {
-        _homeModeIndex = 0; // Приборная панель открывает рабочую панель.
+        _homeModeIndex = 0; // Старый внутренний режим рабочей панели оставляем только для внутренних переходов.
       } else if (tab == 'services') {
         _homeModeIndex = 2;
       } else if (tab == 'tips') {
@@ -2476,36 +3195,99 @@ Future<void> _loadRoleWorkspaceData() async {
   }
 
   List<_HomeSideMenuItem> _homeSideMenuItems() {
+    // Единая структура меню для ПК, планшета и мобильного листа «Ещё».
+    // Верхняя карточка слева открывает обзор, поэтому пункт «Обзор» здесь не дублируем.
     return const [
+      _HomeSideMenuItem.group('Основное'),
       _HomeSideMenuItem(
-        id: 'overview',
-        title: 'Обзор',
+        id: 'news',
+        title: 'Главные новости',
+        subtitle: 'Новости клуба и сообщества',
         icon: Icons.newspaper_rounded,
       ),
       _HomeSideMenuItem(
-        id: 'dashboard',
-        title: 'События',
-        icon: Icons.dashboard_customize_rounded,
+        id: 'clubs',
+        title: 'Клубы и команды',
+        subtitle: 'Команды, составы и переход в CMR',
+        icon: Icons.groups_rounded,
       ),
       _HomeSideMenuItem(
-        id: 'services',
-        title: 'Сервисы',
-        icon: Icons.apps_rounded,
+        id: 'schedule',
+        title: 'Расписание',
+        subtitle: 'Календарь занятий и матчей',
+        icon: Icons.calendar_month_rounded,
       ),
+      _HomeSideMenuItem(
+        id: 'events',
+        title: 'Мероприятия',
+        subtitle: 'События, сборы и активности',
+        icon: Icons.event_rounded,
+      ),
+
+      _HomeSideMenuItem.group('Обучение и медиа'),
       _HomeSideMenuItem(
         id: 'video_lessons',
         title: 'Видеоуроки',
+        subtitle: 'Папки, обучение и материалы',
         icon: Icons.school_rounded,
-      ),
-      _HomeSideMenuItem(
-        id: 'chat',
-        title: 'Чат',
-        icon: Icons.forum_rounded,
       ),
       _HomeSideMenuItem(
         id: 'live',
         title: 'Эфир',
+        subtitle: 'Видео, reels и трансляции',
         icon: Icons.live_tv_rounded,
+      ),
+      _HomeSideMenuItem(
+        id: 'tips',
+        title: 'Советы',
+        subtitle: 'Подсказки и инструкции',
+        icon: Icons.tips_and_updates_rounded,
+      ),
+
+      _HomeSideMenuItem.group('Сервисы'),
+      _HomeSideMenuItem(
+        id: 'services',
+        title: 'Сервисы',
+        subtitle: 'Инструменты приложения',
+        icon: Icons.apps_rounded,
+      ),
+      _HomeSideMenuItem(
+        id: 'tracking',
+        title: 'Трекинг',
+        subtitle: 'Датчики и тренировочный режим',
+        icon: Icons.monitor_heart_rounded,
+      ),
+      _HomeSideMenuItem(
+        id: 'venues',
+        title: 'Площадки',
+        subtitle: 'Бронирование и объекты',
+        icon: Icons.stadium_rounded,
+      ),
+      _HomeSideMenuItem(
+        id: 'tickets',
+        title: 'Билеты',
+        subtitle: 'Заявки и посещение матчей',
+        icon: Icons.confirmation_number_rounded,
+      ),
+
+      _HomeSideMenuItem.group('Аккаунт'),
+      _HomeSideMenuItem(
+        id: 'chat',
+        title: 'Чат',
+        subtitle: 'Общение внутри команды',
+        icon: Icons.forum_rounded,
+      ),
+      _HomeSideMenuItem(
+        id: 'profile',
+        title: 'Профиль',
+        subtitle: 'Данные пользователя и настройки',
+        icon: Icons.person_rounded,
+      ),
+      _HomeSideMenuItem(
+        id: 'subscription',
+        title: 'PRO подписка',
+        subtitle: 'Расширенные возможности',
+        icon: Icons.workspace_premium_rounded,
       ),
     ];
   }
@@ -2518,8 +3300,10 @@ Future<void> _loadRoleWorkspaceData() async {
       child: Row(
         children: [
           _buildVerticalHomeMenu(context),
+          const SizedBox(width: 10),
           Expanded(
             child: _homeWorkspaceTab == 'overview' ||
+                    _homeWorkspaceTab == 'news' ||
                     _homeWorkspaceTab == 'dashboard' ||
                     _homeWorkspaceTab == 'services' ||
                     _homeWorkspaceTab == 'tips'
@@ -2561,6 +3345,8 @@ Future<void> _loadRoleWorkspaceData() async {
     final maxWidth = _contentMaxWidth(context);
 
     return SafeArea(
+      top: true,
+      bottom: false,
       child: RefreshIndicator(
         color: _homeDesign.primaryColor,
         onRefresh: _loadInitialData,
@@ -2616,6 +3402,20 @@ Future<void> _loadRoleWorkspaceData() async {
     Widget page;
 
     switch (_homeWorkspaceTab) {
+      case 'clubs':
+        page = TeamListScreen(
+          initialSport: selectedSport ?? 'Футбол',
+          embedded: true,
+          onClose: () => _selectHomeWorkspaceTab('overview'),
+        );
+        break;
+      case 'events':
+        page = EventsListScreen(
+          initialSport: selectedSport ?? 'Футбол',
+          embedded: true,
+          onClose: () => _selectHomeWorkspaceTab('overview'),
+        );
+        break;
       case 'video_lessons':
         page = const VideoLessonsHubScreen();
         break;
@@ -2633,132 +3433,296 @@ Future<void> _loadRoleWorkspaceData() async {
     }
 
     return Container(
-      color: _homeDesign.backgroundColor,
+      color: _homePageBackground,
       child: page,
     );
   }
 
   Widget _buildVerticalHomeMenu(BuildContext context) {
-    final items = _homeSideMenuItems();
+    final allItems = _homeSideMenuItems();
+    final railItems = allItems.where((item) => !item.isGroup).toList(growable: false);
+    final targetName = _getDashboardTargetName().trim();
+    final accountName = _currentFullName.trim().isEmpty ? 'Спортотека' : _currentFullName.trim();
+    final safeName = targetName.isNotEmpty ? targetName : accountName;
+    final logoUrl = _currentTeamLogoUrl.trim();
+    final overviewActive = _homeWorkspaceTab == 'overview';
+
+    String railLabel(_HomeSideMenuItem item) {
+      switch (item.id) {
+        case 'news':
+          return 'Новости';
+        case 'clubs':
+          return 'Клубы';
+        case 'schedule':
+          return 'Кален.';
+        case 'events':
+          return 'События';
+        case 'video_lessons':
+          return 'Уроки';
+        case 'live':
+          return 'Эфир';
+        case 'tips':
+          return 'Советы';
+        case 'services':
+          return 'Сервисы';
+        case 'tracking':
+          return 'Трекинг';
+        case 'venues':
+          return 'Площадки';
+        case 'tickets':
+          return 'Билеты';
+        case 'chat':
+          return 'Чат';
+        case 'profile':
+          return 'Профиль';
+        case 'subscription':
+          return 'PRO';
+        default:
+          final words = item.title.trim().split(RegExp(r'\s+'));
+          return words.isEmpty ? item.title : words.first;
+      }
+    }
 
     return Container(
-      width: 78,
-      margin: const EdgeInsets.fromLTRB(10, 10, 0, 10),
+      width: 72,
+      margin: const EdgeInsets.fromLTRB(8, 8, 0, 8),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: _homeDesign.cardColor,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _homeDesign.borderColor),
+        color: _workspaceRail,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withOpacity(.08)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(_homeDesign.shadowOpacity),
-            blurRadius: _homeDesign.shadowBlur,
+            color: Colors.black.withOpacity(.12),
+            blurRadius: 18,
             offset: const Offset(0, 8),
           ),
         ],
       ),
       child: Column(
         children: [
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Tooltip(
-            message: 'Профиль',
+            message: safeName,
             waitDuration: const Duration(milliseconds: 250),
+            preferBelow: false,
             child: InkWell(
-              borderRadius: BorderRadius.circular(18),
-              onTap: () => _selectHomeWorkspaceTab('profile'),
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => _selectHomeWorkspaceTab('overview'),
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                width: 52,
-                height: 52,
+                duration: const Duration(milliseconds: 160),
+                width: 50,
+                height: 50,
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: _homeWorkspaceTab == 'profile'
-                      ? _homeDesign.primaryColor
-                      : _homeDesign.primaryColor.withOpacity(0.10),
-                  borderRadius: BorderRadius.circular(18),
+                  color: overviewActive ? Colors.white : _workspaceRailPanel,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white.withOpacity(.08)),
+                  boxShadow: overviewActive
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(.08),
+                            blurRadius: 14,
+                            offset: const Offset(0, 6),
+                          ),
+                        ]
+                      : const [],
                 ),
-                child: Center(
-                  child: Text(
-                    _currentFullName.trim().isEmpty
-                        ? 'С'
-                        : _currentFullName.trim().characters.first.toUpperCase(),
-                    style: TextStyle(
-                      color: _homeWorkspaceTab == 'profile'
-                          ? Colors.white
-                          : _homeDesign.primaryColor,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 18,
-                    ),
+                child: Transform.scale(
+                  scale: .78,
+                  child: _buildHomeMenuIdentityLogo(
+                    name: safeName,
+                    logoUrl: logoUrl,
+                    active: overviewActive,
                   ),
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 9),
+          _HomeClubRailUtilityButton(
+            icon: Icons.dashboard_customize_rounded,
+            label: 'Обзор',
+            tooltip: 'Обзор главной',
+            active: overviewActive,
+            onTap: () => _selectHomeWorkspaceTab('overview'),
+          ),
+          const SizedBox(height: 9),
           Expanded(
             child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
               physics: const BouncingScrollPhysics(),
-              clipBehavior: Clip.none,
-              itemCount: items.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemCount: railItems.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 7),
               itemBuilder: (context, index) {
-                final item = items[index];
-                return _HomeSideRailButton(
+                final item = railItems[index];
+
+                return _HomeClubSideRailButton(
                   item: item,
+                  label: railLabel(item),
                   active: _homeWorkspaceTab == item.id,
-                  primaryColor: _homeDesign.primaryColor,
-                  textColor: _homeDesign.textColor,
-                  mutedColor: _homeDesign.mutedTextColor,
-                  backgroundColor: _homeDesign.backgroundColor,
-                  onTap: () => _selectHomeWorkspaceTab(item.id),
+                  onTap: () => _handleHomeMenuAction(item.id),
                 );
               },
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
-            child: _HomeSideRailButton(
-              item: const _HomeSideMenuItem(
-                id: 'tips',
-                title: 'Советы',
-                icon: Icons.tips_and_updates_rounded,
-              ),
-              active: _homeWorkspaceTab == 'tips',
-              primaryColor: _homeDesign.primaryColor,
-              textColor: _homeDesign.textColor,
-              mutedColor: _homeDesign.mutedTextColor,
-              backgroundColor: _homeDesign.backgroundColor,
-              onTap: () => _selectHomeWorkspaceTab('tips'),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Column(
+              children: [
+                _HomeClubRailUtilityButton(
+                  icon: Icons.home_rounded,
+                  label: 'Главная',
+                  tooltip: 'На главную',
+                  active: false,
+                  onTap: () => _selectHomeWorkspaceTab('overview'),
+                ),
+                const SizedBox(height: 7),
+                _HomeClubRailUtilityButton(
+                  icon: Icons.apps_rounded,
+                  label: 'Меню',
+                  tooltip: 'Полное меню',
+                  active: false,
+                  onTap: _openMobileMoreMenu,
+                ),
+                const SizedBox(height: 7),
+                _HomeClubSideRailButton(
+                  item: const _HomeSideMenuItem(
+                    id: 'logout',
+                    title: 'Выйти',
+                    subtitle: 'Завершить сеанс',
+                    icon: Icons.logout_rounded,
+                  ),
+                  label: 'Выход',
+                  active: false,
+                  danger: true,
+                  onTap: _logoutToLogin,
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
-            child: _HomeSideRailButton(
-              item: const _HomeSideMenuItem(
-                id: 'logout',
-                title: 'Выйти',
-                icon: Icons.logout_rounded,
-              ),
-              active: false,
-              danger: true,
-              primaryColor: const Color(0xFFDC2626),
-              textColor: _homeDesign.textColor,
-              mutedColor: const Color(0xFFDC2626),
-              backgroundColor: const Color(0xFFFFEDED),
-              onTap: _logoutToLogin,
-            ),
-          ),
+          const SizedBox(height: 12),
         ],
       ),
     );
   }
 
 
+  Widget _buildHomeMenuIdentityLogo({
+    required String name,
+    required String logoUrl,
+    required bool active,
+  }) {
+    final urls = _mediaUrlCandidates(logoUrl);
+
+    Widget fallback() => Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                _workspaceMenuGreen.withOpacity(active ? .18 : .13),
+                _workspaceMenuGreen.withOpacity(.045),
+              ],
+            ),
+          ),
+          child: Center(
+            child: Text(
+              _teamInitials(name),
+              maxLines: 1,
+              overflow: TextOverflow.clip,
+              style: const TextStyle(
+                color: _workspaceMenuGreen,
+                fontWeight: FontWeight.w900,
+                fontSize: 13,
+                letterSpacing: -0.2,
+              ),
+            ),
+          ),
+        );
+
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.transparent),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(active ? .07 : .04),
+            blurRadius: active ? 12 : 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.hardEdge,
+      child: urls.isNotEmpty
+          ? _ResilientNetworkImage(
+              urls: urls,
+              fit: BoxFit.contain,
+              padding: const EdgeInsets.all(4),
+              fallback: fallback(),
+            )
+          : fallback(),
+    );
+  }
+
   bool _isEmbeddedHomeTab(String tab) {
     return tab == 'video_lessons' ||
+        tab == 'clubs' ||
+        tab == 'events' ||
         tab == 'chat' ||
         tab == 'live' ||
         tab == 'profile';
+  }
+
+  void _handleHomeMenuAction(String id) {
+    if (!mounted) return;
+
+    switch (id) {
+      case 'overview':
+      case 'news':
+      case 'dashboard':
+      case 'chat':
+      case 'profile':
+      case 'services':
+      case 'video_lessons':
+      case 'live':
+      case 'tips':
+        _selectHomeWorkspaceTab(id);
+        break;
+      case 'search':
+        _openSearch();
+        break;
+      case 'tracking':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const TrackingModeScreen()),
+        );
+        break;
+      case 'clubs':
+        _selectHomeWorkspaceTab('clubs');
+        break;
+      case 'venues':
+        _openVenuesAll();
+        break;
+      case 'schedule':
+        _openScheduleAll();
+        break;
+      case 'events':
+        _selectHomeWorkspaceTab('events');
+        break;
+      case 'tickets':
+        _openTicketsAll();
+        break;
+      case 'subscription':
+        _openSubscription();
+        break;
+      case 'logout':
+        _logoutToLogin();
+        break;
+    }
   }
 
   void _handleMobileBottomTap(int index) {
@@ -2767,7 +3731,7 @@ Future<void> _loadRoleWorkspaceData() async {
         _selectHomeWorkspaceTab('overview');
         break;
       case 1:
-        _selectHomeWorkspaceTab('dashboard');
+        _selectHomeWorkspaceTab('news');
         break;
       case 2:
         _selectHomeWorkspaceTab('chat');
@@ -2782,61 +3746,17 @@ Future<void> _loadRoleWorkspaceData() async {
   }
 
   void _handleMobileMoreAction(String id) {
-    if (!mounted) return;
-
-    switch (id) {
-      case 'profile':
-      case 'video_lessons':
-      case 'chat':
-      case 'live':
-      case 'tips':
-      case 'overview':
-      case 'dashboard':
-      case 'services':
-        _selectHomeWorkspaceTab(id);
-        break;
-      case 'search':
-        _openSearch();
-        break;
-      case 'tracking':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const TrackingModeScreen()),
-        );
-        break;
-      case 'clubs':
-        _openClubsAll();
-        break;
-      case 'venues':
-        _openVenuesAll();
-        break;
-      case 'schedule':
-        _openScheduleAll();
-        break;
-      case 'events':
-        _openEventsAll();
-        break;
-      case 'tickets':
-        _openTicketsAll();
-        break;
-      case 'subscription':
-        _openSubscription();
-        break;
-      case 'settings':
-        _openHomeCustomizer();
-        break;
-      case 'logout':
-        _logoutToLogin();
-        break;
-    }
+    _handleHomeMenuAction(id);
   }
 
   int _mobileBottomMenuIndex() {
     switch (_homeWorkspaceTab) {
       case 'overview':
         return 0;
-      case 'dashboard':
+      case 'news':
         return 1;
+      case 'dashboard':
+        return 4;
       case 'chat':
         return 2;
       case 'profile':
@@ -2847,12 +3767,15 @@ Future<void> _loadRoleWorkspaceData() async {
   }
 
   Widget _buildMobileBottomMenu(BuildContext context) {
+    // ВАЖНО: это меню должно повторять геометрию ClubWorkspace.
+    // Не задаём height/padding вручную — BottomNavigationBar сам держит
+    // правильную высоту и вертикальные отступы, как в club_workspace_screen.dart.
     return SafeArea(
       top: false,
       child: Container(
         margin: const EdgeInsets.fromLTRB(12, 0, 12, 10),
         decoration: BoxDecoration(
-          color: _homeDesign.cardColor,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(22),
           border: Border.all(color: _homeDesign.borderColor),
           boxShadow: [
@@ -2868,7 +3791,7 @@ Future<void> _loadRoleWorkspaceData() async {
           child: BottomNavigationBar(
             currentIndex: _mobileBottomMenuIndex(),
             type: BottomNavigationBarType.fixed,
-            backgroundColor: _homeDesign.cardColor,
+            backgroundColor: Colors.white,
             selectedItemColor: _homeDesign.primaryColor,
             unselectedItemColor: _homeDesign.mutedTextColor,
             selectedFontSize: 10.5,
@@ -2879,12 +3802,12 @@ Future<void> _loadRoleWorkspaceData() async {
             onTap: _handleMobileBottomTap,
             items: const [
               BottomNavigationBarItem(
-                icon: Icon(Icons.newspaper_rounded),
+                icon: Icon(Icons.space_dashboard_rounded),
                 label: 'Обзор',
               ),
               BottomNavigationBarItem(
-                icon: Icon(Icons.dashboard_customize_rounded),
-                label: 'События',
+                icon: Icon(Icons.newspaper_rounded),
+                label: 'Новости',
               ),
               BottomNavigationBarItem(
                 icon: Icon(Icons.forum_rounded),
@@ -2905,72 +3828,122 @@ Future<void> _loadRoleWorkspaceData() async {
     );
   }
 
+  Widget _buildMobileBottomMenuCell({
+    required int index,
+    required int current,
+    required IconData icon,
+    required String label,
+  }) {
+    final active = current == index;
+    final color = active ? _homeDesign.primaryColor : _homeDesign.mutedTextColor;
+
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () => _handleMobileBottomTap(index),
+          child: SizedBox(
+            height: 68,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  color: color,
+                  size: active ? 27 : 25,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: active ? 10.8 : 10.4,
+                    height: 1.0,
+                    fontWeight: active ? FontWeight.w900 : FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _homeMobileMoreSubtitle(String id) {
+    switch (id) {
+      case 'news':
+        return 'Главные новости';
+      case 'services':
+        return 'Инструменты приложения';
+      case 'video_lessons':
+        return 'Обучение и материалы';
+      case 'live':
+        return 'Трансляции и эфиры';
+      case 'tips':
+        return 'Подсказки и инструкции';
+      case 'search':
+        return 'Быстрый поиск';
+      case 'tracking':
+        return 'Тренировочный режим';
+      case 'clubs':
+        return 'Клубы, команды, составы';
+      case 'venues':
+        return 'Площадки и бронирование';
+      case 'schedule':
+        return 'Календарь занятий';
+      case 'events':
+        return 'Мероприятия и события';
+      case 'tickets':
+        return 'Билеты и заявки';
+      case 'subscription':
+        return 'Расширенный доступ';
+      case 'logout':
+        return 'Завершить сеанс';
+      default:
+        return 'Раздел приложения';
+    }
+  }
+
+  Color _homeMobileMoreColor(String id) {
+    switch (id) {
+      case 'logout':
+        return const Color(0xFFDC2626);
+      case 'subscription':
+        return const Color(0xFF7C3AED);
+      case 'events':
+      case 'tickets':
+        return const Color(0xFFF59E0B);
+      case 'tracking':
+      case 'venues':
+        return const Color(0xFF0F766E);
+      case 'video_lessons':
+      case 'live':
+        return const Color(0xFF2563EB);
+      default:
+        return _workspaceMenuGreen;
+    }
+  }
+
   void _openMobileMoreMenu() {
     final items = <_HomeSideMenuItem>[
-      const _HomeSideMenuItem(
-        id: 'services',
-        title: 'Сервисы',
-        icon: Icons.apps_rounded,
-      ),
       ..._homeSideMenuItems().where(
-        (item) => item.id != 'overview' &&
+        (item) => !item.isGroup && item.id != 'overview' &&
             item.id != 'dashboard' &&
-            item.id != 'services' &&
-            item.id != 'chat',
-      ),
-      const _HomeSideMenuItem(
-        id: 'tips',
-        title: 'Советы',
-        icon: Icons.tips_and_updates_rounded,
-      ),
-      const _HomeSideMenuItem(
-        id: 'search',
-        title: 'Поиск',
-        icon: Icons.search_rounded,
-      ),
-      const _HomeSideMenuItem(
-        id: 'tracking',
-        title: 'Трекинг',
-        icon: Icons.monitor_heart_rounded,
-      ),
-      const _HomeSideMenuItem(
-        id: 'clubs',
-        title: 'Клубы и команды',
-        icon: Icons.groups_rounded,
-      ),
-      const _HomeSideMenuItem(
-        id: 'venues',
-        title: 'Площадки',
-        icon: Icons.stadium_rounded,
-      ),
-      const _HomeSideMenuItem(
-        id: 'schedule',
-        title: 'Расписание',
-        icon: Icons.calendar_month_rounded,
-      ),
-      const _HomeSideMenuItem(
-        id: 'events',
-        title: 'Мероприятия',
-        icon: Icons.event_rounded,
-      ),
-      const _HomeSideMenuItem(
-        id: 'tickets',
-        title: 'Билеты',
-        icon: Icons.confirmation_number_rounded,
-      ),
-      const _HomeSideMenuItem(
-        id: 'subscription',
-        title: 'PRO подписка',
-        icon: Icons.workspace_premium_rounded,
-      ),
-      const _HomeSideMenuItem(
-        id: 'settings',
-        title: 'Настройки экрана',
-        icon: Icons.tune_rounded,
+            item.id != 'news' &&
+            item.id != 'chat' &&
+            item.id != 'profile',
       ),
       const _HomeSideMenuItem(
         id: 'logout',
         title: 'Выйти',
+        subtitle: 'Завершить сеанс',
         icon: Icons.logout_rounded,
       ),
     ];
@@ -2980,154 +3953,251 @@ Future<void> _loadRoleWorkspaceData() async {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
-        return SafeArea(
-          top: false,
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(sheetContext).size.height * 0.74,
-            ),
-            decoration: BoxDecoration(
-              color: _homeDesign.backgroundColor,
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: _homeDesign.borderColor),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.16),
-                  blurRadius: 28,
-                  offset: const Offset(0, 12),
+        final h = MediaQuery.of(sheetContext).size.height;
+        final bottom = MediaQuery.of(sheetContext).padding.bottom;
+
+        return Container(
+          constraints: BoxConstraints(maxHeight: h * .86),
+          margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+          padding: EdgeInsets.fromLTRB(16, 10, 16, 14 + bottom),
+          decoration: BoxDecoration(
+            color: _homePageBackground,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(.18),
+                blurRadius: 28,
+                offset: const Offset(0, 14),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 42,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: _homeDesign.borderColor.withOpacity(.95),
+                  borderRadius: BorderRadius.circular(999),
                 ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 42,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: _homeDesign.borderColor,
-                    borderRadius: BorderRadius.circular(99),
-                  ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: _homeDesign.cardColor,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: Colors.transparent),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(.035),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
                 ),
-                Row(
+                child: Row(
                   children: [
-                    Expanded(
-                      child: Text(
-                        'Ещё разделы',
-                        style: TextStyle(
-                          color: _homeDesign.textColor,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                        ),
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: _homeDesign.primaryColor.withOpacity(.10),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Icon(
+                        Icons.dashboard_customize_rounded,
+                        color: _homeDesign.primaryColor,
+                        size: 24,
                       ),
                     ),
-                    IconButton(
-                      onPressed: () => Navigator.pop(sheetContext),
-                      icon: Icon(
-                        Icons.close_rounded,
-                        color: _homeDesign.mutedTextColor,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Главное меню',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: _homeDesign.textColor,
+                              fontSize: 17,
+                              height: 1.08,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Быстрый доступ к разделам Спортотеки',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: _homeDesign.mutedTextColor,
+                              fontSize: 12,
+                              height: 1.15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
-                Flexible(
-                  child: GridView.builder(
-                    shrinkWrap: true,
-                    physics: const BouncingScrollPhysics(),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
-                      mainAxisSpacing: 10,
-                      crossAxisSpacing: 10,
-                      childAspectRatio: 0.98,
-                    ),
-                    itemCount: items.length,
-                    itemBuilder: (context, index) {
-                      final item = items[index];
-                      final active = _homeWorkspaceTab == item.id;
-                      final isLogout = item.id == 'logout';
-                      final color = isLogout
-                          ? const Color(0xFFDC2626)
-                          : _homeDesign.primaryColor;
-
-                      return Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(18),
-                          onTap: () {
-                            Navigator.pop(sheetContext);
-                            _handleMobileMoreAction(item.id);
-                          },
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 160),
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: active
-                                  ? color.withOpacity(0.12)
-                                  : _homeDesign.cardColor,
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(
-                                color: active
-                                    ? color.withOpacity(0.55)
-                                    : _homeDesign.borderColor,
+              ),
+              const SizedBox(height: 12),
+              Flexible(
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(16, 15, 16, 8),
+                  decoration: BoxDecoration(
+                    color: _homeDesign.cardColor,
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(color: Colors.transparent),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(.035),
+                        blurRadius: 14,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Разделы',
+                              style: TextStyle(
+                                color: _homeDesign.textColor,
+                                fontSize: 16,
+                                height: 1.1,
+                                fontWeight: FontWeight.w900,
                               ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.035),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 3),
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    color: color.withOpacity(0.10),
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  child: Icon(
-                                    item.icon,
-                                    color: color,
-                                    size: 20,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  item.title,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: isLogout
-                                        ? color
-                                        : _homeDesign.textColor,
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.w800,
-                                    height: 1.08,
-                                  ),
-                                ),
-                              ],
                             ),
                           ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: _homeDesign.primaryColor.withOpacity(.10),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              '${items.length}',
+                              style: TextStyle(
+                                color: _homeDesign.primaryColor,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Flexible(
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          padding: EdgeInsets.zero,
+                          physics: const BouncingScrollPhysics(),
+                          itemCount: items.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 5),
+                          itemBuilder: (context, index) {
+                            final item = items[index];
+                            final active = _homeWorkspaceTab == item.id;
+                            final isLogout = item.id == 'logout';
+                            final color = _homeMobileMoreColor(item.id);
+                            final titleColor = active || isLogout
+                                ? color
+                                : _homeDesign.textColor;
+
+                            return Material(
+                              color: Colors.transparent,
+                              borderRadius: BorderRadius.circular(14),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(14),
+                                onTap: () {
+                                  Navigator.of(sheetContext).pop();
+                                  _handleMobileMoreAction(item.id);
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 44,
+                                        height: 44,
+                                        decoration: BoxDecoration(
+                                          color: color.withOpacity(active ? .14 : .10),
+                                          borderRadius: BorderRadius.circular(15),
+                                          border: Border.all(color: Colors.transparent),
+                                        ),
+                                        child: Icon(item.icon, color: color, size: 22),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              item.title,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                color: titleColor,
+                                                fontSize: 15,
+                                                height: 1.05,
+                                                fontWeight: FontWeight.w900,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 3),
+                                            Text(
+                                              item.subtitle.trim().isEmpty
+                                                  ? _homeMobileMoreSubtitle(item.id)
+                                                  : item.subtitle,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                color: _homeDesign.mutedTextColor,
+                                                fontSize: 12,
+                                                height: 1.12,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Icon(
+                                        active
+                                            ? Icons.check_circle_rounded
+                                            : Icons.chevron_right_rounded,
+                                        color: active ? color : _homeDesign.mutedTextColor,
+                                        size: active ? 20 : 22,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       },
     );
   }
+
 
   void _openDrawer() {
     _scaffoldKey.currentState?.openDrawer();
@@ -3138,7 +4208,7 @@ Future<void> _loadRoleWorkspaceData() async {
     if (hasError) {
       return Scaffold(
         key: _scaffoldKey,
-        backgroundColor: _homeDesign.backgroundColor,
+        backgroundColor: _homePageBackground,
         body: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 520),
@@ -3194,11 +4264,15 @@ Future<void> _loadRoleWorkspaceData() async {
 
     return Scaffold(
       key: _scaffoldKey,
-      backgroundColor: _homeDesign.backgroundColor,
+      backgroundColor: _homePageBackground,
       body: useSideMenu
           ? _buildDesktopTabletHomeShell(context)
           : (isEmbeddedMobileTab
-              ? SafeArea(child: _buildEmbeddedWorkspacePage(context))
+              ? SafeArea(
+                  top: true,
+                  bottom: false,
+                  child: _buildEmbeddedWorkspacePage(context),
+                )
               : _buildMobileHomeShell(context)),
       // На телефоне показываем одно нижнее меню HomeScreen.
       // На планшете и ПК остаётся боковое меню.
@@ -4155,8 +5229,7 @@ Widget _buildRecentChatsCard() {
             final chatId =
                 int.tryParse('${chat['id'] ?? chat['chat_id'] ?? 0}') ?? 0;
 
-            final chatName =
-                (chat['title'] ?? chat['name'] ?? 'Чат').toString().trim();
+            final chatName = _resolveChatDisplayName(chat);
 
             final lastMessage = (chat['last_message'] ??
                     chat['message'] ??
@@ -4737,14 +5810,13 @@ Widget _buildNewsHubPage(BuildContext context) {
 
   return Container(
     decoration: BoxDecoration(
-      color: _homeDesign.cardColor,
-      borderRadius: BorderRadius.circular(_homeDesign.cardRadius),
-      border: Border.all(color: _homeDesign.borderColor),
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(30),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withOpacity(_homeDesign.shadowOpacity),
-          blurRadius: _homeDesign.shadowBlur,
-          offset: const Offset(0, 4),
+          color: Colors.black.withOpacity(0.018),
+          blurRadius: 20,
+          offset: const Offset(0, 8),
         ),
       ],
     ),
@@ -5995,6 +7067,10 @@ Widget _buildHeroStatCardHome({
   final compact = _collapsedHeader && !_isTablet(context);
   final logoUrl = _currentTeamLogoUrl.trim();
   final targetName = _getDashboardTargetName().trim();
+  final displayTargetName = targetName.isNotEmpty
+      ? _formatMenuHeaderName(targetName)
+      : 'Вместе к победам!';
+  final displayTargetLength = displayTargetName.replaceAll('\n', ' ').length;
 
   return Container(
     decoration: BoxDecoration(
@@ -6054,21 +7130,20 @@ Widget _buildHeroStatCardHome({
                 if (!compact) ...[
                   const SizedBox(height: 2),
                   Text(
-                    targetName.isNotEmpty
-                        ? targetName
-                        : 'Вместе к победам!',
-                    maxLines: 1,
+                    displayTargetName,
+                    maxLines: displayTargetLength > 18 ? 2 : 1,
                     overflow: TextOverflow.ellipsis,
+                    softWrap: true,
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.86),
                       fontSize: _responsiveFont(
                         context,
-                        mobile: 10.5,
-                        tablet: 11.5,
+                        mobile: displayTargetLength > 22 ? 10.0 : 10.5,
+                        tablet: displayTargetLength > 22 ? 10.8 : 11.5,
                         landscapeDelta: -0.2,
                       ),
                       fontWeight: FontWeight.w600,
-                      height: 1.15,
+                      height: 1.12,
                     ),
                   ),
                 ],
@@ -6170,6 +7245,12 @@ Widget _buildHeroStatCardHome({
     required bool compact,
   }) {
     final size = compact ? 34.0 : 36.0;
+    final urls = _mediaUrlCandidates(logoUrl);
+    const fallback = Icon(
+      Icons.sports_soccer_rounded,
+      color: Color(0xFF00A750),
+      size: 20,
+    );
 
     return Container(
       width: size,
@@ -6179,21 +7260,14 @@ Widget _buildHeroStatCardHome({
         borderRadius: BorderRadius.circular(10),
       ),
       clipBehavior: Clip.hardEdge,
-      child: logoUrl.isNotEmpty
-          ? Image.network(
-              logoUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const Icon(
-                Icons.sports_soccer_rounded,
-                color: Color(0xFF00A750),
-                size: 20,
-              ),
+      child: urls.isNotEmpty
+          ? _ResilientNetworkImage(
+              urls: urls,
+              fit: BoxFit.contain,
+              padding: const EdgeInsets.all(3),
+              fallback: fallback,
             )
-          : const Icon(
-              Icons.sports_soccer_rounded,
-              color: Color(0xFF00A750),
-              size: 20,
-            ),
+          : fallback,
     );
   }
 
@@ -6204,8 +7278,8 @@ Widget _buildHeroStatCardHome({
 
   switch (_homeModeIndex) {
     case 1:
-      title = 'Новости';
-      subtitle = 'Лента сообщества';
+      title = 'Главные новости';
+      subtitle = 'Лента клуба и сообщества';
       icon = Icons.newspaper_rounded;
       break;
     case 2:
@@ -6219,8 +7293,8 @@ Widget _buildHeroStatCardHome({
       icon = Icons.tips_and_updates_rounded;
       break;
     default:
-      title = 'Обзор';
-      subtitle = 'Рабочая панель и модули';
+      title = 'Главная';
+      subtitle = 'Новости и быстрые разделы';
       icon = Icons.dashboard_customize_rounded;
   }
 
@@ -6285,7 +7359,7 @@ Widget _buildHeroStatCardHome({
         Container(
           padding: const EdgeInsets.all(3),
           decoration: BoxDecoration(
-            color: _homeDesign.backgroundColor,
+            color: _homeSoftSurface,
             borderRadius: BorderRadius.circular(999),
           ),
           child: Row(
@@ -6293,7 +7367,7 @@ Widget _buildHeroStatCardHome({
               Expanded(
                 child: _buildHubModeChip(
                   index: 0,
-                  title: 'Обзор',
+                  title: 'Инструменты',
                   icon: Icons.widgets_rounded,
                 ),
               ),
@@ -6444,8 +7518,8 @@ Widget _buildTipsHubPage(BuildContext context) {
               onTap: () {
                 if (!mounted) return;
                 setState(() {
-                  _homeWorkspaceTab = 'dashboard';
-                  _homeModeIndex = 0;
+                  _homeWorkspaceTab = 'news';
+                  _homeModeIndex = 1;
                 });
               },
               child: Container(
@@ -6465,7 +7539,7 @@ Widget _buildTipsHubPage(BuildContext context) {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      width >= 560 ? 'К панели' : 'Назад',
+                      width >= 560 ? 'К новостям' : 'Назад',
                       style: TextStyle(
                         color: _homeDesign.primaryColor,
                         fontSize: 11.5,
@@ -7142,7 +8216,7 @@ Widget _buildDashboardEventsSection(
 }) {
   final rows = _dashboardSortedByDate(
     _clubEvents,
-    ['event_date', 'date', 'start_at', 'created_at'],
+    ['event_date', 'date', 'start_at', 'starts_at', 'created_at'],
     futureFirst: true,
   ).take(3).toList();
 
@@ -7167,7 +8241,7 @@ Widget _buildDashboardEventsSection(
             );
             final date = _pickMapString(
               event,
-              ['event_date', 'date', 'start_at', 'created_at'],
+              ['event_date', 'date', 'start_at', 'starts_at', 'created_at'],
               fallback: '',
             );
             final subtitle = _pickMapString(
@@ -7194,7 +8268,7 @@ Widget _buildDashboardMatchesSection(
 }) {
   final rows = _dashboardSortedByDate(
     _recentMatches,
-    ['match_date', 'date', 'game_date', 'created_at'],
+    ['match_date', 'match_datetime', 'date', 'game_date', 'start_at', 'created_at'],
     futureFirst: true,
   ).take(3).toList();
 
@@ -7214,7 +8288,7 @@ Widget _buildDashboardMatchesSection(
         : rows.map((match) {
             final date = _pickMapString(
               match,
-              ['match_date', 'date', 'game_date', 'created_at'],
+              ['match_date', 'match_datetime', 'date', 'game_date', 'start_at', 'created_at'],
               fallback: '',
             );
 
@@ -7290,7 +8364,7 @@ Widget _buildDashboardChatsSection(
 }) {
   final rows = _dashboardSortedByDate(
     _recentChats,
-    ['last_message_at', 'updated_at', 'created_at', 'time'],
+    ['last_time', 'last_message_at', 'updated_at', 'created_at', 'time'],
     futureFirst: false,
   ).take(3).toList();
 
@@ -7316,7 +8390,7 @@ Widget _buildDashboardChatsSection(
           ]
         : rows.map((chat) {
             final chatId = int.tryParse('${chat['id'] ?? chat['chat_id'] ?? 0}') ?? 0;
-            final chatName = (chat['title'] ?? chat['name'] ?? 'Чат').toString().trim();
+            final chatName = _resolveChatDisplayName(chat);
             final lastMessage = (chat['last_message'] ??
                     chat['message'] ??
                     chat['last_text'] ??
@@ -7368,7 +8442,7 @@ Widget _buildDashboardPlansSection(
 }) {
   final rows = _dashboardSortedByDate(
     _clubPlans,
-    ['created_at', 'date', 'updated_at'],
+    ['updated_at', 'created_at', 'plan_date', 'training_date', 'date'],
     futureFirst: false,
   ).take(3).toList();
 
@@ -7398,14 +8472,27 @@ Widget _buildDashboardPlansSection(
             );
             final date = _pickMapString(
               plan,
-              ['created_at', 'date', 'updated_at'],
+              ['updated_at', 'created_at', 'plan_date', 'training_date', 'date'],
               fallback: '',
             );
+            final trainerName = _pickMapString(
+              plan,
+              ['trainer_name', 'coach_name', 'author_name', 'created_by_name'],
+              fallback: '',
+            );
+            final teamName = _pickMapString(
+              plan,
+              ['team_name', 'team_title'],
+              fallback: '',
+            );
+            final planSubtitle = [teamName, trainerName, subtitle]
+                .where((value) => value.trim().isNotEmpty)
+                .join(' · ');
 
             return _buildDashboardListRow(
               icon: Icons.menu_book_rounded,
               title: title,
-              subtitle: subtitle,
+              subtitle: planSubtitle.isNotEmpty ? planSubtitle : 'План-конспект',
               trailing: _compactDashboardDate(date),
               color: const Color(0xFF0891B2),
               onTap: () => _runWorkspaceModuleById('plans'),
@@ -8760,7 +9847,7 @@ List<Map<String, dynamic>> _buildUnifiedClubActivityItems(BuildContext context) 
 
   for (final chat in _recentChats.take(3)) {
     final chatId = int.tryParse('${chat['id'] ?? chat['chat_id'] ?? 0}') ?? 0;
-    final chatName = (chat['title'] ?? chat['name'] ?? 'Чат').toString().trim();
+    final chatName = _resolveChatDisplayName(chat);
     final lastMessage = (chat['last_message'] ?? chat['message'] ?? chat['last_text'] ?? 'Нет сообщений')
         .toString()
         .trim();
@@ -8792,6 +9879,37 @@ List<Map<String, dynamic>> _buildUnifiedClubActivityItems(BuildContext context) 
                 ),
               );
             },
+    });
+  }
+
+  for (final plan in _clubPlans.take(3)) {
+    final title = _pickMapString(
+      plan,
+      ['title', 'name', 'plan_title'],
+      fallback: 'План тренировки',
+    );
+    final trainerName = _pickMapString(
+      plan,
+      ['trainer_name', 'coach_name', 'author_name', 'created_by_name'],
+      fallback: '',
+    );
+    final teamName = _pickMapString(
+      plan,
+      ['team_name', 'team_title'],
+      fallback: '',
+    );
+    final subtitle = [teamName, trainerName]
+        .where((value) => value.trim().isNotEmpty)
+        .join(' · ');
+
+    items.add({
+      'title': 'Новый план',
+      'value': title,
+      'subtitle': subtitle.isNotEmpty ? subtitle : 'План-конспект команды',
+      'trailing': 'план',
+      'icon': Icons.menu_book_rounded,
+      'color': const Color(0xFF0F766E),
+      'onTap': () => _runWorkspaceModuleById('plans'),
     });
   }
 
@@ -8969,7 +10087,7 @@ Widget _buildWorkspaceRecentChatsSection(
             final index = entry.key;
             final chat = entry.value;
             final chatId = int.tryParse('${chat['id'] ?? chat['chat_id'] ?? 0}') ?? 0;
-            final chatName = (chat['title'] ?? chat['name'] ?? 'Чат').toString().trim();
+            final chatName = _resolveChatDisplayName(chat);
             final lastMessage = (chat['last_message'] ?? chat['message'] ?? chat['last_text'] ?? 'Нет сообщений')
                 .toString()
                 .trim();
@@ -9085,14 +10203,13 @@ Widget _buildWorkspaceTrackerSection(
 
     return Container(
       decoration: BoxDecoration(
-        color: _homeDesign.cardColor,
-        borderRadius: BorderRadius.circular(_homeDesign.cardRadius),
-        border: Border.all(color: _homeDesign.borderColor),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(30),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(_homeDesign.shadowOpacity),
-            blurRadius: _homeDesign.shadowBlur,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.018),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -9442,7 +10559,7 @@ Widget _buildWorkspaceTrackerSection(
                         width: _isTablet(context) ? 130 : 120,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(12),
-                          color: _homeDesign.backgroundColor,
+                          color: _homeSoftSurface,
                         ),
                         child: Stack(
                           fit: StackFit.expand,
@@ -14196,36 +15313,64 @@ List<Widget> _buildNewsSections(BuildContext context) {
     );
   }
 
- Widget _buildFeaturedNewsCard(
-  Map<String, dynamic> post,
-  HomeSectionConfig config, {
-  double? customImageHeight,
-  int customTextLines = 2,
-}) {
+  Widget _buildCleanNewsCard({
+    required Widget child,
+    VoidCallback? onTap,
+    EdgeInsetsGeometry padding = const EdgeInsets.all(10),
+    double radius = 22,
+    Color color = _homeSoftSurface,
+    Clip clipBehavior = Clip.antiAlias,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(radius),
+      clipBehavior: clipBehavior,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(radius),
+        child: Container(
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(radius),
+          ),
+          padding: padding,
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFeaturedNewsCard(
+    Map<String, dynamic> post,
+    HomeSectionConfig config, {
+    double? customImageHeight,
+    int customTextLines = 2,
+  }) {
     final title = _stripHtml((post['title'] ?? '').toString());
     final text = _stripHtml((post['text'] ?? '').toString());
     final imageUrl = (post['imageUrl'] ?? '').toString();
     final author = (post['authorName'] ?? 'Пользователь').toString();
     final avatarUrl = (post['authorAvatar'] ?? '').toString();
     final hasImage = imageUrl.isNotEmpty;
+    final imageHeight = customImageHeight ?? (_isTablet(context) ? 180.0 : 160.0);
 
-    return _buildCard(
-      accentOverride: config.accentOverride,
+    return _buildCleanNewsCard(
       padding: EdgeInsets.zero,
+      radius: 24,
       onTap: () => _openPost(post),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (hasImage)
             ClipRRect(
-              borderRadius: BorderRadius.vertical(
-                top: Radius.circular(_homeDesign.cardRadius),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
               ),
               child: Stack(
                 children: [
-                SizedBox(
-  height: customImageHeight ?? (_isTablet(context) ? 180 : 160),
-                      width: double.infinity,
+                  SizedBox(
+                    height: imageHeight,
+                    width: double.infinity,
                     child: Image.network(
                       imageUrl,
                       fit: BoxFit.cover,
@@ -14262,7 +15407,7 @@ List<Widget> _buildNewsSections(BuildContext context) {
                     bottom: 10,
                     child: Text(
                       title.isNotEmpty ? title : 'Главная новость',
-                      maxLines: 2,
+                      maxLines: customTextLines,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: Colors.white,
@@ -14280,10 +15425,10 @@ List<Widget> _buildNewsSections(BuildContext context) {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (!hasImage)
+                if (!hasImage) ...[
                   Text(
                     title.isNotEmpty ? title : 'Главная новость',
-                  maxLines: customTextLines,
+                    maxLines: customTextLines,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: _homeDesign.cardTitleSize,
@@ -14291,7 +15436,8 @@ List<Widget> _buildNewsSections(BuildContext context) {
                       color: _homeDesign.textColor,
                     ),
                   ),
-                if (!hasImage) const SizedBox(height: 6),
+                  const SizedBox(height: 6),
+                ],
                 Row(
                   children: [
                     _authorAvatarWidget(
@@ -14340,101 +15486,102 @@ List<Widget> _buildNewsSections(BuildContext context) {
     );
   }
 
-Widget _buildCompactNewsRow(
-  Map<String, dynamic> post,
-  HomeSectionConfig config, {
-  bool forceExpanded = false,
-}) {
-  final title = _stripHtml((post['title'] ?? '').toString());
-  final text = _stripHtml((post['text'] ?? '').toString());
-  final imageUrl = (post['imageUrl'] ?? '').toString();
-  final hasImage = imageUrl.isNotEmpty;
-  final isTablet = _isTablet(context);
-final tileSize = forceExpanded ? 78.0 : (isTablet ? 64.0 : 72.0);
+  Widget _buildCompactNewsRow(
+    Map<String, dynamic> post,
+    HomeSectionConfig config, {
+    bool forceExpanded = false,
+  }) {
+    final title = _stripHtml((post['title'] ?? '').toString());
+    final text = _stripHtml((post['text'] ?? '').toString());
+    final imageUrl = (post['imageUrl'] ?? '').toString();
+    final hasImage = imageUrl.isNotEmpty;
+    final isTablet = _isTablet(context);
+    final tileSize = forceExpanded ? 78.0 : (isTablet ? 64.0 : 72.0);
 
-  return _buildCard(
-    accentOverride: config.accentOverride,
-    padding: const EdgeInsets.all(10),
-    onTap: () => _openPost(post),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-         width: tileSize,
-height: tileSize,
-          decoration: BoxDecoration(
-            color: _homeDesign.primaryColor.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          clipBehavior: Clip.hardEdge,
-          child: hasImage
-              ? Image.network(
-                  imageUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Icon(
-                    Icons.image_rounded,
+    return _buildCleanNewsCard(
+      padding: const EdgeInsets.all(10),
+      radius: 20,
+      onTap: () => _openPost(post),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: tileSize,
+            height: tileSize,
+            decoration: BoxDecoration(
+              color: _homeDesign.primaryColor.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            clipBehavior: Clip.hardEdge,
+            child: hasImage
+                ? Image.network(
+                    imageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Icon(
+                      Icons.image_rounded,
+                      color: _homeDesign.primaryColor,
+                      size: 22,
+                    ),
+                  )
+                : Icon(
+                    Icons.article_rounded,
                     color: _homeDesign.primaryColor,
-                    size: 22,
+                    size: 24,
                   ),
-                )
-              : Icon(
-                  Icons.article_rounded,
-                  color: _homeDesign.primaryColor,
-                  size: 24,
-                ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title.isNotEmpty ? title : 'Новость',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: isTablet
-                      ? _homeDesign.bodyTextSize - 1
-                      : _homeDesign.bodyTextSize,
-                  fontWeight: FontWeight.w800,
-                  color: _homeDesign.textColor,
-                  height: 1.18,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                text.isNotEmpty ? text : 'Материал сообщества',
-               maxLines: forceExpanded ? 2 : (isTablet ? 1 : 2),
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: _homeDesign.smallTextSize,
-                  color: _homeDesign.mutedTextColor,
-                  height: 1.18,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                _formatPostDateHome(post['date'] as DateTime),
-                style: TextStyle(
-                  fontSize: _homeDesign.smallTextSize - 1,
-                  color: _homeDesign.mutedTextColor,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
           ),
-        ),
-        const SizedBox(width: 4),
-        Icon(
-          Icons.chevron_right_rounded,
-          color: _homeDesign.mutedTextColor,
-          size: 18,
-        ),
-      ],
-    ),
-  );
-}
-Widget _buildSectionHeaderFromDesign({
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title.isNotEmpty ? title : 'Новость',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: isTablet
+                        ? _homeDesign.bodyTextSize - 1
+                        : _homeDesign.bodyTextSize,
+                    fontWeight: FontWeight.w800,
+                    color: _homeDesign.textColor,
+                    height: 1.18,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  text.isNotEmpty ? text : 'Материал сообщества',
+                  maxLines: forceExpanded ? 2 : (isTablet ? 1 : 2),
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: _homeDesign.smallTextSize,
+                    color: _homeDesign.mutedTextColor,
+                    height: 1.18,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _formatPostDateHome(post['date'] as DateTime),
+                  style: TextStyle(
+                    fontSize: _homeDesign.smallTextSize - 1,
+                    color: _homeDesign.mutedTextColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 4),
+          Icon(
+            Icons.chevron_right_rounded,
+            color: _homeDesign.mutedTextColor,
+            size: 18,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeaderFromDesign({
   required HomeSectionConfig config,
   required String title,
   required String subtitle,
@@ -14449,10 +15596,12 @@ Widget _buildSectionHeaderFromDesign({
       : subtitle;
   final canShowSeeAll = config.showSeeAll && onSeeAll != null;
 
+  final hideNewsDividers = config.type == HomeSectionType.posts;
+
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      if (config.showDividerAbove)
+      if (config.showDividerAbove && !hideNewsDividers)
         Divider(
           color: _homeDesign.borderColor,
           height: 14,
@@ -14569,7 +15718,7 @@ Widget _buildSectionHeaderFromDesign({
             ),
         ],
       ),
-      if (config.showDividerBelow)
+      if (config.showDividerBelow && !hideNewsDividers)
         Padding(
           padding: const EdgeInsets.only(top: 8),
           child: Divider(
@@ -16054,7 +17203,7 @@ class _CustomDrawer extends StatelessWidget {
       width: width,
       child: SafeArea(
         child: Container(
-          color: design.backgroundColor,
+          color: _homePageBackground,
           child: Column(
             children: [
               Padding(
@@ -16207,11 +17356,6 @@ class _CustomDrawer extends StatelessWidget {
                       icon: Icons.workspace_premium_rounded,
                       title: 'PRO подписка',
                       routeKey: 'subscription',
-                    ),
-                    _buildDrawerItem(
-                      icon: Icons.tune_rounded,
-                      title: 'Настройки экрана',
-                      routeKey: 'settings',
                     ),
                     _buildDrawerItem(
                       icon: Icons.help_outline_rounded,
@@ -16919,12 +18063,111 @@ class _SportotekaHeaderDelegate extends SliverPersistentHeaderDelegate {
   }
 }
 
+List<String> _mediaUrlCandidates(String raw) {
+  final cleaned = raw.trim().replaceAll('\\', '/');
+  if (cleaned.isEmpty || cleaned.startsWith('data:')) return const <String>[];
+
+  final result = <String>[];
+  void add(String value) {
+    final v = value.trim();
+    if (v.isEmpty) return;
+    final encoded = Uri.encodeFull(v.replaceAll(' ', '%20'));
+    if (!result.contains(encoded)) result.add(encoded);
+  }
+
+  if (cleaned.startsWith('http://') || cleaned.startsWith('https://')) {
+    add(cleaned);
+    try {
+      final uri = Uri.parse(cleaned);
+      if (uri.host.contains('sportotekaapp.ru')) {
+        final path = uri.path;
+        if (path.startsWith('/uploads/')) {
+          add(uri.replace(path: '/api$path').toString());
+        } else if (path.startsWith('/api/uploads/')) {
+          add(uri.replace(path: path.replaceFirst('/api/', '/')).toString());
+        }
+      }
+    } catch (_) {}
+    return result;
+  }
+
+  final withoutLeadingSlash = cleaned.replaceFirst(RegExp(r'^/+'), '');
+
+  if (cleaned.startsWith('/api/')) {
+    add('https://sportotekaapp.ru$cleaned');
+    add('https://sportotekaapp.ru${cleaned.replaceFirst('/api/', '/')}');
+  } else if (cleaned.startsWith('/')) {
+    add('https://sportotekaapp.ru$cleaned');
+    add('https://sportotekaapp.ru/api$cleaned');
+  } else if (withoutLeadingSlash.startsWith('api/')) {
+    add('https://sportotekaapp.ru/$withoutLeadingSlash');
+    add('https://sportotekaapp.ru/${withoutLeadingSlash.replaceFirst('api/', '')}');
+  } else {
+    add('https://sportotekaapp.ru/$withoutLeadingSlash');
+    add('https://sportotekaapp.ru/api/$withoutLeadingSlash');
+  }
+
+  return result;
+}
+
 String _normalizeMediaUrl(String raw) {
-  final s = raw.trim();
-  if (s.isEmpty) return '';
-  if (s.startsWith('http://') || s.startsWith('https://')) return s;
-  if (s.startsWith('/')) return 'https://sportotekaapp.ru$s';
-  return 'https://sportotekaapp.ru/$s';
+  final candidates = _mediaUrlCandidates(raw);
+  return candidates.isEmpty ? '' : candidates.first;
+}
+
+class _ResilientNetworkImage extends StatefulWidget {
+  final List<String> urls;
+  final BoxFit fit;
+  final Widget fallback;
+  final EdgeInsetsGeometry padding;
+
+  const _ResilientNetworkImage({
+    required this.urls,
+    required this.fallback,
+    this.fit = BoxFit.cover,
+    this.padding = EdgeInsets.zero,
+  });
+
+  @override
+  State<_ResilientNetworkImage> createState() => _ResilientNetworkImageState();
+}
+
+class _ResilientNetworkImageState extends State<_ResilientNetworkImage> {
+  int _index = 0;
+
+  @override
+  void didUpdateWidget(covariant _ResilientNetworkImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.urls.join('|') != widget.urls.join('|')) {
+      _index = 0;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.urls.isEmpty) return widget.fallback;
+
+    final safeIndex = _index.clamp(0, widget.urls.length - 1).toInt();
+    final url = widget.urls[safeIndex];
+
+    return Padding(
+      padding: widget.padding,
+      child: Image.network(
+        url,
+        fit: widget.fit,
+        errorBuilder: (_, __, ___) {
+          if (safeIndex < widget.urls.length - 1) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && _index == safeIndex) {
+                setState(() => _index = safeIndex + 1);
+              }
+            });
+          }
+          return widget.fallback;
+        },
+      ),
+    );
+  }
 }
 
 String _stripHtml(String? html) {
@@ -16964,6 +18207,12 @@ String _teamLogoFromAnyKey(Map<String, dynamic> team) {
   final candidates = [
     team['logo'],
     team['logo_url'],
+    team['club_logo'],
+    team['club_logo_url'],
+    team['team_logo'],
+    team['team_logo_url'],
+    team['avatar'],
+    team['avatar_url'],
     team['image'],
     team['image_url'],
     team['emblem'],
@@ -17007,6 +18256,28 @@ Color _teamAccentBySport(String sport, HomeSectionConfig config) {
   }
 
   return config.accentOverride ?? SportPalette.accentGreen;
+}
+
+String _formatMenuHeaderName(String name) {
+  final cleaned = name.trim().replaceAll(RegExp(r'\s+'), ' ');
+  if (cleaned.isEmpty) return cleaned;
+
+  // Для названий вроде «Футбольный клуб Гомель» оставляем прежнюю ширину
+  // меню и аккуратно переносим город на вторую строку.
+  final footballClubPrefix = RegExp(
+    r'^(Футбольный\s+клуб)\s+(.+)$',
+    caseSensitive: false,
+  );
+  final match = footballClubPrefix.firstMatch(cleaned);
+  if (match != null) {
+    final prefix = match.group(1) ?? '';
+    final club = match.group(2) ?? '';
+    if (prefix.isNotEmpty && club.isNotEmpty) {
+      return '$prefix\n$club';
+    }
+  }
+
+  return cleaned;
 }
 
 String _teamInitials(String name) {
@@ -17054,12 +18325,12 @@ Widget _teamLogoWidget({
       ),
     ),
     child: ClipOval(
-      child: logoUrl.isNotEmpty
-          ? Image.network(
-              logoUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) =>
-                  _teamFallbackLogo(teamName, accent),
+      child: _mediaUrlCandidates(logoUrl).isNotEmpty
+          ? _ResilientNetworkImage(
+              urls: _mediaUrlCandidates(logoUrl),
+              fit: BoxFit.contain,
+              padding: EdgeInsets.all(size * 0.10),
+              fallback: _teamFallbackLogo(teamName, accent),
             )
           : _teamFallbackLogo(teamName, accent),
     ),
