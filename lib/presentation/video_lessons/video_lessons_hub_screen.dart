@@ -3,9 +3,7 @@ import 'package:sportoteka/core/utils/pref_utils.dart';
 
 import '../../data/models/video_lesson_preview_data.dart';
 import '../../data/services/video_lessons_service.dart';
-import 'my_video_lessons_screen.dart';
 import 'video_lesson_detail_screen.dart';
-import 'video_lessons_authors_screen.dart';
 
 enum _VideoFilter { all, recommended, my }
 
@@ -22,7 +20,7 @@ class VideoLessonsHubPalette {
   static const textMuted = Color(0xFF666666);
   static const textSoft = Color(0xFF9CA3AF);
 
-  static const background = Color(0xFFF8F9FA);
+  static const background = Color(0xFFFFFFFF);
   static const border = Color(0xFFE5E7EB);
   static const gold = Color(0xFFFFC83D);
 
@@ -56,6 +54,16 @@ class _VideoLessonsHubScreenState extends State<VideoLessonsHubScreen>
 
   int currentUserId = 0;
   bool isLoading = true;
+
+  Widget _withStableTextScale(Widget child) {
+    final media = MediaQuery.of(context);
+    final scale = media.textScaler.scale(1.0).clamp(1.0, 1.08).toDouble();
+
+    return MediaQuery(
+      data: media.copyWith(textScaler: TextScaler.linear(scale)),
+      child: child,
+    );
+  }
   bool _isScrolled = false;
 
   List<VideoLessonPreviewData> previewLessons = [];
@@ -125,7 +133,10 @@ class _VideoLessonsHubScreenState extends State<VideoLessonsHubScreen>
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => VideoLessonDetailScreen(lessonId: lessonId),
+        builder: (_) => VideoLessonDetailScreen(
+          lessonId: lessonId,
+          autoPlay: true,
+        ),
       ),
     );
 
@@ -136,23 +147,28 @@ class _VideoLessonsHubScreenState extends State<VideoLessonsHubScreen>
 
   bool _isTablet(double width) => width >= 900;
 
-  int _gridCount(double width, Orientation orientation) {
-    if (orientation == Orientation.portrait) {
-      if (width >= 900) return 2;
-      return 1;
-    }
+  // Отдельный порог именно для плиток видео.
+  // Раньше сетка включалась только от 900 px, поэтому на планшете/узком окне
+  // экран попадал в мобильный режим и видео шли друг под другом.
+  bool _useVideoGrid(double width, Orientation orientation) {
+    return width >= 640 || (orientation == Orientation.landscape && width >= 560);
+  }
 
+  int _gridCount(double width, Orientation orientation) {
+    if (width >= 1500) return 5;
+    if (width >= 1180) return 4;
     if (width >= 900) return 3;
+    if (width >= 640) return 2;
+    if (orientation == Orientation.landscape && width >= 560) return 2;
     return 1;
   }
 
   double _gridAspectRatio(double width, Orientation orientation) {
-    if (orientation == Orientation.portrait) {
-      if (width >= 900) return 1.18;
-      return 0.86;
-    }
-
-    if (width >= 900) return 1.22;
+    if (width >= 1500) return 1.48;
+    if (width >= 1180) return 1.44;
+    if (width >= 900) return 1.4;
+    if (width >= 640) return 1.16;
+    if (orientation == Orientation.landscape && width >= 560) return 1.14;
     return 0.84;
   }
 
@@ -174,6 +190,29 @@ class _VideoLessonsHubScreenState extends State<VideoLessonsHubScreen>
 
       return matchesSearch && matchesFilter;
     }).toList();
+  }
+
+  List<VideoLessonPreviewData> get _authorsList {
+    // Группируем уроки по авторам для отображения в сетке
+    final Map<String, VideoLessonPreviewData> uniqueAuthors = {};
+    for (var lesson in previewLessons) {
+      final authorName = lesson.lesson.authorName?.trim() ?? '';
+      final authorSurname = lesson.lesson.authorSurname?.trim() ?? '';
+      final userId = lesson.lesson.userId;
+      
+      final authorKey = authorName.isNotEmpty || authorSurname.isNotEmpty
+          ? '${authorName}_${authorSurname}_$userId'
+          : 'user_${userId}';
+      
+      if (!uniqueAuthors.containsKey(authorKey)) {
+        uniqueAuthors[authorKey] = lesson;
+      }
+    }
+    return uniqueAuthors.values.toList();
+  }
+
+  List<VideoLessonPreviewData> get _myLessonsList {
+    return previewLessons.where((item) => item.lesson.userId == currentUserId).toList();
   }
 
   String _buildMeta(VideoLessonPreviewData item) {
@@ -806,6 +845,12 @@ class _VideoLessonsHubScreenState extends State<VideoLessonsHubScreen>
       ),
       child: TextField(
         controller: _searchController,
+        style: const TextStyle(
+          fontSize: 13,
+          height: 1.2,
+          color: VideoLessonsHubPalette.text,
+          fontWeight: FontWeight.w700,
+        ),
         onChanged: (_) => setState(() {}),
         decoration: InputDecoration(
           hintText: 'Поиск по названию или описанию',
@@ -934,44 +979,45 @@ class _VideoLessonsHubScreenState extends State<VideoLessonsHubScreen>
             ],
           ),
           const SizedBox(height: 12),
-          SizedBox(
-            height: 42,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                _buildFilterChip(
-                  label: 'Все видео',
-                  icon: Icons.apps_rounded,
-                  selected: _filter == _VideoFilter.all,
-                  onTap: () {
-                    setState(() {
-                      _filter = _VideoFilter.all;
-                    });
-                  },
-                ),
-                _buildFilterChip(
-                  label: 'Рекомендуемые',
-                  icon: Icons.auto_awesome_rounded,
-                  selected: _filter == _VideoFilter.recommended,
-                  onTap: () {
-                    setState(() {
-                      _filter = _VideoFilter.recommended;
-                    });
-                  },
-                ),
-                _buildFilterChip(
-                  label: 'Мои',
-                  icon: Icons.person_rounded,
-                  selected: _filter == _VideoFilter.my,
-                  onTap: () {
-                    setState(() {
-                      _filter = _VideoFilter.my;
-                    });
-                  },
-                ),
-              ],
+          if (_tabController.index == 0) // Показываем фильтры только на вкладке каталога
+            SizedBox(
+              height: 42,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  _buildFilterChip(
+                    label: 'Все видео',
+                    icon: Icons.apps_rounded,
+                    selected: _filter == _VideoFilter.all,
+                    onTap: () {
+                      setState(() {
+                        _filter = _VideoFilter.all;
+                      });
+                    },
+                  ),
+                  _buildFilterChip(
+                    label: 'Рекомендуемые',
+                    icon: Icons.auto_awesome_rounded,
+                    selected: _filter == _VideoFilter.recommended,
+                    onTap: () {
+                      setState(() {
+                        _filter = _VideoFilter.recommended;
+                      });
+                    },
+                  ),
+                  _buildFilterChip(
+                    label: 'Мои',
+                    icon: Icons.person_rounded,
+                    selected: _filter == _VideoFilter.my,
+                    onTap: () {
+                      setState(() {
+                        _filter = _VideoFilter.my;
+                      });
+                    },
+                  ),
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -1212,79 +1258,109 @@ class _VideoLessonsHubScreenState extends State<VideoLessonsHubScreen>
     );
   }
 
-  Widget _buildTabletVideoCard(VideoLessonPreviewData item) {
+  Widget _buildDesktopVideoTile(VideoLessonPreviewData item) {
     final lesson = item.lesson;
+    final titleStyle = TextStyle(
+      fontSize: 13.5,
+      height: 1.22,
+      fontWeight: FontWeight.w900,
+      color: VideoLessonsHubPalette.text,
+      letterSpacing: -0.1,
+    );
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: () => _openLessonDetail(item),
-      child: Container(
-        decoration: BoxDecoration(
-          color: VideoLessonsHubPalette.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: VideoLessonsHubPalette.border),
-          boxShadow: VideoLessonsHubPalette.cardShadowSoft,
-        ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => _openLessonDetail(item),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildThumb(
-              item: item,
-              radius: const BorderRadius.vertical(top: Radius.circular(18)),
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    _buildThumb(item: item),
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: Colors.black.withOpacity(0.04),
+                          ),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: Center(
+                        child: Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.46),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.play_arrow_rounded,
+                            color: Colors.white,
+                            size: 30,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildSmallAuthorAvatar(lesson.authorAvatar),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          lesson.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            height: 1.18,
-                            fontWeight: FontWeight.w800,
-                            color: VideoLessonsHubPalette.text,
-                          ),
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildSmallAuthorAvatar(lesson.authorAvatar),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        lesson.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: titleStyle,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _buildTabletMeta(item),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          height: 1.2,
+                          fontWeight: FontWeight.w700,
+                          color: VideoLessonsHubPalette.textMuted,
                         ),
-                        const SizedBox(height: 3),
-                        Text(
-                          _buildTabletMeta(item),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 10.5,
-                            height: 1.15,
-                            fontWeight: FontWeight.w600,
-                            color: VideoLessonsHubPalette.textMuted,
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 6),
-                  Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: VideoLessonsHubPalette.background,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
+                ),
+                const SizedBox(width: 6),
+                SizedBox(
+                  width: 26,
+                  height: 26,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    splashRadius: 18,
+                    onPressed: () => _openLessonDetail(item),
+                    icon: const Icon(
                       Icons.more_vert_rounded,
-                      size: 16,
+                      size: 18,
                       color: VideoLessonsHubPalette.textMuted,
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ],
         ),
@@ -1422,93 +1498,234 @@ class _VideoLessonsHubScreenState extends State<VideoLessonsHubScreen>
     );
   }
 
-  Widget _buildMobileCatalog() {
-    final items = _filteredLessons;
+  // Адаптивная сетка для всех вкладок
+  Widget _buildAdaptiveGrid({
+    required List<VideoLessonPreviewData> items,
+    required bool isLoading,
+    required double width,
+    required Orientation orientation,
+    required Future<void> Function() onRefresh,
+  }) {
+    final isTablet = _isTablet(width);
+    final useGrid = _useVideoGrid(width, orientation);
 
-    if (isLoading) return _buildLoadingSkeleton(tablet: false);
-    if (items.isEmpty) return _buildEmptyState();
+    if (isLoading) {
+      return _buildLoadingSkeleton(tablet: useGrid || isTablet);
+    }
 
-    return RefreshIndicator(
-      onRefresh: _loadData,
-      color: VideoLessonsHubPalette.primaryGreen,
-      child: ListView.builder(
-        controller: _catalogScrollController,
-        padding: const EdgeInsets.only(top: 12, bottom: 20),
-        itemCount: items.length,
-        itemBuilder: (_, index) => _buildMobileVideoItem(items[index]),
-      ),
-    );
-  }
+    if (items.isEmpty) {
+      return _buildEmptyState();
+    }
 
-  Widget _buildTabletCatalog(double width, Orientation orientation) {
-    final items = _filteredLessons;
+    if (!useGrid) {
+      return RefreshIndicator(
+        onRefresh: onRefresh,
+        color: VideoLessonsHubPalette.primaryGreen,
+        child: ListView.builder(
+          controller: _catalogScrollController,
+          padding: const EdgeInsets.only(top: 12, bottom: 20),
+          itemCount: items.length,
+          itemBuilder: (_, index) => _buildMobileVideoItem(items[index]),
+        ),
+      );
+    }
+
     final crossAxisCount = _gridCount(width, orientation);
-
-    if (isLoading) return _buildLoadingSkeleton(tablet: true);
-    if (items.isEmpty) return _buildEmptyState();
-
+    
     return RefreshIndicator(
-      onRefresh: _loadData,
+      onRefresh: onRefresh,
       color: VideoLessonsHubPalette.primaryGreen,
       child: GridView.builder(
         controller: _catalogScrollController,
-        padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+        padding: const EdgeInsets.fromLTRB(22, 16, 22, 24),
         itemCount: items.length,
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: crossAxisCount,
-          crossAxisSpacing: 14,
-          mainAxisSpacing: 14,
+          crossAxisSpacing: 18,
+          mainAxisSpacing: 26,
           childAspectRatio: _gridAspectRatio(width, orientation),
         ),
-        itemBuilder: (_, index) => _buildTabletVideoCard(items[index]),
+        itemBuilder: (_, index) => _buildDesktopVideoTile(items[index]),
       ),
     );
   }
 
+  // Вкладка каталога
   Widget _buildCatalogTab(double width, Orientation orientation) {
-    final isTablet = _isTablet(width);
-
     return Container(
       color: VideoLessonsHubPalette.background,
       child: Column(
         children: [
           _buildCatalogHeader(width),
           Expanded(
-            child: isTablet
-                ? _buildTabletCatalog(width, orientation)
-                : _buildMobileCatalog(),
+            child: _buildAdaptiveGrid(
+              items: _filteredLessons,
+              isLoading: isLoading,
+              width: width,
+              orientation: orientation,
+              onRefresh: _loadData,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildAuthorsTab() {
+  // Вкладка авторов
+  Widget _buildAuthorsTab(double width, Orientation orientation) {
     return Container(
       color: VideoLessonsHubPalette.background,
-      child: const SafeArea(
-        top: false,
-        bottom: false,
-        child: VideoLessonsAuthorsScreen(),
+      child: Column(
+        children: [
+          // Заголовок для авторов (без поиска и фильтров)
+          Container(
+            padding: EdgeInsets.fromLTRB(
+              _isTablet(width) ? 18 : 16,
+              12,
+              _isTablet(width) ? 18 : 16,
+              8,
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.groups_rounded,
+                  color: VideoLessonsHubPalette.primaryGreen,
+                  size: 24,
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Авторы и преподаватели',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: VideoLessonsHubPalette.text,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  height: 46,
+                  padding: const EdgeInsets.symmetric(horizontal: 13),
+                  decoration: BoxDecoration(
+                    color: VideoLessonsHubPalette.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: VideoLessonsHubPalette.border),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.person_rounded,
+                        color: VideoLessonsHubPalette.primaryGreen,
+                        size: 17,
+                      ),
+                      const SizedBox(width: 7),
+                      Text(
+                        '${_authorsList.length}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13,
+                          color: VideoLessonsHubPalette.text,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _buildAdaptiveGrid(
+              items: _authorsList,
+              isLoading: isLoading,
+              width: width,
+              orientation: orientation,
+              onRefresh: _loadData,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildMyLessonsTab() {
+  // Вкладка моих материалов
+  Widget _buildMyLessonsTab(double width, Orientation orientation) {
     return Container(
       color: VideoLessonsHubPalette.background,
-      child: const SafeArea(
-        top: false,
-        bottom: false,
-        child: MyVideoLessonsScreen(),
+      child: Column(
+        children: [
+          // Заголовок для моих материалов
+          Container(
+            padding: EdgeInsets.fromLTRB(
+              _isTablet(width) ? 18 : 16,
+              12,
+              _isTablet(width) ? 18 : 16,
+              8,
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.folder_rounded,
+                  color: VideoLessonsHubPalette.primaryGreen,
+                  size: 24,
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Мои материалы',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: VideoLessonsHubPalette.text,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  height: 46,
+                  padding: const EdgeInsets.symmetric(horizontal: 13),
+                  decoration: BoxDecoration(
+                    color: VideoLessonsHubPalette.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: VideoLessonsHubPalette.border),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.video_library_outlined,
+                        color: VideoLessonsHubPalette.primaryGreen,
+                        size: 17,
+                      ),
+                      const SizedBox(width: 7),
+                      Text(
+                        '${_myLessonsList.length}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13,
+                          color: VideoLessonsHubPalette.text,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _buildAdaptiveGrid(
+              items: _myLessonsList,
+              isLoading: isLoading,
+              width: width,
+              orientation: orientation,
+              onRefresh: _loadData,
+            ),
+          ),
+        ],
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return OrientationBuilder(
-      builder: (context, orientation) {
+    return _withStableTextScale(
+      OrientationBuilder(
+        builder: (context, orientation) {
         return LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth;
@@ -1532,8 +1749,8 @@ class _VideoLessonsHubScreenState extends State<VideoLessonsHubScreen>
                               physics: const NeverScrollableScrollPhysics(),
                               children: [
                                 _buildCatalogTab(contentWidth, orientation),
-                                _buildAuthorsTab(),
-                                _buildMyLessonsTab(),
+                                _buildAuthorsTab(contentWidth, orientation),
+                                _buildMyLessonsTab(contentWidth, orientation),
                               ],
                             ),
                           ),
@@ -1556,8 +1773,8 @@ class _VideoLessonsHubScreenState extends State<VideoLessonsHubScreen>
                       physics: const NeverScrollableScrollPhysics(),
                       children: [
                         _buildCatalogTab(width, orientation),
-                        _buildAuthorsTab(),
-                        _buildMyLessonsTab(),
+                        _buildAuthorsTab(width, orientation),
+                        _buildMyLessonsTab(width, orientation),
                       ],
                     ),
                   ),
@@ -1565,8 +1782,9 @@ class _VideoLessonsHubScreenState extends State<VideoLessonsHubScreen>
               ),
             );
           },
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }

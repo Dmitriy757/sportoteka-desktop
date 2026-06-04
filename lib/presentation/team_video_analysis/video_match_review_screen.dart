@@ -62,6 +62,23 @@ class VideoMatchReviewScreen extends StatefulWidget {
   final String videoUrl;
   final int videoId;
 
+  /// true — режим встраивания внутрь TeamMatchDetailScreen.
+  /// В этом режиме экран не создаёт отдельный Scaffold и не заставляет
+  /// устройство переходить в landscape, чтобы не ломать рабочую область матча.
+  final bool embedded;
+  final bool forceLandscape;
+
+  /// true — во встроенном режиме переносит вертикальное меню AI-разбора
+  /// в левую часть экрана, чтобы оно заменяло общее меню матча.
+  final bool railOnLeft;
+
+  /// Управление видео из внешней нижней панели TeamMatchDetailScreen.
+  final VideoMatchReviewPlaybackController? playbackController;
+
+  /// false — внутри виджета скрывается верхняя полоса управления видео,
+  /// потому что используется общий нижний плеер экрана матча.
+  final bool showInternalVideoControls;
+
   const VideoMatchReviewScreen({
     super.key,
     required this.matchId,
@@ -71,6 +88,11 @@ class VideoMatchReviewScreen extends StatefulWidget {
     required this.matchTitle,
     required this.videoUrl,
     required this.videoId,
+    this.embedded = false,
+    this.forceLandscape = true,
+    this.railOnLeft = false,
+    this.playbackController,
+    this.showInternalVideoControls = true,
   });
 
   @override
@@ -88,22 +110,164 @@ enum ReviewOverlayPanel {
   analytics,
 }
 
+class VideoMatchReviewPlaybackController extends ChangeNotifier {
+  _VideoMatchReviewScreenState? _state;
+
+  Duration position = Duration.zero;
+  Duration duration = Duration.zero;
+  bool isReady = false;
+  bool isPlaying = false;
+  bool isFullscreen = false;
+  double speed = 1.0;
+  ReviewOverlayPanel activePanel = ReviewOverlayPanel.none;
+  int tabIndex = 0;
+
+  bool get attached => _state != null;
+
+  void _attach(_VideoMatchReviewScreenState state) {
+    _state = state;
+    _syncFromState();
+  }
+
+  void _detach(_VideoMatchReviewScreenState state) {
+    if (identical(_state, state)) {
+      _state = null;
+      isReady = false;
+      isPlaying = false;
+      activePanel = ReviewOverlayPanel.none;
+      notifyListeners();
+    }
+  }
+
+  void _syncFromState() {
+    final state = _state;
+    if (state == null) return;
+
+    final value = state._controller.value;
+    final nextPosition = value.position;
+    final nextDuration = value.duration;
+    final nextReady = state._videoReady && value.isInitialized;
+    final nextPlaying = value.isPlaying;
+    final nextSpeed = speed;
+    final nextFullscreen = state._isVideoFullscreen || state._fullscreenRouteOpen;
+    final nextPanel = state._activeOverlayPanel;
+    final nextTab = state._tabController.index;
+
+    final changed = position != nextPosition ||
+        duration != nextDuration ||
+        isReady != nextReady ||
+        isPlaying != nextPlaying ||
+        speed != nextSpeed ||
+        isFullscreen != nextFullscreen ||
+        activePanel != nextPanel ||
+        tabIndex != nextTab;
+
+    position = nextPosition;
+    duration = nextDuration;
+    isReady = nextReady;
+    isPlaying = nextPlaying;
+    speed = nextSpeed;
+    isFullscreen = nextFullscreen;
+    activePanel = nextPanel;
+    tabIndex = nextTab;
+
+    if (changed) notifyListeners();
+  }
+
+  Future<void> togglePlayPause() async {
+    await _state?._togglePlayPause();
+    _syncFromState();
+  }
+
+  Future<void> seekRelative(int seconds) async {
+    await _state?._seekRelative(seconds);
+    _syncFromState();
+  }
+
+  Future<void> seekToFraction(double fraction) async {
+    final state = _state;
+    if (state == null || !state._videoReady) return;
+
+    final duration = state._controller.value.duration;
+    if (duration.inMilliseconds <= 0) return;
+
+    final clamped = fraction.clamp(0.0, 1.0).toDouble();
+    final target = Duration(
+      milliseconds: (duration.inMilliseconds * clamped).round(),
+    );
+    await state._controller.seekTo(target);
+    if (state.mounted) state.setState(() {});
+    _syncFromState();
+  }
+
+  Future<void> cycleSpeed() async {
+    final state = _state;
+    if (state == null || !state._videoReady) return;
+
+    const speeds = <double>[1.0, 1.25, 1.5, 2.0, 0.75];
+    final current = speed;
+    final index = speeds.indexWhere((item) => (item - current).abs() < 0.01);
+    final next = speeds[(index + 1) % speeds.length];
+    await state._controller.setPlaybackSpeed(next);
+    speed = next;
+    notifyListeners();
+    if (state.mounted) state.setState(() {});
+    _syncFromState();
+  }
+
+  void toggleFullscreen() {
+    _state?._toggleFullscreen();
+    _syncFromState();
+  }
+
+  void openVideo() {
+    final state = _state;
+    if (state == null) return;
+    state._tabController.animateTo(0);
+    _syncFromState();
+  }
+
+  void openReport() {
+    final state = _state;
+    if (state == null) return;
+    state._tabController.animateTo(1);
+    _syncFromState();
+  }
+
+  void togglePanel(ReviewOverlayPanel panel) {
+    _state?._togglePanel(panel);
+    _syncFromState();
+  }
+
+  void closePanels() {
+    _state?._closePanels();
+    _syncFromState();
+  }
+
+  Future<void> createEpisodeFromCurrentFrame() async {
+    await _state?._createEpisodeFromCurrentFrame();
+    _syncFromState();
+  }
+}
+
 
 
 
 class ReviewUiPalette {
-  static const bg = Color(0xFFF4F7FB);
+  static const bg = Color(0xFFF4F7FA);
   static const panel = Color(0xFFFFFFFF);
   static const panelSoft = Color(0xFFF8FAFC);
-  static const border = Color(0xFFE2E8F0);
-  static const text = Color(0xFF0F172A);
+  static const line = Color(0xFFD8E2EA);
+  static const border = Color(0xFFD7E8DE);
+  static const text = Color(0xFF101828);
   static const textMuted = Color(0xFF64748B);
 
-  static const blue = Color(0xFF2563EB);
-  static const blue2 = Color(0xFF3B82F6);
+  static const primary = Color(0xFF1F7A4D);
+  static const primary2 = Color(0xFF22C55E);
+  static const blue = Color(0xFF176BCA);
   static const green = Color(0xFF16A34A);
-  static const red = Color(0xFFDC2626);
-  static const amber = Color(0xFFF59E0B);
+  static const red = Color(0xFFD64545);
+  static const amber = Color(0xFFD99A00);
   static const violet = Color(0xFF7C3AED);
 
   static const darkOverlay = Color(0x99000000);
@@ -247,11 +411,16 @@ bool _isLoadingServerFrame = false;
       width: 64,
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
       decoration: BoxDecoration(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.10),
-        ),
+        color: ReviewUiPalette.panel,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: ReviewUiPalette.line),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -288,6 +457,7 @@ bool _isLoadingServerFrame = false;
     ),
   );
 }
+
 
 void _openTtdEventDetail(Map<String, dynamic> event) {
   Navigator.push(
@@ -474,13 +644,14 @@ Widget _buildPassNetworkBadge() {
       width: 220,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.62),
+        color: Colors.white.withOpacity(0.94),
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: ReviewUiPalette.line),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.14),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.10),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -488,9 +659,9 @@ Widget _buildPassNetworkBadge() {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Pass Network',
+            'Связи передач',
             style: TextStyle(
-              color: Colors.white,
+              color: ReviewUiPalette.text,
               fontSize: 12,
               fontWeight: FontWeight.w900,
             ),
@@ -502,7 +673,7 @@ Widget _buildPassNetworkBadge() {
               child: Text(
                 '${e.fromTrackId} → ${e.toTrackId} · ${e.count}',
                 style: const TextStyle(
-                  color: Colors.white70,
+                  color: ReviewUiPalette.textMuted,
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                 ),
@@ -514,6 +685,7 @@ Widget _buildPassNetworkBadge() {
     ),
   );
 }
+
 
 
 void _applyServerPacketToOverlay(AiFramePacket packet) {
@@ -564,7 +736,7 @@ void _applyServerPacketToOverlay(AiFramePacket packet) {
         _showOverlay();
         onTap();
       },
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(14),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         width: 44,
@@ -572,20 +744,27 @@ void _applyServerPacketToOverlay(AiFramePacket packet) {
         decoration: BoxDecoration(
           gradient: isActive
               ? const LinearGradient(
-                  colors: [Color(0xFF2563EB), Color(0xFF3B82F6)],
+                  colors: [ReviewUiPalette.primary, ReviewUiPalette.primary2],
                 )
               : null,
-          color: isActive ? null : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
+          color: isActive ? null : ReviewUiPalette.panelSoft,
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isActive
-                ? Colors.transparent
-                : Colors.white.withOpacity(0.10),
+            color: isActive ? ReviewUiPalette.primary : ReviewUiPalette.line,
           ),
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                    color: ReviewUiPalette.primary.withOpacity(0.20),
+                    blurRadius: 12,
+                    offset: const Offset(0, 5),
+                  ),
+                ]
+              : const [],
         ),
         child: Icon(
           icon,
-          color: Colors.white,
+          color: isActive ? Colors.white : ReviewUiPalette.textMuted,
           size: 20,
         ),
       ),
@@ -599,6 +778,7 @@ void _applyServerPacketToOverlay(AiFramePacket packet) {
     child: button,
   );
 }
+
 
 
   double _openedPanelWidth() {
@@ -619,7 +799,13 @@ void _applyServerPacketToOverlay(AiFramePacket packet) {
   
   bool _reportLoading = false;
   bool _creatingEpisode = false;
+
+  // В embedded-режиме обычный setState увеличивал видео только внутри вкладки.
+  // Для настоящего полноэкранного режима открываем отдельный root route поверх
+  // TeamMatchDetailScreen / ClubWorkspace, но используем тот же VideoPlayerController.
   bool _isVideoFullscreen = false;
+  bool _fullscreenRouteOpen = false;
+
   bool _showAiPanelInline = false;
   bool _isSimpleMode = false;
   bool _quickSummaryCollapsed = true;
@@ -743,7 +929,7 @@ double _adaptiveGap(double screenWidth) {
             title: 'TTD / Счёт',
             leftValue: total,
             rightValue: single,
-            leftColor: const Color(0xFF2563EB),
+            leftColor: const Color(0xFF1F7A4D),
             rightColor: const Color(0xFFF59E0B),
           ),
           const SizedBox(height: 14),
@@ -921,72 +1107,107 @@ double _adaptiveGap(double screenWidth) {
   final bool panelOpen = _activeOverlayPanel != ReviewOverlayPanel.none;
 
   return ClipRRect(
-    borderRadius: BorderRadius.circular(_isVideoFullscreen ? 0 : 28),
+    borderRadius: BorderRadius.circular(_isVideoFullscreen ? 0 : 22),
     child: Container(
-      color: Colors.black,
+      color: ReviewUiPalette.bg,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final totalWidth = constraints.maxWidth;
-
           final railWidth = _adaptiveRailWidth(totalWidth);
           final panelWidth = panelOpen ? _adaptivePanelWidth(totalWidth) : 0.0;
           final gap = _adaptiveGap(totalWidth);
+          final railGap = widget.railOnLeft ? gap : 0.0;
+          final videoWidth = totalWidth -
+              railWidth -
+              railGap -
+              (panelOpen ? panelWidth + gap : 0);
 
-          final videoWidth =
-              totalWidth - railWidth - (panelOpen ? panelWidth + gap : 0);
+          final rail = SizedBox(
+            width: railWidth,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: _buildRightMainRail(),
+            ),
+          );
+
+          final panel = SizedBox(
+            width: panelWidth,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: _buildCenterSlidingPanel(),
+            ),
+          );
+
+          final video = SizedBox(
+            width: videoWidth.clamp(260.0, totalWidth).toDouble(),
+            child: Container(
+              margin: EdgeInsets.all(_isVideoFullscreen ? 0 : 10),
+              decoration: BoxDecoration(
+                color: ReviewUiPalette.panel,
+                borderRadius: BorderRadius.circular(_isVideoFullscreen ? 0 : 18),
+                border: Border.all(color: ReviewUiPalette.line),
+                boxShadow: _isVideoFullscreen
+                    ? const []
+                    : [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 18,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(_isVideoFullscreen ? 0 : 18),
+                child: Column(
+                  children: [
+                    if (widget.showInternalVideoControls)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+                        child: _buildTopVideoTimelineBar(),
+                      ),
+                    Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          10,
+                          widget.showInternalVideoControls ? 0 : 10,
+                          10,
+                          10,
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            color: Colors.black,
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                _buildVideoSection(),
+                                _buildSelectedPlayerOverlayCard(),
+                                _buildSelectedEpisodeOverlayBadge(),
+                                _buildBottomPlayersStrip(),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
 
           return Row(
             children: [
-             SizedBox(
-  width: videoWidth.clamp(260.0, totalWidth),
-  child: Container(
-    margin: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: Colors.black,
-      borderRadius: BorderRadius.circular(24),
-      border: Border.all(
-        color: Colors.white.withOpacity(0.08),
-      ),
-    ),
-    child: ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-            child: _buildTopVideoTimelineBar(),
-          ),
-          Expanded(
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                _buildVideoSection(),
-                _buildBottomPlayersStrip(),
-              ],
-            ),
-          ),
-        ],
-      ),
-    ),
-  ),
-),              if (panelOpen) ...[
+              if (widget.railOnLeft) ...[
+                rail,
                 SizedBox(width: gap),
-                SizedBox(
-                  width: panelWidth,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: _buildCenterSlidingPanel(),
-                  ),
-                ),
               ],
-
-              SizedBox(
-                width: railWidth,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: _buildRightMainRail(),
-                ),
-              ),
+              video,
+              if (panelOpen) ...[
+                SizedBox(width: gap),
+                panel,
+              ],
+              if (!widget.railOnLeft) rail,
             ],
           );
         },
@@ -995,34 +1216,58 @@ double _adaptiveGap(double screenWidth) {
   );
 }
 
+
 Widget _buildTopVideoTimelineBar() {
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
     decoration: BoxDecoration(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: Colors.white.withOpacity(0.10)),
+      color: ReviewUiPalette.panelSoft,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: ReviewUiPalette.line),
     ),
     child: Row(
       children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: ReviewUiPalette.primary.withOpacity(0.10),
+            borderRadius: BorderRadius.circular(11),
+          ),
+          child: IconButton(
+            padding: EdgeInsets.zero,
+            onPressed: _togglePlayPause,
+            icon: Icon(
+              _controller.value.isPlaying
+                  ? Icons.pause_rounded
+                  : Icons.play_arrow_rounded,
+              color: ReviewUiPalette.primary,
+              size: 19,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
         Text(
           Formatters.formatDuration(_controller.value.position),
           style: const TextStyle(
-            color: Colors.white,
+            color: ReviewUiPalette.text,
             fontSize: 12,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
           ),
         ),
         const SizedBox(width: 10),
         Expanded(
-          child: VideoProgressIndicator(
-            _controller,
-            allowScrubbing: true,
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            colors: const VideoProgressColors(
-              playedColor: Colors.white,
-              bufferedColor: Colors.white30,
-              backgroundColor: Colors.white12,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: VideoProgressIndicator(
+              _controller,
+              allowScrubbing: true,
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              colors: const VideoProgressColors(
+                playedColor: ReviewUiPalette.primary,
+                bufferedColor: Color(0xFFA8CDB8),
+                backgroundColor: Color(0xFFE6EDF3),
+              ),
             ),
           ),
         ),
@@ -1030,15 +1275,44 @@ Widget _buildTopVideoTimelineBar() {
         Text(
           Formatters.formatDuration(_controller.value.duration),
           style: const TextStyle(
-            color: Colors.white,
+            color: ReviewUiPalette.textMuted,
             fontSize: 12,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
           ),
         ),
+        const SizedBox(width: 10),
+        _buildTimelineIconButton(Icons.replay_10_rounded, () => _seekRelative(-10)),
+        const SizedBox(width: 6),
+        _buildTimelineIconButton(Icons.forward_10_rounded, () => _seekRelative(10)),
+        const SizedBox(width: 6),
+        _buildTimelineIconButton(Icons.camera_alt_outlined, _createEpisodeFromCurrentFrame),
+        const SizedBox(width: 6),
+        _buildTimelineIconButton(Icons.fullscreen_rounded, _toggleFullscreen),
       ],
     ),
   );
 }
+
+Widget _buildTimelineIconButton(IconData icon, VoidCallback onTap) {
+  return Material(
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(11),
+      child: Ink(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(11),
+          border: Border.all(color: ReviewUiPalette.line),
+        ),
+        child: Icon(icon, color: ReviewUiPalette.textMuted, size: 18),
+      ),
+    ),
+  );
+}
+
 
 Widget _buildCenterSlidingPanel() {
   return AnimatedContainer(
@@ -1275,11 +1549,16 @@ Widget _buildRightMainRail() {
       width: 68,
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
       decoration: BoxDecoration(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.10),
-        ),
+        color: ReviewUiPalette.panel,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: ReviewUiPalette.line),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: SingleChildScrollView(
         child: Column(
@@ -1287,7 +1566,6 @@ Widget _buildRightMainRail() {
           children: [
             _buildRailSectionLabel('АНАЛИЗ'),
             const SizedBox(height: 8),
-
             _buildRailButton(
               icon: Icons.flash_on_rounded,
               isActive: _isPanelOpen(ReviewOverlayPanel.ttd),
@@ -1315,10 +1593,8 @@ Widget _buildRightMainRail() {
               onTap: () => _togglePanel(ReviewOverlayPanel.analytics),
               tooltip: 'AI',
             ),
-
             const SizedBox(height: 14),
             _buildRailDivider(),
-
             const SizedBox(height: 12),
             _buildRailSectionLabel('ОТЧЁТ'),
             const SizedBox(height: 8),
@@ -1328,10 +1604,8 @@ Widget _buildRightMainRail() {
               onTap: () => _tabController.animateTo(1),
               tooltip: 'Отчёт',
             ),
-
             const SizedBox(height: 14),
             _buildRailDivider(),
-
             const SizedBox(height: 12),
             _buildRailSectionLabel('ВИДЕО'),
             const SizedBox(height: 8),
@@ -1370,26 +1644,29 @@ Widget _buildRightMainRail() {
     ),
   );
 }
+
 Widget _buildRailSectionLabel(String text) {
   return Text(
     text,
     textAlign: TextAlign.center,
-    style: TextStyle(
-      color: Colors.white.withOpacity(0.55),
+    style: const TextStyle(
+      color: ReviewUiPalette.textMuted,
       fontSize: 9,
-      fontWeight: FontWeight.w800,
+      fontWeight: FontWeight.w900,
       letterSpacing: 0.8,
     ),
   );
 }
 
+
 Widget _buildRailDivider() {
   return Container(
     width: 28,
     height: 1,
-    color: Colors.white.withOpacity(0.10),
+    color: ReviewUiPalette.line,
   );
 }
+
 
 Widget _buildSlidingOverlayPanelInline() {
   return Align(
@@ -1555,6 +1832,7 @@ void _toggleOverlay() {
       _showRightRail = true;
     });
 
+    _notifyPlaybackBridge();
     _restartOverlayAutoHide();
   }
 
@@ -1563,6 +1841,7 @@ void _toggleOverlay() {
     setState(() {
       _activeOverlayPanel = ReviewOverlayPanel.none;
     });
+    _notifyPlaybackBridge();
     _restartOverlayAutoHide();
   }
 
@@ -1661,7 +1940,7 @@ Widget _buildAiQuickLaunchCard() {
               ),
               child: const Icon(
                 Icons.auto_graph_rounded,
-                color: Color(0xFF2563EB),
+                color: Color(0xFF1F7A4D),
               ),
             ),
             const SizedBox(width: 12),
@@ -1719,7 +1998,7 @@ Widget _buildAiQuickLaunchCard() {
                     : const Icon(Icons.smart_toy_outlined),
                 label: Text(_aiLoading ? 'AI работает...' : 'Запустить AI'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
+                  backgroundColor: const Color(0xFF1F7A4D),
                   foregroundColor: Colors.white,
                   minimumSize: const Size.fromHeight(46),
                   shape: RoundedRectangleBorder(
@@ -1818,7 +2097,7 @@ Widget _buildAiAnalysisSection() {
           decoration: BoxDecoration(
             gradient: selected
                 ? const LinearGradient(
-                    colors: [Color(0xFF2563EB), Color(0xFF3B82F6)],
+                    colors: [Color(0xFF1F7A4D), Color(0xFF22C55E)],
                   )
                 : null,
             color: selected ? null : Colors.transparent,
@@ -2281,14 +2560,14 @@ Widget _buildTapMarkerOverlay() {
         height: 32,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: const Color(0xFF2563EB).withOpacity(0.18),
+          color: const Color(0xFF1F7A4D).withOpacity(0.18),
           border: Border.all(
-            color: const Color(0xFF2563EB),
+            color: const Color(0xFF1F7A4D),
             width: 2.5,
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF2563EB).withOpacity(0.28),
+              color: const Color(0xFF1F7A4D).withOpacity(0.28),
               blurRadius: 10,
               spreadRadius: 1,
             ),
@@ -2299,7 +2578,7 @@ Widget _buildTapMarkerOverlay() {
             width: 8,
             height: 8,
             decoration: const BoxDecoration(
-              color: Color(0xFF2563EB),
+              color: Color(0xFF1F7A4D),
               shape: BoxShape.circle,
             ),
           ),
@@ -2310,129 +2589,123 @@ Widget _buildTapMarkerOverlay() {
 }
 
     Widget _buildSelectedPlayerOverlayCard() {
-    if (_selectedPlayer == null) return const SizedBox.shrink();
-    
+  if (_selectedPlayer == null) return const SizedBox.shrink();
 
-    final photo = _playerPhoto(_selectedPlayer!);
-    final fullName = _playerFullName(_selectedPlayer!);
-    final position = _playerPosition(_selectedPlayer!);
-    final totalActions = _videoAllTotal();
+  final photo = _playerPhoto(_selectedPlayer!);
+  final fullName = _playerFullName(_selectedPlayer!);
+  final position = _playerPosition(_selectedPlayer!);
+  final totalActions = _videoAllTotal();
 
-    return AnimatedPositioned(
-      duration: const Duration(milliseconds: 240),
-      curve: Curves.easeOutCubic,
-      left: 18,
-        bottom: 92,
-      child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 220),
-        opacity: _showOverlayUi ? 1 : 0,
-        child: IgnorePointer(
-          ignoring: !_showOverlayUi,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-              child: Container(
-                width: 260,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.38),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.white.withOpacity(0.08)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.16),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 24,
-                      backgroundColor: Colors.white.withOpacity(0.12),
-                      backgroundImage:
-                          photo.isNotEmpty ? NetworkImage(photo) : null,
-                      child: photo.isEmpty
-                          ? const Icon(Icons.person, color: Colors.white)
-                          : null,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            fullName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w900,
-                            ),
+  return AnimatedPositioned(
+    duration: const Duration(milliseconds: 240),
+    curve: Curves.easeOutCubic,
+    left: 18,
+    bottom: 106,
+    child: AnimatedOpacity(
+      duration: const Duration(milliseconds: 220),
+      opacity: _showOverlayUi ? 1 : 0,
+      child: IgnorePointer(
+        ignoring: !_showOverlayUi,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+            child: Container(
+              width: 260,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.94),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: ReviewUiPalette.line),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.12),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: ReviewUiPalette.primary.withOpacity(0.10),
+                    backgroundImage: photo.isNotEmpty ? NetworkImage(photo) : null,
+                    child: photo.isEmpty
+                        ? const Icon(Icons.person, color: ReviewUiPalette.primary)
+                        : null,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          fullName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: ReviewUiPalette.text,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            position.isEmpty ? 'Позиция не указана' : position,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.72),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.10),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.08),
                         ),
-                      ),
-                      child: Column(
-                        children: [
-                          Text(
-                            '$totalActions',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w900,
-                              height: 1,
-                            ),
+                        const SizedBox(height: 4),
+                        Text(
+                          position.isEmpty ? 'Позиция не указана' : position,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: ReviewUiPalette.textMuted,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'TTD',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.72),
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              height: 1,
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: ReviewUiPalette.primary.withOpacity(0.10),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: ReviewUiPalette.primary.withOpacity(0.16)),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          '$totalActions',
+                          style: const TextStyle(
+                            color: ReviewUiPalette.primary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                            height: 1,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'TTD',
+                          style: TextStyle(
+                            color: ReviewUiPalette.primary,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            height: 1,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
+
 
 Widget _buildQuickInlineCounterBubble({
   required int value,
@@ -2575,6 +2848,7 @@ void initState() {
 @override
 void dispose() {
   _controller.removeListener(_onVideoPositionChanged);
+  widget.playbackController?._detach(this);
 
   _playerSearchCtrl.dispose();
   _tabController.dispose();
@@ -2584,12 +2858,14 @@ void dispose() {
   _tapMarkerTimer?.cancel();
   _overlayAutoHideTimer?.cancel();
 
-  SystemChrome.setPreferredOrientations(const [
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-  ]);
+  if (!widget.embedded && widget.forceLandscape) {
+    SystemChrome.setPreferredOrientations(const [
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+  }
 
   _controller.dispose();
   _noteCtrl.dispose();
@@ -2611,27 +2887,37 @@ void _initializeServices() {
 void _setupControllers() {
   _tabController = TabController(length: 2, vsync: this)
     ..addListener(() {
+      _notifyPlaybackBridge();
       if (mounted) setState(() {});
     });
 
-  SystemChrome.setPreferredOrientations(const [
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-  ]);
+  if (!widget.embedded && widget.forceLandscape) {
+    SystemChrome.setPreferredOrientations(const [
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+  }
 
   _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl))
     ..initialize().then((_) {
       if (!mounted) return;
       setState(() => _videoReady = true);
+      _notifyPlaybackBridge();
     });
 
   _controller.addListener(() {
+    _notifyPlaybackBridge();
     if (mounted) setState(() {});
   });
 
   _controller.addListener(_onVideoPositionChanged);
+  widget.playbackController?._attach(this);
 
   _playerSearchCtrl.addListener(_applyPlayerFilter);
+}
+
+void _notifyPlaybackBridge() {
+  widget.playbackController?._syncFromState();
 }
 
 
@@ -2730,12 +3016,12 @@ Future<void> _pickOwnPlayerForAi() async {
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
                                 color: isSelected
-                                    ? const Color(0xFF2563EB).withOpacity(0.08)
+                                    ? const Color(0xFF1F7A4D).withOpacity(0.08)
                                     : Colors.white,
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
                                   color: isSelected
-                                      ? const Color(0xFF2563EB)
+                                      ? const Color(0xFF1F7A4D)
                                       : const Color(0xFFE2E8F0),
                                 ),
                               ),
@@ -2744,7 +3030,7 @@ Future<void> _pickOwnPlayerForAi() async {
                                   CircleAvatar(
                                     radius: 22,
                                     backgroundColor:
-                                        const Color(0xFF2563EB).withOpacity(0.12),
+                                        const Color(0xFF1F7A4D).withOpacity(0.12),
                                     backgroundImage: _playerPhoto(p).isNotEmpty
                                         ? NetworkImage(_playerPhoto(p))
                                         : null,
@@ -2755,7 +3041,7 @@ Future<void> _pickOwnPlayerForAi() async {
                                                 : '?',
                                             style: const TextStyle(
                                               fontWeight: FontWeight.w800,
-                                              color: Color(0xFF2563EB),
+                                              color: Color(0xFF1F7A4D),
                                             ),
                                           )
                                         : null,
@@ -2791,7 +3077,7 @@ Future<void> _pickOwnPlayerForAi() async {
                                   if (isSelected)
                                     const Icon(
                                       Icons.check_circle_rounded,
-                                      color: Color(0xFF2563EB),
+                                      color: Color(0xFF1F7A4D),
                                     ),
                                 ],
                               ),
@@ -3266,7 +3552,7 @@ Future<void> _bindAiTrackToSelectedPlayer() async {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Icon(Icons.access_time, size: 16, color: const Color(0xFF2563EB)),
+                        Icon(Icons.access_time, size: 16, color: const Color(0xFF1F7A4D)),
                         const SizedBox(width: 8),
                         Text(
                           Formatters.formatDuration(Duration(seconds: timeSeconds)),
@@ -3281,7 +3567,7 @@ Future<void> _bindAiTrackToSelectedPlayer() async {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF2563EB).withOpacity(0.1),
+                              color: const Color(0xFF1F7A4D).withOpacity(0.1),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
@@ -3289,7 +3575,7 @@ Future<void> _bindAiTrackToSelectedPlayer() async {
                               style: const TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
-                                color: Color(0xFF2563EB),
+                                color: Color(0xFF1F7A4D),
                               ),
                             ),
                           ),
@@ -3391,7 +3677,7 @@ Future<void> _bindAiTrackToSelectedPlayer() async {
               );
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2563EB),
+              backgroundColor: const Color(0xFF1F7A4D),
               foregroundColor: Colors.white,
             ),
             child: const Text('Сохранить'),
@@ -3744,7 +4030,7 @@ Future<void> _showTtdEventsList(String metricCode, String metricTitle) async {
                                           style: const TextStyle(
                                             fontSize: 11,
                                             fontWeight: FontWeight.w600,
-                                            color: Color(0xFF2563EB),
+                                            color: Color(0xFF1F7A4D),
                                           ),
                                         ),
                                     ],
@@ -3801,7 +4087,7 @@ Future<void> _showTtdEventsList(String metricCode, String metricTitle) async {
                                   label: const Text('Редактировать'),
                                   style: TextButton.styleFrom(
                                     foregroundColor:
-                                        const Color(0xFF2563EB),
+                                        const Color(0xFF1F7A4D),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
@@ -3882,7 +4168,7 @@ Future<void> _showTtdEventsList(String metricCode, String metricTitle) async {
           ElevatedButton(
             onPressed: () => Get.back(result: true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2563EB),
+              backgroundColor: const Color(0xFF1F7A4D),
               foregroundColor: Colors.white,
             ),
             child: const Text('Закрыть'),
@@ -4320,19 +4606,76 @@ Future<void> _warmupDetections() async {
     if (mounted) setState(() {});
   }
 
-  void _enterFullscreen() {
-    if (!mounted) return;
+  Future<void> _openFullscreenRoute() async {
+    if (!mounted || _fullscreenRouteOpen) return;
+
+    _fullscreenRouteOpen = true;
     setState(() => _isVideoFullscreen = true);
+
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+
+    try {
+      await Navigator.of(context, rootNavigator: true).push<void>(
+        PageRouteBuilder<void>(
+          opaque: true,
+          fullscreenDialog: true,
+          barrierColor: Colors.black,
+          transitionDuration: const Duration(milliseconds: 180),
+          reverseTransitionDuration: const Duration(milliseconds: 140),
+          pageBuilder: (routeContext, animation, secondaryAnimation) {
+            return Material(
+              color: Colors.black,
+              child: WillPopScope(
+                onWillPop: () async => true,
+                child: AnimatedBuilder(
+                  animation: _controller,
+                  builder: (_, __) => _buildFullscreenVideoOverlay(),
+                ),
+              ),
+            );
+          },
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+        ),
+      );
+    } finally {
+      await SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.manual,
+        overlays: SystemUiOverlay.values,
+      );
+
+      _fullscreenRouteOpen = false;
+      if (mounted) {
+        setState(() => _isVideoFullscreen = false);
+      }
+    }
+  }
+
+  void _enterFullscreen() {
+    _openFullscreenRoute();
   }
 
   void _exitFullscreen() {
     if (!mounted) return;
+
+    if (_fullscreenRouteOpen) {
+      Navigator.of(context, rootNavigator: true).maybePop();
+      return;
+    }
+
     setState(() => _isVideoFullscreen = false);
   }
 
   void _toggleFullscreen() {
     if (!mounted) return;
-    setState(() => _isVideoFullscreen = !_isVideoFullscreen);
+
+    if (_fullscreenRouteOpen || _isVideoFullscreen) {
+      _exitFullscreen();
+    } else {
+      _openFullscreenRoute();
+    }
+    _notifyPlaybackBridge();
   }
 
   void _toggleEpisodesPanel() {
@@ -5182,10 +5525,10 @@ Future<void> _saveQuickTtd(
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: const Color(0xFF2563EB).withOpacity(0.10),
+              color: const Color(0xFF1F7A4D).withOpacity(0.10),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(icon, color: const Color(0xFF2563EB), size: 22),
+            child: Icon(icon, color: const Color(0xFF1F7A4D), size: 22),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -5337,10 +5680,10 @@ Future<void> _saveQuickTtd(
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: const Color(0xFF2563EB).withOpacity(0.10),
+              color: const Color(0xFF1F7A4D).withOpacity(0.10),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(icon, color: const Color(0xFF2563EB), size: 22),
+            child: Icon(icon, color: const Color(0xFF1F7A4D), size: 22),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -5476,13 +5819,13 @@ Future<void> _saveQuickTtd(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  const Color(0xFF2563EB).withOpacity(0.10),
-                  const Color(0xFF3B82F6).withOpacity(0.06),
+                  const Color(0xFF1F7A4D).withOpacity(0.10),
+                  const Color(0xFF22C55E).withOpacity(0.06),
                 ],
               ),
               borderRadius: BorderRadius.circular(22),
               border: Border.all(
-                color: const Color(0xFF2563EB).withOpacity(0.22),
+                color: const Color(0xFF1F7A4D).withOpacity(0.22),
               ),
             ),
             child: Row(
@@ -5491,14 +5834,14 @@ Future<void> _saveQuickTtd(
                   width: 20,
                   height: 20,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2563EB).withOpacity(0.14),
+                    color: const Color(0xFF1F7A4D).withOpacity(0.14),
                     shape: BoxShape.circle,
                   ),
                   child: const Center(
                     child: Icon(
                       Icons.bolt_rounded,
                       size: 12,
-                      color: Color(0xFF2563EB),
+                      color: Color(0xFF1F7A4D),
                     ),
                   ),
                 ),
@@ -5508,7 +5851,7 @@ Future<void> _saveQuickTtd(
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
-                    color: Color(0xFF2563EB),
+                    color: Color(0xFF1F7A4D),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -5519,13 +5862,13 @@ Future<void> _saveQuickTtd(
                     width: 20,
                     height: 20,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF2563EB).withOpacity(0.10),
+                      color: const Color(0xFF1F7A4D).withOpacity(0.10),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
                       Icons.close_rounded,
                       size: 14,
-                      color: Color(0xFF2563EB),
+                      color: Color(0xFF1F7A4D),
                     ),
                   ),
                 ),
@@ -5598,7 +5941,7 @@ Future<void> _loadSavedMatchPlayers() async {
             decoration: BoxDecoration(
               gradient: isSelected
                   ? const LinearGradient(
-                      colors: [Color(0xFF2563EB), Color(0xFF3B82F6)],
+                      colors: [Color(0xFF1F7A4D), Color(0xFF22C55E)],
                     )
                   : null,
               color: isSelected ? null : Colors.transparent,
@@ -5606,7 +5949,7 @@ Future<void> _loadSavedMatchPlayers() async {
               boxShadow: isSelected
                   ? [
                       BoxShadow(
-                        color: const Color(0xFF2563EB).withOpacity(0.25),
+                        color: const Color(0xFF1F7A4D).withOpacity(0.25),
                         blurRadius: 12,
                         offset: const Offset(0, 4),
                       ),
@@ -5710,9 +6053,16 @@ Widget _buildVideoToolbar() {
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
     decoration: BoxDecoration(
-      color: Colors.black.withOpacity(0.72),
+      color: ReviewUiPalette.panel,
       borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: Colors.white.withOpacity(0.08)),
+      border: Border.all(color: ReviewUiPalette.line),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.04),
+          blurRadius: 12,
+          offset: const Offset(0, 4),
+        ),
+      ],
     ),
     child: Wrap(
       spacing: 8,
@@ -5732,7 +6082,7 @@ Widget _buildVideoToolbar() {
           icon: _showHeatmap
               ? Icons.local_fire_department_rounded
               : Icons.heat_pump_outlined,
-          label: _showHeatmap ? 'Heatmap ON' : 'Heatmap OFF',
+          label: _showHeatmap ? 'Карта ON' : 'Карта OFF',
           onTap: () {
             setState(() {
               _showHeatmap = !_showHeatmap;
@@ -5743,6 +6093,7 @@ Widget _buildVideoToolbar() {
     ),
   );
 }
+
 
 Widget _toolbarButton({
   required IconData icon,
@@ -5760,13 +6111,13 @@ Widget _toolbarButton({
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         decoration: BoxDecoration(
           color: disabled
-              ? Colors.white.withOpacity(0.06)
-              : const Color(0xFF2563EB).withOpacity(0.18),
+              ? const Color(0xFFF1F5F9)
+              : ReviewUiPalette.primary.withOpacity(0.10),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: disabled
-                ? Colors.white.withOpacity(0.08)
-                : const Color(0xFF2563EB).withOpacity(0.55),
+                ? ReviewUiPalette.line
+                : ReviewUiPalette.primary.withOpacity(0.24),
           ),
         ),
         child: Row(
@@ -5775,13 +6126,17 @@ Widget _toolbarButton({
             Icon(
               icon,
               size: 16,
-              color: disabled ? Colors.white38 : Colors.white,
+              color: disabled
+                  ? const Color(0xFF94A3B8)
+                  : ReviewUiPalette.primary,
             ),
             const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
-                color: disabled ? Colors.white38 : Colors.white,
+                color: disabled
+                    ? const Color(0xFF94A3B8)
+                    : ReviewUiPalette.text,
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
               ),
@@ -5792,6 +6147,7 @@ Widget _toolbarButton({
     ),
   );
 }
+
 
 Future<void> _openTeamIdentitySheet() async {
   await showModalBottomSheet(
@@ -5909,11 +6265,11 @@ Widget _buildVideoSection() {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
           decoration: BoxDecoration(
             color:
-                filled ? const Color(0xFF2563EB) : const Color(0xFFF8FAFC),
+                filled ? const Color(0xFF1F7A4D) : const Color(0xFFF8FAFC),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color:
-                  filled ? const Color(0xFF2563EB) : const Color(0xFFE2E8F0),
+                  filled ? const Color(0xFF1F7A4D) : const Color(0xFFE2E8F0),
             ),
           ),
           child: Row(
@@ -5922,7 +6278,7 @@ Widget _buildVideoSection() {
               Icon(
                 icon,
                 size: 16,
-                color: filled ? Colors.white : const Color(0xFF2563EB),
+                color: filled ? Colors.white : const Color(0xFF1F7A4D),
               ),
               const SizedBox(width: 6),
               Text(
@@ -5956,17 +6312,17 @@ Widget _buildVideoSection() {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             color: isPrimary
-                ? const Color(0xFF2563EB)
+                ? const Color(0xFF1F7A4D)
                 : const Color(0xFFF8FAFC),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
               color:
-                  isPrimary ? const Color(0xFF2563EB) : const Color(0xFFDCE3EC),
+                  isPrimary ? const Color(0xFF1F7A4D) : const Color(0xFFDCE3EC),
             ),
             boxShadow: [
               BoxShadow(
                 color: isPrimary
-                    ? const Color(0xFF2563EB).withOpacity(0.18)
+                    ? const Color(0xFF1F7A4D).withOpacity(0.18)
                     : Colors.black.withOpacity(0.03),
                 blurRadius: 12,
                 offset: const Offset(0, 6),
@@ -5982,13 +6338,13 @@ Widget _buildVideoSection() {
                 decoration: BoxDecoration(
                   color: isPrimary
                       ? Colors.white.withOpacity(0.16)
-                      : const Color(0xFF2563EB).withOpacity(0.10),
+                      : const Color(0xFF1F7A4D).withOpacity(0.10),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
                   icon,
                   size: 18,
-                  color: isPrimary ? Colors.white : const Color(0xFF2563EB),
+                  color: isPrimary ? Colors.white : const Color(0xFF1F7A4D),
                 ),
               ),
               const SizedBox(width: 10),
@@ -6052,7 +6408,7 @@ Widget _buildPlayersPanelWithBottomSelection() {
           icon: const Icon(Icons.group_add_rounded),
           label: const Text('Выбрать игроков матча'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF2563EB),
+            backgroundColor: const Color(0xFF1F7A4D),
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 14),
             shape: RoundedRectangleBorder(
@@ -6175,8 +6531,8 @@ Widget _buildPlayersPanelWithBottomSelection() {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            const Color(0xFF2563EB).withOpacity(0.10),
-            const Color(0xFF3B82F6).withOpacity(0.04),
+            const Color(0xFF1F7A4D).withOpacity(0.10),
+            const Color(0xFF22C55E).withOpacity(0.04),
           ],
         ),
         borderRadius: BorderRadius.circular(20),
@@ -6190,7 +6546,7 @@ Widget _buildPlayersPanelWithBottomSelection() {
             backgroundImage:
                 photo.isNotEmpty ? NetworkImage(photo) as ImageProvider : null,
             child: photo.isEmpty
-                ? const Icon(Icons.person, color: Color(0xFF2563EB))
+                ? const Icon(Icons.person, color: Color(0xFF1F7A4D))
                 : null,
           ),
           const SizedBox(width: 12),
@@ -6241,7 +6597,7 @@ Widget _buildPlayersPanelWithBottomSelection() {
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
-                color: Color(0xFF2563EB),
+                color: Color(0xFF1F7A4D),
               ),
             ),
           ),
@@ -6412,7 +6768,7 @@ Widget _buildPlayersPanelWithBottomSelection() {
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
                       color: isSelected
-                          ? const Color(0xFF2563EB)
+                          ? const Color(0xFF1F7A4D)
                           : const Color(0xFF64748B),
                     ),
                   ),
@@ -6577,7 +6933,7 @@ Widget _buildPlayersPanelWithBottomSelection() {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                const Color(0xFF2563EB).withOpacity(0.04),
+                const Color(0xFF1F7A4D).withOpacity(0.04),
                 Colors.white,
               ],
             )
@@ -6616,7 +6972,7 @@ Widget _buildPlayersPanelWithBottomSelection() {
                   child: const Icon(
                     Icons.sports_soccer_rounded,
                     size: 18,
-                    color: Color(0xFF2563EB),
+                    color: Color(0xFF1F7A4D),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -6699,7 +7055,7 @@ Widget _buildPlayersPanelWithBottomSelection() {
                         percent: totalPercent,
                         successColor: const Color(0xFF16A34A),
                         failColor: const Color(0xFFDC2626),
-                        percentColor: const Color(0xFF2563EB),
+                        percentColor: const Color(0xFF1F7A4D),
                       ),
                       const SizedBox(height: 12),
                       Row(
@@ -6896,7 +7252,7 @@ Widget _buildQuickSummaryRow() {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          const Color(0xFF2563EB).withOpacity(0.06),
+          const Color(0xFF1F7A4D).withOpacity(0.06),
           const Color(0xFF7C3AED).withOpacity(0.025),
         ],
       ),
@@ -6928,13 +7284,13 @@ Widget _buildQuickSummaryRow() {
                   width: 32,
                   height: 32,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2563EB).withOpacity(0.10),
+                    color: const Color(0xFF1F7A4D).withOpacity(0.10),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
                     Icons.analytics_outlined,
                     size: 18,
-                    color: Color(0xFF2563EB),
+                    color: Color(0xFF1F7A4D),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -6978,7 +7334,7 @@ Widget _buildQuickSummaryRow() {
                       child: _buildSummaryStat(
                         label: 'Всего',
                         value: total.toString(),
-                        color: const Color(0xFF2563EB),
+                        color: const Color(0xFF1F7A4D),
                         icon: Icons.analytics_outlined,
                       ),
                     ),
@@ -7336,12 +7692,10 @@ Widget _buildPossessionBadge() {
 
   final teamTag = _aiTracking.currentBallOwnerTeamTag;
   final dotColor = teamTag == myTeamTag
-      ? const Color(0xFF16A34A)
-      : const Color(0xFFFFFFFF);
+      ? ReviewUiPalette.primary
+      : ReviewUiPalette.red;
 
-  final teamName = teamTag == myTeamTag
-      ? widget.teamName
-      : opponentTeamName;
+  final teamName = teamTag == myTeamTag ? widget.teamName : opponentTeamName;
 
   return Positioned(
     right: 14,
@@ -7349,13 +7703,16 @@ Widget _buildPossessionBadge() {
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.62),
+        color: Colors.white.withOpacity(0.94),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: teamTag == myTeamTag
-              ? dotColor.withOpacity(0.75)
-              : Colors.white.withOpacity(0.65),
-        ),
+        border: Border.all(color: dotColor.withOpacity(0.28)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.10),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -7366,18 +7723,13 @@ Widget _buildPossessionBadge() {
             decoration: BoxDecoration(
               color: dotColor,
               shape: BoxShape.circle,
-              border: Border.all(
-                color: teamTag == myTeamTag
-                    ? Colors.transparent
-                    : Colors.black.withOpacity(0.25),
-              ),
             ),
           ),
           const SizedBox(width: 8),
           Text(
             'Владение: $ownerName • $teamName',
             style: const TextStyle(
-              color: Colors.white,
+              color: ReviewUiPalette.text,
               fontSize: 12,
               fontWeight: FontWeight.w800,
             ),
@@ -7387,6 +7739,7 @@ Widget _buildPossessionBadge() {
     ),
   );
 }
+
 
 
   Widget _buildCounterStat({
@@ -7507,7 +7860,7 @@ Widget _buildPossessionBadge() {
             padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
             child: Row(
               children: [
-                const Icon(Icons.flash_on_rounded, color: Color(0xFF2563EB)),
+                const Icon(Icons.flash_on_rounded, color: Color(0xFF1F7A4D)),
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
@@ -7529,7 +7882,7 @@ Widget _buildPossessionBadge() {
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF2563EB),
+                        color: Color(0xFF1F7A4D),
                       ),
                     ),
                   ),
@@ -8252,7 +8605,7 @@ if (_showAiPanelInline) ...[
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: active ? const Color(0xFF2563EB) : Colors.transparent,
+          color: active ? const Color(0xFF1F7A4D) : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: Colors.white.withOpacity(0.10),
@@ -8288,7 +8641,7 @@ if (_showAiPanelInline) ...[
           decoration: BoxDecoration(
             gradient: selected
                 ? const LinearGradient(
-                    colors: [Color(0xFF2563EB), Color(0xFF3B82F6)],
+                    colors: [Color(0xFF1F7A4D), Color(0xFF22C55E)],
                   )
                 : null,
             color: selected ? null : Colors.transparent,
@@ -8406,10 +8759,10 @@ if (_showAiPanelInline) ...[
           width: 42,
           height: 42,
           decoration: BoxDecoration(
-            color: const Color(0xFF2563EB).withOpacity(0.10),
+            color: const Color(0xFF1F7A4D).withOpacity(0.10),
             borderRadius: BorderRadius.circular(14),
           ),
-          child: Icon(icon, color: const Color(0xFF2563EB), size: 22),
+          child: Icon(icon, color: const Color(0xFF1F7A4D), size: 22),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -8494,30 +8847,40 @@ if (_showAiPanelInline) ...[
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? const Color(0xFF2563EB)
-                      : Colors.black.withOpacity(0.35),
-                  borderRadius: BorderRadius.circular(18),
+                      ? ReviewUiPalette.primary
+                      : Colors.white.withOpacity(0.94),
+                  borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: isSelected
-                        ? const Color(0xFF3B82F6)
-                        : Colors.white.withOpacity(0.10),
+                        ? ReviewUiPalette.primary2
+                        : ReviewUiPalette.line,
                   ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(isSelected ? 0.16 : 0.10),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
                 ),
                 child: Row(
                   children: [
                     CircleAvatar(
                       radius: 22,
-                      backgroundColor: Colors.white.withOpacity(0.12),
-                      backgroundImage:
-                          photo.isNotEmpty ? NetworkImage(photo) : null,
+                      backgroundColor: isSelected
+                          ? Colors.white.withOpacity(0.18)
+                          : ReviewUiPalette.primary.withOpacity(0.10),
+                      backgroundImage: photo.isNotEmpty ? NetworkImage(photo) : null,
                       child: photo.isEmpty
                           ? Text(
                               _playerFullName(player).isNotEmpty
                                   ? _playerFullName(player)[0].toUpperCase()
                                   : '?',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w800,
+                              style: TextStyle(
+                                color: isSelected
+                                    ? Colors.white
+                                    : ReviewUiPalette.primary,
+                                fontWeight: FontWeight.w900,
                               ),
                             )
                           : null,
@@ -8532,10 +8895,12 @@ if (_showAiPanelInline) ...[
                             _playerFullName(player),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: isSelected
+                                  ? Colors.white
+                                  : ReviewUiPalette.text,
                               fontSize: 13,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w900,
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -8546,9 +8911,11 @@ if (_showAiPanelInline) ...[
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.72),
+                              color: isSelected
+                                  ? Colors.white.withOpacity(0.78)
+                                  : ReviewUiPalette.textMuted,
                               fontSize: 11,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ],
@@ -8564,6 +8931,7 @@ if (_showAiPanelInline) ...[
     ),
   );
 }
+
   
      Widget _buildActivePanelBody() {
   switch (_activeOverlayPanel) {
@@ -8742,7 +9110,7 @@ if (_showAiPanelInline) ...[
           decoration: BoxDecoration(
             gradient: primary
                 ? const LinearGradient(
-                    colors: [Color(0xFF2563EB), Color(0xFF3B82F6)],
+                    colors: [Color(0xFF1F7A4D), Color(0xFF22C55E)],
                   )
                 : null,
             color: primary ? null : Colors.white.withOpacity(0.10),
@@ -8835,12 +9203,12 @@ if (_showAiPanelInline) ...[
                   width: 42,
                   height: 42,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2563EB).withOpacity(0.10),
+                    color: const Color(0xFF1F7A4D).withOpacity(0.10),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: const Icon(
                     Icons.analytics_outlined,
-                    color: Color(0xFF2563EB),
+                    color: Color(0xFF1F7A4D),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -8872,7 +9240,7 @@ if (_showAiPanelInline) ...[
                 _buildHeaderStatChip(
                   label: 'Игроков',
                   value: '${_matchPlayers.length}',
-                  color: const Color(0xFF2563EB),
+                  color: const Color(0xFF1F7A4D),
                 ),
                 const SizedBox(width: 8),
                 _buildHeaderStatChip(
@@ -9012,7 +9380,7 @@ if (_showAiPanelInline) ...[
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xFF2563EB), Color(0xFF3B82F6)],
+              colors: [Color(0xFF1F7A4D), Color(0xFF22C55E)],
             ),
             borderRadius: BorderRadius.circular(28),
           ),
@@ -9062,7 +9430,7 @@ if (_showAiPanelInline) ...[
               child: const Icon(
                 Icons.flash_on_rounded,
                 size: 18,
-                color: Color(0xFF2563EB),
+                color: Color(0xFF1F7A4D),
               ),
             ),
             const SizedBox(width: 10),
@@ -9104,7 +9472,7 @@ if (_showAiPanelInline) ...[
 
    Widget _buildFallbackPortrait() {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FB),
+      backgroundColor: const Color(0xFFF4F7FA),
       body: SafeArea(
         child: Center(
           child: Padding(
@@ -9130,7 +9498,7 @@ if (_showAiPanelInline) ...[
                   Icon(
                     Icons.screen_rotation_alt_rounded,
                     size: 56,
-                    color: Color(0xFF2563EB),
+                    color: Color(0xFF1F7A4D),
                   ),
                   SizedBox(height: 16),
                   Text(
@@ -9162,143 +9530,174 @@ if (_showAiPanelInline) ...[
   }
   
     Widget _buildSelectedEpisodeOverlayBadge() {
-    if (_selectedEpisode == null) {
-      return const SizedBox.shrink();
-    }
+  if (_selectedEpisode == null) {
+    return const SizedBox.shrink();
+  }
 
-    final title = _s(_selectedEpisode!['event_title']).trim().isEmpty
-        ? 'Эпизод'
-        : _s(_selectedEpisode!['event_title']);
-    final timeSec = _i(_selectedEpisode!['timecode_seconds']);
+  final title = _s(_selectedEpisode!['event_title']).trim().isEmpty
+      ? 'Эпизод'
+      : _s(_selectedEpisode!['event_title']);
+  final timeSec = _i(_selectedEpisode!['timecode_seconds']);
 
-    return AnimatedPositioned(
-      duration: const Duration(milliseconds: 240),
-      curve: Curves.easeOutCubic,
-      left: 18,
-      top: 92,
-      child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 220),
-        opacity: _showOverlayUi ? 1 : 0,
-        child: IgnorePointer(
-          ignoring: !_showOverlayUi,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(18),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 320),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.35),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: Colors.white.withOpacity(0.08)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 30,
-                      height: 30,
+  return AnimatedPositioned(
+    duration: const Duration(milliseconds: 240),
+    curve: Curves.easeOutCubic,
+    left: 18,
+    top: 18,
+    child: AnimatedOpacity(
+      duration: const Duration(milliseconds: 220),
+      opacity: _showOverlayUi ? 1 : 0,
+      child: IgnorePointer(
+        ignoring: !_showOverlayUi,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 320),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.94),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: ReviewUiPalette.line),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.12),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: ReviewUiPalette.primary.withOpacity(0.10),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.video_library_outlined,
+                      color: ReviewUiPalette.primary,
+                      size: 16,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: ReviewUiPalette.text,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          'Таймкод: ${Formatters.formatDuration(Duration(seconds: timeSec))}',
+                          style: const TextStyle(
+                            color: ReviewUiPalette.textMuted,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  InkWell(
+                    onTap: _clearSelectedEpisode,
+                    borderRadius: BorderRadius.circular(999),
+                    child: Container(
+                      width: 24,
+                      height: 24,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.10),
-                        borderRadius: BorderRadius.circular(10),
+                        color: const Color(0xFFF1F5F9),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: ReviewUiPalette.line),
                       ),
                       child: const Icon(
-                        Icons.video_library_outlined,
-                        color: Colors.white,
-                        size: 16,
+                        Icons.close_rounded,
+                        size: 14,
+                        color: ReviewUiPalette.textMuted,
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Flexible(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            'Таймкод: ${Formatters.formatDuration(Duration(seconds: timeSec))}',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.72),
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    InkWell(
-                      onTap: _clearSelectedEpisode,
-                      borderRadius: BorderRadius.circular(999),
-                      child: Container(
-                        width: 24,
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.10),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.close_rounded,
-                          size: 14,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
+
   
     @override
   Widget build(BuildContext context) {
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
 
+    Widget loadingBody() {
+      return const ColoredBox(
+        color: Color(0xFFF4F7FA),
+        child: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    Widget reviewBody() {
+      final content = Stack(
+        children: [
+          Positioned.fill(
+            child: Padding(
+              padding: EdgeInsets.all(_isVideoFullscreen ? 0 : 12),
+              child: _tabController.index == 0
+                  ? _buildVideoCanvas()
+                  : _buildModernReportsTab(),
+            ),
+          ),
+        ],
+      );
+
+      if (widget.embedded) {
+        return content;
+      }
+
+      return SafeArea(child: content);
+    }
+
     if (_loading) {
+      final body = loadingBody();
+      if (widget.embedded) return body;
+
       return const Scaffold(
-        backgroundColor: Color(0xFFF4F7FB),
+        backgroundColor: Color(0xFFF4F7FA),
         body: Center(
           child: CircularProgressIndicator(),
         ),
       );
     }
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FB),
-      body: isLandscape
-          ? SafeArea(
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: Padding(
-                      padding: EdgeInsets.all(_isVideoFullscreen ? 0 : 12),
-                      child: _tabController.index == 0
-                          ? _buildVideoCanvas()
-                          : _buildModernReportsTab(),
-                    ),
-                  ),
+    if (widget.embedded) {
+      return Container(
+        color: const Color(0xFFF4F7FA),
+        child: reviewBody(),
+      );
+    }
 
-                                 ],
-              ),
-            )
-          : _buildFallbackPortrait(),
+    return Scaffold(
+      backgroundColor: const Color(0xFFF4F7FA),
+      body: isLandscape ? reviewBody() : _buildFallbackPortrait(),
     );
-  }}
+  }
+}

@@ -1,4 +1,5 @@
 // lib/presentation/testing/cmr_testing_panel.dart
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -10,14 +11,173 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:http/http.dart' as http;
 
+// ==================== Цветовая схема (унифицирована с матчами) ====================
+
+class _CmrTestColors {
+  static const Color panel = Colors.white;
+  static const Color soft = Color(0xFFF8F9FA);
+  static const Color soft2 = Color(0xFFF1F3F5);
+  static const Color text = Color(0xFF0B0F14);
+  static const Color muted = Color(0xFF475467);
+  static const Color muted2 = Color(0xFF667085);
+  static const Color line = Color(0xFFE5E7EB);
+  static const Color graphite = Color(0xFF111827);
+  static const Color graphite2 = Color(0xFF1F2937);
+
+  // Фирменный зелёный — только как точечный акцент.
+  static const Color green = Color(0xFF00A750);
+  static const Color greenDark = Color(0xFF067A46);
+  static const Color greenSoft = Color(0xFFF3FBF7);
+  static const Color greenBorder = Color(0xFFD7F0E2);
+
+  static const Color red = Color(0xFFD92D20);
+  static const Color redSoft = Color(0xFFFFF1F1);
+  static const Color redBorder = Color(0xFFFEE4E2);
+  static const Color yellow = Color(0xFFFACC15);
+  static const Color orange = Color(0xFFFB923C);
+}
+
+// ==================== Текстовые стили ====================
+
+class _CmrTestText {
+  static TextStyle title(double size) {
+    return TextStyle(
+      color: _CmrTestColors.text,
+      fontSize: size,
+      fontWeight: FontWeight.w800,
+      height: 1.12,
+    );
+  }
+
+  static TextStyle section() {
+    return const TextStyle(
+      color: _CmrTestColors.text,
+      fontSize: 16,
+      fontWeight: FontWeight.w800,
+      height: 1.18,
+    );
+  }
+
+  static TextStyle value(double size) {
+    return TextStyle(
+      color: _CmrTestColors.text,
+      fontSize: size,
+      fontWeight: FontWeight.w700,
+      height: 1.35,
+    );
+  }
+
+  static TextStyle muted(double size) {
+    return TextStyle(
+      color: _CmrTestColors.muted,
+      fontSize: size,
+      fontWeight: FontWeight.w600,
+      height: 1.42,
+    );
+  }
+
+  static TextStyle caption() {
+    return const TextStyle(
+      color: _CmrTestColors.muted,
+      fontSize: 12,
+      fontWeight: FontWeight.w700,
+      height: 1.15,
+    );
+  }
+
+  static TextStyle pill() {
+    return const TextStyle(
+      color: _CmrTestColors.text,
+      fontSize: 12,
+      fontWeight: FontWeight.w700,
+    );
+  }
+
+  static TextStyle tab() {
+    return const TextStyle(
+      color: _CmrTestColors.text,
+      fontSize: 13,
+      fontWeight: FontWeight.w800,
+    );
+  }
+
+  static TextStyle tabSelected() {
+    return const TextStyle(
+      color: _CmrTestColors.text,
+      fontSize: 13,
+      fontWeight: FontWeight.w900,
+    );
+  }
+
+  static TextStyle action() {
+    return const TextStyle(
+      color: _CmrTestColors.text,
+      fontSize: 13,
+      fontWeight: FontWeight.w900,
+    );
+  }
+
+  static TextStyle danger() {
+    return const TextStyle(
+      color: _CmrTestColors.red,
+      fontSize: 13,
+      fontWeight: FontWeight.w800,
+    );
+  }
+}
+
+// ==================== Декораторы ====================
+
+class _CmrTestDecor {
+  static double _radius(double value) => value > 18 ? 18 : value;
+
+  static BoxDecoration panel({double radius = 18}) {
+    return BoxDecoration(
+      color: _CmrTestColors.panel,
+      borderRadius: BorderRadius.circular(_radius(radius)),
+      border: Border.all(color: _CmrTestColors.line, width: 1),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(.035),
+          blurRadius: 18,
+          offset: const Offset(0, 10),
+        ),
+      ],
+    );
+  }
+
+  static BoxDecoration softCard({double radius = 16, bool active = false}) {
+    return BoxDecoration(
+      color: active ? _CmrTestColors.panel : _CmrTestColors.soft,
+      borderRadius: BorderRadius.circular(_radius(radius)),
+      border: Border.all(
+        color: active ? _CmrTestColors.green.withOpacity(.38) : _CmrTestColors.line,
+        width: active ? 1.2 : 1,
+      ),
+      boxShadow: active
+          ? [
+              BoxShadow(
+                color: Colors.black.withOpacity(.035),
+                blurRadius: 14,
+                offset: const Offset(0, 8),
+              ),
+            ]
+          : null,
+    );
+  }
+}
+
 class CmrTestingPanel extends StatefulWidget {
   final int clubId;
   final int teamId;
   final String clubName;
   final String teamName;
   final String? initialStage;
+  final String? initialCategory;
   final int? userId;
   final String? initialDate;
+  final int? initialPlayerId;
+  final String? initialPlayerName;
   final VoidCallback? onBackToMenu;
 
   const CmrTestingPanel({
@@ -27,8 +187,11 @@ class CmrTestingPanel extends StatefulWidget {
     required this.clubName,
     required this.teamName,
     this.initialStage,
+    this.initialCategory,
     this.userId,
     this.initialDate,
+    this.initialPlayerId,
+    this.initialPlayerName,
     this.onBackToMenu,
   });
 
@@ -47,13 +210,17 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
   bool sessionsLoading = false;
   bool loading = true;
   bool saving = false;
+  bool _silentSaving = false;
+  Timer? _autosaveTimer;
   String? error;
 
-  bool _infoPanelCollapsed = false;
+  bool _infoPanelCollapsed = true;
   String _positionFilter = 'all';
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _mobilePlayersScrollController = ScrollController();
   bool _mobileToolsCollapsed = false;
+  int _focusedPlayerId = 0;
+  String _focusedPlayerName = '';
 
   List<Map<String, dynamic>> stages = [];
   List<Map<String, dynamic>> categories = [];
@@ -66,19 +233,28 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
   @override
   void initState() {
     super.initState();
+    category = _normalizeInitialCategory(widget.initialCategory) ?? category;
     stage = _initialStageForTeam();
     _selectedDate = _parseDate(widget.initialDate) ?? DateTime.now();
+    _focusedPlayerId = widget.initialPlayerId ?? 0;
+    _focusedPlayerName = _asStr(widget.initialPlayerName);
+    if (_focusedPlayerName.isNotEmpty) {
+      _searchController.text = _focusedPlayerName;
+    }
+    _searchController.addListener(_handleSearchChanged);
     _mobilePlayersScrollController.addListener(_handleMobilePlayersScroll);
     _load();
   }
 
   @override
   void dispose() {
+    _autosaveTimer?.cancel();
     for (final c in _controllers.values) {
       c.dispose();
     }
     _mobilePlayersScrollController.removeListener(_handleMobilePlayersScroll);
     _mobilePlayersScrollController.dispose();
+    _searchController.removeListener(_handleSearchChanged);
     _searchController.dispose();
     super.dispose();
   }
@@ -89,6 +265,18 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     if (shouldCollapse != _mobileToolsCollapsed) {
       setState(() => _mobileToolsCollapsed = shouldCollapse);
     }
+  }
+
+  void _handleSearchChanged() {
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  void _clearFocusedPlayer() {
+    _focusedPlayerId = 0;
+    _focusedPlayerName = '';
+    _searchController.clear();
+    if (mounted) setState(() {});
   }
 
   void _expandMobileTools() {
@@ -111,15 +299,13 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     if (raw.isEmpty || raw == 'null') return '';
 
     final parsed = _toDouble(raw);
+    if (parsed == null) return raw.replaceAll('.', ',');
 
-    // Прыжок в длину в интерфейсе ведём в сантиметрах.
-    // Если в старых сохранённых данных попалось значение в метрах (2,19),
-    // показываем его тренеру как 219.
-    if (testCode == 'long_jump' && parsed != null && parsed > 0 && parsed < 20) {
+    if (testCode == 'long_jump' && parsed > 0 && parsed < 20) {
       return _formatNumber(parsed * 100, fraction: 0);
     }
 
-    return raw.replaceAll('.', ',');
+    return _formatNumber(parsed, fraction: 2);
   }
 
   String _formatNumber(num value, {int fraction = 2}) {
@@ -141,6 +327,32 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     final s = '${raw ?? ''}'.trim().replaceAll(',', '.').replaceAll(RegExp(r'[^0-9.\-]'), '');
     if (s.isEmpty || s == 'null') return null;
     return double.tryParse(s);
+  }
+
+  String? _normalizeInitialCategory(String? raw) {
+    if (raw == null) return null;
+    final t = raw.trim().toLowerCase();
+    if (t.isEmpty) return null;
+    switch (t) {
+      case 'physical':
+      case 'technical':
+      case 'tactical':
+      case 'psychological':
+      case 'mental':
+      case 'theory':
+      case 'theoretical':
+      case 'medical':
+      case 'functional':
+        return t;
+      default:
+        if (t.contains('физ') || t.contains('physical') || t.contains('fitness')) return 'physical';
+        if (t.contains('тех') || t.contains('technical') || t.contains('technique')) return 'technical';
+        if (t.contains('так') || t.contains('tactical')) return 'tactical';
+        if (t.contains('псих') || t.contains('mental') || t.contains('psych')) return 'psychological';
+        if (t.contains('теор') || t.contains('theory')) return 'theory';
+        if (t.contains('функ') || t.contains('мед') || t.contains('functional') || t.contains('medical')) return 'functional';
+        return t;
+    }
   }
 
   String _initialStageForTeam() {
@@ -172,9 +384,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
       case 'МВС':
         return 'U8';
       case 'МЯЧ+ВОРОТА+СОПЕРНИК+ПАРТНЕР':
-      case 'МЯЧ+ВОРОТА+СОПЕРНИК+ПАРТНЁР':
       case 'М+В+С+ПАРТНЕР':
-      case 'М+В+С+ПАРТНЁР':
       case 'МВСП':
         return 'U9';
     }
@@ -195,7 +405,6 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     if (v is num) return v.toInt();
     return int.tryParse('${v ?? 0}') ?? 0;
   }
-
 
   DateTime? _parseDate(String? raw) {
     if (raw == null) return null;
@@ -221,8 +430,8 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
 
   String _monthTitle(DateTime d) {
     const months = [
-      'январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
-      'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'
+      'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+      'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
     ];
     return '${months[d.month - 1]} ${d.year}';
   }
@@ -269,7 +478,6 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     await _load();
   }
 
-
   Future<void> _load() async {
     setState(() {
       loading = true;
@@ -294,8 +502,6 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
       final data = _decode(r.body);
       if (data['success'] != true) throw data['message'] ?? 'Не удалось загрузить тестирование';
 
-      // Важно: если на выбранную дату тестирования ещё нет,
-      // не берём старые результаты, даже если get_testing_matrix вернул последнюю сессию.
       final matrixPlayers = selectedSessionId > 0 ? _list(data['players']) : <Map<String, dynamic>>[];
       final teamPlayers = await _fetchTeamPlayers();
       final mergedPlayers = _mergePlayersWithResults(teamPlayers, matrixPlayers);
@@ -397,8 +603,38 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     return merged;
   }
 
-  Future<void> _save() async {
-    setState(() => saving = true);
+  void _onResultChanged(StateSetter localRefresh) {
+    localRefresh(() {});
+    setState(() {});
+    _scheduleAutosave();
+  }
+
+  void _scheduleAutosave() {
+    if (loading || tests.isEmpty || players.isEmpty) return;
+    _autosaveTimer?.cancel();
+    _autosaveTimer = Timer(const Duration(milliseconds: 900), () {
+      if (!mounted) return;
+      _save(showFeedback: false, reloadAfterSave: false);
+    });
+  }
+
+  Future<void> _manualSave() async {
+    _autosaveTimer?.cancel();
+    await _save(showFeedback: true, reloadAfterSave: true);
+  }
+
+  Future<void> _save({bool showFeedback = true, bool reloadAfterSave = true}) async {
+    if (_silentSaving || saving) {
+      if (!showFeedback) _scheduleAutosave();
+      return;
+    }
+
+    if (showFeedback) {
+      setState(() => saving = true);
+    } else {
+      _silentSaving = true;
+    }
+
     try {
       final rows = <Map<String, dynamic>>[];
       for (final p in players) {
@@ -430,15 +666,27 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
       );
       final data = _decode(r.body);
       if (data['success'] != true) throw data['message'] ?? 'Не удалось сохранить';
-      sessionId = _asInt(data['session_id']);
-      await _load();
-      if (!mounted) return;
+
+      final newSessionId = _asInt(data['session_id']);
+      if (newSessionId > 0) sessionId = newSessionId;
+
+      if (reloadAfterSave) {
+        await _load();
+      } else {
+        await _loadSessionsOnly();
+      }
+
+      if (!mounted || !showFeedback) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Результаты сохранены')));
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || !showFeedback) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     } finally {
-      if (mounted) setState(() => saving = false);
+      if (showFeedback) {
+        if (mounted) setState(() => saving = false);
+      } else {
+        _silentSaving = false;
+      }
     }
   }
 
@@ -575,8 +823,6 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
   }
 
   double _normalizeValueForNorm(String testCode, double value, double? min, double? max) {
-    // Прыжок в длину в таблице и нормативе показываем в сантиметрах.
-    // На всякий случай, если тренер введёт 2,19, для расчёта считаем это 219 см.
     if (testCode == 'long_jump' && value > 0 && value < 20) {
       return value * 100;
     }
@@ -586,126 +832,126 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
   _Rating _finalFor(Map<String, dynamic> p) {
     int points = 0;
     int count = 0;
+    final playerId = _playerId(p);
+    final results = p['results'];
+
     for (final t in tests) {
       final code = _asStr(t['code']);
-      final rating = _ratingFor(code, _controllers[_key(_playerId(p), code)]?.text ?? '');
+
+      final controllerText = _controllers[_key(playerId, code)]?.text;
+      final storedValue = results is Map && results[code] is Map ? results[code]['value'] : null;
+      final valueText = controllerText ?? _numText(code, storedValue);
+
+      final rating = _ratingFor(code, valueText);
       if (rating.points > 0) {
         points += rating.points;
         count++;
       }
     }
+
     if (count == 0) return _Rating.empty();
     final avg = points / count;
-    if (avg >= 3.6) return _Rating('excellent', const Color(0xFF22C55E), 'Отлично', points: 4);
-    if (avg >= 2.6) return _Rating('good', const Color(0xFFFACC15), 'Хорошо', points: 3);
-    if (avg >= 1.6) return _Rating('satisfactory', const Color(0xFFFB923C), 'Удовлетворительно', points: 2);
-    return _Rating('poor', const Color(0xFFEF4444), 'Неудовлетворительно', points: 1);
+    if (avg >= 3.6) return _Rating('excellent', _CmrTestColors.green, 'Отлично', points: 4);
+    if (avg >= 2.6) return _Rating('good', _CmrTestColors.yellow, 'Хорошо', points: 3);
+    if (avg >= 1.6) return _Rating('satisfactory', _CmrTestColors.orange, 'Удовлетворительно', points: 2);
+    return _Rating('poor', _CmrTestColors.red, 'Неудовлетворительно', points: 1);
   }
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.sizeOf(context).width < 760;
-    return Container(
-      color: _C.page,
-      child: Column(
-        children: [
-          _header(isMobile),
-          const Divider(height: 1, color: _C.line),
-          if (saving) const LinearProgressIndicator(minHeight: 2, color: _C.green),
-          Expanded(
-            child: loading
-                ? const Center(child: CircularProgressIndicator(color: _C.green))
-                : error != null
-                    ? _error()
-                    : isMobile
-                        ? _mobileBody()
-                        : _desktopBody(),
-          ),
-        ],
+    final media = MediaQuery.of(context);
+    final isMobile = media.size.width < 760;
+
+    return MediaQuery(
+      data: media.copyWith(textScaler: TextScaler.noScaling),
+      child: Container(
+        color: _CmrTestColors.soft,
+        child: Column(
+          children: [
+            _header(isMobile),
+            if (saving) const LinearProgressIndicator(minHeight: 2, color: _CmrTestColors.green),
+            Expanded(
+              child: loading
+                  ? const Center(child: CircularProgressIndicator(color: _CmrTestColors.green))
+                  : error != null
+                      ? _error()
+                      : isMobile
+                          ? _mobileBody()
+                          : _desktopBody(),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _header(bool mobile) {
     return Container(
-      color: Colors.white,
-      padding: EdgeInsets.fromLTRB(mobile ? 10 : 16, 10, mobile ? 10 : 16, 10),
+      margin: EdgeInsets.fromLTRB(mobile ? 8 : 12, mobile ? 8 : 12, mobile ? 8 : 12, 6),
+      padding: EdgeInsets.fromLTRB(mobile ? 10 : 12, 8, mobile ? 10 : 12, 8),
+      decoration: _CmrTestDecor.panel(),
       child: Row(
         children: [
-          IconButton(
+          _IconButton(
+            icon: Icons.arrow_back_rounded,
             onPressed: widget.onBackToMenu,
-            icon: const Icon(Icons.arrow_back_rounded),
             tooltip: 'Назад',
+            compact: mobile,
           ),
-          const SizedBox(width: 4),
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: _C.greenSoft,
-              borderRadius: BorderRadius.circular(14),
+          if (mobile) ...[
+            const SizedBox(width: 4),
+            _IconBox(icon: Icons.fact_check_rounded, size: 42),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Тестирование',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _CmrTestText.title(17),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${widget.clubName} • ${widget.teamName}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _CmrTestText.muted(11),
+                  ),
+                ],
+              ),
             ),
-            child: const Icon(Icons.fact_check_rounded, color: _C.greenDark),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Тестирование', maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.h1.copyWith(fontSize: mobile ? 18 : 22)),
-                const SizedBox(height: 2),
-                Text('${widget.clubName} • ${widget.teamName}', maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.caption),
-              ],
-            ),
-          ),
-          if (!mobile) ...[
-            _filterBar(compact: false),
-            const SizedBox(width: 10),
           ],
           if (!mobile) ...[
-            IconButton.filled(
-              style: IconButton.styleFrom(
-                backgroundColor: _C.greenDark,
-                foregroundColor: Colors.white,
-                fixedSize: const Size(42, 42),
-                minimumSize: const Size(42, 42),
-                shape: const CircleBorder(),
-                elevation: 2,
-                shadowColor: _C.greenDark.withOpacity(.25),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: _filterBar(compact: false),
               ),
+            ),
+            const SizedBox(width: 8),
+          ],
+          if (!mobile) ...[
+            _IconButton(
+              icon: Icons.open_in_full_rounded,
               onPressed: _openFullscreen,
               tooltip: 'Открыть тестирование во весь экран',
-              icon: const Icon(Icons.open_in_full_rounded, size: 20),
+              compact: mobile,
             ),
             const SizedBox(width: 8),
           ],
           _exportButton(mobile: mobile),
           const SizedBox(width: 8),
-          IconButton.filled(
-            style: IconButton.styleFrom(
-              backgroundColor: _C.greenDark,
-              foregroundColor: Colors.white,
-              disabledBackgroundColor: _C.greenDark.withOpacity(.45),
-              disabledForegroundColor: Colors.white.withOpacity(.85),
-              fixedSize: const Size(42, 42),
-              minimumSize: const Size(42, 42),
-              shape: const CircleBorder(),
-              elevation: 2,
-              shadowColor: _C.greenDark.withOpacity(.25),
-            ),
-            onPressed: saving ? null : _save,
+          _IconButton(
+            icon: Icons.save_rounded,
+            onPressed: saving ? null : _manualSave,
             tooltip: 'Сохранить результаты',
-            icon: saving
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.save_rounded, size: 20),
+            filled: true,
+            compact: mobile,
+            isLoading: saving,
           ),
         ],
       ),
@@ -717,7 +963,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Выберите раздел подготовки', style: _C.caption.copyWith(fontWeight: FontWeight.w900, color: _C.muted)),
+          Text('Выберите раздел подготовки', style: _CmrTestText.caption().copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
           _categorySegment(compact: true),
           const SizedBox(height: 8),
@@ -738,86 +984,44 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
 
   Widget _categorySegment({required bool compact}) {
     final items = _categoryItems;
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: items.map((e) {
-          final code = _asStr(e['code']);
-          final active = category == code;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(compact ? 18 : 16),
-              onTap: () {
-                if (category == code) return;
-                setState(() {
-                  category = code;
-                  sessionId = 0;
-                });
-                _load();
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOutCubic,
-                width: compact ? 178 : null,
-                constraints: compact ? const BoxConstraints(minHeight: 76) : const BoxConstraints(minHeight: 42),
-                padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 13, vertical: compact ? 10 : 9),
-                decoration: BoxDecoration(
-                  color: active ? _C.greenDark : _C.input,
-                  borderRadius: BorderRadius.circular(compact ? 18 : 16),
-                  border: Border.all(color: active ? _C.greenDark : _C.line),
-                  boxShadow: active
-                      ? [BoxShadow(color: _C.greenDark.withOpacity(.18), blurRadius: 14, offset: const Offset(0, 6))]
-                      : null,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth.isFinite ? constraints.maxWidth : MediaQuery.of(context).size.width;
+        final isTightDesktopHeader = !compact && availableWidth < 760;
+        final isVeryTightHeader = !compact && availableWidth < 620;
+
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Row(
+            children: items.map((e) {
+              final code = _asStr(e['code']);
+              final active = category == code;
+              return Padding(
+                padding: EdgeInsets.only(right: compact ? 7 : 6),
+                child: _CategoryChip(
+                  code: code,
+                  title: _categoryTitle(code),
+                  hint: _categoryHint(code),
+                  icon: _categoryIcon(code),
+                  active: active,
+                  compact: compact,
+                  isTightDesktop: isTightDesktopHeader,
+                  isVeryTight: isVeryTightHeader,
+                  onTap: () {
+                    if (category == code) return;
+                    setState(() {
+                      category = code;
+                      sessionId = 0;
+                    });
+                    _load();
+                  },
                 ),
-                child: Row(
-                  mainAxisSize: compact ? MainAxisSize.max : MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: compact ? 34 : 28,
-                      height: compact ? 34 : 28,
-                      decoration: BoxDecoration(
-                        color: active ? Colors.white.withOpacity(.18) : Colors.white,
-                        borderRadius: BorderRadius.circular(11),
-                      ),
-                      child: Icon(_categoryIcon(code), size: compact ? 19 : 17, color: active ? Colors.white : _C.greenDark),
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _categoryTitle(code),
-                            maxLines: compact ? 2 : 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: _C.body.copyWith(
-                              fontSize: compact ? 12.5 : 13,
-                              color: active ? Colors.white : _C.text,
-                              fontWeight: FontWeight.w900,
-                              height: 1.05,
-                            ),
-                          ),
-                          if (compact) ...[
-                            const SizedBox(height: 3),
-                            Text(
-                              _categoryHint(code),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: _C.caption.copyWith(color: active ? Colors.white.withOpacity(.84) : _C.muted, fontSize: 10.5),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
+              );
+            }).toList(),
+          ),
+        );
+      },
     );
   }
 
@@ -827,15 +1031,19 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
       child: Container(
         height: 42,
         padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(color: _C.greenSoft, borderRadius: BorderRadius.circular(14)),
+        decoration: BoxDecoration(
+          color: _CmrTestColors.panel,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _CmrTestColors.greenBorder, width: 1),
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.lock_rounded, size: 15, color: _C.greenDark),
+            const Icon(Icons.lock_rounded, size: 15, color: _CmrTestColors.green),
             const SizedBox(width: 6),
             Text(
               compact ? stage : 'Этап $stage',
-              style: _C.body.copyWith(fontSize: compact ? 12 : 13, color: _C.greenDark, fontWeight: FontWeight.w900),
+              style: _CmrTestText.action().copyWith(fontSize: compact ? 12 : 13),
             ),
           ],
         ),
@@ -852,7 +1060,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
           width: _infoPanelCollapsed ? 58 : 292,
           child: _side(),
         ),
-        const VerticalDivider(width: 1, color: _C.line),
+        const SizedBox(width: 8),
         Expanded(child: _tableArea()),
       ],
     );
@@ -875,11 +1083,12 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                       padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
                       child: _filterBar(compact: true),
                     ),
-                    const Divider(height: 1, color: _C.line),
+                    const SizedBox(height: 6),
                     _dateCalendarBar(compact: true),
-                    const Divider(height: 1, color: _C.line),
+                    const SizedBox(height: 6),
                     _tableToolbar(),
-                    const Divider(height: 1, color: _C.line),
+                    if (_hasFocusedPlayer) _focusedPlayerBanner(compact: true),
+                    const SizedBox(height: 6),
                   ],
                 ),
         ),
@@ -898,19 +1107,11 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
           padding: const EdgeInsets.fromLTRB(10, 7, 10, 7),
           decoration: const BoxDecoration(
             color: Colors.white,
-            border: Border(bottom: BorderSide(color: _C.line, width: 1)),
+            
           ),
           child: Row(
             children: [
-              Container(
-                height: 36,
-                width: 36,
-                decoration: BoxDecoration(
-                  color: _C.greenSoft,
-                  borderRadius: BorderRadius.circular(13),
-                ),
-                child: const Icon(Icons.tune_rounded, color: _C.greenDark, size: 18),
-              ),
+              _IconBox(icon: Icons.tune_rounded, size: 36),
               const SizedBox(width: 9),
               Expanded(
                 child: Column(
@@ -921,14 +1122,14 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                       '${_categoryTitle(category)} • $stage',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _C.body.copyWith(fontWeight: FontWeight.w900, fontSize: 12.5),
+                      style: _CmrTestText.value(12.5),
                     ),
                     const SizedBox(height: 1),
                     Text(
                       '${_dateRu(_selectedDate)} • показано $visible из ${players.length}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _C.caption.copyWith(fontSize: 10.8),
+                      style: _CmrTestText.caption(),
                     ),
                   ],
                 ),
@@ -938,7 +1139,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                 onPressed: _expandMobileTools,
                 tooltip: 'Показать фильтры',
                 visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: _C.greenDark),
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: _CmrTestColors.green),
               ),
             ],
           ),
@@ -950,28 +1151,21 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
   Widget _side() {
     if (_infoPanelCollapsed) {
       return Container(
-        color: Colors.white,
+        margin: const EdgeInsets.fromLTRB(12, 8, 0, 12),
+        decoration: _CmrTestDecor.panel(),
         child: Column(
           children: [
             const SizedBox(height: 10),
-            IconButton.filled(
-              style: IconButton.styleFrom(
-                backgroundColor: _C.greenDark,
-                foregroundColor: Colors.white,
-                fixedSize: const Size(42, 42),
-                minimumSize: const Size(42, 42),
-                shape: const CircleBorder(),
-                elevation: 2,
-                shadowColor: _C.greenDark.withOpacity(.25),
-              ),
+            _IconButton(
+              icon: Icons.keyboard_double_arrow_right_rounded,
               onPressed: () => setState(() => _infoPanelCollapsed = false),
               tooltip: 'Показать подсказки и тесты',
-              icon: const Icon(Icons.keyboard_double_arrow_right_rounded, size: 20),
+              compact: true,
             ),
             const SizedBox(height: 12),
             RotatedBox(
               quarterTurns: 3,
-              child: Text('Подсказки', style: _C.caption.copyWith(fontWeight: FontWeight.w900)),
+              child: Text('Подсказки', style: _CmrTestText.caption()),
             ),
           ],
         ),
@@ -979,27 +1173,20 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     }
 
     return Container(
-      color: Colors.white,
+      margin: const EdgeInsets.fromLTRB(12, 8, 0, 12),
+      decoration: _CmrTestDecor.panel(),
       child: Column(
         children: [
           Container(
             padding: const EdgeInsets.fromLTRB(14, 12, 8, 6),
             child: Row(
               children: [
-                Expanded(child: Text('Подсказки и тесты', style: _C.h2)),
-                IconButton.filled(
-                  style: IconButton.styleFrom(
-                    backgroundColor: _C.greenDark,
-                    foregroundColor: Colors.white,
-                    fixedSize: const Size(38, 38),
-                    minimumSize: const Size(38, 38),
-                    shape: const CircleBorder(),
-                    elevation: 2,
-                    shadowColor: _C.greenDark.withOpacity(.25),
-                  ),
+                Expanded(child: Text('Подсказки и тесты', style: _CmrTestText.section())),
+                _IconButton(
+                  icon: Icons.keyboard_double_arrow_left_rounded,
                   onPressed: () => setState(() => _infoPanelCollapsed = true),
                   tooltip: 'Свернуть панель влево',
-                  icon: const Icon(Icons.keyboard_double_arrow_left_rounded, size: 19),
+                  compact: true,
                 ),
               ],
             ),
@@ -1016,7 +1203,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                 const SizedBox(height: 16),
                 _positionDistribution(),
                 const SizedBox(height: 18),
-                Text('Тесты в этом этапе', style: _C.h2),
+                Text('Тесты в этом этапе', style: _CmrTestText.section()),
                 const SizedBox(height: 8),
                 ...tests.map(_testHint),
               ],
@@ -1032,15 +1219,15 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     if (items.isEmpty) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: _C.tile, borderRadius: BorderRadius.circular(18), border: Border.all(color: _C.line.withOpacity(.75))),
+      decoration: _CmrTestDecor.softCard(radius: 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.groups_2_rounded, size: 18, color: _C.greenDark),
+              const Icon(Icons.groups_2_rounded, size: 18, color: _CmrTestColors.green),
               const SizedBox(width: 8),
-              Expanded(child: Text('Амплуа игроков', style: _C.h2)),
+              Expanded(child: Text('Амплуа игроков', style: _CmrTestText.section())),
             ],
           ),
           const SizedBox(height: 10),
@@ -1048,35 +1235,17 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
             spacing: 6,
             runSpacing: 6,
             children: [
-              _positionChip('all', 'Все', players.length),
-              ...items.map((e) => _positionChip(e.key, e.key, e.value)),
+              _PositionChip(value: 'all', label: 'Все', count: players.length, active: _positionFilter == 'all', onTap: () => setState(() => _positionFilter = 'all')),
+              ...items.map((e) => _PositionChip(
+                    value: e.key,
+                    label: e.key,
+                    count: e.value,
+                    active: _positionFilter == e.key,
+                    onTap: () => setState(() => _positionFilter = e.key),
+                  )),
             ],
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _positionChip(String value, String label, int count) {
-    final active = _positionFilter == value;
-    return InkWell(
-      borderRadius: BorderRadius.circular(999),
-      onTap: () => setState(() => _positionFilter = value),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
-        decoration: BoxDecoration(
-          color: active ? _C.greenDark : Colors.white,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: active ? _C.greenDark : _C.line),
-        ),
-        child: Text(
-          '$label · $count',
-          style: _C.caption.copyWith(
-            color: active ? Colors.white : _C.text,
-            fontWeight: FontWeight.w900,
-            fontSize: 11,
-          ),
-        ),
       ),
     );
   }
@@ -1085,17 +1254,17 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: _C.tile, borderRadius: BorderRadius.circular(16)),
+      decoration: _CmrTestDecor.softCard(radius: 16),
       child: Row(
         children: [
-          const Icon(Icons.sports_soccer_rounded, color: _C.greenDark, size: 18),
+          const Icon(Icons.sports_soccer_rounded, color: _CmrTestColors.green, size: 18),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_asStr(t['short_title']), style: _C.body.copyWith(fontWeight: FontWeight.w900)),
-                Text(_unitForTest(t), style: _C.caption),
+                Text(_asStr(t['short_title']), style: _CmrTestText.value(12.5)),
+                Text(_unitForTest(t), style: _CmrTestText.caption()),
               ],
             ),
           ),
@@ -1112,11 +1281,15 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
   Widget _infoCard(String title, String text) {
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: _C.greenSoft, borderRadius: BorderRadius.circular(18)),
+      decoration: BoxDecoration(
+        color: _CmrTestColors.panel,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _CmrTestColors.greenBorder, width: 1),
+      ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title, style: _C.h2.copyWith(color: _C.greenDark)),
+        Text(title, style: _CmrTestText.section().copyWith(color: _CmrTestColors.text)),
         const SizedBox(height: 6),
-        Text(text, style: _C.caption.copyWith(color: _C.greenDark, height: 1.25)),
+        Text(text, style: _CmrTestText.caption().copyWith(height: 1.25)),
       ]),
     );
   }
@@ -1150,14 +1323,36 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     return entries;
   }
 
+  String _normText(String value) => value
+      .toLowerCase()
+      .replaceAll('ё', 'е')
+      .replaceAll(RegExp(r'[^a-zа-я0-9]+'), ' ')
+      .trim();
+
+  bool _isFocusedPlayer(Map<String, dynamic> p) {
+    if (_focusedPlayerId > 0 && _playerId(p) == _focusedPlayerId) return true;
+    final focusedName = _normText(_focusedPlayerName);
+    if (focusedName.isEmpty) return false;
+    final full = _normText(_playerFullName(p));
+    final short = _normText(_shortPlayerName(p));
+    final tokens = focusedName.split(' ').where((e) => e.length > 1).toList();
+    final tokenMatch = tokens.isNotEmpty && tokens.every((token) => full.contains(token) || short.contains(token));
+    return full == focusedName || full.contains(focusedName) || focusedName.contains(full) || short == focusedName || tokenMatch;
+  }
+
+  bool get _hasFocusedPlayer => _focusedPlayerId > 0 || _focusedPlayerName.trim().isNotEmpty;
+
   List<Map<String, dynamic>> get _visiblePlayers {
-    final query = _searchController.text.trim().toLowerCase();
+    final query = _normText(_searchController.text);
     return players.where((p) {
       final pos = _playerPosition(p);
       if (_positionFilter != 'all' && pos != _positionFilter) return false;
+      if (_focusedPlayerId > 0 && query.isEmpty) return _isFocusedPlayer(p);
       if (query.isEmpty) return true;
-      final haystack = '${_playerFullName(p)} ${_shortPlayerName(p)} ${_playerPosition(p)} ${p['number'] ?? p['player_number'] ?? ''}'.toLowerCase();
-      return haystack.contains(query);
+      final haystack = _normText(
+        '${_playerFullName(p)} ${_shortPlayerName(p)} ${_playerPosition(p)} ${_playerId(p)} ${p['number'] ?? p['player_number'] ?? ''}',
+      );
+      return haystack.contains(query) || _isFocusedPlayer(p);
     }).toList();
   }
 
@@ -1167,7 +1362,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     if (url.isNotEmpty) {
       return CircleAvatar(
         radius: 17,
-        backgroundColor: _C.greenSoft,
+        backgroundColor: _CmrTestColors.greenSoft,
         backgroundImage: NetworkImage(url),
         onBackgroundImageError: (_, __) {},
         child: const SizedBox.shrink(),
@@ -1175,8 +1370,8 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     }
     return CircleAvatar(
       radius: 17,
-      backgroundColor: _C.greenSoft,
-      child: Text(initials, style: const TextStyle(color: _C.greenDark, fontWeight: FontWeight.w900, fontSize: 11)),
+      backgroundColor: _CmrTestColors.greenSoft,
+      child: Text(initials, style: const TextStyle(color: _CmrTestColors.green, fontWeight: FontWeight.w900, fontSize: 11)),
     );
   }
 
@@ -1266,9 +1461,6 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     final parts = full.split(' ').where((e) => e.trim().isNotEmpty).toList();
     if (parts.length == 1) return parts.first;
 
-    // В ответах API часто приходит порядок «Имя Фамилия».
-    // Поэтому в запасном варианте фамилией считаем последний элемент,
-    // а имя сокращаем до первой буквы.
     final surname = parts.last;
     final nameInitial = parts.first.isNotEmpty ? ' ${parts.first.substring(0, 1).toUpperCase()}.' : '';
     return '$surname$nameInitial';
@@ -1280,15 +1472,15 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
       child: Column(
         children: [
           LayoutBuilder(builder: (context, c) => _dateCalendarBar(compact: c.maxWidth < 720)),
-          const Divider(height: 1, color: _C.line),
+          const SizedBox(height: 2),
           _tableToolbar(),
-          const Divider(height: 1, color: _C.line),
+          if (_hasFocusedPlayer) _focusedPlayerBanner(compact: false),
+          const SizedBox(height: 2),
           Expanded(child: _table()),
         ],
       ),
     );
   }
-
 
   Widget _dateCalendarBar({required bool compact}) {
     final hasData = sessionId > 0 || _hasSessionOn(_selectedDate);
@@ -1304,8 +1496,8 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                 Row(children: [
                   Expanded(child: _dateSelectorButton()),
                   const SizedBox(width: 8),
-                  _dateStepButton(Icons.chevron_left_rounded, () => _selectTestingDate(_selectedDate.subtract(const Duration(days: 1))), 'Предыдущий день'),
-                  _dateStepButton(Icons.chevron_right_rounded, () => _selectTestingDate(_selectedDate.add(const Duration(days: 1))), 'Следующий день'),
+                  _SquareButton(icon: Icons.chevron_left_rounded, onTap: () => _selectTestingDate(_selectedDate.subtract(const Duration(days: 1))), compact: compact),
+                  _SquareButton(icon: Icons.chevron_right_rounded, onTap: () => _selectTestingDate(_selectedDate.add(const Duration(days: 1))), compact: compact),
                 ]),
                 const SizedBox(height: 8),
                 _dateStatusChip(label, hasData),
@@ -1315,57 +1507,23 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
               children: [
                 _dateSelectorButton(),
                 const SizedBox(width: 8),
-                _dateStepButton(Icons.chevron_left_rounded, () => _selectTestingDate(_selectedDate.subtract(const Duration(days: 1))), 'Предыдущий день'),
-                _dateStepButton(Icons.chevron_right_rounded, () => _selectTestingDate(_selectedDate.add(const Duration(days: 1))), 'Следующий день'),
+                _SquareButton(icon: Icons.chevron_left_rounded, onTap: () => _selectTestingDate(_selectedDate.subtract(const Duration(days: 1))), compact: compact),
+                _SquareButton(icon: Icons.chevron_right_rounded, onTap: () => _selectTestingDate(_selectedDate.add(const Duration(days: 1))), compact: compact),
                 const SizedBox(width: 10),
                 _dateStatusChip(label, hasData),
                 const Spacer(),
                 if (sessions.isNotEmpty)
-                  Text('Сохранённых дат: ${sessions.length}', style: _C.caption.copyWith(fontWeight: FontWeight.w800)),
+                  Text('Сохранённых дат: ${sessions.length}', style: _CmrTestText.caption()),
               ],
             ),
     );
   }
 
   Widget _dateSelectorButton() {
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
+    return _ActionButton(
+      icon: Icons.calendar_month_rounded,
+      text: _dateRu(_selectedDate),
       onTap: _showCalendarDialog,
-      child: Container(
-        height: 44,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: _C.greenSoft,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _C.greenDark.withOpacity(.14)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.calendar_month_rounded, color: _C.greenDark, size: 19),
-            const SizedBox(width: 8),
-            Text(_dateRu(_selectedDate), style: _C.body.copyWith(color: _C.greenDark, fontWeight: FontWeight.w900)),
-            const SizedBox(width: 8),
-            const Icon(Icons.keyboard_arrow_down_rounded, color: _C.greenDark, size: 18),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _dateStepButton(IconData icon, VoidCallback onTap, String tooltip) {
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Container(
-          height: 40,
-          width: 40,
-          decoration: BoxDecoration(color: _C.input, borderRadius: BorderRadius.circular(14), border: Border.all(color: _C.line)),
-          child: Icon(icon, size: 20, color: _C.text),
-        ),
-      ),
     );
   }
 
@@ -1373,23 +1531,21 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: hasData ? const Color(0xFFEAF8F0) : const Color(0xFFFFF7ED),
+        color: hasData ? _CmrTestColors.panel : const Color(0xFFFFF7ED),
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: hasData ? _CmrTestColors.greenBorder : const Color(0xFFFED7AA), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(hasData ? Icons.check_circle_rounded : Icons.edit_calendar_rounded, size: 16, color: hasData ? _C.greenDark : const Color(0xFFC2410C)),
+          Icon(hasData ? Icons.check_circle_rounded : Icons.edit_calendar_rounded, size: 16, color: hasData ? _CmrTestColors.green : _CmrTestColors.orange),
           const SizedBox(width: 6),
           Flexible(
             child: Text(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: _C.caption.copyWith(
-                color: hasData ? _C.greenDark : const Color(0xFFC2410C),
-                fontWeight: FontWeight.w900,
-              ),
+              style: _CmrTestText.caption().copyWith(color: hasData ? _CmrTestColors.green : _CmrTestColors.orange),
             ),
           ),
         ],
@@ -1419,22 +1575,15 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                 constraints: const BoxConstraints(maxWidth: 440),
                 child: Container(
                   padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(28), boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(.12), blurRadius: 30, offset: const Offset(0, 18)),
-                  ]),
+                  decoration: _CmrTestDecor.panel(),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Row(
                         children: [
-                          Container(
-                            width: 42,
-                            height: 42,
-                            decoration: BoxDecoration(color: _C.greenSoft, borderRadius: BorderRadius.circular(15)),
-                            child: const Icon(Icons.calendar_month_rounded, color: _C.greenDark),
-                          ),
+                          _IconBox(icon: Icons.calendar_month_rounded, size: 42),
                           const SizedBox(width: 10),
-                          Expanded(child: Text('Дата тестирования', style: _C.h1.copyWith(fontSize: 20))),
+                          Expanded(child: Text('Дата тестирования', style: _CmrTestText.title(20))),
                           IconButton(
                             onPressed: () => Navigator.pop(dialogContext),
                             icon: const Icon(Icons.close_rounded),
@@ -1444,14 +1593,14 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                       const SizedBox(height: 12),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                        decoration: BoxDecoration(color: _C.tile, borderRadius: BorderRadius.circular(18)),
+                        decoration: _CmrTestDecor.softCard(radius: 18),
                         child: Row(
                           children: [
                             IconButton(
                               onPressed: () => localSetState(() => visibleMonth = DateTime(visibleMonth.year, visibleMonth.month - 1)),
                               icon: const Icon(Icons.chevron_left_rounded),
                             ),
-                            Expanded(child: Center(child: Text(_monthTitle(visibleMonth), style: _C.h2.copyWith(fontSize: 16)))),
+                            Expanded(child: Center(child: Text(_monthTitle(visibleMonth), style: _CmrTestText.section().copyWith(fontSize: 16)))),
                             IconButton(
                               onPressed: () => localSetState(() => visibleMonth = DateTime(visibleMonth.year, visibleMonth.month + 1)),
                               icon: const Icon(Icons.chevron_right_rounded),
@@ -1462,7 +1611,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                       const SizedBox(height: 10),
                       Row(
                         children: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
-                            .map((d) => Expanded(child: Center(child: Text(d, style: _C.caption.copyWith(fontWeight: FontWeight.w900)))))
+                            .map((d) => Expanded(child: Center(child: Text(d, style: _CmrTestText.caption()))))
                             .toList(),
                       ),
                       const SizedBox(height: 6),
@@ -1484,18 +1633,17 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                             onTap: () => localSetState(() => picked = date),
                             child: Container(
                               decoration: BoxDecoration(
-                                color: selected ? _C.greenDark : saved ? _C.greenSoft : today ? _C.input : Colors.white,
+                                color: selected ? _CmrTestColors.graphite : saved ? _CmrTestColors.greenSoft : today ? _CmrTestColors.soft2 : Colors.white,
                                 borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: selected ? _C.greenDark : saved ? _C.greenDark.withOpacity(.28) : _C.line.withOpacity(.75)),
                               ),
                               child: Stack(
                                 children: [
                                   Center(
                                     child: Text(
                                       '$day',
-                                      style: _C.body.copyWith(
+                                      style: _CmrTestText.value(13).copyWith(
                                         fontWeight: FontWeight.w900,
-                                        color: selected ? Colors.white : _C.text,
+                                        color: selected ? Colors.white : _CmrTestColors.text,
                                       ),
                                     ),
                                   ),
@@ -1507,7 +1655,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                                         width: 6,
                                         height: 6,
                                         decoration: BoxDecoration(
-                                          color: selected ? Colors.white : _C.greenDark,
+                                          color: selected ? Colors.white : _CmrTestColors.green,
                                           shape: BoxShape.circle,
                                         ),
                                       ),
@@ -1522,39 +1670,33 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                       Row(
                         children: [
                           Expanded(
-                            child: SizedBox(
-                              height: 48,
-                              child: OutlinedButton(
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: _C.greenDark,
-                                  side: const BorderSide(color: _C.greenDark, width: 1.2),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                  textStyle: _C.body.copyWith(fontWeight: FontWeight.w900),
-                                ),
-                                onPressed: () {
-                                  localSetState(() {
-                                    picked = DateTime.now();
-                                    visibleMonth = DateTime(picked.year, picked.month);
-                                  });
-                                },
-                                child: const FittedBox(child: Text('Сегодня')),
+                            child: OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: _CmrTestColors.graphite,
+                                side: BorderSide.none,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                minimumSize: const Size(0, 48),
                               ),
+                              onPressed: () {
+                                localSetState(() {
+                                  picked = DateTime.now();
+                                  visibleMonth = DateTime(picked.year, picked.month);
+                                });
+                              },
+                              child: const FittedBox(child: Text('Сегодня')),
                             ),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
-                            child: SizedBox(
-                              height: 48,
-                              child: FilledButton(
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: _C.greenDark,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                  textStyle: _C.body.copyWith(fontWeight: FontWeight.w900),
-                                ),
-                                onPressed: () => Navigator.pop(dialogContext, picked),
-                                child: FittedBox(child: Text(_hasSessionOn(picked) ? 'Открыть дату' : 'Создать на дату')),
+                            child: FilledButton(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: _CmrTestColors.graphite,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                minimumSize: const Size(0, 48),
                               ),
+                              onPressed: () => Navigator.pop(dialogContext, picked),
+                              child: FittedBox(child: Text(_hasSessionOn(picked) ? 'Открыть дату' : 'Создать на дату')),
                             ),
                           ),
                         ],
@@ -1574,47 +1716,51 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     }
   }
 
+  Widget _focusedPlayerBanner({required bool compact}) {
+    final label = _focusedPlayerName.trim().isNotEmpty
+        ? _focusedPlayerName.trim()
+        : (_focusedPlayerId > 0 ? 'игрок #$_focusedPlayerId' : 'выбранный игрок');
+
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.fromLTRB(compact ? 10 : 14, 0, compact ? 10 : 14, compact ? 6 : 8),
+      padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+      decoration: BoxDecoration(
+        color: _CmrTestColors.panel,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _CmrTestColors.greenBorder, width: 1),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.person_search_rounded, color: _CmrTestColors.green, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Показан игрок из предупреждения: $label',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _CmrTestText.value(compact ? 12.5 : 13).copyWith(color: _CmrTestColors.green),
+            ),
+          ),
+          TextButton(
+            onPressed: _clearFocusedPlayer,
+            style: TextButton.styleFrom(
+              foregroundColor: _CmrTestColors.graphite,
+              visualDensity: VisualDensity.compact,
+              textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+            ),
+            child: const Text('Показать всех'),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _tableToolbar() {
     final visible = _visiblePlayers.length;
     return LayoutBuilder(
       builder: (context, c) {
         final compact = c.maxWidth < 720;
-        final search = TextField(
-          controller: _searchController,
-          onChanged: (_) => setState(() {}),
-          decoration: InputDecoration(
-            isDense: true,
-            prefixIcon: const Icon(Icons.search_rounded, size: 19),
-            hintText: 'Быстро найти игрока, номер или амплуа...',
-            filled: true,
-            fillColor: _C.input,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-            suffixIcon: _searchController.text.trim().isEmpty
-                ? null
-                : IconButton(
-                    onPressed: () {
-                      _searchController.clear();
-                      setState(() {});
-                    },
-                    icon: const Icon(Icons.close_rounded, size: 18),
-                  ),
-          ),
-        );
-
-        final positions = SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              _positionChip('all', 'Все амплуа', players.length),
-              const SizedBox(width: 6),
-              ..._positionItems.map((e) => Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: _positionChip(e.key, e.key, e.value),
-                  )),
-            ],
-          ),
-        );
 
         return Container(
           color: Colors.white,
@@ -1623,20 +1769,71 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
               ? Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    search,
+                    _SearchField(
+                      controller: _searchController,
+                      hint: 'Быстро найти игрока, номер или амплуа...',
+                      compact: true,
+                      onClear: _clearFocusedPlayer,
+                    ),
                     const SizedBox(height: 8),
-                    positions,
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _PositionChip(value: 'all', label: 'Все амплуа', count: players.length, active: _positionFilter == 'all', onTap: () => setState(() => _positionFilter = 'all')),
+                          const SizedBox(width: 6),
+                          ..._positionItems.map((e) => Padding(
+                                padding: const EdgeInsets.only(right: 6),
+                                child: _PositionChip(
+                                  value: e.key,
+                                  label: e.key,
+                                  count: e.value,
+                                  active: _positionFilter == e.key,
+                                  onTap: () => setState(() => _positionFilter = e.key),
+                                ),
+                              )),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 6),
-                    Text('Показано: $visible из ${players.length}', style: _C.caption.copyWith(fontWeight: FontWeight.w800)),
+                    Text('Показано: $visible из ${players.length}', style: _CmrTestText.caption()),
                   ],
                 )
               : Row(
                   children: [
-                    SizedBox(width: 280, child: search),
+                    SizedBox(
+                      width: 280,
+                      child: _SearchField(
+                        controller: _searchController,
+                        hint: 'Поиск игрока, номера или амплуа...',
+                        compact: false,
+                        onClear: _clearFocusedPlayer,
+                      ),
+                    ),
                     const SizedBox(width: 10),
-                    Expanded(child: positions),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _PositionChip(value: 'all', label: 'Все амплуа', count: players.length, active: _positionFilter == 'all', onTap: () => setState(() => _positionFilter = 'all')),
+                            const SizedBox(width: 6),
+                            ..._positionItems.map((e) => Padding(
+                                  padding: const EdgeInsets.only(right: 6),
+                                  child: _PositionChip(
+                                    value: e.key,
+                                    label: e.key,
+                                    count: e.value,
+                                    active: _positionFilter == e.key,
+                                    onTap: () => setState(() => _positionFilter = e.key),
+                                  ),
+                                )),
+                          ],
+                        ),
+                      ),
+                    ),
                     const SizedBox(width: 10),
-                    Text('Показано: $visible из ${players.length}', style: _C.caption.copyWith(fontWeight: FontWeight.w800)),
+                    Text('Показано: $visible из ${players.length}', style: _CmrTestText.caption()),
                   ],
                 ),
         );
@@ -1646,10 +1843,34 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
 
   Widget _table() {
     if (tests.isEmpty) {
-      return const Center(child: Text('Для выбранного этапа пока нет тестов'));
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.sports_soccer_rounded, size: 48, color: _CmrTestColors.muted),
+            const SizedBox(height: 12),
+            Text(
+              'Для выбранного этапа пока нет тестов',
+              style: _CmrTestText.muted(14),
+            ),
+          ],
+        ),
+      );
     }
     if (players.isEmpty) {
-      return const Center(child: Text('В команде нет игроков'));
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.people_outline_rounded, size: 48, color: _CmrTestColors.muted),
+            const SizedBox(height: 12),
+            Text(
+              'В команде нет игроков',
+              style: _CmrTestText.muted(14),
+            ),
+          ],
+        ),
+      );
     }
 
     final tablePlayers = _visiblePlayers;
@@ -1668,15 +1889,50 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(14),
             child: DataTable(
-              headingRowHeight: 48,
+              headingRowHeight: 46,
               dataRowMinHeight: 58,
               dataRowMaxHeight: 64,
               columnSpacing: 14,
-              border: TableBorder(horizontalInside: BorderSide(color: _C.line.withOpacity(.75))),
+              headingTextStyle: _CmrTestText.caption().copyWith(fontWeight: FontWeight.w900),
+              dataTextStyle: _CmrTestText.value(11.5),
               columns: [
-                const DataColumn(label: SizedBox(width: 210, child: Text('Игрок'))),
-                ...tests.map((t) => DataColumn(label: SizedBox(width: 126, child: Text('${_asStr(t['short_title'])}\n${_unitForTest(t)}', maxLines: 2)))),
-                const DataColumn(label: SizedBox(width: 150, child: Text('Итоговая оценка'))),
+                const DataColumn(
+                  label: SizedBox(
+                    width: 210,
+                    child: Text(
+                      'Игрок',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+                ...tests.map(
+                  (t) {
+                    final title = _asStr(t['short_title']).isEmpty ? _asStr(t['title']) : _asStr(t['short_title']);
+                    return DataColumn(
+                      label: SizedBox(
+                        width: 126,
+                        child: Text(
+                          '$title\n${_unitForTest(t)}',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const DataColumn(
+                  label: SizedBox(
+                    width: 126,
+                    child: Text(
+                      'Итоговая оценка',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
               ],
               rows: tablePlayers.map((p) => _row(p)).toList(),
             ),
@@ -1700,13 +1956,22 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
   Widget _mobilePlayerCard(Map<String, dynamic> p, int index) {
     final playerId = _playerId(p);
     final finalRating = _finalFor(p);
+    final focused = _isFocusedPlayer(p);
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: _C.line.withOpacity(.85)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(.035), blurRadius: 16, offset: const Offset(0, 8))],
-      ),
+      decoration: focused
+          ? BoxDecoration(
+              color: _CmrTestColors.panel,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: _CmrTestColors.green.withOpacity(.38), width: 1.2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(.035),
+                  blurRadius: 14,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            )
+          : _CmrTestDecor.panel(),
       child: Column(
         children: [
           Padding(
@@ -1723,38 +1988,57 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                         _shortPlayerName(p).isEmpty ? 'Игрок #$playerId' : _shortPlayerName(p),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: _C.body.copyWith(fontWeight: FontWeight.w900, fontSize: 15),
+                        style: _CmrTestText.value(15),
                       ),
                       const SizedBox(height: 2),
-                      Text(_playerPosition(p), maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.caption),
+                      Text(_playerPosition(p), maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrTestText.caption()),
                     ],
                   ),
                 ),
                 const SizedBox(width: 8),
+                if (focused) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: _CmrTestColors.green,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: const Text(
+                      'Найден',
+                      style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
                 _ratingPill(finalRating),
               ],
             ),
           ),
-          const Divider(height: 1, color: _C.line),
+          const SizedBox(height: 2),
           Padding(
             padding: const EdgeInsets.all(10),
-            child: GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-                childAspectRatio: 1.5,
-              ),
-              itemCount: tests.length,
-              itemBuilder: (_, i) {
-                final t = tests[i];
-                final code = _asStr(t['code']);
-                final results = p['results'];
-                final old = results is Map ? (results[code] is Map ? results[code]['value'] : null) : null;
-                final c = _ctrl(playerId, code, old);
-                return _mobileValueTile(t, c, code);
+            child: LayoutBuilder(
+              builder: (context, c) {
+                final oneColumn = c.maxWidth < 340;
+                return GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: oneColumn ? 1 : 2,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                    childAspectRatio: oneColumn ? 2.35 : 1.24,
+                  ),
+                  itemCount: tests.length,
+                  itemBuilder: (_, i) {
+                    final t = tests[i];
+                    final code = _asStr(t['code']);
+                    final results = p['results'];
+                    final old = results is Map ? (results[code] is Map ? results[code]['value'] : null) : null;
+                    final c = _ctrl(playerId, code, old);
+                    return _mobileValueTile(t, c, code);
+                  },
+                );
               },
             ),
           ),
@@ -1770,9 +2054,8 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
       return Container(
         padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
         decoration: BoxDecoration(
-          color: hasRating ? r.color.withOpacity(.12) : _C.input,
+          color: hasRating ? r.color.withOpacity(.08) : _CmrTestColors.soft,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: hasRating ? r.color.withOpacity(.32) : _C.line.withOpacity(.65)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1784,10 +2067,10 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                     _asStr(test['short_title']).isEmpty ? _asStr(test['title']) : _asStr(test['short_title']),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: _C.caption.copyWith(fontWeight: FontWeight.w900, color: _C.text),
+                    style: _CmrTestText.value(11),
                   ),
                 ),
-                Text(_unitForTest(test), style: _C.caption.copyWith(fontSize: 10, fontWeight: FontWeight.w800)),
+                Text(_unitForTest(test), style: _CmrTestText.caption().copyWith(fontSize: 9)),
               ],
             ),
             const SizedBox(height: 4),
@@ -1796,19 +2079,18 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                 controller: c,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 textInputAction: TextInputAction.next,
-                onChanged: (_) {
-                  localSetState(() {});
-                  setState(() {});
-                },
+                onChanged: (_) => _onResultChanged(localSetState),
                 textAlign: TextAlign.center,
-                style: _C.body.copyWith(fontWeight: FontWeight.w900, fontSize: 18),
+                style: _CmrTestText.value(18),
                 decoration: InputDecoration(
                   isDense: true,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                   hintText: '0',
                   filled: true,
                   fillColor: Colors.white,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
                 ),
               ),
             ),
@@ -1817,10 +2099,9 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
               hasRating ? r.label : 'ввод результата',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: _C.caption.copyWith(
-                fontSize: 10.5,
-                color: hasRating ? _darken(r.color) : _C.muted,
-                fontWeight: FontWeight.w900,
+              style: _CmrTestText.caption().copyWith(
+                fontSize: 10,
+                color: hasRating ? _darken(r.color) : _CmrTestColors.muted,
               ),
             ),
           ],
@@ -1832,7 +2113,12 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
   DataRow _row(Map<String, dynamic> p) {
     final playerId = _playerId(p);
     final finalRating = _finalFor(p);
-    return DataRow(cells: [
+    final focused = _isFocusedPlayer(p);
+    return DataRow(
+      color: focused
+          ? MaterialStateProperty.all(_CmrTestColors.soft)
+          : null,
+      cells: [
       DataCell(SizedBox(
         width: 210,
         child: Row(
@@ -1848,10 +2134,35 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                     _shortPlayerName(p).isEmpty ? 'Игрок #$playerId' : _shortPlayerName(p),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: _C.body.copyWith(fontWeight: FontWeight.w900),
+                    style: _CmrTestText.value(12),
                   ),
                   const SizedBox(height: 2),
-                  Text(_playerPosition(p), maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.caption.copyWith(fontSize: 10.5)),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _playerPosition(p),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: _CmrTestText.caption().copyWith(fontSize: 10),
+                        ),
+                      ),
+                      if (focused) ...[
+                        const SizedBox(width: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: _CmrTestColors.green,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: const Text(
+                            'Найден',
+                            style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -1866,7 +2177,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
         final rating = _ratingFor(code, c.text);
         return DataCell(_valueCell(c, rating, code));
       }),
-      DataCell(_ratingPill(finalRating)),
+      DataCell(_ratingCell(finalRating)),
     ]);
   }
 
@@ -1877,43 +2188,81 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
         width: 126,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
-          color: r.color.withOpacity(r.label.isEmpty ? 0 : .14),
+          color: r.label.isEmpty ? _CmrTestColors.panel : r.color.withOpacity(.07),
           borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: r.label.isEmpty ? _CmrTestColors.line : r.color.withOpacity(.18), width: 1),
         ),
         child: TextField(
           controller: c,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          onChanged: (_) { localSetState(() {}); setState(() {}); },
+          onChanged: (_) => _onResultChanged(localSetState),
           textAlign: TextAlign.center,
-          style: _C.body.copyWith(fontWeight: FontWeight.w900),
+          style: _CmrTestText.value(12),
           decoration: InputDecoration(
             isDense: true,
             hintText: '—',
             border: InputBorder.none,
             helperText: r.label.isEmpty ? null : r.label,
-            helperStyle: TextStyle(fontSize: 10, color: _darken(r.color), fontWeight: FontWeight.w800),
+            helperStyle: TextStyle(fontSize: 9, color: _darken(r.color), fontWeight: FontWeight.w800),
           ),
         ),
       );
     });
   }
 
-  Widget _ratingPill(_Rating r) {
-    if (r.label.isEmpty) return const Text('—', style: _C.caption);
+  Widget _ratingCell(_Rating r) {
+    final hasRating = r.label.isNotEmpty;
     return Container(
-      constraints: const BoxConstraints(minWidth: 86, maxWidth: 150),
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
-      decoration: BoxDecoration(color: r.color.withOpacity(.16), borderRadius: BorderRadius.circular(999)),
+      width: 126,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: hasRating ? r.color.withOpacity(.07) : _CmrTestColors.soft,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: hasRating ? r.color.withOpacity(.18) : _CmrTestColors.line, width: 1),
+      ),
+      alignment: Alignment.center,
       child: Text(
-        r.label,
+        hasRating ? r.label : '—',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         textAlign: TextAlign.center,
-        style: TextStyle(color: _darken(r.color), fontWeight: FontWeight.w900, fontSize: 11.5),
+        style: hasRating
+            ? TextStyle(color: _darken(r.color), fontWeight: FontWeight.w800, fontSize: 11)
+            : _CmrTestText.caption(),
       ),
     );
   }
 
+  Widget _ratingPill(_Rating r) {
+    if (r.label.isEmpty) {
+      return const SizedBox(
+        width: 116,
+        child: Center(child: Text('—')),
+      );
+    }
+
+    return SizedBox(
+      width: 116,
+      child: Center(
+        child: Container(
+          constraints: const BoxConstraints(minWidth: 90, maxWidth: 116),
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+          decoration: BoxDecoration(
+            color: r.color.withOpacity(.08),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: r.color.withOpacity(.20), width: 1),
+          ),
+          child: Text(
+            r.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: _darken(r.color), fontWeight: FontWeight.w800, fontSize: 11),
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _exportButton({required bool mobile}) {
     return PopupMenuButton<String>(
@@ -1929,23 +2278,15 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
         PopupMenuItem(value: 'pdf', child: Text('Экспорт в PDF')),
       ],
       child: Container(
-        height: 40,
-        padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 12),
+        width: 42,
+        height: 42,
+        alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: _C.input,
+          color: _CmrTestColors.panel,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _C.line),
+          border: Border.all(color: _CmrTestColors.line, width: 1),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.file_download_outlined, size: 18, color: _C.text),
-            if (!mobile) ...[
-              const SizedBox(width: 7),
-              Text('Экспорт', style: _C.body.copyWith(fontWeight: FontWeight.w900)),
-            ],
-          ],
-        ),
+        child: const Icon(Icons.file_download_outlined, size: 19, color: _CmrTestColors.muted),
       ),
     );
   }
@@ -1954,7 +2295,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => Scaffold(
-          backgroundColor: _C.page,
+          backgroundColor: _CmrTestColors.panel,
           body: SafeArea(
             child: CmrTestingPanel(
               clubId: widget.clubId,
@@ -1962,8 +2303,11 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
               clubName: widget.clubName,
               teamName: widget.teamName,
               initialStage: stage,
+              initialCategory: category,
               userId: widget.userId,
               initialDate: _dateIso(_selectedDate),
+              initialPlayerId: _focusedPlayerId > 0 ? _focusedPlayerId : null,
+              initialPlayerName: _focusedPlayerName.trim().isNotEmpty ? _focusedPlayerName.trim() : null,
               onBackToMenu: () => Navigator.of(context).pop(),
             ),
           ),
@@ -2015,10 +2359,10 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     final buffer = StringBuffer();
     buffer.writeln('<html><head><meta charset="utf-8">');
     buffer.writeln('<style>');
-    buffer.writeln('body{font-family:Arial, sans-serif;} table{border-collapse:collapse;width:100%;} th,td{border:1px solid #cbd5e1;padding:8px;font-size:12px;} th{background:#eaf8f0;} .title{font-size:18px;font-weight:700;margin-bottom:12px;}');
+    buffer.writeln('body{font-family:Arial, sans-serif;} table{border-collapse:collapse;width:100%;} th,td{border:1px solid #E2E8F0;padding:8px;font-size:12px;} th{background:#F2F7F4;} .title{font-size:18px;font-weight:700;margin-bottom:12px;}');
     buffer.writeln('</style></head><body>');
     buffer.writeln('<div class="title">${_escapeHtml(_exportTitle())}</div>');
-    buffer.writeln('<table>');
+    buffer.writeln('<td>');
     for (var i = 0; i < rows.length; i++) {
       final tag = i == 0 ? 'th' : 'td';
       buffer.writeln('<tr>');
@@ -2066,7 +2410,6 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     }
   }
 
-
   Future<({pw.Font? regular, pw.Font? bold})> _loadPdfFonts() async {
     Future<pw.Font?> load(String path) async {
       try {
@@ -2105,8 +2448,8 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
               headerStyle: pw.TextStyle(font: fonts.bold, fontWeight: pw.FontWeight.bold, fontSize: 8),
               cellStyle: pw.TextStyle(font: fonts.regular, fontSize: 8),
               cellAlignment: pw.Alignment.centerLeft,
-              headerDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFEAF8F0)),
-              border: pw.TableBorder.all(color: const PdfColor.fromInt(0xFFCBD5E1), width: .5),
+              headerDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF2F7F4)),
+              border: pw.TableBorder.all(color: const PdfColor.fromInt(0xFFE2E8F0), width: .5),
             ),
           ],
         ),
@@ -2119,7 +2462,6 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     }
   }
 
-
   void _showTestInfo(Map<String, dynamic> t) {
     final code = _asStr(t['code']);
     final title = _asStr(t['title']);
@@ -2131,38 +2473,34 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
       context: context,
       builder: (_) => Dialog(
         insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        child: ConstrainedBox(
+        backgroundColor: Colors.transparent,
+        child: Container(
           constraints: const BoxConstraints(maxWidth: 920, maxHeight: 760),
+          decoration: _CmrTestDecor.panel(),
           child: Column(
             children: [
               Container(
                 padding: const EdgeInsets.fromLTRB(18, 14, 10, 12),
-                decoration: const BoxDecoration(
-                  color: _C.greenSoft,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                decoration: BoxDecoration(
+                  color: _CmrTestColors.panel,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                  border: const Border(bottom: BorderSide(color: _CmrTestColors.line, width: 1)),
                 ),
                 child: Row(
                   children: [
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
-                      child: const Icon(Icons.sports_soccer_rounded, color: _C.greenDark),
-                    ),
+                    _IconBox(icon: Icons.sports_soccer_rounded, size: 42),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(title.isEmpty ? 'Описание теста' : title, maxLines: 2, overflow: TextOverflow.ellipsis, style: _C.h1.copyWith(fontSize: 18)),
+                          Text(title.isEmpty ? 'Описание теста' : title, maxLines: 2, overflow: TextOverflow.ellipsis, style: _CmrTestText.title(18)),
                           const SizedBox(height: 3),
-                          Text('${_categoryTitle(category)} • $stage • ${_asStr(t['unit'])}', style: _C.caption.copyWith(color: _C.greenDark)),
+                          Text('${_categoryTitle(category)} • $stage • ${_asStr(t['unit'])}', style: _CmrTestText.caption().copyWith(color: _CmrTestColors.green)),
                         ],
                       ),
                     ),
-                    IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded), tooltip: 'Закрыть'),
+                    IconButton(onPressed: () => Navigator.pop(_), icon: const Icon(Icons.close_rounded), tooltip: 'Закрыть'),
                   ],
                 ),
               ),
@@ -2199,16 +2537,12 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Графическая схема', style: _C.h2.copyWith(fontSize: 15)),
+                          Text('Графическая схема', style: _CmrTestText.section().copyWith(fontSize: 15)),
                           const SizedBox(height: 8),
                           Expanded(
                             child: Container(
                               width: double.infinity,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFBFDFB),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: _C.line),
-                              ),
+                              decoration: _CmrTestDecor.softCard(radius: 20),
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(20),
                                 child: CustomPaint(
@@ -2219,7 +2553,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                             ),
                           ),
                           const SizedBox(height: 8),
-                          Text(_schemeLegend(code), style: _C.caption.copyWith(height: 1.25)),
+                          Text(_schemeLegend(code), style: _CmrTestText.caption().copyWith(height: 1.25)),
                         ],
                       ),
                     );
@@ -2245,24 +2579,19 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
   Widget _methodBlock(String title, String text, IconData icon) {
     return Container(
       padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(color: _C.tile, borderRadius: BorderRadius.circular(18), border: Border.all(color: _C.line.withOpacity(.75))),
+      decoration: _CmrTestDecor.softCard(radius: 18),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(color: _C.greenSoft, borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: _C.greenDark, size: 17),
-          ),
+          _IconBox(icon: icon, size: 30),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: _C.h2),
+                Text(title, style: _CmrTestText.section()),
                 const SizedBox(height: 5),
-                Text(text, style: _C.caption.copyWith(height: 1.35)),
+                Text(text, style: _CmrTestText.caption().copyWith(height: 1.35)),
               ],
             ),
           ),
@@ -2282,11 +2611,11 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     rows.sort((a, b) => _asInt(b['points']).compareTo(_asInt(a['points'])));
     return Container(
       padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: _C.line)),
+      decoration: _CmrTestDecor.softCard(radius: 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Нормативы для $stage', style: _C.h2),
+          Text('Нормативы для $stage', style: _CmrTestText.section()),
           const SizedBox(height: 8),
           ...rows.map((n) {
             final color = _Rating.fromHex(_asStr(n['rating']), _asStr(n['color_hex']), _asStr(n['label'])).color;
@@ -2303,8 +2632,8 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                 children: [
                   Container(width: 10, height: 10, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(99))),
                   const SizedBox(width: 8),
-                  SizedBox(width: 154, child: FittedBox(alignment: Alignment.centerLeft, fit: BoxFit.scaleDown, child: Text(_asStr(n['label']), maxLines: 1, softWrap: false, style: _C.caption.copyWith(fontWeight: FontWeight.w900, color: _darken(color))))),
-                  Expanded(child: Text(range, textAlign: TextAlign.right, style: _C.caption)),
+                  SizedBox(width: 154, child: FittedBox(alignment: Alignment.centerLeft, fit: BoxFit.scaleDown, child: Text(_asStr(n['label']), maxLines: 1, softWrap: false, style: _CmrTestText.caption().copyWith(fontWeight: FontWeight.w900, color: _darken(color))))),
+                  Expanded(child: Text(range, textAlign: TextAlign.right, style: _CmrTestText.caption())),
                 ],
               ),
             );
@@ -2391,11 +2720,19 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     child: Padding(
       padding: const EdgeInsets.all(24),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(Icons.error_outline_rounded, color: Colors.red, size: 42),
+        const Icon(Icons.error_outline_rounded, color: _CmrTestColors.red, size: 42),
         const SizedBox(height: 10),
-        Text(error ?? 'Ошибка', textAlign: TextAlign.center),
+        Text(error ?? 'Ошибка', textAlign: TextAlign.center, style: _CmrTestText.muted(14)),
         const SizedBox(height: 12),
-        OutlinedButton(onPressed: _load, child: const Text('Повторить')),
+        OutlinedButton(
+          onPressed: _load,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: _CmrTestColors.graphite,
+            side: BorderSide.none,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+          child: const Text('Повторить'),
+        ),
       ]),
     ),
   );
@@ -2406,15 +2743,397 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     return parts.take(2).map((e) => e.substring(0, 1).toUpperCase()).join();
   }
 
-  Color _darken(Color c) => Color.fromARGB(c.alpha, (c.red * .65).round(), (c.green * .65).round(), (c.blue * .65).round());
-
-  static const _defaultStages = [
-    {'code':'U6','title':'U6'}, {'code':'U7','title':'U7'}, {'code':'U8','title':'U8'}, {'code':'U9','title':'U9'},
-    {'code':'U10','title':'U10'}, {'code':'U11','title':'U11'}, {'code':'U12','title':'U12'}, {'code':'U13','title':'U13'},
-    {'code':'U14','title':'U14'}, {'code':'U15','title':'U15'}, {'code':'U16','title':'U16'}, {'code':'U17','title':'U17'},
-  ];
+  Color _darken(Color c) => Color.fromARGB(c.alpha, (c.red * .7).round(), (c.green * .7).round(), (c.blue * .7).round());
 }
 
+// ==================== Компоненты ====================
+
+class _IconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final String tooltip;
+  final bool filled;
+  final bool compact;
+  final bool isLoading;
+
+  const _IconButton({
+    required this.icon,
+    required this.onPressed,
+    required this.tooltip,
+    this.filled = false,
+    this.compact = false,
+    this.isLoading = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final size = compact ? 38.0 : 42.0;
+    final bgColor = filled ? _CmrTestColors.graphite : _CmrTestColors.panel;
+    final fgColor = filled ? _CmrTestColors.green : _CmrTestColors.graphite;
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: isLoading ? null : onPressed,
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: filled ? _CmrTestColors.graphite : _CmrTestColors.line, width: 1),
+            boxShadow: filled
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(.08),
+                      blurRadius: 14,
+                      offset: const Offset(0, 8),
+                    ),
+                  ]
+                : null,
+          ),
+          child: isLoading
+              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : Icon(icon, color: fgColor, size: size * 0.48),
+        ),
+      ),
+    );
+  }
+}
+
+class _IconBox extends StatelessWidget {
+  final IconData icon;
+  final double size;
+
+  const _IconBox({required this.icon, this.size = 42});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: _CmrTestColors.panel,
+        borderRadius: BorderRadius.circular(size * 0.35),
+        border: Border.all(color: _CmrTestColors.line, width: 1),
+      ),
+      child: Icon(icon, color: _CmrTestColors.green, size: size * 0.48),
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final VoidCallback onTap;
+
+  const _ActionButton({
+    required this.icon,
+    required this.text,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: _CmrTestColors.panel,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _CmrTestColors.line, width: 1),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: _CmrTestColors.green, size: 19),
+              const SizedBox(width: 8),
+              Text(text, style: _CmrTestText.action()),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SquareButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool compact;
+
+  const _SquareButton({required this.icon, required this.onTap, this.compact = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final size = compact ? 38.0 : 42.0;
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(compact ? 14 : 15),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(compact ? 14 : 15),
+        onTap: onTap,
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: _CmrTestColors.panel,
+            borderRadius: BorderRadius.circular(compact ? 14 : 15),
+            border: Border.all(color: _CmrTestColors.line, width: 1),
+          ),
+          child: Icon(icon, color: _CmrTestColors.text, size: size * 0.55),
+        ),
+      ),
+    );
+  }
+}
+
+class _CategoryChip extends StatelessWidget {
+  final String code;
+  final String title;
+  final String hint;
+  final IconData icon;
+  final bool active;
+  final bool compact;
+  final bool isTightDesktop;
+  final bool isVeryTight;
+  final VoidCallback onTap;
+
+  const _CategoryChip({
+    required this.code,
+    required this.title,
+    required this.hint,
+    required this.icon,
+    required this.active,
+    required this.compact,
+    required this.isTightDesktop,
+    required this.isVeryTight,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final titleFontSize = compact ? 10.8 : (isVeryTight ? 10.2 : isTightDesktop ? 10.8 : 11.4);
+    final iconBox = compact ? 28.0 : (isTightDesktop ? 22.0 : 24.0);
+    final iconSize = compact ? 15.5 : (isTightDesktop ? 13.5 : 14.5);
+    final horizontalPadding = compact ? 9.0 : (isTightDesktop ? 7.0 : 9.0);
+    final verticalPadding = compact ? 8.0 : 7.0;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(compact ? 16 : 14),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        width: compact ? 158 : null,
+        constraints: compact ? const BoxConstraints(minHeight: 60) : const BoxConstraints(minHeight: 34),
+        padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: verticalPadding),
+        decoration: BoxDecoration(
+          color: active ? _CmrTestColors.panel : _CmrTestColors.soft,
+          borderRadius: BorderRadius.circular(compact ? 16 : 14),
+          border: Border.all(color: active ? _CmrTestColors.green.withOpacity(.38) : _CmrTestColors.line, width: active ? 1.2 : 1),
+        ),
+        child: Row(
+          mainAxisSize: compact ? MainAxisSize.max : MainAxisSize.min,
+          children: [
+            Container(
+              width: iconBox,
+              height: iconBox,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(compact ? 10 : 9),
+              ),
+              child: Icon(icon, size: iconSize, color: _CmrTestColors.green),
+            ),
+            SizedBox(width: compact ? 7 : 6),
+            Flexible(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: compact ? 2 : 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _CmrTestText.value(titleFontSize).copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: _CmrTestColors.text,
+                    ),
+                  ),
+                  if (compact) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      hint,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _CmrTestText.caption().copyWith(
+                        color: active ? _CmrTestColors.text : _CmrTestColors.muted,
+                        fontSize: 9.4,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PositionChip extends StatelessWidget {
+  final String value;
+  final String label;
+  final int count;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _PositionChip({
+    required this.value,
+    required this.label,
+    required this.count,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+          decoration: BoxDecoration(
+            color: active ? _CmrTestColors.panel : _CmrTestColors.soft,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: active ? _CmrTestColors.green.withOpacity(.38) : _CmrTestColors.line, width: active ? 1.2 : 1),
+          ),
+          child: Text(
+            '$label · $count',
+            style: _CmrTestText.caption().copyWith(
+              color: _CmrTestColors.text,
+              fontWeight: FontWeight.w800,
+              fontSize: 11,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SearchField extends StatelessWidget {
+  final TextEditingController controller;
+  final String hint;
+  final VoidCallback onClear;
+  final bool compact;
+
+  const _SearchField({
+    required this.controller,
+    required this.hint,
+    required this.onClear,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 12, vertical: compact ? 6 : 7),
+      decoration: _CmrTestDecor.softCard(radius: compact ? 14 : 16),
+      child: Row(
+        children: [
+          Icon(Icons.search_rounded, size: compact ? 19 : 22, color: _CmrTestColors.muted),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              style: _CmrTestText.value(compact ? 13 : 14),
+              decoration: InputDecoration(
+                hintText: hint,
+                border: InputBorder.none,
+                isDense: true,
+                hintStyle: _CmrTestText.muted(compact ? 12.5 : 14),
+              ),
+              textInputAction: TextInputAction.search,
+            ),
+          ),
+          if (controller.text.isNotEmpty)
+            IconButton(
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              icon: const Icon(Icons.close_rounded, size: 20),
+              onPressed: onClear,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ==================== Остальные классы ====================
+
+class TestingApi {
+  static const String base = 'https://sportotekaapp.ru/api';
+}
+
+class _Rating {
+  final String code;
+  final Color color;
+  final String label;
+  final int points;
+  const _Rating(this.code, this.color, this.label, {this.points = 0});
+  factory _Rating.empty() => const _Rating('', Colors.transparent, '', points: 0);
+  factory _Rating.fromHex(String code, String hex, String label, {int? points}) {
+    final clean = hex.replaceAll('#', '');
+    final value = int.tryParse('FF$clean', radix: 16) ?? 0x00000000;
+    final autoPoints = code == 'excellent' ? 4 : code == 'good' ? 3 : code == 'satisfactory' ? 2 : code == 'poor' ? 1 : 0;
+    return _Rating(code, Color(value), label, points: points ?? autoPoints);
+  }
+}
+
+class _PhysicalNorms {
+  static final Map<String, Map<String, List<double?>>> norms = {
+    'U6': {'run_10m':[null,2.25,2.30,2.35], 'long_jump':[120,110,100,null]},
+    'U7': {'run_10m':[null,2.20,2.25,2.30], 'long_jump':[140,130,120,null], 'run_30m':[null,5.70,5.85,6.00], 'shuttle_3x10':[null,8.90,9.10,9.30]},
+    'U8': {'run_10m':[null,2.15,2.20,2.25], 'long_jump':[160,150,140,null], 'run_30m':[null,5.50,5.65,5.80], 'shuttle_3x10':[null,8.60,8.80,9.00]},
+    'U9': {'run_10m':[null,2.10,2.15,2.20], 'long_jump':[180,170,160,null], 'run_30m':[null,5.30,5.45,5.60], 'shuttle_3x10':[null,8.30,8.50,8.70]},
+    'U10': {'run_10m':[null,2.05,2.10,2.15], 'long_jump':[200,190,180,null], 'run_30m':[null,5.10,5.25,5.40], 'shuttle_3x10':[null,8.00,8.20,8.40]},
+    'U11': {'run_10m':[null,2.05,2.10,2.15], 'long_jump':[200,190,180,null], 'run_30m':[null,5.10,5.25,5.40], 'shuttle_3x10':[null,8.00,8.20,8.40]},
+    'U12': {'run_10m':[null,2.00,2.05,2.10], 'long_jump':[210,200,190,null], 'run_30m':[null,4.90,5.05,5.20], 'shuttle_3x10':[null,7.75,7.95,8.15]},
+    'U13': {'run_10m':[null,1.95,2.00,2.05], 'long_jump':[220,210,200,null], 'run_30m':[null,4.70,4.85,5.00], 'shuttle_3x10':[null,7.50,7.70,7.90]},
+    'U14': {'run_10m':[null,1.90,1.95,2.00], 'long_jump':[230,220,210,null], 'run_30m':[null,4.50,4.65,4.80], 'shuttle_3x10':[null,7.25,7.45,7.65]},
+    'U15': {'run_10m':[null,1.85,1.90,1.95], 'long_jump':[240,230,220,null], 'run_30m':[null,4.30,4.45,4.60], 'shuttle_3x10':[null,7.00,7.20,7.40]},
+    'U16': {'run_10m':[null,1.80,1.85,1.90], 'long_jump':[250,240,230,null], 'run_30m':[null,4.15,4.30,4.45], 'shuttle_3x10':[null,6.75,6.95,7.15]},
+    'U17': {'run_10m':[null,1.75,1.80,1.85], 'long_jump':[260,250,240,null], 'run_30m':[null,4.00,4.15,4.30], 'shuttle_3x10':[null,6.50,6.70,6.90]},
+  };
+
+  static _Rating rate(double v, List<double?> m, bool lowerIsBetter) {
+    if (lowerIsBetter) {
+      if (v <= m[1]!) return const _Rating('excellent', _CmrTestColors.green, 'Отлично', points: 4);
+      if (v <= m[2]!) return const _Rating('good', _CmrTestColors.yellow, 'Хорошо', points: 3);
+      if (v <= m[3]!) return const _Rating('satisfactory', _CmrTestColors.orange, 'Удовлетворительно', points: 2);
+      return const _Rating('poor', _CmrTestColors.red, 'Неудовлетворительно', points: 1);
+    }
+    if (v >= m[0]!) return const _Rating('excellent', _CmrTestColors.green, 'Отлично', points: 4);
+    if (v >= m[1]!) return const _Rating('good', _CmrTestColors.yellow, 'Хорошо', points: 3);
+    if (v >= m[2]!) return const _Rating('satisfactory', _CmrTestColors.orange, 'Удовлетворительно', points: 2);
+    return const _Rating('poor', _CmrTestColors.red, 'Неудовлетворительно', points: 1);
+  }
+}
+
+// ==================== _TestSchemePainter ====================
 
 class _TestSchemePainter extends CustomPainter {
   final String code;
@@ -2425,14 +3144,10 @@ class _TestSchemePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final field = RRect.fromRectAndRadius(Offset(18, 18) & Size(size.width - 36, size.height - 36), const Radius.circular(18));
-    final bg = Paint()..color = const Color(0xFFEAF8F0);
+    final bg = Paint()..color = const Color(0xFFF2F7F4);
     final line = Paint()
-      ..color = const Color(0xFF087A43)
+      ..color = const Color(0xFF1F7A4D)
       ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-    final dash = Paint()
-      ..color = const Color(0xFF94A3B8)
-      ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke;
     canvas.drawRRect(field, bg);
     canvas.drawRRect(field, line);
@@ -2458,7 +3173,7 @@ class _TestSchemePainter extends CustomPainter {
   }
 
   void _drawStraight(Canvas canvas, Size size, String length, String width) {
-    final p = Paint()..color = const Color(0xFF087A43)..strokeWidth = 4..strokeCap = StrokeCap.round;
+    final p = Paint()..color = const Color(0xFF1F7A4D)..strokeWidth = 4..strokeCap = StrokeCap.round;
     final y = size.height * .52;
     final x1 = size.width * .18;
     final x2 = size.width * .82;
@@ -2485,7 +3200,7 @@ class _TestSchemePainter extends CustomPainter {
 
   void _drawDribbleLanes(Canvas canvas, Size size) {
     final left = size.width * .2, right = size.width * .8, top = size.height * .42, bottom = size.height * .58;
-    final paint = Paint()..color = const Color(0xFF087A43)..strokeWidth = 2..style = PaintingStyle.stroke;
+    final paint = Paint()..color = const Color(0xFF1F7A4D)..strokeWidth = 2..style = PaintingStyle.stroke;
     canvas.drawRect(Rect.fromLTRB(left, top, right, bottom), paint);
     for (var i = 1; i < 5; i++) {
       final x = left + (right - left) / 5 * i;
@@ -2514,7 +3229,7 @@ class _TestSchemePainter extends CustomPainter {
   void _drawJump(Canvas canvas, Size size) {
     final x = size.width * .28;
     final y = size.height * .66;
-    final paint = Paint()..color = const Color(0xFF087A43)..strokeWidth = 4;
+    final paint = Paint()..color = const Color(0xFF1F7A4D)..strokeWidth = 4;
     canvas.drawLine(Offset(x, y - 70), Offset(x, y + 35), paint);
     _cone(canvas, Offset(x, y - 70)); _cone(canvas, Offset(x, y + 35));
     _arrow(canvas, Offset(x + 16, y), Offset(size.width * .78, y));
@@ -2525,7 +3240,7 @@ class _TestSchemePainter extends CustomPainter {
   void _drawShot(Canvas canvas, Size size) {
     final goal = Rect.fromLTWH(size.width * .65, size.height * .34, size.width * .18, size.height * .32);
     canvas.drawRect(goal, Paint()..color = Colors.white..style = PaintingStyle.fill);
-    canvas.drawRect(goal, Paint()..color = const Color(0xFF087A43)..strokeWidth = 2..style = PaintingStyle.stroke);
+    canvas.drawRect(goal, Paint()..color = const Color(0xFF1F7A4D)..strokeWidth = 2..style = PaintingStyle.stroke);
     canvas.drawLine(Offset(goal.left + goal.width * .33, goal.top), Offset(goal.left + goal.width * .33, goal.bottom), Paint()..color = const Color(0xFF94A3B8)..strokeWidth = 1);
     canvas.drawLine(Offset(goal.left + goal.width * .67, goal.top), Offset(goal.left + goal.width * .67, goal.bottom), Paint()..color = const Color(0xFF94A3B8)..strokeWidth = 1);
     final ball = Offset(size.width * .26, size.height * .58);
@@ -2567,7 +3282,7 @@ class _TestSchemePainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.shortestSide * .28;
     canvas.drawCircle(center, radius, Paint()..color = Colors.white.withOpacity(.8)..style = PaintingStyle.fill);
-    canvas.drawCircle(center, radius, Paint()..color = const Color(0xFF087A43)..strokeWidth = 2..style = PaintingStyle.stroke);
+    canvas.drawCircle(center, radius, Paint()..color = const Color(0xFF1F7A4D)..strokeWidth = 2..style = PaintingStyle.stroke);
     _ball(canvas, center.translate(-14, -16));
     _label(canvas, label, center.translate(-24, radius + 18));
   }
@@ -2588,7 +3303,7 @@ class _TestSchemePainter extends CustomPainter {
   }
 
   void _arrow(Canvas canvas, Offset a, Offset b) {
-    final p = Paint()..color = const Color(0xFF087A43)..strokeWidth = 2.2..strokeCap = StrokeCap.round;
+    final p = Paint()..color = const Color(0xFF1F7A4D)..strokeWidth = 2.2..strokeCap = StrokeCap.round;
     canvas.drawLine(a, b, p);
     final dir = (b - a);
     final len = dir.distance == 0 ? 1 : dir.distance;
@@ -2599,7 +3314,7 @@ class _TestSchemePainter extends CustomPainter {
   }
 
   void _flag(Canvas canvas, Offset o, String text) {
-    canvas.drawCircle(o, 7, Paint()..color = const Color(0xFF087A43));
+    canvas.drawCircle(o, 7, Paint()..color = const Color(0xFF1F7A4D));
     _label(canvas, text, o.translate(-22, 16));
   }
 
@@ -2629,10 +3344,10 @@ class _TestSchemePainter extends CustomPainter {
 
   void _miniGoal(Canvas canvas, Offset o) {
     canvas.drawRect(Rect.fromCenter(center: o, width: 10, height: 70), Paint()..color = Colors.white);
-    canvas.drawRect(Rect.fromCenter(center: o, width: 10, height: 70), Paint()..color = const Color(0xFF087A43)..strokeWidth = 2..style = PaintingStyle.stroke);
+    canvas.drawRect(Rect.fromCenter(center: o, width: 10, height: 70), Paint()..color = const Color(0xFF1F7A4D)..strokeWidth = 2..style = PaintingStyle.stroke);
   }
 
-  void _label(Canvas canvas, String text, Offset o, {Color color = const Color(0xFF15221B), double size = 11, bool bold = false}) {
+  void _label(Canvas canvas, String text, Offset o, {Color color = const Color(0xFF101828), double size = 11, bool bold = false}) {
     final tp = TextPainter(
       text: TextSpan(text: text, style: TextStyle(color: color, fontSize: size, fontWeight: bold ? FontWeight.w900 : FontWeight.w700)),
       textDirection: TextDirection.ltr,
@@ -2643,69 +3358,4 @@ class _TestSchemePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _TestSchemePainter oldDelegate) => oldDelegate.code != code || oldDelegate.title != title;
-}
-
-class TestingApi {
-  static const String base = 'https://sportotekaapp.ru/api';
-}
-
-class _Rating {
-  final String code;
-  final Color color;
-  final String label;
-  final int points;
-  const _Rating(this.code, this.color, this.label, {this.points = 0});
-  factory _Rating.empty() => const _Rating('', Colors.transparent, '', points: 0);
-  factory _Rating.fromHex(String code, String hex, String label, {int? points}) {
-    final clean = hex.replaceAll('#', '');
-    final value = int.tryParse('FF$clean', radix: 16) ?? 0x00000000;
-    final autoPoints = code == 'excellent' ? 4 : code == 'good' ? 3 : code == 'satisfactory' ? 2 : code == 'poor' ? 1 : 0;
-    return _Rating(code, Color(value), label, points: points ?? autoPoints);
-  }
-}
-
-class _PhysicalNorms {
-  static final Map<String, Map<String, List<double?>>> norms = {
-    'U6': {'run_10m':[null,2.25,2.30,2.35], 'long_jump':[120,110,100,null]},
-    'U7': {'run_10m':[null,2.20,2.25,2.30], 'long_jump':[140,130,120,null], 'run_30m':[null,5.70,5.85,6.00], 'shuttle_3x10':[null,8.90,9.10,9.30]},
-    'U8': {'run_10m':[null,2.15,2.20,2.25], 'long_jump':[160,150,140,null], 'run_30m':[null,5.50,5.65,5.80], 'shuttle_3x10':[null,8.60,8.80,9.00]},
-    'U9': {'run_10m':[null,2.10,2.15,2.20], 'long_jump':[180,170,160,null], 'run_30m':[null,5.30,5.45,5.60], 'shuttle_3x10':[null,8.30,8.50,8.70]},
-    'U10': {'run_10m':[null,2.05,2.10,2.15], 'long_jump':[200,190,180,null], 'run_30m':[null,5.10,5.25,5.40], 'shuttle_3x10':[null,8.00,8.20,8.40]},
-    'U11': {'run_10m':[null,2.05,2.10,2.15], 'long_jump':[200,190,180,null], 'run_30m':[null,5.10,5.25,5.40], 'shuttle_3x10':[null,8.00,8.20,8.40]},
-    'U12': {'run_10m':[null,2.00,2.05,2.10], 'long_jump':[210,200,190,null], 'run_30m':[null,4.90,5.05,5.20], 'shuttle_3x10':[null,7.75,7.95,8.15]},
-    'U13': {'run_10m':[null,1.95,2.00,2.05], 'long_jump':[220,210,200,null], 'run_30m':[null,4.70,4.85,5.00], 'shuttle_3x10':[null,7.50,7.70,7.90]},
-    'U14': {'run_10m':[null,1.90,1.95,2.00], 'long_jump':[230,220,210,null], 'run_30m':[null,4.50,4.65,4.80], 'shuttle_3x10':[null,7.25,7.45,7.65]},
-    'U15': {'run_10m':[null,1.85,1.90,1.95], 'long_jump':[240,230,220,null], 'run_30m':[null,4.30,4.45,4.60], 'shuttle_3x10':[null,7.00,7.20,7.40]},
-    'U16': {'run_10m':[null,1.80,1.85,1.90], 'long_jump':[250,240,230,null], 'run_30m':[null,4.15,4.30,4.45], 'shuttle_3x10':[null,6.75,6.95,7.15]},
-    'U17': {'run_10m':[null,1.75,1.80,1.85], 'long_jump':[260,250,240,null], 'run_30m':[null,4.00,4.15,4.30], 'shuttle_3x10':[null,6.50,6.70,6.90]},
-  };
-
-  static _Rating rate(double v, List<double?> m, bool lowerIsBetter) {
-    if (lowerIsBetter) {
-      if (v <= m[1]!) return const _Rating('excellent', Color(0xFF22C55E), 'Отлично', points: 4);
-      if (v <= m[2]!) return const _Rating('good', Color(0xFFFACC15), 'Хорошо', points: 3);
-      if (v <= m[3]!) return const _Rating('satisfactory', Color(0xFFFB923C), 'Удовлетворительно', points: 2);
-      return const _Rating('poor', Color(0xFFEF4444), 'Неудовлетворительно', points: 1);
-    }
-    if (v >= m[0]!) return const _Rating('excellent', Color(0xFF22C55E), 'Отлично', points: 4);
-    if (v >= m[1]!) return const _Rating('good', Color(0xFFFACC15), 'Хорошо', points: 3);
-    if (v >= m[2]!) return const _Rating('satisfactory', Color(0xFFFB923C), 'Удовлетворительно', points: 2);
-    return const _Rating('poor', Color(0xFFEF4444), 'Неудовлетворительно', points: 1);
-  }
-}
-
-class _C {
-  static const page = Color(0xFFF7FAF8);
-  static const green = Color(0xFF00A750);
-  static const greenDark = Color(0xFF087A43);
-  static const greenSoft = Color(0xFFEAF8F0);
-  static const line = Color(0xFFE6ECE8);
-  static const input = Color(0xFFF3F7F5);
-  static const tile = Color(0xFFF6F9F7);
-  static const text = Color(0xFF15221B);
-  static const muted = Color(0xFF647067);
-  static const h1 = TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w900);
-  static const h2 = TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w900);
-  static const body = TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w600);
-  static const caption = TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.w600);
 }

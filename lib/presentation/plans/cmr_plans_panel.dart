@@ -33,6 +33,8 @@ class CmrPlansPanel extends StatefulWidget {
   State<CmrPlansPanel> createState() => _CmrPlansPanelState();
 }
 
+enum _UnsavedDraftChoice { stay, openOther, exitWithoutSaving }
+
 class _CmrPlansPanelState extends State<CmrPlansPanel> {
   bool loading = true;
   bool saving = false;
@@ -497,9 +499,190 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
     dateCtrl.text = _asStr(p?['plan_date'] ?? p?['created_at']);
   }
 
-  void _selectFolder(Map<String, dynamic>? folder) {
+  bool get _hasUnsavedLocalDraft {
+    final plan = selectedPlan;
+    if (plan == null) return false;
+
+    final isLocalDraft = plan['_is_local_draft'] == true ||
+        '${plan['_is_local_draft']}'.toLowerCase() == 'true';
+
+    return _asInt(plan['id'] ?? plan['plan_id']) <= 0 || isLocalDraft;
+  }
+
+  Future<_UnsavedDraftChoice> _confirmCloseUnsavedDraft({
+    required String openOtherText,
+  }) async {
+    if (!_hasUnsavedLocalDraft) return _UnsavedDraftChoice.openOther;
+
+    final isMobile = _isMobile(context);
+
+    final result = await Get.dialog<_UnsavedDraftChoice>(
+      Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 14 : 24,
+          vertical: 24,
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: isMobile ? MediaQuery.of(context).size.width - 28 : 520,
+          ),
+          child: Material(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.fromLTRB(
+                    isMobile ? 16 : 22,
+                    isMobile ? 16 : 20,
+                    isMobile ? 16 : 22,
+                    16,
+                  ),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFFFFF7ED), Colors.white],
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFEDD5),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: const Icon(
+                          Icons.edit_document,
+                          color: Color(0xFFC2410C),
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'План не сохранён',
+                              style: _C.h1.copyWith(fontSize: isMobile ? 18 : 21),
+                            ),
+                            const SizedBox(height: 5),
+                            Text(
+                              'Открыт новый черновик. Сохраните его или подтвердите переход, чтобы не потерять данные.',
+                              style: _C.body.copyWith(fontSize: isMobile ? 12.5 : 13.2),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    isMobile ? 14 : 20,
+                    6,
+                    isMobile ? 14 : 20,
+                    isMobile ? 14 : 20,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () => Get.back(result: _UnsavedDraftChoice.stay),
+                          icon: const Icon(Icons.save_rounded, size: 19),
+                          label: const Text('Остаться и сохранить'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _C.graphite,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            textStyle: const TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () => Get.back(result: _UnsavedDraftChoice.openOther),
+                          icon: const Icon(Icons.folder_open_rounded, size: 19),
+                          label: Text(openOtherText),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: _C.text,
+                            side: const BorderSide(color: _C.line),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            textStyle: const TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: TextButton.icon(
+                          onPressed: () => Get.back(result: _UnsavedDraftChoice.exitWithoutSaving),
+                          icon: const Icon(Icons.delete_outline_rounded, size: 19),
+                          label: const Text('Выйти без сохранения'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFFB91C1C),
+                            padding: const EdgeInsets.symmetric(vertical: 13),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            textStyle: const TextStyle(
+                              fontSize: 13.2,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      barrierDismissible: false,
+    );
+
+    return result ?? _UnsavedDraftChoice.stay;
+  }
+
+  Future<void> _selectFolder(Map<String, dynamic>? folder) async {
+    final nextFolderId = folder == null ? null : _asInt(folder['id']);
+    if (selectedFolderId == nextFolderId) return;
+
+    final draftChoice = await _confirmCloseUnsavedDraft(
+      openOtherText: 'Открыть другую папку',
+    );
+    if (draftChoice == _UnsavedDraftChoice.stay) return;
+
+    if (!mounted) return;
     setState(() {
-      selectedFolderId = folder == null ? null : _asInt(folder['id']);
+      selectedPlan = null;
+      selectedFolderId = nextFolderId;
       selectedFolderTitle = folder == null
           ? 'Все материалы'
           : (_asStr(folder['title']).isEmpty
@@ -521,19 +704,49 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
       }
     });
 
-    _loadPlansForTeam();
+    await _loadPlansForTeam();
   }
 
-  void _selectPlan(Map<String, dynamic> plan) {
+  Future<void> _selectPlan(Map<String, dynamic> plan) async {
+    final currentPlanId = _asInt(selectedPlan?['id'] ?? selectedPlan?['plan_id']);
+    final nextPlanId = _asInt(plan['id'] ?? plan['plan_id']);
+    final sameSavedPlan = currentPlanId > 0 && currentPlanId == nextPlanId;
+    if (sameSavedPlan) return;
+
+    final draftChoice = await _confirmCloseUnsavedDraft(
+      openOtherText: 'Открыть другой',
+    );
+    if (draftChoice == _UnsavedDraftChoice.stay) return;
+
+    if (!mounted) return;
     setState(() {
       selectedPlan = plan;
       editMode = false;
+      showFoldersList = false;
     });
 
     _syncEditors();
   }
 
-  void _handleBack() {
+  Future<void> _handleBack() async {
+    if (_hasUnsavedLocalDraft) {
+      final draftChoice = await _confirmCloseUnsavedDraft(
+        openOtherText: 'Открыть другой',
+      );
+      if (draftChoice == _UnsavedDraftChoice.stay) return;
+
+      if (!mounted) return;
+      setState(() {
+        selectedPlan = null;
+        editMode = false;
+      });
+
+      if (draftChoice == _UnsavedDraftChoice.openOther) {
+        _syncEditors();
+        return;
+      }
+    }
+
     if (editMode) {
       setState(() => editMode = false);
       _syncEditors();
@@ -588,10 +801,6 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                     decoration: BoxDecoration(
                       color: selected ? _C.greenSoft : _C.input,
                       borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color: selected ? _C.green.withOpacity(.32) : _C.line,
-                        width: selected ? 1.4 : 1,
-                      ),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -603,7 +812,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                               height: 32,
                               decoration: BoxDecoration(
                                 color: selected ? Colors.white : Colors.white.withOpacity(.75),
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(18),
                               ),
                               child: Icon(
                                 icon,
@@ -619,7 +828,6 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                               decoration: BoxDecoration(
                                 color: selected ? _C.green : Colors.white,
                                 shape: BoxShape.circle,
-                                border: Border.all(color: selected ? _C.green : _C.line),
                               ),
                               child: selected
                                   ? const Icon(Icons.check_rounded, color: Colors.white, size: 14)
@@ -683,7 +891,6 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                             decoration: BoxDecoration(
                               color: _C.greenSoft,
                               borderRadius: BorderRadius.circular(18),
-                              border: Border.all(color: _C.green.withOpacity(.12)),
                             ),
                             child: const Icon(Icons.create_new_folder_rounded, color: _C.greenDark, size: 25),
                           ),
@@ -748,7 +955,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(18),
-                                borderSide: const BorderSide(color: _C.green, width: 1.4),
+                                borderSide: BorderSide.none,
                               ),
                             ),
                           ),
@@ -811,7 +1018,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                             children: [
                               Expanded(
                                 child: OutlinedButton(
-                                  onPressed: () => Get.back(result: false),
+                                  onPressed: () => Get.back(result: _UnsavedDraftChoice.stay),
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: _C.text,
                                     side: const BorderSide(color: _C.line),
@@ -829,7 +1036,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                                   icon: const Icon(Icons.add_rounded, size: 19),
                                   label: const Text('Создать'),
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: _C.green,
+                                    backgroundColor: _C.graphite,
                                     foregroundColor: Colors.white,
                                     elevation: 0,
                                     minimumSize: const Size.fromHeight(46),
@@ -892,25 +1099,138 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
     final titleCtrl = TextEditingController(text: selectedFolderTitle);
 
     final ok = await Get.dialog<bool>(
-      AlertDialog(
-        title: const Text('Переименовать папку'),
-        content: TextField(
-          controller: titleCtrl,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'Новое название',
+      Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Material(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(26),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.fromLTRB(18, 18, 12, 16),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFFF4FBF7), Colors.white],
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: _C.greenSoft,
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: const Icon(Icons.drive_file_rename_outline_rounded, color: _C.greenDark, size: 24),
+                      ),
+                      const SizedBox(width: 13),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Переименовать папку', style: _C.h1.copyWith(fontSize: 20)),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Новое название будет видно в дереве папок и в сетке материалов.',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: _C.body.copyWith(fontSize: 12.2),
+                            ),
+                          ],
+                        ),
+                      ),
+                      _SquareTool(
+                        icon: Icons.close_rounded,
+                        onTap: () => Get.back(result: false),
+                        tooltip: 'Закрыть',
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: titleCtrl,
+                        autofocus: true,
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => Get.back(result: true),
+                        style: const TextStyle(
+                          color: _C.text,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                        ),
+                        decoration: InputDecoration(
+                          labelText: 'Название папки',
+                          hintText: 'Например: Микроциклы, Ведение мяча',
+                          prefixIcon: const Icon(Icons.folder_rounded, color: _C.greenDark),
+                          filled: true,
+                          fillColor: _C.input,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: BorderSide.none,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: BorderSide.none,
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Get.back(result: _UnsavedDraftChoice.stay),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: _C.text,
+                                side: const BorderSide(color: _C.line),
+                                minimumSize: const Size.fromHeight(46),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                              ),
+                              child: const Text('Отмена'),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () => Get.back(result: true),
+                              icon: const Icon(Icons.check_rounded, size: 18),
+                              label: const Text('Сохранить'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _C.graphite,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                minimumSize: const Size.fromHeight(46),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Get.back(result: false),
-            child: const Text('Отмена'),
-          ),
-          ElevatedButton(
-            onPressed: () => Get.back(result: true),
-            child: const Text('Сохранить'),
-          ),
-        ],
       ),
     );
 
@@ -1000,6 +1320,131 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
     }
   }
 
+
+  Map<String, dynamic>? _decodeLooseJson(String body) {
+    final trimmed = body.trim();
+    if (trimmed.isEmpty) return null;
+
+    try {
+      final decoded = jsonDecode(trimmed);
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    } catch (_) {}
+
+    final start = trimmed.indexOf('{');
+    final end = trimmed.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      try {
+        final decoded = jsonDecode(trimmed.substring(start, end + 1));
+        if (decoded is Map) return Map<String, dynamic>.from(decoded);
+      } catch (_) {}
+    }
+
+    return null;
+  }
+
+  int _planIdFromResponse(Map<String, dynamic> data) {
+    final candidates = <dynamic>[
+      data['plan_id'],
+      data['id'],
+      data['new_id'],
+      data['insert_id'],
+      data['created_id'],
+    ];
+
+    final nestedKeys = ['plan', 'item', 'data'];
+    for (final key in nestedKeys) {
+      final nested = data[key];
+      if (nested is Map) {
+        candidates.add(nested['plan_id']);
+        candidates.add(nested['id']);
+      }
+    }
+
+    for (final value in candidates) {
+      final id = _asInt(value);
+      if (id > 0) return id;
+    }
+
+    return 0;
+  }
+
+  Future<Map<String, dynamic>> _postPlanJson(
+    String endpoint,
+    Map<String, dynamic> payload,
+  ) async {
+    final response = await http
+        .post(
+          Uri.parse('${TrainingPlansApi.base}/$endpoint'),
+          headers: const {'Content-Type': 'application/json; charset=utf-8'},
+          body: jsonEncode(payload),
+        )
+        .timeout(const Duration(seconds: 14));
+
+    final data = _decodeLooseJson(response.body);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw 'HTTP ${response.statusCode}: ${response.body}';
+    }
+
+    if (data == null) {
+      throw response.body.isEmpty ? 'Сервер вернул пустой ответ' : response.body;
+    }
+
+    return data;
+  }
+
+  Future<void> _createPlanInCurrentFolder() async {
+    if (saving) return;
+
+    final folderId = _activeFolderId;
+    final folderTitle = folderId > 0 ? selectedFolderTitle : 'Все материалы';
+    final now = DateTime.now();
+    final date = [
+      now.year.toString().padLeft(4, '0'),
+      now.month.toString().padLeft(2, '0'),
+      now.day.toString().padLeft(2, '0'),
+    ].join('-');
+
+    final draft = <String, dynamic>{
+      'id': 0,
+      'plan_id': 0,
+      'club_id': widget.clubId,
+      'club_name': widget.clubName,
+      'team_id': widget.teamId ?? 0,
+      'team_name': widget.teamName,
+      'folder_id': folderId,
+      'folder_title': folderTitle,
+      'folder_name': folderTitle,
+      'theme': 'Новый план',
+      'cycle_title': 'Недельный цикл',
+      'description': '',
+      'plan_description': '',
+      'plan_date': date,
+      'date': date,
+      'location': 'Тренировочное поле',
+      'players_count': 12,
+      'duration_min': 90,
+      'created_at': date,
+      '_is_local_draft': true,
+    };
+
+    if (!mounted) return;
+
+    setState(() {
+      selectedPlan = draft;
+      editMode = true;
+    });
+
+    _syncEditors();
+
+    Get.snackbar(
+      'Новый план',
+      'Черновик открыт справа. Заполните поля и нажмите сохранить — план будет создан на сервере.',
+      snackPosition: SnackPosition.BOTTOM,
+      margin: const EdgeInsets.all(12),
+    );
+  }
+
   Future<void> _renameSelectedPlan() async {
     final plan = selectedPlan;
     if (plan == null) {
@@ -1061,7 +1506,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
 
       final response = await http
           .post(
-            Uri.parse('${TrainingPlansApi.base}/update_training_plan.php'),
+            Uri.parse('${TrainingPlansApi.base}/create_training_plan.php'),
             headers: const {'Content-Type': 'application/json; charset=utf-8'},
             body: jsonEncode(payload),
           )
@@ -1164,7 +1609,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
 
       final response = await http
           .post(
-            Uri.parse('${TrainingPlansApi.base}/update_training_plan.php'),
+            Uri.parse('${TrainingPlansApi.base}/create_training_plan.php'),
             headers: const {
               'Content-Type': 'application/json; charset=utf-8',
             },
@@ -1269,17 +1714,8 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
           decoration: const BoxDecoration(color: _C.page),
           child: isMobile ? _buildMobileFinder() : _buildFinderLayout(),
         ),
-        if (saving)
-          const Positioned(
-            left: 0,
-            right: 0,
-            top: 0,
-            child: LinearProgressIndicator(
-              minHeight: 3,
-              color: _C.green,
-              backgroundColor: _C.greenSoft,
-            ),
-          ),
+        // Верхнюю полоску загрузки убрали, чтобы правый блок с кнопками
+        // «Сохранить» и действиями не отделялся линией от белого фона.
       ],
     );
   }
@@ -1314,7 +1750,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                 child: const LinearProgressIndicator(
                   minHeight: 5,
                   color: _C.green,
-                  backgroundColor: _C.greenSoft,
+                  backgroundColor: _C.graphite,
                 ),
               ),
             ],
@@ -1329,16 +1765,20 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
       builder: (context, constraints) {
         final width = constraints.maxWidth;
         final sidebarWidth = width < 1180 ? 224.0 : 238.0;
-        final filesWidth = width < 1180 ? 286.0 : 306.0;
+        final filesWidth = width < 1180 ? 292.0 : 314.0;
 
-        return Row(
-          children: [
-            SizedBox(width: sidebarWidth, child: _buildSidebar()),
-            const VerticalDivider(width: 1, thickness: 1, color: _C.line),
-            SizedBox(width: filesWidth, child: _buildFilesColumn()),
-            const VerticalDivider(width: 1, thickness: 1, color: _C.line),
-            Expanded(child: _buildPreviewPane()),
-          ],
+        return Container(
+          color: _C.page,
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              SizedBox(width: sidebarWidth, child: _SoftPanel(child: _buildSidebar())),
+              const SizedBox(width: 10),
+              SizedBox(width: filesWidth, child: _SoftPanel(child: _buildFilesColumn())),
+              const SizedBox(width: 10),
+              Expanded(child: _SoftPanel(child: _buildPreviewPane())),
+            ],
+          ),
         );
       },
     );
@@ -1347,18 +1787,26 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
   Widget _buildMobileFinder() {
     final showPlan = selectedPlan != null && !showFoldersList;
 
-    return Column(
-      children: [
-        _buildMobileTopBar(),
-        const Divider(height: 1, color: _C.line),
-        Expanded(
-          child: showPlan
-              ? _buildPreviewPane(compact: true)
-              : showFoldersList
-                  ? _buildSidebar(mobile: true)
-                  : _buildFilesColumn(mobile: true),
-        ),
-      ],
+    return Container(
+      color: _C.page,
+      child: Column(
+        children: [
+          _buildMobileTopBar(),
+          const SizedBox(height: 8),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+              child: _SoftPanel(
+                child: showPlan
+                    ? _buildPreviewPane(compact: true)
+                    : showFoldersList
+                        ? _buildSidebar(mobile: true)
+                        : _buildFilesColumn(mobile: true),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1440,7 +1888,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
               ],
             ),
           ),
-          const Divider(height: 1, color: _C.line),
+          const SizedBox(height: 8),
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
@@ -1483,125 +1931,167 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
   }
 
   Widget _buildFilesColumn({bool mobile = false}) {
-    final total = plans.length + graphics.length + files.length;
+    final childFolders = _currentChildFolders;
+    final total = childFolders.length + plans.length + graphics.length + files.length;
 
     return Container(
       color: Colors.white,
       child: Column(
         children: [
           _buildFileToolbar(mobile: mobile),
-          const Divider(height: 1, color: _C.line),
-          _BrowserTableHeader(mobile: mobile),
-          const Divider(height: 1, color: _C.line),
+          const SizedBox(height: 8),
           Expanded(
             child: RefreshIndicator(
               color: _C.green,
               onRefresh: () async => _loadPlansForTeam(),
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(6, 6, 6, 12),
-                children: [
-                  if (loadingMaterials) const _MaterialsLoading(),
-                  if (materialsError != null) ...[
-                    _BrowserGroupLabel(
-                      title: 'Материалы',
-                      count: 0,
-                      icon: Icons.warning_amber_rounded,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = constraints.maxWidth;
+                  final columns = mobile
+                      ? 2
+                      : width >= 620
+                          ? 4
+                          : width >= 440
+                              ? 3
+                              : 2;
+                  final spacing = mobile ? 10.0 : 12.0;
+                  final aspect = mobile ? .82 : .86;
+                  final hasInfoCard = loadingMaterials || materialsError != null || total == 0;
+
+                  return GridView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: EdgeInsets.fromLTRB(mobile ? 10 : 14, 12, mobile ? 10 : 14, 18),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: columns,
+                      crossAxisSpacing: spacing,
+                      mainAxisSpacing: spacing,
+                      childAspectRatio: aspect,
                     ),
-                    _CompactEmptyBlock(
-                      title: 'Материалы не загрузились',
-                      text: materialsError!,
-                    ),
-                  ],
-                  if (plans.isNotEmpty) ...[
-                    _BrowserGroupLabel(
-                      title: 'Планы-конспекты',
-                      count: plans.length,
-                      icon: Icons.description_rounded,
-                    ),
-                    ...plans.map((plan) {
-                      final active = _asInt(plan['id']) == _asInt(selectedPlan?['id']);
-                      return _BrowserFileRow(
-                        title: _planTitle(plan),
-                        subtitle: _asStr(plan['trainer_name']).isNotEmpty
-                            ? _asStr(plan['trainer_name'])
-                            : (_asStr(plan['team_name']).isNotEmpty ? _asStr(plan['team_name']) : 'План-конспект'),
-                        folder: _asStr(plan['folder_title']).isNotEmpty
-                            ? _asStr(plan['folder_title'])
-                            : _folderTitleById(_asInt(plan['folder_id'])),
-                        date: _shortDate(_asStr(plan['plan_date']).isNotEmpty
-                            ? _asStr(plan['plan_date'])
-                            : _asStr(plan['created_at'])),
-                        badge: _planBadgesText(plan),
-                        icon: Icons.description_rounded,
-                        active: active,
-                        onTap: () => _selectPlan(plan),
-                        onRename: active ? _renameSelectedPlan : null,
-                      );
-                    }),
-                  ],
-                  if (!loadingMaterials && graphics.isNotEmpty) ...[
-                    _BrowserGroupLabel(
-                      title: 'Схемы',
-                      count: graphics.length,
-                      icon: Icons.account_tree_rounded,
-                      hint: 'зажмите и перетащите вправо',
-                    ),
-                    ...graphics.map((g) => _DraggableMaterialTile(
+                    itemCount: 1 + total + (hasInfoCard ? 1 : 0),
+                    itemBuilder: (_, index) {
+                      if (index == 0) {
+                        return _CreatePlanGridCard(
+                          title: 'Новый план',
+                          text: selectedFolderId == null
+                              ? 'Создать в материалах и открыть справа'
+                              : 'Создать в папке «$selectedFolderTitle» и открыть справа',
+                          onTap: saving ? null : _createPlanInCurrentFolder,
+                        );
+                      }
+
+                      if (loadingMaterials && index == 1) {
+                        return const _FinderGridInfoCard(
+                          icon: Icons.sync_rounded,
+                          title: 'Загрузка',
+                          text: 'Собираем файлы, схемы и планы',
+                          spinning: true,
+                        );
+                      }
+
+                      if (!loadingMaterials && materialsError != null && index == 1) {
+                        return _FinderGridInfoCard(
+                          icon: Icons.warning_amber_rounded,
+                          title: 'Ошибка',
+                          text: materialsError!,
+                        );
+                      }
+
+                      if (!loadingMaterials && materialsError == null && total == 0 && index == 1) {
+                        return const _FinderGridInfoCard(
+                          icon: Icons.folder_open_rounded,
+                          title: 'Папка пустая',
+                          text: 'Здесь пока нет материалов. Начните с кнопки «Новый план».',
+                        );
+                      }
+
+                      var i = index - 1;
+                      if (hasInfoCard) i -= 1;
+
+                      if (i < childFolders.length) {
+                        final f = childFolders[i];
+                        final folderId = _asInt(f['id']);
+                        final title = _asStr(f['title']).isEmpty ? 'Папка' : _asStr(f['title']);
+                        return _FinderGridItem(
+                          title: title,
+                          subtitle: _folderCounterText(f),
+                          icon: Icons.folder_rounded,
+                          accentIcon: _folderHasChildren(folderId)
+                              ? Icons.keyboard_arrow_right_rounded
+                              : Icons.folder_open_rounded,
+                          active: selectedFolderId == folderId,
+                          onTap: () => _selectFolder(f),
+                        );
+                      }
+                      i -= childFolders.length;
+
+                      if (i < plans.length) {
+                        final plan = plans[i];
+                        final active = _asInt(plan['id']) == _asInt(selectedPlan?['id']);
+                        return _FinderGridItem(
+                          title: _planTitle(plan),
+                          subtitle: _asStr(plan['trainer_name']).isNotEmpty
+                              ? _asStr(plan['trainer_name'])
+                              : (_asStr(plan['team_name']).isNotEmpty ? _asStr(plan['team_name']) : 'План-конспект'),
+                          meta: _shortDate(_asStr(plan['plan_date']).isNotEmpty
+                              ? _asStr(plan['plan_date'])
+                              : _asStr(plan['created_at'])),
+                          badge: _planBadgesText(plan),
+                          icon: Icons.description_rounded,
+                          active: active,
+                          onTap: () => _selectPlan(plan),
+                          onRename: active ? _renameSelectedPlan : null,
+                        );
+                      }
+                      i -= plans.length;
+
+                      if (i < graphics.length) {
+                        final g = graphics[i];
+                        final title = _asStr(g['title']).isNotEmpty
+                            ? _asStr(g['title'])
+                            : (_asStr(g['name']).isNotEmpty ? _asStr(g['name']) : 'Схема #${_asInt(g['id'])}');
+                        return _DraggableMaterialGridItem(
                           data: g,
                           type: 'scheme',
-                          title: _asStr(g['title']).isNotEmpty
-                              ? _asStr(g['title'])
-                              : (_asStr(g['name']).isNotEmpty ? _asStr(g['name']) : 'Схема #${_asInt(g['id'])}'),
-                          subtitle: 'Схема • нажмите для просмотра',
-                          folder: '',
-                          date: _shortDate(_asStr(g['created_at'])),
+                          title: title,
+                          subtitle: 'Схема',
+                          meta: _shortDate(_asStr(g['created_at'])),
                           icon: Icons.account_tree_rounded,
                           previewUrl: _materialImageUrl(g),
                           onPreview: () => _openSchemePreview(g),
-                        )),
-                  ],
-                  if (!loadingMaterials && files.isNotEmpty) ...[
-                    _BrowserGroupLabel(
-                      title: 'Файлы',
-                      count: files.length,
-                      icon: Icons.insert_drive_file_rounded,
-                      hint: 'docx, xlsx, pdf, изображения',
-                    ),
-                    ...files.map((f) => _DraggableMaterialTile(
-                          data: f,
-                          type: 'file',
-                          title: _asStr(f['title']).isNotEmpty
-                              ? _asStr(f['title'])
-                              : (_asStr(f['file_name']).isNotEmpty ? _asStr(f['file_name']) : 'Файл #${_asInt(f['id'])}'),
-                          subtitle: _asStr(f['file_ext']).isNotEmpty
-                              ? _asStr(f['file_ext']).toUpperCase()
-                              : 'Файл',
-                          folder: '',
-                          date: _shortDate(_asStr(f['created_at'])),
-                          icon: _fileIcon(_asStr(f['file_ext']).isNotEmpty ? _asStr(f['file_ext']) : _asStr(f['file_name'])),
-                          previewUrl: _materialImageUrl(f),
-                        )),
-                  ],
-                  if (!loadingMaterials && materialsError == null && total == 0)
-                    const _FinderEmpty(
-                      title: 'Папка пустая',
-                      text: 'Выберите папку слева. Здесь одним списком появятся планы, схемы и файлы для перетаскивания.',
-                    ),
-                  if (!loadingMaterials && materialsError == null && plans.isEmpty && (graphics.isNotEmpty || files.isNotEmpty))
-                    const Padding(
-                      padding: EdgeInsets.only(top: 8),
-                      child: _CompactEmptyBlock(
-                        title: 'План не выбран',
-                        text: 'Выберите план выше или откройте другой раздел. Материалы уже можно перетаскивать в редактор справа.',
-                      ),
-                    ),
-                ],
+                        );
+                      }
+                      i -= graphics.length;
+
+                      final f = files[i];
+                      final title = _asStr(f['title']).isNotEmpty
+                          ? _asStr(f['title'])
+                          : (_asStr(f['file_name']).isNotEmpty ? _asStr(f['file_name']) : 'Файл #${_asInt(f['id'])}');
+                      final ext = _asStr(f['file_ext']).isNotEmpty ? _asStr(f['file_ext']).toUpperCase() : 'Файл';
+                      return _DraggableMaterialGridItem(
+                        data: f,
+                        type: 'file',
+                        title: title,
+                        subtitle: ext,
+                        meta: _shortDate(_asStr(f['created_at'])),
+                        icon: _fileIcon(_asStr(f['file_ext']).isNotEmpty ? _asStr(f['file_ext']) : _asStr(f['file_name'])),
+                        previewUrl: _materialImageUrl(f),
+                      );
+                    },
+                  );
+                },
               ),
             ),
           ),
         ],
       ),
     );
+  }
+
+  List<Map<String, dynamic>> get _currentChildFolders {
+    final parentId = _activeFolderId;
+    final list = folders.where((f) => _asInt(f['parent_id']) == parentId).toList();
+    list.sort((a, b) => _asStr(a['title']).toLowerCase().compareTo(_asStr(b['title']).toLowerCase()));
+    return list;
   }
 
   String _absoluteMaterialUrl(String raw) {
@@ -1699,6 +2189,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                 decoration: BoxDecoration(
                   color: _C.greenSoft,
                   borderRadius: BorderRadius.circular(11),
+                  border: Border.all(color: _C.greenBorder),
                 ),
                 child: const Icon(Icons.folder_open_rounded, color: _C.greenDark, size: 17),
               ),
@@ -1711,7 +2202,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                       'Материалы',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _C.h1.copyWith(fontSize: mobile ? 14 : 15),
+                      style: _C.h1.copyWith(fontSize: mobile ? 15 : 16),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -1739,7 +2230,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
               ],
             ],
           ),
-          const SizedBox(height: 7),
+          const SizedBox(height: 8),
           TextField(
             controller: searchCtrl,
             onSubmitted: (_) => _loadPlansForTeam(),
@@ -1761,7 +2252,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
               fillColor: _C.input,
               contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(18),
                 borderSide: BorderSide.none,
               ),
             ),
@@ -1789,15 +2280,6 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
     }
 
     final planId = _asInt(plan['id']);
-    if (planId <= 0) {
-      return const ColoredBox(
-        color: _C.preview,
-        child: _FinderEmpty(
-          title: 'План без ID',
-          text: 'Невозможно открыть детальный редактор для плана без идентификатора.',
-        ),
-      );
-    }
 
     final media = MediaQuery.of(context);
 
@@ -1807,19 +2289,46 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
         data: media.copyWith(
           textScaler: TextScaler.linear(compact ? .96 : .92),
         ),
-        child: PlanDetailScreen(
-          key: ValueKey('cmr_plan_editor_$planId'),
-          embedded: true,
-          initialArgs: _planDetailArgs(plan),
-          onOpenFullscreen: _openFullPlanScreen,
-          onSaved: (_) async {
-            await _loadPlansForTeam();
-            final refreshed = plans.where((p) => _asInt(p['id']) == planId).toList();
-            if (!mounted) return;
-            if (refreshed.isNotEmpty) {
-              setState(() => selectedPlan = refreshed.first);
-            }
-          },
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: PlanDetailScreen(
+                key: ValueKey('cmr_plan_editor_$planId'),
+                embedded: true,
+                initialArgs: _planDetailArgs(plan),
+                onOpenFullscreen: _openFullPlanScreen,
+                onSaved: (result) async {
+                  final savedPlanId = _asInt(
+                    result['plan_id'] ??
+                        result['id'] ??
+                        result['new_id'] ??
+                        result['insert_id'] ??
+                        (result['plan'] is Map ? result['plan']['id'] : null) ??
+                        (result['data'] is Map ? result['data']['id'] : null),
+                  );
+
+                  await _loadPlansForTeam();
+
+                  final targetId = savedPlanId > 0 ? savedPlanId : planId;
+                  final refreshed = plans.where((p) => _asInt(p['id']) == targetId).toList();
+                  if (!mounted) return;
+                  if (refreshed.isNotEmpty) {
+                    setState(() => selectedPlan = refreshed.first);
+                  }
+                },
+              ),
+            ),
+
+            // Маска на 1 px убирает тонкую верхнюю линию встроенного редактора,
+            // не затрагивая кнопки «Сохранить» и остальные действия.
+            const Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              height: 1,
+              child: ColoredBox(color: Colors.white),
+            ),
+          ],
         ),
       ),
     );
@@ -1928,28 +2437,64 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
   }
 }
 
+
+class _SoftPanel extends StatelessWidget {
+  final Widget child;
+
+  const _SoftPanel({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: _C.panelDecoration,
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
+  }
+}
+
 class _C {
-  static const Color page = Colors.white;
-  static const Color sidebar = Color(0xFFFAFCFB);
+  static const Color page = Color(0xFFF7F8FA);
+  static const Color sidebar = Colors.white;
   static const Color preview = Colors.white;
-  static const Color input = Color(0xFFF6F8F7);
-  static const Color green = Color(0xFF168A4A);
-  static const Color greenDark = Color(0xFF0F6A38);
-  static const Color greenSoft = Color(0xFFEAF7EF);
+
+  // Премиальная CMR-палитра: бело-графитовая основа,
+  // зелёный используется только как фирменный микро-акцент.
+  static const Color graphite = Color(0xFF111827);
+  static const Color graphiteSoft = Color(0xFF1F2937);
+  static const Color soft = Color(0xFFF8F9FA);
+  static const Color input = Color(0xFFF6F7F8);
+  static const Color green = Color(0xFF00A750);
+  static const Color greenDark = Color(0xFF087A46);
+  static const Color greenSoft = Color(0xFFF3FBF6);
+  static const Color greenBorder = Color(0xFFCFEFDD);
   static const Color text = Color(0xFF101828);
   static const Color muted = Color(0xFF667085);
-  static const Color line = Color(0xFFE7ECE9);
-  static const Color red = Color(0xFFDC2626);
+  static const Color line = Color(0xFFE5E7EB);
+  static const Color red = Color(0xFFD92D20);
 
   static BoxDecoration get panelDecoration => BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: line),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.035),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      );
+
+  static BoxDecoration softCard({double radius = 18}) => BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(radius),
         border: Border.all(color: line),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(.025),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
           ),
         ],
       );
@@ -2094,38 +2639,49 @@ class _FinderFolderTile extends StatelessWidget {
     this.onToggle,
   });
 
- @override
-Widget build(BuildContext context) {
-  return Padding(
-    padding: EdgeInsets.only(
-      left: (level.clamp(0, 4) * 10).toDouble(),
-      bottom: 4,
-    ),
-    child: Material(
-      color: active ? _C.greenSoft : Colors.transparent,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            minHeight: 38,
-          ),
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 8,
-              vertical: 6,
-            ),
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: (level.clamp(0, 4) * 10).toDouble(),
+        bottom: 5,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            constraints: const BoxConstraints(minHeight: 40),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: active
-                  ? Border.all(
-                      color: _C.green.withOpacity(.18),
-                    )
+              color: active ? Colors.white : Colors.transparent,
+              borderRadius: BorderRadius.circular(16),
+              border: active ? Border.all(color: _C.line) : null,
+              boxShadow: active
+                  ? [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(.025),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
                   : null,
             ),
             child: Row(
               children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  width: 3,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: active ? _C.green : Colors.transparent,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+                const SizedBox(width: 7),
                 SizedBox(
                   width: 22,
                   height: 22,
@@ -2135,32 +2691,38 @@ Widget build(BuildContext context) {
                           onTap: onToggle,
                           child: Icon(
                             expanded ? Icons.keyboard_arrow_down_rounded : Icons.chevron_right_rounded,
-                            color: active ? _C.greenDark : const Color(0xFF98A2B3),
+                            color: active ? _C.graphite : const Color(0xFF98A2B3),
                             size: 18,
                           ),
                         )
                       : const SizedBox.shrink(),
                 ),
                 const SizedBox(width: 4),
-                Icon(
-                  system ? Icons.inventory_2_rounded : Icons.folder_rounded,
-                  color: active ? _C.greenDark : const Color(0xFF98A2B3),
-                  size: 18,
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: active ? _C.greenSoft : _C.input,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: active ? _C.greenBorder : _C.line),
+                  ),
+                  child: Icon(
+                    system ? Icons.inventory_2_rounded : Icons.folder_rounded,
+                    color: active ? _C.greenDark : _C.muted,
+                    size: 16,
+                  ),
                 ),
-                const SizedBox(width: 7),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: active
-                              ? _C.greenDark
-                              : _C.text,
+                          color: active ? _C.graphite : _C.text,
                           fontSize: 12,
                           fontWeight: FontWeight.w900,
                         ),
@@ -2170,9 +2732,7 @@ Widget build(BuildContext context) {
                         subtitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: _C.caption.copyWith(
-                          fontSize: 9.8,
-                        ),
+                        style: _C.caption.copyWith(fontSize: 9.8),
                       ),
                     ],
                   ),
@@ -2182,9 +2742,8 @@ Widget build(BuildContext context) {
           ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 }
 
 class _MiniSectionHeader extends StatelessWidget {
@@ -2240,6 +2799,393 @@ class _MiniSectionHeader extends StatelessWidget {
   }
 }
 
+
+class _CreatePlanGridCard extends StatelessWidget {
+  final String title;
+  final String text;
+  final VoidCallback? onTap;
+
+  const _CreatePlanGridCard({
+    required this.title,
+    required this.text,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: _C.line),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(.025),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 3,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: _C.green,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: _C.input,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: _C.line),
+                    ),
+                    child: const Icon(Icons.note_add_rounded, color: _C.greenDark, size: 22),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _C.graphite,
+                  fontSize: 13.6,
+                  fontWeight: FontWeight.w900,
+                  height: 1.1,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                text,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: _C.caption.copyWith(fontSize: 10.5, height: 1.25),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FinderGridInfoCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String text;
+  final bool spinning;
+
+  const _FinderGridInfoCard({
+    required this.icon,
+    required this.title,
+    required this.text,
+    this.spinning = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: _C.softCard(radius: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: _C.input,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: _C.line),
+            ),
+            child: spinning
+                ? const Padding(
+                    padding: EdgeInsets.all(10),
+                    child: CircularProgressIndicator(strokeWidth: 2, color: _C.green),
+                  )
+                : Icon(icon, color: _C.graphite, size: 20),
+          ),
+          const Spacer(),
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: _C.text, fontSize: 12.8, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            text,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: _C.caption.copyWith(height: 1.25),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FinderGridItem extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final String meta;
+  final String badge;
+  final IconData icon;
+  final IconData? accentIcon;
+  final bool active;
+  final String previewUrl;
+  final VoidCallback onTap;
+  final VoidCallback? onRename;
+  final VoidCallback? onPreview;
+
+  const _FinderGridItem({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.active,
+    required this.onTap,
+    this.meta = '',
+    this.badge = '',
+    this.accentIcon,
+    this.previewUrl = '',
+    this.onRename,
+    this.onPreview,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasImage = previewUrl.trim().isNotEmpty;
+
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: active ? _C.greenBorder : _C.line, width: active ? 1.2 : 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(active ? .045 : .025),
+                blurRadius: active ? 16 : 10,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: _C.input,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: active ? _C.greenBorder : _C.line),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: hasImage
+                              ? Image.network(
+                                  previewUrl,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Center(
+                                    child: Icon(icon, color: active ? _C.greenDark : _C.muted, size: 32),
+                                  ),
+                                )
+                              : Center(
+                                  child: Icon(
+                                    icon,
+                                    color: active ? _C.greenDark : const Color(0xFF98A2B3),
+                                    size: icon == Icons.folder_rounded ? 40 : 34,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ),
+                    if (active)
+                      Positioned(
+                        left: 8,
+                        top: 8,
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: _C.green,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                    if (accentIcon != null)
+                      Positioned(
+                        right: 7,
+                        bottom: 7,
+                        child: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(.96),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: _C.line),
+                          ),
+                          child: Icon(accentIcon, size: 16, color: _C.graphite),
+                        ),
+                      ),
+                    if (onRename != null)
+                      Positioned(
+                        right: 6,
+                        top: 6,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(10),
+                          onTap: onRename,
+                          child: Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(.96),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: _C.line),
+                            ),
+                            child: const Icon(Icons.drive_file_rename_outline_rounded, color: _C.greenDark, size: 16),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 9),
+              Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: active ? _C.graphite : _C.text,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w900,
+                  height: 1.12,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      subtitle.isEmpty ? 'Материал' : subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _C.caption.copyWith(fontSize: 10.2),
+                    ),
+                  ),
+                  if (meta.isNotEmpty) ...[
+                    const SizedBox(width: 6),
+                    Text(meta, style: _C.caption.copyWith(fontSize: 9.8)),
+                  ],
+                ],
+              ),
+              if (badge.isNotEmpty) ...[
+                const SizedBox(height: 5),
+                _TinyBadge(text: badge),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DraggableMaterialGridItem extends StatelessWidget {
+  final Map<String, dynamic> data;
+  final String type;
+  final String title;
+  final String subtitle;
+  final String meta;
+  final IconData icon;
+  final String previewUrl;
+  final VoidCallback? onPreview;
+
+  const _DraggableMaterialGridItem({
+    required this.data,
+    required this.type,
+    required this.title,
+    required this.subtitle,
+    required this.meta,
+    required this.icon,
+    this.previewUrl = '',
+    this.onPreview,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final payload = <String, dynamic>{
+      ...data,
+      '_drag_type': type,
+      'material_type': type,
+    };
+
+    final child = _FinderGridItem(
+      title: title,
+      subtitle: subtitle,
+      meta: meta,
+      badge: type == 'scheme' ? 'схема' : 'файл',
+      icon: icon,
+      active: false,
+      previewUrl: previewUrl,
+      onTap: onPreview ?? () {},
+      onPreview: onPreview,
+      accentIcon: Icons.drag_indicator_rounded,
+    );
+
+    return LongPressDraggable<Map<String, dynamic>>(
+      data: payload,
+      feedback: Material(
+        color: Colors.transparent,
+        child: SizedBox(
+          width: 170,
+          height: 190,
+          child: _FinderGridItem(
+            title: title,
+            subtitle: 'Отпустите в редакторе',
+            meta: meta,
+            badge: type == 'scheme' ? 'схема' : 'файл',
+            icon: icon,
+            active: true,
+            previewUrl: previewUrl,
+            onTap: () {},
+            accentIcon: Icons.add_rounded,
+          ),
+        ),
+      ),
+      childWhenDragging: Opacity(opacity: .45, child: child),
+      child: child,
+    );
+  }
+}
+
 class _MaterialsLoading extends StatelessWidget {
   const _MaterialsLoading();
 
@@ -2247,7 +3193,7 @@ class _MaterialsLoading extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: _C.input, borderRadius: BorderRadius.circular(14)),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: _C.line)),
       child: const Row(
         children: [
           SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: _C.green)),
@@ -2269,7 +3215,7 @@ class _CompactEmptyBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: _C.input, borderRadius: BorderRadius.circular(14)),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: _C.line)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2361,7 +3307,7 @@ class _BrowserTableHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFFFCFDFC),
+      color: Colors.white,
       padding: EdgeInsets.fromLTRB(10, mobile ? 6 : 6, 10, mobile ? 6 : 6),
       child: Row(
         children: [
@@ -2413,7 +3359,7 @@ class _BrowserGroupLabel extends StatelessWidget {
           const SizedBox(width: 6),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-            decoration: BoxDecoration(color: _C.input, borderRadius: BorderRadius.circular(999)),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(999), border: Border.all(color: _C.line)),
             child: Text('$count', style: const TextStyle(color: _C.muted, fontSize: 10, fontWeight: FontWeight.w900)),
           ),
           if (hint != null) ...[
@@ -2471,7 +3417,7 @@ class _BrowserFileRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 2),
       child: Material(
-        color: active ? _C.greenSoft : Colors.transparent,
+        color: active ? Colors.white : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
         child: InkWell(
           borderRadius: BorderRadius.circular(10),
@@ -2481,7 +3427,6 @@ class _BrowserFileRow extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(7, 4, 6, 4),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(10),
-              border: active ? Border.all(color: _C.green.withOpacity(.18)) : null,
             ),
             child: Row(
               children: [
@@ -2503,7 +3448,7 @@ class _BrowserFileRow extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: active ? _C.greenDark : _C.text,
+                          color: active ? _C.graphite : _C.text,
                           fontSize: 11.8,
                           fontWeight: FontWeight.w900,
                           height: 1.1,
@@ -2614,9 +3559,9 @@ class _FileThumb extends StatelessWidget {
             width: 30,
             height: 30,
             decoration: BoxDecoration(
-              color: active ? Colors.white : _C.input,
+              color: active ? Colors.white : _C.soft,
               borderRadius: BorderRadius.circular(9),
-              border: Border.all(color: hasImage ? _C.line : Colors.transparent),
+              border: Border.all(color: _C.line),
             ),
             child: content,
           ),
@@ -2679,7 +3624,6 @@ class _SchemePreviewDialog extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(14, 9, 10, 9),
                   decoration: const BoxDecoration(
                     color: Colors.white,
-                    border: Border(bottom: BorderSide(color: _C.line)),
                   ),
                   child: Row(
                     children: [
@@ -2688,7 +3632,7 @@ class _SchemePreviewDialog extends StatelessWidget {
                         height: 38,
                         decoration: BoxDecoration(
                           color: _C.greenSoft,
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(18),
                         ),
                         child: const Icon(Icons.account_tree_rounded, color: _C.greenDark, size: 20),
                       ),
@@ -2795,7 +3739,7 @@ class _TinyBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(999),
@@ -2839,16 +3783,15 @@ class _FinderPlanRow extends StatelessWidget {
     ].join(' • ');
 
     return Material(
-      color: active ? _C.greenSoft : Colors.white,
-      borderRadius: BorderRadius.circular(12),
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(18),
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: active ? _C.green.withOpacity(.20) : Colors.transparent),
+            borderRadius: BorderRadius.circular(18),
           ),
           child: Row(
             children: [
@@ -2856,7 +3799,7 @@ class _FinderPlanRow extends StatelessWidget {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: active ? Colors.white : _C.input,
+                  color: active ? Colors.white : _C.soft,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(Icons.description_rounded, color: active ? _C.greenDark : _C.muted, size: 19),
@@ -2895,17 +3838,22 @@ class _PinnedPlanChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(maxWidth: 210),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: _C.greenSoft,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: _C.green.withOpacity(.14)),
+        border: Border.all(color: _C.greenBorder),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.push_pin_rounded, color: _C.greenDark, size: 15),
+          Container(
+            width: 7,
+            height: 7,
+            decoration: const BoxDecoration(color: _C.green, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 7),
+          const Icon(Icons.push_pin_rounded, color: _C.greenDark, size: 14),
           const SizedBox(width: 6),
           Flexible(
             child: Text(
@@ -2913,7 +3861,7 @@ class _PinnedPlanChip extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                color: _C.greenDark,
+                color: _C.graphite,
                 fontSize: 11.5,
                 fontWeight: FontWeight.w900,
               ),
@@ -2978,47 +3926,61 @@ class _FullEditorBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: _C.greenSoft,
-      borderRadius: BorderRadius.circular(18),
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: _C.green.withOpacity(.16)),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _C.line),
           ),
           child: Row(
             children: [
               Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
-                child: const Icon(Icons.dashboard_customize_rounded, color: _C.greenDark, size: 22),
+                width: 3,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: _C.green,
+                  borderRadius: BorderRadius.circular(99),
+                ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: _C.input,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _C.line),
+                ),
+                child: const Icon(Icons.dashboard_customize_rounded, color: _C.greenDark, size: 20),
+              ),
+              const SizedBox(width: 11),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.greenDark, fontSize: 13.5, fontWeight: FontWeight.w900)),
+                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.graphite, fontSize: 13.2, fontWeight: FontWeight.w900)),
                     const SizedBox(height: 3),
-                    Text(text, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.greenDark, fontSize: 11.5, fontWeight: FontWeight.w700, height: 1.32)),
+                    Text(text, maxLines: 2, overflow: TextOverflow.ellipsis, style: _C.caption.copyWith(height: 1.28)),
                   ],
                 ),
               ),
               const SizedBox(width: 10),
               Container(
-                height: 36,
+                height: 34,
                 padding: const EdgeInsets.symmetric(horizontal: 11),
-                decoration: BoxDecoration(color: _C.green, borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(color: _C.graphite, borderRadius: BorderRadius.circular(12)),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.fullscreen_rounded, color: Colors.white, size: 17),
+                    Icon(Icons.fullscreen_rounded, color: _C.green, size: 16),
                     SizedBox(width: 6),
-                    Text('Открыть', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900)),
+                    Text('Открыть', style: TextStyle(color: Colors.white, fontSize: 11.8, fontWeight: FontWeight.w900)),
                   ],
                 ),
               ),
@@ -3069,12 +4031,12 @@ class _FinderEditorSection extends StatelessWidget {
                 fillColor: _C.input,
                 contentPadding: const EdgeInsets.all(12),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: _C.line),
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide.none,
                 ),
                 enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: _C.line),
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide.none,
                 ),
               ),
             )
@@ -3119,17 +4081,35 @@ class _HintStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(13),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: _C.greenSoft,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _C.green.withOpacity(.14)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _C.line),
       ),
       child: Row(
         children: [
-          const Icon(Icons.info_outline_rounded, color: _C.greenDark, size: 18),
-          const SizedBox(width: 7),
-          Expanded(child: Text(text, style: const TextStyle(color: _C.greenDark, fontSize: 12, fontWeight: FontWeight.w800, height: 1.35))),
+          Container(
+            width: 3,
+            height: 34,
+            decoration: BoxDecoration(
+              color: _C.green,
+              borderRadius: BorderRadius.circular(99),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: _C.greenSoft,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: _C.greenBorder),
+            ),
+            child: const Icon(Icons.info_outline_rounded, color: _C.greenDark, size: 17),
+          ),
+          const SizedBox(width: 9),
+          Expanded(child: Text(text, style: const TextStyle(color: _C.graphite, fontSize: 12, fontWeight: FontWeight.w800, height: 1.35))),
         ],
       ),
     );
@@ -3147,17 +4127,17 @@ class _SquareTool extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final w = InkWell(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(14),
       onTap: onTap,
       child: Container(
         width: 38,
         height: 38,
         decoration: BoxDecoration(
-          color: danger ? const Color(0xFFFFF1F2) : _C.input,
-          borderRadius: BorderRadius.circular(12),
+          color: danger ? const Color(0xFFFFF1F2) : Colors.white,
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: danger ? const Color(0xFFFECACA) : _C.line),
         ),
-        child: Icon(icon, color: danger ? _C.red : _C.greenDark, size: 19),
+        child: Icon(icon, color: danger ? _C.red : _C.graphite, size: 19),
       ),
     );
     return tooltip == null ? w : Tooltip(message: tooltip!, child: w);
@@ -3174,21 +4154,21 @@ class _ActionPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(16),
       onTap: onTap,
       child: Container(
         height: 38,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
-          color: _C.green,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [BoxShadow(color: _C.green.withOpacity(.12), blurRadius: 10, offset: const Offset(0, 4))],
+          color: _C.graphite,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _C.graphite),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: Colors.white, size: 17),
+            Icon(icon, color: _C.green, size: 17),
             const SizedBox(width: 7),
             Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900))),
           ],
@@ -3209,10 +4189,10 @@ class _PrimaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return ElevatedButton.icon(
       onPressed: onTap,
-      icon: Icon(icon, size: 18),
+      icon: Icon(icon, size: 18, color: _C.green),
       label: Text(text),
       style: ElevatedButton.styleFrom(
-        backgroundColor: _C.green,
+        backgroundColor: _C.graphite,
         foregroundColor: Colors.white,
         elevation: 0,
         minimumSize: const Size.fromHeight(46),
@@ -3238,7 +4218,7 @@ class _DangerButton extends StatelessWidget {
       label: Text(text),
       style: OutlinedButton.styleFrom(
         foregroundColor: _C.red,
-        side: const BorderSide(color: Color(0xFFFECACA)),
+        side: const BorderSide(color: _C.line),
         minimumSize: const Size(126, 46),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         textStyle: const TextStyle(fontWeight: FontWeight.w900),

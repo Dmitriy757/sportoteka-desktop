@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/team_video_analysis/team_video_analysis_screen.dart';
 import 'package:sportoteka/presentation/team_video_analysis/video_match_review_screen.dart';
+import 'package:sportoteka/presentation/team_video_analysis/match_video_player_screen.dart';
 
 class CmrVideoAnalysisPanel extends StatefulWidget {
   final int teamId;
@@ -47,6 +48,7 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
   List<Map<String, dynamic>> matches = [];
   List<Map<String, dynamic>> filtered = [];
   Map<String, dynamic>? selectedMatch;
+  Map<String, dynamic>? reviewMatch;
 
   @override
   void initState() {
@@ -282,6 +284,7 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
       }
 
       selectedMatch = null;
+      reviewMatch = null;
       await _loadMatches();
       Get.snackbar('Готово', 'Матч удалён');
     } catch (e) {
@@ -300,6 +303,22 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
         ));
   }
 
+
+  void _openVideoPlayer(Map<String, dynamic> item) {
+    final videoUrl = _normalizeUrl(_s(item['video_url'])) ?? '';
+    final title = _matchTitle(item);
+
+    if (videoUrl.isEmpty) {
+      Get.snackbar('Видео', 'Сначала загрузите видео матча');
+      return;
+    }
+
+    Get.to(() => MatchVideoPlayerScreen(
+          videoUrl: videoUrl,
+          title: title,
+        ));
+  }
+
   void _openReview(Map<String, dynamic> item) {
     final matchId = _asInt(item['id']);
     final videoUrl = _normalizeUrl(_s(item['video_url'])) ?? '';
@@ -314,15 +333,10 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
       return;
     }
 
-    Get.to(() => VideoMatchReviewScreen(
-          matchId: matchId,
-          teamId: widget.teamId,
-          teamName: _displayTeamName,
-          coachId: coachId,
-          matchTitle: _matchTitle(item),
-          videoUrl: videoUrl,
-          videoId: matchId,
-        ));
+    setState(() {
+      selectedMatch = item;
+      reviewMatch = item;
+    });
   }
 
   String get _displayTeamName {
@@ -597,7 +611,10 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
                   hasVideo: _normalizeUrl(_s(item['video_url'])) != null,
                   active: active,
                   compact: true,
-                  onTap: () => setState(() => selectedMatch = item),
+                  onTap: () => setState(() {
+                    selectedMatch = item;
+                    reviewMatch = null;
+                  }),
                 );
               },
             ),
@@ -684,7 +701,10 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
                         tournament: _s(item['tournament']),
                         hasVideo: _normalizeUrl(_s(item['video_url'])) != null,
                         active: active,
-                        onTap: () => setState(() => selectedMatch = item),
+                        onTap: () => setState(() {
+                    selectedMatch = item;
+                    reviewMatch = null;
+                  }),
                       );
                     },
                   ),
@@ -746,7 +766,115 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
     );
   }
 
+  Widget _buildReviewPanel(Map<String, dynamic> item, {required bool isPhone}) {
+    final matchId = _asInt(item['id']);
+    final videoUrl = _normalizeUrl(_s(item['video_url'])) ?? '';
+
+    if (matchId <= 0 || videoUrl.isEmpty) {
+      return _EmptyState(
+        icon: Icons.video_library_outlined,
+        title: 'Разбор недоступен',
+        text: 'У выбранного матча нет корректного видео или id матча.',
+        actionText: 'Назад к матчу',
+        onAction: () => setState(() => reviewMatch = null),
+        isPhone: isPhone,
+      );
+    }
+
+    final review = VideoMatchReviewScreen(
+      matchId: matchId,
+      teamId: widget.teamId,
+      teamName: _displayTeamName,
+      coachId: coachId,
+      matchTitle: _matchTitle(item),
+      videoUrl: videoUrl,
+      videoId: matchId,
+    );
+
+    if (isPhone) {
+      return SizedBox(
+        height: MediaQuery.of(context).size.height * 0.78,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(22),
+          child: review,
+        ),
+      );
+    }
+
+    return Container(
+      decoration: _C.cardDecoration.copyWith(
+        borderRadius: BorderRadius.circular(28),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          Container(
+            height: 58,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: const BoxDecoration(
+              color: _C.card,
+              border: Border(bottom: BorderSide(color: _C.border)),
+            ),
+            child: Row(
+              children: [
+                _HeaderIconButton(
+                  icon: Icons.arrow_back_rounded,
+                  onTap: () => setState(() => reviewMatch = null),
+                  compact: true,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Видеоразбор матча',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: _C.text,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _matchTitle(item),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: _C.muted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                _HeaderIconButton(
+                  icon: Icons.refresh_rounded,
+                  onTap: () => setState(() {
+                    reviewMatch = Map<String, dynamic>.from(item);
+                  }),
+                  compact: true,
+                ),
+              ],
+            ),
+          ),
+          Expanded(child: review),
+        ],
+      ),
+    );
+  }
+
   Widget _buildDetails({required bool isPhone}) {
+    final reviewing = reviewMatch;
+    if (reviewing != null) {
+      return _buildReviewPanel(reviewing, isPhone: isPhone);
+    }
+
     final item = selectedMatch;
 
     if (item == null) {
@@ -931,6 +1059,8 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
                         ? Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
+                              _PrimaryButton(text: 'Открыть видео', icon: Icons.play_circle_fill_rounded, onTap: () => _openVideoPlayer(item), compact: true),
+                              const SizedBox(height: 8),
                               _PrimaryButton(text: 'Открыть AI-анализ', icon: Icons.analytics_rounded, onTap: () => _openReview(item), compact: true),
                               const SizedBox(height: 8),
                               _DangerButton(text: 'Удалить видео', icon: Icons.delete_outline_rounded, onTap: () => _deleteVideo(item), compact: true),
@@ -938,6 +1068,8 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
                           )
                         : Row(
                             children: [
+                              Expanded(child: _PrimaryButton(text: 'Открыть видео', icon: Icons.play_circle_fill_rounded, onTap: () => _openVideoPlayer(item))),
+                              const SizedBox(width: 10),
                               Expanded(child: _PrimaryButton(text: 'Открыть AI-анализ', icon: Icons.analytics_rounded, onTap: () => _openReview(item))),
                               const SizedBox(width: 10),
                               _DangerButton(text: 'Удалить видео', icon: Icons.delete_outline_rounded, onTap: () => _deleteVideo(item)),

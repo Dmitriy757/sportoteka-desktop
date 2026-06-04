@@ -9,33 +9,34 @@ import 'add_edit_video_lesson_screen.dart';
 import 'video_lesson_detail_screen.dart';
 
 class VideoLessonFolderPalette {
-  static const primaryGreen = Color(0xFF00A750);
-  static const primaryGreenDark = Color(0xFF008C40);
-  static const primaryGreenLight = Color(0xFF00C060);
+  static const primaryGreen = Color(0xFF1F7A4D);
+  static const primaryGreenDark = Color(0xFF1F7A4D);
+  static const primaryGreenLight = Color(0xFF3B9567);
 
-  static const lightGreen = Color(0xFFE8F5E9);
-  static const superLightGreen = Color(0xFFF2FFF5);
+  static const lightGreen = Color(0xFFF2F7F4);
+  static const superLightGreen = Color(0xFFF7FBF8);
 
   static const white = Color(0xFFFFFFFF);
-  static const text = Color(0xFF1A1A1A);
-  static const textMuted = Color(0xFF666666);
-  static const textSoft = Color(0xFF9CA3AF);
+  static const text = Color(0xFF101828);
+  static const textMuted = Color(0xFF667085);
+  static const textSoft = Color(0xFF98A2B3);
 
-  static const background = Color(0xFFF8F9FA);
-  static const border = Color(0xFFE5E7EB);
-  static const danger = Color(0xFFE53935);
+  static const background = Color(0xFFFFFFFF);
+  static const soft = Color(0xFFF6F8FA);
+  static const border = Color(0xFFD7E8DE);
+  static const danger = Color(0xFFD92D20);
 
   static const greenGradient = LinearGradient(
-    colors: [primaryGreen, primaryGreenDark],
+    colors: [primaryGreen, primaryGreenLight],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  static const cardShadowSoft = [
+  static final cardShadowSoft = [
     BoxShadow(
-      color: Color(0x08000000),
-      blurRadius: 12,
-      offset: Offset(0, 5),
+      color: Colors.black.withOpacity(.018),
+      blurRadius: 20,
+      offset: const Offset(0, 8),
     ),
   ];
 }
@@ -62,6 +63,28 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
   List<VideoLessonModel> lessons = [];
   bool isLoading = true;
   int currentUserId = 0;
+
+  bool _useLessonTileLayout(BuildContext context) {
+    return MediaQuery.sizeOf(context).width >= 720;
+  }
+
+  int _lessonGridColumns(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+
+    if (width >= 1500) return 4;
+    if (width >= 1180) return 3;
+    if (width >= 720) return 2;
+    return 1;
+  }
+
+  double _lessonGridAspectRatio(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+
+    if (width >= 1180) return 1.18;
+    if (width >= 720) return 1.08;
+    return 1.0;
+  }
+
 
   @override
   void initState() {
@@ -157,7 +180,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
           decoration: InputDecoration(
             labelText: 'Название папки',
             filled: true,
-            fillColor: VideoLessonFolderPalette.background,
+            fillColor: VideoLessonFolderPalette.soft,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: const BorderSide(
@@ -337,13 +360,13 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
     required Widget child,
     EdgeInsets? padding,
     VoidCallback? onTap,
+    Color color = VideoLessonFolderPalette.white,
   }) {
     final card = Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: VideoLessonFolderPalette.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: VideoLessonFolderPalette.border),
+        color: color,
+        borderRadius: BorderRadius.circular(24),
         boxShadow: VideoLessonFolderPalette.cardShadowSoft,
       ),
       child: child,
@@ -351,10 +374,13 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
 
     if (onTap == null) return card;
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: card,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: card,
+      ),
     );
   }
 
@@ -388,9 +414,8 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: VideoLessonFolderPalette.white,
+        color: VideoLessonFolderPalette.superLightGreen,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: VideoLessonFolderPalette.border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -417,113 +442,143 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
   Widget _buildFolderHeader(bool canManage) {
     final color = _parseColor(widget.folder.color);
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            color.withOpacity(0.18),
-            VideoLessonFolderPalette.superLightGreen,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    return _whiteCard(
+      padding: const EdgeInsets.all(18),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: VideoLessonFolderPalette.lightGreen,
+          borderRadius: BorderRadius.circular(24),
         ),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: VideoLessonFolderPalette.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(11),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [color, color.withOpacity(0.8)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(
-                  Icons.folder_copy_rounded,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Папка видеоуроков',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 15,
-                        color: VideoLessonFolderPalette.text,
-                      ),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Уроки, вложенные папки и материалы',
-                      style: TextStyle(
-                        color: VideoLessonFolderPalette.textMuted,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (canManage)
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
                     color: VideoLessonFolderPalette.white,
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: VideoLessonFolderPalette.border),
+                    borderRadius: BorderRadius.circular(17),
                   ),
-                  child: const Text(
-                    'Управление',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 12,
-                      color: VideoLessonFolderPalette.textMuted,
-                    ),
+                  child: Icon(
+                    Icons.folder_copy_rounded,
+                    color: color,
+                    size: 25,
                   ),
                 ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            widget.folder.title,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: VideoLessonFolderPalette.text,
-              fontWeight: FontWeight.w900,
-              fontSize: 22,
-              height: 1.15,
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Папка видеоуроков',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                          color: VideoLessonFolderPalette.text,
+                        ),
+                      ),
+                      SizedBox(height: 3),
+                      Text(
+                        'Материалы, вложенные папки и уроки',
+                        style: TextStyle(
+                          color: VideoLessonFolderPalette.textMuted,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (canManage)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: VideoLessonFolderPalette.white,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: const Text(
+                      'Управление',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                        color: VideoLessonFolderPalette.primaryGreen,
+                      ),
+                    ),
+                  ),
+              ],
             ),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _metricChip(
-                Icons.folder_open_rounded,
-                'Папок: ${subfolders.length}',
+            const SizedBox(height: 18),
+            Text(
+              widget.folder.title,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: VideoLessonFolderPalette.text,
+                fontWeight: FontWeight.w800,
+                fontSize: 24,
+                height: 1.12,
               ),
-              _metricChip(
-                Icons.play_circle_fill_rounded,
-                'Уроков: ${lessons.length}',
-              ),
-            ],
+            ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _metricChip(
+                  Icons.folder_open_rounded,
+                  'Папок: ${subfolders.length}',
+                ),
+                _metricChip(
+                  Icons.play_circle_fill_rounded,
+                  'Уроков: ${lessons.length}',
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required String title,
+    required IconData icon,
+    required VoidCallback onTap,
+    required bool filled,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: filled ? VideoLessonFolderPalette.greenGradient : null,
+        color: filled ? null : VideoLessonFolderPalette.lightGreen,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: ElevatedButton.icon(
+        onPressed: onTap,
+        style: ElevatedButton.styleFrom(
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          foregroundColor:
+              filled ? Colors.white : VideoLessonFolderPalette.primaryGreen,
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
           ),
-        ],
+        ),
+        icon: Icon(icon, size: 20),
+        label: Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
       ),
     );
   }
@@ -531,56 +586,41 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
   Widget _buildActionRow(bool canManage) {
     if (!canManage) return const SizedBox.shrink();
 
-    return Row(
-      children: [
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: VideoLessonFolderPalette.greenGradient,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: ElevatedButton.icon(
-              onPressed: _createSubfolder,
-              style: ElevatedButton.styleFrom(
-                elevation: 0,
-                backgroundColor: Colors.transparent,
-                shadowColor: Colors.transparent,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              icon: const Icon(Icons.create_new_folder_rounded),
-              label: const Text(
-                'Добавить папку',
-                style: TextStyle(fontWeight: FontWeight.w900),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: _addLesson,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: VideoLessonFolderPalette.primaryGreen,
-              side: const BorderSide(
-                color: VideoLessonFolderPalette.primaryGreen,
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-            icon: const Icon(Icons.add_to_queue_rounded),
-            label: const Text(
-              'Добавить урок',
-              style: TextStyle(fontWeight: FontWeight.w900),
-            ),
-          ),
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 520;
+        final folderButton = _buildActionButton(
+          title: 'Новая папка',
+          icon: Icons.create_new_folder_rounded,
+          onTap: _createSubfolder,
+          filled: false,
+        );
+        final lessonButton = _buildActionButton(
+          title: 'Добавить урок',
+          icon: Icons.add_to_queue_rounded,
+          onTap: _addLesson,
+          filled: true,
+        );
+
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              folderButton,
+              const SizedBox(height: 10),
+              lessonButton,
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: folderButton),
+            const SizedBox(width: 10),
+            Expanded(child: lessonButton),
+          ],
+        );
+      },
     );
   }
 
@@ -600,6 +640,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
             ),
           ).then((_) => _loadData());
         },
+        color: VideoLessonFolderPalette.soft,
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
@@ -699,7 +740,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                     width: 34,
                     height: 34,
                     decoration: BoxDecoration(
-                      color: VideoLessonFolderPalette.background,
+                      color: VideoLessonFolderPalette.white,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(
@@ -733,6 +774,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
             ),
           ).then((_) => _loadData());
         },
+        color: VideoLessonFolderPalette.soft,
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
@@ -810,6 +852,224 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
     );
   }
 
+  Widget _buildLessonTile(VideoLessonModel lesson) {
+    final author = '${lesson.authorName} ${lesson.authorSurname}'.trim();
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => VideoLessonDetailScreen(lessonId: lesson.id),
+            ),
+          ).then((_) => _loadData());
+        },
+        borderRadius: BorderRadius.circular(24),
+        child: Container(
+          decoration: BoxDecoration(
+            color: VideoLessonFolderPalette.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: VideoLessonFolderPalette.cardShadowSoft,
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Container(
+                      color: Colors.black12,
+                      child: lesson.thumbnail.isNotEmpty
+                          ? Image.network(
+                              lesson.thumbnail,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Center(
+                                child: Icon(
+                                  Icons.play_circle_fill_rounded,
+                                  size: 42,
+                                  color: VideoLessonFolderPalette.primaryGreen,
+                                ),
+                              ),
+                            )
+                          : const Center(
+                              child: Icon(
+                                Icons.play_circle_fill_rounded,
+                                size: 46,
+                                color: VideoLessonFolderPalette.primaryGreen,
+                              ),
+                            ),
+                    ),
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withOpacity(0.10),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Center(
+                      child: Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.42),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.play_arrow_rounded,
+                          color: Colors.white,
+                          size: 30,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: 10,
+                      top: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 9,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.92),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.play_circle_fill_rounded,
+                              size: 13,
+                              color: VideoLessonFolderPalette.primaryGreen,
+                            ),
+                            SizedBox(width: 5),
+                            Text(
+                              'Урок',
+                              style: TextStyle(
+                                color: VideoLessonFolderPalette.text,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: VideoLessonFolderPalette.superLightGreen,
+                          shape: BoxShape.circle,
+
+                        ),
+                        child: const Icon(
+                          Icons.school_rounded,
+                          size: 17,
+                          color: VideoLessonFolderPalette.primaryGreen,
+                        ),
+                      ),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              lesson.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: VideoLessonFolderPalette.text,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w900,
+                                height: 1.18,
+                              ),
+                            ),
+                            const SizedBox(height: 5),
+                            Text(
+                              author.isEmpty ? 'Автор урока' : author,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: VideoLessonFolderPalette.textMuted,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Комментарии: ${lesson.commentsCount}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: VideoLessonFolderPalette.textSoft,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(
+                        Icons.more_vert_rounded,
+                        size: 19,
+                        color: VideoLessonFolderPalette.textMuted,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLessonsList() {
+    if (!_useLessonTileLayout(context)) {
+      return Column(
+        children: lessons.map(_buildLessonItem).toList(),
+      );
+    }
+
+    return GridView.builder(
+      padding: EdgeInsets.zero,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: lessons.length,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: _lessonGridColumns(context),
+        mainAxisSpacing: 18,
+        crossAxisSpacing: 18,
+        childAspectRatio: _lessonGridAspectRatio(context),
+      ),
+      itemBuilder: (_, index) => _buildLessonTile(lessons[index]),
+    );
+  }
+
+
   @override
   Widget build(BuildContext context) {
     final canManage = widget.isMyMode && currentUserId == widget.ownerUserId;
@@ -865,7 +1125,8 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                   const SizedBox(height: 10),
                   if (lessons.isEmpty)
                     _whiteCard(
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.all(22),
+                      color: VideoLessonFolderPalette.soft,
                       child: const Column(
                         children: [
                           Icon(
@@ -896,7 +1157,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                       ),
                     )
                   else
-                    ...lessons.map(_buildLessonItem),
+                    _buildLessonsList(),
                   const SizedBox(height: 40),
                 ],
               ),

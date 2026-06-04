@@ -10,7 +10,16 @@ const String apiBaseUrl = 'https://sportotekaapp.ru/api/';
 enum TeamCatalogView { list, grid, map }
 
 class TeamListScreen extends StatefulWidget {
-  const TeamListScreen({super.key});
+  final String? initialSport;
+  final bool embedded;
+  final VoidCallback? onClose;
+
+  const TeamListScreen({
+    super.key,
+    this.initialSport,
+    this.embedded = false,
+    this.onClose,
+  });
 
   @override
   State<TeamListScreen> createState() => _TeamListScreenState();
@@ -59,6 +68,9 @@ class _TeamListScreenState extends State<TeamListScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialSport != null && widget.initialSport!.trim().isNotEmpty) {
+      _sport = widget.initialSport!.trim();
+    }
     _searchCtrl.addListener(_onSearchChanged);
     _loadFirst();
   }
@@ -341,6 +353,129 @@ class _TeamListScreenState extends State<TeamListScreen> {
     final bg = const Color(0xFFF3F5F8);
     final inMap = _view == TeamCatalogView.map;
 
+    void toggleGrid() {
+      setState(() {
+        _grid = !_grid;
+        _view = _grid ? TeamCatalogView.grid : TeamCatalogView.list;
+      });
+    }
+
+    void toggleMap() {
+      setState(() {
+        _view = inMap ? (_grid ? TeamCatalogView.grid : TeamCatalogView.list) : TeamCatalogView.map;
+        if (!inMap) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => _fitAllMarkers());
+        }
+      });
+    }
+
+    final content = RefreshIndicator(
+      onRefresh: _loadFirst,
+      child: CustomScrollView(
+        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+        slivers: [
+          SliverToBoxAdapter(child: _searchAndChips(bg)),
+          const SliverToBoxAdapter(child: SizedBox(height: 8)),
+          if (_loading) ...[
+            SliverToBoxAdapter(child: _skeletonList()),
+          ] else if (_err) ...[
+            SliverFillRemaining(hasScrollBody: false, child: _error()),
+          ] else if (_items.isEmpty) ...[
+            SliverFillRemaining(hasScrollBody: false, child: _empty()),
+          ] else if (_view == TeamCatalogView.map) ...[
+            SliverFillRemaining(
+              hasScrollBody: true,
+              child: Stack(
+                children: [
+                  GoogleMap(
+                    onMapCreated: (c) {
+                      _mapCtrl = c;
+                      Future.delayed(const Duration(milliseconds: 200), _fitAllMarkers);
+                    },
+                    initialCameraPosition: _initialCamera,
+                    markers: _markersFromItems(),
+                    myLocationEnabled: false,
+                    myLocationButtonEnabled: false,
+                    zoomControlsEnabled: false,
+                    mapToolbarEnabled: false,
+                    compassEnabled: true,
+                  ),
+                  Positioned(
+                    right: 16,
+                    bottom: 16,
+                    child: Column(
+                      children: [
+                        _MapFab(
+                          icon: Icons.center_focus_strong_rounded,
+                          tooltip: 'Показать все',
+                          onTap: _fitAllMarkers,
+                        ),
+                        const SizedBox(height: 12),
+                        _MapFab(
+                          icon: Icons.my_location_rounded,
+                          tooltip: 'К Минску',
+                          onTap: () async {
+                            await _mapCtrl?.animateCamera(
+                              CameraUpdate.newCameraPosition(_initialCamera),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else if (_view == TeamCatalogView.grid) ...[
+            _gridSliver(),
+            SliverToBoxAdapter(child: _loadMoreFooter()),
+            const SliverToBoxAdapter(child: SizedBox(height: 16)),
+          ] else ...[
+            _listSliver(),
+            SliverToBoxAdapter(child: _loadMoreFooter()),
+            const SliverToBoxAdapter(child: SizedBox(height: 16)),
+          ],
+        ],
+      ),
+    );
+
+    final actions = <Widget>[
+      if (!inMap)
+        IconButton(
+          tooltip: _grid ? 'Режим списка' : 'Режим сетки',
+          onPressed: toggleGrid,
+          icon: Icon(_grid ? Icons.view_list_rounded : Icons.grid_view_rounded),
+        ),
+      IconButton(
+        tooltip: inMap ? 'Показать список' : 'Показать карту',
+        onPressed: toggleMap,
+        icon: Icon(inMap ? Icons.view_list_rounded : Icons.map_rounded),
+      ),
+      IconButton(
+        tooltip: 'Обновить',
+        onPressed: _loadFirst,
+        icon: const Icon(Icons.refresh_rounded),
+      ),
+    ];
+
+    if (widget.embedded) {
+      return Container(
+        color: bg,
+        child: Column(
+          children: [
+            _EmbeddedCatalogHeader(
+              icon: Icons.groups_rounded,
+              title: 'Клубы и команды',
+              subtitle: 'Каталог команд, составы и быстрый переход в карточку',
+              onClose: widget.onClose,
+              actions: actions,
+            ),
+            Expanded(child: content),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: bg,
       appBar: AppBar(
@@ -350,101 +485,11 @@ class _TeamListScreenState extends State<TeamListScreen> {
         titleSpacing: 16,
         title: const Text('Каталог клубов', style: TextStyle(fontWeight: FontWeight.w800)),
         actions: [
-          if (!inMap)
-            IconButton(
-              tooltip: _grid ? 'Режим списка' : 'Режим сетки',
-              onPressed: () => setState(() {
-                _grid = !_grid;
-                _view = _grid ? TeamCatalogView.grid : TeamCatalogView.list;
-              }),
-              icon: Icon(_grid ? Icons.view_list_rounded : Icons.grid_view_rounded),
-            ),
-          IconButton(
-            tooltip: inMap ? 'Показать список' : 'Показать карту',
-            onPressed: () => setState(() {
-              _view = inMap ? (_grid ? TeamCatalogView.grid : TeamCatalogView.list) : TeamCatalogView.map;
-              if (!inMap) {
-                WidgetsBinding.instance.addPostFrameCallback((_) => _fitAllMarkers());
-              }
-            }),
-            icon: Icon(inMap ? Icons.view_list_rounded : Icons.map_rounded),
-          ),
-          IconButton(
-            tooltip: 'Обновить',
-            onPressed: _loadFirst,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
+          ...actions,
           const SizedBox(width: 4),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _loadFirst,
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(child: _searchAndChips(bg)),
-            const SliverToBoxAdapter(child: SizedBox(height: 8)),
-            if (_loading) ...[
-              SliverToBoxAdapter(child: _skeletonList()),
-            ] else if (_err) ...[
-              SliverFillRemaining(hasScrollBody: false, child: _error()),
-            ] else if (_items.isEmpty) ...[
-              SliverFillRemaining(hasScrollBody: false, child: _empty()),
-            ] else if (_view == TeamCatalogView.map) ...[
-              SliverFillRemaining(
-                hasScrollBody: true,
-                child: Stack(
-                  children: [
-                    GoogleMap(
-                      onMapCreated: (c) {
-                        _mapCtrl = c;
-                        Future.delayed(const Duration(milliseconds: 200), _fitAllMarkers);
-                      },
-                      initialCameraPosition: _initialCamera,
-                      markers: _markersFromItems(),
-                      myLocationEnabled: false,
-                      myLocationButtonEnabled: false,
-                      zoomControlsEnabled: false,
-                      mapToolbarEnabled: false,
-                      compassEnabled: true,
-                    ),
-                    Positioned(
-                      right: 16,
-                      bottom: 16,
-                      child: Column(
-                        children: [
-                          _MapFab(
-                            icon: Icons.center_focus_strong_rounded,
-                            tooltip: 'Показать все',
-                            onTap: _fitAllMarkers,
-                          ),
-                          const SizedBox(height: 12),
-                          _MapFab(
-                            icon: Icons.my_location_rounded,
-                            tooltip: 'К Минску',
-                            onTap: () async {
-                              await _mapCtrl?.animateCamera(
-                                CameraUpdate.newCameraPosition(_initialCamera),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ] else if (_view == TeamCatalogView.grid) ...[
-              _gridSliver(),
-              SliverToBoxAdapter(child: _loadMoreFooter()),
-              const SliverToBoxAdapter(child: SizedBox(height: 16)),
-            ] else ...[
-              _listSliver(),
-              SliverToBoxAdapter(child: _loadMoreFooter()),
-              const SliverToBoxAdapter(child: SizedBox(height: 16)),
-            ],
-          ],
-        ),
-      ),
+      body: content,
     );
   }
 
@@ -916,6 +961,102 @@ class _MatteLogoBadge extends StatelessWidget {
               errorBuilder: (_, __, ___) => Icon(fallbackIcon, color: const Color(0xFF0EA5E9)),
             )
           : Icon(fallbackIcon, color: const Color(0xFF0EA5E9)),
+    );
+  }
+}
+
+
+
+class _EmbeddedCatalogHeader extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback? onClose;
+  final List<Widget> actions;
+
+  const _EmbeddedCatalogHeader({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.onClose,
+    this.actions = const <Widget>[],
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final isCompact = width < 720;
+
+    return SafeArea(
+      bottom: false,
+      child: Container(
+        margin: EdgeInsets.fromLTRB(isCompact ? 12 : 18, 12, isCompact ? 12 : 18, 10),
+        padding: EdgeInsets.all(isCompact ? 12 : 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: isCompact ? 42 : 48,
+              height: isCompact ? 42 : 48,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFDBEAFE)),
+              ),
+              child: Icon(icon, color: const Color(0xFF2563EB), size: isCompact ? 22 : 24),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: isCompact ? 17 : 20,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: isCompact ? 12 : 13,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            ...actions,
+            if (onClose != null)
+              IconButton(
+                tooltip: 'Закрыть',
+                onPressed: onClose,
+                icon: const Icon(Icons.close_rounded),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

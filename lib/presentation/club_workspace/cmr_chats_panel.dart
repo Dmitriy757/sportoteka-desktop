@@ -593,11 +593,7 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
     final items = _visibleItems();
 
     return Container(
-      decoration: BoxDecoration(
-        color: _CmrChatColors.bg,
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: _CmrChatColors.border),
-      ),
+      decoration: _CmrChatDecor.panel(),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
@@ -610,15 +606,18 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
             onCreateGroup: _openCreateGroup,
           ),
           Expanded(
-            child: compact
-                ? _buildCompact(items)
-                : Row(
-                    children: [
-                      SizedBox(width: panelWidth < 1050 ? 320 : 390, child: _buildLeft(items)),
-                      Container(width: 1, color: _CmrChatColors.border),
-                      Expanded(child: _buildRight()),
-                    ],
-                  ),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(compact ? 10 : 14, 0, compact ? 10 : 14, compact ? 10 : 14),
+              child: compact
+                  ? _buildCompact(items)
+                  : Row(
+                      children: [
+                        SizedBox(width: panelWidth < 1050 ? 320 : 390, child: _buildLeft(items)),
+                        const SizedBox(width: 14),
+                        Expanded(child: _buildRight()),
+                      ],
+                    ),
+            ),
           ),
         ],
       ),
@@ -632,7 +631,8 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
 
   Widget _buildLeft(List<Map<String, dynamic>> items) {
     return Container(
-      color: Colors.white,
+      decoration: _CmrChatDecor.innerPanel(),
+      padding: const EdgeInsets.all(4),
       child: Column(
         children: [
           Padding(
@@ -701,6 +701,10 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(18),
                       borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(18),
+                      borderSide: const BorderSide(color: _CmrChatColors.green, width: 1.3),
                     ),
                   ),
                 ),
@@ -793,7 +797,7 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
     final chatId = _selectedChatId;
     if (chatId == null || chatId <= 0) {
       return Container(
-        color: _CmrChatColors.soft,
+        decoration: _CmrChatDecor.softCard(radius: 24),
         child: const Center(
           child: _CmrChatEmpty(
             icon: Icons.forum_rounded,
@@ -805,7 +809,7 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
     }
 
     return Container(
-      color: Colors.white,
+      decoration: _CmrChatDecor.innerPanel(),
       child: Column(
         children: [
           if (showBack)
@@ -814,7 +818,6 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
               padding: const EdgeInsets.symmetric(horizontal: 10),
               decoration: const BoxDecoration(
                 color: Colors.white,
-                border: Border(bottom: BorderSide(color: _CmrChatColors.border)),
               ),
               child: Row(
                 children: [
@@ -871,105 +874,122 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 520;
     final subtitle = [
       if ((clubName ?? '').trim().isNotEmpty) clubName!.trim(),
       if ((teamName ?? '').trim().isNotEmpty) teamName!.trim(),
     ].join(' · ');
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(18, 14, 14, 14),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: _CmrChatColors.border)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF0E9F6E), Color(0xFF0B7A55)],
-              ),
-              borderRadius: BorderRadius.circular(18),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x220E9F6E),
-                  blurRadius: 18,
-                  offset: Offset(0, 8),
-                ),
-              ],
-            ),
-            child: const Icon(Icons.forum_rounded, color: Colors.white, size: 25),
+    final titleBlock = Row(
+      children: [
+        Container(
+          width: compact ? 42 : 48,
+          height: compact ? 42 : 48,
+          decoration: BoxDecoration(
+            color: _CmrChatColors.greenSoft,
+            borderRadius: BorderRadius.circular(compact ? 16 : 18),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Flexible(
+          child: Icon(Icons.forum_rounded, color: _CmrChatColors.green, size: compact ? 22 : 25),
+        ),
+        SizedBox(width: compact ? 10 : 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      'Чаты',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: compact ? 16 : 18,
+                        fontWeight: FontWeight.w900,
+                        color: _CmrChatColors.text,
+                      ),
+                    ),
+                  ),
+                  if (unreadTotal > 0) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
                       child: Text(
-                        'Чаты',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 18,
+                        compact ? '$unreadTotal' : '$unreadTotal новых',
+                        style: const TextStyle(
+                          color: Color(0xFF1D4ED8),
+                          fontSize: 11,
                           fontWeight: FontWeight.w900,
-                          color: _CmrChatColors.text,
                         ),
                       ),
                     ),
-                    if (unreadTotal > 0) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEFF6FF),
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: const Color(0xFFD8EAFE)),
-                        ),
-                        child: Text(
-                          '$unreadTotal новых',
-                          style: const TextStyle(
-                            color: Color(0xFF1D4ED8),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle.isEmpty
+                    ? 'Личные диалоги, группы и пользователи'
+                    : '$subtitle · диалоги и группы',
+                maxLines: compact ? 2 : 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _CmrChatColors.muted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(compact ? 12 : 18, compact ? 12 : 14, compact ? 10 : 14, compact ? 10 : 14),
+      decoration: const BoxDecoration(color: Colors.white),
+      child: compact
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                titleBlock,
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _HeaderButton(
+                        icon: Icons.group_add_rounded,
+                        text: 'Группа',
+                        onTap: onCreateGroup,
                       ),
-                    ],
+                    ),
+                    const SizedBox(width: 8),
+                    _CircleAction(icon: Icons.refresh_rounded, onTap: onRefresh, tooltip: 'Обновить'),
+                    const SizedBox(width: 8),
+                    _CircleAction(icon: Icons.open_in_new_rounded, onTap: onOpenFull, tooltip: 'Полный экран'),
                   ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle.isEmpty
-                      ? 'Личные диалоги, группы и быстрый поиск пользователей'
-                      : '$subtitle · личные диалоги, группы и пользователи',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _CmrChatColors.muted,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(child: titleBlock),
+                const SizedBox(width: 10),
+                _HeaderButton(
+                  icon: Icons.group_add_rounded,
+                  text: 'Группа',
+                  onTap: onCreateGroup,
                 ),
+                const SizedBox(width: 8),
+                _CircleAction(icon: Icons.refresh_rounded, onTap: onRefresh, tooltip: 'Обновить'),
+                const SizedBox(width: 8),
+                _CircleAction(icon: Icons.open_in_new_rounded, onTap: onOpenFull, tooltip: 'Открыть полный экран'),
               ],
             ),
-          ),
-          const SizedBox(width: 10),
-          _HeaderButton(
-            icon: Icons.group_add_rounded,
-            text: 'Группа',
-            onTap: onCreateGroup,
-          ),
-          const SizedBox(width: 8),
-          _CircleAction(icon: Icons.refresh_rounded, onTap: onRefresh, tooltip: 'Обновить'),
-          const SizedBox(width: 8),
-          _CircleAction(icon: Icons.open_in_new_rounded, onTap: onOpenFull, tooltip: 'Открыть полный экран'),
-        ],
-      ),
     );
   }
 }
@@ -993,7 +1013,7 @@ class _ModeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = selected ? const Color(0xFFEAF8F2) : _CmrChatColors.soft;
+    final bg = selected ? _CmrChatColors.greenSoft : _CmrChatColors.soft;
     final fg = selected ? _CmrChatColors.green : _CmrChatColors.text;
     return InkWell(
       onTap: onTap,
@@ -1005,7 +1025,7 @@ class _ModeChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: selected ? const Color(0xFFBDEBD8) : _CmrChatColors.border),
+          border: null,
         ),
         child: Row(
           mainAxisAlignment: wide ? MainAxisAlignment.center : MainAxisAlignment.start,
@@ -1061,8 +1081,7 @@ class _ChatRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = selected ? const Color(0xFFEAF8F2) : Colors.white;
-    final border = selected ? const Color(0xFFBDEBD8) : _CmrChatColors.border;
+    final bg = selected ? _CmrChatColors.greenSoft : _CmrChatColors.soft;
 
     return InkWell(
       onTap: onTap,
@@ -1073,12 +1092,7 @@ class _ChatRow extends StatelessWidget {
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: border),
-          boxShadow: selected
-              ? const [
-                  BoxShadow(color: Color(0x120E9F6E), blurRadius: 18, offset: Offset(0, 8)),
-                ]
-              : null,
+          border: null,
         ),
         child: Row(
           children: [
@@ -1200,9 +1214,8 @@ class _UserRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(11),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: _CmrChatColors.soft,
           borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: _CmrChatColors.border),
         ),
         child: Row(
           children: [
@@ -1222,7 +1235,7 @@ class _UserRow extends StatelessWidget {
               width: 34,
               height: 34,
               decoration: BoxDecoration(
-                color: const Color(0xFFEAF8F2),
+                color: _CmrChatColors.greenSoft,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: const Icon(Icons.arrow_forward_rounded, size: 18, color: _CmrChatColors.green),
@@ -1263,9 +1276,8 @@ class _Avatar extends StatelessWidget {
       width: 46,
       height: 46,
       decoration: BoxDecoration(
-        color: const Color(0xFFEAF8F2),
+        color: _CmrChatColors.greenSoft,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFBDEBD8)),
       ),
       child: Center(
         child: initials.isNotEmpty
@@ -1287,9 +1299,9 @@ class _TinyBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: blue ? const Color(0xFFEFF6FF) : _CmrChatColors.soft,
+        color: blue ? const Color(0xFFEFF6FF) : Colors.white,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: blue ? const Color(0xFFD8EAFE) : _CmrChatColors.border),
+        border: Border.all(color: blue ? const Color(0xFFD8EAFE) : _CmrChatColors.greenBorder),
       ),
       child: Text(
         text,
@@ -1425,9 +1437,8 @@ class _CmrChatEmpty extends StatelessWidget {
                 width: 62,
                 height: 62,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEAF8F2),
+                  color: _CmrChatColors.greenSoft,
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: const Color(0xFFBDEBD8)),
                 ),
                 child: Icon(icon, color: _CmrChatColors.green, size: 30),
               ),
@@ -1467,7 +1478,6 @@ class _ChatListSkeleton extends StatelessWidget {
         decoration: BoxDecoration(
           color: _CmrChatColors.soft,
           borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: _CmrChatColors.border),
         ),
       ),
       separatorBuilder: (_, __) => const SizedBox(height: 8),
@@ -1477,10 +1487,36 @@ class _ChatListSkeleton extends StatelessWidget {
 }
 
 class _CmrChatColors {
-  static const Color bg = Color(0xFFF6F8FA);
-  static const Color soft = Color(0xFFF2F5F7);
+  static const Color panel = Colors.white;
+  static const Color soft = Color(0xFFF6F8FA);
   static const Color border = Color(0xFFE5EAF0);
-  static const Color text = Color(0xFF17212B);
-  static const Color muted = Color(0xFF7A8794);
-  static const Color green = Color(0xFF0E9F6E);
+  static const Color text = Color(0xFF101828);
+  static const Color muted = Color(0xFF667085);
+  static const Color green = Color(0xFF1F7A4D);
+  static const Color greenSoft = Color(0xFFF2F7F4);
+  static const Color greenBorder = Color(0xFFD7E8DE);
+}
+
+class _CmrChatDecor {
+  static BoxDecoration panel() => BoxDecoration(
+        color: _CmrChatColors.panel,
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.018),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      );
+
+  static BoxDecoration innerPanel() => BoxDecoration(
+        color: _CmrChatColors.panel,
+        borderRadius: BorderRadius.circular(24),
+      );
+
+  static BoxDecoration softCard({double radius = 22}) => BoxDecoration(
+        color: _CmrChatColors.soft,
+        borderRadius: BorderRadius.circular(radius),
+      );
 }

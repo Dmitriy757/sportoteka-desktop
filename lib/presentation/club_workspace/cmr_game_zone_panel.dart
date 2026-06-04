@@ -259,14 +259,10 @@ class _CmrGameZonePanelState extends State<CmrGameZonePanel> {
         final details = _buildDetailsPanel(selected, compact);
 
         if (compact) {
-          return ListView(
-            padding: const EdgeInsets.only(bottom: 24),
-            children: [
-              SizedBox(height: 620, child: list),
-              const SizedBox(height: 12),
-              SizedBox(height: 620, child: details),
-            ],
-          );
+          final height = constraints.maxHeight.isFinite
+              ? constraints.maxHeight
+              : MediaQuery.sizeOf(context).height * .82;
+          return SizedBox(height: height, child: list);
         }
         return Row(
           children: [
@@ -274,6 +270,70 @@ class _CmrGameZonePanelState extends State<CmrGameZonePanel> {
             const SizedBox(width: 12),
             Expanded(child: details),
           ],
+        );
+      },
+    );
+  }
+
+  Future<void> _openZoneDetailsSheet(Map<String, dynamic> item) async {
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final isChallenge = _kind(item) == _ZoneItemKind.challenge;
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: .90,
+          minChildSize: .52,
+          maxChildSize: .96,
+          builder: (context, scrollController) {
+            return Container(
+              margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+              decoration: _CmrDecor.card(radius: 30),
+              child: Column(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 5,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: _CmrColors.soft,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      _CmrRoundIcon(
+                        icon: isChallenge ? Icons.flag_rounded : Icons.quiz_rounded,
+                        color: isChallenge ? _CmrColors.green : _CmrColors.purple,
+                        size: 46,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _title(item),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: _CmrText.title(18),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Закрыть',
+                        onPressed: () => Navigator.pop(sheetContext),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(child: _buildDetailsPanel(item, true)),
+                ],
+              ),
+            );
+          },
         );
       },
     );
@@ -315,16 +375,34 @@ class _CmrGameZonePanelState extends State<CmrGameZonePanel> {
             ],
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(child: _CmrStatCard(value: '${_challenges.length}', label: 'заданий', icon: Icons.flag_rounded)),
-              const SizedBox(width: 8),
-              Expanded(child: _CmrStatCard(value: '${_quizzes.length}', label: 'квизов', icon: Icons.quiz_rounded)),
-              const SizedBox(width: 8),
-              Expanded(child: _CmrStatCard(value: '${_activeChallenges + _activeQuizzes}', label: 'активно', icon: Icons.play_circle_rounded)),
-              const SizedBox(width: 8),
-              Expanded(child: _CmrStatCard(value: '$_totalPoints', label: 'очков', icon: Icons.stars_rounded)),
-            ],
+          LayoutBuilder(
+            builder: (context, c) {
+              final statCards = [
+                _CmrStatCard(value: '${_challenges.length}', label: 'заданий', icon: Icons.flag_rounded),
+                _CmrStatCard(value: '${_quizzes.length}', label: 'квизов', icon: Icons.quiz_rounded),
+                _CmrStatCard(value: '${_activeChallenges + _activeQuizzes}', label: 'активно', icon: Icons.play_circle_rounded),
+                _CmrStatCard(value: '$_totalPoints', label: 'очков', icon: Icons.stars_rounded),
+              ];
+              if (!compact) {
+                return Row(
+                  children: [
+                    Expanded(child: statCards[0]),
+                    const SizedBox(width: 8),
+                    Expanded(child: statCards[1]),
+                    const SizedBox(width: 8),
+                    Expanded(child: statCards[2]),
+                    const SizedBox(width: 8),
+                    Expanded(child: statCards[3]),
+                  ],
+                );
+              }
+              final itemWidth = (c.maxWidth - 8) / 2;
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: statCards.map((card) => SizedBox(width: itemWidth, child: card)).toList(),
+              );
+            },
           ),
           const SizedBox(height: 12),
           _CmrInput(controller: _searchC, hint: 'Поиск по названию, описанию, статусу', icon: Icons.search_rounded),
@@ -356,7 +434,10 @@ class _CmrGameZonePanelState extends State<CmrGameZonePanel> {
                           status: _statusText(item),
                           icon: _kind(item) == _ZoneItemKind.challenge ? Icons.flag_rounded : Icons.quiz_rounded,
                           color: _kind(item) == _ZoneItemKind.challenge ? _CmrColors.green : _CmrColors.purple,
-                          onTap: () => setState(() => _selectedIndex = index),
+                          onTap: () {
+                            setState(() => _selectedIndex = index);
+                            if (compact) _openZoneDetailsSheet(item);
+                          },
                         );
                       },
                     ),
@@ -527,7 +608,7 @@ class _CmrGameZonePanelState extends State<CmrGameZonePanel> {
                 decoration: BoxDecoration(
                   color: active ? _CmrColors.greenSoft : Colors.white,
                   borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: active ? _CmrColors.green.withOpacity(.35) : _CmrColors.border),
+                  border: null,
                 ),
                 child: Text(item.$2, style: TextStyle(color: active ? _CmrColors.greenDark : _CmrColors.muted, fontSize: 12, fontWeight: FontWeight.w900)),
               ),
@@ -578,6 +659,7 @@ class _CmrGameZonePanelState extends State<CmrGameZonePanel> {
 
 class _CmrColors {
   static const bg = Color(0xFFF6F8FA);
+  static const soft = Color(0xFFF6F8FA);
   static const card = Colors.white;
   static const black = Color(0xFF101828);
   static const text = Color(0xFF182230);

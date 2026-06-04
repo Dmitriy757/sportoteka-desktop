@@ -39,6 +39,53 @@ class VideoLessonsPalette {
   ];
 }
 
+
+class _VideoLessonTilePatternPainter extends CustomPainter {
+  final Color color;
+
+  const _VideoLessonTilePatternPainter({
+    required this.color,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+
+    final circlePaint = Paint()
+      ..color = color.withOpacity(0.65)
+      ..style = PaintingStyle.fill;
+
+    for (var i = -1; i < 5; i++) {
+      final dx = size.width * (0.18 + i * 0.22);
+      canvas.drawCircle(
+        Offset(dx, size.height * 0.22),
+        18 + i.abs() * 2,
+        paint,
+      );
+    }
+
+    canvas.drawCircle(
+      Offset(size.width * 0.82, size.height * 0.76),
+      46,
+      paint,
+    );
+
+    canvas.drawCircle(
+      Offset(size.width * 0.18, size.height * 0.78),
+      7,
+      circlePaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _VideoLessonTilePatternPainter oldDelegate) {
+    return oldDelegate.color != color;
+  }
+}
+
 class VideoLessonsScreen extends StatefulWidget {
   final int ownerUserId;
   final String ownerName;
@@ -74,6 +121,53 @@ class _VideoLessonsScreenState extends State<VideoLessonsScreen> {
     'Пустые',
   ];
 
+  bool _isVideoTileLayout(BuildContext context) {
+    // Плиточный режим нужен уже на планшете и в широком мобильном окне.
+    // Иначе папки/видео выглядят как обычный список друг под другом.
+    return MediaQuery.sizeOf(context).width >= 600;
+  }
+
+  int _folderGridColumns(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+
+    if (width >= 1500) return 5;
+    if (width >= 1120) return 4;
+    if (width >= 720) return 3;
+    return 2;
+  }
+
+  double _folderGridAspectRatio(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+
+    if (width >= 1120) return 1.28;
+    if (width >= 720) return 1.18;
+    return 0.82;
+  }
+
+  EdgeInsets _pagePadding(
+    BuildContext context, {
+    double top = 0,
+    double bottom = 0,
+  }) {
+    final width = MediaQuery.sizeOf(context).width;
+    final horizontal = width >= 1120 ? 24.0 : 16.0;
+
+    return EdgeInsets.fromLTRB(horizontal, top, horizontal, bottom);
+  }
+
+  SliverGridDelegateWithFixedCrossAxisCount _folderGridDelegate(
+    BuildContext context,
+  ) {
+    final wide = _isVideoTileLayout(context);
+
+    return SliverGridDelegateWithFixedCrossAxisCount(
+      crossAxisCount: _folderGridColumns(context),
+      mainAxisSpacing: wide ? 22 : 14,
+      crossAxisSpacing: wide ? 22 : 14,
+      childAspectRatio: _folderGridAspectRatio(context),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -102,7 +196,10 @@ class _VideoLessonsScreenState extends State<VideoLessonsScreen> {
 
     try {
       folders = await VideoLessonsService.getFolders(
-        ownerId: widget.ownerUserId,
+        // В режиме "Мои видеоуроки" показываем только свои папки.
+        // В общем каталоге ownerId не передаём, чтобы поиск и список видели
+        // папки, созданные другими пользователями.
+        ownerId: widget.isMyMode ? widget.ownerUserId : null,
       );
     } catch (e) {
       debugPrint('VideoLessonsScreen getFolders error: $e');
@@ -597,7 +694,7 @@ class _VideoLessonsScreenState extends State<VideoLessonsScreen> {
           color: VideoLessonsPalette.text,
         ),
         decoration: InputDecoration(
-          hintText: 'Поиск папок',
+          hintText: widget.isMyMode ? 'Поиск моих папок' : 'Поиск по всем папкам',
           hintStyle: const TextStyle(
             color: VideoLessonsPalette.textMuted,
             fontWeight: FontWeight.w600,
@@ -792,9 +889,36 @@ class _VideoLessonsScreenState extends State<VideoLessonsScreen> {
   }
 
   Widget _buildFeaturedFolders(bool canManage) {
-    final items = _filteredFolders.take(6).toList();
+    final items = _filteredFolders.take(8).toList();
 
     if (items.isEmpty) return const SizedBox.shrink();
+
+    final width = MediaQuery.sizeOf(context).width;
+    final useTileGrid = width >= 720;
+
+    if (useTileGrid) {
+      final columns = width >= 1500
+          ? 5
+          : width >= 1120
+              ? 4
+              : 3;
+
+      return GridView.builder(
+        padding: EdgeInsets.zero,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: items.length,
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: columns,
+          mainAxisSpacing: 22,
+          crossAxisSpacing: 22,
+          childAspectRatio: width >= 1120 ? 1.34 : 1.24,
+        ),
+        itemBuilder: (_, index) {
+          return _buildFolderVideoTile(items[index], canManage);
+        },
+      );
+    }
 
     return SizedBox(
       height: 220,
@@ -959,6 +1083,10 @@ class _VideoLessonsScreenState extends State<VideoLessonsScreen> {
   }
 
   Widget _buildFolderGrid(VideoFolderModel folder, bool canManage) {
+    if (_isVideoTileLayout(context)) {
+      return _buildFolderVideoTile(folder, canManage);
+    }
+
     final folderColor = _parseColor(folder.color);
 
     return GestureDetector(
@@ -1117,6 +1245,209 @@ class _VideoLessonsScreenState extends State<VideoLessonsScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFolderVideoTile(VideoFolderModel folder, bool canManage) {
+    final folderColor = _parseColor(folder.color);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _openFolder(folder),
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          decoration: BoxDecoration(
+            color: VideoLessonsPalette.background,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    gradient: LinearGradient(
+                      colors: [
+                        folderColor,
+                        folderColor.withOpacity(0.72),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    boxShadow: VideoLessonsPalette.cardShadowSoft,
+                  ),
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(18),
+                          child: CustomPaint(
+                            painter: _VideoLessonTilePatternPainter(
+                              color: Colors.white.withOpacity(0.12),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: 12,
+                        top: 12,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.22),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            '${folder.lessonsCount} видео',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        right: 10,
+                        top: 8,
+                        child: PopupMenuButton<String>(
+                          padding: EdgeInsets.zero,
+                          icon: const Icon(
+                            Icons.more_vert_rounded,
+                            color: Colors.white,
+                          ),
+                          onSelected: (value) async {
+                            if (value == 'open') {
+                              _openFolder(folder);
+                            } else if (value == 'edit') {
+                              await _renameFolder(folder);
+                            } else if (value == 'delete') {
+                              await _deleteFolder(folder);
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            const PopupMenuItem<String>(
+                              value: 'open',
+                              child: Text('Открыть'),
+                            ),
+                            if (canManage)
+                              const PopupMenuItem<String>(
+                                value: 'edit',
+                                child: Text('Редактировать'),
+                              ),
+                            if (canManage)
+                              const PopupMenuItem<String>(
+                                value: 'delete',
+                                child: Text(
+                                  'Удалить',
+                                  style: TextStyle(color: Colors.red),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Center(
+                        child: Container(
+                          width: 58,
+                          height: 58,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.24),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.38),
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.play_arrow_rounded,
+                            color: Colors.white,
+                            size: 40,
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        right: 12,
+                        bottom: 12,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.52),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            'Папка',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: folderColor.withOpacity(0.14),
+                    child: Icon(
+                      Icons.folder_rounded,
+                      color: folderColor,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            folder.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 15,
+                              height: 1.18,
+                              color: VideoLessonsPalette.text,
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            '${folder.lessonsCount} уроков • ${folder.subfoldersCount} подпапок',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: VideoLessonsPalette.textMuted,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1354,7 +1685,7 @@ class _VideoLessonsScreenState extends State<VideoLessonsScreen> {
         slivers: [
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+              padding: _pagePadding(context, top: 14),
               child: Column(
                 children: [
                   _buildSearchBar(),
@@ -1432,47 +1763,37 @@ class _VideoLessonsScreenState extends State<VideoLessonsScreen> {
           ),
           if (isLoading && folders.isEmpty)
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+              padding: _pagePadding(context, bottom: 20),
               sliver: SliverGrid(
                 delegate: SliverChildBuilderDelegate(
                   (_, __) => _buildSkeletonCard(),
                   childCount: 6,
                 ),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 14,
-                  crossAxisSpacing: 14,
-                  childAspectRatio: 0.82,
-                ),
+                gridDelegate: _folderGridDelegate(context),
               ),
             )
           else if (filtered.isEmpty)
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                padding: _pagePadding(context, bottom: 20),
                 child: _buildEmptyState(canManage),
               ),
             )
-          else if (isGrid)
+          else if (isGrid || _isVideoTileLayout(context))
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+              padding: _pagePadding(context, bottom: 20),
               sliver: SliverGrid(
                 delegate: SliverChildBuilderDelegate(
                   (_, index) => _buildFolderGrid(filtered[index], canManage),
                   childCount: filtered.length,
                 ),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 14,
-                  crossAxisSpacing: 14,
-                  childAspectRatio: 0.82,
-                ),
+                gridDelegate: _folderGridDelegate(context),
               ),
             )
           else
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                padding: _pagePadding(context, bottom: 20),
                 child: Column(
                   children: filtered
                       .map((folder) => _buildFolderList(folder, canManage))

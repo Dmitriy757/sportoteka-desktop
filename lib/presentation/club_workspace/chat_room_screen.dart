@@ -47,6 +47,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
   final FocusNode _inputFocus = FocusNode();
   final ScrollController _scrollController = ScrollController();
 
+  late String _chatTitle;
+
   // Сообщения/участники
   List<Map<String, dynamic>> messages = [];
   List<Map<String, dynamic>> members = [];
@@ -96,6 +98,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
     WidgetsBinding.instance.addObserver(this);
 
     initializeDateFormatting('ru_RU');
+    _chatTitle = _normalizeChatTitle(widget.chatName);
 
     // ✅ ВАЖНО: помечаем чат как прочитанный на сервере при входе
     _markThisChatRead();
@@ -285,6 +288,64 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
     return t.length > 80 ? '${t.substring(0, 80)}…' : t;
   }
 
+  String _normalizeChatTitle(String raw) {
+    final title = raw.trim();
+    if (title.isEmpty || title.toLowerCase() == 'null') return 'Чат';
+    return title;
+  }
+
+  bool _isGenericChatTitle(String raw) {
+    final title = raw.trim().toLowerCase();
+    return title.isEmpty ||
+        title == 'чат' ||
+        title == 'личный чат' ||
+        title == 'групповой чат' ||
+        title == 'новый чат' ||
+        title == 'null';
+  }
+
+  String _memberDisplayName(Map<String, dynamic> member) {
+    final name = [
+      member['first_name'],
+      member['last_name'],
+    ]
+        .where((v) => v != null && v.toString().trim().isNotEmpty)
+        .map((v) => v.toString().trim())
+        .join(' ')
+        .trim();
+
+    if (name.isNotEmpty) return name;
+
+    for (final key in const ['name', 'full_name', 'username', 'email', 'phone']) {
+      final value = (member[key] ?? '').toString().trim();
+      if (value.isNotEmpty && value.toLowerCase() != 'null') return value;
+    }
+    return '';
+  }
+
+  void _refreshTitleFromMembers() {
+    if (!_isGenericChatTitle(_chatTitle)) return;
+
+    final otherMembers = members.where((member) {
+      final id = int.tryParse('${member['id'] ?? member['user_id'] ?? member['userId'] ?? 0}') ?? 0;
+      return id != widget.userId;
+    }).toList();
+
+    final names = otherMembers
+        .map(_memberDisplayName)
+        .where((name) => name.trim().isNotEmpty)
+        .toList();
+
+    if (names.isEmpty) return;
+
+    final nextTitle = names.length == 1
+        ? names.first
+        : names.take(3).join(', ') + (names.length > 3 ? ' +' : '');
+
+    if (nextTitle.trim().isEmpty || nextTitle == _chatTitle) return;
+    if (mounted) setState(() => _chatTitle = nextTitle);
+  }
+
   // ====================== API ======================
 
   Future<void> _loadMessages({bool initial = false, bool fromPoll = false}) async {
@@ -422,8 +483,12 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
             : (decoded is Map ? (decoded['members'] ?? decoded['data'] ?? []) : []);
 
         if (!mounted) return;
-        setState(() => members = List<Map<String, dynamic>>.from(
-            list.map((e) => Map<String, dynamic>.from(e))));
+        setState(() {
+          members = List<Map<String, dynamic>>.from(
+            list.map((e) => Map<String, dynamic>.from(e)),
+          );
+        });
+        _refreshTitleFromMembers();
       } else {
         debugPrint('get_chat_members HTTP ${res.statusCode}: ${res.body}');
       }
@@ -1222,7 +1287,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                       children: [
                         Container(
                           constraints: BoxConstraints(
-                            maxWidth: MediaQuery.of(context).size.width * 0.75,
+                            maxWidth: MediaQuery.of(context).size.width * (MediaQuery.of(context).size.width < 420 ? 0.80 : 0.75),
                           ),
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                           decoration: BoxDecoration(
@@ -1428,6 +1493,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final compact = width < 520;
+    final messagePadding = EdgeInsets.fromLTRB(compact ? 10 : 16, 12, compact ? 10 : 16, 12);
+
     return Scaffold(
       resizeToAvoidBottomInset: true,
       backgroundColor: const Color(0xFFF5F5F5),
@@ -1441,6 +1510,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                 icon: const Icon(Icons.arrow_back, color: Colors.black),
                 onPressed: () => Navigator.pop(context),
               ),
+        titleSpacing: widget.embedded ? 12 : null,
         title: searchMode
             ? TextField(
                 controller: _searchController,
@@ -1455,78 +1525,129 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
               )
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    widget.chatName,
-                    style: const TextStyle(
+                    _chatTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
                       color: Colors.black,
-                      fontSize: 18,
+                      fontSize: compact ? 16 : 18,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   if (members.isNotEmpty)
                     Text(
                       '${members.length} участников',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(color: Colors.grey, fontSize: 12),
                     ),
                 ],
               ),
-        actions: [
-          if (searchMode) ...[
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: Text(
-                  searchHits.isEmpty
-                      ? '0/0'
-                      : '${(currentHit >= 0 ? currentHit + 1 : 0)}/${searchHits.length}',
-                  style: const TextStyle(color: Colors.black87, fontSize: 13),
-                ),
-              ),
-            ),
-            IconButton(
-              tooltip: 'Предыдущее',
-              icon: const Icon(Icons.keyboard_arrow_up, color: Colors.black),
-              onPressed: searchHits.isEmpty ? null : _prevHit,
-            ),
-            IconButton(
-              tooltip: 'Следующее',
-              icon: const Icon(Icons.keyboard_arrow_down, color: Colors.black),
-              onPressed: searchHits.isEmpty ? null : _nextHit,
-            ),
-            IconButton(
-              tooltip: 'Закрыть поиск',
-              icon: const Icon(Icons.close, color: Colors.black),
-              onPressed: _toggleSearch,
-            ),
-          ] else ...[
-            IconButton(
-              tooltip: 'Поиск',
-              icon: const Icon(Icons.search, color: Colors.black),
-              onPressed: _toggleSearch,
-            ),
-            IconButton(
-              tooltip: 'Аудиозвонок',
-              icon: const Icon(Icons.call, color: Colors.black),
-              onPressed: _startAudioCall,
-            ),
-            IconButton(
-              icon: const Icon(Icons.group, color: Colors.black),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => EditGroupChatScreen(
-                      chatId: widget.chatId,
-                      currentUserId: widget.userId,
-                      chatName: widget.chatName,
+        actions: searchMode
+            ? [
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: Text(
+                      searchHits.isEmpty
+                          ? '0/0'
+                          : '${(currentHit >= 0 ? currentHit + 1 : 0)}/${searchHits.length}',
+                      style: const TextStyle(color: Colors.black87, fontSize: 13),
                     ),
                   ),
-                ).then((_) => _loadMembers());
-              },
-            ),
-          ],
-        ],
+                ),
+                if (!compact) ...[
+                  IconButton(
+                    tooltip: 'Предыдущее',
+                    icon: const Icon(Icons.keyboard_arrow_up, color: Colors.black),
+                    onPressed: searchHits.isEmpty ? null : _prevHit,
+                  ),
+                  IconButton(
+                    tooltip: 'Следующее',
+                    icon: const Icon(Icons.keyboard_arrow_down, color: Colors.black),
+                    onPressed: searchHits.isEmpty ? null : _nextHit,
+                  ),
+                ] else
+                  PopupMenuButton<String>(
+                    tooltip: 'Навигация поиска',
+                    icon: const Icon(Icons.unfold_more_rounded, color: Colors.black),
+                    onSelected: (value) {
+                      if (value == 'prev') _prevHit();
+                      if (value == 'next') _nextHit();
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'prev', child: Text('Предыдущее совпадение')),
+                      PopupMenuItem(value: 'next', child: Text('Следующее совпадение')),
+                    ],
+                  ),
+                IconButton(
+                  tooltip: 'Закрыть поиск',
+                  icon: const Icon(Icons.close, color: Colors.black),
+                  onPressed: _toggleSearch,
+                ),
+              ]
+            : compact
+                ? [
+                    IconButton(
+                      tooltip: 'Поиск',
+                      icon: const Icon(Icons.search, color: Colors.black),
+                      onPressed: _toggleSearch,
+                    ),
+                    PopupMenuButton<String>(
+                      tooltip: 'Ещё',
+                      icon: const Icon(Icons.more_horiz_rounded, color: Colors.black),
+                      onSelected: (value) {
+                        if (value == 'call') _startAudioCall();
+                        if (value == 'group') {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => EditGroupChatScreen(
+                                chatId: widget.chatId,
+                                currentUserId: widget.userId,
+                                chatName: _chatTitle,
+                              ),
+                            ),
+                          ).then((_) => _loadMembers());
+                        }
+                      },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(value: 'call', child: Text('Аудиозвонок')),
+                        PopupMenuItem(value: 'group', child: Text('Участники группы')),
+                      ],
+                    ),
+                  ]
+                : [
+                    IconButton(
+                      tooltip: 'Поиск',
+                      icon: const Icon(Icons.search, color: Colors.black),
+                      onPressed: _toggleSearch,
+                    ),
+                    IconButton(
+                      tooltip: 'Аудиозвонок',
+                      icon: const Icon(Icons.call, color: Colors.black),
+                      onPressed: _startAudioCall,
+                    ),
+                    IconButton(
+                      tooltip: 'Участники группы',
+                      icon: const Icon(Icons.group, color: Colors.black),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => EditGroupChatScreen(
+                              chatId: widget.chatId,
+                              currentUserId: widget.userId,
+                              chatName: _chatTitle,
+                            ),
+                          ),
+                        ).then((_) => _loadMembers());
+                      },
+                    ),
+                  ],
       ),
       body: Column(
         children: [
@@ -1542,55 +1663,46 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                           baseColor: Colors.grey.shade300,
                           highlightColor: Colors.grey.shade100,
                           child: ListView.builder(
-                            padding: const EdgeInsets.all(16),
+                            padding: messagePadding,
                             itemCount: 10,
                             itemBuilder: (context, index) => _buildSkeletonMessage(index),
                           ),
                         )
                       : ListView.builder(
-                          physics: const BouncingScrollPhysics(
-                            parent: AlwaysScrollableScrollPhysics(),
-                          ),
+                          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                           controller: _scrollController,
-                          padding: const EdgeInsets.all(16),
+                          padding: messagePadding,
                           itemCount: messages.length,
                           addAutomaticKeepAlives: true,
                           addRepaintBoundaries: true,
                           cacheExtent: 1000,
                           itemBuilder: (context, index) {
                             final currentMessage = messages[index];
-
-                            final currentDate =
-                                _safeParseDate(currentMessage['created_at']).toLocal();
-                            final previousMessage =
-                                index > 0 ? messages[index - 1] : null;
+                            final currentDate = _safeParseDate(currentMessage['created_at']).toLocal();
+                            final previousMessage = index > 0 ? messages[index - 1] : null;
                             final prevDate = previousMessage != null
                                 ? _safeParseDate(previousMessage['created_at']).toLocal()
                                 : null;
-
                             final isSameUser = previousMessage != null &&
                                 previousMessage['sender_id'] == currentMessage['sender_id'];
-
                             final messageWidget = _buildMessage(
                               currentMessage,
                               showAvatarAndName: !isSameUser,
                             );
 
-                            if (prevDate == null ||
-                                !DateUtils.isSameDay(currentDate, prevDate)) {
+                            if (prevDate == null || !DateUtils.isSameDay(currentDate, prevDate)) {
                               return Column(
                                 children: [
                                   Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 8, horizontal: 16),
+                                    margin: const EdgeInsets.only(bottom: 4),
+                                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
                                     decoration: BoxDecoration(
                                       color: Colors.grey.shade200,
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Text(
                                       DateFormat.yMMMMd('ru_RU').format(currentDate),
-                                      style: TextStyle(
-                                          color: Colors.grey.shade600, fontSize: 12),
+                                      style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                                     ),
                                   ),
                                   messageWidget,
@@ -1602,8 +1714,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                         ),
                 ),
                 Positioned(
-                  bottom: 20,
-                  right: 20,
+                  bottom: compact ? 12 : 20,
+                  right: compact ? 12 : 20,
                   child: ValueListenableBuilder<bool>(
                     valueListenable: _showScrollToBottomVN,
                     builder: (_, visible, __) {
@@ -1626,10 +1738,12 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
             top: false,
             child: Container(
               color: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: EdgeInsets.fromLTRB(compact ? 8 : 16, 8, compact ? 8 : 16, 8),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   IconButton(
+                    visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
                     icon: const Icon(Icons.attach_file, color: Colors.grey),
                     onPressed: _pickImage,
                   ),
@@ -1640,27 +1754,29 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           const SizedBox(width: 12),
                           Expanded(
                             child: TextField(
                               focusNode: _inputFocus,
                               controller: _controller,
+                              minLines: 1,
+                              maxLines: 4,
                               decoration: InputDecoration(
                                 hintText: editingMessageId != null
                                     ? 'Изменить сообщение…'
                                     : (replyingToId != null ? 'Ответить…' : 'Написать сообщение…'),
                                 border: InputBorder.none,
-                                contentPadding:
-                                    const EdgeInsets.symmetric(vertical: 12),
+                                contentPadding: const EdgeInsets.symmetric(vertical: 12),
                               ),
-                              onChanged: (v) =>
-                                  setState(() => isTyping = v.trim().isNotEmpty),
+                              onChanged: (v) => setState(() => isTyping = v.trim().isNotEmpty),
                               onSubmitted: (_) => _sendMessage(),
                             ),
                           ),
                           if (isTyping)
                             IconButton(
+                              visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
                               icon: const Icon(Icons.send, color: Colors.blue),
                               onPressed: _sendMessage,
                             ),
@@ -1673,6 +1789,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                       onLongPressStart: (_) => _startRecording(),
                       onLongPressEnd: (_) => _stopRecording(),
                       child: IconButton(
+                        visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
                         icon: Icon(isRecording ? Icons.mic_off : Icons.mic),
                         color: isRecording ? Colors.red : Colors.grey,
                         onPressed: () {},

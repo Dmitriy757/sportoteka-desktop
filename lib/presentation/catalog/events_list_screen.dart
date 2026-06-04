@@ -12,8 +12,15 @@ enum EventCatalogView { list, grid, calendar }
 
 class EventsListScreen extends StatefulWidget {
   final String? initialSport;
+  final bool embedded;
+  final VoidCallback? onClose;
 
-  const EventsListScreen({super.key, this.initialSport});
+  const EventsListScreen({
+    super.key,
+    this.initialSport,
+    this.embedded = false,
+    this.onClose,
+  });
 
   @override
   State<EventsListScreen> createState() => _EventsListScreenState();
@@ -340,6 +347,101 @@ class _EventsListScreenState extends State<EventsListScreen> {
   Widget build(BuildContext context) {
     final bg = const Color(0xFFF3F5F8);
 
+    Future<void> refresh() async {
+      if (_view == EventCatalogView.calendar) {
+        await _loadMonthMarks(_calMonth);
+        await _loadDayEvents(_selectedDay);
+      } else {
+        await _loadFirst();
+      }
+    }
+
+    Future<void> toggleView() async {
+      if (_view == EventCatalogView.list) {
+        setState(() => _view = EventCatalogView.grid);
+      } else if (_view == EventCatalogView.grid) {
+        setState(() => _view = EventCatalogView.calendar);
+        await _loadMonthMarks(_calMonth);
+        await _loadDayEvents(_selectedDay);
+      } else {
+        setState(() => _view = EventCatalogView.list);
+        _loadFirst();
+      }
+    }
+
+    final viewIcon = _view == EventCatalogView.list
+        ? Icons.grid_view_rounded
+        : _view == EventCatalogView.grid
+            ? Icons.calendar_month_rounded
+            : Icons.view_list_rounded;
+    final viewTooltip = _view == EventCatalogView.list
+        ? 'Сетка'
+        : _view == EventCatalogView.grid
+            ? 'Календарь'
+            : 'Список';
+
+    final content = RefreshIndicator(
+      onRefresh: refresh,
+      child: CustomScrollView(
+        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+        slivers: [
+          SliverToBoxAdapter(child: _searchAndChips(bg)),
+          const SliverToBoxAdapter(child: SizedBox(height: 8)),
+
+          if (_view == EventCatalogView.calendar) ...[
+            SliverToBoxAdapter(child: _calendarBlock(bg)),
+            const SliverToBoxAdapter(child: SizedBox(height: 10)),
+            SliverToBoxAdapter(child: _dayHeader()),
+          ],
+
+          if (_loading) ...[
+            SliverToBoxAdapter(child: _skeletonList()),
+          ] else if (_err) ...[
+            SliverFillRemaining(hasScrollBody: false, child: _error()),
+          ] else if (_items.isEmpty) ...[
+            SliverFillRemaining(hasScrollBody: false, child: _empty()),
+          ] else if (_view == EventCatalogView.grid) ...[
+            _gridSliver(),
+            SliverToBoxAdapter(child: _loadMoreFooter()),
+            const SliverToBoxAdapter(child: SizedBox(height: 16)),
+          ] else ...[
+            _listSliver(),
+            if (_view == EventCatalogView.list) SliverToBoxAdapter(child: _loadMoreFooter()),
+            const SliverToBoxAdapter(child: SizedBox(height: 16)),
+          ],
+        ],
+      ),
+    );
+
+    if (widget.embedded) {
+      return Container(
+        color: bg,
+        child: Column(
+          children: [
+            _EmbeddedCatalogHeader(
+              icon: Icons.event_rounded,
+              title: 'Мероприятия',
+              subtitle: 'События, сборы и активности внутри главного экрана',
+              onClose: widget.onClose,
+              actions: [
+                IconButton(
+                  tooltip: viewTooltip,
+                  onPressed: toggleView,
+                  icon: Icon(viewIcon),
+                ),
+                IconButton(
+                  tooltip: 'Обновить',
+                  onPressed: refresh,
+                  icon: const Icon(Icons.refresh_rounded),
+                ),
+              ],
+            ),
+            Expanded(child: content),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: bg,
       appBar: AppBar(
@@ -349,88 +451,20 @@ class _EventsListScreenState extends State<EventsListScreen> {
         titleSpacing: 16,
         title: const Text('Каталог мероприятий', style: TextStyle(fontWeight: FontWeight.w800)),
         actions: [
-          // ✅ переключатель режимов
           IconButton(
-            tooltip: _view == EventCatalogView.list
-                ? 'Сетка'
-                : _view == EventCatalogView.grid
-                    ? 'Календарь'
-                    : 'Список',
-            onPressed: () async {
-              if (_view == EventCatalogView.list) {
-                setState(() => _view = EventCatalogView.grid);
-              } else if (_view == EventCatalogView.grid) {
-                setState(() => _view = EventCatalogView.calendar);
-                await _loadMonthMarks(_calMonth);
-                await _loadDayEvents(_selectedDay);
-              } else {
-                setState(() => _view = EventCatalogView.list);
-                _loadFirst();
-              }
-            },
-            icon: Icon(
-              _view == EventCatalogView.list
-                  ? Icons.grid_view_rounded
-                  : _view == EventCatalogView.grid
-                      ? Icons.calendar_month_rounded
-                      : Icons.view_list_rounded,
-            ),
+            tooltip: viewTooltip,
+            onPressed: toggleView,
+            icon: Icon(viewIcon),
           ),
           IconButton(
             tooltip: 'Обновить',
-            onPressed: () async {
-              if (_view == EventCatalogView.calendar) {
-                await _loadMonthMarks(_calMonth);
-                await _loadDayEvents(_selectedDay);
-              } else {
-                _loadFirst();
-              }
-            },
+            onPressed: refresh,
             icon: const Icon(Icons.refresh_rounded),
           ),
           const SizedBox(width: 4),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          if (_view == EventCatalogView.calendar) {
-            await _loadMonthMarks(_calMonth);
-            await _loadDayEvents(_selectedDay);
-          } else {
-            await _loadFirst();
-          }
-        },
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(child: _searchAndChips(bg)),
-            SliverToBoxAdapter(child: const SizedBox(height: 8)),
-
-            // ✅ КАЛЕНДАРЬ режим
-            if (_view == EventCatalogView.calendar) ...[
-              SliverToBoxAdapter(child: _calendarBlock(bg)),
-              SliverToBoxAdapter(child: const SizedBox(height: 10)),
-              SliverToBoxAdapter(child: _dayHeader()),
-            ],
-
-            if (_loading) ...[
-              SliverToBoxAdapter(child: _skeletonList()),
-            ] else if (_err) ...[
-              SliverFillRemaining(hasScrollBody: false, child: _error()),
-            ] else if (_items.isEmpty) ...[
-              SliverFillRemaining(hasScrollBody: false, child: _empty()),
-            ] else if (_view == EventCatalogView.grid) ...[
-              _gridSliver(),
-              SliverToBoxAdapter(child: _loadMoreFooter()),
-              const SliverToBoxAdapter(child: SizedBox(height: 16)),
-            ] else ...[
-              // list + calendar используют один list
-              _listSliver(),
-              if (_view == EventCatalogView.list) SliverToBoxAdapter(child: _loadMoreFooter()),
-              const SliverToBoxAdapter(child: SizedBox(height: 16)),
-            ],
-          ],
-        ),
-      ),
+      body: content,
     );
   }
 
@@ -1171,6 +1205,102 @@ class _EventImage extends StatelessWidget {
               errorBuilder: (_, __, ___) => Icon(fallbackIcon, color: const Color(0xFF0EA5E9)),
             )
           : Icon(fallbackIcon, color: const Color(0xFF0EA5E9)),
+    );
+  }
+}
+
+
+
+class _EmbeddedCatalogHeader extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback? onClose;
+  final List<Widget> actions;
+
+  const _EmbeddedCatalogHeader({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.onClose,
+    this.actions = const <Widget>[],
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final isCompact = width < 720;
+
+    return SafeArea(
+      bottom: false,
+      child: Container(
+        margin: EdgeInsets.fromLTRB(isCompact ? 12 : 18, 12, isCompact ? 12 : 18, 10),
+        padding: EdgeInsets.all(isCompact ? 12 : 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: isCompact ? 42 : 48,
+              height: isCompact ? 42 : 48,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFDBEAFE)),
+              ),
+              child: Icon(icon, color: const Color(0xFF2563EB), size: isCompact ? 22 : 24),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: isCompact ? 17 : 20,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: isCompact ? 12 : 13,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            ...actions,
+            if (onClose != null)
+              IconButton(
+                tooltip: 'Закрыть',
+                onPressed: onClose,
+                icon: const Icon(Icons.close_rounded),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

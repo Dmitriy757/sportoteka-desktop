@@ -20,17 +20,21 @@ import 'package:sportoteka/presentation/profile_screen/help_profile_screen.dart'
 import 'controller/profile_controller.dart';
 
 class ProfilePalette {
-  static const background = Color(0xFFF6F8FA);
+  static const background = Color(0xFFF6F7F8);
   static const card = Color(0xFFFFFFFF);
+  static const surface = Color(0xFFF9FAFB);
+  static const surfaceMuted = Color(0xFFF2F4F7);
+  static const graphite = Color(0xFF111827);
+  static const graphiteSoft = Color(0xFF1F2937);
   static const text = Color(0xFF111827);
   static const muted = Color(0xFF667085);
   static const lightMuted = Color(0xFF98A2B3);
   static const border = Color(0xFFE4E7EC);
   static const borderSoft = Color(0xFFF0F2F5);
 
-  static const green = Color(0xFF178A45);
-  static const greenDark = Color(0xFF0F6F36);
-  static const greenSoft = Color(0xFFEAF7EF);
+  static const green = Color(0xFF00A750);
+  static const greenDark = Color(0xFF08723A);
+  static const greenSoft = Color(0xFFEAF8F0);
 
   static const blue = Color(0xFF2563EB);
   static const blueSoft = Color(0xFFEFF6FF);
@@ -42,21 +46,23 @@ class ProfilePalette {
   static const tealSoft = Color(0xFFE6F6F4);
   static const red = Color(0xFFDC2626);
   static const redSoft = Color(0xFFFFEDED);
+  static const instagram = Color(0xFFE1306C);
 
-  static const shadow = BoxShadow(
-    color: Color(0x08000000),
-    blurRadius: 18,
-    offset: Offset(0, 8),
-  );
 
   static Color softFor(Color color) {
-    if (color == blue) return blueSoft;
-    if (color == orange) return orangeSoft;
-    if (color == purple) return purpleSoft;
-    if (color == teal) return tealSoft;
     if (color == red) return redSoft;
-    return greenSoft;
+    if (color == instagram) return instagram.withOpacity(0.06);
+    if (color == green || color == greenDark) return greenSoft;
+    return surfaceMuted;
   }
+
+  static List<BoxShadow> get cardShadow => [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.035),
+          blurRadius: 22,
+          offset: const Offset(0, 10),
+        ),
+      ];
 }
 
 class ProfileText {
@@ -88,6 +94,36 @@ class ProfileText {
     color: ProfilePalette.muted,
     height: 1.25,
   );
+}
+
+enum ProfileItemType {
+  workspace,
+  myPage,
+  service,
+  training,
+  achievements,
+  settings,
+  legal,
+  support,
+  danger,
+}
+
+class ProfileMenuItem {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color accent;
+  final VoidCallback onTap;
+  final ProfileItemType type;
+
+  const ProfileMenuItem({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.accent,
+    required this.onTap,
+    this.type = ProfileItemType.service,
+  });
 }
 
 class ProfileScreen extends StatefulWidget {
@@ -129,9 +165,6 @@ class _ProfileScreenState extends State<ProfileScreen>
   String myTeamCategory = '';
 
   bool assignedTeamLoading = false;
-
-  // Назначенные клубом команды тренера.
-  // Старые поля ниже оставлены как совместимость, если сервер пока отдаёт только одну team.
   final List<Map<String, dynamic>> assignedTeams = [];
   int assignedTeamId = 0;
   String assignedTeamName = '';
@@ -194,7 +227,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     } catch (_) {}
     return {'status': 'error'};
   }
-
 
   bool _isOkResponse(Map<String, dynamic> data) {
     final status = (data['status'] ?? '').toString().toLowerCase();
@@ -434,8 +466,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     try {
       Map<String, dynamic> data = {};
 
-      // ВАЖНО: используем endpoint, который читает team_trainers
-      // и возвращает все команды тренера, а не только созданную им команду.
       final multiResp = await http.post(
         Uri.parse('$getAssignedCoachTeamsUrl?coach_id=$userId&trainer_id=$userId'),
         body: {
@@ -454,7 +484,6 @@ class _ProfileScreenState extends State<ProfileScreen>
         list = [Map<String, dynamic>.from(data['team'] as Map)];
       }
 
-      // Совместимость со старым endpoint, если get_trainer_teams.php ещё не создан.
       if (list.isEmpty) {
         final singleResp = await http.post(
           Uri.parse(getAssignedCoachTeamUrl),
@@ -576,276 +605,146 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
+  // ==================== ДЕСКТОП/ПЛАНШЕТ (БЕЗ ДУБЛЕЙ) ====================
+
   Widget _desktopBody(double width) {
     final isTablet = width < 1100;
-    final leftWidth = isTablet ? 292.0 : 330.0;
+    final leftWidth = isTablet ? 300.0 : 340.0;
 
     return SafeArea(
-      top: false,
-      bottom: false,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return Padding(
-            padding: EdgeInsets.fromLTRB(
-              isTablet ? 12 : 18,
-              12,
-              isTablet ? 12 : 18,
-              12,
-            ),
-            child: SizedBox(
-              height: constraints.maxHeight,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Левая панель: профиль + быстрый доступ
+            SizedBox(
+              width: leftWidth,
+              child: Column(
                 children: [
-                  SizedBox(
-                    width: leftWidth,
-                    child: Column(
-                      children: [
-                        _accountCard(compact: true),
-                        const SizedBox(height: 12),
-                        _workspacePrimaryTile(compact: isTablet),
-                        const SizedBox(height: 12),
-                        Expanded(child: _desktopMiniInfoPanel()),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _desktopProfileMenuBoard(isTablet: isTablet),
-                  ),
+                  _accountCard(compact: true),
+                  const SizedBox(height: 16),
+                  _quickAccessPanel(),
+                  const SizedBox(height: 16),
+                  _dangerSectionCompact(),
                 ],
               ),
             ),
-          );
-        },
+            const SizedBox(width: 16),
+            // Правая панель: все сервисы единым списком
+            Expanded(child: _unifiedServicesBoard(isTablet: isTablet)),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _desktopProfileMenuBoard({required bool isTablet}) {
-    final personalItems = _serviceItems()
-        .where((item) => !item.title.toLowerCase().contains('панель'))
-        .toList();
-
-    return _plainCard(
-      padding: EdgeInsets.fromLTRB(
-        isTablet ? 14 : 18,
-        isTablet ? 14 : 18,
-        isTablet ? 14 : 18,
-        isTablet ? 12 : 16,
+  // Панель быстрого доступа — только самое главное (рабочая зона + Моя страница)
+  Widget _quickAccessPanel() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: ProfilePalette.border),
+        boxShadow: ProfilePalette.cardShadow,
       ),
-      child: isTablet
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _desktopBoardTitle(
-                  title: 'Меню профиля',
-                  subtitle: 'Личные разделы отдельно, настройки вынесены в отдельный экран',
-                  icon: Icons.tune_rounded,
-                ),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: _desktopMenuSection(
-                    title: 'Личные разделы',
-                    rightLabel: '${personalItems.length}',
-                    children: personalItems.map(_desktopMenuRow).toList(),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  height: 86,
-                  child: _desktopMenuSection(
-                    title: 'Дополнительно',
-                    compact: true,
-                    children: [_desktopMenuRow(_profileHelpItem())],
-                  ),
-                ),
-              ],
-            )
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  flex: 7,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _desktopBoardTitle(
-                        title: 'Меню профиля',
-                        subtitle: 'Посты, бронирования, тренировки и достижения в одном месте',
-                        icon: Icons.tune_rounded,
-                      ),
-                      const SizedBox(height: 14),
-                      Expanded(
-                        child: _desktopMenuSection(
-                          title: 'Личные разделы',
-                          rightLabel: '${personalItems.length}',
-                          children: personalItems.map(_desktopMenuRow).toList(),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 14),
-                SizedBox(
-                  width: 340,
-                  child: _desktopSettingsPortalCard(),
-                ),
-              ],
-            ),
-    );
-  }
-
-  ProfileMenuItem _profileHelpItem() {
-    return ProfileMenuItem(
-      title: 'Настройки профиля',
-      subtitle: 'Настройки, документы, поддержка и безопасность',
-      icon: Icons.manage_accounts_outlined,
-      accent: ProfilePalette.blue,
-      onTap: _openProfileHelp,
-    );
-  }
-
-  void _openProfileHelp() {
-    Get.to(() => const HelpProfileScreen())?.then((_) => _loadUserData());
-  }
-
-  Widget _desktopSettingsPortalCard() {
-    return _plainCard(
-      padding: const EdgeInsets.all(18),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              _iconBadge(Icons.manage_accounts_outlined, ProfilePalette.blue),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Text('Настройки профиля', style: ProfileText.section),
-              ),
-            ],
+          _quickAccessTile(
+            title: isClub ? 'Панель клуба' : (isCoach ? 'Панель тренера' : 'Моя команда'),
+            subtitle: _workspaceSubtitle(),
+            icon: isClub ? Icons.apartment_rounded : Icons.sports_soccer_rounded,
+            color: ProfilePalette.green,
+            onTap: _workspaceOpenAction() ?? () {},
           ),
-          const SizedBox(height: 8),
-          const Text(
-            'Все служебные разделы вынесены отдельно: профиль, документы, поддержка и безопасность.',
-            style: ProfileText.caption,
-          ),
-          const Spacer(),
-          Material(
-            color: ProfilePalette.blue,
-            borderRadius: BorderRadius.circular(16),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(16),
-              onTap: _openProfileHelp,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-                child: const Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Открыть настройки',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                    Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
-                  ],
-                ),
-              ),
-            ),
+          const SizedBox(height: 4),
+          _quickAccessTile(
+            title: 'Моя страница',
+            subtitle: 'Публикации, фото, лента',
+            icon: Icons.person_rounded, 
+            color: ProfilePalette.instagram,
+            onTap: () => Get.toNamed(AppRoutes.myProfileScreen),
+            isHighlighted: true,
           ),
         ],
       ),
     );
   }
 
-  Widget _workspacePrimaryTile({required bool compact}) {
-    final title = isClub
-        ? 'Панель клуба'
-        : isCoach
-            ? 'Панель команд'
-            : isPlayer
-                ? 'Панель игрока'
-                : 'Рабочая панель';
-
-    final subtitle = _workspaceSubtitle();
-    VoidCallback? onTap = _workspaceOpenAction();
-
+  Widget _quickAccessTile({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+    bool isHighlighted = false,
+  }) {
     return Material(
-      color: ProfilePalette.green,
-      borderRadius: BorderRadius.circular(22),
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(24),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(24),
         child: Container(
-          height: compact ? 104 : 116,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-            gradient: const LinearGradient(
-              colors: [ProfilePalette.green, ProfilePalette.greenDark],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+            borderRadius: BorderRadius.circular(20),
+            color: isHighlighted ? ProfilePalette.surface : Colors.transparent,
+            border: isHighlighted
+                ? Border.all(color: ProfilePalette.borderSoft)
+                : null,
           ),
           child: Row(
             children: [
               Container(
-                width: compact ? 48 : 54,
-                height: compact ? 48 : 54,
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(.16),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: Colors.white.withOpacity(.18)),
+                  color: color == ProfilePalette.green
+                      ? ProfilePalette.greenSoft
+                      : ProfilePalette.surfaceMuted,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: color == ProfilePalette.green
+                        ? ProfilePalette.green.withOpacity(.18)
+                        : ProfilePalette.border,
+                  ),
                 ),
                 child: Icon(
-                  isClub ? Icons.apartment_rounded : Icons.dashboard_customize_outlined,
-                  color: Colors.white,
-                  size: compact ? 24 : 27,
+                  icon,
+                  color: color == ProfilePalette.green
+                      ? ProfilePalette.green
+                      : ProfilePalette.graphite,
+                  size: 24,
                 ),
               ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: compact ? 18 : 20,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -.4,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: ProfilePalette.text,
                       ),
                     ),
-                    const SizedBox(height: 5),
+                    const SizedBox(height: 4),
                     Text(
                       subtitle,
-                      maxLines: 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(.84),
+                      style: const TextStyle(
                         fontSize: 12,
-                        height: 1.2,
-                        fontWeight: FontWeight.w700,
+                        color: ProfilePalette.muted,
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Icon(
-                Icons.arrow_forward_rounded,
-                color: Colors.white.withOpacity(.92),
-                size: 24,
-              ),
+              Icon(Icons.arrow_forward_ios_rounded, color: ProfilePalette.lightMuted, size: 18),
             ],
           ),
         ),
@@ -853,183 +752,125 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  VoidCallback? _workspaceOpenAction() {
-    if (isClub) {
-      return () => Get.toNamed(AppRoutes.clubDashboardScreen);
-    }
-    if (isCoach && (assignedTeams.isNotEmpty || assignedTeamId > 0)) {
-      // В рабочей панели тренер увидит только назначенные ему команды.
-      return _openTrainerWorkspace();
-    }
-    if (isCoach && myTeamId > 0) {
-      return () => Get.toNamed('/myTeamScreen', arguments: {'team_id': myTeamId, 'mode': 'coach_my'});
-    }
-    if (isPlayer && playerTeamId > 0) {
-      return () => Get.toNamed('/myTeamScreen', arguments: {'team_id': playerTeamId, 'mode': 'player_team'});
-    }
-    if (isCoach) {
-      return () => Get.toNamed(AppRoutes.createTeamScreen);
-    }
-    return null;
-  }
+  // Единая панель сервисов (без дублей)
+  Widget _unifiedServicesBoard({required bool isTablet}) {
+    final allItems = _getUnifiedMenuItems();
 
-  String _workspaceSubtitle() {
-    if (isClub) {
-      return clubTeamsLoading ? 'Загрузка команд клуба...' : 'Команды, тренеры и управление клубом';
-    }
-    if (isCoach && myTeamName.trim().isNotEmpty) {
-      return myTeamName.trim();
-    }
-    if (isCoach && assignedTeams.length > 1) {
-      return 'Назначено команд: ${assignedTeams.length}';
-    }
-    if (isCoach && assignedTeamName.trim().isNotEmpty) {
-      return assignedTeamName.trim();
-    }
-    if (isCoach) {
-      return 'Команда ещё не назначена';
-    }
-    if (isPlayer && playerTeamName.trim().isNotEmpty) {
-      return playerTeamName.trim();
-    }
-    return 'Главная рабочая зона аккаунта';
-  }
-
-  Widget _desktopMiniInfoPanel() {
-    final rows = _workspaceRows();
-
-    return _plainCard(
-      padding: const EdgeInsets.fromLTRB(14, 13, 14, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Доступ', style: ProfileText.section),
-          const SizedBox(height: 8),
-          Expanded(
-            child: rows.isEmpty
-                ? _emptyMiniRow(
-                    isCoach ? 'Команда ещё не создана' : 'Панель не назначена',
-                    isCoach ? 'Создать' : null,
-                    isCoach ? () => Get.toNamed(AppRoutes.createTeamScreen) : null,
-                  )
-                : ListView.separated(
-                    padding: EdgeInsets.zero,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: rows.length > 3 ? 3 : rows.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (_, index) => rows[index],
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _desktopBoardTitle({
-    required String title,
-    required String subtitle,
-    required IconData icon,
-  }) {
-    return Row(
-      children: [
-        _iconBadge(icon, ProfilePalette.green),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: ProfileText.title),
-              const SizedBox(height: 3),
-              Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: ProfileText.caption),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _desktopMenuSection({
-    required String title,
-    required List<Widget> children,
-    String? rightLabel,
-    bool compact = false,
-  }) {
     return Container(
-      padding: EdgeInsets.fromLTRB(12, compact ? 10 : 12, 12, compact ? 8 : 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFFAFBFC),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: ProfilePalette.borderSoft),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: ProfilePalette.border),
+        boxShadow: ProfilePalette.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(child: Text(title, style: ProfileText.section)),
-              if (rightLabel != null)
-                Text(
-                  rightLabel,
-                  style: ProfileText.caption.copyWith(
-                    color: ProfilePalette.lightMuted,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-            ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+            child: Row(
+              children: [
+                const Icon(Icons.grid_view_rounded, color: ProfilePalette.green, size: 22),
+                const SizedBox(width: 10),
+                const Text('Все сервисы', style: ProfileText.title),
+                const Spacer(),
+                Text('${allItems.length}', style: ProfileText.caption),
+              ],
+            ),
           ),
-          SizedBox(height: compact ? 4 : 6),
+          const SizedBox(height: 4),
           Expanded(
-            child: children.isEmpty
-                ? _emptyMiniRow('Разделы пока недоступны', null, null)
-                : Column(
-                    children: [
-                      for (int i = 0; i < children.length; i++) ...[
-                        Expanded(child: children[i]),
-                        if (i != children.length - 1)
-                          const Divider(height: 1, color: ProfilePalette.borderSoft),
-                      ],
-                    ],
-                  ),
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              itemCount: allItems.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final item = allItems[index];
+                return _unifiedMenuItem(item);
+              },
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _desktopMenuRow(ProfileMenuItem item) {
+  Widget _unifiedMenuItem(ProfileMenuItem item) {
+    final isMyPage = item.type == ProfileItemType.myPage;
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(20),
       child: InkWell(
         onTap: item.onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            color: isMyPage ? ProfilePalette.surface : Colors.white,
+            border: Border.all(color: ProfilePalette.borderSoft),
+          ),
           child: Row(
             children: [
-              _smallIconBadge(item.icon, item.accent),
-              const SizedBox(width: 10),
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: ProfilePalette.softFor(item.accent),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: item.accent == ProfilePalette.green
+                        ? ProfilePalette.green.withOpacity(.20)
+                        : ProfilePalette.borderSoft,
+                  ),
+                ),
+                child: Icon(
+                  item.icon,
+                  color: item.accent == ProfilePalette.green
+                      ? ProfilePalette.green
+                      : (item.accent == ProfilePalette.red || item.accent == ProfilePalette.instagram
+                          ? item.accent
+                          : ProfilePalette.graphite),
+                  size: 21,
+                ),
+              ),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       item.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: ProfileText.rowTitle.copyWith(fontSize: 14),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: ProfilePalette.text,
+                      ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 4),
                     Text(
                       item.subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: ProfileText.caption.copyWith(fontSize: 11.5),
+                      style: const TextStyle(fontSize: 12, color: ProfilePalette.muted),
                     ),
                   ],
                 ),
               ),
+              if (isMyPage)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: ProfilePalette.graphite,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'Личный',
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                ),
               const Icon(Icons.chevron_right_rounded, color: ProfilePalette.lightMuted, size: 20),
             ],
           ),
@@ -1038,263 +879,145 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  Widget _smallIconBadge(IconData icon, Color color) {
-    return Container(
-      width: 38,
-      height: 38,
-      decoration: BoxDecoration(
-        color: ProfilePalette.softFor(color),
-        borderRadius: BorderRadius.circular(13),
+  // Формируем единое меню без дублей
+  List<ProfileMenuItem> _getUnifiedMenuItems() {
+    final items = <ProfileMenuItem>[];
+
+    // Моя страница — уже в быстром доступе, но добавим с меткой Instagram
+    items.add(ProfileMenuItem(
+      title: 'Моя страница',
+      subtitle: 'Публикации и личный блог',
+      icon: Icons.person_rounded,
+      accent: ProfilePalette.instagram,
+      onTap: () => Get.toNamed(AppRoutes.myProfileScreen),
+      type: ProfileItemType.myPage,
+    ));
+
+    // Остальные сервисы
+    items.addAll([
+      ProfileMenuItem(
+        title: 'Мои площадки',
+        subtitle: 'Спортивные объекты',
+        icon: Icons.stadium_outlined,
+        accent: ProfilePalette.orange,
+        onTap: () => Get.toNamed(AppRoutes.myGroundsScreen),
       ),
-      child: Icon(icon, color: color, size: 20),
-    );
+      ProfileMenuItem(
+        title: 'Бронирования',
+        subtitle: 'Заявки по моим площадкам',
+        icon: Icons.calendar_today_outlined,
+        accent: ProfilePalette.teal,
+        onTap: () => Get.to(() => const BookingsForMyVenuesScreen()),
+      ),
+    ]);
+
+    if (!isClub) {
+      items.addAll([
+        ProfileMenuItem(
+          title: 'Тренировки',
+          subtitle: 'Личные тренировки',
+          icon: Icons.directions_run_outlined,
+          accent: ProfilePalette.orange,
+          onTap: () => Get.to(() => const MyTrainingsScreen()),
+        ),
+        ProfileMenuItem(
+          title: 'Достижения',
+          subtitle: 'Награды и прогресс',
+          icon: Icons.emoji_events_outlined,
+          accent: ProfilePalette.purple,
+          onTap: () => Get.to(() => const AchievementsScreen()),
+        ),
+        ProfileMenuItem(
+          title: 'AR тренировки',
+          subtitle: 'Инновации',
+          icon: Icons.auto_awesome_outlined,
+          accent: ProfilePalette.purple,
+          onTap: () => Get.to(() => const InnovationHistoryScreen()),
+        ),
+      ]);
+    }
+
+    // Настройки, поддержка, документы
+    items.addAll([
+      ProfileMenuItem(
+        title: 'Настройки',
+        subtitle: 'Аккаунт, уведомления',
+        icon: Icons.settings_outlined,
+        accent: ProfilePalette.blue,
+        onTap: () => Get.toNamed(AppRoutes.settingsScreen),
+      ),
+      ProfileMenuItem(
+        title: 'Помощь',
+        subtitle: 'Поддержка и чат',
+        icon: Icons.support_agent_rounded,
+        accent: ProfilePalette.green,
+        onTap: () => Get.to(() => const HelpProfileScreen()),
+      ),
+      ProfileMenuItem(
+        title: 'Документы',
+        subtitle: 'Правила и политика',
+        icon: Icons.description_outlined,
+        accent: ProfilePalette.teal,
+        onTap: () => _openUrl(termsUrl),
+      ),
+    ]);
+
+    return items;
   }
 
-  Widget _workspaceAccessPanel({required bool compact}) {
-    final rows = _workspaceRows();
-
-    return _plainCard(
-      padding: const EdgeInsets.all(14),
+  Widget _dangerSectionCompact() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: ProfilePalette.border),
+        boxShadow: ProfilePalette.cardShadow,
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              _iconBadge(Icons.account_tree_outlined, ProfilePalette.green),
-              const SizedBox(width: 10),
-              const Expanded(child: Text('Рабочая зона', style: ProfileText.section)),
-            ],
+          _dangerCompactTile(
+            title: 'Выйти',
+            icon: Icons.logout_rounded,
+            onTap: _showLogoutDialog,
           ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: rows.isEmpty
-                ? _emptyMiniRow(
-                    isCoach ? 'Команда ещё не создана' : 'Рабочая панель пока не назначена',
-                    isCoach ? 'Создать' : null,
-                    isCoach ? () => Get.toNamed(AppRoutes.createTeamScreen) : null,
-                  )
-                : ListView.separated(
-                    padding: EdgeInsets.zero,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: rows.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (_, index) => rows[index],
-                  ),
+          const SizedBox(height: 4),
+          _dangerCompactTile(
+            title: 'Удалить аккаунт',
+            icon: Icons.delete_forever_rounded,
+            onTap: _showDeleteAccountSheet,
           ),
         ],
       ),
     );
   }
 
-  List<Widget> _workspaceRows() {
-    final rows = <Widget>[];
-
-    if (isClub) {
-      rows.add(
-        _teamLine(
-          title: 'Панель клуба',
-          subtitle: clubTeamsLoading ? 'Загрузка команд...' : 'Команды: $clubTeamsCount',
-          logoUrl: '',
-          icon: Icons.apartment_rounded,
-          onTap: () => Get.toNamed(AppRoutes.clubDashboardScreen),
-        ),
-      );
-    }
-
-    if (isCoach) {
-      rows.add(
-        _teamLine(
-          title: 'Панель команд',
-          subtitle: assignedTeamLoading || myTeamLoading
-              ? 'Загрузка команд...'
-              : _workspaceSubtitle(),
-          logoUrl: '',
-          icon: Icons.dashboard_customize_outlined,
-          onTap: _workspaceOpenAction() ?? () {},
-        ),
-      );
-
-      if (myTeamId > 0) {
-        rows.add(const SizedBox(height: 8));
-        rows.add(
-          _teamLine(
-            title: myTeamName.isEmpty ? 'Панель команды' : myTeamName,
-            subtitle: myTeamCategory.isEmpty ? 'Команда тренера' : myTeamCategory,
-            logoUrl: myTeamLogo,
-            icon: Icons.shield_outlined,
-            onTap: () => Get.toNamed(
-              '/myTeamScreen',
-              arguments: {'team_id': myTeamId, 'mode': 'coach_my'},
-            ),
-          ),
-        );
-      }
-
-      final assigned = assignedTeams.isNotEmpty
-          ? assignedTeams
-          : (_firstAssignedTeam() == null ? <Map<String, dynamic>>[] : <Map<String, dynamic>>[_firstAssignedTeam()!]);
-      for (final team in assigned) {
-        final teamId = _asInt(team['id'] ?? team['team_id']);
-        if (teamId <= 0 || teamId == myTeamId) continue;
-        rows.add(
-          _teamLine(
-            title: (team['name'] ?? team['team_name'] ?? 'Команда клуба').toString(),
-            subtitle: (team['category'] ?? '').toString().trim().isEmpty
-                ? 'Назначена клубом'
-                : (team['category'] ?? '').toString(),
-            logoUrl: (team['logo'] ?? team['team_logo'] ?? '').toString(),
-            icon: Icons.group_work_outlined,
-            onTap: null,
-            showArrow: false,
-          ),
-        );
-      }
-    }
-
-    if (isPlayer && playerTeamId > 0) {
-      rows.add(
-        _teamLine(
-          title: playerTeamName.isEmpty ? 'Моя команда' : playerTeamName,
-          subtitle: playerTeamCategory.isEmpty ? 'Команда игрока' : playerTeamCategory,
-          logoUrl: playerTeamLogo,
-          icon: Icons.shield_outlined,
-          onTap: () => Get.toNamed(
-            '/myTeamScreen',
-            arguments: {'team_id': playerTeamId, 'mode': 'player_team'},
-          ),
-        ),
-      );
-    }
-
-    return rows;
-  }
-
-  Widget _workspaceHeroButton() {
-    final title = isClub
-        ? 'Открыть панель клуба'
-        : isCoach
-            ? 'Открыть панель команд'
-            : isPlayer
-                ? 'Открыть мою команду'
-                : 'Открыть рабочую панель';
-
-    VoidCallback? onTap;
-    if (isClub) {
-      onTap = () => Get.toNamed(AppRoutes.clubDashboardScreen);
-    } else if (isCoach && (assignedTeams.isNotEmpty || assignedTeamId > 0)) {
-      onTap = _openTrainerWorkspace();
-    } else if (isCoach && myTeamId > 0) {
-      onTap = () => Get.toNamed('/myTeamScreen', arguments: {'team_id': myTeamId, 'mode': 'coach_my'});
-    } else if (isPlayer && playerTeamId > 0) {
-      onTap = () => Get.toNamed('/myTeamScreen', arguments: {'team_id': playerTeamId, 'mode': 'player_team'});
-    } else if (isCoach) {
-      onTap = () => Get.toNamed(AppRoutes.createTeamScreen);
-    }
-
+  Widget _dangerCompactTile({
+    required String title,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
     return Material(
-      color: ProfilePalette.green,
-      borderRadius: BorderRadius.circular(20),
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(24),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            gradient: const LinearGradient(
-              colors: [ProfilePalette.green, ProfilePalette.greenDark],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(.16),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white.withOpacity(.18)),
-                ),
-                child: const Icon(Icons.arrow_forward_rounded, color: Colors.white),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -.3,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _mainTeamLabel().isEmpty ? 'Команды, сервисы и управление' : _mainTeamLabel(),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(.82),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _desktopActionTile(ProfileMenuItem item) {
-    return Material(
-      color: ProfilePalette.softFor(item.accent),
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        onTap: item.onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          padding: const EdgeInsets.all(13),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: item.accent.withOpacity(.12)),
-          ),
-          child: Row(
-            children: [
-              _iconBadge(item.icon, item.accent),
+              Icon(icon, color: ProfilePalette.red, size: 22),
               const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: ProfileText.rowTitle,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      item.subtitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: ProfileText.caption,
-                    ),
-                  ],
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: ProfilePalette.red,
                 ),
               ),
-              const Icon(Icons.chevron_right_rounded, size: 20, color: ProfilePalette.lightMuted),
+              const Spacer(),
+              const Icon(Icons.chevron_right_rounded, color: ProfilePalette.lightMuted, size: 20),
             ],
           ),
         ),
@@ -1302,60 +1025,72 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  Widget _compactSettingsBlock() {
-    final items = _settingsItems().take(2).toList();
-
-    return _plainCard(
-      padding: const EdgeInsets.fromLTRB(14, 13, 14, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Настройки', style: ProfileText.section),
-          const SizedBox(height: 6),
-          Expanded(
-            child: Column(
-              children: [
-                for (int i = 0; i < items.length; i++) ...[
-                  Expanded(child: _profileRow(items[i])),
-                  if (i != items.length - 1) const Divider(height: 1, color: ProfilePalette.borderSoft),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // ==================== МОБИЛЬНАЯ ВЕРСИЯ (ЕДИНЫЙ ЧИСТЫЙ СТИЛЬ) ====================
 
   Widget _mobileBody() {
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-              _accountCard(compact: true),
-              const SizedBox(height: 12),
-              _teamSummaryCard(),
-              const SizedBox(height: 12),
-              _sectionCard(
-                title: 'Сервисы',
-                children: _serviceItems().map(_profileRow).toList(),
-              ),
-              const SizedBox(height: 12),
-              _sectionCard(
-                title: 'Настройки профиля',
-                children: [_profileRow(_profileHelpItem())],
-              ),
-              const SizedBox(height: 16),
-              _versionText(),
-            ]),
+        SliverSafeArea(
+          sliver: SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                _accountCard(compact: true),
+                const SizedBox(height: 12),
+                _quickAccessPanel(),
+                const SizedBox(height: 12),
+                _mobileUnifiedServicesPanel(),
+                const SizedBox(height: 12),
+                _dangerSectionCompact(),
+                const SizedBox(height: 16),
+                _versionText(),
+              ]),
+            ),
           ),
         ),
       ],
     );
   }
+
+  Widget _mobileUnifiedServicesPanel() {
+    final allItems = _getUnifiedMenuItems();
+
+    return _plainCard(
+      padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.grid_view_rounded,
+                  color: ProfilePalette.green,
+                  size: 22,
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text('Все сервисы', style: ProfileText.section),
+                ),
+                _smallCounter('${allItems.length}'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...allItems.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _unifiedMenuItem(item),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==================== ОБЩИЕ ВИДЖЕТЫ ====================
 
   Widget _accountCard({required bool compact}) {
     final fullName = '$firstName $lastName'.trim().isEmpty
@@ -1367,6 +1102,15 @@ class _ProfileScreenState extends State<ProfileScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Container(
+            width: 42,
+            height: 4,
+            decoration: BoxDecoration(
+              color: ProfilePalette.green,
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+          const SizedBox(height: 14),
           Row(
             children: [
               GestureDetector(
@@ -1568,6 +1312,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     final content = Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
+        color: ProfilePalette.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: ProfilePalette.borderSoft),
       ),
@@ -1608,7 +1353,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
 
     return Material(
-      color: const Color(0xFFFAFBFC),
+      color: Colors.white,
       borderRadius: BorderRadius.circular(16),
       child: onTap == null
           ? content
@@ -1626,9 +1371,9 @@ class _ProfileScreenState extends State<ProfileScreen>
       width: 42,
       height: 42,
       decoration: BoxDecoration(
-        color: ProfilePalette.greenSoft,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: ProfilePalette.green.withOpacity(.12)),
+        border: Border.all(color: ProfilePalette.green.withOpacity(.22)),
       ),
       child: hasLogo
           ? ClipRRect(
@@ -1725,6 +1470,14 @@ class _ProfileScreenState extends State<ProfileScreen>
   List<ProfileMenuItem> _serviceItems() {
     final items = <ProfileMenuItem>[];
 
+    items.add(ProfileMenuItem(
+      title: 'Моя страница',
+      subtitle: 'Публикации и личный блог',
+      icon: Icons.person_rounded,
+      accent: ProfilePalette.instagram,
+      onTap: () => Get.toNamed(AppRoutes.myProfileScreen),
+    ));
+
     if (isClub) {
       items.add(
         ProfileMenuItem(
@@ -1752,13 +1505,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
 
     items.addAll([
-      ProfileMenuItem(
-        title: 'Мои посты',
-        subtitle: 'Публикации и личная страница',
-        icon: Icons.article_outlined,
-        accent: ProfilePalette.blue,
-        onTap: () => Get.toNamed(AppRoutes.myProfileScreen),
-      ),
       ProfileMenuItem(
         title: 'Мои площадки',
         subtitle: 'Созданные спортивные объекты',
@@ -1804,147 +1550,18 @@ class _ProfileScreenState extends State<ProfileScreen>
     return items;
   }
 
-  List<ProfileMenuItem> _settingsItems() {
-    return [
-      ProfileMenuItem(
-        title: 'Редактировать профиль',
-        subtitle: 'Фото, имя и данные аккаунта',
-        icon: Icons.edit_outlined,
-        accent: ProfilePalette.blue,
-        onTap: _openEditProfile,
-      ),
-      ProfileMenuItem(
-        title: 'Настройки приложения',
-        subtitle: 'Уведомления и параметры',
-        icon: Icons.settings_outlined,
-        accent: ProfilePalette.teal,
-        onTap: () => Get.toNamed(AppRoutes.settingsScreen),
-      ),
-      ProfileMenuItem(
-        title: 'Мои подписки',
-        subtitle: 'Тарифы и доступ к функциям',
-        icon: Icons.subscriptions_outlined,
-        accent: ProfilePalette.purple,
-        onTap: () => Get.toNamed(AppRoutes.subscriptionsScreen),
-      ),
-    ];
-  }
-
-  List<ProfileMenuItem> _legalItems() {
-    return [
-      ProfileMenuItem(
-        title: 'Условия использования',
-        subtitle: 'Правила работы сервиса',
-        icon: Icons.description_outlined,
-        accent: ProfilePalette.teal,
-        onTap: () => _openUrl(termsUrl),
-      ),
-      ProfileMenuItem(
-        title: 'Политика конфиденциальности',
-        subtitle: 'Как обрабатываются данные',
-        icon: Icons.privacy_tip_outlined,
-        accent: ProfilePalette.blue,
-        onTap: () => _openUrl(privacyUrl),
-      ),
-      ProfileMenuItem(
-        title: 'Правила сообщества',
-        subtitle: 'Поведение и публикации',
-        icon: Icons.shield_outlined,
-        accent: ProfilePalette.green,
-        onTap: () => _openUrl(rulesUrl),
-      ),
-    ];
-  }
-
-  Widget _supportCompactCard() {
-    return _plainCard(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _iconBadge(Icons.support_agent_rounded, ProfilePalette.green),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Text('Поддержка', style: ProfileText.section),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          const SupportButton(),
-        ],
-      ),
+  ProfileMenuItem _profileHelpItem() {
+    return ProfileMenuItem(
+      title: 'Настройки профиля',
+      subtitle: 'Настройки, документы, поддержка и безопасность',
+      icon: Icons.manage_accounts_outlined,
+      accent: ProfilePalette.blue,
+      onTap: _openProfileHelp,
     );
   }
 
-  Widget _dangerSection() {
-    return _plainCard(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Безопасность', style: ProfileText.section),
-          const SizedBox(height: 8),
-          _dangerRow(
-            title: 'Выйти из аккаунта',
-            subtitle: 'Завершить текущий сеанс',
-            icon: Icons.logout_rounded,
-            onTap: _showLogoutDialog,
-          ),
-          const Divider(height: 16, color: ProfilePalette.borderSoft),
-          _dangerRow(
-            title: 'Удалить аккаунт',
-            subtitle: 'Навсегда удалить профиль и данные',
-            icon: Icons.delete_forever_outlined,
-            onTap: _showDeleteAccountSheet,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _dangerRow({
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            children: [
-              _iconBadge(icon, ProfilePalette.red),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: ProfileText.rowTitle.copyWith(color: ProfilePalette.red),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(subtitle, style: ProfileText.caption),
-                  ],
-                ),
-              ),
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: ProfilePalette.lightMuted,
-                size: 22,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  void _openProfileHelp() {
+    Get.to(() => const HelpProfileScreen())?.then((_) => _loadUserData());
   }
 
   Widget _plainCard({required Widget child, EdgeInsets? padding}) {
@@ -1955,7 +1572,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         color: ProfilePalette.card,
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: ProfilePalette.border),
-        boxShadow: const [ProfilePalette.shadow],
+        boxShadow: ProfilePalette.cardShadow,
       ),
       child: child,
     );
@@ -1969,10 +1586,10 @@ class _ProfileScreenState extends State<ProfileScreen>
           width: size,
           height: size,
           decoration: BoxDecoration(
-            color: ProfilePalette.greenSoft,
+            color: Colors.white,
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 3),
-            boxShadow: const [ProfilePalette.shadow],
+            border: Border.all(color: ProfilePalette.green.withOpacity(.26), width: 2),
+            boxShadow: ProfilePalette.cardShadow,
           ),
           child: hasAvatar
               ? ClipOval(
@@ -2001,9 +1618,9 @@ class _ProfileScreenState extends State<ProfileScreen>
             width: 24,
             height: 24,
             decoration: BoxDecoration(
-              color: ProfilePalette.green,
+              color: ProfilePalette.graphite,
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2),
+              border: Border.all(color: ProfilePalette.green, width: 1.5),
             ),
             child: const Icon(Icons.edit_rounded, size: 12, color: Colors.white),
           ),
@@ -2019,9 +1636,21 @@ class _ProfileScreenState extends State<ProfileScreen>
       decoration: BoxDecoration(
         color: ProfilePalette.softFor(accent),
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: accent.withOpacity(.12)),
+        border: Border.all(
+          color: accent == ProfilePalette.green
+              ? ProfilePalette.green.withOpacity(.20)
+              : ProfilePalette.borderSoft,
+        ),
       ),
-      child: Icon(icon, size: 20, color: accent),
+      child: Icon(
+        icon,
+        size: 20,
+        color: accent == ProfilePalette.green
+            ? ProfilePalette.green
+            : (accent == ProfilePalette.red || accent == ProfilePalette.instagram
+                ? accent
+                : ProfilePalette.graphite),
+      ),
     );
   }
 
@@ -2030,14 +1659,18 @@ class _ProfileScreenState extends State<ProfileScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: ProfilePalette.softFor(accent),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: accent.withOpacity(.12)),
+        border: Border.all(
+          color: green
+              ? ProfilePalette.green.withOpacity(.26)
+              : ProfilePalette.border,
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: accent),
+          Icon(icon, size: 14, color: green ? ProfilePalette.green : ProfilePalette.graphite),
           const SizedBox(width: 6),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 190),
@@ -2046,7 +1679,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: accent,
+                color: green ? ProfilePalette.green : ProfilePalette.graphite,
                 fontSize: 12,
                 fontWeight: FontWeight.w900,
               ),
@@ -2061,7 +1694,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0xFFF7F8FA),
+        color: ProfilePalette.surface,
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: ProfilePalette.borderSoft),
       ),
@@ -2097,7 +1730,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFAFBFC),
+        color: ProfilePalette.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: ProfilePalette.borderSoft),
       ),
@@ -2134,7 +1767,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       label: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis),
       style: ElevatedButton.styleFrom(
         elevation: 0,
-        backgroundColor: ProfilePalette.green,
+        backgroundColor: ProfilePalette.graphite,
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -2154,6 +1787,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       label: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis),
       style: OutlinedButton.styleFrom(
         foregroundColor: ProfilePalette.text,
+        backgroundColor: Colors.white,
         side: const BorderSide(color: ProfilePalette.border),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -2188,6 +1822,47 @@ class _ProfileScreenState extends State<ProfileScreen>
     if (isCoach && assignedTeamName.trim().isNotEmpty) return assignedTeamName.trim();
     if (isPlayer && playerTeamName.trim().isNotEmpty) return playerTeamName.trim();
     return '';
+  }
+
+  String _workspaceSubtitle() {
+    if (isClub) {
+      return clubTeamsLoading ? 'Загрузка команд клуба...' : 'Команды, тренеры и управление клубом';
+    }
+    if (isCoach && myTeamName.trim().isNotEmpty) {
+      return myTeamName.trim();
+    }
+    if (isCoach && assignedTeams.length > 1) {
+      return 'Назначено команд: ${assignedTeams.length}';
+    }
+    if (isCoach && assignedTeamName.trim().isNotEmpty) {
+      return assignedTeamName.trim();
+    }
+    if (isCoach) {
+      return 'Команда ещё не назначена';
+    }
+    if (isPlayer && playerTeamName.trim().isNotEmpty) {
+      return playerTeamName.trim();
+    }
+    return 'Главная рабочая зона аккаунта';
+  }
+
+  VoidCallback? _workspaceOpenAction() {
+    if (isClub) {
+      return () => Get.toNamed(AppRoutes.clubDashboardScreen);
+    }
+    if (isCoach && (assignedTeams.isNotEmpty || assignedTeamId > 0)) {
+      return _openTrainerWorkspace();
+    }
+    if (isCoach && myTeamId > 0) {
+      return () => Get.toNamed('/myTeamScreen', arguments: {'team_id': myTeamId, 'mode': 'coach_my'});
+    }
+    if (isPlayer && playerTeamId > 0) {
+      return () => Get.toNamed('/myTeamScreen', arguments: {'team_id': playerTeamId, 'mode': 'player_team'});
+    }
+    if (isCoach) {
+      return () => Get.toNamed(AppRoutes.createTeamScreen);
+    }
+    return null;
   }
 
   void _openEditProfile() {
@@ -2238,7 +1913,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                         onPressed: () => Navigator.pop(context),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 13),
-                          side: const BorderSide(color: ProfilePalette.border),
+                          backgroundColor: const Color(0xFFF7FAF8),
+                          side: BorderSide.none,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
@@ -2328,7 +2004,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                     ),
                     const SizedBox(height: 14),
                     Material(
-                      color: const Color(0xFFFAFBFC),
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(16),
@@ -2336,8 +2012,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                         child: Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAF9),
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: ProfilePalette.borderSoft),
                           ),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2374,7 +2050,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                             onPressed: () => Navigator.pop(context),
                             style: OutlinedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 14),
-                              side: const BorderSide(color: ProfilePalette.border),
+                              backgroundColor: const Color(0xFFF7FAF8),
+                              side: BorderSide.none,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14),
                               ),
@@ -2530,62 +2207,5 @@ class _ProfileScreenState extends State<ProfileScreen>
       default:
         return role.isEmpty ? 'Пользователь' : role;
     }
-  }
-}
-
-class ProfileMenuItem {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Color accent;
-  final VoidCallback onTap;
-
-  const ProfileMenuItem({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.accent,
-    required this.onTap,
-  });
-}
-
-class _TopIconButton extends StatelessWidget {
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onTap;
-  final bool danger;
-
-  const _TopIconButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onTap,
-    this.danger = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = danger ? ProfilePalette.red : ProfilePalette.text;
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: onTap,
-          child: Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: danger ? ProfilePalette.red.withOpacity(.18) : ProfilePalette.border,
-              ),
-            ),
-            child: Icon(icon, size: 20, color: color),
-          ),
-        ),
-      ),
-    );
   }
 }

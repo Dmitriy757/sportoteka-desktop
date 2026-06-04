@@ -29,10 +29,10 @@ class ClubDashboardPalette {
   static const text = Color(0xFF0F172A);
   static const textMuted = Color(0xFF64748B);
   static const textLight = Color(0xFF94A3B8);
-  static const background = Color(0xFFF6F8FB);
+  static const background = Color(0xFFFFFFFF);
   static const card = Color(0xFFFFFFFF);
   static const border = Color(0xFFE5E7EB);
-  static const surface = Color(0xFFF8FAFC);
+  static const surface = Color(0xFFFFFFFF);
 
   static const blue = Color(0xFF2563EB);
   static const purple = Color(0xFF7C3AED);
@@ -405,12 +405,8 @@ class _ClubDashboardScreenState extends State<ClubDashboardScreen>
       if (data['success'] == true && data['prefs'] != null) {
         final prefs = Map<String, dynamic>.from(data['prefs']);
 
-        final bgColorHex = _asString(prefs['bg_color']);
-        if (bgColorHex != null && bgColorHex.isNotEmpty) {
-          _dashboardBgColor = _colorFromHex(bgColorHex);
-        } else {
-          _dashboardBgColor = ClubDashboardPalette.background;
-        }
+        // Держим панель клуба в едином белом стиле, как Home/Profile.
+        _dashboardBgColor = ClubDashboardPalette.background;
 
         final currentModules =
             List<Map<String, dynamic>>.from(_clubModuleBanners());

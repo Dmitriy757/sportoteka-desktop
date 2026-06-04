@@ -60,7 +60,9 @@
 
 
   <key>NSBluetoothAlwaysUsageDescription</key>
-  <string>Приложение использует Bluetooth для подключения к спортивным трекерам и устройствам для анализа тренировок.</string>
+  <string>Приложению нужен Bluetooth для подключения спортивного трекера.</string>
+  <key>NSBluetoothPeripheralUsageDescription</key>
+  <string>Приложению нужен Bluetooth для подключения спортивного трекера.</string>
   <key>UILaunchStoryboardName</key>
   <string>LaunchScreen</string>
   <key>UIMainStoryboardFile</key>

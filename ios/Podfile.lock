@@ -1,50 +1,10 @@
 PODS:
-  - agora_rtc_engine (6.5.3):
-    - AgoraIrisRTC_iOS (= 4.5.2-build.1)
-    - AgoraRtcEngine_iOS (= 4.5.2)
+  - agora_rtc_engine (6.5.4):
+    - AgoraIrisRTC_iOS (= 4.5.3-build.1)
+    - AgoraRtcEngine_Special_iOS (= 4.5.3.70)
     - Flutter
-  - AgoraInfra_iOS (1.2.13.1)
-  - AgoraIrisRTC_iOS (4.5.2-build.1)
-  - AgoraRtcEngine_iOS (4.5.2):
-    - AgoraRtcEngine_iOS/AIAEC (= 4.5.2)
-    - AgoraRtcEngine_iOS/AIAECLL (= 4.5.2)
-    - AgoraRtcEngine_iOS/AINS (= 4.5.2)
-    - AgoraRtcEngine_iOS/AINSLL (= 4.5.2)
-    - AgoraRtcEngine_iOS/AudioBeauty (= 4.5.2)
-    - AgoraRtcEngine_iOS/ClearVision (= 4.5.2)
-    - AgoraRtcEngine_iOS/ContentInspect (= 4.5.2)
-    - AgoraRtcEngine_iOS/FaceCapture (= 4.5.2)
-    - AgoraRtcEngine_iOS/FaceDetection (= 4.5.2)
-    - AgoraRtcEngine_iOS/LipSync (= 4.5.2)
-    - AgoraRtcEngine_iOS/ReplayKit (= 4.5.2)
-    - AgoraRtcEngine_iOS/RtcBasic (= 4.5.2)
-    - AgoraRtcEngine_iOS/SpatialAudio (= 4.5.2)
-    - AgoraRtcEngine_iOS/VideoAv1CodecDec (= 4.5.2)
-    - AgoraRtcEngine_iOS/VideoAv1CodecEnc (= 4.5.2)
-    - AgoraRtcEngine_iOS/VideoCodecDec (= 4.5.2)
-    - AgoraRtcEngine_iOS/VideoCodecEnc (= 4.5.2)
-    - AgoraRtcEngine_iOS/VirtualBackground (= 4.5.2)
-    - AgoraRtcEngine_iOS/VQA (= 4.5.2)
-  - AgoraRtcEngine_iOS/AIAEC (4.5.2)
-  - AgoraRtcEngine_iOS/AIAECLL (4.5.2)
-  - AgoraRtcEngine_iOS/AINS (4.5.2)
-  - AgoraRtcEngine_iOS/AINSLL (4.5.2)
-  - AgoraRtcEngine_iOS/AudioBeauty (4.5.2)
-  - AgoraRtcEngine_iOS/ClearVision (4.5.2)
-  - AgoraRtcEngine_iOS/ContentInspect (4.5.2)
-  - AgoraRtcEngine_iOS/FaceCapture (4.5.2)
-  - AgoraRtcEngine_iOS/FaceDetection (4.5.2)
-  - AgoraRtcEngine_iOS/LipSync (4.5.2)
-  - AgoraRtcEngine_iOS/ReplayKit (4.5.2)
-  - AgoraRtcEngine_iOS/RtcBasic (4.5.2):
-    - AgoraInfra_iOS (= 1.2.13.1)
-  - AgoraRtcEngine_iOS/SpatialAudio (4.5.2)
-  - AgoraRtcEngine_iOS/VideoAv1CodecDec (4.5.2)
-  - AgoraRtcEngine_iOS/VideoAv1CodecEnc (4.5.2)
-  - AgoraRtcEngine_iOS/VideoCodecDec (4.5.2)
-  - AgoraRtcEngine_iOS/VideoCodecEnc (4.5.2)
-  - AgoraRtcEngine_iOS/VirtualBackground (4.5.2)
-  - AgoraRtcEngine_iOS/VQA (4.5.2)
+  - AgoraIrisRTC_iOS (4.5.3-build.1)
+  - AgoraRtcEngine_Special_iOS (4.5.3.70)
   - audio_session (0.0.1):
     - Flutter
   - camera_avfoundation (0.0.1):
@@ -254,6 +214,8 @@ PODS:
     - nanopb/encode (= 2.30910.0)
   - nanopb/decode (2.30910.0)
   - nanopb/encode (2.30910.0)
+  - open_filex (0.0.2):
+    - Flutter
   - package_info_plus (0.4.5):
     - Flutter
   - path_provider_foundation (0.0.1):
@@ -271,9 +233,9 @@ PODS:
     - FlutterMacOS
     - Protobuf (~> 3.5)
     - SwiftProtobuf (~> 1.0)
-  - SDWebImage (5.21.5):
-    - SDWebImage/Core (= 5.21.5)
-  - SDWebImage/Core (5.21.5)
+  - SDWebImage (5.21.7):
+    - SDWebImage/Core (= 5.21.7)
+  - SDWebImage/Core (5.21.7)
   - sensors_plus (0.0.1):
     - Flutter
   - share_plus (0.0.1):
@@ -288,7 +250,7 @@ PODS:
   - sqflite_darwin (0.0.4):
     - Flutter
     - FlutterMacOS
-  - SwiftProtobuf (1.36.1)
+  - SwiftProtobuf (1.38.0)
   - SwiftyGif (5.4.5)
   - syncfusion_flutter_pdfviewer (0.0.1):
     - Flutter
@@ -329,6 +291,7 @@ DEPENDENCIES:
   - just_audio (from `.symlinks/plugins/just_audio/darwin`)
   - MLKitPoseDetection (= 1.0.0-beta12)
   - MLKitPoseDetectionAccurate (= 1.0.0-beta12)
+  - open_filex (from `.symlinks/plugins/open_filex/ios`)
   - package_info_plus (from `.symlinks/plugins/package_info_plus/ios`)
   - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
   - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
@@ -349,9 +312,8 @@ DEPENDENCIES:
 
 SPEC REPOS:
   trunk:
-    - AgoraInfra_iOS
     - AgoraIrisRTC_iOS
-    - AgoraRtcEngine_iOS
+    - AgoraRtcEngine_Special_iOS
     - DKImagePickerController
     - DKPhotoGallery
     - Firebase
@@ -424,6 +386,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/iris_method_channel/ios"
   just_audio:
     :path: ".symlinks/plugins/just_audio/darwin"
+  open_filex:
+    :path: ".symlinks/plugins/open_filex/ios"
   package_info_plus:
     :path: ".symlinks/plugins/package_info_plus/ios"
   path_provider_foundation:
@@ -460,10 +424,9 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/webview_flutter_wkwebview/darwin"
 
 SPEC CHECKSUMS:
-  agora_rtc_engine: 0c7d50312967c4dc31c3c45e50589ce48f57e08a
-  AgoraInfra_iOS: 3691b2b277a1712a35ae96de25af319de0d73d08
-  AgoraIrisRTC_iOS: eab58c126439adf5ec99632828a558ea216860da
-  AgoraRtcEngine_iOS: 97e2398a2addda9057815a2a583a658e36796ff6
+  agora_rtc_engine: c8ad6313ec7a1b2f28ab3328ff485df6d19a32de
+  AgoraIrisRTC_iOS: d6468160cad25d36c2b6cb5e9bd5b17ba4e58677
+  AgoraRtcEngine_Special_iOS: 48063561d21b07524358ee0a17abc6be762c58f7
   audio_session: 9bb7f6c970f21241b19f5a3658097ae459681ba0
   camera_avfoundation: be3be85408cd4126f250386828e9b1dfa40ab436
   connectivity_plus: 481668c94744c30c53b8895afb39159d1e619bdf
@@ -507,6 +470,7 @@ SPEC CHECKSUMS:
   MLKitVision: 90922bca854014a856f8b649d1f1f04f63fd9c79
   MLKitXenoCommon: 7e4785ec6344ec6ae70f0c205ffd52403ec36f3b
   nanopb: 438bc412db1928dac798aa6fd75726007be04262
+  open_filex: 432f3cd11432da3e39f47fcc0df2b1603854eff1
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
   path_provider_foundation: 080d55be775b7414fd5a5ef3ac137b97b097e564
   permission_handler_apple: 4ed2196e43d0651e8ff7ca3483a069d469701f2d
@@ -515,14 +479,14 @@ SPEC CHECKSUMS:
   Protobuf: 8d5596f7468be5400861a6bbfb2dfe9d0d1cde34
   ReachabilitySwift: 32793e867593cfc1177f5d16491e3a197d2fccda
   reactive_ble_mobile: ea97709e18fa6f0b0592909725d7ae7e1c595b64
-  SDWebImage: e9c98383c7572d713c1a0d7dd2783b10599b9838
+  SDWebImage: e9fc87c1aab89a8ab1bbd74eba378c6f53be8abf
   sensors_plus: 6a11ed0c2e1d0bd0b20b4029d3bad27d96e0c65b
   share_plus: 50da8cb520a8f0f65671c6c6a99b3617ed10a58a
   shared_preferences_foundation: 9e1978ff2562383bd5676f64ec4e9aa8fa06a6f7
   smart_auth: 33668081c5f646af84f10492a067d25fdcd16951
   sms_autofill: b36b2147535657fea83d7f3898d7831de70bd8e4
   sqflite_darwin: 20b2a3a3b70e43edae938624ce550a3cbf66a3d0
-  SwiftProtobuf: 9e106a71456f4d3f6a3b0c8fd87ef0be085efc38
+  SwiftProtobuf: d724b5145bfc609d9a49c1e3e3a3dabb07273ffb
   SwiftyGif: 706c60cf65fa2bc5ee0313beece843c8eb8194d4
   syncfusion_flutter_pdfviewer: dfb514751af5b6b71e504c9c04a2e4ddbc1dd895
   url_launcher_ios: 694010445543906933d732453a59da0a173ae33d

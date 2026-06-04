@@ -524,12 +524,8 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                           decoration: BoxDecoration(
-                            color: active ? color.withOpacity(.10) : _C.soft,
+                            color: active ? color.withOpacity(.12) : _C.soft,
                             borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: active ? color.withOpacity(.75) : _C.border),
-                            boxShadow: [
-                              BoxShadow(color: Colors.black.withOpacity(.018), blurRadius: 10, offset: const Offset(0, 5)),
-                            ],
                           ),
                           child: Row(
                             children: [
@@ -844,7 +840,7 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
       width: _leftWidth,
       height: _headerHeight,
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: const BoxDecoration(color: _C.header, border: Border(bottom: BorderSide(color: _C.border), right: BorderSide(color: _C.border))),
+      decoration: const BoxDecoration(color: _C.header),
       alignment: Alignment.centerLeft,
       child: Text('Игроки (${_filteredPlayers.length})', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: _C.text)),
     );
@@ -854,7 +850,7 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
     return Container(
       width: events.length * _cellWidth,
       height: _headerHeight,
-      decoration: const BoxDecoration(color: _C.header, border: Border(bottom: BorderSide(color: _C.border))),
+      decoration: const BoxDecoration(color: _C.header),
       child: Row(
         children: events.map((event) {
           return SizedBox(
@@ -878,8 +874,7 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
       height: _rowHeight,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: index.isEven ? Colors.white : Colors.white,
-        border: const Border(bottom: BorderSide(color: _C.border), right: BorderSide(color: _C.border)),
+        color: index.isEven ? Colors.white : _C.soft.withOpacity(.42),
       ),
       child: Row(
         children: [
@@ -887,9 +882,8 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: _C.softGreen,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: _C.border),
             ),
             clipBehavior: Clip.antiAlias,
             child: photo != null
@@ -918,7 +912,7 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
     return Container(
       width: events.length * _cellWidth,
       height: _rowHeight,
-      decoration: BoxDecoration(color: index.isEven ? Colors.white : Colors.white, border: const Border(bottom: BorderSide(color: _C.border))),
+      decoration: BoxDecoration(color: index.isEven ? Colors.white : _C.soft.withOpacity(.42)),
       child: Row(
         children: events.map((event) {
           final eventId = _asInt(event['id']);
@@ -937,7 +931,7 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
 }
 
 class _C {
-  static const Color bg = Color(0xFFF7F9FA);
+  static const Color bg = Colors.white;
   static const Color cardColor = Colors.white;
   static const Color header = Color(0xFFF3F7F5);
   static const Color soft = Color(0xFFF2F6F4);
@@ -951,19 +945,11 @@ class _C {
   static BoxDecoration get card => BoxDecoration(
         color: cardColor,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: border.withOpacity(.85)),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(.018), blurRadius: 12, offset: const Offset(0, 6)),
-        ],
       );
 
   static BoxDecoration get cardCompact => BoxDecoration(
         color: cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: border.withOpacity(.75)),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(.012), blurRadius: 8, offset: const Offset(0, 4)),
-        ],
       );
 }
 
@@ -1019,7 +1005,6 @@ class _TeamLogoMark extends StatelessWidget {
       decoration: BoxDecoration(
         color: _C.softGreen,
         borderRadius: BorderRadius.circular(size * .33),
-        border: Border.all(color: _C.border),
       ),
       clipBehavior: Clip.antiAlias,
       child: url == null
@@ -1060,9 +1045,8 @@ class _StatusCircle extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: empty ? const Color(0xFFF8FAFC) : color.withOpacity(.12),
+        color: empty ? const Color(0xFFF1F5F9) : color.withOpacity(.14),
         shape: BoxShape.circle,
-        border: Border.all(color: empty ? const Color(0xFFCBD5E1) : color.withOpacity(.72), width: 2),
       ),
       alignment: Alignment.center,
       child: empty ? null : Text(symbol, style: TextStyle(fontSize: size * .43, fontWeight: FontWeight.w900, color: color)),
