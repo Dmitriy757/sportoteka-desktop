@@ -111,27 +111,6 @@ class TrackerLiveApi {
     }
   }
 
-
-  Future<List<Map<String, dynamic>>> loadLivePeriods({
-    required int liveSessionId,
-  }) async {
-    final json = await _get('$apiBaseUrl/get_tracker_session_periods.php?live_session_id=$liveSessionId');
-    final list = (json['periods'] as List? ?? json['items'] as List? ?? const []);
-    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-  }
-
-  Future<void> saveLivePeriod({
-    required int liveSessionId,
-    required int teamId,
-    required Map<String, dynamic> period,
-  }) async {
-    await _post('$apiBaseUrl/save_tracker_session_period.php', {
-      'live_session_id': liveSessionId,
-      'team_id': teamId,
-      ...period,
-    });
-  }
-
   Future<Map<String, dynamic>> _get(String url) async {
     final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 20));
     return _decode(response.body);

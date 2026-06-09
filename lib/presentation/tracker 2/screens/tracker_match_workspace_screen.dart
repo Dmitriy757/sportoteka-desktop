@@ -12,9 +12,8 @@ import '../services/tracker_pro_api.dart';
 import '../tracker_live_panel.dart';
 import '../tracker_player_activity_screen.dart';
 import '../widgets/tracker_pro_analytics_panel.dart';
-import '../reports/tracker_training_report_screen.dart';
 
-enum TrackerWorkspaceSection { dashboard, live, activity, sessions, devices, field, settings, debug }
+enum TrackerWorkspaceSection { live, activity, analytics, sessions, devices, heatmap, field, video, settings, debug }
 
 class TrackerMatchWorkspaceScreen extends StatefulWidget {
   const TrackerMatchWorkspaceScreen({
@@ -51,13 +50,12 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
   List<TrackerDeviceModel> _savedDevices = <TrackerDeviceModel>[];
   List<TrackerFieldModel> _fields = <TrackerFieldModel>[];
 
-  TrackerWorkspaceSection _section = TrackerWorkspaceSection.dashboard;
+  TrackerWorkspaceSection _section = TrackerWorkspaceSection.live;
   TrackerPlayerOption? _selectedPlayer;
   TrackerFieldModel? _selectedField;
   ActionTrackerDevice? _connected;
   ActionTrackerBatteryState? _battery;
   ActionTrackerRecord? _selectedRecord;
-  TrackerSessionModel? _selectedReportSession;
 
   StreamSubscription<ActionTrackerParseResult>? _dataSub;
   StreamSubscription<String>? _logSub;
@@ -108,7 +106,6 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
       _selectedPlayer = null;
       _selectedField = null;
       _selectedRecord = null;
-      _selectedReportSession = null;
       _battery = null;
       _connected = _ble.connectedInfo;
       _liveRunning = false;
@@ -288,59 +285,16 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
     }
   }
 
-  void _createNewFieldDraft() {
-    final index = _fields.length + 1;
-    setState(() {
-      _selectedField = TrackerFieldModel(
-        clubId: widget.clubId,
-        teamId: widget.teamId,
-        title: index <= 1 ? 'Основное поле' : 'Поле $index',
-        lengthM: 105,
-        widthM: 68,
-        isDefault: true,
-      );
-      _calibrationCorners.clear();
-    });
-    _toast('Поле', 'Создано новое поле. Пройдите углы A → B → C → D и нажмите «Сохранить».');
-  }
-
-  void _resetCalibrationCorners() {
-    setState(() => _calibrationCorners.clear());
-    _toast('Калибровка', 'Точки A/B/C/D сброшены.');
-  }
-
-  Future<void> _handleCornerTap(int index) async {
-    if (index != _calibrationCorners.length) {
-      final labels = const ['A', 'B', 'C', 'D'];
-      _toast('Калибровка', 'Сейчас нужна точка ${labels[_calibrationCorners.length.clamp(0, 3)]}. Идите по порядку A → B → C → D.');
-      return;
-    }
-    await _captureCalibrationPoint();
-  }
-
   Future<void> _captureCalibrationPoint() async {
-    final labels = const ['A', 'B', 'C', 'D'];
-    if (_calibrationCorners.length >= 4) {
-      _toast('Калибровка', 'Все 4 точки уже получены. Нажмите «Сохранить» или «Сбросить».');
-      return;
-    }
-
     if (_points.isEmpty) {
-      _toast('Калибровка', 'Нет GPS-точки от трекера. Подключите датчик и дождитесь GPS-пакета.');
+      _toast('Калибровка', 'Нет GPS-точки. Запустите Live или загрузите запись.');
       return;
     }
-
-    final nextIndex = _calibrationCorners.length;
-    final point = _points.last;
-
     setState(() {
-      _calibrationCorners.add(point);
+      if (_calibrationCorners.length >= 4) _calibrationCorners.clear();
+      _calibrationCorners.add(_points.last);
     });
-
-    _toast(
-      'Калибровка',
-      'Точка ${labels[nextIndex]} сохранена (${_calibrationCorners.length}/4).',
-    );
+    _toast('Калибровка', 'Точка ${_calibrationCorners.length}/4 сохранена');
   }
 
   Future<void> _saveCapturedField() async {
@@ -455,30 +409,15 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
             children: [
               _DarkRail(
                 selected: _section,
+                teamName: widget.teamName,
+                clubName: widget.clubName,
                 onSelect: (section) => setState(() => _section = section),
                 onBack: _handleBackPressed,
               ),
               Expanded(
-                child: Column(
-                  children: [
-                    if (_section != TrackerWorkspaceSection.live)
-                      _TopBar(
-                        teamName: widget.teamName,
-                        clubName: widget.clubName,
-                        selectedPlayer: _selectedPlayer?.name ?? 'Игрок не выбран',
-                        selectedSection: _section,
-                        loading: _loading,
-                        onRefresh: _loadServerData,
-                      ),
-                    Expanded(
-                      child: Padding(
-                        padding: _section == TrackerWorkspaceSection.live
-                            ? const EdgeInsets.fromLTRB(0, 0, 6, 6)
-                            : const EdgeInsets.fromLTRB(0, 6, 6, 6),
-                        child: _buildSection(),
-                      ),
-                    ),
-                  ],
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 6, 6, 6),
+                  child: _buildSection(),
                 ),
               ),
             ],
@@ -499,184 +438,27 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
 
   Widget _sectionWidget(TrackerWorkspaceSection section) {
     switch (section) {
-      case TrackerWorkspaceSection.dashboard:
-        return _dashboard();
       case TrackerWorkspaceSection.live:
         return _live();
       case TrackerWorkspaceSection.activity:
         return _activity();
+      case TrackerWorkspaceSection.analytics:
+        return _analytics();
       case TrackerWorkspaceSection.sessions:
         return _sessions();
       case TrackerWorkspaceSection.devices:
         return _devices();
+      case TrackerWorkspaceSection.heatmap:
+        return _heatmap();
       case TrackerWorkspaceSection.field:
         return _field();
+      case TrackerWorkspaceSection.video:
+        return _video();
       case TrackerWorkspaceSection.settings:
         return _settings();
       case TrackerWorkspaceSection.debug:
         return _debug();
     }
-  }
-
-  Widget _dashboard() {
-    return FutureBuilder<TrackerDashboardModel>(
-      future: _api.loadDashboard(teamId: widget.teamId),
-      builder: (context, snapshot) {
-        final dashboard = snapshot.data;
-        final summary = dashboard?.summary ?? const <String, dynamic>{};
-        final rows = dashboard?.players ?? const <TrackerPlayerLoadRow>[];
-        final connected = _savedDevices.where((d) => d.playerId != null).length;
-        final readyFields = _fields.where((f) => f.hasCalibration).length;
-        final gpsReady = _points.isNotEmpty || _connected != null;
-
-        return _DarkPage(
-          title: 'Tracker Pro',
-          subtitle: 'Catapult-режим: подключение, Live, команда, отчёты и поле в одном рабочем сценарии',
-          icon: Icons.dashboard_customize_rounded,
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _DarkActionButton(
-                icon: Icons.play_arrow_rounded,
-                label: 'Открыть Live',
-                primary: true,
-                onTap: () => setState(() => _section = TrackerWorkspaceSection.live),
-              ),
-              const SizedBox(width: 8),
-              _DarkActionButton(
-                icon: Icons.sensors_rounded,
-                label: 'Трекеры',
-                onTap: () => setState(() => _section = TrackerWorkspaceSection.devices),
-              ),
-            ],
-          ),
-          child: LayoutBuilder(
-            builder: (context, c) {
-              final compact = c.maxWidth < 920;
-              final kpi = _dashboardKpis(summary, rows.length, connected, readyFields);
-              final left = _DarkCard(
-                title: 'Готовность команды',
-                subtitle: '$connected/${_players.length} трекеров',
-                child: Column(
-                  children: [
-                    _ReadinessRow(title: 'Игроки', text: _players.isEmpty ? 'Состав не загружен' : '${_players.length} игроков', ok: _players.isNotEmpty),
-                    const SizedBox(height: 8),
-                    _ReadinessRow(title: 'Трекеры', text: connected == 0 ? 'Подключите датчики' : '$connected подключено', ok: connected > 0),
-                    const SizedBox(height: 8),
-                    _ReadinessRow(title: 'Поле', text: readyFields == 0 ? 'Нужна калибровка' : '$readyFields готово', ok: readyFields > 0),
-                    const SizedBox(height: 8),
-                    _ReadinessRow(title: 'GPS', text: gpsReady ? 'Сигнал есть' : 'Ожидаем пакет', ok: gpsReady),
-                    const Spacer(),
-                    _DarkActionButton(
-                      icon: Icons.sensors_rounded,
-                      label: connected == 0 ? 'Подключить трекеры' : 'Управлять трекерами',
-                      primary: connected == 0,
-                      onTap: () => setState(() => _section = TrackerWorkspaceSection.devices),
-                    ),
-                    const SizedBox(height: 8),
-                    _DarkActionButton(
-                      icon: Icons.map_rounded,
-                      label: readyFields == 0 ? 'Настроить поле' : 'Проверить поле',
-                      onTap: () => setState(() => _section = TrackerWorkspaceSection.field),
-                    ),
-                  ],
-                ),
-              );
-
-              final center = _DarkCard(
-                title: 'Команда онлайн',
-                subtitle: snapshot.connectionState == ConnectionState.waiting && dashboard == null ? 'загрузка' : '${rows.length} игроков в аналитике',
-                child: rows.isEmpty
-                    ? const _DarkEmpty(icon: Icons.groups_rounded, text: 'После подключения трекеров и запуска Live здесь появится таблица игроков.')
-                    : ListView(
-                        children: rows.take(12).map((p) {
-                          return _DarkListTile(
-                            icon: Icons.person_rounded,
-                            avatarUrl: p.avatar,
-                            initials: _playerInitials(p.playerName),
-                            title: p.playerName,
-                            subtitle: '${(p.distanceM / 1000).toStringAsFixed(2)} км · max ${p.maxSpeedKmh.toStringAsFixed(1)} км/ч · спринты ${p.sprintCount}',
-                            trailing: 'анализ',
-                            active: _selectedPlayer?.id == p.playerId,
-                            onTap: () {
-                              final matches = _players.where((x) => x.id == p.playerId).toList();
-                              setState(() {
-                                if (matches.isNotEmpty) _selectedPlayer = matches.first;
-                                _section = TrackerWorkspaceSection.activity;
-                              });
-                            },
-                          );
-                        }).toList(),
-                      ),
-              );
-
-              final right = _DarkCard(
-                title: 'Рабочий сценарий',
-                subtitle: 'как в Catapult',
-                child: Column(
-                  children: [
-                    _ScenarioButton(step: '1', title: 'Подключить трекеры', text: 'Датчики и привязка к игрокам', icon: Icons.sensors_rounded, onTap: () => setState(() => _section = TrackerWorkspaceSection.devices)),
-                    const SizedBox(height: 8),
-                    _ScenarioButton(step: '2', title: 'Проверить поле', text: 'Калибровка A/B/C/D', icon: Icons.map_rounded, onTap: () => setState(() => _section = TrackerWorkspaceSection.field)),
-                    const SizedBox(height: 8),
-                    _ScenarioButton(step: '3', title: 'Начать Live', text: 'Поле, точки, зоны, сигналы', icon: Icons.play_arrow_rounded, onTap: () => setState(() => _section = TrackerWorkspaceSection.live)),
-                    const SizedBox(height: 8),
-                    _ScenarioButton(step: '4', title: 'Открыть отчёты', text: 'Сессии, таблицы, экспорт', icon: Icons.table_chart_rounded, onTap: () => setState(() => _section = TrackerWorkspaceSection.sessions)),
-                    const Spacer(),
-                    const _DarkHint(text: 'Главная показывает команду и готовность. Live — только рабочий мониторинг. Активность — графики игрока. Сессии — отчёты и экспорт.'),
-                  ],
-                ),
-              );
-
-              final content = compact
-                  ? ListView(
-                      children: [
-                        SizedBox(height: 140, child: _DashboardKpiStrip(items: kpi)),
-                        const SizedBox(height: 10),
-                        SizedBox(height: 360, child: center),
-                        const SizedBox(height: 10),
-                        SizedBox(height: 310, child: left),
-                        const SizedBox(height: 10),
-                        SizedBox(height: 360, child: right),
-                      ],
-                    )
-                  : Column(
-                      children: [
-                        SizedBox(height: 118, child: _DashboardKpiStrip(items: kpi)),
-                        const SizedBox(height: 10),
-                        Expanded(
-                          child: Row(
-                            children: [
-                              Expanded(flex: 3, child: left),
-                              const SizedBox(width: 10),
-                              Expanded(flex: 5, child: center),
-                              const SizedBox(width: 10),
-                              Expanded(flex: 3, child: right),
-                            ],
-                          ),
-                        ),
-                      ],
-                    );
-
-              return content;
-            },
-          ),
-        );
-      },
-    );
-  }
-
-  List<_DashboardKpiData> _dashboardKpis(Map<String, dynamic> summary, int analyticPlayers, int connected, int readyFields) {
-    double d(dynamic v) => v is num ? v.toDouble() : double.tryParse('$v') ?? 0;
-    int i(dynamic v) => v is num ? v.toInt() : int.tryParse('$v') ?? 0;
-    return [
-      _DashboardKpiData(icon: Icons.groups_rounded, title: 'Игроки онлайн', value: '$connected/${_players.length}', subtitle: 'трекеры'),
-      _DashboardKpiData(icon: Icons.route_rounded, title: 'Дистанция', value: '${(d(summary['total_distance_m']) / 1000).toStringAsFixed(2)} км', subtitle: 'команда'),
-      _DashboardKpiData(icon: Icons.speed_rounded, title: 'Макс. скорость', value: '${d(summary['max_speed_kmh']).toStringAsFixed(1)}', subtitle: 'км/ч'),
-      _DashboardKpiData(icon: Icons.local_fire_department_rounded, title: 'Спринты', value: '${i(summary['sprint_count'])}', subtitle: 'команда'),
-      _DashboardKpiData(icon: Icons.monitor_heart_rounded, title: 'Нагрузка', value: d(summary['avg_load_score']).toStringAsFixed(1), subtitle: 'средняя'),
-      _DashboardKpiData(icon: Icons.map_rounded, title: 'Поля', value: '$readyFields/${_fields.length}', subtitle: 'калибровка'),
-    ];
   }
 
   Widget _live() {
@@ -696,6 +478,18 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
         if (!mounted || _liveRunning == running) return;
         setState(() => _liveRunning = running);
       },
+    );
+  }
+
+
+  Widget _activity() {
+    return TrackerPlayerActivityScreen(
+      key: ValueKey('activity_${widget.teamId}_${_selectedPlayer?.id ?? 0}_${_selectedField?.id ?? 0}'),
+      teamId: widget.teamId,
+      teamName: widget.teamName,
+      rosterPlayers: _players,
+      selectedPlayer: _selectedPlayer,
+      fieldId: _selectedField?.id,
     );
   }
 
@@ -719,80 +513,35 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
     );
   }
 
-  Widget _activity() {
-    return TrackerPlayerActivityScreen(
-      key: ValueKey('activity_${widget.clubId}_${widget.teamId}_${_selectedPlayer?.id ?? 0}_${_selectedField?.id ?? 0}'),
-      teamId: widget.teamId,
-      teamName: widget.teamName,
-      rosterPlayers: _players,
-      selectedPlayer: _selectedPlayer,
-      fieldId: _selectedField?.id,
-    );
-  }
-
   Widget _sessions() {
     return _DarkPage(
-      title: 'Отчёты / сессии',
-      subtitle: 'календарь тренировок, расшифровка, PDF и Excel',
-      icon: Icons.table_chart_rounded,
+      title: 'Сессии и отчёты',
+      subtitle: 'видимый список тренировок, расшифровка, графики и экспорт PDF / Excel',
+      icon: Icons.assignment_rounded,
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
         _DarkActionButton(icon: Icons.refresh_rounded, label: 'Обновить', onTap: () => setState(() {})),
         const SizedBox(width: 8),
-        _DarkActionButton(
-          icon: Icons.cloud_upload_rounded,
-          label: _savingRecord ? 'Сохраняю...' : 'Сохранить GPS',
-          primary: true,
-          onTap: _savingRecord ? null : _saveRecordAsSession,
-        ),
+        _DarkActionButton(icon: Icons.cloud_upload_rounded, label: _savingRecord ? 'Сохраняю...' : 'Сохранить GPS', primary: true, onTap: _savingRecord ? null : _saveRecordAsSession),
       ]),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 980;
-          final sessionsList = _SessionsListPane(
-            api: _api,
-            teamId: widget.teamId,
-            playerId: _selectedPlayer?.id,
-            selectedSession: _selectedReportSession,
-            onSelect: (session) => setState(() => _selectedReportSession = session),
-            onProcess: (session) async {
-              try {
-                await _api.processSession(sessionId: session.id);
-                _toast('Сессия', 'Обработка запущена');
-                setState(() {});
-              } catch (e) {
-                _toast('Сессия', '$e');
-              }
-            },
-          );
-          final gpsRecords = _GpsRecordsPane(
-            records: _records,
-            selectedRecord: _selectedRecord,
-            pointsCount: _points.length,
-            onLoad: _loadGpsRecord,
-          );
-          final report = _SelectedTrainingReportPane(
-            session: _selectedReportSession,
-            teamId: widget.teamId,
-            teamName: widget.teamName,
-          );
-
-          if (compact) {
-            return Column(children: [
-              SizedBox(height: 210, child: sessionsList),
-              const SizedBox(height: 10),
-              SizedBox(height: 150, child: gpsRecords),
-              const SizedBox(height: 10),
-              Expanded(child: report),
-            ]);
+      child: _TrackerSessionsReportBoard(
+        api: _api,
+        teamId: widget.teamId,
+        teamName: widget.teamName,
+        selectedPlayer: _selectedPlayer,
+        records: _records,
+        selectedRecord: _selectedRecord,
+        pointsCount: _points.length,
+        savingRecord: _savingRecord,
+        onLoadRecord: _loadGpsRecord,
+        onSaveRecord: _saveRecordAsSession,
+        onProcessSession: (session) async {
+          try {
+            await _api.processSession(sessionId: session.id);
+            _toast('Сессия', 'Сессия обработана');
+            setState(() {});
+          } catch (e) {
+            _toast('Сессия', '$e');
           }
-
-          return Row(children: [
-            Expanded(flex: 3, child: sessionsList),
-            const SizedBox(width: 10),
-            Expanded(flex: 3, child: gpsRecords),
-            const SizedBox(width: 10),
-            Expanded(flex: 8, child: report),
-          ]);
         },
       ),
     );
@@ -895,110 +644,47 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
   }
 
   Widget _field() {
-    final labels = const ['A', 'B', 'C', 'D'];
-    final nextIndex = _calibrationCorners.length >= 4 ? -1 : _calibrationCorners.length;
-    final nextLabel = nextIndex < 0 ? 'готово' : labels[nextIndex];
-
     return _DarkPage(
       title: 'Калибровка поля',
-      subtitle: 'создайте поле и пройдите углы GPS-трекером: A верхний левый → B верхний правый → C нижний правый → D нижний левый',
+      subtitle: '4 GPS corners, projection 105×68, one field for all trackers',
       icon: Icons.map_rounded,
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-        _DarkActionButton(icon: Icons.add_rounded, label: 'Новое поле', onTap: _createNewFieldDraft),
-        const SizedBox(width: 8),
-        _DarkActionButton(
-          icon: Icons.gps_fixed_rounded,
-          label: nextIndex < 0 ? 'GPS готов' : 'GPS $nextLabel',
-          primary: true,
-          onTap: nextIndex < 0 ? null : _captureCalibrationPoint,
-        ),
-        const SizedBox(width: 8),
-        _DarkActionButton(
-          icon: Icons.restart_alt_rounded,
-          label: 'Сбросить',
-          onTap: _calibrationCorners.isEmpty ? null : _resetCalibrationCorners,
-        ),
+        _DarkActionButton(icon: Icons.add_location_alt_rounded, label: 'Точка', primary: true, onTap: _captureCalibrationPoint),
         const SizedBox(width: 8),
         _DarkActionButton(icon: Icons.save_rounded, label: 'Сохранить', onTap: _calibrationCorners.length >= 4 ? _saveCapturedField : null),
       ]),
       child: Row(children: [
-        Expanded(
-          flex: 4,
-          child: _DarkCard(
-            title: 'Поля команды',
-            subtitle: '${_fields.length} полей',
-            child: ListView(children: [
-              _DarkActionButton(icon: Icons.add_rounded, label: 'Новое поле', onTap: _createNewFieldDraft),
-              const SizedBox(height: 10),
-              if (_selectedField?.id == null && _selectedField != null)
-                _DarkListTile(
-                  icon: Icons.add_location_alt_rounded,
-                  title: _selectedField!.title,
-                  subtitle: '${_selectedField!.lengthM.toStringAsFixed(0)}×${_selectedField!.widthM.toStringAsFixed(0)} м · черновик, нужны 4 точки',
-                  active: true,
-                  trailing: 'новое',
-                  onTap: () {},
-                ),
-              if (_fields.isEmpty && _selectedField == null)
-                const _DarkEmpty(icon: Icons.map_rounded, text: 'Нажмите «Новое поле», затем поставьте 4 угла GPS-трекером.'),
-              ..._fields.map((f) => _DarkListTile(
+        Expanded(flex: 4, child: _DarkCard(
+          title: 'Поля команды',
+          subtitle: '${_fields.length} fields',
+          child: _fields.isEmpty
+              ? const _DarkEmpty(icon: Icons.map_rounded, text: 'Создайте поле через 4 угла.')
+              : ListView(children: _fields.map((f) => _DarkListTile(
                     icon: f.hasCalibration ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
                     title: f.title,
-                    subtitle: '${f.lengthM.toStringAsFixed(0)}×${f.widthM.toStringAsFixed(0)} м · ${f.hasCalibration ? 'откалибровано' : 'нужна калибровка'}',
+                    subtitle: '${f.lengthM.toStringAsFixed(0)}×${f.widthM.toStringAsFixed(0)} m · ${f.hasCalibration ? 'откалибровано' : 'нужна калибровка'}',
                     active: _selectedField?.id == f.id,
                     trailing: _selectedField?.id == f.id ? 'выбрано' : 'выбрать',
-                    onTap: () => setState(() {
-                      _selectedField = f;
-                      _calibrationCorners.clear();
-                    }),
-                  )),
-            ]),
-          ),
-        ),
+                    onTap: () => setState(() => _selectedField = f),
+                  )).toList()),
+        )),
         const SizedBox(width: 10),
-        Expanded(
-          flex: 8,
-          child: _DarkCard(
-            title: 'Калибровка по 4 точкам',
-            subtitle: nextIndex < 0 ? 'все точки получены' : 'следующая точка: $nextLabel',
-            child: Column(children: [
-              _CalibrationStatusBanner(
-                nextLabel: nextLabel,
-                done: nextIndex < 0,
-                pointCount: _calibrationCorners.length,
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: CustomPaint(
-                  painter: _DarkCalibrationPainter(corners: _calibrationCorners, activeIndex: nextIndex),
-                  child: const SizedBox.expand(),
-                ),
-              ),
-              const SizedBox(height: 8),
-              _DarkHint(
-                text: _points.isEmpty
-                    ? 'GPS-точек пока нет. Подключите трекер, выйдите на поле и дождитесь координат.'
-                    : 'Последняя GPS-точка готова. Нажмите ${nextIndex < 0 ? '«Сохранить»' : '«GPS $nextLabel»'}.',
-              ),
-              const SizedBox(height: 8),
-              Wrap(spacing: 8, runSpacing: 8, children: List.generate(4, (i) {
-                final ready = _calibrationCorners.length > i;
-                final active = !ready && i == _calibrationCorners.length && _calibrationCorners.length < 4;
-                return _DarkCornerChip(
-                  label: labels[i],
-                  value: ready
-                      ? '${_calibrationCorners[i].latitude.toStringAsFixed(6)}\n${_calibrationCorners[i].longitude.toStringAsFixed(6)}'
-                      : active
-                          ? 'ожидает GPS'
-                          : 'после предыдущей',
-                  ready: ready,
-                  active: active,
-                  onTap: () => _handleCornerTap(i),
-                );
-              })),
-            ]),
-          ),
-        ),
+        Expanded(flex: 8, child: _DarkCard(
+          title: 'Калибровка по 4 точкам',
+          subtitle: 'go to each corner and press Point',
+          child: Column(children: [
+            Expanded(child: CustomPaint(painter: _DarkCalibrationPainter(corners: _calibrationCorners), child: const SizedBox.expand())),
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, runSpacing: 8, children: List.generate(4, (i) {
+              final ready = _calibrationCorners.length > i;
+              return _DarkCornerChip(
+                label: ['A', 'B', 'C', 'D'][i],
+                value: ready ? '${_calibrationCorners[i].latitude.toStringAsFixed(6)}, ${_calibrationCorners[i].longitude.toStringAsFixed(6)}' : 'не задано',
+                ready: ready,
+              );
+            })),
+          ]),
+        )),
       ]),
     );
   }
@@ -1083,132 +769,919 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
 }
 
 
-class _SessionsListPane extends StatelessWidget {
-  const _SessionsListPane({
+class _TrackerSessionsReportBoard extends StatefulWidget {
+  const _TrackerSessionsReportBoard({
     required this.api,
     required this.teamId,
-    required this.playerId,
-    required this.selectedSession,
-    required this.onSelect,
-    required this.onProcess,
+    required this.teamName,
+    required this.selectedPlayer,
+    required this.records,
+    required this.selectedRecord,
+    required this.pointsCount,
+    required this.savingRecord,
+    required this.onLoadRecord,
+    required this.onSaveRecord,
+    required this.onProcessSession,
   });
 
   final TrackerProApi api;
   final int teamId;
-  final int? playerId;
-  final TrackerSessionModel? selectedSession;
-  final ValueChanged<TrackerSessionModel> onSelect;
-  final ValueChanged<TrackerSessionModel> onProcess;
+  final String teamName;
+  final TrackerPlayerOption? selectedPlayer;
+  final List<ActionTrackerRecord> records;
+  final ActionTrackerRecord? selectedRecord;
+  final int pointsCount;
+  final bool savingRecord;
+  final ValueChanged<ActionTrackerRecord> onLoadRecord;
+  final VoidCallback onSaveRecord;
+  final Future<void> Function(TrackerSessionModel session) onProcessSession;
+
+  @override
+  State<_TrackerSessionsReportBoard> createState() => _TrackerSessionsReportBoardState();
+}
+
+class _TrackerSessionsReportBoardState extends State<_TrackerSessionsReportBoard> {
+  int? _selectedSessionId;
+  int _tab = 0;
+  String _search = '';
+
+  static const _tabs = <String>[
+    'Сводка',
+    'Локомоторная',
+    'Механическая',
+    'Внутренняя',
+    'Микроцикл',
+  ];
 
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<TrackerSessionModel>>(
-      future: api.loadSessions(teamId: teamId, playerId: playerId),
+      future: widget.api.loadSessions(teamId: widget.teamId, playerId: widget.selectedPlayer?.id),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting && snapshot.data == null) {
-          return const _DarkCard(title: 'Сессии', subtitle: 'загрузка', child: Center(child: CircularProgressIndicator()));
-        }
-        if (snapshot.hasError) {
-          return _DarkCard(
-            title: 'Сессии',
-            subtitle: 'ошибка',
-            child: _DarkError(error: '${snapshot.error}', onRetry: () {}),
-          );
-        }
-        final sessions = snapshot.data ?? const <TrackerSessionModel>[];
-        return _DarkCard(
-          title: 'Сессии',
-          subtitle: '${sessions.length} тренировок',
-          child: sessions.isEmpty
-              ? const _DarkEmpty(icon: Icons.storage_rounded, text: 'Сессии появятся после Live или сохранения GPS-записи.')
-              : ListView.builder(
-                  itemCount: sessions.length,
-                  itemBuilder: (context, index) {
-                    final s = sessions[index];
-                    final active = selectedSession?.id == s.id || (selectedSession == null && index == 0);
-                    return _DarkListTile(
-                      icon: Icons.assignment_rounded,
-                      title: s.title,
-                      subtitle: '${s.playerName ?? 'Команда'} · ${s.createdAt} · ${(s.distanceM / 1000).toStringAsFixed(2)} км · max ${s.maxSpeedKmh.toStringAsFixed(1)}',
-                      active: active,
-                      trailing: active ? 'отчёт' : 'открыть',
-                      onTap: () => onSelect(s),
-                    );
-                  },
+        final allSessions = snapshot.data ?? const <TrackerSessionModel>[];
+        final query = _search.trim().toLowerCase();
+        final sessions = query.isEmpty
+            ? allSessions
+            : allSessions.where((s) {
+                final text = '${s.title} ${s.playerName ?? ''} ${s.createdAt} ${s.deviceName}'.toLowerCase();
+                return text.contains(query);
+              }).toList(growable: false);
+
+        final selected = _resolveSelectedSession(sessions);
+        final loading = snapshot.connectionState == ConnectionState.waiting && snapshot.data == null;
+
+        return LayoutBuilder(
+          builder: (context, c) {
+            final compact = c.maxWidth < 940;
+            if (compact) {
+              return Column(
+                children: [
+                  _SessionSidePanel(
+                    loading: loading,
+                    sessions: sessions,
+                    selectedSessionId: selected?.id,
+                    records: widget.records,
+                    selectedRecord: widget.selectedRecord,
+                    pointsCount: widget.pointsCount,
+                    search: _search,
+                    onSearch: (v) => setState(() => _search = v),
+                    onSelectSession: (s) => setState(() {
+                      _selectedSessionId = s.id;
+                      _tab = 0;
+                    }),
+                    onLoadRecord: widget.onLoadRecord,
+                    onProcessSession: widget.onProcessSession,
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: _ReportPreviewPane(
+                      api: widget.api,
+                      teamName: widget.teamName,
+                      selected: selected,
+                      tab: _tab,
+                      tabs: _tabs,
+                      sessions: sessions,
+                      onTab: (i) => setState(() => _tab = i),
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            return Row(
+              children: [
+                SizedBox(
+                  width: 340,
+                  child: _SessionSidePanel(
+                    loading: loading,
+                    sessions: sessions,
+                    selectedSessionId: selected?.id,
+                    records: widget.records,
+                    selectedRecord: widget.selectedRecord,
+                    pointsCount: widget.pointsCount,
+                    search: _search,
+                    onSearch: (v) => setState(() => _search = v),
+                    onSelectSession: (s) => setState(() {
+                      _selectedSessionId = s.id;
+                      _tab = 0;
+                    }),
+                    onLoadRecord: widget.onLoadRecord,
+                    onProcessSession: widget.onProcessSession,
+                  ),
                 ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _ReportPreviewPane(
+                    api: widget.api,
+                    teamName: widget.teamName,
+                    selected: selected,
+                    tab: _tab,
+                    tabs: _tabs,
+                    sessions: sessions,
+                    onTab: (i) => setState(() => _tab = i),
+                  ),
+                ),
+              ],
+            );
+          },
         );
       },
     );
   }
+
+  TrackerSessionModel? _resolveSelectedSession(List<TrackerSessionModel> sessions) {
+    if (sessions.isEmpty) return null;
+    final id = _selectedSessionId;
+    if (id != null) {
+      for (final s in sessions) {
+        if (s.id == id) return s;
+      }
+    }
+    return sessions.first;
+  }
 }
 
-class _GpsRecordsPane extends StatelessWidget {
-  const _GpsRecordsPane({
+class _SessionSidePanel extends StatelessWidget {
+  const _SessionSidePanel({
+    required this.loading,
+    required this.sessions,
+    required this.selectedSessionId,
     required this.records,
     required this.selectedRecord,
     required this.pointsCount,
-    required this.onLoad,
+    required this.search,
+    required this.onSearch,
+    required this.onSelectSession,
+    required this.onLoadRecord,
+    required this.onProcessSession,
   });
 
+  final bool loading;
+  final List<TrackerSessionModel> sessions;
+  final int? selectedSessionId;
   final List<ActionTrackerRecord> records;
   final ActionTrackerRecord? selectedRecord;
   final int pointsCount;
-  final ValueChanged<ActionTrackerRecord> onLoad;
+  final String search;
+  final ValueChanged<String> onSearch;
+  final ValueChanged<TrackerSessionModel> onSelectSession;
+  final ValueChanged<ActionTrackerRecord> onLoadRecord;
+  final Future<void> Function(TrackerSessionModel session) onProcessSession;
 
   @override
   Widget build(BuildContext context) {
     return _DarkCard(
-      title: 'GPS-записи',
-      subtitle: selectedRecord == null ? '${records.length} записей' : 'Record ${selectedRecord!.fileId} · $pointsCount точек',
-      child: records.isEmpty
-          ? const _DarkEmpty(icon: Icons.download_rounded, text: 'Подключите трекер и загрузите записи.')
-          : ListView(
-              children: records
-                  .map((r) => _DarkListTile(
-                        icon: Icons.route_rounded,
-                        title: 'Record ${r.fileId}',
-                        subtitle: '${r.length} bytes${selectedRecord?.fileId == r.fileId ? ' · $pointsCount точек' : ''}',
-                        active: selectedRecord?.fileId == r.fileId,
-                        trailing: selectedRecord?.fileId == r.fileId ? 'выбрано' : 'загрузить',
-                        onTap: () => onLoad(r),
-                      ))
-                  .toList(),
+      title: 'Сессии',
+      subtitle: loading ? 'загрузка' : '${sessions.length} тренировок',
+      child: Column(
+        children: [
+          _SessionSearchField(value: search, onChanged: onSearch),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 90,
+            child: Row(
+              children: [
+                Expanded(child: _MiniSessionStat(icon: Icons.event_available_rounded, label: 'Сессий', value: '${sessions.length}')),
+                const SizedBox(width: 8),
+                Expanded(child: _MiniSessionStat(icon: Icons.route_rounded, label: 'GPS точек', value: '$pointsCount')),
+              ],
             ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            flex: 7,
+            child: loading
+                ? const Center(child: CircularProgressIndicator())
+                : sessions.isEmpty
+                    ? const _DarkEmpty(icon: Icons.event_busy_rounded, text: 'Сохранённые тренировки появятся здесь. Сессии видны сразу, без скрытых окон.')
+                    : ListView.builder(
+                        itemCount: sessions.length,
+                        itemBuilder: (context, i) {
+                          final s = sessions[i];
+                          final selected = selectedSessionId == s.id;
+                          return _SessionTile(
+                            session: s,
+                            selected: selected,
+                            onTap: () => onSelectSession(s),
+                            onProcess: () => onProcessSession(s),
+                          );
+                        },
+                      ),
+          ),
+          const SizedBox(height: 8),
+          _LocalRecordsStrip(
+            records: records,
+            selectedRecord: selectedRecord,
+            pointsCount: pointsCount,
+            onLoadRecord: onLoadRecord,
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _SelectedTrainingReportPane extends StatelessWidget {
-  const _SelectedTrainingReportPane({
-    required this.session,
-    required this.teamId,
+class _SessionSearchField extends StatelessWidget {
+  const _SessionSearchField({required this.value, required this.onChanged});
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: TextEditingController(text: value)..selection = TextSelection.collapsed(offset: value.length),
+      onChanged: onChanged,
+      style: const TextStyle(color: _TD.text, fontSize: 12, fontWeight: FontWeight.w800),
+      decoration: InputDecoration(
+        isDense: true,
+        prefixIcon: const Icon(Icons.search_rounded, size: 18, color: _TD.muted),
+        hintText: 'Поиск по дате, игроку, сессии',
+        hintStyle: const TextStyle(color: _TD.muted, fontSize: 11, fontWeight: FontWeight.w700),
+        filled: true,
+        fillColor: _TD.card2,
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _TD.border)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _TD.green)),
+      ),
+    );
+  }
+}
+
+class _SessionTile extends StatelessWidget {
+  const _SessionTile({required this.session, required this.selected, required this.onTap, required this.onProcess});
+  final TrackerSessionModel session;
+  final bool selected;
+  final VoidCallback onTap;
+  final VoidCallback onProcess;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: selected ? _TD.green.withOpacity(.10) : _TD.card2,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: selected ? _TD.green.withOpacity(.55) : _TD.border),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Icon(selected ? Icons.check_circle_rounded : Icons.event_note_rounded, color: selected ? _TD.green : _TD.muted, size: 19),
+              const SizedBox(width: 8),
+              Expanded(child: Text(session.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontSize: 12.5, fontWeight: FontWeight.w900))),
+              Text(_shortDate(session.createdAt), style: const TextStyle(color: _TD.muted, fontSize: 10, fontWeight: FontWeight.w800)),
+            ]),
+            const SizedBox(height: 8),
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              _SmallChip(label: session.playerName ?? 'Команда'),
+              _SmallChip(label: '${(session.distanceM / 1000).toStringAsFixed(2)} км'),
+              _SmallChip(label: 'max ${session.maxSpeedKmh.toStringAsFixed(1)}'),
+              _SmallChip(label: 'спринты ${session.sprintCount}'),
+            ]),
+            const SizedBox(height: 8),
+            Row(children: [
+              Expanded(child: Text('Статус: ${session.processingStatus}', style: const TextStyle(color: _TD.muted, fontSize: 10, fontWeight: FontWeight.w800))),
+              TextButton.icon(
+                style: TextButton.styleFrom(visualDensity: VisualDensity.compact, padding: const EdgeInsets.symmetric(horizontal: 8)),
+                onPressed: onProcess,
+                icon: const Icon(Icons.sync_rounded, size: 14),
+                label: const Text('Обработать', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900)),
+              ),
+            ]),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReportPreviewPane extends StatelessWidget {
+  const _ReportPreviewPane({
+    required this.api,
     required this.teamName,
+    required this.selected,
+    required this.tab,
+    required this.tabs,
+    required this.sessions,
+    required this.onTab,
   });
 
-  final TrackerSessionModel? session;
-  final int teamId;
+  final TrackerProApi api;
+  final String teamName;
+  final TrackerSessionModel? selected;
+  final int tab;
+  final List<String> tabs;
+  final List<TrackerSessionModel> sessions;
+  final ValueChanged<int> onTab;
+
+  @override
+  Widget build(BuildContext context) {
+    final session = selected;
+    if (session == null) {
+      return const _DarkCard(
+        title: 'Отчёт по тренировке',
+        subtitle: 'нет выбранной сессии',
+        child: _DarkEmpty(icon: Icons.assignment_late_rounded, text: 'Выберите тренировку слева или сохраните новую GPS-сессию.'),
+      );
+    }
+
+    return _DarkCard(
+      title: 'Отчёт по тренировке',
+      subtitle: '${session.title} · ${teamName}',
+      child: Column(
+        children: [
+          _ReportWhiteHeader(api: api, session: session, teamName: teamName),
+          const SizedBox(height: 8),
+          _ReportTabs(tabs: tabs, selected: tab, onTap: onTab),
+          const SizedBox(height: 8),
+          Expanded(
+            child: FutureBuilder<TrackerSessionReportModel>(
+              future: api.loadSessionReport(sessionId: session.id),
+              builder: (context, snapshot) {
+                final report = snapshot.data;
+                if (snapshot.connectionState == ConnectionState.waiting && report == null) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return _DarkError(error: '${snapshot.error}', onRetry: () {});
+                }
+                final safeReport = report ?? TrackerSessionReportModel(
+                  session: <String, dynamic>{'id': session.id},
+                  summary: TrackerSessionSummaryModel(
+                    sessionId: session.id,
+                    distanceM: session.distanceM,
+                    maxSpeedKmh: session.maxSpeedKmh,
+                    sprintCount: session.sprintCount,
+                    loadScore: session.loadScore,
+                  ),
+                  points: const <TrackerSessionPointModel>[],
+                  heatmap: const <TrackerHeatPoint>[],
+                );
+                return _ReportTabBody(tab: tab, report: safeReport, session: session, sessions: sessions);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReportWhiteHeader extends StatelessWidget {
+  const _ReportWhiteHeader({required this.api, required this.session, required this.teamName});
+  final TrackerProApi api;
+  final TrackerSessionModel session;
   final String teamName;
 
   @override
   Widget build(BuildContext context) {
-    final s = session;
-    if (s == null) {
-      return const _DarkCard(
-        title: 'Отчёт тренировки',
-        subtitle: 'выберите сессию слева',
-        child: _DarkEmpty(icon: Icons.analytics_rounded, text: 'Выберите тренировку в списке «Сессии», чтобы открыть сводку, локомоторную, механическую и внутреннюю нагрузку.'),
-      );
-    }
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
-      child: TrackerTrainingReportScreen(
-        key: ValueKey('training_report_${s.id}'),
-        sessionId: s.id,
-        teamId: teamId,
-        teamName: teamName,
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _TD.border),
+      ),
+      child: Row(children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(color: _TD.green.withOpacity(.10), borderRadius: BorderRadius.circular(12)),
+          child: const Icon(Icons.assessment_rounded, color: _TD.green),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('SPORTOTEKA TRACKER PRO', style: TextStyle(color: _TD.text, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: .4)),
+          const SizedBox(height: 3),
+          Text('Отчёт по тренировке · $teamName', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontSize: 17, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 2),
+          Text('${session.title} · ${session.createdAt}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontSize: 11, fontWeight: FontWeight.w800)),
+        ])),
+        const SizedBox(width: 8),
+        _ExportButton(icon: Icons.picture_as_pdf_rounded, label: 'PDF', onTap: () => _showExportLink(context, 'PDF', '${api.apiBaseUrl}/export_tracker_training_report_pdf.php?session_id=${session.id}')),
+        const SizedBox(width: 8),
+        _ExportButton(icon: Icons.table_chart_rounded, label: 'Excel', onTap: () => _showExportLink(context, 'Excel', '${api.apiBaseUrl}/export_tracker_training_report_csv.php?session_id=${session.id}')),
+      ]),
+    );
+  }
+
+  static void _showExportLink(BuildContext context, String title, String url) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Text('Экспорт $title', style: const TextStyle(fontWeight: FontWeight.w900)),
+        content: SelectableText(url, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+        actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Закрыть'))],
       ),
     );
   }
+}
+
+class _ExportButton extends StatelessWidget {
+  const _ExportButton({required this.icon, required this.label, required this.onTap});
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        height: 38,
+        padding: const EdgeInsets.symmetric(horizontal: 11),
+        decoration: BoxDecoration(color: _TD.card2, borderRadius: BorderRadius.circular(10), border: Border.all(color: _TD.border)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, color: _TD.text, size: 17),
+          const SizedBox(width: 6),
+          Text(label, style: const TextStyle(color: _TD.text, fontSize: 11, fontWeight: FontWeight.w900)),
+        ]),
+      ),
+    );
+  }
+}
+
+class _ReportTabs extends StatelessWidget {
+  const _ReportTabs({required this.tabs, required this.selected, required this.onTap});
+  final List<String> tabs;
+  final int selected;
+  final ValueChanged<int> onTap;
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 38,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: tabs.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final active = selected == i;
+          return InkWell(
+            onTap: () => onTap(i),
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(color: active ? _TD.text : _TD.card2, borderRadius: BorderRadius.circular(10), border: Border.all(color: active ? _TD.text : _TD.border)),
+              child: Text(tabs[i], style: TextStyle(color: active ? Colors.white : _TD.text, fontSize: 11, fontWeight: FontWeight.w900)),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ReportTabBody extends StatelessWidget {
+  const _ReportTabBody({required this.tab, required this.report, required this.session, required this.sessions});
+  final int tab;
+  final TrackerSessionReportModel report;
+  final TrackerSessionModel session;
+  final List<TrackerSessionModel> sessions;
+
+  @override
+  Widget build(BuildContext context) {
+    switch (tab) {
+      case 1:
+        return _LocomotorReport(report: report, sessions: sessions, session: session);
+      case 2:
+        return _MechanicalReport(report: report);
+      case 3:
+        return _InternalLoadReport(report: report);
+      case 4:
+        return _MicrocycleReport(sessions: sessions);
+      case 0:
+      default:
+        return _SummaryReport(report: report, session: session);
+    }
+  }
+}
+
+class _SummaryReport extends StatelessWidget {
+  const _SummaryReport({required this.report, required this.session});
+  final TrackerSessionReportModel report;
+  final TrackerSessionModel session;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = report.summary;
+    return ListView(
+      children: [
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: MediaQuery.of(context).size.width > 1100 ? 5 : 3,
+          crossAxisSpacing: 8,
+          mainAxisSpacing: 8,
+          childAspectRatio: 1.85,
+          children: [
+            _ReportKpi(title: 'Дистанция', value: '${s.distanceM.toStringAsFixed(0)} м', icon: Icons.route_rounded),
+            _ReportKpi(title: 'Метры/мин', value: _metersPerMin(s), icon: Icons.speed_rounded),
+            _ReportKpi(title: 'Макс. скорость', value: '${s.maxSpeedKmh.toStringAsFixed(1)}', icon: Icons.bolt_rounded),
+            _ReportKpi(title: 'Ускорения', value: '${s.accelerationCount}', icon: Icons.keyboard_double_arrow_up_rounded),
+            _ReportKpi(title: 'Торможения', value: '${s.decelerationCount}', icon: Icons.keyboard_double_arrow_down_rounded),
+            _ReportKpi(title: 'HIR', value: '${s.hirDistanceM.toStringAsFixed(0)} м', icon: Icons.local_fire_department_rounded),
+            _ReportKpi(title: 'VHIR', value: '${s.vhirDistanceM.toStringAsFixed(0)} м', icon: Icons.whatshot_rounded),
+            _ReportKpi(title: 'Спринт', value: '${s.sprintDistanceM.toStringAsFixed(0)} м', icon: Icons.flash_on_rounded),
+            _ReportKpi(title: 'Кол-во спринтов', value: '${s.sprintCount}', icon: Icons.directions_run_rounded),
+            _ReportKpi(title: 'Player Load', value: s.loadScore.toStringAsFixed(1), icon: Icons.monitor_heart_rounded),
+          ],
+        ),
+        const SizedBox(height: 10),
+        _ComparisonChart(
+          title: 'Сравнение с матчевыми средними',
+          values: [
+            _ChartValue('Дистанция', _percent(session.distanceM, 7792)),
+            _ChartValue('М/мин', _percent(_metersPerMinValue(s), 116)),
+            _ChartValue('Макс. скорость', _percent(s.maxSpeedKmh, 29)),
+            _ChartValue('Ускорения', _percent(s.accelerationCount.toDouble(), 20)),
+            _ChartValue('Торможения', _percent(s.decelerationCount.toDouble(), 27)),
+            _ChartValue('HIR', _percent(s.hirDistanceM, 1228)),
+            _ChartValue('VHIR', _percent(s.vhirDistanceM, 426)),
+            _ChartValue('Спринт', _percent(s.sprintDistanceM, 100)),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _LocomotorReport extends StatelessWidget {
+  const _LocomotorReport({required this.report, required this.sessions, required this.session});
+  final TrackerSessionReportModel report;
+  final List<TrackerSessionModel> sessions;
+  final TrackerSessionModel session;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = sessions.isEmpty ? <TrackerSessionModel>[session] : sessions;
+    final avgDistance = rows.isEmpty ? 0.0 : rows.fold<double>(0, (v, s) => v + s.distanceM) / rows.length;
+    final avgMaxSpeed = rows.isEmpty ? 0.0 : rows.fold<double>(0, (v, s) => v + s.maxSpeedKmh) / rows.length;
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SingleChildScrollView(
+              child: DataTable(
+                headingRowColor: MaterialStateProperty.all(_TD.card2),
+                dataRowMinHeight: 42,
+                dataRowMaxHeight: 48,
+                columns: const [
+                  DataColumn(label: Text('Фамилия')),
+                  DataColumn(label: Text('Время')),
+                  DataColumn(label: Text('Дистанция')),
+                  DataColumn(label: Text('М/мин')),
+                  DataColumn(label: Text('Макс скорость')),
+                  DataColumn(label: Text('Ускорения')),
+                  DataColumn(label: Text('Торможения')),
+                  DataColumn(label: Text('V3 Бег')),
+                  DataColumn(label: Text('V4 ВСБ')),
+                  DataColumn(label: Text('V5 Спринт')),
+                  DataColumn(label: Text('Кол-во спринтов')),
+                  DataColumn(label: Text('Player Load')),
+                ],
+                rows: [
+                  ...rows.map((s) => DataRow(cells: [
+                        DataCell(Text(s.playerName ?? 'Команда', style: const TextStyle(fontWeight: FontWeight.w800))),
+                        DataCell(Text(_durationLabel(report.summary.durationSec))),
+                        DataCell(Text(s.distanceM.toStringAsFixed(0))),
+                        DataCell(Text(_metersPerMinValue(report.summary).toStringAsFixed(1))),
+                        DataCell(Text(s.maxSpeedKmh.toStringAsFixed(1))),
+                        DataCell(Text('${report.summary.accelerationCount}')),
+                        DataCell(Text('${report.summary.decelerationCount}')),
+                        DataCell(Text(report.summary.hirDistanceM.toStringAsFixed(0))),
+                        DataCell(Text(report.summary.vhirDistanceM.toStringAsFixed(0))),
+                        DataCell(Text(report.summary.sprintDistanceM.toStringAsFixed(0))),
+                        DataCell(Text('${s.sprintCount}')),
+                        DataCell(Text(s.loadScore.toStringAsFixed(1))),
+                      ])),
+                  DataRow(color: MaterialStateProperty.all(_TD.green.withOpacity(.08)), cells: [
+                    const DataCell(Text('СРЕДНЕЕ', style: TextStyle(fontWeight: FontWeight.w900))),
+                    DataCell(Text(_durationLabel(report.summary.durationSec))),
+                    DataCell(Text(avgDistance.toStringAsFixed(0))),
+                    DataCell(Text(_metersPerMinValue(report.summary).toStringAsFixed(1))),
+                    DataCell(Text(avgMaxSpeed.toStringAsFixed(1))),
+                    DataCell(Text('${report.summary.accelerationCount}')),
+                    DataCell(Text('${report.summary.decelerationCount}')),
+                    DataCell(Text(report.summary.hirDistanceM.toStringAsFixed(0))),
+                    DataCell(Text(report.summary.vhirDistanceM.toStringAsFixed(0))),
+                    DataCell(Text(report.summary.sprintDistanceM.toStringAsFixed(0))),
+                    DataCell(Text('${report.summary.sprintCount}')),
+                    DataCell(Text(report.summary.loadScore.toStringAsFixed(1))),
+                  ]),
+                  DataRow(color: MaterialStateProperty.all(const Color(0xFFF2F4F7)), cells: const [
+                    DataCell(Text('СРЕДНЕЕ 2026 (МАТЧИ)', style: TextStyle(fontWeight: FontWeight.w900))),
+                    DataCell(Text('01:13:49')),
+                    DataCell(Text('7792')),
+                    DataCell(Text('116')),
+                    DataCell(Text('29')),
+                    DataCell(Text('20')),
+                    DataCell(Text('27')),
+                    DataCell(Text('1228')),
+                    DataCell(Text('426')),
+                    DataCell(Text('100')),
+                    DataCell(Text('5')),
+                    DataCell(Text('34')),
+                  ]),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MechanicalReport extends StatelessWidget {
+  const _MechanicalReport({required this.report});
+  final TrackerSessionReportModel report;
+  @override
+  Widget build(BuildContext context) {
+    final s = report.summary;
+    return ListView(children: [
+      Row(children: [
+        Expanded(child: _ComparisonChart(title: 'Ускорения / торможения', values: [_ChartValue('Ускорения', s.accelerationCount.toDouble()), _ChartValue('Торможения', s.decelerationCount.toDouble())])),
+        const SizedBox(width: 10),
+        Expanded(child: _ComparisonChart(title: 'Взрывные действия', values: [_ChartValue('ACC+DEC', (s.accelerationCount + s.decelerationCount).toDouble()), _ChartValue('Спринты', s.sprintCount.toDouble())])),
+      ]),
+      const SizedBox(height: 10),
+      _ReportInfoBlock(title: 'Механическая работа', text: 'Здесь отображаются ускорения, торможения, суммарные ACC+DEC и взрывные действия. Следующий шаг — разделить изменения направления движения по правой/левой стороне, если трекер отдаёт IMU/COD данные.'),
+    ]);
+  }
+}
+
+class _InternalLoadReport extends StatelessWidget {
+  const _InternalLoadReport({required this.report});
+  final TrackerSessionReportModel report;
+  @override
+  Widget build(BuildContext context) {
+    final s = report.summary;
+    return ListView(children: [
+      Row(children: [
+        Expanded(child: _ComparisonChart(title: 'Дистанция в зонах', values: [_ChartValue('HIR', s.hirDistanceM), _ChartValue('VHIR', s.vhirDistanceM), _ChartValue('Спринт', s.sprintDistanceM)])),
+        const SizedBox(width: 10),
+        Expanded(child: _ComparisonChart(title: 'Player Load / HR Exertion', values: [_ChartValue('Player Load', s.loadScore), const _ChartValue('HR Exertion', 0)])),
+      ]),
+      const SizedBox(height: 10),
+      _ReportInfoBlock(title: 'Внутренняя нагрузка', text: 'Для полной страницы как в PDF нужно подключить ЧСС: средний % от ЧСС макс, время в зонах ЧСС, дистанция в зонах ЧСС и HR Exertion.'),
+    ]);
+  }
+}
+
+class _MicrocycleReport extends StatelessWidget {
+  const _MicrocycleReport({required this.sessions});
+  final List<TrackerSessionModel> sessions;
+  @override
+  Widget build(BuildContext context) {
+    final last = sessions.take(7).toList(growable: false).reversed.toList(growable: false);
+    return ListView(children: [
+      _ComparisonChart(
+        title: 'Динамика микроцикла',
+        values: last.isEmpty
+            ? const [_ChartValue('Нет данных', 0)]
+            : last.map((s) => _ChartValue(_shortDate(s.createdAt), s.distanceM)).toList(growable: false),
+      ),
+      const SizedBox(height: 10),
+      _ReportInfoBlock(title: 'Периоды сессии', text: 'Таймлайн должен сохраняться в tracker_session_periods: Разминка, игровое упражнение, удары, восстановление. Тогда отчёт сможет фильтровать нагрузку по каждому периоду.'),
+    ]);
+  }
+}
+
+class _ReportKpi extends StatelessWidget {
+  const _ReportKpi({required this.title, required this.value, required this.icon});
+  final String title;
+  final String value;
+  final IconData icon;
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: _TD.border)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Icon(icon, color: _TD.green, size: 20),
+        Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontSize: 18, fontWeight: FontWeight.w900)),
+        Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontSize: 10, fontWeight: FontWeight.w800)),
+      ]),
+    );
+  }
+}
+
+class _ChartValue {
+  final String label;
+  final double value;
+  const _ChartValue(this.label, this.value);
+}
+
+class _ComparisonChart extends StatelessWidget {
+  const _ComparisonChart({required this.title, required this.values});
+  final String title;
+  final List<_ChartValue> values;
+  @override
+  Widget build(BuildContext context) {
+    final maxValue = values.fold<double>(1, (m, v) => math.max(m, v.value.abs()));
+    return Container(
+      height: 250,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: _TD.border)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, style: const TextStyle(color: _TD.text, fontSize: 13, fontWeight: FontWeight.w900)),
+        const SizedBox(height: 10),
+        Expanded(
+          child: CustomPaint(
+            painter: _BarChartPainter(values: values, maxValue: maxValue),
+            child: const SizedBox.expand(),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+class _BarChartPainter extends CustomPainter {
+  const _BarChartPainter({required this.values, required this.maxValue});
+  final List<_ChartValue> values;
+  final double maxValue;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final area = Rect.fromLTWH(8, 8, size.width - 16, size.height - 34);
+    final gridPaint = Paint()..color = _TD.border..strokeWidth = 1;
+    for (var i = 0; i <= 4; i++) {
+      final y = area.top + area.height * i / 4;
+      canvas.drawLine(Offset(area.left, y), Offset(area.right, y), gridPaint);
+    }
+    if (values.isEmpty) return;
+    final gap = values.length > 1 ? 8.0 : 0.0;
+    final barW = math.max(8.0, (area.width - gap * (values.length - 1)) / values.length);
+    for (var i = 0; i < values.length; i++) {
+      final v = values[i];
+      final ratio = maxValue <= 0 ? 0.0 : (v.value / maxValue).clamp(0.0, 1.0).toDouble();
+      final h = area.height * ratio;
+      final left = area.left + i * (barW + gap);
+      final rect = Rect.fromLTWH(left, area.bottom - h, barW, h);
+      final paint = Paint()..color = ratio > .75 ? _TD.green : ratio > .35 ? _TD.orange : _TD.blue.withOpacity(.75);
+      canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(4)), paint);
+      final label = v.label.length > 8 ? '${v.label.substring(0, 8)}…' : v.label;
+      final tp = TextPainter(text: TextSpan(text: label, style: const TextStyle(color: _TD.muted, fontSize: 8, fontWeight: FontWeight.w800)), textDirection: TextDirection.ltr)..layout(maxWidth: barW + gap);
+      tp.paint(canvas, Offset(left, area.bottom + 6));
+    }
+  }
+  @override
+  bool shouldRepaint(covariant _BarChartPainter oldDelegate) => true;
+}
+
+class _ReportInfoBlock extends StatelessWidget {
+  const _ReportInfoBlock({required this.title, required this.text});
+  final String title;
+  final String text;
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: _TD.card2, borderRadius: BorderRadius.circular(12), border: Border.all(color: _TD.border)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, style: const TextStyle(color: _TD.text, fontSize: 14, fontWeight: FontWeight.w900)),
+        const SizedBox(height: 6),
+        Text(text, style: const TextStyle(color: _TD.muted, fontSize: 12, fontWeight: FontWeight.w700, height: 1.35)),
+      ]),
+    );
+  }
+}
+
+class _MiniSessionStat extends StatelessWidget {
+  const _MiniSessionStat({required this.icon, required this.label, required this.value});
+  final IconData icon;
+  final String label;
+  final String value;
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(color: _TD.card2, borderRadius: BorderRadius.circular(10), border: Border.all(color: _TD.border)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Icon(icon, color: _TD.green, size: 18),
+        Text(value, style: const TextStyle(color: _TD.text, fontSize: 16, fontWeight: FontWeight.w900)),
+        Text(label, style: const TextStyle(color: _TD.muted, fontSize: 10, fontWeight: FontWeight.w800)),
+      ]),
+    );
+  }
+}
+
+class _SmallChip extends StatelessWidget {
+  const _SmallChip({required this.label});
+  final String label;
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(99), border: Border.all(color: _TD.border)),
+      child: Text(label, style: const TextStyle(color: _TD.muted, fontSize: 9.5, fontWeight: FontWeight.w900)),
+    );
+  }
+}
+
+class _LocalRecordsStrip extends StatelessWidget {
+  const _LocalRecordsStrip({required this.records, required this.selectedRecord, required this.pointsCount, required this.onLoadRecord});
+  final List<ActionTrackerRecord> records;
+  final ActionTrackerRecord? selectedRecord;
+  final int pointsCount;
+  final ValueChanged<ActionTrackerRecord> onLoadRecord;
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 118,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(color: _TD.card2, borderRadius: BorderRadius.circular(12), border: Border.all(color: _TD.border)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.download_rounded, color: _TD.green, size: 18),
+          const SizedBox(width: 8),
+          Expanded(child: Text(selectedRecord == null ? 'Записи с устройства' : 'Record ${selectedRecord!.fileId} · $pointsCount точек', style: const TextStyle(color: _TD.text, fontSize: 11, fontWeight: FontWeight.w900))),
+        ]),
+        const SizedBox(height: 8),
+        Expanded(
+          child: records.isEmpty
+              ? const Text('Подключите трекер и загрузите GPS-записи.', style: TextStyle(color: _TD.muted, fontSize: 11, fontWeight: FontWeight.w700))
+              : ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: records.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (context, i) {
+                    final r = records[i];
+                    final active = selectedRecord?.fileId == r.fileId;
+                    return InkWell(
+                      onTap: () => onLoadRecord(r),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        width: 108,
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: active ? _TD.green.withOpacity(.10) : Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: active ? _TD.green : _TD.border)),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+                          Text('Record ${r.fileId}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontSize: 11, fontWeight: FontWeight.w900)),
+                          const SizedBox(height: 4),
+                          Text('${r.length} bytes', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontSize: 9, fontWeight: FontWeight.w800)),
+                        ]),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ]),
+    );
+  }
+}
+
+String _shortDate(String raw) {
+  final dt = DateTime.tryParse(raw.replaceFirst(' ', 'T'));
+  if (dt == null) return raw.isEmpty ? '—' : raw.split(' ').first;
+  return '${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}.${dt.year.toString().substring(2)}';
+}
+
+String _durationLabel(int seconds) {
+  if (seconds <= 0) return '00:00:00';
+  final h = seconds ~/ 3600;
+  final m = (seconds % 3600) ~/ 60;
+  final s = seconds % 60;
+  return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+}
+
+double _metersPerMinValue(TrackerSessionSummaryModel s) {
+  final minutes = s.durationSec > 0 ? s.durationSec / 60.0 : 0;
+  if (minutes <= 0) return 0;
+  return s.distanceM / minutes;
+}
+
+String _metersPerMin(TrackerSessionSummaryModel s) => _metersPerMinValue(s).toStringAsFixed(1);
+
+double _percent(double value, double baseline) {
+  if (baseline <= 0) return 0;
+  return (value / baseline * 100).clamp(0, 999).toDouble();
 }
 
 class _TD {
@@ -1235,23 +1708,27 @@ class _TD {
 
 extension _SectionExt on TrackerWorkspaceSection {
   String get title => switch (this) {
-        TrackerWorkspaceSection.dashboard => 'Главная',
-        TrackerWorkspaceSection.live => 'Live',
-        TrackerWorkspaceSection.activity => 'Игроки',
-        TrackerWorkspaceSection.sessions => 'Отчёты',
-        TrackerWorkspaceSection.devices => 'Трекеры',
+        TrackerWorkspaceSection.live => 'Онлайн',
+        TrackerWorkspaceSection.activity => 'Активность',
+        TrackerWorkspaceSection.analytics => 'Аналитика',
+        TrackerWorkspaceSection.sessions => 'Сессии',
+        TrackerWorkspaceSection.devices => 'Датчики',
+        TrackerWorkspaceSection.heatmap => 'Теплокарта',
         TrackerWorkspaceSection.field => 'Поле',
-        TrackerWorkspaceSection.settings => 'Пороги',
+        TrackerWorkspaceSection.video => 'Видео',
+        TrackerWorkspaceSection.settings => 'Настройки',
         TrackerWorkspaceSection.debug => 'Диагн.',
       };
 
   IconData get icon => switch (this) {
-        TrackerWorkspaceSection.dashboard => Icons.dashboard_customize_rounded,
         TrackerWorkspaceSection.live => Icons.radio_button_checked_rounded,
-        TrackerWorkspaceSection.activity => Icons.monitor_heart_rounded,
-        TrackerWorkspaceSection.sessions => Icons.table_chart_rounded,
+        TrackerWorkspaceSection.activity => Icons.show_chart_rounded,
+        TrackerWorkspaceSection.analytics => Icons.analytics_rounded,
+        TrackerWorkspaceSection.sessions => Icons.download_rounded,
         TrackerWorkspaceSection.devices => Icons.sensors_rounded,
+        TrackerWorkspaceSection.heatmap => Icons.local_fire_department_rounded,
         TrackerWorkspaceSection.field => Icons.map_rounded,
+        TrackerWorkspaceSection.video => Icons.video_library_rounded,
         TrackerWorkspaceSection.settings => Icons.tune_rounded,
         TrackerWorkspaceSection.debug => Icons.bug_report_rounded,
       };
@@ -1260,11 +1737,15 @@ extension _SectionExt on TrackerWorkspaceSection {
 class _DarkRail extends StatelessWidget {
   const _DarkRail({
     required this.selected,
+    required this.teamName,
+    required this.clubName,
     required this.onSelect,
     required this.onBack,
   });
 
   final TrackerWorkspaceSection selected;
+  final String teamName;
+  final String clubName;
   final ValueChanged<TrackerWorkspaceSection> onSelect;
   final VoidCallback onBack;
 
@@ -1272,7 +1753,7 @@ class _DarkRail extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = TrackerWorkspaceSection.values;
     return Container(
-      width: 74,
+      width: 82,
       padding: const EdgeInsets.fromLTRB(6, 6, 4, 6),
       child: Container(
         decoration: BoxDecoration(
@@ -1289,25 +1770,17 @@ class _DarkRail extends StatelessWidget {
         ),
         child: Column(
           children: [
+            _RailTeamBadge(teamName: teamName, clubName: clubName),
             Expanded(
               child: ListView.separated(
-                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+                padding: const EdgeInsets.fromLTRB(6, 4, 6, 6),
                 itemCount: items.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 5),
                 itemBuilder: (context, i) {
                   final item = items[i];
-                  return _RailButton(
-                    icon: item.icon,
-                    label: item.title,
-                    active: item == selected,
-                    onTap: () => onSelect(item),
-                  );
+                  return _RailButton(icon: item.icon, label: item.title, active: item == selected, onTap: () => onSelect(item));
                 },
               ),
-            ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 6),
-              child: Divider(height: 10, thickness: 1, color: _TD.border),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
@@ -1319,6 +1792,54 @@ class _DarkRail extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RailTeamBadge extends StatelessWidget {
+  const _RailTeamBadge({required this.teamName, required this.clubName});
+
+  final String teamName;
+  final String clubName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(6, 6, 6, 4),
+      child: Tooltip(
+        message: '$clubName · $teamName',
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 5),
+          decoration: BoxDecoration(
+            color: _TD.card,
+            borderRadius: BorderRadius.circular(11),
+            border: Border.all(color: _TD.border.withOpacity(.9)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: _TD.green.withOpacity(.10),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: const Icon(Icons.shield_rounded, color: _TD.green, size: 18),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                teamName,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: _TD.text, fontSize: 8.4, height: 1.05, fontWeight: FontWeight.w900),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1408,13 +1929,14 @@ class _RailButtonState extends State<_RailButton> {
 }
 
 class _TopBar extends StatelessWidget {
-  const _TopBar({required this.teamName, required this.clubName, required this.selectedPlayer, required this.selectedSection, required this.loading, required this.onRefresh});
+  const _TopBar({required this.teamName, required this.clubName, required this.selectedPlayer, required this.selectedSection, required this.loading, required this.onRefresh, required this.onBack});
   final String teamName;
   final String clubName;
   final String selectedPlayer;
   final TrackerWorkspaceSection selectedSection;
   final bool loading;
   final VoidCallback onRefresh;
+  final VoidCallback onBack;
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1423,6 +1945,8 @@ class _TopBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(color: _TD.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: _TD.border.withOpacity(.85))),
       child: Row(children: [
+        IconButton(onPressed: onBack, icon: const Icon(Icons.arrow_back_rounded, color: _TD.text)),
+        const SizedBox(width: 6),
         Container(width: 34, height: 34, decoration: BoxDecoration(color: _TD.card2, borderRadius: BorderRadius.circular(9)), child: Icon(selectedSection.icon, color: _TD.green, size: 19)),
         const SizedBox(width: 10),
         Expanded(child: Text('Спортотека Трекинг · ${selectedSection.title}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w900, fontSize: 16))),
@@ -1967,128 +2491,6 @@ String? _normalizeAvatarUrl(String? raw) {
 }
 
 
-class _DashboardKpiData {
-  const _DashboardKpiData({required this.icon, required this.title, required this.value, required this.subtitle});
-  final IconData icon;
-  final String title;
-  final String value;
-  final String subtitle;
-}
-
-class _DashboardKpiStrip extends StatelessWidget {
-  const _DashboardKpiStrip({required this.items});
-  final List<_DashboardKpiData> items;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView.separated(
-      scrollDirection: Axis.horizontal,
-      itemCount: items.length,
-      separatorBuilder: (_, __) => const SizedBox(width: 10),
-      itemBuilder: (context, index) {
-        final item = items[index];
-        return Container(
-          width: 176,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: _TD.card,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: _TD.border),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(color: _TD.green.withOpacity(.10), borderRadius: BorderRadius.circular(9)),
-                    child: Icon(item.icon, color: _TD.green, size: 18),
-                  ),
-                  const Spacer(),
-                  Text(item.subtitle, style: const TextStyle(color: _TD.dim, fontSize: 9.5, fontWeight: FontWeight.w800)),
-                ],
-              ),
-              const Spacer(),
-              Text(item.value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -.4)),
-              const SizedBox(height: 2),
-              Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontSize: 11, fontWeight: FontWeight.w800)),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _ReadinessRow extends StatelessWidget {
-  const _ReadinessRow({required this.title, required this.text, required this.ok});
-  final String title;
-  final String text;
-  final bool ok;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: ok ? _TD.green.withOpacity(.08) : _TD.card2, borderRadius: BorderRadius.circular(10), border: Border.all(color: ok ? _TD.green.withOpacity(.35) : _TD.border)),
-      child: Row(
-        children: [
-          Icon(ok ? Icons.check_circle_rounded : Icons.warning_amber_rounded, color: ok ? _TD.green : _TD.orange, size: 19),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w900, fontSize: 12)),
-              Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontWeight: FontWeight.w700, fontSize: 10.5)),
-            ]),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ScenarioButton extends StatelessWidget {
-  const _ScenarioButton({required this.step, required this.title, required this.text, required this.icon, required this.onTap});
-  final String step;
-  final String title;
-  final String text;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: _TD.card2,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.all(11),
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: _TD.border)),
-          child: Row(
-            children: [
-              CircleAvatar(radius: 15, backgroundColor: _TD.graphite, child: Text(step, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900))),
-              const SizedBox(width: 10),
-              Icon(icon, color: _TD.green, size: 19),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w900, fontSize: 12.2)),
-                  Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontWeight: FontWeight.w700, fontSize: 10.2)),
-                ]),
-              ),
-              const Icon(Icons.chevron_right_rounded, color: _TD.dim),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _DarkEmpty extends StatelessWidget {
   const _DarkEmpty({required this.icon, required this.text});
   final IconData icon;
@@ -2138,101 +2540,21 @@ class _DarkHint extends StatelessWidget {
 }
 
 class _DarkCornerChip extends StatelessWidget {
-  const _DarkCornerChip({
-    required this.label,
-    required this.value,
-    required this.ready,
-    this.active = false,
-    this.onTap,
-  });
-
+  const _DarkCornerChip({required this.label, required this.value, required this.ready});
   final String label;
   final String value;
   final bool ready;
-  final bool active;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = ready ? _TD.green : active ? const Color(0xFF2563EB) : _TD.dim;
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Container(
-        width: 230,
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: ready
-              ? _TD.green.withOpacity(.10)
-              : active
-                  ? const Color(0xFF2563EB).withOpacity(.10)
-                  : _TD.card2,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: ready
-                ? _TD.green
-                : active
-                    ? const Color(0xFF2563EB)
-                    : _TD.border,
-            width: ready || active ? 2 : 1,
-          ),
-        ),
-        child: Row(children: [
-          CircleAvatar(
-            radius: 15,
-            backgroundColor: color,
-            child: ready
-                ? const Icon(Icons.check_rounded, color: Colors.white, size: 15)
-                : Text(label, style: const TextStyle(color: _TD.bg, fontSize: 11, fontWeight: FontWeight.w900)),
-          ),
-          const SizedBox(width: 10),
-          Expanded(child: Text(value, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontSize: 10, fontWeight: FontWeight.w800))),
-        ]),
-      ),
-    );
-  }
-}
-
-class _CalibrationStatusBanner extends StatelessWidget {
-  const _CalibrationStatusBanner({
-    required this.nextLabel,
-    required this.done,
-    required this.pointCount,
-  });
-
-  final String nextLabel;
-  final bool done;
-  final int pointCount;
-
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: done ? _TD.green.withOpacity(.10) : const Color(0xFF2563EB).withOpacity(.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: done ? _TD.green.withOpacity(.35) : const Color(0xFF2563EB).withOpacity(.22)),
-      ),
-      child: Row(
-        children: [
-          Icon(done ? Icons.check_circle_rounded : Icons.gps_fixed_rounded, color: done ? _TD.green : const Color(0xFF2563EB)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              done
-                  ? 'Все 4 угла получены. Нажмите «Сохранить».'
-                  : 'Следующий угол: $nextLabel · перейдите в угол поля и нажмите GPS $nextLabel',
-              style: TextStyle(
-                color: done ? _TD.green : _TD.text,
-                fontWeight: FontWeight.w900,
-                fontSize: 12,
-              ),
-            ),
-          ),
-          Text('$pointCount/4', style: const TextStyle(color: _TD.muted, fontWeight: FontWeight.w900)),
-        ],
-      ),
+      width: 230,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(color: ready ? _TD.green.withOpacity(.10) : _TD.card2, borderRadius: BorderRadius.circular(9), border: Border.all(color: ready ? _TD.green.withOpacity(.35) : _TD.border)),
+      child: Row(children: [
+        CircleAvatar(radius: 13, backgroundColor: ready ? _TD.green : _TD.dim, child: Text(label, style: const TextStyle(color: _TD.bg, fontSize: 11, fontWeight: FontWeight.w900))),
+        const SizedBox(width: 8),
+        Expanded(child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontSize: 10, fontWeight: FontWeight.w800))),
+      ]),
     );
   }
 }
@@ -2299,11 +2621,8 @@ class _DarkHeatmapPainter extends CustomPainter {
 }
 
 class _DarkCalibrationPainter extends CustomPainter {
-  const _DarkCalibrationPainter({required this.corners, this.activeIndex = -1});
-
+  const _DarkCalibrationPainter({required this.corners});
   final List<ActionTrackerGpsPoint> corners;
-  final int activeIndex;
-
   @override
   void paint(Canvas canvas, Size size) {
     final area = (Offset.zero & size).deflate(18);
@@ -2316,36 +2635,15 @@ class _DarkCalibrationPainter extends CustomPainter {
     }
     final pitch = Rect.fromCenter(center: area.center, width: w, height: h);
     _DarkHeatmapPainter(points: const [])._drawPitch(canvas, pitch);
-
-    final cornersPos = [
-      pitch.topLeft + const Offset(18, 18),
-      pitch.topRight + const Offset(-18, 18),
-      pitch.bottomRight + const Offset(-18, -18),
-      pitch.bottomLeft + const Offset(18, -18),
-    ];
-
+    final cornersPos = [pitch.topLeft + const Offset(18, 18), pitch.topRight + const Offset(-18, 18), pitch.bottomRight + const Offset(-18, -18), pitch.bottomLeft + const Offset(18, -18)];
     for (var i = 0; i < 4; i++) {
       final ready = corners.length > i;
-      final active = i == activeIndex;
       final p = cornersPos[i];
-      final color = ready ? _TD.green : active ? const Color(0xFF2563EB) : _TD.dim;
-      canvas.drawCircle(p, active ? 19 : 16, Paint()..color = color);
-      if (ready) {
-        final check = TextPainter(
-          text: const TextSpan(text: '✓', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
-          textDirection: TextDirection.ltr,
-        )..layout();
-        check.paint(canvas, p - Offset(check.width / 2, check.height / 2));
-      } else {
-        final tp = TextPainter(
-          text: TextSpan(text: ['A', 'B', 'C', 'D'][i], style: const TextStyle(color: _TD.bg, fontWeight: FontWeight.w900)),
-          textDirection: TextDirection.ltr,
-        )..layout();
-        tp.paint(canvas, p - Offset(tp.width / 2, tp.height / 2));
-      }
+      canvas.drawCircle(p, 16, Paint()..color = ready ? _TD.green : _TD.dim);
+      final tp = TextPainter(text: TextSpan(text: ['A', 'B', 'C', 'D'][i], style: const TextStyle(color: _TD.bg, fontWeight: FontWeight.w900)), textDirection: TextDirection.ltr)..layout();
+      tp.paint(canvas, p - Offset(tp.width / 2, tp.height / 2));
     }
   }
-
   @override
   bool shouldRepaint(covariant _DarkCalibrationPainter oldDelegate) => true;
 }

@@ -254,20 +254,36 @@ class VideoMatchReviewPlaybackController extends ChangeNotifier {
 
 
 class ReviewUiPalette {
-  static const bg = Color(0xFFF4F7FA);
-  static const panel = Color(0xFFFFFFFF);
-  static const panelSoft = Color(0xFFF8FAFC);
-  static const line = Color(0xFFD8E2EA);
-  static const border = Color(0xFFD7E8DE);
-  static const text = Color(0xFF101828);
-  static const textMuted = Color(0xFF64748B);
+  // CMR / Club Roster стиль: светлая рабочая область, белые панели,
+  // графитовая типографика и точечный зелёный акцент Sportoteka.
+  static const bg = Color(0xFFF5F6F7);
+  static const panel = Colors.white;
+  static const panelSoft = Color(0xFFF8F9FA);
+  static const panelSoft2 = Color(0xFFF1F3F5);
+  static const line = Color(0xFFE5E7EB);
+  static const border = Color(0xFFD7F0E2);
 
-  static const primary = Color(0xFF1F7A4D);
-  static const primary2 = Color(0xFF22C55E);
-  static const blue = Color(0xFF176BCA);
-  static const green = Color(0xFF16A34A);
-  static const red = Color(0xFFD64545);
-  static const amber = Color(0xFFD99A00);
+  static const text = Color(0xFF0B0F14);
+  static const text2 = Color(0xFF182230);
+  static const textMuted = Color(0xFF374151);
+  static const textSubtle = Color(0xFF6B7280);
+
+  static const graphite = Color(0xFF111827);
+  static const graphiteSoft = Color(0xFF1F2937);
+
+  static const primary = Color(0xFF00A750);
+  static const primary2 = Color(0xFF067A46);
+  static const green = Color(0xFF00A750);
+  static const greenDark = Color(0xFF067A46);
+  static const greenSoft = Color(0xFFF3FBF7);
+  static const greenSoft2 = Color(0xFFF8FEFA);
+
+  static const blue = Color(0xFF2563EB);
+  static const blueSoft = Color(0xFFF4F7FF);
+  static const red = Color(0xFFD92D20);
+  static const redSoft = Color(0xFFFFF1F1);
+  static const amber = Color(0xFFEA580C);
+  static const amberSoft = Color(0xFFFFF7ED);
   static const violet = Color(0xFF7C3AED);
 
   static const darkOverlay = Color(0x99000000);
@@ -408,17 +424,17 @@ bool _isLoadingServerFrame = false;
   return Align(
     alignment: Alignment.center,
     child: Container(
-      width: 64,
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      width: 54,
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
       decoration: BoxDecoration(
         color: ReviewUiPalette.panel,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: ReviewUiPalette.line),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
+            color: Colors.black.withOpacity(0.018),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -431,21 +447,21 @@ bool _isLoadingServerFrame = false;
             onTap: () => _togglePanel(ReviewOverlayPanel.ttd),
             tooltip: 'TTD',
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
           _buildRailButton(
             icon: Icons.person_outline_rounded,
             isActive: _isPanelOpen(ReviewOverlayPanel.players),
             onTap: () => _togglePanel(ReviewOverlayPanel.players),
             tooltip: 'Игроки',
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
           _buildRailButton(
             icon: Icons.video_library_outlined,
             isActive: _isPanelOpen(ReviewOverlayPanel.episodes),
             onTap: () => _togglePanel(ReviewOverlayPanel.episodes),
             tooltip: 'Эпизоды',
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
           _buildRailButton(
             icon: Icons.analytics_outlined,
             isActive: _isPanelOpen(ReviewOverlayPanel.analytics),
@@ -736,36 +752,50 @@ void _applyServerPacketToOverlay(AiFramePacket packet) {
         _showOverlay();
         onTap();
       },
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(10),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        width: 44,
-        height: 44,
+        duration: const Duration(milliseconds: 160),
+        width: 36,
+        height: 36,
         decoration: BoxDecoration(
-          gradient: isActive
-              ? const LinearGradient(
-                  colors: [ReviewUiPalette.primary, ReviewUiPalette.primary2],
-                )
-              : null,
-          color: isActive ? null : ReviewUiPalette.panelSoft,
-          borderRadius: BorderRadius.circular(14),
+          color: isActive ? ReviewUiPalette.graphite : ReviewUiPalette.panel,
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isActive ? ReviewUiPalette.primary : ReviewUiPalette.line,
+            color: isActive ? ReviewUiPalette.graphite : ReviewUiPalette.line,
+            width: 1,
           ),
           boxShadow: isActive
               ? [
                   BoxShadow(
-                    color: ReviewUiPalette.primary.withOpacity(0.20),
-                    blurRadius: 12,
-                    offset: const Offset(0, 5),
+                    color: Colors.black.withOpacity(0.035),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
                   ),
                 ]
               : const [],
         ),
-        child: Icon(
-          icon,
-          color: isActive ? Colors.white : ReviewUiPalette.textMuted,
-          size: 20,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            if (isActive)
+              Positioned(
+                left: 0,
+                top: 9,
+                bottom: 9,
+                child: Container(
+                  width: 3,
+                  decoration: BoxDecoration(
+                    color: ReviewUiPalette.primary,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+              ),
+            Icon(
+              icon,
+              color: isActive ? Colors.white : ReviewUiPalette.textMuted,
+              size: 18,
+            ),
+          ],
         ),
       ),
     ),
@@ -872,9 +902,10 @@ bool _undoInProgress = false;
   }
   
   double _adaptiveRailWidth(double screenWidth) {
-  if (screenWidth < 900) return 64;
-  if (screenWidth < 1200) return 72;
-  return 76;
+  // CMR team matches: узкое плоское меню и минимальные зазоры между блоками.
+  if (screenWidth < 900) return 56;
+  if (screenWidth < 1200) return 60;
+  return 62;
 }
 
 double _adaptivePanelWidth(double screenWidth) {
@@ -889,9 +920,9 @@ double _adaptivePanelWidth(double screenWidth) {
 
 
 double _adaptiveGap(double screenWidth) {
-  if (screenWidth < 900) return 8;
-  if (screenWidth < 1200) return 10;
-  return 12;
+  if (screenWidth < 900) return 4;
+  if (screenWidth < 1200) return 5;
+  return 6;
 }
   
   
@@ -1106,17 +1137,17 @@ double _adaptiveGap(double screenWidth) {
   Widget _buildVideoCanvas() {
   final bool panelOpen = _activeOverlayPanel != ReviewOverlayPanel.none;
 
-  return ClipRRect(
-    borderRadius: BorderRadius.circular(_isVideoFullscreen ? 0 : 22),
-    child: Container(
-      color: ReviewUiPalette.bg,
+  return Container(
+    color: ReviewUiPalette.bg,
+    child: Padding(
+      padding: EdgeInsets.all(_isVideoFullscreen ? 0 : 6),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final totalWidth = constraints.maxWidth;
           final railWidth = _adaptiveRailWidth(totalWidth);
           final panelWidth = panelOpen ? _adaptivePanelWidth(totalWidth) : 0.0;
-          final gap = _adaptiveGap(totalWidth);
-          final railGap = widget.railOnLeft ? gap : 0.0;
+          final gap = _isVideoFullscreen ? 0.0 : _adaptiveGap(totalWidth);
+          final railGap = gap;
           final videoWidth = totalWidth -
               railWidth -
               railGap -
@@ -1124,57 +1155,59 @@ double _adaptiveGap(double screenWidth) {
 
           final rail = SizedBox(
             width: railWidth,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: _buildRightMainRail(),
-            ),
+            child: _buildRightMainRail(),
           );
 
           final panel = SizedBox(
             width: panelWidth,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: _buildCenterSlidingPanel(),
-            ),
+            child: _buildCenterSlidingPanel(),
           );
 
           final video = SizedBox(
             width: videoWidth.clamp(260.0, totalWidth).toDouble(),
             child: Container(
-              margin: EdgeInsets.all(_isVideoFullscreen ? 0 : 10),
               decoration: BoxDecoration(
                 color: ReviewUiPalette.panel,
-                borderRadius: BorderRadius.circular(_isVideoFullscreen ? 0 : 18),
-                border: Border.all(color: ReviewUiPalette.line),
+                borderRadius: BorderRadius.circular(_isVideoFullscreen ? 0 : 14),
+                border: Border.all(
+                  color: _isVideoFullscreen ? Colors.transparent : ReviewUiPalette.line,
+                  width: 1,
+                ),
                 boxShadow: _isVideoFullscreen
                     ? const []
                     : [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
+                          color: Colors.black.withOpacity(0.035),
                           blurRadius: 18,
-                          offset: const Offset(0, 8),
+                          offset: const Offset(0, 10),
                         ),
                       ],
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(_isVideoFullscreen ? 0 : 18),
+                borderRadius: BorderRadius.circular(_isVideoFullscreen ? 0 : 14),
                 child: Column(
                   children: [
+                    if (!_isVideoFullscreen) _buildReviewWorkspaceHeader(),
                     if (widget.showInternalVideoControls)
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+                        padding: EdgeInsets.fromLTRB(
+                          6,
+                          _isVideoFullscreen ? 0 : 0,
+                          6,
+                          6,
+                        ),
                         child: _buildTopVideoTimelineBar(),
                       ),
                     Expanded(
                       child: Padding(
                         padding: EdgeInsets.fromLTRB(
-                          10,
-                          widget.showInternalVideoControls ? 0 : 10,
-                          10,
-                          10,
+                          _isVideoFullscreen ? 0 : 6,
+                          widget.showInternalVideoControls || !_isVideoFullscreen ? 0 : 6,
+                          _isVideoFullscreen ? 0 : 6,
+                          _isVideoFullscreen ? 0 : 6,
                         ),
                         child: ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(_isVideoFullscreen ? 0 : 12),
                           child: Container(
                             color: Colors.black,
                             child: Stack(
@@ -1197,6 +1230,7 @@ double _adaptiveGap(double screenWidth) {
           );
 
           return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (widget.railOnLeft) ...[
                 rail,
@@ -1207,7 +1241,10 @@ double _adaptiveGap(double screenWidth) {
                 SizedBox(width: gap),
                 panel,
               ],
-              if (!widget.railOnLeft) rail,
+              if (!widget.railOnLeft) ...[
+                SizedBox(width: gap),
+                rail,
+              ],
             ],
           );
         },
@@ -1216,23 +1253,172 @@ double _adaptiveGap(double screenWidth) {
   );
 }
 
+Widget _buildReviewWorkspaceHeader() {
+  final selectedEpisodeId =
+      _selectedEpisode != null ? _i(_selectedEpisode!['id']) : null;
+
+  return Container(
+    padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+    decoration: const BoxDecoration(
+      color: ReviewUiPalette.panel,
+      border: Border(
+        bottom: BorderSide(color: ReviewUiPalette.line),
+      ),
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: ReviewUiPalette.greenSoft,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: ReviewUiPalette.border),
+          ),
+          child: const Icon(
+            Icons.slow_motion_video_rounded,
+            color: ReviewUiPalette.primary,
+            size: 18,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.matchTitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: ReviewUiPalette.text,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                  height: 1.12,
+                  letterSpacing: -0.2,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                '${widget.teamName} • видеоразбор матча',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: ReviewUiPalette.textMuted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  height: 1.1,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        _buildWorkspaceTabButton(
+          title: 'Видео',
+          icon: Icons.play_circle_outline_rounded,
+          selected: _tabController.index == 0,
+          onTap: () => _tabController.animateTo(0),
+        ),
+        const SizedBox(width: 8),
+        _buildWorkspaceTabButton(
+          title: 'Отчёт',
+          icon: Icons.assessment_outlined,
+          selected: _tabController.index == 1,
+          onTap: () => _tabController.animateTo(1),
+        ),
+        if (selectedEpisodeId != null) ...[
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: ReviewUiPalette.panelSoft,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: ReviewUiPalette.line),
+            ),
+            child: Text(
+              'EP-$selectedEpisodeId',
+              style: const TextStyle(
+                color: ReviewUiPalette.text2,
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
+Widget _buildWorkspaceTabButton({
+  required String title,
+  required IconData icon,
+  required bool selected,
+  required VoidCallback onTap,
+}) {
+  return Material(
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: () {
+        onTap();
+        _showOverlay();
+      },
+      borderRadius: BorderRadius.circular(10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? ReviewUiPalette.graphite : ReviewUiPalette.panelSoft,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? ReviewUiPalette.graphite : ReviewUiPalette.line,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 15,
+              color: selected ? Colors.white : ReviewUiPalette.textMuted,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              title,
+              style: TextStyle(
+                color: selected ? Colors.white : ReviewUiPalette.text2,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+                height: 1,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+
 
 Widget _buildTopVideoTimelineBar() {
   return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
     decoration: BoxDecoration(
       color: ReviewUiPalette.panelSoft,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(12),
       border: Border.all(color: ReviewUiPalette.line),
     ),
     child: Row(
       children: [
         Container(
-          width: 34,
-          height: 34,
+          width: 30,
+          height: 30,
           decoration: BoxDecoration(
-            color: ReviewUiPalette.primary.withOpacity(0.10),
-            borderRadius: BorderRadius.circular(11),
+            color: ReviewUiPalette.greenSoft,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: ReviewUiPalette.border),
           ),
           child: IconButton(
             padding: EdgeInsets.zero,
@@ -1242,7 +1428,7 @@ Widget _buildTopVideoTimelineBar() {
                   ? Icons.pause_rounded
                   : Icons.play_arrow_rounded,
               color: ReviewUiPalette.primary,
-              size: 19,
+              size: 17,
             ),
           ),
         ),
@@ -1300,14 +1486,14 @@ Widget _buildTimelineIconButton(IconData icon, VoidCallback onTap) {
       onTap: onTap,
       borderRadius: BorderRadius.circular(11),
       child: Ink(
-        width: 34,
-        height: 34,
+        width: 30,
+        height: 30,
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(11),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(color: ReviewUiPalette.line),
         ),
-        child: Icon(icon, color: ReviewUiPalette.textMuted, size: 18),
+        child: Icon(icon, color: ReviewUiPalette.textMuted, size: 16),
       ),
     ),
   );
@@ -1319,13 +1505,13 @@ Widget _buildCenterSlidingPanel() {
     duration: const Duration(milliseconds: 260),
     curve: Curves.easeOutCubic,
     decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(28),
-      border: Border.all(color: const Color(0xFFE2E8F0)),
+      color: ReviewUiPalette.panel,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: ReviewUiPalette.line),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withOpacity(0.08),
-          blurRadius: 20,
+          color: Colors.black.withOpacity(0.035),
+          blurRadius: 18,
           offset: const Offset(0, 10),
         ),
       ],
@@ -1333,18 +1519,15 @@ Widget _buildCenterSlidingPanel() {
     child: Column(
       children: [
         _buildSlidingPanelHeader(),
-        const Divider(height: 1),
+        const Divider(height: 1, color: ReviewUiPalette.line),
         Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                bottom: Radius.circular(28),
-              ),
-              child: Container(
-                color: const Color(0xFFF8FBFF),
-                child: _buildActivePanelBody(),
-              ),
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(
+              bottom: Radius.circular(14),
+            ),
+            child: Container(
+              color: ReviewUiPalette.panelSoft,
+              child: _buildActivePanelBody(),
             ),
           ),
         ),
@@ -1357,15 +1540,15 @@ Widget _buildSlidingOverlayPanelLeftInline() {
   return Align(
     alignment: Alignment.topCenter,
     child: Container(
-      margin: const EdgeInsets.only(top: 20, bottom: 20),
+      margin: const EdgeInsets.only(top: 6, bottom: 6),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        color: ReviewUiPalette.panel,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: ReviewUiPalette.line),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 20,
+            color: Colors.black.withOpacity(0.035),
+            blurRadius: 18,
             offset: const Offset(0, 10),
           ),
         ],
@@ -1373,14 +1556,14 @@ Widget _buildSlidingOverlayPanelLeftInline() {
       child: Column(
         children: [
           _buildSlidingPanelHeader(),
-          const Divider(height: 1),
+          const Divider(height: 1, color: ReviewUiPalette.line),
           Expanded(
             child: ClipRRect(
               borderRadius: const BorderRadius.vertical(
-                bottom: Radius.circular(28),
+                bottom: Radius.circular(14),
               ),
               child: Container(
-                color: const Color(0xFFF8FBFF),
+                color: ReviewUiPalette.panelSoft,
                 child: _buildActivePanelBody(),
               ),
             ),
@@ -1390,6 +1573,7 @@ Widget _buildSlidingOverlayPanelLeftInline() {
     ),
   );
 }
+
 Widget _buildPureVideoWorkArea() {
   return Stack(
     fit: StackFit.expand,
@@ -1543,79 +1727,95 @@ Widget _buildBottomControlsBar() {
 }
 
 Widget _buildRightMainRail() {
-  return Align(
-    alignment: Alignment.center,
-    child: Container(
-      width: 68,
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-      decoration: BoxDecoration(
-        color: ReviewUiPalette.panel,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: ReviewUiPalette.line),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
+  final railRadius = BorderRadius.circular(14);
+
+  return Container(
+    decoration: BoxDecoration(
+      color: ReviewUiPalette.panel,
+      borderRadius: railRadius,
+      border: Border.all(color: ReviewUiPalette.line),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.018),
+          blurRadius: 10,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    ),
+    child: ClipRRect(
+      borderRadius: railRadius,
       child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildRailSectionLabel('АНАЛИЗ'),
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: ReviewUiPalette.panelSoft,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: ReviewUiPalette.line),
+              ),
+              child: const Icon(
+                Icons.video_settings_rounded,
+                color: ReviewUiPalette.graphite,
+                size: 17,
+              ),
+            ),
             const SizedBox(height: 8),
+            _buildRailSectionLabel('АНАЛИЗ'),
+            const SizedBox(height: 5),
             _buildRailButton(
               icon: Icons.flash_on_rounded,
               isActive: _isPanelOpen(ReviewOverlayPanel.ttd),
               onTap: () => _togglePanel(ReviewOverlayPanel.ttd),
               tooltip: 'TTD',
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
             _buildRailButton(
               icon: Icons.person_outline_rounded,
               isActive: _isPanelOpen(ReviewOverlayPanel.players),
               onTap: () => _togglePanel(ReviewOverlayPanel.players),
               tooltip: 'Игроки',
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
             _buildRailButton(
               icon: Icons.video_library_outlined,
               isActive: _isPanelOpen(ReviewOverlayPanel.episodes),
               onTap: () => _togglePanel(ReviewOverlayPanel.episodes),
               tooltip: 'Эпизоды',
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
             _buildRailButton(
               icon: Icons.analytics_outlined,
               isActive: _isPanelOpen(ReviewOverlayPanel.analytics),
               onTap: () => _togglePanel(ReviewOverlayPanel.analytics),
               tooltip: 'AI',
             ),
-            const SizedBox(height: 14),
-            _buildRailDivider(),
-            const SizedBox(height: 12),
-            _buildRailSectionLabel('ОТЧЁТ'),
             const SizedBox(height: 8),
+            _buildRailDivider(),
+            const SizedBox(height: 7),
+            _buildRailSectionLabel('ОТЧЁТ'),
+            const SizedBox(height: 5),
             _buildRailButton(
               icon: Icons.assessment_rounded,
               isActive: _tabController.index == 1,
               onTap: () => _tabController.animateTo(1),
               tooltip: 'Отчёт',
             ),
-            const SizedBox(height: 14),
-            _buildRailDivider(),
-            const SizedBox(height: 12),
-            _buildRailSectionLabel('ВИДЕО'),
             const SizedBox(height: 8),
+            _buildRailDivider(),
+            const SizedBox(height: 7),
+            _buildRailSectionLabel('ВИДЕО'),
+            const SizedBox(height: 5),
             _buildRailButton(
               icon: Icons.replay_10_rounded,
               isActive: false,
               onTap: () => _seekRelative(-10),
               tooltip: '-10',
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
             _buildRailButton(
               icon: _controller.value.isPlaying
                   ? Icons.pause_rounded
@@ -1624,14 +1824,14 @@ Widget _buildRightMainRail() {
               onTap: _togglePlayPause,
               tooltip: 'Play',
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
             _buildRailButton(
               icon: Icons.forward_10_rounded,
               isActive: false,
               onTap: () => _seekRelative(10),
               tooltip: '+10',
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
             _buildRailButton(
               icon: Icons.fullscreen_rounded,
               isActive: false,
@@ -1650,10 +1850,11 @@ Widget _buildRailSectionLabel(String text) {
     text,
     textAlign: TextAlign.center,
     style: const TextStyle(
-      color: ReviewUiPalette.textMuted,
-      fontSize: 9,
+      color: ReviewUiPalette.textSubtle,
+      fontSize: 8,
       fontWeight: FontWeight.w900,
-      letterSpacing: 0.8,
+      letterSpacing: 0.65,
+      height: 1,
     ),
   );
 }
@@ -1661,7 +1862,7 @@ Widget _buildRailSectionLabel(String text) {
 
 Widget _buildRailDivider() {
   return Container(
-    width: 28,
+    width: 30,
     height: 1,
     color: ReviewUiPalette.line,
   );
@@ -1672,15 +1873,15 @@ Widget _buildSlidingOverlayPanelInline() {
   return Align(
     alignment: Alignment.topCenter,
     child: Container(
-      margin: const EdgeInsets.only(top: 90, bottom: 20),
+      margin: const EdgeInsets.only(top: 6, bottom: 6),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        color: ReviewUiPalette.panel,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: ReviewUiPalette.line),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 20,
+            color: Colors.black.withOpacity(0.035),
+            blurRadius: 18,
             offset: const Offset(0, 10),
           ),
         ],
@@ -1688,14 +1889,14 @@ Widget _buildSlidingOverlayPanelInline() {
       child: Column(
         children: [
           _buildSlidingPanelHeader(),
-          const Divider(height: 1),
+          const Divider(height: 1, color: ReviewUiPalette.line),
           Expanded(
             child: ClipRRect(
               borderRadius: const BorderRadius.vertical(
-                bottom: Radius.circular(28),
+                bottom: Radius.circular(14),
               ),
               child: Container(
-                color: const Color(0xFFF8FBFF),
+                color: ReviewUiPalette.panelSoft,
                 child: _buildActivePanelBody(),
               ),
             ),
@@ -1705,6 +1906,8 @@ Widget _buildSlidingOverlayPanelInline() {
     ),
   );
 }
+  
+      
   
       Widget _buildTopGradientOverlay() {
     return IgnorePointer(
@@ -8676,7 +8879,7 @@ if (_showAiPanelInline) ...[
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOutCubic,
-      right: isOpen ? 82 : -460,
+      right: isOpen ? 84 : -460,
       top: 90,
       bottom: 20,
       child: AnimatedOpacity(
@@ -8687,28 +8890,28 @@ if (_showAiPanelInline) ...[
           child: Container(
             width: 380,
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
+              color: ReviewUiPalette.panel,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: ReviewUiPalette.line),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.16),
-                  blurRadius: 28,
-                  offset: const Offset(-8, 14),
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 20,
+                  offset: const Offset(-8, 12),
                 ),
               ],
             ),
             child: Column(
               children: [
                 _buildSlidingPanelHeader(),
-                const Divider(height: 1),
+                const Divider(height: 1, color: ReviewUiPalette.line),
                 Expanded(
                   child: ClipRRect(
                     borderRadius: const BorderRadius.vertical(
-                      bottom: Radius.circular(28),
+                      bottom: Radius.circular(14),
                     ),
                     child: Container(
-                      color: const Color(0xFFF8FBFF),
+                      color: ReviewUiPalette.panelSoft,
                       child: _buildActivePanelBody(),
                     ),
                   ),
@@ -8735,7 +8938,7 @@ if (_showAiPanelInline) ...[
     case ReviewOverlayPanel.episodes:
       title = 'Эпизоды';
       icon = Icons.video_library_outlined;
-      subtitle = 'Эпизоды для Pro режима';
+      subtitle = 'Ключевые моменты матча';
       break;
    case ReviewOverlayPanel.ttd:
   title = 'TTD';
@@ -8751,18 +8954,22 @@ if (_showAiPanelInline) ...[
       break;
   }
 
-  return Padding(
-    padding: const EdgeInsets.fromLTRB(18, 16, 12, 14),
+  return Container(
+    padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+    decoration: const BoxDecoration(
+      color: ReviewUiPalette.panel,
+    ),
     child: Row(
       children: [
         Container(
-          width: 42,
-          height: 42,
+          width: 38,
+          height: 38,
           decoration: BoxDecoration(
-            color: const Color(0xFF1F7A4D).withOpacity(0.10),
-            borderRadius: BorderRadius.circular(14),
+            color: ReviewUiPalette.greenSoft,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: ReviewUiPalette.border),
           ),
-          child: Icon(icon, color: const Color(0xFF1F7A4D), size: 22),
+          child: Icon(icon, color: ReviewUiPalette.primary, size: 20),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -8771,37 +8978,50 @@ if (_showAiPanelInline) ...[
             children: [
               Text(
                 title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontSize: 17,
+                  fontSize: 15,
                   fontWeight: FontWeight.w900,
-                  color: Color(0xFF0F172A),
+                  color: ReviewUiPalette.text,
+                  height: 1.12,
+                  letterSpacing: -0.2,
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 3),
               Text(
                 subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFF64748B),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: ReviewUiPalette.textMuted,
+                  height: 1.1,
                 ),
               ),
             ],
           ),
         ),
-        InkWell(
-          onTap: _closePanels,
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(
-              Icons.close_rounded,
-              color: Color(0xFF334155),
+        const SizedBox(width: 10),
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: _closePanels,
+            borderRadius: BorderRadius.circular(10),
+            child: Ink(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: ReviewUiPalette.panelSoft,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: ReviewUiPalette.line),
+              ),
+              child: const Icon(
+                Icons.close_rounded,
+                color: ReviewUiPalette.textMuted,
+                size: 18,
+              ),
             ),
           ),
         ),
@@ -8809,6 +9029,7 @@ if (_showAiPanelInline) ...[
     ),
   );
 }
+
 
   Widget _buildBottomPlayersStrip() {
   final source = _matchPlayers.isNotEmpty ? _matchPlayers : _players;
@@ -9660,7 +9881,7 @@ if (_showAiPanelInline) ...[
         children: [
           Positioned.fill(
             child: Padding(
-              padding: EdgeInsets.all(_isVideoFullscreen ? 0 : 12),
+              padding: EdgeInsets.all(_isVideoFullscreen ? 0 : 6),
               child: _tabController.index == 0
                   ? _buildVideoCanvas()
                   : _buildModernReportsTab(),

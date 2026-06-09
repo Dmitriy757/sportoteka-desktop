@@ -39,6 +39,7 @@ import 'package:sportoteka/presentation/club_workspace/cmr_club_overview_panel.d
 import 'package:sportoteka/presentation/tracker/sportoteka_tracker_pro_screen.dart';
 
 enum ClubSection {
+  coachDashboard,
   overview,
   teams,
   teamDashboard,
@@ -121,7 +122,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   Map<String, dynamic>? selectedTeam;
   Map<String, dynamic>? selectedPlayer;
 
-  ClubSection selectedSection = ClubSection.overview;
+  ClubSection selectedSection = ClubSection.teams;
 
   late final AnimationController _introController;
   bool _introStarted = true;
@@ -129,21 +130,18 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   bool _mobileGestureHintShown = false;
 
   static const List<ClubSection> _mobileSwipeSections = <ClubSection>[
-    ClubSection.overview,
     ClubSection.teams,
     ClubSection.roster,
     ClubSection.calendar,
     ClubSection.trainers,
     ClubSection.matches,
     ClubSection.plans,
-    ClubSection.videoAnalysis,
     ClubSection.attendance,
     ClubSection.testing,
     ClubSection.tracker,
     ClubSection.chat,
     ClubSection.graphics,
     ClubSection.manager,
-    ClubSection.videoLessons,
   ];
 
   @override
@@ -688,7 +686,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       // После выбора активной команды автоматически возвращаемся
       // в основную панель клуба. Если где-то явно нужен полный экран
       // команды, передавай openTeam: true.
-      selectedSection = openTeam ? ClubSection.teamDashboard : ClubSection.overview;
+      selectedSection = openTeam ? ClubSection.teamDashboard : ClubSection.teams;
     });
 
     if (id > 0) {
@@ -1380,7 +1378,6 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   }
 
   List<_FullMenuItem> get _fullMenuItems => const [
-        _FullMenuItem(ClubSection.overview, Icons.space_dashboard_rounded, 'Обзор клуба', 'Краткая сводка без дублей'),
         _FullMenuItem(ClubSection.teams, Icons.account_tree_rounded, 'Команды', 'Список команд клуба'),
         _FullMenuItem(ClubSection.trainers, Icons.badge_rounded, 'Тренеры', 'Специалисты и назначения'),
         _FullMenuItem(ClubSection.roster, Icons.groups_2_rounded, 'Состав', 'Игроки и профили'),
@@ -1388,12 +1385,10 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         _FullMenuItem(ClubSection.calendar, Icons.calendar_month_rounded, 'Календарь', 'Тренировки и события'),
         _FullMenuItem(ClubSection.plans, Icons.folder_copy_rounded, 'Планы-конспекты', 'Материалы тренера', pro: true),
         _FullMenuItem(ClubSection.graphics, Icons.draw_rounded, 'Редактор схем', 'Упражнения и разметка', pro: true),
-        _FullMenuItem(ClubSection.videoLessons, Icons.video_library_rounded, 'Видеоуроки', 'Обучающие материалы'),
         _FullMenuItem(ClubSection.attendance, Icons.fact_check_rounded, 'Посещаемость', 'Журнал занятий', pro: true),
         _FullMenuItem(ClubSection.testing, Icons.science_rounded, 'Тестирование', 'Физика, техника, тактика', pro: true),
         _FullMenuItem(ClubSection.medical, Icons.medical_information_rounded, 'Медкарта', 'Состояние игроков'),
         _FullMenuItem(ClubSection.tracker, Icons.sensors_rounded, 'Трекер', 'GPS, нагрузка и тепловые карты', pro: true),
-        _FullMenuItem(ClubSection.videoAnalysis, Icons.analytics_rounded, 'Видеоанализ', 'AI, ТТД и статистика', pro: true),
         _FullMenuItem(ClubSection.manager, Icons.psychology_alt_rounded, 'Менеджер команды', 'Тактика и состав', pro: true),
         _FullMenuItem(ClubSection.chat, Icons.forum_rounded, 'Чаты', 'Общение команды'),
         _FullMenuItem(ClubSection.parents, Icons.family_restroom_rounded, 'Родители', 'Доступы и связь'),
@@ -1672,8 +1667,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   }
 
   void _handleWorkspaceBack() {
-    if (selectedSection != ClubSection.overview) {
-      setState(() => selectedSection = ClubSection.overview);
+    if (selectedSection != ClubSection.teams) {
+      setState(() => selectedSection = ClubSection.teams);
       return;
     }
 
@@ -1790,7 +1785,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   void _goToNextMobileSection() {
     final index = _mobileSwipeSections.indexOf(selectedSection);
     if (index < 0) {
-      setState(() => selectedSection = ClubSection.overview);
+      setState(() => selectedSection = ClubSection.teams);
       return;
     }
 
@@ -1802,7 +1797,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   void _goToPreviousMobileSection() {
     final index = _mobileSwipeSections.indexOf(selectedSection);
     if (index < 0) {
-      setState(() => selectedSection = ClubSection.overview);
+      setState(() => selectedSection = ClubSection.teams);
       return;
     }
 
@@ -2328,12 +2323,6 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         'label': 'Планы',
         'section': ClubSection.plans,
         'color': _C.blue,
-      },
-      {
-        'icon': Icons.analytics_rounded,
-        'label': 'Видеоанализ',
-        'section': ClubSection.videoAnalysis,
-        'color': _C.purple,
       },
       {
         'icon': Icons.science_rounded,
@@ -2906,12 +2895,6 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         'color': _C.greenDark,
       },
       {
-        'icon': Icons.analytics_rounded,
-        'title': 'Видеоанализ',
-        'section': ClubSection.videoAnalysis,
-        'color': _C.purple,
-      },
-      {
         'icon': Icons.psychology_alt_rounded,
         'title': 'Менеджер',
         'section': ClubSection.manager,
@@ -3028,10 +3011,6 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
             onTap: _handleMobileBottomTap,
             items: const [
               BottomNavigationBarItem(
-                icon: Icon(Icons.space_dashboard_rounded),
-                label: 'Обзор',
-              ),
-              BottomNavigationBarItem(
                 icon: Icon(Icons.account_tree_rounded),
                 label: 'Команды',
               ),
@@ -3055,38 +3034,33 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   }
 
   int _mobileBottomMenuIndex() {
-    if (selectedSection == ClubSection.overview) return 0;
-
     if (selectedSection == ClubSection.teams ||
         selectedSection == ClubSection.teamDashboard) {
-      return 1;
+      return 0;
     }
 
     if (selectedSection == ClubSection.roster ||
         selectedSection == ClubSection.playerProfile) {
-      return 2;
+      return 1;
     }
 
-    if (selectedSection == ClubSection.calendar) return 3;
+    if (selectedSection == ClubSection.calendar) return 2;
 
-    return 4;
+    return 3;
   }
 
   void _handleMobileBottomTap(int index) {
     switch (index) {
       case 0:
-        setState(() => selectedSection = ClubSection.overview);
-        return;
-      case 1:
         setState(() => selectedSection = ClubSection.teams);
         return;
-      case 2:
+      case 1:
         setState(() => selectedSection = ClubSection.roster);
         return;
-      case 3:
+      case 2:
         setState(() => selectedSection = ClubSection.calendar);
         return;
-      case 4:
+      case 3:
         _openMobileMoreMenu();
         return;
     }
@@ -3337,6 +3311,8 @@ Widget _buildNavItem({
 
   String _titleFor(ClubSection section) {
     switch (section) {
+      case ClubSection.coachDashboard:
+        return 'Панель трекера';
       case ClubSection.overview:
         return 'Рабочий кабинет клуба';
       case ClubSection.teams:
@@ -3400,6 +3376,8 @@ Widget _buildNavItem({
 
   String _subtitleFor(ClubSection section) {
     switch (section) {
+      case ClubSection.coachDashboard:
+        return 'Главная панель GPS-комплекса: готовность команды, онлайн, отчёты и трекеры';
       case ClubSection.overview:
         return 'Команды, игроки, матчи, тренировки и аналитика в одном экране';
       case ClubSection.teams:
@@ -3463,6 +3441,27 @@ Widget _buildNavItem({
 
   Widget _buildContent() {
     switch (selectedSection) {
+      case ClubSection.coachDashboard:
+        return _TeamModulePanel(
+          hasTeam: _hasTeam,
+          title: 'Панель трекера',
+          subtitle: 'Откройте центр GPS-трекинга команды: онлайн, подключение трекеров, активность и отчёты.',
+          icon: Icons.sensors_rounded,
+          primaryText: 'Открыть центр трекинга',
+          onPrimary: _openFullTracker,
+          quickActions: [
+            _ModuleQuickAction(
+              'Команды',
+              Icons.groups_2_rounded,
+              () => setState(() => selectedSection = ClubSection.teams),
+            ),
+            _ModuleQuickAction(
+              'Сессии',
+              Icons.assignment_rounded,
+              _openFullTracker,
+            ),
+          ],
+        );
       case ClubSection.overview:
         return CmrClubOverviewPanel(
           clubId: clubId,
@@ -3520,11 +3519,6 @@ Widget _buildNavItem({
                 () => setState(() => selectedSection = ClubSection.matches)),
             _ModuleQuickAction('Календарь', Icons.calendar_month_rounded,
                 () => setState(() => selectedSection = ClubSection.calendar)),
-            _ModuleQuickAction(
-                'Видеоанализ',
-                Icons.analytics_rounded,
-                () => setState(
-                    () => selectedSection = ClubSection.videoAnalysis)),
           ],
         );
       case ClubSection.roster:
@@ -3654,11 +3648,6 @@ Widget _buildNavItem({
           quickActions: [
             _ModuleQuickAction('Планы', Icons.folder_copy_rounded,
                 () => setState(() => selectedSection = ClubSection.plans)),
-            _ModuleQuickAction(
-                'Видеоанализ',
-                Icons.analytics_rounded,
-                () => setState(
-                    () => selectedSection = ClubSection.videoAnalysis)),
           ],
         );
       case ClubSection.tracker:
@@ -3675,11 +3664,6 @@ Widget _buildNavItem({
               'Матчи',
               Icons.sports_soccer_rounded,
               () => setState(() => selectedSection = ClubSection.matches),
-            ),
-            _ModuleQuickAction(
-              'Видеоанализ',
-              Icons.analytics_rounded,
-              () => setState(() => selectedSection = ClubSection.videoAnalysis),
             ),
           ],
         );
@@ -3866,11 +3850,16 @@ class _C {
   static const Color soft2 = Color(0xFFFFFFFF);
   static const Color accent = Color(0xFF6B7280);
 
-  static const Color rail = Color(0xFF101214);
-  static const Color railPanel = Color(0xFF181B1F);
-  static const Color railHover = Color(0xFF22262B);
-  static const Color railText = Color(0xFFF9FAFB);
-  static const Color railMuted = Color(0xFF9CA3AF);
+  // Меню клуба синхронизировано с home_screen.dart:
+  // белая рейка, мягкая подложка, графитовый активный пункт.
+  static const Color rail = Color(0xFFFFFFFF);
+  static const Color railPanel = Color(0xFFF7F8FA);
+  static const Color railHover = Color(0xFFF0F2F5);
+  static const Color railText = Color(0xFF344054);
+  static const Color railMuted = Color(0xFF667085);
+
+  // Акцент точки в левом rail — как в home_screen.dart.
+  static const Color menuGreen = Color(0xFF178A45);
 
   static const Color primaryGreen = Color(0xFF00A750);
   static const Color greenDark = Color(0xFF087A3A);
@@ -3897,6 +3886,8 @@ class _C {
 
   static Color accentForSection(ClubSection section) {
     switch (section) {
+      case ClubSection.coachDashboard:
+        return purple;
       case ClubSection.overview:
         return primaryGreen;
       case ClubSection.teams:
@@ -4287,12 +4278,6 @@ const List<_NavGroup> _clubWorkspaceNavGroups = [
       subtitle: 'Упражнения и разметка',
       pro: true,
     ),
-    _NavItem(
-      ClubSection.videoLessons,
-      Icons.video_library_rounded,
-      'Видеоуроки',
-      subtitle: 'Обучающие материалы',
-    ),
   ]),
   _NavGroup('Контроль', [
     _NavItem(
@@ -4310,6 +4295,13 @@ const List<_NavGroup> _clubWorkspaceNavGroups = [
       pro: true,
     ),
     _NavItem(
+      ClubSection.coachDashboard,
+      Icons.dashboard_customize_rounded,
+      'GPS-панель',
+      subtitle: 'Готовность, онлайн и отчёты',
+      pro: true,
+    ),
+    _NavItem(
       ClubSection.tracker,
       Icons.sensors_rounded,
       'Трекер',
@@ -4324,13 +4316,6 @@ const List<_NavGroup> _clubWorkspaceNavGroups = [
     ),
   ]),
   _NavGroup('Аналитика и связь', [
-    _NavItem(
-      ClubSection.videoAnalysis,
-      Icons.analytics_rounded,
-      'Видеоанализ',
-      subtitle: 'AI, ТТД и статистика',
-      pro: true,
-    ),
     _NavItem(
       ClubSection.manager,
       Icons.psychology_alt_rounded,
@@ -4403,14 +4388,56 @@ class _Sidebar extends StatelessWidget {
   });
 
   List<_NavItem> get _flatNavItems => <_NavItem>[
-        const _NavItem(
-          ClubSection.overview,
-          Icons.grid_view_rounded,
-          'Обзор',
-          subtitle: 'Сводка клуба',
-        ),
         for (final group in _clubWorkspaceNavGroups) ...group.items,
       ];
+
+  String _railLabel(_NavItem item) {
+    switch (item.section) {
+      case ClubSection.overview:
+        return 'Обзор';
+      case ClubSection.teams:
+        return 'Команды';
+      case ClubSection.trainers:
+        return 'Тренеры';
+      case ClubSection.roster:
+        return 'Состав';
+      case ClubSection.matches:
+        return 'Матчи';
+      case ClubSection.calendar:
+        return 'Кален.';
+      case ClubSection.plans:
+        return 'Планы';
+      case ClubSection.graphics:
+        return 'Схемы';
+      case ClubSection.videoLessons:
+        return 'Уроки';
+      case ClubSection.attendance:
+        return 'Журнал';
+      case ClubSection.testing:
+        return 'Тесты';
+      case ClubSection.coachDashboard:
+        return 'GPS';
+      case ClubSection.tracker:
+        return 'Трекер';
+      case ClubSection.medical:
+        return 'Мед.';
+      case ClubSection.videoAnalysis:
+        return 'Видео';
+      case ClubSection.manager:
+        return 'Менедж.';
+      case ClubSection.chat:
+        return 'Чаты';
+      case ClubSection.parents:
+        return 'Родит.';
+      case ClubSection.miniGames:
+        return 'Игры';
+      case ClubSection.settings:
+        return 'Настр.';
+      default:
+        final words = item.label.trim().split(RegExp(r'\s+'));
+        return words.isEmpty ? item.label : words.first;
+    }
+  }
 
   bool _sectionIsActive(ClubSection itemSection) {
     if (itemSection == selectedSection) return true;
@@ -4613,61 +4640,51 @@ class _Sidebar extends StatelessWidget {
     final navItems = _flatNavItems;
 
     return Container(
-      width: 72,
-      margin: const EdgeInsets.fromLTRB(8, 8, 0, 8),
+      width: 74,
+      margin: const EdgeInsets.fromLTRB(6, 6, 0, 6),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: _C.rail,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(.08)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.12),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+            color: Colors.black.withOpacity(.055),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
       child: Column(
         children: [
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Tooltip(
             message: safeClubName,
             waitDuration: const Duration(milliseconds: 250),
             preferBelow: false,
             child: InkWell(
               borderRadius: BorderRadius.circular(12),
-              onTap: () => onSelect(ClubSection.overview),
+              onTap: () => onSelect(ClubSection.teams),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 160),
-                width: 50,
-                height: 50,
+                width: 56,
+                height: 52,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: _sectionIsActive(ClubSection.overview)
-                      ? Colors.white
-                      : _C.railPanel,
+                  color: _C.railPanel,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withOpacity(.08)),
-                  boxShadow: _sectionIsActive(ClubSection.overview)
-                      ? [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(.08),
-                            blurRadius: 14,
-                            offset: const Offset(0, 6),
-                          ),
-                        ]
-                      : const [],
                 ),
-                child: _LogoBox(
-                  url: clubLogo,
-                  size: 34,
-                  bgColor: Colors.white,
+                child: Transform.scale(
+                  scale: .78,
+                  child: _LogoBox(
+                    url: clubLogo,
+                    size: 34,
+                    bgColor: Colors.white,
+                  ),
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 9),
+          const SizedBox(height: 6),
           _ClubRailUtilityButton(
             icon: Icons.account_tree_rounded,
             label: 'Команда',
@@ -4676,19 +4693,20 @@ class _Sidebar extends StatelessWidget {
             active: selectedSection == ClubSection.teamDashboard,
             onTap: () => _openTeamPicker(context),
           ),
-          const SizedBox(height: 9),
+          const SizedBox(height: 6),
           Expanded(
             child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               physics: const BouncingScrollPhysics(),
               itemCount: navItems.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 7),
+              separatorBuilder: (_, __) => const SizedBox(height: 6),
               itemBuilder: (context, index) {
                 final item = navItems[index];
                 final active = _sectionIsActive(item.section);
 
                 return _ClubSideRailButton(
                   item: item,
+                  label: _railLabel(item),
                   active: active,
                   accent: _C.primaryGreen,
                   proLocked: item.pro && !hasActiveSubscription,
@@ -4708,7 +4726,7 @@ class _Sidebar extends StatelessWidget {
                   active: false,
                   onTap: onGoHome,
                 ),
-                const SizedBox(height: 7),
+                const SizedBox(height: 6),
                 _ClubRailUtilityButton(
                   icon: Icons.apps_rounded,
                   label: 'Меню',
@@ -4719,7 +4737,7 @@ class _Sidebar extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
         ],
       ),
     );
@@ -5034,12 +5052,12 @@ class _ClubRailUtilityButtonState extends State<_ClubRailUtilityButton> {
   Widget build(BuildContext context) {
     final selected = widget.active;
     final bgColor = selected
-        ? Colors.white
+        ? _C.railText
         : _hovered
             ? _C.railHover
             : Colors.transparent;
-    final iconColor = selected ? _C.rail : _C.railText;
-    final textColor = selected ? _C.rail : _C.railMuted;
+    final iconColor = selected ? Colors.white : _C.railText;
+    final textColor = selected ? Colors.white : _C.railMuted;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -5053,22 +5071,28 @@ class _ClubRailUtilityButtonState extends State<_ClubRailUtilityButton> {
           onTap: widget.onTap,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
-            width: 54,
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            width: 58,
+            padding: const EdgeInsets.symmetric(vertical: 7),
             decoration: BoxDecoration(
               color: bgColor,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: selected
-                    ? Colors.white.withOpacity(.58)
-                    : _hovered
-                        ? Colors.white.withOpacity(.08)
-                        : Colors.transparent,
-              ),
+              boxShadow: selected
+                  ? [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(.10),
+                        blurRadius: 14,
+                        offset: const Offset(0, 6),
+                      ),
+                    ]
+                  : const [],
             ),
-            child: SizedBox(
-              width: double.infinity,
-              child: Column(
+            child: Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
@@ -5098,8 +5122,23 @@ class _ClubRailUtilityButtonState extends State<_ClubRailUtilityButton> {
                       ),
                     ),
                   ),
-                ],
-              ),
+                    ],
+                  ),
+                ),
+                if (selected)
+                  Positioned(
+                    left: 0,
+                    top: 8,
+                    bottom: 8,
+                    child: Container(
+                      width: 3,
+                      decoration: BoxDecoration(
+                        color: _C.menuGreen,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         ),
@@ -5110,6 +5149,7 @@ class _ClubRailUtilityButtonState extends State<_ClubRailUtilityButton> {
 
 class _ClubSideRailButton extends StatefulWidget {
   final _NavItem item;
+  final String label;
   final bool active;
   final Color accent;
   final bool proLocked;
@@ -5117,6 +5157,7 @@ class _ClubSideRailButton extends StatefulWidget {
 
   const _ClubSideRailButton({
     required this.item,
+    required this.label,
     required this.active,
     required this.accent,
     this.proLocked = false,
@@ -5133,12 +5174,12 @@ class _ClubSideRailButtonState extends State<_ClubSideRailButton> {
   @override
   Widget build(BuildContext context) {
     final bgColor = widget.active
-        ? Colors.white
+        ? _C.railText
         : _hovered
             ? _C.railHover
             : Colors.transparent;
-    final fg = widget.active ? _C.rail : _C.railText;
-    final textColor = widget.active ? _C.rail : _C.railMuted;
+    final fg = widget.active ? Colors.white : _C.railText;
+    final textColor = widget.active ? Colors.white : _C.railMuted;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -5154,21 +5195,14 @@ class _ClubSideRailButtonState extends State<_ClubSideRailButton> {
             duration: const Duration(milliseconds: 160),
             curve: Curves.easeOut,
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.symmetric(vertical: 7),
             decoration: BoxDecoration(
               color: bgColor,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: widget.active
-                    ? Colors.white.withOpacity(.62)
-                    : _hovered
-                        ? Colors.white.withOpacity(.08)
-                        : Colors.transparent,
-              ),
               boxShadow: widget.active
                   ? [
                       BoxShadow(
-                        color: Colors.black.withOpacity(.08),
+                        color: Colors.black.withOpacity(.10),
                         blurRadius: 14,
                         offset: const Offset(0, 6),
                       ),
@@ -5199,7 +5233,7 @@ class _ClubSideRailButtonState extends State<_ClubSideRailButton> {
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 2),
                           child: Text(
-                            widget.item.label,
+                            widget.label,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             textAlign: TextAlign.center,
@@ -5217,14 +5251,14 @@ class _ClubSideRailButtonState extends State<_ClubSideRailButton> {
                 ),
                 if (widget.active)
                   Positioned(
-                    right: 5,
-                    top: 5,
+                    left: 0,
+                    top: 8,
+                    bottom: 8,
                     child: Container(
-                      width: 5,
-                      height: 5,
-                      decoration: const BoxDecoration(
-                        color: _C.primaryGreen,
-                        shape: BoxShape.circle,
+                      width: 3,
+                      decoration: BoxDecoration(
+                        color: _C.menuGreen,
+                        borderRadius: BorderRadius.circular(999),
                       ),
                     ),
                   ),
