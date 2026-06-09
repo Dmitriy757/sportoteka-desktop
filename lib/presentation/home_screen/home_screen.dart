@@ -76,13 +76,13 @@ const Color _workspaceMenuLightMuted = Color(0xFF98A2B3);
 const Color _workspaceMenuHover = Color(0xFFF0F2F5);
 const Color _workspaceMenuSoft = Colors.white;
 
-// Узкая боковая рейка как в ClubWorkspace: дорогой графитовый тон
-// + зелёный только как маленький фирменный акцент.
-const Color _workspaceRail = Color(0xFF101214);
-const Color _workspaceRailPanel = Color(0xFF181B1F);
-const Color _workspaceRailHover = Color(0xFF22262B);
-const Color _workspaceRailText = Color(0xFFF9FAFB);
-const Color _workspaceRailMuted = Color(0xFF9CA3AF);
+// Светлая боковая рейка в едином CMR-стиле: белая панель, графитовый
+// активный пункт и зелёный только как тонкий фирменный акцент.
+const Color _workspaceRail = Color(0xFFFFFFFF);
+const Color _workspaceRailPanel = Color(0xFFF7F8FA);
+const Color _workspaceRailHover = Color(0xFFF0F2F5);
+const Color _workspaceRailText = Color(0xFF344054);
+const Color _workspaceRailMuted = Color(0xFF667085);
 
 final Dio dio = Dio()
   ..options.baseUrl = apiBaseUrl
@@ -648,12 +648,12 @@ class _HomeClubRailUtilityButtonState
   Widget build(BuildContext context) {
     final selected = widget.active;
     final bgColor = selected
-        ? Colors.white
+        ? _workspaceMenuGraphite
         : _hovered
             ? _workspaceRailHover
             : Colors.transparent;
-    final iconColor = selected ? _workspaceRail : _workspaceRailText;
-    final textColor = selected ? _workspaceRail : _workspaceRailMuted;
+    final iconColor = selected ? Colors.white : _workspaceRailText;
+    final textColor = selected ? Colors.white : _workspaceRailMuted;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -667,62 +667,84 @@ class _HomeClubRailUtilityButtonState
           onTap: widget.onTap,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
-            width: 54,
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            width: 58,
+            padding: const EdgeInsets.symmetric(vertical: 7),
             decoration: BoxDecoration(
               color: bgColor,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: selected
-                    ? Colors.white.withOpacity(.58)
+                    ? _workspaceMenuGraphite
                     : _hovered
-                        ? Colors.white.withOpacity(.08)
+                        ? const Color(0xFFE5E7EB)
                         : Colors.transparent,
               ),
               boxShadow: selected
                   ? [
                       BoxShadow(
-                        color: Colors.black.withOpacity(.08),
+                        color: Colors.black.withOpacity(.10),
                         blurRadius: 14,
                         offset: const Offset(0, 6),
                       ),
                     ]
                   : const [],
             ),
-            child: SizedBox(
-              width: double.infinity,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: Center(
-                      child: widget.imageUrl != null && widget.imageUrl!.trim().isNotEmpty
-                          ? _HomeRailLogo(url: widget.imageUrl, size: 24)
-                          : Icon(widget.icon, color: iconColor, size: 21),
-                    ),
+            child: Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: Center(
+                          child: widget.imageUrl != null && widget.imageUrl!.trim().isNotEmpty
+                              ? _HomeRailLogo(url: widget.imageUrl, size: 24)
+                              : Icon(widget.icon, color: iconColor, size: 21),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      SizedBox(
+                        width: double.infinity,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 2),
+                          child: Text(
+                            widget.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: textColor,
+                              fontSize: 9.05,
+                              height: 1.0,
+                              fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  SizedBox(
-                    width: double.infinity,
-                    child: Text(
-                      widget.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: textColor,
-                        fontSize: 9.1,
-                        height: 1.0,
-                        fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                ),
+                if (selected)
+                  Positioned(
+                    left: 0,
+                    top: 8,
+                    bottom: 8,
+                    child: Container(
+                      width: 3,
+                      decoration: BoxDecoration(
+                        color: _workspaceMenuGreen,
+                        borderRadius: BorderRadius.circular(999),
                       ),
                     ),
                   ),
-                ],
-              ),
+              ],
             ),
           ),
         ),
@@ -758,19 +780,19 @@ class _HomeClubSideRailButtonState extends State<_HomeClubSideRailButton> {
   Widget build(BuildContext context) {
     final danger = widget.danger;
     final bgColor = widget.active
-        ? Colors.white
+        ? _workspaceMenuGraphite
         : _hovered
             ? _workspaceRailHover
             : Colors.transparent;
     final iconColor = widget.active
-        ? _workspaceRail
+        ? Colors.white
         : danger
-            ? const Color(0xFFFCA5A5)
+            ? const Color(0xFFDC2626)
             : _workspaceRailText;
     final textColor = widget.active
-        ? _workspaceRail
+        ? Colors.white
         : danger
-            ? const Color(0xFFFCA5A5)
+            ? const Color(0xFFDC2626)
             : _workspaceRailMuted;
 
     return MouseRegion(
@@ -788,21 +810,21 @@ class _HomeClubSideRailButtonState extends State<_HomeClubSideRailButton> {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
             curve: Curves.easeOut,
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.symmetric(vertical: 7),
             decoration: BoxDecoration(
               color: bgColor,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: widget.active
-                    ? Colors.white.withOpacity(.62)
+                    ? _workspaceMenuGraphite
                     : _hovered
-                        ? Colors.white.withOpacity(.08)
+                        ? const Color(0xFFE5E7EB)
                         : Colors.transparent,
               ),
               boxShadow: widget.active
                   ? [
                       BoxShadow(
-                        color: Colors.black.withOpacity(.08),
+                        color: Colors.black.withOpacity(.10),
                         blurRadius: 14,
                         offset: const Offset(0, 6),
                       ),
@@ -852,14 +874,14 @@ class _HomeClubSideRailButtonState extends State<_HomeClubSideRailButton> {
                 ),
                 if (widget.active)
                   Positioned(
-                    right: 5,
-                    top: 5,
+                    left: 0,
+                    top: 8,
+                    bottom: 8,
                     child: Container(
-                      width: 5,
-                      height: 5,
-                      decoration: const BoxDecoration(
+                      width: 3,
+                      decoration: BoxDecoration(
                         color: _workspaceMenuGreen,
-                        shape: BoxShape.circle,
+                        borderRadius: BorderRadius.circular(999),
                       ),
                     ),
                   ),
@@ -3300,7 +3322,7 @@ Future<void> _loadRoleWorkspaceData() async {
       child: Row(
         children: [
           _buildVerticalHomeMenu(context),
-          const SizedBox(width: 10),
+          const SizedBox(width: 6),
           Expanded(
             child: _homeWorkspaceTab == 'overview' ||
                     _homeWorkspaceTab == 'news' ||
@@ -3321,7 +3343,7 @@ Future<void> _loadRoleWorkspaceData() async {
                               child: Padding(
                                 padding: EdgeInsets.fromLTRB(
                                   horizontalPadding,
-                                  12,
+                                  8,
                                   horizontalPadding,
                                   0,
                                 ),
@@ -3484,24 +3506,24 @@ Future<void> _loadRoleWorkspaceData() async {
     }
 
     return Container(
-      width: 72,
-      margin: const EdgeInsets.fromLTRB(8, 8, 0, 8),
+      width: 74,
+      margin: const EdgeInsets.fromLTRB(6, 6, 0, 6),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: _workspaceRail,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(.08)),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.12),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+            color: Colors.black.withOpacity(.055),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
       child: Column(
         children: [
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Tooltip(
             message: safeName,
             waitDuration: const Duration(milliseconds: 250),
@@ -3511,17 +3533,17 @@ Future<void> _loadRoleWorkspaceData() async {
               onTap: () => _selectHomeWorkspaceTab('overview'),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 160),
-                width: 50,
-                height: 50,
+                width: 56,
+                height: 52,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: overviewActive ? Colors.white : _workspaceRailPanel,
+                  color: overviewActive ? _workspaceMenuGraphite : _workspaceRailPanel,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withOpacity(.08)),
+                  border: Border.all(color: overviewActive ? _workspaceMenuGraphite : const Color(0xFFE5E7EB)),
                   boxShadow: overviewActive
                       ? [
                           BoxShadow(
-                            color: Colors.black.withOpacity(.08),
+                            color: Colors.black.withOpacity(.10),
                             blurRadius: 14,
                             offset: const Offset(0, 6),
                           ),
@@ -3539,7 +3561,7 @@ Future<void> _loadRoleWorkspaceData() async {
               ),
             ),
           ),
-          const SizedBox(height: 9),
+          const SizedBox(height: 6),
           _HomeClubRailUtilityButton(
             icon: Icons.dashboard_customize_rounded,
             label: 'Обзор',
@@ -3547,13 +3569,13 @@ Future<void> _loadRoleWorkspaceData() async {
             active: overviewActive,
             onTap: () => _selectHomeWorkspaceTab('overview'),
           ),
-          const SizedBox(height: 9),
+          const SizedBox(height: 6),
           Expanded(
             child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               physics: const BouncingScrollPhysics(),
               itemCount: railItems.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 7),
+              separatorBuilder: (_, __) => const SizedBox(height: 6),
               itemBuilder: (context, index) {
                 final item = railItems[index];
 
@@ -3577,7 +3599,7 @@ Future<void> _loadRoleWorkspaceData() async {
                   active: false,
                   onTap: () => _selectHomeWorkspaceTab('overview'),
                 ),
-                const SizedBox(height: 7),
+                const SizedBox(height: 6),
                 _HomeClubRailUtilityButton(
                   icon: Icons.apps_rounded,
                   label: 'Меню',
@@ -3585,7 +3607,7 @@ Future<void> _loadRoleWorkspaceData() async {
                   active: false,
                   onTap: _openMobileMoreMenu,
                 ),
-                const SizedBox(height: 7),
+                const SizedBox(height: 6),
                 _HomeClubSideRailButton(
                   item: const _HomeSideMenuItem(
                     id: 'logout',
@@ -3601,7 +3623,7 @@ Future<void> _loadRoleWorkspaceData() async {
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
         ],
       ),
     );
@@ -3982,7 +4004,7 @@ Future<void> _loadRoleWorkspaceData() async {
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
@@ -4047,7 +4069,7 @@ Future<void> _loadRoleWorkspaceData() async {
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Flexible(
                 child: Container(
                   width: double.infinity,
@@ -4381,7 +4403,7 @@ Future<void> _loadRoleWorkspaceData() async {
             title: 'Быстрые действия',
             subtitle: 'Основные разделы без лишних баннеров',
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -4457,7 +4479,7 @@ Future<void> _loadRoleWorkspaceData() async {
           _buildSmallInfoRow(Icons.verified_user_outlined, 'Роль', role),
           const SizedBox(height: 7),
           _buildSmallInfoRow(Icons.sports_soccer_rounded, 'Вид спорта', selectedSport ?? 'Футбол'),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
@@ -4812,9 +4834,9 @@ Widget _buildWorkspaceCommandCenterSection(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Expanded(flex: 5, child: _buildUpcomingMatchesCard()),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 6),
                   Expanded(flex: 5, child: _buildPastMatchesStatsCard()),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 6),
                   Expanded(flex: 5, child: _buildClubBriefTtdCard(match, report)),
                 ],
               ),
@@ -4830,7 +4852,7 @@ Widget _buildWorkspaceCommandCenterSection(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Expanded(child: _buildUpcomingMatchesCard()),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 6),
                       Expanded(child: _buildPastMatchesStatsCard()),
                     ],
                   ),
@@ -4859,7 +4881,7 @@ Widget _buildWorkspaceCommandCenterSection(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(child: _buildLastMatchTtdCard(match)),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 6),
                   Expanded(child: _buildRecentChatsCard()),
                 ],
               ),
@@ -5296,7 +5318,7 @@ Widget _buildRecentChatsCard() {
                               )
                             : null,
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 6),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -5586,7 +5608,7 @@ Widget _buildQuickCoachActionsGrid(BuildContext context) {
                             size: 17,
                           ),
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             item['title'] as String,
@@ -5888,7 +5910,7 @@ Widget _buildNewsHubPage(BuildContext context) {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           if (_isTablet(context))
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -5914,7 +5936,7 @@ Widget _buildNewsHubPage(BuildContext context) {
                     ],
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 6),
                 Expanded(
                   flex: 4,
                   child: Column(
@@ -6002,7 +6024,7 @@ Widget _buildServicesHubPage(BuildContext context) {
               color: _homeDesign.mutedTextColor,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
@@ -6013,7 +6035,7 @@ Widget _buildServicesHubPage(BuildContext context) {
                   color: const Color(0xFF0891B2),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 6),
               Expanded(
                 child: _buildServicesMiniCard(
                   title: 'Клубы',
@@ -6218,7 +6240,7 @@ Widget _buildWorkspaceHeroSection(
               );
             },
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           _buildWorkspacePrimaryButton(context),
         ],
       ],
@@ -6294,7 +6316,7 @@ Widget _buildClubCmrAndOverviewRow(BuildContext context) {
         return Column(
           children: [
             _buildClubCmrEntryCard(context),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             _buildClubOverviewInlineCard(),
           ],
         );
@@ -6640,7 +6662,7 @@ Widget _buildClubTipsShortcutCard(List<String> hints) {
               size: 18,
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 6),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -7103,7 +7125,7 @@ Widget _buildHeroStatCardHome({
             logoUrl: logoUrl,
             compact: compact,
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 6),
 
           Expanded(
             child: Column(
@@ -7512,7 +7534,7 @@ Widget _buildTipsHubPage(BuildContext context) {
                 ],
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 6),
             InkWell(
               borderRadius: BorderRadius.circular(999),
               onTap: () {
@@ -7762,7 +7784,7 @@ Widget _buildDashboardTopWorkspace(
         return Column(
           children: [
             header,
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             button,
           ],
         );
@@ -8025,7 +8047,7 @@ Widget _buildDashboardTeamCard(Map<String, dynamic> team, {required bool compact
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 7),
+                  const SizedBox(height: 6),
                   Text(
                     selected ? 'Выбрана сейчас' : 'Открыть экран команды',
                     maxLines: 1,
@@ -8789,7 +8811,7 @@ Widget _buildDashboardSplitBlocks(
           return Column(
             children: [
               _buildDashboardPrimaryBlock(context),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               _buildDashboardStatusBlock(),
             ],
           );
@@ -8824,7 +8846,7 @@ Widget _buildDashboardPrimaryBlock(BuildContext context) {
       children: [
         if (!_isClubRole && _isCoachRole) ...[
           _buildDashboardTeamLine(context),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
         ],
         _buildDashboardCompactActions(context),
       ],
@@ -9174,7 +9196,7 @@ Widget _buildDashboardPanel({
               ),
               child: Icon(icon, color: _homeDesign.primaryColor, size: 19),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 6),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -9391,7 +9413,7 @@ Widget _buildWorkspaceTeamPickerSection(
                   size: 18,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 6),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -9529,7 +9551,7 @@ Future<void> _pickWorkspaceTeam(
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Flexible(
                 child: ListView.separated(
                   shrinkWrap: true,
@@ -9651,7 +9673,7 @@ Widget _buildWorkspaceOverviewSection(
                 color: const Color(0xFF2563EB),
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 6),
             Expanded(
               child: _buildOverviewMiniCardHome(
                 title: 'Роль',
@@ -9673,7 +9695,7 @@ Widget _buildWorkspaceOverviewSection(
                 color: const Color(0xFFEA580C),
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 6),
             Expanded(
               child: _buildOverviewMiniCardHome(
                 title: 'Отчёты',
@@ -10149,7 +10171,7 @@ Widget _buildWorkspaceTrackerSection(
                 color: const Color(0xFFE11D48),
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 6),
             Expanded(
               child: _buildOverviewMiniCardHome(
                 title: 'Готовность',
@@ -10171,7 +10193,7 @@ Widget _buildWorkspaceTrackerSection(
                 color: const Color(0xFF2563EB),
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 6),
             Expanded(
               child: _buildOverviewMiniCardHome(
                 title: 'Спринты',
@@ -10832,7 +10854,7 @@ Widget _buildProfessionalWorkspacePanel(BuildContext context) {
                   valueText: _matchValueText(match),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 6),
               Expanded(
                 child: _buildWorkspaceWhiteInfoCard(
                   title: trackerConnected
@@ -10862,7 +10884,7 @@ Widget _buildProfessionalWorkspacePanel(BuildContext context) {
                         },
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 6),
               Expanded(
                 child: _buildWorkspaceWhiteInfoCard(
                   title: 'Последний отчёт',
@@ -11440,7 +11462,7 @@ Widget _buildWorkspaceClubEventsCard(BuildContext context) {
                     color: Color(0xFF2563EB),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 6),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -11532,7 +11554,7 @@ Widget _buildWorkspaceTrainersCard(BuildContext context) {
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 6),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -13081,7 +13103,7 @@ Widget _buildWorkspaceSafeSectionCard({
                 size: 19,
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 6),
             Expanded(
               child: Text(
                 title,
@@ -13924,7 +13946,7 @@ Widget _buildWorkspaceMiniStatCard({
               size: 18,
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 6),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -14702,7 +14724,7 @@ Widget _buildWorkspaceGlassCard({
                   size: 19,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   title,
@@ -14719,7 +14741,7 @@ Widget _buildWorkspaceGlassCard({
               if (trailing != null) trailing,
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Expanded(child: child),
         ],
       ),
@@ -15529,7 +15551,7 @@ List<Widget> _buildNewsSections(BuildContext context) {
                     size: 24,
                   ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 6),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -16956,7 +16978,7 @@ List<Widget> _buildNewsSections(BuildContext context) {
               color: _homeDesign.primaryColor,
               strokeWidth: 2.5,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Text(
               'Загрузка...',
               style: TextStyle(
@@ -16997,7 +17019,7 @@ List<Widget> _buildNewsSections(BuildContext context) {
               size: 42,
               color: _homeDesign.mutedTextColor,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Text(
               text,
               style: TextStyle(
@@ -17430,7 +17452,7 @@ class _CustomDrawer extends StatelessWidget {
                     size: 18,
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     title,
@@ -17632,7 +17654,7 @@ class _HomePromoBannerState extends State<_HomePromoBanner>
                           size: 22,
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 6),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,

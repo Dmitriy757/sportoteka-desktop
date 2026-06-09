@@ -5048,7 +5048,7 @@ String _translatePosition(String key) {
                             color: textPrimary,
                           ),
                         ),
-                        const SizedBox(height: 7),
+                        const SizedBox(height: 6),
                         Text(
                           "Файл отправляется на сервер по частям",
                           textAlign: TextAlign.center,
@@ -5958,7 +5958,7 @@ String _translatePosition(String key) {
                         letterSpacing: .9,
                       ),
                     ),
-                    const SizedBox(height: 7),
+                    const SizedBox(height: 6),
                     Text(
                       title,
                       maxLines: 2,
@@ -7906,7 +7906,7 @@ String _translatePosition(String key) {
                         opponent: opponent,
                         score: score,
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 6),
                     ],
                     Expanded(child: content),
                   ],
@@ -8052,24 +8052,24 @@ String _translatePosition(String key) {
     final safeOpponent = opponent.trim().isEmpty ? 'Соперник' : opponent.trim();
 
     return Container(
-      width: 72,
-      margin: const EdgeInsets.fromLTRB(8, 8, 0, 8),
+      width: 74,
+      margin: const EdgeInsets.fromLTRB(6, 6, 0, 6),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: _MatchRailColors.rail,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(.08)),
+        border: Border.all(color: _MatchRailColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.12),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+            color: Colors.black.withOpacity(.018),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Column(
         children: [
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Tooltip(
             message: safeTitle,
             waitDuration: const Duration(milliseconds: 250),
@@ -8083,34 +8083,72 @@ String _translatePosition(String key) {
                   final active = _safeMatchTabIndex(_tabController.index) == 0;
                   return AnimatedContainer(
                     duration: const Duration(milliseconds: 160),
-                    width: 50,
+                    width: 58,
                     height: 50,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: active ? Colors.white : _MatchRailColors.railPanel,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white.withOpacity(.08)),
+                      color: active ? _MatchRailColors.active : _MatchRailColors.railPanel,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: active ? _MatchRailColors.active : _MatchRailColors.border),
                       boxShadow: active
                           ? [
                               BoxShadow(
-                                color: Colors.black.withOpacity(.08),
-                                blurRadius: 14,
-                                offset: const Offset(0, 6),
+                                color: Colors.black.withOpacity(.035),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
                               ),
                             ]
                           : const [],
                     ),
-                    child: Icon(
-                      Icons.sports_soccer_rounded,
-                      color: active ? _MatchRailColors.rail : _MatchRailColors.railText,
-                      size: 26,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        if (active)
+                          Positioned(
+                            left: 0,
+                            top: 8,
+                            bottom: 8,
+                            child: Container(
+                              width: 3,
+                              decoration: BoxDecoration(
+                                color: _MatchRailColors.primaryGreen,
+                                borderRadius: BorderRadius.circular(99),
+                              ),
+                            ),
+                          ),
+                        Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.sports_soccer_rounded,
+                              color: active ? Colors.white : _MatchRailColors.railText,
+                              size: 18,
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              'Обзор',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: active ? Colors.white : _MatchRailColors.railMuted,
+                                fontSize: 8,
+                                height: .95,
+                                letterSpacing: -.25,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   );
                 },
               ),
             ),
           ),
-          const SizedBox(height: 9),
+          const SizedBox(height: 6),
           _MatchRailUtilityButton(
             icon: Icons.scoreboard_rounded,
             label: score,
@@ -8118,16 +8156,16 @@ String _translatePosition(String key) {
             active: false,
             onTap: () => _openMatchDetailTab(0),
           ),
-          const SizedBox(height: 9),
+          const SizedBox(height: 6),
           Expanded(
             child: AnimatedBuilder(
               animation: _tabController,
               builder: (context, _) {
                 return ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                   physics: const BouncingScrollPhysics(),
                   itemCount: _matchNavItems.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 7),
+                  separatorBuilder: (_, __) => const SizedBox(height: 5),
                   itemBuilder: (context, index) {
                     final item = _matchNavItems[index];
                     final active = _safeMatchTabIndex(_tabController.index) == index;
@@ -8143,7 +8181,7 @@ String _translatePosition(String key) {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 6),
             child: Column(
               children: [
                 _MatchRailUtilityButton(
@@ -8153,7 +8191,7 @@ String _translatePosition(String key) {
                   active: false,
                   onTap: () => _openMatchDetailTab(0),
                 ),
-                const SizedBox(height: 7),
+                const SizedBox(height: 6),
                 _MatchRailUtilityButton(
                   icon: Icons.tune_rounded,
                   label: 'Настр.',
@@ -8164,7 +8202,7 @@ String _translatePosition(String key) {
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
         ],
       ),
     );
@@ -11310,11 +11348,13 @@ class _MatchDetailNavItem {
 
 
 class _MatchRailColors {
-  static const Color rail = Color(0xFF101214);
-  static const Color railPanel = Color(0xFF181B1F);
-  static const Color railHover = Color(0xFF22262B);
-  static const Color railText = Color(0xFFF9FAFB);
-  static const Color railMuted = Color(0xFF9CA3AF);
+  static const Color rail = Color(0xFFFFFFFF);
+  static const Color railPanel = Color(0xFFF8F9FA);
+  static const Color railHover = Color(0xFFF1F3F5);
+  static const Color railText = Color(0xFF374151);
+  static const Color railMuted = Color(0xFF6B7280);
+  static const Color border = Color(0xFFE5E7EB);
+  static const Color active = Color(0xFF111827);
   static const Color primaryGreen = Color(0xFF00A750);
 }
 
@@ -11339,12 +11379,16 @@ class _MatchRailButtonState extends State<_MatchRailButton> {
   @override
   Widget build(BuildContext context) {
     final bgColor = widget.active
-        ? Colors.white
+        ? _MatchRailColors.active
         : _hovered
             ? _MatchRailColors.railHover
-            : Colors.transparent;
-    final fg = widget.active ? _MatchRailColors.rail : _MatchRailColors.railText;
-    final textColor = widget.active ? _MatchRailColors.rail : _MatchRailColors.railMuted;
+            : _MatchRailColors.railPanel;
+    final borderColor = widget.active ? _MatchRailColors.active : _MatchRailColors.border;
+    final fg = widget.active ? Colors.white : _MatchRailColors.railText;
+    final textColor = widget.active ? Colors.white : _MatchRailColors.railMuted;
+    var label = widget.item.title;
+    if (label == 'Основные ТТД') label = 'ТТД';
+    if (label == 'Видеоанализ ИИ') label = 'ИИ';
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -11354,70 +11398,68 @@ class _MatchRailButtonState extends State<_MatchRailButton> {
         waitDuration: const Duration(milliseconds: 250),
         preferBelow: false,
         child: InkWell(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
           onTap: widget.onTap,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
             curve: Curves.easeOut,
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            width: double.infinity,
+            height: 50,
             decoration: BoxDecoration(
               color: bgColor,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: widget.active
-                    ? Colors.white.withOpacity(.62)
-                    : _hovered
-                        ? Colors.white.withOpacity(.08)
-                        : Colors.transparent,
-              ),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: borderColor),
               boxShadow: widget.active
                   ? [
                       BoxShadow(
-                        color: Colors.black.withOpacity(.08),
-                        blurRadius: 14,
-                        offset: const Offset(0, 6),
+                        color: Colors.black.withOpacity(.035),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
                       ),
                     ]
                   : const [],
             ),
             child: Stack(
+              alignment: Alignment.center,
               clipBehavior: Clip.none,
               children: [
+                if (widget.active)
+                  Positioned(
+                    left: 0,
+                    top: 8,
+                    bottom: 8,
+                    child: Container(
+                      width: 3,
+                      decoration: BoxDecoration(
+                        color: _MatchRailColors.primaryGreen,
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                    ),
+                  ),
                 Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(widget.item.icon, color: fg, size: 21),
-                    const SizedBox(height: 4),
+                    Icon(widget.item.icon, color: fg, size: 18),
+                    const SizedBox(height: 3),
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 3),
                       child: Text(
-                        widget.item.title,
+                        label,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: textColor,
-                          fontSize: 9.05,
-                          height: 1.0,
-                          fontWeight: widget.active ? FontWeight.w900 : FontWeight.w700,
+                          fontSize: 8,
+                          height: .95,
+                          letterSpacing: -.25,
+                          fontWeight: FontWeight.w900,
                         ),
                       ),
                     ),
                   ],
                 ),
-                if (widget.active)
-                  Positioned(
-                    right: 5,
-                    top: 5,
-                    child: Container(
-                      width: 5,
-                      height: 5,
-                      decoration: const BoxDecoration(
-                        color: _MatchRailColors.primaryGreen,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
@@ -11453,12 +11495,15 @@ class _MatchRailUtilityButtonState extends State<_MatchRailUtilityButton> {
   Widget build(BuildContext context) {
     final selected = widget.active;
     final bgColor = selected
-        ? Colors.white
+        ? _MatchRailColors.active
         : _hovered
             ? _MatchRailColors.railHover
-            : Colors.transparent;
-    final iconColor = selected ? _MatchRailColors.rail : _MatchRailColors.railText;
-    final textColor = selected ? _MatchRailColors.rail : _MatchRailColors.railMuted;
+            : _MatchRailColors.railPanel;
+    final borderColor = selected ? _MatchRailColors.active : _MatchRailColors.border;
+    final iconColor = selected ? Colors.white : _MatchRailColors.railText;
+    final textColor = selected ? Colors.white : _MatchRailColors.railMuted;
+    var label = widget.label;
+    if (label.length > 7 && label.contains(':')) label = 'Счёт';
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -11467,42 +11512,72 @@ class _MatchRailUtilityButtonState extends State<_MatchRailUtilityButton> {
         message: widget.tooltip,
         waitDuration: const Duration(milliseconds: 250),
         preferBelow: false,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: widget.onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            width: 54,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            decoration: BoxDecoration(
-              color: bgColor,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: selected
-                    ? Colors.white.withOpacity(.58)
-                    : _hovered
-                        ? Colors.white.withOpacity(.08)
-                        : Colors.transparent,
+        child: Center(
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: widget.onTap,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              curve: Curves.easeOut,
+              width: 58,
+              height: 50,
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: borderColor),
+                boxShadow: selected
+                    ? [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(.035),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ]
+                    : const [],
               ),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(widget.icon, color: iconColor, size: 21),
-                const SizedBox(height: 4),
-                Text(
-                  widget.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: textColor,
-                    fontSize: 9.1,
-                    height: 1.0,
-                    fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+              child: Stack(
+                alignment: Alignment.center,
+                clipBehavior: Clip.none,
+                children: [
+                  if (selected)
+                    Positioned(
+                      left: 0,
+                      top: 8,
+                      bottom: 8,
+                      child: Container(
+                        width: 3,
+                        decoration: BoxDecoration(
+                          color: _MatchRailColors.primaryGreen,
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                      ),
+                    ),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(widget.icon, color: iconColor, size: 18),
+                      const SizedBox(height: 3),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 3),
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: textColor,
+                            fontSize: 8,
+                            height: .95,
+                            letterSpacing: -.25,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

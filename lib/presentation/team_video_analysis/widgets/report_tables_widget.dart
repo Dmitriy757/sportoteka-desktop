@@ -30,6 +30,82 @@ class ReportTablesWidget extends StatelessWidget {
 });
 
 
+  // =========================
+  // CMR PREMIUM STYLE
+  // =========================
+
+  static const Color _cmrBg = Color(0xFFF5F6F7);
+  static const Color _cmrPanel = Colors.white;
+  static const Color _cmrSoft = Color(0xFFF8F9FA);
+  static const Color _cmrText = Color(0xFF0B0F14);
+  static const Color _cmrText2 = Color(0xFF182230);
+  static const Color _cmrMuted = Color(0xFF374151);
+  static const Color _cmrMuted2 = Color(0xFF6B7280);
+  static const Color _cmrGraphite = Color(0xFF111827);
+  static const Color _cmrGreen = Color(0xFF00A750);
+  static const Color _cmrGreenDark = Color(0xFF067A46);
+  static const Color _cmrGreenSoft = Color(0xFFF3FBF7);
+  static const Color _cmrGreenBorder = Color(0xFFD7F0E2);
+  static const Color _cmrLine = Color(0xFFE5E7EB);
+  static const Color _cmrRed = Color(0xFFD92D20);
+
+  TextStyle _cmrTitle(double size) => TextStyle(
+        fontFamily: 'Roboto',
+        color: _cmrText,
+        fontSize: size,
+        fontWeight: FontWeight.w900,
+        height: 1.12,
+        letterSpacing: -0.25,
+      );
+
+  TextStyle _cmrValue(double size, {Color? color}) => TextStyle(
+        fontFamily: 'Roboto',
+        color: color ?? _cmrText2,
+        fontSize: size,
+        fontWeight: FontWeight.w800,
+        height: 1.15,
+        letterSpacing: -0.12,
+      );
+
+  TextStyle _cmrMutedStyle(double size, {Color? color, FontWeight? weight}) => TextStyle(
+        fontFamily: 'Roboto',
+        color: color ?? _cmrMuted,
+        fontSize: size,
+        fontWeight: weight ?? FontWeight.w700,
+        height: 1.25,
+        letterSpacing: -0.05,
+      );
+
+  BoxDecoration _cmrPanelDecoration({double radius = 14, bool elevated = false}) {
+    return BoxDecoration(
+      color: _cmrPanel,
+      borderRadius: BorderRadius.circular(math.min(radius, 14)),
+      border: Border.all(color: _cmrLine, width: 1),
+      boxShadow: elevated
+          ? [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.035),
+                blurRadius: 18,
+                offset: const Offset(0, 10),
+              ),
+            ]
+          : null,
+    );
+  }
+
+  BoxDecoration _cmrSoftDecoration({bool active = false, Color? accent}) {
+    final accentColor = accent ?? _cmrGreen;
+    return BoxDecoration(
+      color: active ? _cmrPanel : _cmrSoft,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(
+        color: active ? accentColor.withOpacity(.38) : _cmrLine,
+        width: active ? 1.15 : 1,
+      ),
+    );
+  }
+
+
 Set<String> _selectedPlayerIds() {
   return selectedMatchPlayers
       .map((p) => Formatters.safeString(p['id']))
@@ -111,7 +187,7 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
   // =========================
 
   double _usableWidth(BoxConstraints constraints) {
-    return math.max(0, constraints.maxWidth - 24);
+    return math.max(0.0, constraints.maxWidth - 24);
   }
 
   double _tableScale(BoxConstraints constraints) {
@@ -552,56 +628,52 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
     String? subtitle,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [color.withOpacity(0.1), color.withOpacity(0.05)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.3), width: 1),
-      ),
+      constraints: const BoxConstraints(minHeight: 92),
+      padding: const EdgeInsets.all(12),
+      decoration: _cmrPanelDecoration(radius: 14, elevated: true),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
+              color: _cmrPanel,
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(color: color.withOpacity(.32), width: 1),
             ),
-            child: Icon(icon, color: color, size: 24),
+            child: Icon(icon, color: color, size: 21),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: color,
-                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _cmrMutedStyle(11.5, color: _cmrMuted2, weight: FontWeight.w800),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF0F172A),
-                  ),
+                const SizedBox(height: 5),
+                Row(
+                  children: [
+                    Flexible(child: Text(value, style: _cmrTitle(21), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                    const SizedBox(width: 8),
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                    ),
+                  ],
                 ),
                 if (subtitle != null) ...[
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 4),
                   Text(
                     subtitle,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey.shade600,
-                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _cmrMutedStyle(11, color: _cmrMuted2, weight: FontWeight.w700),
                   ),
                 ],
               ],
@@ -612,6 +684,7 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
     );
   }
 
+
   Widget _buildActionStatsBanner({
     required String title,
     required int success,
@@ -620,105 +693,58 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
   }) {
     final total = success + fail;
     final percent = total > 0 ? ((success / total) * 100).round() : 0;
-    
+
+    Widget miniValue(String label, String value, Color valueColor) {
+      return Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(value, style: _cmrValue(16, color: valueColor)),
+            const SizedBox(height: 3),
+            Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _cmrMutedStyle(10.2, color: _cmrMuted2)),
+          ],
+        ),
+      );
+    }
+
     return Container(
+      width: 224,
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.3)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+      decoration: _cmrSoftDecoration(active: true, accent: color),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: 8),
           Row(
             children: [
-              Expanded(
-                child: Column(
-                  children: [
-                    Text(
-                      success.toString(),
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF16A34A),
-                      ),
-                    ),
-                    const Text(
-                      'Точные',
-                      style: TextStyle(fontSize: 10, color: Colors.grey),
-                    ),
-                  ],
-                ),
-              ),
               Container(
-                width: 1,
-                height: 30,
-                color: Colors.grey.shade300,
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
               ),
+              const SizedBox(width: 8),
               Expanded(
-                child: Column(
-                  children: [
-                    Text(
-                      fail.toString(),
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFFDC2626),
-                      ),
-                    ),
-                    const Text(
-                      'Неточные',
-                      style: TextStyle(fontSize: 10, color: Colors.grey),
-                    ),
-                  ],
-                ),
+                child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _cmrTitle(12.5)),
               ),
-              Container(
-                width: 1,
-                height: 30,
-                color: Colors.grey.shade300,
-              ),
-              Expanded(
-                child: Column(
-                  children: [
-                    Text(
-                      '$percent%',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF2563EB),
-                      ),
-                    ),
-                    const Text(
-                      'Эффективность',
-                      style: TextStyle(fontSize: 10, color: Colors.grey),
-                    ),
-                  ],
-                ),
-              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              miniValue('Точные', success.toString(), _cmrGreenDark),
+              Container(width: 1, height: 34, color: _cmrLine),
+              const SizedBox(width: 10),
+              miniValue('Неточные', fail.toString(), _cmrRed),
+              Container(width: 1, height: 34, color: _cmrLine),
+              const SizedBox(width: 10),
+              miniValue('Эфф.', '$percent%', color),
             ],
           ),
         ],
       ),
     );
   }
+
 
   // =========================
   // EXPORT
@@ -1206,22 +1232,18 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
   }) {
     return Container(
       width: width,
-      padding: EdgeInsets.only(right: isLast ? 8 : 4),
+      padding: EdgeInsets.only(right: isLast ? 8 : 4, left: 4),
       alignment: Alignment.center,
       child: Text(
         title,
-        style: TextStyle(
-          fontSize: fontSize,
-          fontWeight: FontWeight.w700,
-          color: const Color(0xFF64748B),
-          height: 1.2,
-        ),
+        style: _cmrMutedStyle(fontSize, color: _cmrMuted2, weight: FontWeight.w900),
         textAlign: TextAlign.center,
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
       ),
     );
   }
+
 
   Widget _buildSectionHeader(
     String title,
@@ -1232,37 +1254,35 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
   }) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: horizontal, vertical: vertical),
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: 8, top: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
+        color: _cmrPanel,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _cmrLine),
       ),
       child: Row(
         children: [
           Container(
             width: 4,
-            height: 20,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(4),
-            ),
+            height: 22,
+            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(99)),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              title,
-              style: TextStyle(
-                fontSize: fontSize,
-                fontWeight: FontWeight.w800,
-                color: color,
-              ),
+          const SizedBox(width: 10),
+          Expanded(child: Text(title, style: _cmrTitle(fontSize), maxLines: 1, overflow: TextOverflow.ellipsis)),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+            decoration: BoxDecoration(
+              color: color.withOpacity(.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: color.withOpacity(.22)),
             ),
+            child: Text('ГРУППА', style: _cmrMutedStyle(10, color: color, weight: FontWeight.w900)),
           ),
         ],
       ),
     );
   }
+
 
   Widget _buildPassHeaderGroup(
     String title,
@@ -1273,29 +1293,24 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
     return SizedBox(
       width: width,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: titleFontSize,
-              color: const Color(0xFF64748B),
-            ),
-          ),
+          Text(title, style: _cmrMutedStyle(titleFontSize, color: _cmrMuted2, weight: FontWeight.w900)),
           const SizedBox(height: 4),
-          Text(
-            "К   С   Д",
-            style: TextStyle(
-              fontSize: subFontSize,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFF64748B),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: _cmrPanel,
+              borderRadius: BorderRadius.circular(7),
+              border: Border.all(color: _cmrLine),
             ),
-            textAlign: TextAlign.center,
+            child: Text('К   С   Д', style: _cmrMutedStyle(subFontSize, color: _cmrMuted2, weight: FontWeight.w900), textAlign: TextAlign.center),
           ),
         ],
       ),
     );
   }
+
 
   Widget _buildPassSectionHeader(
     String title,
@@ -1305,23 +1320,24 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
     double horizontal = 10,
   }) {
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
+      margin: const EdgeInsets.only(bottom: 8, top: 2),
       padding: EdgeInsets.symmetric(horizontal: horizontal, vertical: vertical),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.3)),
+        color: _cmrPanel,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _cmrLine),
       ),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: fontSize,
-          fontWeight: FontWeight.w700,
-          color: color,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(width: 5, height: 5, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          const SizedBox(width: 8),
+          Text(title, style: _cmrTitle(fontSize)),
+        ],
       ),
     );
   }
+
 
   Widget _buildExportButton({
     required IconData icon,
@@ -1331,25 +1347,169 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
   }) {
     return Material(
       color: Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(10),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: color, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(.08),
+                  borderRadius: BorderRadius.circular(7),
+                  border: Border.all(color: color.withOpacity(.22)),
                 ),
+                child: Icon(icon, color: color, size: 15),
               ),
+              const SizedBox(width: 8),
+              Text(label, style: _cmrMutedStyle(12.5, color: _cmrText, weight: FontWeight.w900)),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+
+
+
+  Widget _buildEmptyTableState({required String title, required IconData icon}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
+      decoration: _cmrSoftDecoration(),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: _cmrPanel,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: _cmrLine),
+            ),
+            child: Icon(icon, color: _cmrMuted2, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: _cmrTitle(14)),
+                const SizedBox(height: 4),
+                Text('Данные появятся после заполнения отчёта по матчу.', style: _cmrMutedStyle(12, color: _cmrMuted2)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReportTableShell({
+    required BoxConstraints constraints,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color accent,
+    required Widget content,
+    String? badge,
+  }) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: _cmrPanelDecoration(radius: 14, elevated: true),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 13, 14, 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: _cmrPanel,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: accent.withOpacity(.38), width: 1),
+                  ),
+                  child: Icon(icon, color: accent, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: _cmrTitle(16.5), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 4),
+                      Text(subtitle, style: _cmrMutedStyle(12, color: _cmrMuted2), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ],
+                  ),
+                ),
+                if (badge != null) ...[
+                  const SizedBox(width: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: _cmrGreenSoft,
+                      borderRadius: BorderRadius.circular(9),
+                      border: Border.all(color: _cmrGreenBorder),
+                    ),
+                    child: Text(badge, style: _cmrMutedStyle(11.5, color: _cmrGreenDark, weight: FontWeight.w900)),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Container(height: 1, color: _cmrLine),
+          _needsHorizontalScroll(constraints)
+              ? SingleChildScrollView(scrollDirection: Axis.horizontal, child: content)
+              : content,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCmrTableHeader({required List<Widget> children, EdgeInsets? padding}) {
+    return Container(
+      padding: padding ?? const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      decoration: BoxDecoration(
+        color: _cmrSoft,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _cmrLine),
+      ),
+      child: Row(children: children),
+    );
+  }
+
+  Widget _buildCmrPercentCell(dynamic value, double width, double fontSize) {
+    final percent = value ?? 0;
+    final rawColor = Formatters.getEffectColor(percent);
+    return SizedBox(
+      width: width,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 7),
+        decoration: BoxDecoration(
+          color: rawColor,
+          borderRadius: BorderRadius.circular(9),
+          boxShadow: [
+            BoxShadow(color: rawColor.withOpacity(.18), blurRadius: 10, offset: const Offset(0, 4)),
+          ],
+        ),
+        child: Text(
+          '$percent%',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontFamily: 'Roboto',
+            fontSize: fontSize,
+            fontWeight: FontWeight.w900,
+            color: Colors.white,
+            height: 1,
           ),
         ),
       ),
@@ -1365,161 +1525,97 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
     final teamMainEfficiency = _getTeamMainEfficiency();
     final teamPassEfficiency = _getTeamPassEfficiency();
     final teamGkEfficiency = _getTeamGoalkeeperEfficiency();
-    
-    return SingleChildScrollView(
-      child: Column(
-        children: [
+
+    return Container(
+      color: _cmrBg,
+      child: SingleChildScrollView(
+        child: Column(
+          children: [
             Padding(
-  padding: const EdgeInsets.all(16),
-  child: Row(
-    children: [
-      if (onBack != null)
-        Container(
-          margin: const EdgeInsets.only(right: 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+              child: Row(
+                children: [
+                  if (onBack != null)
+                    Container(
+                      margin: const EdgeInsets.only(right: 10),
+                      decoration: _cmrPanelDecoration(radius: 12, elevated: true),
+                      child: IconButton(
+                        onPressed: onBack,
+                        icon: const Icon(Icons.arrow_back_rounded, color: _cmrText),
+                        tooltip: 'Назад',
+                      ),
+                    ),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: Container(
+                        decoration: _cmrPanelDecoration(radius: 12, elevated: true),
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+                        child: Wrap(
+                          alignment: WrapAlignment.end,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            _buildExportButton(icon: Icons.table_chart_rounded, label: 'Excel', color: _cmrGreenDark, onTap: _exportToExcel),
+                            Container(height: 28, width: 1, color: _cmrLine),
+                            _buildExportButton(icon: Icons.picture_as_pdf_rounded, label: 'PDF', color: _cmrRed, onTap: _exportToPdf),
+                            Container(height: 28, width: 1, color: _cmrLine),
+                            _buildExportButton(icon: Icons.more_horiz_rounded, label: 'Ещё', color: _cmrGraphite, onTap: () => _showExportMenu(context)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: IconButton(
-            onPressed: onBack,
-            icon: const Icon(
-              Icons.arrow_back_rounded,
-              color: Color(0xFF2563EB),
             ),
-            tooltip: 'Назад',
-          ),
+            if (reportLoading)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                child: LinearProgressIndicator(minHeight: 3, color: _cmrGreen),
+              ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final mobile = constraints.maxWidth < 680;
+                  final cards = [
+                    _buildInfoBanner(title: 'Эффективность команды', value: '${teamMainEfficiency.round()}%', icon: Icons.analytics_outlined, color: _cmrGreen, subtitle: 'По основным действиям'),
+                    _buildInfoBanner(title: 'Точность передач', value: '${teamPassEfficiency.round()}%', icon: Icons.compare_arrows_rounded, color: const Color(0xFF2563EB), subtitle: 'Всего ${_filteredPassReportRows.length} игроков'),
+                    _buildInfoBanner(title: 'Эффективность вратарей', value: '${teamGkEfficiency.round()}%', icon: Icons.sports_handball_rounded, color: _cmrRed, subtitle: 'По всем действиям'),
+                    _buildInfoBanner(title: 'Всего игроков', value: '${_filteredMainReportRows.length}', icon: Icons.people_outline_rounded, color: _cmrGraphite, subtitle: 'Приняли участие'),
+                  ];
+
+                  if (mobile) {
+                    return Column(
+                      children: [
+                        for (var i = 0; i < cards.length; i++) ...[
+                          cards[i],
+                          if (i != cards.length - 1) const SizedBox(height: 10),
+                        ],
+                      ],
+                    );
+                  }
+
+                  return Column(
+                    children: [
+                      Row(children: [Expanded(child: cards[0]), const SizedBox(width: 10), Expanded(child: cards[1])]),
+                      const SizedBox(height: 10),
+                      Row(children: [Expanded(child: cards[2]), const SizedBox(width: 10), Expanded(child: cards[3])]),
+                    ],
+                  );
+                },
+              ),
+            ),
+            _buildMainReportTable(),
+            _buildPassReportTable(),
+            _buildGoalkeeperReportTable(),
+            const SizedBox(height: 20),
+          ],
         ),
-      Expanded(
-        child: Align(
-          alignment: Alignment.centerRight,
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Wrap(
-              alignment: WrapAlignment.end,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                _buildExportButton(
-                  icon: Icons.table_chart,
-                  label: 'Excel',
-                  color: Colors.green,
-                  onTap: _exportToExcel,
-                ),
-                Container(
-                  height: 30,
-                  width: 1,
-                  color: Colors.grey.shade200,
-                ),
-                _buildExportButton(
-                  icon: Icons.picture_as_pdf,
-                  label: 'PDF',
-                  color: Colors.red,
-                  onTap: _exportToPdf,
-                ),
-                Container(
-                  height: 30,
-                  width: 1,
-                  color: Colors.grey.shade200,
-                ),
-                _buildExportButton(
-                  icon: Icons.more_horiz,
-                  label: 'Ещё',
-                  color: const Color(0xFF2563EB),
-                  onTap: () => _showExportMenu(context),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    ],
-  ),
-),
-          if (reportLoading) const LinearProgressIndicator(minHeight: 4),
-          
-          // Баннеры командной статистики
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildInfoBanner(
-                        title: 'Эффективность команды',
-                        value: '${teamMainEfficiency.round()}%',
-                        icon: Icons.analytics_outlined,
-                        color: const Color(0xFF2563EB),
-                        subtitle: 'По основным действиям',
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildInfoBanner(
-                        title: 'Точность передач',
-                        value: '${teamPassEfficiency.round()}%',
-                        icon: Icons.compare_arrows_rounded,
-                        color: const Color(0xFF7C3AED),
-                        subtitle: 'Всего ${_filteredPassReportRows.length} игроков',
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildInfoBanner(
-                        title: 'Эффективность вратарей',
-                        value: '${teamGkEfficiency.round()}%',
-                        icon: Icons.sports_handball,
-                        color: const Color(0xFFDC2626),
-                        subtitle: 'По всем действиям',
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildInfoBanner(
-                        title: 'Всего игроков',
-                        value: '${_filteredMainReportRows.length}',
-                        icon: Icons.people_outline_rounded,
-                        color: const Color(0xFFF59E0B),
-                        subtitle: 'Приняли участие',
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          
-          const SizedBox(height: 8),
-          _buildMainReportTable(),
-          const SizedBox(height: 16),
-          _buildPassReportTable(),
-          const SizedBox(height: 16),
-          _buildGoalkeeperReportTable(),
-          const SizedBox(height: 20),
-        ],
       ),
     );
   }
+
 
   // =========================
   // MAIN TABLE
@@ -1527,55 +1623,19 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
 
   Widget _buildMainReportTable() {
     final teamStats = _getTeamMainStats();
-    
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final scale = _tableScale(constraints);
         final tableWidth = _tableWidth(constraints);
-
         final bool isTablet = _isTablet(constraints);
-        final double titleFont = _responsiveFont(
-          constraints,
-          phone: 16,
-          tablet: 18,
-        );
-        final double subTitleFont = _responsiveFont(
-          constraints,
-          phone: 12,
-          tablet: 13,
-        );
-        final double headerFont = _responsiveFont(
-          constraints,
-          phone: 10,
-          tablet: 11.5,
-        );
-        final double nameFont = _responsiveFont(
-          constraints,
-          phone: 14,
-          tablet: 15.5,
-        );
-        final double metricFont = _responsiveFont(
-          constraints,
-          phone: 11,
-          tablet: 12.5,
-        );
-        final double totalMetricFont = _responsiveFont(
-          constraints,
-          phone: 13,
-          tablet: 14,
-        );
-        final double percentFont = _responsiveFont(
-          constraints,
-          phone: 13,
-          tablet: 14,
-        );
+        final double titleFont = _responsiveFont(constraints, phone: 15.5, tablet: 16.5);
+        final double headerFont = _responsiveFont(constraints, phone: 10.5, tablet: 11.2);
+        final double nameFont = _responsiveFont(constraints, phone: 13.2, tablet: 14.2);
+        final double metricFont = _responsiveFont(constraints, phone: 11, tablet: 12);
+        final double percentFont = _responsiveFont(constraints, phone: 12, tablet: 13);
         final EdgeInsets innerPadding = _tableInnerPadding(constraints);
-
-        final double avatarSize = _responsiveAvatar(
-          constraints,
-          phone: 36,
-          tablet: 42,
-        );
+        final double avatarSize = _responsiveAvatar(constraints, phone: 36, tablet: 40);
 
         final double playerW = playerNameWidth * scale;
         final double gapW = rowGap * scale;
@@ -1584,147 +1644,79 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
         final double metricSmallW = metricWidthSmall * scale;
         final double totalW = totalWidth * scale;
         final double percentW = percentWidth * scale;
-
         final grouped = _groupRows(_filteredMainReportRows);
 
-        Widget buildMetricCell(String value, {Color? color, bool isTotal = false}) {
+        Widget buildMetricCell(String value, {Color? accent, bool isTotal = false}) {
           final parts = value.split('/');
           final success = parts.isNotEmpty ? int.tryParse(parts[0]) ?? 0 : 0;
           final fail = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
           final total = success + fail;
+          final activeAccent = accent ?? _cmrGreen;
 
           return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-            decoration: BoxDecoration(
-              color: color ?? Colors.grey.shade50,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(
-                color: isTotal
-                    ? const Color(0xFF2563EB).withOpacity(0.3)
-                    : Colors.grey.shade200,
-                width: 0.5,
-              ),
-            ),
+            constraints: const BoxConstraints(minHeight: 42),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+            decoration: _cmrSoftDecoration(active: isTotal, accent: activeAccent),
             child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (total > 0) ...[
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF16A34A),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 2),
-                      Text(
-                        success.toString(),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF16A34A),
-                        ),
-                      ),
-                      const SizedBox(width: 2),
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFDC2626),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 2),
-                      Text(
-                        fail.toString(),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFFDC2626),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                ],
-                Text(
-                  value,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: isTotal ? totalMetricFont : metricFont,
-                    fontWeight: isTotal ? FontWeight.w800 : FontWeight.w600,
-                    color: isTotal ? const Color(0xFF2563EB) : Colors.grey.shade800,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(success.toString(), style: _cmrValue(metricFont, color: _cmrGreenDark)),
+                    Text(' / ', style: _cmrMutedStyle(metricFont - 1, color: _cmrMuted2, weight: FontWeight.w800)),
+                    Text(fail.toString(), style: _cmrValue(metricFont, color: _cmrRed)),
+                  ],
                 ),
+                if (total > 0) ...[
+                  const SizedBox(height: 2),
+                  Text(value, textAlign: TextAlign.center, style: _cmrMutedStyle(metricFont - 1, color: isTotal ? activeAccent : _cmrMuted2, weight: FontWeight.w800)),
+                ],
               ],
             ),
           );
         }
 
-        Widget buildPlayerRow(Map<String, dynamic> player) {
+        Widget buildPlayerRow(Map<String, dynamic> player, Color groupColor) {
           return Container(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: Colors.grey.shade200, width: 0.5),
-              ),
-            ),
+            margin: const EdgeInsets.only(bottom: 7),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            decoration: _cmrPanelDecoration(radius: 11),
             child: Row(
               children: [
+                Container(width: 3, height: isTablet ? 46 : 42, decoration: BoxDecoration(color: groupColor, borderRadius: BorderRadius.circular(99))),
+                const SizedBox(width: 8),
                 SizedBox(
-                  width: playerW,
+                  width: math.max(0.0, playerW - 11),
                   child: Row(
                     children: [
                       _buildPlayerAvatar(player, size: avatarSize),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 10),
                       Expanded(
-                        child: Text(
-                          player['player_name'] ?? 'Неизвестно',
-                          style: TextStyle(
-                            fontSize: nameFont,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(player['player_name'] ?? 'Неизвестно', style: _cmrTitle(nameFont), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            const SizedBox(height: 3),
+                            Text('ТТД игрока', style: _cmrMutedStyle(10.5, color: _cmrMuted2)),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
                 SizedBox(width: gapW),
-                SizedBox(width: feintW, child: buildMetricCell(player['feint_dribble'] ?? '0/0')),
-                SizedBox(width: metricW, child: buildMetricCell(player['shot_on_goal'] ?? '0/0')),
-                SizedBox(width: metricW, child: buildMetricCell(player['tackle_duel'] ?? '0/0')),
-                SizedBox(width: metricW, child: buildMetricCell(player['interception'] ?? '0/0')),
-                SizedBox(width: metricW, child: buildMetricCell(player['recovery'] ?? '0/0')),
-                SizedBox(width: metricW, child: buildMetricCell(player['header_play'] ?? '0/0')),
-                SizedBox(width: metricSmallW, child: buildMetricCell(player['throw_ins'] ?? '0/0')),
-                SizedBox(width: metricW, child: buildMetricCell(player['pass_avp'] ?? '0/0')),
-                SizedBox(
-                  width: totalW,
-                  child: buildMetricCell(player['ttd_total'] ?? '0/0', isTotal: true),
-                ),
-                Container(
-                  width: percentW,
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Formatters.getEffectColor(player['effect_percent'] ?? 0),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    '${player['effect_percent'] ?? 0}%',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: percentFont,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
+                SizedBox(width: feintW, child: buildMetricCell(player['feint_dribble'] ?? '0/0', accent: groupColor)),
+                SizedBox(width: metricW, child: buildMetricCell(player['shot_on_goal'] ?? '0/0', accent: groupColor)),
+                SizedBox(width: metricW, child: buildMetricCell(player['tackle_duel'] ?? '0/0', accent: groupColor)),
+                SizedBox(width: metricW, child: buildMetricCell(player['interception'] ?? '0/0', accent: groupColor)),
+                SizedBox(width: metricW, child: buildMetricCell(player['recovery'] ?? '0/0', accent: groupColor)),
+                SizedBox(width: metricW, child: buildMetricCell(player['header_play'] ?? '0/0', accent: groupColor)),
+                SizedBox(width: metricSmallW, child: buildMetricCell(player['throw_ins'] ?? '0/0', accent: groupColor)),
+                SizedBox(width: metricW, child: buildMetricCell(player['pass_avp'] ?? '0/0', accent: groupColor)),
+                SizedBox(width: totalW, child: buildMetricCell(player['ttd_total'] ?? '0/0', accent: groupColor, isTotal: true)),
+                _buildCmrPercentCell(player['effect_percent'] ?? 0, percentW, percentFont),
               ],
             ),
           );
@@ -1737,133 +1729,56 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: playerW,
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 12),
-                          child: Text(
-                            "Игрок",
-                            style: TextStyle(
-                              fontSize: isTablet ? 13 : 12,
-                              fontWeight: FontWeight.w700,
-                              color: const Color(0xFF64748B),
-                            ),
-                          ),
-                        ),
-                      ),
-                      _buildHeaderCell("Финт+\nДриблинг", feintW, fontSize: headerFont),
-                      _buildHeaderCell("Удары", metricW, fontSize: headerFont),
-                      _buildHeaderCell("Отбор", metricW, fontSize: headerFont),
-                      _buildHeaderCell("Перехват", metricW, fontSize: headerFont),
-                      _buildHeaderCell("Подбор", metricW, fontSize: headerFont),
-                      _buildHeaderCell("Голова", metricW, fontSize: headerFont),
-                      _buildHeaderCell("Ауты", metricSmallW, fontSize: headerFont),
-                      _buildHeaderCell("Пас АВП", metricW, fontSize: headerFont),
-                      _buildHeaderCell("Всего\nТТД", totalW, fontSize: headerFont),
-                      _buildHeaderCell("%", percentW, isLast: true, fontSize: headerFont),
-                    ],
-                  ),
+                _buildCmrTableHeader(
+                  children: [
+                    SizedBox(width: playerW, child: Padding(padding: const EdgeInsets.only(left: 8), child: Text('Игрок', style: _cmrMutedStyle(headerFont + 1, color: _cmrMuted2, weight: FontWeight.w900)))),
+                    SizedBox(width: gapW),
+                    _buildHeaderCell('Финт+\nДриблинг', feintW, fontSize: headerFont),
+                    _buildHeaderCell('Удары', metricW, fontSize: headerFont),
+                    _buildHeaderCell('Отбор', metricW, fontSize: headerFont),
+                    _buildHeaderCell('Перехват', metricW, fontSize: headerFont),
+                    _buildHeaderCell('Подбор', metricW, fontSize: headerFont),
+                    _buildHeaderCell('Голова', metricW, fontSize: headerFont),
+                    _buildHeaderCell('Ауты', metricSmallW, fontSize: headerFont),
+                    _buildHeaderCell('Пас АВП', metricW, fontSize: headerFont),
+                    _buildHeaderCell('Всего\nТТД', totalW, fontSize: headerFont),
+                    _buildHeaderCell('%', percentW, isLast: true, fontSize: headerFont),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                for (final entry in grouped.entries) ...[
-                  _buildSectionHeader(
-                    _groupTitle(entry.key),
-                    _groupColor(entry.key),
-                    fontSize: isTablet ? 17 : 16,
-                    vertical: isTablet ? 14 : 12,
-                    horizontal: isTablet ? 18 : 16,
-                  ),
-                  ...entry.value.map(buildPlayerRow),
-                  const SizedBox(height: 12),
-                ],
-                
-                // Командная статистика
-                const SizedBox(height: 24),
+                const SizedBox(height: 10),
+                if (grouped.isEmpty)
+                  _buildEmptyTableState(title: 'Нет данных по ТТД', icon: Icons.sports_soccer_rounded)
+                else
+                  for (final entry in grouped.entries) ...[
+                    _buildSectionHeader(_groupTitle(entry.key), _groupColor(entry.key), fontSize: isTablet ? 15.5 : 14.5, vertical: isTablet ? 10 : 9, horizontal: isTablet ? 12 : 10),
+                    ...entry.value.map((player) => buildPlayerRow(player, _groupColor(entry.key))),
+                    const SizedBox(height: 6),
+                  ],
+                const SizedBox(height: 18),
                 Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
+                  padding: const EdgeInsets.all(14),
+                  decoration: _cmrSoftDecoration(),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Icon(Icons.people_outline, color: const Color(0xFF2563EB), size: 20),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Статистика команды',
-                            style: TextStyle(
-                              fontSize: isTablet ? 16 : 14,
-                              fontWeight: FontWeight.w800,
-                              color: const Color(0xFF0F172A),
-                            ),
-                          ),
-                        ],
-                      ),
+                      Row(children: [
+                        Container(width: 30, height: 30, decoration: BoxDecoration(color: _cmrPanel, borderRadius: BorderRadius.circular(9), border: Border.all(color: _cmrGreen.withOpacity(.35))), child: const Icon(Icons.people_outline_rounded, color: _cmrGreen, size: 17)),
+                        const SizedBox(width: 10),
+                        Text('Статистика команды', style: _cmrTitle(titleFont)),
+                      ]),
                       const SizedBox(height: 12),
                       Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
+                        spacing: 10,
+                        runSpacing: 10,
                         children: [
-                          _buildActionStatsBanner(
-                            title: 'Финт / Дриблинг',
-                            success: teamStats['feint_dribble']?['success'] ?? 0,
-                            fail: teamStats['feint_dribble']?['fail'] ?? 0,
-                            color: const Color(0xFF2563EB),
-                          ),
-                          _buildActionStatsBanner(
-                            title: 'Удары',
-                            success: teamStats['shot_on_goal']?['success'] ?? 0,
-                            fail: teamStats['shot_on_goal']?['fail'] ?? 0,
-                            color: const Color(0xFF059669),
-                          ),
-                          _buildActionStatsBanner(
-                            title: 'Отбор',
-                            success: teamStats['tackle_duel']?['success'] ?? 0,
-                            fail: teamStats['tackle_duel']?['fail'] ?? 0,
-                            color: const Color(0xFFDC2626),
-                          ),
-                          _buildActionStatsBanner(
-                            title: 'Перехват',
-                            success: teamStats['interception']?['success'] ?? 0,
-                            fail: teamStats['interception']?['fail'] ?? 0,
-                            color: const Color(0xFF7C3AED),
-                          ),
-                          _buildActionStatsBanner(
-                            title: 'Подбор',
-                            success: teamStats['recovery']?['success'] ?? 0,
-                            fail: teamStats['recovery']?['fail'] ?? 0,
-                            color: const Color(0xFFF59E0B),
-                          ),
-                          _buildActionStatsBanner(
-                            title: 'Игра головой',
-                            success: teamStats['header_play']?['success'] ?? 0,
-                            fail: teamStats['header_play']?['fail'] ?? 0,
-                            color: const Color(0xFF8B5CF6),
-                          ),
-                          _buildActionStatsBanner(
-                            title: 'Ауты',
-                            success: teamStats['throw_ins']?['success'] ?? 0,
-                            fail: teamStats['throw_ins']?['fail'] ?? 0,
-                            color: const Color(0xFFEC489A),
-                          ),
-                          _buildActionStatsBanner(
-                            title: 'Пас АВП',
-                            success: teamStats['pass_avp']?['success'] ?? 0,
-                            fail: teamStats['pass_avp']?['fail'] ?? 0,
-                            color: const Color(0xFF14B8A6),
-                          ),
+                          _buildActionStatsBanner(title: 'Финт / Дриблинг', success: teamStats['feint_dribble']?['success'] ?? 0, fail: teamStats['feint_dribble']?['fail'] ?? 0, color: _cmrGreen),
+                          _buildActionStatsBanner(title: 'Удары', success: teamStats['shot_on_goal']?['success'] ?? 0, fail: teamStats['shot_on_goal']?['fail'] ?? 0, color: const Color(0xFF2563EB)),
+                          _buildActionStatsBanner(title: 'Отбор', success: teamStats['tackle_duel']?['success'] ?? 0, fail: teamStats['tackle_duel']?['fail'] ?? 0, color: _cmrRed),
+                          _buildActionStatsBanner(title: 'Перехват', success: teamStats['interception']?['success'] ?? 0, fail: teamStats['interception']?['fail'] ?? 0, color: const Color(0xFF7C3AED)),
+                          _buildActionStatsBanner(title: 'Подбор', success: teamStats['recovery']?['success'] ?? 0, fail: teamStats['recovery']?['fail'] ?? 0, color: const Color(0xFFEA580C)),
+                          _buildActionStatsBanner(title: 'Игра головой', success: teamStats['header_play']?['success'] ?? 0, fail: teamStats['header_play']?['fail'] ?? 0, color: const Color(0xFF8B5CF6)),
+                          _buildActionStatsBanner(title: 'Ауты', success: teamStats['throw_ins']?['success'] ?? 0, fail: teamStats['throw_ins']?['fail'] ?? 0, color: const Color(0xFFEC4899)),
+                          _buildActionStatsBanner(title: 'Пас АВП', success: teamStats['pass_avp']?['success'] ?? 0, fail: teamStats['pass_avp']?['fail'] ?? 0, color: const Color(0xFF14B8A6)),
                         ],
                       ),
                     ],
@@ -1874,81 +1789,19 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
           ),
         );
 
-        return Container(
-          margin: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 15,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: const BoxDecoration(
-                  color: Color(0xFF2563EB),
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.sports_soccer,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Технико-тактические действия",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: titleFont,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            "С выявлением процента эффективности",
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: subTitleFont,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              _needsHorizontalScroll(constraints)
-                  ? SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: content,
-                    )
-                  : content,
-            ],
-          ),
+        return _buildReportTableShell(
+          constraints: constraints,
+          title: 'Технико-тактические действия',
+          subtitle: 'Профессиональная таблица действий игроков и эффективности',
+          icon: Icons.sports_soccer_rounded,
+          accent: _cmrGreen,
+          badge: '${_getTeamMainEfficiency().round()}% командно',
+          content: content,
         );
       },
     );
   }
+
 
   // =========================
   // PASS TABLE
@@ -1956,186 +1809,87 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
 
   Widget _buildPassReportTable() {
     final passStats = _getTeamPassStats();
-    
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final scale = _tableScale(constraints);
         final tableWidth = _tableWidth(constraints);
-
         final bool isTablet = _isTablet(constraints);
-        final double titleFont = _responsiveFont(
-          constraints,
-          phone: 16,
-          tablet: 18,
-        );
-        final double subTitleFont = _responsiveFont(
-          constraints,
-          phone: 12,
-          tablet: 13,
-        );
-        final double headerFont = _responsiveFont(
-          constraints,
-          phone: 11,
-          tablet: 12,
-        );
-        final double subHeaderFont = _responsiveFont(
-          constraints,
-          phone: 10,
-          tablet: 11,
-        );
-        final double nameFont = _responsiveFont(
-          constraints,
-          phone: 12,
-          tablet: 13.5,
-        );
-        final double metricFont = _responsiveFont(
-          constraints,
-          phone: 9,
-          tablet: 10,
-        );
-        final double metricMainFont = _responsiveFont(
-          constraints,
-          phone: 11,
-          tablet: 12,
-        );
-        final double percentFont = _responsiveFont(
-          constraints,
-          phone: 11,
-          tablet: 12.5,
-        );
+        final double titleFont = _responsiveFont(constraints, phone: 15.5, tablet: 16.5);
+        final double headerFont = _responsiveFont(constraints, phone: 10.5, tablet: 11.5);
+        final double subHeaderFont = _responsiveFont(constraints, phone: 9.5, tablet: 10.5);
+        final double nameFont = _responsiveFont(constraints, phone: 13, tablet: 14);
+        final double metricFont = _responsiveFont(constraints, phone: 10.5, tablet: 11.3);
+        final double percentFont = _responsiveFont(constraints, phone: 12, tablet: 13);
         final EdgeInsets innerPadding = _tableInnerPadding(constraints);
-
-        final double avatarSize = _responsiveAvatar(
-          constraints,
-          phone: 32,
-          tablet: 38,
-        );
+        final double avatarSize = _responsiveAvatar(constraints, phone: 34, tablet: 38);
 
         final double playerW = passPlayerWidth * scale;
         final double gapW = rowGap * scale;
         final double metricW = passMetricWidth * scale;
         final double totalW = passTotalWidth * scale;
         final double percentW = passPercentWidth * scale;
-
         final grouped = _groupRows(_filteredPassReportRows);
 
-        Widget buildPassCell(String value, {bool isTotal = false}) {
+        Widget buildPassCell(String value, {Color? accent, bool isTotal = false}) {
           final parts = value.split('/');
           final success = parts.isNotEmpty ? int.tryParse(parts[0]) ?? 0 : 0;
           final fail = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
+          final activeAccent = accent ?? const Color(0xFF2563EB);
 
           return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-            decoration: BoxDecoration(
-              color: isTotal
-                  ? const Color(0xFF7C3AED).withOpacity(0.10)
-                  : Colors.grey.shade50,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(
-                color: isTotal
-                    ? const Color(0xFF7C3AED).withOpacity(0.22)
-                    : Colors.grey.shade200,
-                width: 0.5,
-              ),
-            ),
+            constraints: const BoxConstraints(minHeight: 42),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+            decoration: _cmrSoftDecoration(active: isTotal, accent: activeAccent),
             child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      success.toString(),
-                      style: TextStyle(
-                        fontSize: metricMainFont,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF16A34A),
-                      ),
-                    ),
-                    const Text("/", style: TextStyle(fontSize: 11, color: Colors.grey)),
-                    Text(
-                      fail.toString(),
-                      style: TextStyle(
-                        fontSize: metricMainFont,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFFDC2626),
-                      ),
-                    ),
-                  ],
-                ),
+                Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Text(success.toString(), style: _cmrValue(metricFont, color: _cmrGreenDark)),
+                  Text('/', style: _cmrMutedStyle(metricFont - 1, color: _cmrMuted2, weight: FontWeight.w800)),
+                  Text(fail.toString(), style: _cmrValue(metricFont, color: _cmrRed)),
+                ]),
                 const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: metricFont,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
+                Text(value, style: _cmrMutedStyle(metricFont - 1, color: isTotal ? activeAccent : _cmrMuted2, weight: FontWeight.w800)),
               ],
             ),
           );
         }
 
-        Widget buildPlayerRow(Map<String, dynamic> player) {
+        Widget buildPlayerRow(Map<String, dynamic> player, Color groupColor) {
           return Container(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: Colors.grey.shade200, width: 0.5),
-              ),
-            ),
+            margin: const EdgeInsets.only(bottom: 7),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            decoration: _cmrPanelDecoration(radius: 11),
             child: Row(
               children: [
+                Container(width: 3, height: isTablet ? 44 : 40, decoration: BoxDecoration(color: groupColor, borderRadius: BorderRadius.circular(99))),
+                const SizedBox(width: 8),
                 SizedBox(
-                  width: playerW,
-                  child: Row(
-                    children: [
-                      _buildPlayerAvatar(player, size: avatarSize),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          player['player_name'] ?? 'Неизвестно',
-                          style: TextStyle(
-                            fontSize: nameFont,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
+                  width: math.max(0.0, playerW - 11),
+                  child: Row(children: [
+                    _buildPlayerAvatar(player, size: avatarSize),
+                    const SizedBox(width: 10),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(player['player_name'] ?? 'Неизвестно', style: _cmrTitle(nameFont), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 3),
+                      Text('Передачи: К / С / Д', style: _cmrMutedStyle(10.5, color: _cmrMuted2)),
+                    ])),
+                  ]),
                 ),
                 SizedBox(width: gapW),
-                SizedBox(width: metricW, child: buildPassCell(player['forward_short'] ?? '0/0')),
-                SizedBox(width: metricW, child: buildPassCell(player['forward_medium'] ?? '0/0')),
-                SizedBox(width: metricW, child: buildPassCell(player['forward_long'] ?? '0/0')),
-                SizedBox(width: metricW, child: buildPassCell(player['side_short'] ?? '0/0')),
-                SizedBox(width: metricW, child: buildPassCell(player['side_medium'] ?? '0/0')),
-                SizedBox(width: metricW, child: buildPassCell(player['side_long'] ?? '0/0')),
-                SizedBox(width: metricW, child: buildPassCell(player['back_short'] ?? '0/0')),
-                SizedBox(width: metricW, child: buildPassCell(player['back_medium'] ?? '0/0')),
-                SizedBox(width: metricW, child: buildPassCell(player['back_long'] ?? '0/0')),
-                SizedBox(width: totalW, child: buildPassCell(player['total'] ?? '0/0', isTotal: true)),
-                SizedBox(
-                  width: percentW,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Formatters.getEffectColor(player['effect_percent'] ?? 0),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '${player['effect_percent'] ?? 0}%',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: percentFont,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
+                SizedBox(width: metricW, child: buildPassCell(player['forward_short'] ?? '0/0', accent: groupColor)),
+                SizedBox(width: metricW, child: buildPassCell(player['forward_medium'] ?? '0/0', accent: groupColor)),
+                SizedBox(width: metricW, child: buildPassCell(player['forward_long'] ?? '0/0', accent: groupColor)),
+                SizedBox(width: metricW, child: buildPassCell(player['side_short'] ?? '0/0', accent: groupColor)),
+                SizedBox(width: metricW, child: buildPassCell(player['side_medium'] ?? '0/0', accent: groupColor)),
+                SizedBox(width: metricW, child: buildPassCell(player['side_long'] ?? '0/0', accent: groupColor)),
+                SizedBox(width: metricW, child: buildPassCell(player['back_short'] ?? '0/0', accent: groupColor)),
+                SizedBox(width: metricW, child: buildPassCell(player['back_medium'] ?? '0/0', accent: groupColor)),
+                SizedBox(width: metricW, child: buildPassCell(player['back_long'] ?? '0/0', accent: groupColor)),
+                SizedBox(width: totalW, child: buildPassCell(player['total'] ?? '0/0', accent: groupColor, isTotal: true)),
+                _buildCmrPercentCell(player['effect_percent'] ?? 0, percentW, percentFont),
               ],
             ),
           );
@@ -2145,260 +1899,66 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
           padding: innerPadding,
           child: SizedBox(
             width: tableWidth,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: playerW,
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 8),
-                          child: Text(
-                            "Игрок",
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: isTablet ? 13 : 12,
-                              color: const Color(0xFF64748B),
-                            ),
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: gapW),
-                      _buildPassHeaderGroup(
-                        "Вперед",
-                        metricW * 3,
-                        titleFontSize: headerFont,
-                        subFontSize: subHeaderFont,
-                      ),
-                      _buildPassHeaderGroup(
-                        "Поперек",
-                        metricW * 3,
-                        titleFontSize: headerFont,
-                        subFontSize: subHeaderFont,
-                      ),
-                      _buildPassHeaderGroup(
-                        "Назад",
-                        metricW * 3,
-                        titleFontSize: headerFont,
-                        subFontSize: subHeaderFont,
-                      ),
-                      SizedBox(
-                        width: totalW,
-                        child: Text(
-                          "Всего",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: headerFont,
-                            color: const Color(0xFF64748B),
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      SizedBox(
-                        width: percentW,
-                        child: Text(
-                          "Эфф.",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: headerFont,
-                            color: const Color(0xFF64748B),
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              _buildCmrTableHeader(children: [
+                SizedBox(width: playerW, child: Padding(padding: const EdgeInsets.only(left: 8), child: Text('Игрок', style: _cmrMutedStyle(headerFont + 1, color: _cmrMuted2, weight: FontWeight.w900)))),
+                SizedBox(width: gapW),
+                _buildPassHeaderGroup('Вперед', metricW * 3, titleFontSize: headerFont, subFontSize: subHeaderFont),
+                _buildPassHeaderGroup('Поперек', metricW * 3, titleFontSize: headerFont, subFontSize: subHeaderFont),
+                _buildPassHeaderGroup('Назад', metricW * 3, titleFontSize: headerFont, subFontSize: subHeaderFont),
+                _buildHeaderCell('Всего', totalW, fontSize: headerFont),
+                _buildHeaderCell('Эфф.', percentW, isLast: true, fontSize: headerFont),
+              ]),
+              const SizedBox(height: 10),
+              if (grouped.isEmpty)
+                _buildEmptyTableState(title: 'Нет данных по передачам', icon: Icons.compare_arrows_rounded)
+              else
                 for (final entry in grouped.entries) ...[
-                  _buildPassSectionHeader(
-                    _groupTitle(entry.key),
-                    _groupColor(entry.key),
-                    fontSize: isTablet ? 13 : 12,
-                    vertical: isTablet ? 7 : 6,
-                    horizontal: isTablet ? 12 : 10,
-                  ),
-                  ...entry.value.map(buildPlayerRow),
-                  const SizedBox(height: 12),
+                  _buildPassSectionHeader(_groupTitle(entry.key), _groupColor(entry.key), fontSize: isTablet ? 13 : 12.5, vertical: isTablet ? 8 : 7, horizontal: isTablet ? 11 : 10),
+                  ...entry.value.map((player) => buildPlayerRow(player, _groupColor(entry.key))),
+                  const SizedBox(height: 6),
                 ],
-                
-                // Командная статистика передач
-                const SizedBox(height: 24),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.compare_arrows, color: const Color(0xFF7C3AED), size: 20),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Статистика передач команды',
-                            style: TextStyle(
-                              fontSize: isTablet ? 16 : 14,
-                              fontWeight: FontWeight.w800,
-                              color: const Color(0xFF0F172A),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        children: [
-                          _buildActionStatsBanner(
-                            title: 'Вперед К',
-                            success: passStats['forward_short']?['success'] ?? 0,
-                            fail: passStats['forward_short']?['fail'] ?? 0,
-                            color: const Color(0xFF2563EB),
-                          ),
-                          _buildActionStatsBanner(
-                            title: 'Вперед С',
-                            success: passStats['forward_medium']?['success'] ?? 0,
-                            fail: passStats['forward_medium']?['fail'] ?? 0,
-                            color: const Color(0xFF3B82F6),
-                          ),
-                          _buildActionStatsBanner(
-                            title: 'Вперед Д',
-                            success: passStats['forward_long']?['success'] ?? 0,
-                            fail: passStats['forward_long']?['fail'] ?? 0,
-                            color: const Color(0xFF60A5FA),
-                          ),
-                          _buildActionStatsBanner(
-                            title: 'Поперек К',
-                            success: passStats['side_short']?['success'] ?? 0,
-                            fail: passStats['side_short']?['fail'] ?? 0,
-                            color: const Color(0xFF059669),
-                          ),
-                          _buildActionStatsBanner(
-                            title: 'Поперек С',
-                            success: passStats['side_medium']?['success'] ?? 0,
-                            fail: passStats['side_medium']?['fail'] ?? 0,
-                            color: const Color(0xFF10B981),
-                          ),
-                          _buildActionStatsBanner(
-                            title: 'Поперек Д',
-                            success: passStats['side_long']?['success'] ?? 0,
-                            fail: passStats['side_long']?['fail'] ?? 0,
-                            color: const Color(0xFF34D399),
-                          ),
-                          _buildActionStatsBanner(
-                            title: 'Назад К',
-                            success: passStats['back_short']?['success'] ?? 0,
-                            fail: passStats['back_short']?['fail'] ?? 0,
-                            color: const Color(0xFFDC2626),
-                          ),
-                          _buildActionStatsBanner(
-                            title: 'Назад С',
-                            success: passStats['back_medium']?['success'] ?? 0,
-                            fail: passStats['back_medium']?['fail'] ?? 0,
-                            color: const Color(0xFFEF4444),
-                          ),
-                          _buildActionStatsBanner(
-                            title: 'Назад Д',
-                            success: passStats['back_long']?['success'] ?? 0,
-                            fail: passStats['back_long']?['fail'] ?? 0,
-                            color: const Color(0xFFF87171),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+              const SizedBox(height: 18),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: _cmrSoftDecoration(),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Container(width: 30, height: 30, decoration: BoxDecoration(color: _cmrPanel, borderRadius: BorderRadius.circular(9), border: Border.all(color: const Color(0xFF2563EB).withOpacity(.32))), child: const Icon(Icons.compare_arrows_rounded, color: Color(0xFF2563EB), size: 17)),
+                    const SizedBox(width: 10),
+                    Text('Статистика передач команды', style: _cmrTitle(titleFont)),
+                  ]),
+                  const SizedBox(height: 12),
+                  Wrap(spacing: 10, runSpacing: 10, children: [
+                    _buildActionStatsBanner(title: 'Вперед К', success: passStats['forward_short']?['success'] ?? 0, fail: passStats['forward_short']?['fail'] ?? 0, color: const Color(0xFF2563EB)),
+                    _buildActionStatsBanner(title: 'Вперед С', success: passStats['forward_medium']?['success'] ?? 0, fail: passStats['forward_medium']?['fail'] ?? 0, color: const Color(0xFF3B82F6)),
+                    _buildActionStatsBanner(title: 'Вперед Д', success: passStats['forward_long']?['success'] ?? 0, fail: passStats['forward_long']?['fail'] ?? 0, color: const Color(0xFF60A5FA)),
+                    _buildActionStatsBanner(title: 'Поперек К', success: passStats['side_short']?['success'] ?? 0, fail: passStats['side_short']?['fail'] ?? 0, color: _cmrGreen),
+                    _buildActionStatsBanner(title: 'Поперек С', success: passStats['side_medium']?['success'] ?? 0, fail: passStats['side_medium']?['fail'] ?? 0, color: const Color(0xFF10B981)),
+                    _buildActionStatsBanner(title: 'Поперек Д', success: passStats['side_long']?['success'] ?? 0, fail: passStats['side_long']?['fail'] ?? 0, color: const Color(0xFF34D399)),
+                    _buildActionStatsBanner(title: 'Назад К', success: passStats['back_short']?['success'] ?? 0, fail: passStats['back_short']?['fail'] ?? 0, color: _cmrRed),
+                    _buildActionStatsBanner(title: 'Назад С', success: passStats['back_medium']?['success'] ?? 0, fail: passStats['back_medium']?['fail'] ?? 0, color: const Color(0xFFEF4444)),
+                    _buildActionStatsBanner(title: 'Назад Д', success: passStats['back_long']?['success'] ?? 0, fail: passStats['back_long']?['fail'] ?? 0, color: const Color(0xFFF87171)),
+                  ]),
+                ]),
+              ),
+            ]),
           ),
         );
 
-        return Container(
-          margin: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 15,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: const BoxDecoration(
-                  color: Color(0xFF7C3AED),
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.compare_arrows,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Анализ передач",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: titleFont,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            "Детальная статистика",
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: subTitleFont,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              _needsHorizontalScroll(constraints)
-                  ? SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: content,
-                    )
-                  : content,
-            ],
-          ),
+        return _buildReportTableShell(
+          constraints: constraints,
+          title: 'Анализ передач',
+          subtitle: 'Направление, дистанция и точность передач по игрокам',
+          icon: Icons.compare_arrows_rounded,
+          accent: const Color(0xFF2563EB),
+          badge: '${_getTeamPassEfficiency().round()}% точность',
+          content: content,
         );
       },
     );
   }
+
 
   // =========================
   // GOALKEEPER TABLE
@@ -2409,50 +1969,14 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
       builder: (context, constraints) {
         final scale = _tableScale(constraints);
         final tableWidth = _tableWidth(constraints);
-
         final bool isTablet = _isTablet(constraints);
-        final double titleFont = _responsiveFont(
-          constraints,
-          phone: 16,
-          tablet: 18,
-        );
-        final double subTitleFont = _responsiveFont(
-          constraints,
-          phone: 12,
-          tablet: 13,
-        );
-        final double headerFont = _responsiveFont(
-          constraints,
-          phone: 11,
-          tablet: 12,
-        );
-        final double nameFont = _responsiveFont(
-          constraints,
-          phone: 12,
-          tablet: 13.5,
-        );
-        final double metricMainFont = _responsiveFont(
-          constraints,
-          phone: 11,
-          tablet: 12,
-        );
-        final double metricSubFont = _responsiveFont(
-          constraints,
-          phone: 9,
-          tablet: 10,
-        );
-        final double percentFont = _responsiveFont(
-          constraints,
-          phone: 11,
-          tablet: 12.5,
-        );
+        final double headerFont = _responsiveFont(constraints, phone: 10.5, tablet: 11.5);
+        final double nameFont = _responsiveFont(constraints, phone: 13, tablet: 14);
+        final double metricMainFont = _responsiveFont(constraints, phone: 10.5, tablet: 11.5);
+        final double metricSubFont = _responsiveFont(constraints, phone: 9, tablet: 9.8);
+        final double percentFont = _responsiveFont(constraints, phone: 12, tablet: 13);
         final EdgeInsets innerPadding = _tableInnerPadding(constraints);
-
-        final double avatarSize = _responsiveAvatar(
-          constraints,
-          phone: 28,
-          tablet: 34,
-        );
+        final double avatarSize = _responsiveAvatar(constraints, phone: 34, tablet: 38);
 
         final double playerW = playerNameWidthSmall * scale;
         final double gapW = rowGap * scale;
@@ -2462,7 +1986,6 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
         final double passW = (metricWidth * 1.5) * scale;
         final double totalW = totalWidth * scale;
         final double percentW = percentWidth * scale;
-
         final goalkeepers = _reportRowsByGroup(_filteredGoalkeeperReportRows, 'gk');
 
         Widget buildGkCell(dynamic value, {bool isTotal = false}) {
@@ -2472,356 +1995,113 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
             final fail = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
 
             return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-              decoration: BoxDecoration(
-                color: isTotal
-                    ? const Color(0xFFDC2626).withOpacity(0.1)
-                    : Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        success.toString(),
-                        style: TextStyle(
-                          fontSize: metricMainFont,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF16A34A),
-                        ),
-                      ),
-                      const Text("/", style: TextStyle(fontSize: 11, color: Colors.grey)),
-                      Text(
-                        fail.toString(),
-                        style: TextStyle(
-                          fontSize: metricMainFont,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFFDC2626),
-                        ),
-                      ),
-                    ],
-                  ),
-                  Text(
-                    value,
-                    style: TextStyle(
-                      fontSize: metricSubFont,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                ],
-              ),
+              constraints: const BoxConstraints(minHeight: 40),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+              decoration: _cmrSoftDecoration(active: isTotal, accent: _cmrRed),
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: [
+                Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Text(success.toString(), style: _cmrValue(metricMainFont, color: _cmrGreenDark)),
+                  Text('/', style: _cmrMutedStyle(metricMainFont - 1, color: _cmrMuted2, weight: FontWeight.w800)),
+                  Text(fail.toString(), style: _cmrValue(metricMainFont, color: _cmrRed)),
+                ]),
+                const SizedBox(height: 2),
+                Text(value, style: _cmrMutedStyle(metricSubFont, color: isTotal ? _cmrRed : _cmrMuted2, weight: FontWeight.w800)),
+              ]),
             );
           }
 
           return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              value.toString(),
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: metricMainFont,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+            constraints: const BoxConstraints(minHeight: 40),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+            decoration: _cmrSoftDecoration(),
+            child: Center(child: Text(value.toString(), textAlign: TextAlign.center, style: _cmrValue(metricMainFont))),
           );
+        }
+
+        Widget headerText(String text, double width, {TextAlign align = TextAlign.center}) {
+          return SizedBox(width: width, child: Text(text, textAlign: align, maxLines: 2, overflow: TextOverflow.ellipsis, style: _cmrMutedStyle(headerFont, color: _cmrMuted2, weight: FontWeight.w900)));
         }
 
         final content = Padding(
           padding: innerPadding,
           child: SizedBox(
             width: tableWidth,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: playerW,
-                        child: Text(
-                          "Игрок",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: headerFont,
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: gapW),
-                      SizedBox(
-                        width: metricSmallW,
-                        child: Text(
-                          "Проп.",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: headerFont,
-                          ),
-                        ),
-                      ),
-                      SizedBox(
-                        width: metricSmallW,
-                        child: Text(
-                          "Сейвы",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: headerFont,
-                          ),
-                        ),
-                      ),
-                      SizedBox(
-                        width: metricW,
-                        child: Text(
-                          "Ввод\nрук.",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: headerFont,
-                          ),
-                        ),
-                      ),
-                      SizedBox(
-                        width: metricW,
-                        child: Text(
-                          "Выходы",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: headerFont,
-                          ),
-                        ),
-                      ),
-                      SizedBox(
-                        width: metricSmallW,
-                        child: Text(
-                          "Бой",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: headerFont,
-                          ),
-                        ),
-                      ),
-                      SizedBox(
-                        width: metricSmallW,
-                        child: Text(
-                          "Перехв.",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: headerFont,
-                          ),
-                        ),
-                      ),
-                      SizedBox(
-                        width: outsideW,
-                        child: Text(
-                          "За штраф.",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: headerFont,
-                          ),
-                        ),
-                      ),
-                      SizedBox(
-                        width: passW,
-                        child: Text(
-                          "Передачи",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: headerFont,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      SizedBox(
-                        width: totalW,
-                        child: Text(
-                          "Всего",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: headerFont,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      SizedBox(
-                        width: percentW,
-                        child: Text(
-                          "Эфф.",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: headerFont,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              _buildCmrTableHeader(children: [
+                SizedBox(width: playerW, child: Padding(padding: const EdgeInsets.only(left: 8), child: Text('Игрок', style: _cmrMutedStyle(headerFont + 1, color: _cmrMuted2, weight: FontWeight.w900)))),
+                SizedBox(width: gapW),
+                headerText('Проп.', metricSmallW),
+                headerText('Сейвы', metricSmallW),
+                headerText('Ввод\nрук.', metricW),
+                headerText('Выходы', metricW),
+                headerText('Бой', metricSmallW),
+                headerText('Перехв.', metricSmallW),
+                headerText('За штраф.', outsideW),
+                headerText('Передачи', passW),
+                headerText('Всего', totalW),
+                headerText('Эфф.', percentW),
+              ]),
+              const SizedBox(height: 10),
+              if (goalkeepers.isEmpty)
+                _buildEmptyTableState(title: 'Нет данных по вратарям', icon: Icons.sports_handball_rounded)
+              else ...[
+                _buildSectionHeader('Вратари', _cmrRed, fontSize: isTablet ? 15.5 : 14.5, vertical: isTablet ? 10 : 9, horizontal: isTablet ? 12 : 10),
                 ...goalkeepers.map((gk) {
                   return Container(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: Colors.grey.shade200,
-                          width: 0.5,
-                        ),
+                    margin: const EdgeInsets.only(bottom: 7),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    decoration: _cmrPanelDecoration(radius: 11),
+                    child: Row(children: [
+                      Container(width: 3, height: isTablet ? 44 : 40, decoration: BoxDecoration(color: _cmrRed, borderRadius: BorderRadius.circular(99))),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: math.max(0.0, playerW - 11),
+                        child: Row(children: [
+                          _buildPlayerAvatar(gk, size: avatarSize, isGoalkeeper: true),
+                          const SizedBox(width: 9),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(gk['player_name'] ?? 'Неизвестно', style: _cmrTitle(nameFont), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            const SizedBox(height: 3),
+                            Text('Вратарская линия', style: _cmrMutedStyle(10.5, color: _cmrMuted2)),
+                          ])),
+                        ]),
                       ),
-                    ),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: playerW,
-                          child: Row(
-                            children: [
-                              _buildPlayerAvatar(
-                                gk,
-                                size: avatarSize,
-                                isGoalkeeper: true,
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  gk['player_name'] ?? 'Неизвестно',
-                                  style: TextStyle(
-                                    fontSize: nameFont,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        SizedBox(width: gapW),
-                        SizedBox(width: metricSmallW, child: buildGkCell(gk['conceded'] ?? 0)),
-                        SizedBox(width: metricSmallW, child: buildGkCell(gk['saves'] ?? 0)),
-                        SizedBox(width: metricW, child: buildGkCell(gk['hand_distribution'] ?? '0/0')),
-                        SizedBox(width: metricW, child: buildGkCell(gk['coming_out'] ?? '0/0')),
-                        SizedBox(width: metricSmallW, child: buildGkCell(gk['close_combat'] ?? '0/0')),
-                        SizedBox(width: metricSmallW, child: buildGkCell(gk['interceptions'] ?? '0/0')),
-                        SizedBox(width: outsideW, child: buildGkCell(gk['outside_box'] ?? '0/0')),
-                        SizedBox(
-                          width: passW,
-                          child: Row(
-                            children: [
-                              Expanded(child: buildGkCell(gk['pass_short'] ?? '0/0')),
-                              const SizedBox(width: 1),
-                              Expanded(child: buildGkCell(gk['pass_medium'] ?? '0/0')),
-                              const SizedBox(width: 1),
-                              Expanded(child: buildGkCell(gk['pass_long'] ?? '0/0')),
-                            ],
-                          ),
-                        ),
-                        SizedBox(
-                          width: totalW,
-                          child: buildGkCell(gk['ttd_total'] ?? '0/0', isTotal: true),
-                        ),
-                        SizedBox(
-                          width: percentW,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Formatters.getEffectColor(gk['effect_percent'] ?? 0),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              '${gk['effect_percent'] ?? 0}%',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: percentFont,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                      SizedBox(width: gapW),
+                      SizedBox(width: metricSmallW, child: buildGkCell(gk['conceded'] ?? 0)),
+                      SizedBox(width: metricSmallW, child: buildGkCell(gk['saves'] ?? 0)),
+                      SizedBox(width: metricW, child: buildGkCell(gk['hand_distribution'] ?? '0/0')),
+                      SizedBox(width: metricW, child: buildGkCell(gk['coming_out'] ?? '0/0')),
+                      SizedBox(width: metricSmallW, child: buildGkCell(gk['close_combat'] ?? '0/0')),
+                      SizedBox(width: metricSmallW, child: buildGkCell(gk['interceptions'] ?? '0/0')),
+                      SizedBox(width: outsideW, child: buildGkCell(gk['outside_box'] ?? '0/0')),
+                      SizedBox(width: passW, child: Row(children: [
+                        Expanded(child: buildGkCell(gk['pass_short'] ?? '0/0')),
+                        const SizedBox(width: 2),
+                        Expanded(child: buildGkCell(gk['pass_medium'] ?? '0/0')),
+                        const SizedBox(width: 2),
+                        Expanded(child: buildGkCell(gk['pass_long'] ?? '0/0')),
+                      ])),
+                      SizedBox(width: totalW, child: buildGkCell(gk['ttd_total'] ?? '0/0', isTotal: true)),
+                      _buildCmrPercentCell(gk['effect_percent'] ?? 0, percentW, percentFont),
+                    ]),
                   );
                 }),
               ],
-            ),
+            ]),
           ),
         );
 
-        return Container(
-          margin: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 15,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFDC2626),
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.sports_handball,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Вратарская статистика",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: titleFont,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            "Детальный анализ действий вратарей",
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: subTitleFont,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              _needsHorizontalScroll(constraints)
-                  ? SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: content,
-                    )
-                  : content,
-            ],
-          ),
+        return _buildReportTableShell(
+          constraints: constraints,
+          title: 'Вратарская статистика',
+          subtitle: 'Сейвы, ввод мяча, выходы и передачи вратарей',
+          icon: Icons.sports_handball_rounded,
+          accent: _cmrRed,
+          badge: '${_getTeamGoalkeeperEfficiency().round()}% эффективно',
+          content: content,
         );
       },
     );
   }
+
 }

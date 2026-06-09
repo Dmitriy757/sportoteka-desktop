@@ -12,9 +12,8 @@ import '../services/tracker_pro_api.dart';
 import '../tracker_live_panel.dart';
 import '../tracker_player_activity_screen.dart';
 import '../widgets/tracker_pro_analytics_panel.dart';
-import '../reports/tracker_training_report_screen.dart';
 
-enum TrackerWorkspaceSection { dashboard, live, activity, sessions, devices, field, settings, debug }
+enum TrackerWorkspaceSection { live, analytics, activity, sessions, devices, heatmap, field, video, settings, debug }
 
 class TrackerMatchWorkspaceScreen extends StatefulWidget {
   const TrackerMatchWorkspaceScreen({
@@ -47,17 +46,20 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
   final List<ActionTrackerGpsPoint> _points = <ActionTrackerGpsPoint>[];
   final List<ActionTrackerGpsPoint> _calibrationCorners = <ActionTrackerGpsPoint>[];
 
+  ActionTrackerGpsPoint? _latestTrackerGpsPoint;
+  DateTime? _latestTrackerGpsAt;
+  Completer<ActionTrackerGpsPoint?>? _calibrationPointCompleter;
+
   List<TrackerPlayerOption> _players = <TrackerPlayerOption>[];
   List<TrackerDeviceModel> _savedDevices = <TrackerDeviceModel>[];
   List<TrackerFieldModel> _fields = <TrackerFieldModel>[];
 
-  TrackerWorkspaceSection _section = TrackerWorkspaceSection.dashboard;
+  TrackerWorkspaceSection _section = TrackerWorkspaceSection.live;
   TrackerPlayerOption? _selectedPlayer;
   TrackerFieldModel? _selectedField;
   ActionTrackerDevice? _connected;
   ActionTrackerBatteryState? _battery;
   ActionTrackerRecord? _selectedRecord;
-  TrackerSessionModel? _selectedReportSession;
 
   StreamSubscription<ActionTrackerParseResult>? _dataSub;
   StreamSubscription<String>? _logSub;
@@ -67,6 +69,7 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
   bool _connecting = false;
   bool _savingRecord = false;
   bool _liveRunning = false;
+  bool _capturingCalibrationPoint = false;
 
   @override
   void initState() {
@@ -108,8 +111,9 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
       _selectedPlayer = null;
       _selectedField = null;
       _selectedRecord = null;
-      _selectedReportSession = null;
       _battery = null;
+      _latestTrackerGpsPoint = null;
+      _latestTrackerGpsAt = null;
       _connected = _ble.connectedInfo;
       _liveRunning = false;
       _logs.insert(0, '[TEAM] переключение команды → ${widget.teamName} (${widget.teamId})');
@@ -145,7 +149,20 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
             ..clear()
             ..addAll(event.records);
         }
-        if (event.gpsChunk != null) _points.addAll(event.gpsChunk!.points);
+        final chunk = event.gpsChunk;
+        if (chunk != null && chunk.points.isNotEmpty) {
+          final validPoints = chunk.points.where(_isUsableGpsPoint).toList(growable: false);
+          if (validPoints.isNotEmpty) {
+            _points.addAll(validPoints);
+            _latestTrackerGpsPoint = validPoints.last;
+            _latestTrackerGpsAt = DateTime.now();
+
+            final waiter = _calibrationPointCompleter;
+            if (waiter != null && !waiter.isCompleted) {
+              waiter.complete(validPoints.last);
+            }
+          }
+        }
       });
     });
 
@@ -288,59 +305,132 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
     }
   }
 
+  bool _isUsableGpsPoint(ActionTrackerGpsPoint point) {
+    if (point.latitude.abs() < 0.000001 && point.longitude.abs() < 0.000001) {
+      return false;
+    }
+    if (point.latitude.abs() > 90 || point.longitude.abs() > 180) {
+      return false;
+    }
+    return true;
+  }
+
+  double _distanceBetweenGps(ActionTrackerGpsPoint a, ActionTrackerGpsPoint b) {
+    const earthRadiusM = 6371000.0;
+    final dLat = _degToRad(b.latitude - a.latitude);
+    final dLon = _degToRad(b.longitude - a.longitude);
+    final lat1 = _degToRad(a.latitude);
+    final lat2 = _degToRad(b.latitude);
+    final h = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(lat1) * math.cos(lat2) * math.sin(dLon / 2) * math.sin(dLon / 2);
+    return 2 * earthRadiusM * math.atan2(math.sqrt(h), math.sqrt(1 - h));
+  }
+
+  double _degToRad(double value) => value * math.pi / 180.0;
+
+  Future<ActionTrackerGpsPoint?> _readTrackerGpsForCalibration() async {
+    final connected = _connected ?? _ble.connectedInfo;
+    if (connected == null) {
+      _toast('Калибровка', 'Сначала подключите GPS-трекер во вкладке «Датчики».');
+      return null;
+    }
+
+    final latest = _latestTrackerGpsPoint;
+    final latestAt = _latestTrackerGpsAt;
+    if (latest != null && latestAt != null && DateTime.now().difference(latestAt).inSeconds <= 4) {
+      return latest;
+    }
+
+    final waiter = Completer<ActionTrackerGpsPoint?>();
+    _calibrationPointCompleter = waiter;
+
+    try {
+      final commands = ActionTrackerBleProfile.commandCurrentGpsCandidates.take(6).toList(growable: false);
+      for (final command in commands) {
+        if (waiter.isCompleted) break;
+        await _ble.sendRawCommand(command);
+        await Future<void>.delayed(const Duration(milliseconds: 420));
+      }
+
+      return await waiter.future.timeout(
+        const Duration(seconds: 6),
+        onTimeout: () => null,
+      );
+    } finally {
+      if (identical(_calibrationPointCompleter, waiter)) {
+        _calibrationPointCompleter = null;
+      }
+    }
+  }
+
+  Future<void> _captureCalibrationPoint() async {
+    if (_capturingCalibrationPoint) return;
+    if (_calibrationCorners.length >= 4) {
+      _toast('Калибровка', 'Все 4 точки уже получены. Нажмите «Сохранить поле» или «Сбросить».');
+      return;
+    }
+
+    setState(() => _capturingCalibrationPoint = true);
+    try {
+      final point = await _readTrackerGpsForCalibration();
+      if (point == null || !_isUsableGpsPoint(point)) {
+        _toast('Калибровка', 'Трекер пока не отдал GPS-точку. Выйдите на поле, дождитесь GPS и повторите.');
+        return;
+      }
+
+      if (_calibrationCorners.isNotEmpty) {
+        final previous = _calibrationCorners.last;
+        final distance = _distanceBetweenGps(previous, point);
+        if (distance < 2.0) {
+          _toast('Калибровка', 'Новая точка слишком близко к предыдущей (${distance.toStringAsFixed(1)} м). Перейдите к следующему углу поля.');
+          return;
+        }
+      }
+
+      setState(() {
+        _calibrationCorners.add(point);
+      });
+
+      final label = ['A', 'B', 'C', 'D'][_calibrationCorners.length - 1];
+      _toast('Калибровка', 'Точка $label сохранена с GPS-трекера (${_calibrationCorners.length}/4)');
+    } finally {
+      if (mounted) setState(() => _capturingCalibrationPoint = false);
+    }
+  }
+
+  void _handleCornerTap(int index) {
+    if (index < _calibrationCorners.length) {
+      final label = ['A', 'B', 'C', 'D'][index];
+      _toast('Калибровка', 'Точка $label уже сохранена. Чтобы изменить её, нажмите «Сбросить».');
+      return;
+    }
+    if (index != _calibrationCorners.length) {
+      final next = ['A', 'B', 'C', 'D'][_calibrationCorners.length];
+      _toast('Калибровка', 'Сначала нужно установить точку $next. Идём строго A → B → C → D.');
+      return;
+    }
+    _captureCalibrationPoint();
+  }
+
+  void _resetCalibrationCorners() {
+    setState(() => _calibrationCorners.clear());
+    _toast('Калибровка', 'Точки сброшены. Начните с угла A.');
+  }
+
   void _createNewFieldDraft() {
     final index = _fields.length + 1;
     setState(() {
       _selectedField = TrackerFieldModel(
         clubId: widget.clubId,
         teamId: widget.teamId,
-        title: index <= 1 ? 'Основное поле' : 'Поле $index',
+        title: index <= 1 ? 'Основное поле' : 'Новое поле $index',
         lengthM: 105,
         widthM: 68,
         isDefault: true,
       );
       _calibrationCorners.clear();
     });
-    _toast('Поле', 'Создано новое поле. Пройдите углы A → B → C → D и нажмите «Сохранить».');
-  }
-
-  void _resetCalibrationCorners() {
-    setState(() => _calibrationCorners.clear());
-    _toast('Калибровка', 'Точки A/B/C/D сброшены.');
-  }
-
-  Future<void> _handleCornerTap(int index) async {
-    if (index != _calibrationCorners.length) {
-      final labels = const ['A', 'B', 'C', 'D'];
-      _toast('Калибровка', 'Сейчас нужна точка ${labels[_calibrationCorners.length.clamp(0, 3)]}. Идите по порядку A → B → C → D.');
-      return;
-    }
-    await _captureCalibrationPoint();
-  }
-
-  Future<void> _captureCalibrationPoint() async {
-    final labels = const ['A', 'B', 'C', 'D'];
-    if (_calibrationCorners.length >= 4) {
-      _toast('Калибровка', 'Все 4 точки уже получены. Нажмите «Сохранить» или «Сбросить».');
-      return;
-    }
-
-    if (_points.isEmpty) {
-      _toast('Калибровка', 'Нет GPS-точки от трекера. Подключите датчик и дождитесь GPS-пакета.');
-      return;
-    }
-
-    final nextIndex = _calibrationCorners.length;
-    final point = _points.last;
-
-    setState(() {
-      _calibrationCorners.add(point);
-    });
-
-    _toast(
-      'Калибровка',
-      'Точка ${labels[nextIndex]} сохранена (${_calibrationCorners.length}/4).',
-    );
+    _toast('Поле', 'Создан черновик нового поля. Пройдите 4 угла и нажмите «Сохранить поле».');
   }
 
   Future<void> _saveCapturedField() async {
@@ -451,37 +541,53 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
       child: Scaffold(
         backgroundColor: _TD.bg,
         body: SafeArea(
-          child: Row(
-            children: [
-              _DarkRail(
-                selected: _section,
-                onSelect: (section) => setState(() => _section = section),
-                onBack: _handleBackPressed,
-              ),
-              Expanded(
-                child: Column(
-                  children: [
-                    if (_section != TrackerWorkspaceSection.live)
-                      _TopBar(
-                        teamName: widget.teamName,
-                        clubName: widget.clubName,
-                        selectedPlayer: _selectedPlayer?.name ?? 'Игрок не выбран',
-                        selectedSection: _section,
-                        loading: _loading,
-                        onRefresh: _loadServerData,
-                      ),
-                    Expanded(
-                      child: Padding(
-                        padding: _section == TrackerWorkspaceSection.live
-                            ? const EdgeInsets.fromLTRB(0, 0, 6, 6)
-                            : const EdgeInsets.fromLTRB(0, 6, 6, 6),
-                        child: _buildSection(),
-                      ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 760;
+              final content = Column(
+                children: [
+                  _TopBar(
+                    teamName: widget.teamName,
+                    clubName: widget.clubName,
+                    selectedPlayer: _selectedPlayer?.name ?? 'Игрок не выбран',
+                    selectedSection: _section,
+                    loading: _loading,
+                    onRefresh: _loadServerData,
+                    onBack: _handleBackPressed,
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(compact ? 8 : 0, 6, 8, 8),
+                      child: _buildSection(),
                     ),
+                  ),
+                ],
+              );
+
+              if (compact) {
+                return Column(
+                  children: [
+                    _MobileTrackerNav(
+                      selected: _section,
+                      onSelect: (section) => setState(() => _section = section),
+                      onBack: _handleBackPressed,
+                    ),
+                    Expanded(child: content),
                   ],
-                ),
-              ),
-            ],
+                );
+              }
+
+              return Row(
+                children: [
+                  _DarkRail(
+                    selected: _section,
+                    onSelect: (section) => setState(() => _section = section),
+                    onBack: _handleBackPressed,
+                  ),
+                  Expanded(child: content),
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -499,184 +605,27 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
 
   Widget _sectionWidget(TrackerWorkspaceSection section) {
     switch (section) {
-      case TrackerWorkspaceSection.dashboard:
-        return _dashboard();
       case TrackerWorkspaceSection.live:
         return _live();
+      case TrackerWorkspaceSection.analytics:
+        return _analytics();
       case TrackerWorkspaceSection.activity:
         return _activity();
       case TrackerWorkspaceSection.sessions:
         return _sessions();
       case TrackerWorkspaceSection.devices:
         return _devices();
+      case TrackerWorkspaceSection.heatmap:
+        return _heatmap();
       case TrackerWorkspaceSection.field:
         return _field();
+      case TrackerWorkspaceSection.video:
+        return _video();
       case TrackerWorkspaceSection.settings:
         return _settings();
       case TrackerWorkspaceSection.debug:
         return _debug();
     }
-  }
-
-  Widget _dashboard() {
-    return FutureBuilder<TrackerDashboardModel>(
-      future: _api.loadDashboard(teamId: widget.teamId),
-      builder: (context, snapshot) {
-        final dashboard = snapshot.data;
-        final summary = dashboard?.summary ?? const <String, dynamic>{};
-        final rows = dashboard?.players ?? const <TrackerPlayerLoadRow>[];
-        final connected = _savedDevices.where((d) => d.playerId != null).length;
-        final readyFields = _fields.where((f) => f.hasCalibration).length;
-        final gpsReady = _points.isNotEmpty || _connected != null;
-
-        return _DarkPage(
-          title: 'Tracker Pro',
-          subtitle: 'Catapult-режим: подключение, Live, команда, отчёты и поле в одном рабочем сценарии',
-          icon: Icons.dashboard_customize_rounded,
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _DarkActionButton(
-                icon: Icons.play_arrow_rounded,
-                label: 'Открыть Live',
-                primary: true,
-                onTap: () => setState(() => _section = TrackerWorkspaceSection.live),
-              ),
-              const SizedBox(width: 8),
-              _DarkActionButton(
-                icon: Icons.sensors_rounded,
-                label: 'Трекеры',
-                onTap: () => setState(() => _section = TrackerWorkspaceSection.devices),
-              ),
-            ],
-          ),
-          child: LayoutBuilder(
-            builder: (context, c) {
-              final compact = c.maxWidth < 920;
-              final kpi = _dashboardKpis(summary, rows.length, connected, readyFields);
-              final left = _DarkCard(
-                title: 'Готовность команды',
-                subtitle: '$connected/${_players.length} трекеров',
-                child: Column(
-                  children: [
-                    _ReadinessRow(title: 'Игроки', text: _players.isEmpty ? 'Состав не загружен' : '${_players.length} игроков', ok: _players.isNotEmpty),
-                    const SizedBox(height: 8),
-                    _ReadinessRow(title: 'Трекеры', text: connected == 0 ? 'Подключите датчики' : '$connected подключено', ok: connected > 0),
-                    const SizedBox(height: 8),
-                    _ReadinessRow(title: 'Поле', text: readyFields == 0 ? 'Нужна калибровка' : '$readyFields готово', ok: readyFields > 0),
-                    const SizedBox(height: 8),
-                    _ReadinessRow(title: 'GPS', text: gpsReady ? 'Сигнал есть' : 'Ожидаем пакет', ok: gpsReady),
-                    const Spacer(),
-                    _DarkActionButton(
-                      icon: Icons.sensors_rounded,
-                      label: connected == 0 ? 'Подключить трекеры' : 'Управлять трекерами',
-                      primary: connected == 0,
-                      onTap: () => setState(() => _section = TrackerWorkspaceSection.devices),
-                    ),
-                    const SizedBox(height: 8),
-                    _DarkActionButton(
-                      icon: Icons.map_rounded,
-                      label: readyFields == 0 ? 'Настроить поле' : 'Проверить поле',
-                      onTap: () => setState(() => _section = TrackerWorkspaceSection.field),
-                    ),
-                  ],
-                ),
-              );
-
-              final center = _DarkCard(
-                title: 'Команда онлайн',
-                subtitle: snapshot.connectionState == ConnectionState.waiting && dashboard == null ? 'загрузка' : '${rows.length} игроков в аналитике',
-                child: rows.isEmpty
-                    ? const _DarkEmpty(icon: Icons.groups_rounded, text: 'После подключения трекеров и запуска Live здесь появится таблица игроков.')
-                    : ListView(
-                        children: rows.take(12).map((p) {
-                          return _DarkListTile(
-                            icon: Icons.person_rounded,
-                            avatarUrl: p.avatar,
-                            initials: _playerInitials(p.playerName),
-                            title: p.playerName,
-                            subtitle: '${(p.distanceM / 1000).toStringAsFixed(2)} км · max ${p.maxSpeedKmh.toStringAsFixed(1)} км/ч · спринты ${p.sprintCount}',
-                            trailing: 'анализ',
-                            active: _selectedPlayer?.id == p.playerId,
-                            onTap: () {
-                              final matches = _players.where((x) => x.id == p.playerId).toList();
-                              setState(() {
-                                if (matches.isNotEmpty) _selectedPlayer = matches.first;
-                                _section = TrackerWorkspaceSection.activity;
-                              });
-                            },
-                          );
-                        }).toList(),
-                      ),
-              );
-
-              final right = _DarkCard(
-                title: 'Рабочий сценарий',
-                subtitle: 'как в Catapult',
-                child: Column(
-                  children: [
-                    _ScenarioButton(step: '1', title: 'Подключить трекеры', text: 'Датчики и привязка к игрокам', icon: Icons.sensors_rounded, onTap: () => setState(() => _section = TrackerWorkspaceSection.devices)),
-                    const SizedBox(height: 8),
-                    _ScenarioButton(step: '2', title: 'Проверить поле', text: 'Калибровка A/B/C/D', icon: Icons.map_rounded, onTap: () => setState(() => _section = TrackerWorkspaceSection.field)),
-                    const SizedBox(height: 8),
-                    _ScenarioButton(step: '3', title: 'Начать Live', text: 'Поле, точки, зоны, сигналы', icon: Icons.play_arrow_rounded, onTap: () => setState(() => _section = TrackerWorkspaceSection.live)),
-                    const SizedBox(height: 8),
-                    _ScenarioButton(step: '4', title: 'Открыть отчёты', text: 'Сессии, таблицы, экспорт', icon: Icons.table_chart_rounded, onTap: () => setState(() => _section = TrackerWorkspaceSection.sessions)),
-                    const Spacer(),
-                    const _DarkHint(text: 'Главная показывает команду и готовность. Live — только рабочий мониторинг. Активность — графики игрока. Сессии — отчёты и экспорт.'),
-                  ],
-                ),
-              );
-
-              final content = compact
-                  ? ListView(
-                      children: [
-                        SizedBox(height: 140, child: _DashboardKpiStrip(items: kpi)),
-                        const SizedBox(height: 10),
-                        SizedBox(height: 360, child: center),
-                        const SizedBox(height: 10),
-                        SizedBox(height: 310, child: left),
-                        const SizedBox(height: 10),
-                        SizedBox(height: 360, child: right),
-                      ],
-                    )
-                  : Column(
-                      children: [
-                        SizedBox(height: 118, child: _DashboardKpiStrip(items: kpi)),
-                        const SizedBox(height: 10),
-                        Expanded(
-                          child: Row(
-                            children: [
-                              Expanded(flex: 3, child: left),
-                              const SizedBox(width: 10),
-                              Expanded(flex: 5, child: center),
-                              const SizedBox(width: 10),
-                              Expanded(flex: 3, child: right),
-                            ],
-                          ),
-                        ),
-                      ],
-                    );
-
-              return content;
-            },
-          ),
-        );
-      },
-    );
-  }
-
-  List<_DashboardKpiData> _dashboardKpis(Map<String, dynamic> summary, int analyticPlayers, int connected, int readyFields) {
-    double d(dynamic v) => v is num ? v.toDouble() : double.tryParse('$v') ?? 0;
-    int i(dynamic v) => v is num ? v.toInt() : int.tryParse('$v') ?? 0;
-    return [
-      _DashboardKpiData(icon: Icons.groups_rounded, title: 'Игроки онлайн', value: '$connected/${_players.length}', subtitle: 'трекеры'),
-      _DashboardKpiData(icon: Icons.route_rounded, title: 'Дистанция', value: '${(d(summary['total_distance_m']) / 1000).toStringAsFixed(2)} км', subtitle: 'команда'),
-      _DashboardKpiData(icon: Icons.speed_rounded, title: 'Макс. скорость', value: '${d(summary['max_speed_kmh']).toStringAsFixed(1)}', subtitle: 'км/ч'),
-      _DashboardKpiData(icon: Icons.local_fire_department_rounded, title: 'Спринты', value: '${i(summary['sprint_count'])}', subtitle: 'команда'),
-      _DashboardKpiData(icon: Icons.monitor_heart_rounded, title: 'Нагрузка', value: d(summary['avg_load_score']).toStringAsFixed(1), subtitle: 'средняя'),
-      _DashboardKpiData(icon: Icons.map_rounded, title: 'Поля', value: '$readyFields/${_fields.length}', subtitle: 'калибровка'),
-    ];
   }
 
   Widget _live() {
@@ -732,69 +681,67 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
 
   Widget _sessions() {
     return _DarkPage(
-      title: 'Отчёты / сессии',
-      subtitle: 'календарь тренировок, расшифровка, PDF и Excel',
-      icon: Icons.table_chart_rounded,
+      title: 'Сессии / выгрузка',
+      subtitle: 'поиск записей, выгрузка GPS, серверные сессии',
+      icon: Icons.download_rounded,
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
         _DarkActionButton(icon: Icons.refresh_rounded, label: 'Обновить', onTap: () => setState(() {})),
         const SizedBox(width: 8),
-        _DarkActionButton(
-          icon: Icons.cloud_upload_rounded,
-          label: _savingRecord ? 'Сохраняю...' : 'Сохранить GPS',
-          primary: true,
-          onTap: _savingRecord ? null : _saveRecordAsSession,
+        _DarkActionButton(icon: Icons.cloud_upload_rounded, label: _savingRecord ? 'Сохраняю...' : 'Сохранить', primary: true, onTap: _savingRecord ? null : _saveRecordAsSession),
+      ]),
+      child: Row(children: [
+        Expanded(
+          flex: 5,
+          child: _DarkCard(
+            title: 'GPS-записи',
+            subtitle: _selectedRecord == null ? '${_records.length} записей на устройстве' : 'selected ${_selectedRecord!.fileId} · ${_points.length} points',
+            child: _records.isEmpty
+                ? const _DarkEmpty(icon: Icons.download_rounded, text: 'Подключите трекер и загрузите записи.')
+                : ListView(children: _records.map((r) => _DarkListTile(
+                      icon: Icons.route_rounded,
+                      title: 'Record ${r.fileId}',
+                      subtitle: '${r.length} bytes${_selectedRecord?.fileId == r.fileId ? ' · ${_points.length} points' : ''}',
+                      active: _selectedRecord?.fileId == r.fileId,
+                      trailing: _selectedRecord?.fileId == r.fileId ? 'выбрано' : 'загрузить',
+                      onTap: () => _loadGpsRecord(r),
+                    )).toList()),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          flex: 7,
+          child: FutureBuilder<List<TrackerSessionModel>>(
+            future: _api.loadSessions(teamId: widget.teamId, playerId: _selectedPlayer?.id),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting && snapshot.data == null) {
+                return const _DarkCard(title: 'Сессии на сервере', subtitle: 'загрузка', child: Center(child: CircularProgressIndicator()));
+              }
+              final sessions = snapshot.data ?? const <TrackerSessionModel>[];
+              return _DarkCard(
+                title: 'Сессии на сервере',
+                subtitle: '${sessions.length} сохранённых сессий',
+                child: sessions.isEmpty
+                    ? const _DarkEmpty(icon: Icons.storage_rounded, text: 'Сессии появятся после сохранения GPS-записи.')
+                    : ListView(children: sessions.map((s) => _DarkListTile(
+                          icon: Icons.storage_rounded,
+                          title: s.title,
+                          subtitle: '${s.playerName ?? 'Игрок'} · ${s.createdAt} · ${(s.distanceM / 1000).toStringAsFixed(2)} km · max ${s.maxSpeedKmh.toStringAsFixed(1)}',
+                          trailing: 'обработать',
+                          onTap: () async {
+                            try {
+                              await _api.processSession(sessionId: s.id);
+                              _toast('Session', 'Processed');
+                              setState(() {});
+                            } catch (e) {
+                              _toast('Session', '$e');
+                            }
+                          },
+                        )).toList()),
+              );
+            },
+          ),
         ),
       ]),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 980;
-          final sessionsList = _SessionsListPane(
-            api: _api,
-            teamId: widget.teamId,
-            playerId: _selectedPlayer?.id,
-            selectedSession: _selectedReportSession,
-            onSelect: (session) => setState(() => _selectedReportSession = session),
-            onProcess: (session) async {
-              try {
-                await _api.processSession(sessionId: session.id);
-                _toast('Сессия', 'Обработка запущена');
-                setState(() {});
-              } catch (e) {
-                _toast('Сессия', '$e');
-              }
-            },
-          );
-          final gpsRecords = _GpsRecordsPane(
-            records: _records,
-            selectedRecord: _selectedRecord,
-            pointsCount: _points.length,
-            onLoad: _loadGpsRecord,
-          );
-          final report = _SelectedTrainingReportPane(
-            session: _selectedReportSession,
-            teamId: widget.teamId,
-            teamName: widget.teamName,
-          );
-
-          if (compact) {
-            return Column(children: [
-              SizedBox(height: 210, child: sessionsList),
-              const SizedBox(height: 10),
-              SizedBox(height: 150, child: gpsRecords),
-              const SizedBox(height: 10),
-              Expanded(child: report),
-            ]);
-          }
-
-          return Row(children: [
-            Expanded(flex: 3, child: sessionsList),
-            const SizedBox(width: 10),
-            Expanded(flex: 3, child: gpsRecords),
-            const SizedBox(width: 10),
-            Expanded(flex: 8, child: report),
-          ]);
-        },
-      ),
     );
   }
 
@@ -898,19 +845,26 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
     final labels = const ['A', 'B', 'C', 'D'];
     final nextIndex = _calibrationCorners.length >= 4 ? -1 : _calibrationCorners.length;
     final nextLabel = nextIndex < 0 ? 'готово' : labels[nextIndex];
+    final progressText = _calibrationCorners.length >= 4
+        ? 'Все 4 точки получены. Нажмите «Сохранить поле».'
+        : 'Следующая точка: $nextLabel · порядок A → B → C → D';
 
     return _DarkPage(
       title: 'Калибровка поля',
-      subtitle: 'создайте поле и пройдите углы GPS-трекером: A верхний левый → B верхний правый → C нижний правый → D нижний левый',
+      subtitle: 'создайте поле и пройдите углы с GPS-трекером: A верхний левый → B верхний правый → C нижний правый → D нижний левый',
       icon: Icons.map_rounded,
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
         _DarkActionButton(icon: Icons.add_rounded, label: 'Новое поле', onTap: _createNewFieldDraft),
         const SizedBox(width: 8),
         _DarkActionButton(
           icon: Icons.gps_fixed_rounded,
-          label: nextIndex < 0 ? 'GPS готов' : 'GPS $nextLabel',
+          label: _capturingCalibrationPoint
+              ? 'Читаю GPS...'
+              : nextIndex < 0
+                  ? 'GPS готов'
+                  : 'GPS $nextLabel',
           primary: true,
-          onTap: nextIndex < 0 ? null : _captureCalibrationPoint,
+          onTap: _capturingCalibrationPoint || nextIndex < 0 ? null : _captureCalibrationPoint,
         ),
         const SizedBox(width: 8),
         _DarkActionButton(
@@ -919,86 +873,97 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
           onTap: _calibrationCorners.isEmpty ? null : _resetCalibrationCorners,
         ),
         const SizedBox(width: 8),
-        _DarkActionButton(icon: Icons.save_rounded, label: 'Сохранить', onTap: _calibrationCorners.length >= 4 ? _saveCapturedField : null),
+        _DarkActionButton(icon: Icons.save_rounded, label: 'Сохранить поле', onTap: _calibrationCorners.length >= 4 ? _saveCapturedField : null),
       ]),
       child: Row(children: [
-        Expanded(
-          flex: 4,
-          child: _DarkCard(
-            title: 'Поля команды',
-            subtitle: '${_fields.length} полей',
-            child: ListView(children: [
-              _DarkActionButton(icon: Icons.add_rounded, label: 'Новое поле', onTap: _createNewFieldDraft),
-              const SizedBox(height: 10),
-              if (_selectedField?.id == null && _selectedField != null)
-                _DarkListTile(
-                  icon: Icons.add_location_alt_rounded,
-                  title: _selectedField!.title,
-                  subtitle: '${_selectedField!.lengthM.toStringAsFixed(0)}×${_selectedField!.widthM.toStringAsFixed(0)} м · черновик, нужны 4 точки',
-                  active: true,
-                  trailing: 'новое',
-                  onTap: () {},
+        Expanded(flex: 4, child: _DarkCard(
+          title: 'Поля команды',
+          subtitle: _selectedField?.id == null && _selectedField != null ? 'новый черновик' : '${_fields.length} полей',
+          child: Column(
+            children: [
+              SizedBox(
+                width: double.infinity,
+                child: _DarkActionButton(
+                  icon: Icons.add_rounded,
+                  label: 'Новое поле',
+                  primary: true,
+                  onTap: _createNewFieldDraft,
                 ),
-              if (_fields.isEmpty && _selectedField == null)
-                const _DarkEmpty(icon: Icons.map_rounded, text: 'Нажмите «Новое поле», затем поставьте 4 угла GPS-трекером.'),
-              ..._fields.map((f) => _DarkListTile(
-                    icon: f.hasCalibration ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
-                    title: f.title,
-                    subtitle: '${f.lengthM.toStringAsFixed(0)}×${f.widthM.toStringAsFixed(0)} м · ${f.hasCalibration ? 'откалибровано' : 'нужна калибровка'}',
-                    active: _selectedField?.id == f.id,
-                    trailing: _selectedField?.id == f.id ? 'выбрано' : 'выбрать',
-                    onTap: () => setState(() {
-                      _selectedField = f;
-                      _calibrationCorners.clear();
-                    }),
-                  )),
-            ]),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          flex: 8,
-          child: _DarkCard(
-            title: 'Калибровка по 4 точкам',
-            subtitle: nextIndex < 0 ? 'все точки получены' : 'следующая точка: $nextLabel',
-            child: Column(children: [
-              _CalibrationStatusBanner(
-                nextLabel: nextLabel,
-                done: nextIndex < 0,
-                pointCount: _calibrationCorners.length,
               ),
               const SizedBox(height: 8),
               Expanded(
-                child: CustomPaint(
-                  painter: _DarkCalibrationPainter(corners: _calibrationCorners, activeIndex: nextIndex),
-                  child: const SizedBox.expand(),
-                ),
+                child: ListView(children: [
+                  if (_selectedField?.id == null && _selectedField != null)
+                    _DarkListTile(
+                      icon: Icons.add_location_alt_rounded,
+                      title: _selectedField!.title,
+                      subtitle: '${_selectedField!.lengthM.toStringAsFixed(0)}×${_selectedField!.widthM.toStringAsFixed(0)} м · черновик, нужны 4 GPS-точки',
+                      active: true,
+                      trailing: 'новое',
+                      onTap: () {},
+                    ),
+                  if (_fields.isEmpty && _selectedField == null)
+                    const _DarkEmpty(icon: Icons.map_rounded, text: 'Нажмите «Новое поле», затем поставьте 4 угла GPS-трекером.'),
+                  ..._fields.map((f) => _DarkListTile(
+                        icon: f.hasCalibration ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
+                        title: f.title,
+                        subtitle: '${f.lengthM.toStringAsFixed(0)}×${f.widthM.toStringAsFixed(0)} м · ${f.hasCalibration ? 'откалибровано' : 'нужна калибровка'}',
+                        active: _selectedField?.id == f.id,
+                        trailing: _selectedField?.id == f.id ? 'выбрано' : 'выбрать',
+                        onTap: () => setState(() {
+                          _selectedField = f;
+                          _calibrationCorners.clear();
+                        }),
+                      )),
+                ]),
               ),
-              const SizedBox(height: 8),
-              _DarkHint(
-                text: _points.isEmpty
-                    ? 'GPS-точек пока нет. Подключите трекер, выйдите на поле и дождитесь координат.'
-                    : 'Последняя GPS-точка готова. Нажмите ${nextIndex < 0 ? '«Сохранить»' : '«GPS $nextLabel»'}.',
-              ),
-              const SizedBox(height: 8),
-              Wrap(spacing: 8, runSpacing: 8, children: List.generate(4, (i) {
-                final ready = _calibrationCorners.length > i;
-                final active = !ready && i == _calibrationCorners.length && _calibrationCorners.length < 4;
-                return _DarkCornerChip(
-                  label: labels[i],
-                  value: ready
-                      ? '${_calibrationCorners[i].latitude.toStringAsFixed(6)}\n${_calibrationCorners[i].longitude.toStringAsFixed(6)}'
-                      : active
-                          ? 'ожидает GPS'
-                          : 'после предыдущей',
-                  ready: ready,
-                  active: active,
-                  onTap: () => _handleCornerTap(i),
-                );
-              })),
-            ]),
+            ],
           ),
-        ),
+        )),
+        const SizedBox(width: 10),
+        Expanded(flex: 8, child: _DarkCard(
+          title: 'Калибровка по 4 точкам',
+          subtitle: _capturingCalibrationPoint ? 'ожидание GPS от трекера' : 'нажмите активную точку или кнопку GPS',
+          child: Column(children: [
+            Expanded(
+              child: CustomPaint(
+                painter: _DarkCalibrationPainter(
+                  corners: _calibrationCorners,
+                  activeIndex: nextIndex,
+                  capturing: _capturingCalibrationPoint,
+                ),
+                child: const SizedBox.expand(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            _CalibrationStatusBanner(
+              text: _capturingCalibrationPoint ? 'Читаю координаты GPS для точки ${nextIndex < 0 ? 'A' : labels[nextIndex]}...' : progressText,
+              done: _calibrationCorners.length >= 4,
+              capturing: _capturingCalibrationPoint,
+            ),
+            const SizedBox(height: 8),
+            _DarkHint(text: _latestTrackerGpsAt == null
+                ? 'GPS трекера ещё не получен. Подключите датчик во вкладке «Датчики», выйдите на поле и нажмите активную точку.'
+                : 'Последний GPS трекера: ${DateTime.now().difference(_latestTrackerGpsAt!).inSeconds} сек. назад'),
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, runSpacing: 8, children: List.generate(4, (i) {
+              final ready = _calibrationCorners.length > i;
+              final active = !ready && _calibrationCorners.length == i && _calibrationCorners.length < 4;
+              return _DarkCornerChip(
+                label: labels[i],
+                value: ready
+                    ? '${_calibrationCorners[i].latitude.toStringAsFixed(6)}\n${_calibrationCorners[i].longitude.toStringAsFixed(6)}'
+                    : active
+                        ? 'нажмите, чтобы считать GPS'
+                        : 'ожидает предыдущие точки',
+                ready: ready,
+                active: active,
+                capturing: active && _capturingCalibrationPoint,
+                onTap: () => _handleCornerTap(i),
+              );
+            })),
+          ]),
+        )),
       ]),
     );
   }
@@ -1082,135 +1047,6 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
   }
 }
 
-
-class _SessionsListPane extends StatelessWidget {
-  const _SessionsListPane({
-    required this.api,
-    required this.teamId,
-    required this.playerId,
-    required this.selectedSession,
-    required this.onSelect,
-    required this.onProcess,
-  });
-
-  final TrackerProApi api;
-  final int teamId;
-  final int? playerId;
-  final TrackerSessionModel? selectedSession;
-  final ValueChanged<TrackerSessionModel> onSelect;
-  final ValueChanged<TrackerSessionModel> onProcess;
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<List<TrackerSessionModel>>(
-      future: api.loadSessions(teamId: teamId, playerId: playerId),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting && snapshot.data == null) {
-          return const _DarkCard(title: 'Сессии', subtitle: 'загрузка', child: Center(child: CircularProgressIndicator()));
-        }
-        if (snapshot.hasError) {
-          return _DarkCard(
-            title: 'Сессии',
-            subtitle: 'ошибка',
-            child: _DarkError(error: '${snapshot.error}', onRetry: () {}),
-          );
-        }
-        final sessions = snapshot.data ?? const <TrackerSessionModel>[];
-        return _DarkCard(
-          title: 'Сессии',
-          subtitle: '${sessions.length} тренировок',
-          child: sessions.isEmpty
-              ? const _DarkEmpty(icon: Icons.storage_rounded, text: 'Сессии появятся после Live или сохранения GPS-записи.')
-              : ListView.builder(
-                  itemCount: sessions.length,
-                  itemBuilder: (context, index) {
-                    final s = sessions[index];
-                    final active = selectedSession?.id == s.id || (selectedSession == null && index == 0);
-                    return _DarkListTile(
-                      icon: Icons.assignment_rounded,
-                      title: s.title,
-                      subtitle: '${s.playerName ?? 'Команда'} · ${s.createdAt} · ${(s.distanceM / 1000).toStringAsFixed(2)} км · max ${s.maxSpeedKmh.toStringAsFixed(1)}',
-                      active: active,
-                      trailing: active ? 'отчёт' : 'открыть',
-                      onTap: () => onSelect(s),
-                    );
-                  },
-                ),
-        );
-      },
-    );
-  }
-}
-
-class _GpsRecordsPane extends StatelessWidget {
-  const _GpsRecordsPane({
-    required this.records,
-    required this.selectedRecord,
-    required this.pointsCount,
-    required this.onLoad,
-  });
-
-  final List<ActionTrackerRecord> records;
-  final ActionTrackerRecord? selectedRecord;
-  final int pointsCount;
-  final ValueChanged<ActionTrackerRecord> onLoad;
-
-  @override
-  Widget build(BuildContext context) {
-    return _DarkCard(
-      title: 'GPS-записи',
-      subtitle: selectedRecord == null ? '${records.length} записей' : 'Record ${selectedRecord!.fileId} · $pointsCount точек',
-      child: records.isEmpty
-          ? const _DarkEmpty(icon: Icons.download_rounded, text: 'Подключите трекер и загрузите записи.')
-          : ListView(
-              children: records
-                  .map((r) => _DarkListTile(
-                        icon: Icons.route_rounded,
-                        title: 'Record ${r.fileId}',
-                        subtitle: '${r.length} bytes${selectedRecord?.fileId == r.fileId ? ' · $pointsCount точек' : ''}',
-                        active: selectedRecord?.fileId == r.fileId,
-                        trailing: selectedRecord?.fileId == r.fileId ? 'выбрано' : 'загрузить',
-                        onTap: () => onLoad(r),
-                      ))
-                  .toList(),
-            ),
-    );
-  }
-}
-
-class _SelectedTrainingReportPane extends StatelessWidget {
-  const _SelectedTrainingReportPane({
-    required this.session,
-    required this.teamId,
-    required this.teamName,
-  });
-
-  final TrackerSessionModel? session;
-  final int teamId;
-  final String teamName;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = session;
-    if (s == null) {
-      return const _DarkCard(
-        title: 'Отчёт тренировки',
-        subtitle: 'выберите сессию слева',
-        child: _DarkEmpty(icon: Icons.analytics_rounded, text: 'Выберите тренировку в списке «Сессии», чтобы открыть сводку, локомоторную, механическую и внутреннюю нагрузку.'),
-      );
-    }
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
-      child: TrackerTrainingReportScreen(
-        key: ValueKey('training_report_${s.id}'),
-        sessionId: s.id,
-        teamId: teamId,
-        teamName: teamName,
-      ),
-    );
-  }
-}
-
 class _TD {
   // Светлый CMR-холст + светлое compact rail-меню как в Club Workspace / Team Match.
   static const bg = Color(0xFFF4F5F6);
@@ -1235,26 +1071,133 @@ class _TD {
 
 extension _SectionExt on TrackerWorkspaceSection {
   String get title => switch (this) {
-        TrackerWorkspaceSection.dashboard => 'Главная',
         TrackerWorkspaceSection.live => 'Live',
+        TrackerWorkspaceSection.analytics => 'Аналитика',
         TrackerWorkspaceSection.activity => 'Игроки',
         TrackerWorkspaceSection.sessions => 'Отчёты',
         TrackerWorkspaceSection.devices => 'Трекеры',
+        TrackerWorkspaceSection.heatmap => 'Теплокарта',
         TrackerWorkspaceSection.field => 'Поле',
+        TrackerWorkspaceSection.video => 'Видео',
         TrackerWorkspaceSection.settings => 'Пороги',
         TrackerWorkspaceSection.debug => 'Диагн.',
       };
 
   IconData get icon => switch (this) {
-        TrackerWorkspaceSection.dashboard => Icons.dashboard_customize_rounded,
         TrackerWorkspaceSection.live => Icons.radio_button_checked_rounded,
-        TrackerWorkspaceSection.activity => Icons.monitor_heart_rounded,
+        TrackerWorkspaceSection.analytics => Icons.query_stats_rounded,
+        TrackerWorkspaceSection.activity => Icons.groups_rounded,
         TrackerWorkspaceSection.sessions => Icons.table_chart_rounded,
         TrackerWorkspaceSection.devices => Icons.sensors_rounded,
+        TrackerWorkspaceSection.heatmap => Icons.local_fire_department_rounded,
         TrackerWorkspaceSection.field => Icons.map_rounded,
+        TrackerWorkspaceSection.video => Icons.video_library_rounded,
         TrackerWorkspaceSection.settings => Icons.tune_rounded,
         TrackerWorkspaceSection.debug => Icons.bug_report_rounded,
       };
+
+  bool get showInMainMenu => switch (this) {
+        TrackerWorkspaceSection.live => true,
+        TrackerWorkspaceSection.activity => true,
+        TrackerWorkspaceSection.sessions => true,
+        TrackerWorkspaceSection.devices => true,
+        TrackerWorkspaceSection.field => true,
+        TrackerWorkspaceSection.settings => true,
+        TrackerWorkspaceSection.debug => true,
+        TrackerWorkspaceSection.analytics => false,
+        TrackerWorkspaceSection.heatmap => false,
+        TrackerWorkspaceSection.video => false,
+      };
+}
+
+class _MobileTrackerNav extends StatelessWidget {
+  const _MobileTrackerNav({
+    required this.selected,
+    required this.onSelect,
+    required this.onBack,
+  });
+
+  final TrackerWorkspaceSection selected;
+  final ValueChanged<TrackerWorkspaceSection> onSelect;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = TrackerWorkspaceSection.values.where((e) => e.showInMainMenu).toList(growable: false);
+    return Container(
+      height: 72,
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
+      color: _TD.bg,
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: _TD.card,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: _TD.border),
+              ),
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+                scrollDirection: Axis.horizontal,
+                itemCount: items.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 6),
+                itemBuilder: (context, i) {
+                  final item = items[i];
+                  final active = item == selected;
+                  return InkWell(
+                    onTap: () => onSelect(item),
+                    borderRadius: BorderRadius.circular(12),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 160),
+                      width: 74,
+                      decoration: BoxDecoration(
+                        color: active ? _TD.graphite : _TD.card2,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: active ? _TD.graphite : _TD.border),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(item.icon, size: 18, color: active ? Colors.white : _TD.text),
+                          const SizedBox(height: 3),
+                          Text(
+                            item.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: active ? Colors.white : _TD.muted,
+                              fontSize: 8.6,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: onBack,
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              width: 58,
+              height: 58,
+              decoration: BoxDecoration(
+                color: _TD.card,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: _TD.border),
+              ),
+              child: const Icon(Icons.arrow_back_rounded, color: _TD.text),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _DarkRail extends StatelessWidget {
@@ -1270,30 +1213,52 @@ class _DarkRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = TrackerWorkspaceSection.values;
+    final items = TrackerWorkspaceSection.values.where((e) => e.showInMainMenu).toList(growable: false);
     return Container(
-      width: 74,
-      padding: const EdgeInsets.fromLTRB(6, 6, 4, 6),
+      width: 82,
+      padding: const EdgeInsets.fromLTRB(8, 8, 6, 8),
+      color: _TD.bg,
       child: Container(
         decoration: BoxDecoration(
-          color: _TD.rail,
-          borderRadius: BorderRadius.circular(14),
+          color: _TD.card,
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(color: _TD.border),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(.045),
-              blurRadius: 18,
-              offset: const Offset(0, 8),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
             ),
           ],
         ),
         child: Column(
           children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: _TD.graphite,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Center(
+                child: Text(
+                  'ST',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -.5,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
             Expanded(
               child: ListView.separated(
-                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
                 itemCount: items.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 5),
+                separatorBuilder: (_, __) => const SizedBox(height: 6),
                 itemBuilder: (context, i) {
                   final item = items[i];
                   return _RailButton(
@@ -1305,12 +1270,8 @@ class _DarkRail extends StatelessWidget {
                 },
               ),
             ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 6),
-              child: Divider(height: 10, thickness: 1, color: _TD.border),
-            ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+              padding: const EdgeInsets.fromLTRB(7, 6, 7, 10),
               child: _RailButton(
                 icon: Icons.arrow_back_rounded,
                 label: 'Назад',
@@ -1356,8 +1317,8 @@ class _RailButtonState extends State<_RailButton> {
             onTap: widget.onTap,
             borderRadius: BorderRadius.circular(11),
             child: Container(
-              height: 50,
-              padding: const EdgeInsets.fromLTRB(4, 5, 4, 4),
+              height: 54,
+              padding: const EdgeInsets.fromLTRB(4, 6, 4, 5),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(11),
                 border: Border.all(color: widget.active ? _TD.graphite : Colors.transparent),
@@ -1389,7 +1350,7 @@ class _RailButtonState extends State<_RailButton> {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: subFg,
-                            fontSize: 8.3,
+                            fontSize: 8.6,
                             fontWeight: FontWeight.w900,
                             letterSpacing: -.15,
                           ),
@@ -1408,30 +1369,80 @@ class _RailButtonState extends State<_RailButton> {
 }
 
 class _TopBar extends StatelessWidget {
-  const _TopBar({required this.teamName, required this.clubName, required this.selectedPlayer, required this.selectedSection, required this.loading, required this.onRefresh});
+  const _TopBar({
+    required this.teamName,
+    required this.clubName,
+    required this.selectedPlayer,
+    required this.selectedSection,
+    required this.loading,
+    required this.onRefresh,
+    required this.onBack,
+  });
+
   final String teamName;
   final String clubName;
   final String selectedPlayer;
   final TrackerWorkspaceSection selectedSection;
   final bool loading;
   final VoidCallback onRefresh;
+  final VoidCallback onBack;
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 54,
-      margin: const EdgeInsets.fromLTRB(0, 6, 6, 0),
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(color: _TD.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: _TD.border.withOpacity(.85))),
-      child: Row(children: [
-        Container(width: 34, height: 34, decoration: BoxDecoration(color: _TD.card2, borderRadius: BorderRadius.circular(9)), child: Icon(selectedSection.icon, color: _TD.green, size: 19)),
-        const SizedBox(width: 10),
-        Expanded(child: Text('Спортотека Трекинг · ${selectedSection.title}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w900, fontSize: 16))),
-        _TopPill(label: clubName, value: teamName),
-        const SizedBox(width: 8),
-        _TopPill(label: 'Игрок', value: selectedPlayer),
-        const SizedBox(width: 8),
-        IconButton(onPressed: loading ? null : onRefresh, icon: loading ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.refresh_rounded, color: _TD.text)),
-      ]),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 720;
+        return Container(
+          height: compact ? 44 : 48,
+          margin: EdgeInsets.fromLTRB(compact ? 8 : 0, compact ? 0 : 8, 8, 0),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: _TD.card,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _TD.border.withOpacity(.9)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: _TD.card2,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Icon(selectedSection.icon, color: _TD.green, size: 17),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  compact ? selectedSection.title : 'SPORTOTEKA TRACKER PRO · ${selectedSection.title}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _TD.text,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 15,
+                    letterSpacing: -.2,
+                  ),
+                ),
+              ),
+              if (!compact) ...[
+                _TopPill(label: 'Команда', value: teamName),
+                const SizedBox(width: 8),
+                _TopPill(label: 'Игрок', value: selectedPlayer),
+                const SizedBox(width: 6),
+              ],
+              IconButton(
+                tooltip: 'Обновить',
+                onPressed: loading ? null : onRefresh,
+                icon: loading
+                    ? const SizedBox(width: 17, height: 17, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.refresh_rounded, color: _TD.text, size: 20),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -1967,128 +1978,6 @@ String? _normalizeAvatarUrl(String? raw) {
 }
 
 
-class _DashboardKpiData {
-  const _DashboardKpiData({required this.icon, required this.title, required this.value, required this.subtitle});
-  final IconData icon;
-  final String title;
-  final String value;
-  final String subtitle;
-}
-
-class _DashboardKpiStrip extends StatelessWidget {
-  const _DashboardKpiStrip({required this.items});
-  final List<_DashboardKpiData> items;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView.separated(
-      scrollDirection: Axis.horizontal,
-      itemCount: items.length,
-      separatorBuilder: (_, __) => const SizedBox(width: 10),
-      itemBuilder: (context, index) {
-        final item = items[index];
-        return Container(
-          width: 176,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: _TD.card,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: _TD.border),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(color: _TD.green.withOpacity(.10), borderRadius: BorderRadius.circular(9)),
-                    child: Icon(item.icon, color: _TD.green, size: 18),
-                  ),
-                  const Spacer(),
-                  Text(item.subtitle, style: const TextStyle(color: _TD.dim, fontSize: 9.5, fontWeight: FontWeight.w800)),
-                ],
-              ),
-              const Spacer(),
-              Text(item.value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -.4)),
-              const SizedBox(height: 2),
-              Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontSize: 11, fontWeight: FontWeight.w800)),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _ReadinessRow extends StatelessWidget {
-  const _ReadinessRow({required this.title, required this.text, required this.ok});
-  final String title;
-  final String text;
-  final bool ok;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: ok ? _TD.green.withOpacity(.08) : _TD.card2, borderRadius: BorderRadius.circular(10), border: Border.all(color: ok ? _TD.green.withOpacity(.35) : _TD.border)),
-      child: Row(
-        children: [
-          Icon(ok ? Icons.check_circle_rounded : Icons.warning_amber_rounded, color: ok ? _TD.green : _TD.orange, size: 19),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w900, fontSize: 12)),
-              Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontWeight: FontWeight.w700, fontSize: 10.5)),
-            ]),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ScenarioButton extends StatelessWidget {
-  const _ScenarioButton({required this.step, required this.title, required this.text, required this.icon, required this.onTap});
-  final String step;
-  final String title;
-  final String text;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: _TD.card2,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.all(11),
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: _TD.border)),
-          child: Row(
-            children: [
-              CircleAvatar(radius: 15, backgroundColor: _TD.graphite, child: Text(step, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900))),
-              const SizedBox(width: 10),
-              Icon(icon, color: _TD.green, size: 19),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w900, fontSize: 12.2)),
-                  Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontWeight: FontWeight.w700, fontSize: 10.2)),
-                ]),
-              ),
-              const Icon(Icons.chevron_right_rounded, color: _TD.dim),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _DarkEmpty extends StatelessWidget {
   const _DarkEmpty({required this.icon, required this.text});
   final IconData icon;
@@ -2128,6 +2017,69 @@ class _PresetDarkButton extends StatelessWidget {
   Widget build(BuildContext context) => _DarkListTile(icon: Icons.tune_rounded, title: title, subtitle: subtitle, trailing: 'применить', onTap: onTap);
 }
 
+class _CalibrationStatusBanner extends StatelessWidget {
+  const _CalibrationStatusBanner({
+    required this.text,
+    required this.done,
+    required this.capturing,
+  });
+
+  final String text;
+  final bool done;
+  final bool capturing;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = done
+        ? _TD.green
+        : capturing
+            ? const Color(0xFF2563EB)
+            : _TD.blue;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: accent.withOpacity(.09),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: accent.withOpacity(.28)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: accent.withOpacity(.13),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: capturing
+                ? const Padding(
+                    padding: EdgeInsets.all(9),
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(done ? Icons.check_circle_rounded : Icons.flag_rounded, color: accent, size: 19),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: accent,
+                fontSize: 12.5,
+                height: 1.2,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _DarkHint extends StatelessWidget {
   const _DarkHint({required this.text});
   final String text;
@@ -2137,101 +2089,145 @@ class _DarkHint extends StatelessWidget {
   }
 }
 
-class _DarkCornerChip extends StatelessWidget {
+class _DarkCornerChip extends StatefulWidget {
   const _DarkCornerChip({
     required this.label,
     required this.value,
     required this.ready,
-    this.active = false,
-    this.onTap,
+    required this.active,
+    required this.capturing,
+    required this.onTap,
   });
 
   final String label;
   final String value;
   final bool ready;
   final bool active;
-  final VoidCallback? onTap;
+  final bool capturing;
+  final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
-    final color = ready ? _TD.green : active ? const Color(0xFF2563EB) : _TD.dim;
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Container(
-        width: 230,
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: ready
-              ? _TD.green.withOpacity(.10)
-              : active
-                  ? const Color(0xFF2563EB).withOpacity(.10)
-                  : _TD.card2,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: ready
-                ? _TD.green
-                : active
-                    ? const Color(0xFF2563EB)
-                    : _TD.border,
-            width: ready || active ? 2 : 1,
-          ),
-        ),
-        child: Row(children: [
-          CircleAvatar(
-            radius: 15,
-            backgroundColor: color,
-            child: ready
-                ? const Icon(Icons.check_rounded, color: Colors.white, size: 15)
-                : Text(label, style: const TextStyle(color: _TD.bg, fontSize: 11, fontWeight: FontWeight.w900)),
-          ),
-          const SizedBox(width: 10),
-          Expanded(child: Text(value, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontSize: 10, fontWeight: FontWeight.w800))),
-        ]),
-      ),
-    );
-  }
+  State<_DarkCornerChip> createState() => _DarkCornerChipState();
 }
 
-class _CalibrationStatusBanner extends StatelessWidget {
-  const _CalibrationStatusBanner({
-    required this.nextLabel,
-    required this.done,
-    required this.pointCount,
-  });
-
-  final String nextLabel;
-  final bool done;
-  final int pointCount;
+class _DarkCornerChipState extends State<_DarkCornerChip> {
+  bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: done ? _TD.green.withOpacity(.10) : const Color(0xFF2563EB).withOpacity(.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: done ? _TD.green.withOpacity(.35) : const Color(0xFF2563EB).withOpacity(.22)),
-      ),
-      child: Row(
-        children: [
-          Icon(done ? Icons.check_circle_rounded : Icons.gps_fixed_rounded, color: done ? _TD.green : const Color(0xFF2563EB)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              done
-                  ? 'Все 4 угла получены. Нажмите «Сохранить».'
-                  : 'Следующий угол: $nextLabel · перейдите в угол поля и нажмите GPS $nextLabel',
-              style: TextStyle(
-                color: done ? _TD.green : _TD.text,
-                fontWeight: FontWeight.w900,
-                fontSize: 12,
+    final accent = widget.ready
+        ? _TD.green
+        : widget.active
+            ? const Color(0xFF2563EB)
+            : _TD.dim;
+    final bg = widget.ready
+        ? _TD.green.withOpacity(.10)
+        : widget.active
+            ? const Color(0xFF2563EB).withOpacity(.10)
+            : _TD.card2;
+    final border = widget.ready || widget.active ? accent : _TD.border;
+    final statusText = widget.ready
+        ? 'сохранена'
+        : widget.active
+            ? (widget.capturing ? 'читаю GPS' : 'активна')
+            : 'не задана';
+
+    return Listener(
+      onPointerDown: (_) => setState(() => _pressed = true),
+      onPointerUp: (_) => setState(() => _pressed = false),
+      onPointerCancel: (_) => setState(() => _pressed = false),
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 110),
+        scale: _pressed ? .97 : 1,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: widget.onTap,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              width: 230,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: border, width: widget.ready || widget.active ? 1.8 : 1),
+                boxShadow: widget.active
+                    ? [
+                        BoxShadow(
+                          color: accent.withOpacity(.13),
+                          blurRadius: 14,
+                          offset: const Offset(0, 5),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: accent,
+                    ),
+                    child: widget.capturing
+                        ? const SizedBox(
+                            width: 15,
+                            height: 15,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : widget.ready
+                            ? const Icon(Icons.check_rounded, color: Colors.white, size: 18)
+                            : Text(
+                                widget.label,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Точка ${widget.label} · $statusText',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: accent,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          widget.capturing ? 'Читаю GPS...' : widget.value,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _TD.muted,
+                            fontSize: 10,
+                            height: 1.15,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-          Text('$pointCount/4', style: const TextStyle(color: _TD.muted, fontWeight: FontWeight.w900)),
-        ],
+        ),
       ),
     );
   }
@@ -2273,20 +2269,114 @@ class _DarkHeatmapPainter extends CustomPainter {
   }
 
   void _drawPitch(Canvas canvas, Rect pitch) {
-    canvas.drawRRect(RRect.fromRectAndRadius(pitch, const Radius.circular(8)), Paint()..color = const Color(0xFF0A7F39));
+    final pitchRRect = RRect.fromRectAndRadius(pitch, const Radius.circular(14));
+
+    // Мягкое поле в стиле CMR/профессионального трекера: не кислотно-зелёное,
+    // а приглушённое, чтобы хорошо читались GPS-точки, теплокарта и подписи.
+    final grass = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Color(0xFF6F9275),
+          Color(0xFF55785D),
+          Color(0xFF496E53),
+        ],
+      ).createShader(pitch);
+    canvas.drawRRect(pitchRRect, grass);
+
+    final stripeW = pitch.width / 12;
     for (var i = 0; i < 12; i++) {
-      canvas.drawRect(Rect.fromLTWH(pitch.left + pitch.width * i / 12, pitch.top, pitch.width / 12, pitch.height), Paint()..color = i.isEven ? Colors.white.withOpacity(.04) : Colors.black.withOpacity(.05));
+      canvas.drawRect(
+        Rect.fromLTWH(pitch.left + stripeW * i, pitch.top, stripeW, pitch.height),
+        Paint()
+          ..color = i.isEven
+              ? Colors.white.withOpacity(.075)
+              : Colors.black.withOpacity(.045),
+      );
     }
+
     final inner = pitch.deflate(12);
     final line = Paint()
-      ..color = Colors.white.withOpacity(.85)
+      ..color = Colors.white.withOpacity(.78)
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
-    canvas.drawRect(inner, line);
+    final thin = Paint()
+      ..color = Colors.white.withOpacity(.55)
+      ..strokeWidth = 1.4
+      ..style = PaintingStyle.stroke;
+
+    canvas.drawRRect(RRect.fromRectAndRadius(inner, const Radius.circular(8)), line);
     canvas.drawLine(Offset(inner.center.dx, inner.top), Offset(inner.center.dx, inner.bottom), line);
     canvas.drawCircle(inner.center, inner.width * .085, line);
-    canvas.drawRect(Rect.fromLTWH(inner.left, inner.center.dy - inner.height * .22, inner.width * .16, inner.height * .44), line);
-    canvas.drawRect(Rect.fromLTWH(inner.right - inner.width * .16, inner.center.dy - inner.height * .22, inner.width * .16, inner.height * .44), line);
+    canvas.drawCircle(inner.center, 2.6, Paint()..color = Colors.white.withOpacity(.82));
+
+    final penaltyW = inner.width * .165;
+    final penaltyH = inner.height * .44;
+    final goalW = inner.width * .055;
+    final goalH = inner.height * .20;
+    canvas.drawRect(Rect.fromLTWH(inner.left, inner.center.dy - penaltyH / 2, penaltyW, penaltyH), line);
+    canvas.drawRect(Rect.fromLTWH(inner.right - penaltyW, inner.center.dy - penaltyH / 2, penaltyW, penaltyH), line);
+    canvas.drawRect(Rect.fromLTWH(inner.left, inner.center.dy - goalH / 2, goalW, goalH), thin);
+    canvas.drawRect(Rect.fromLTWH(inner.right - goalW, inner.center.dy - goalH / 2, goalW, goalH), thin);
+
+    // Ворота снаружи поля — как на референсе.
+    final outerGoalDepth = pitch.width * .016;
+    final outerGoalH = inner.height * .18;
+    canvas.drawLine(
+      Offset(inner.left, inner.center.dy - outerGoalH / 2),
+      Offset(pitch.left, inner.center.dy - outerGoalH / 2),
+      thin,
+    );
+    canvas.drawLine(
+      Offset(inner.left, inner.center.dy + outerGoalH / 2),
+      Offset(pitch.left, inner.center.dy + outerGoalH / 2),
+      thin,
+    );
+    canvas.drawLine(
+      Offset(pitch.left, inner.center.dy - outerGoalH / 2),
+      Offset(pitch.left, inner.center.dy + outerGoalH / 2),
+      thin,
+    );
+    canvas.drawLine(
+      Offset(inner.right, inner.center.dy - outerGoalH / 2),
+      Offset(pitch.right, inner.center.dy - outerGoalH / 2),
+      thin,
+    );
+    canvas.drawLine(
+      Offset(inner.right, inner.center.dy + outerGoalH / 2),
+      Offset(pitch.right, inner.center.dy + outerGoalH / 2),
+      thin,
+    );
+    canvas.drawLine(
+      Offset(pitch.right, inner.center.dy - outerGoalH / 2),
+      Offset(pitch.right, inner.center.dy + outerGoalH / 2),
+      thin,
+    );
+
+    // Угловые дуги.
+    final r = inner.height * .035;
+    canvas.drawArc(Rect.fromCircle(center: inner.topLeft, radius: r), 0, math.pi / 2, false, thin);
+    canvas.drawArc(Rect.fromCircle(center: inner.topRight, radius: r), math.pi / 2, math.pi / 2, false, thin);
+    canvas.drawArc(Rect.fromCircle(center: inner.bottomRight, radius: r), math.pi, math.pi / 2, false, thin);
+    canvas.drawArc(Rect.fromCircle(center: inner.bottomLeft, radius: r), -math.pi / 2, math.pi / 2, false, thin);
+
+    // Технические зоны сверху.
+    final bench = Paint()..color = Colors.black.withOpacity(.18);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(inner.left + inner.width * .31, pitch.top - pitch.height * .025, inner.width * .14, pitch.height * .018),
+        const Radius.circular(4),
+      ),
+      bench,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(inner.left + inner.width * .55, pitch.top - pitch.height * .025, inner.width * .14, pitch.height * .018),
+        const Radius.circular(4),
+      ),
+      bench,
+    );
   }
 
   void _drawText(Canvas canvas, Size size, String text) {
@@ -2299,13 +2389,31 @@ class _DarkHeatmapPainter extends CustomPainter {
 }
 
 class _DarkCalibrationPainter extends CustomPainter {
-  const _DarkCalibrationPainter({required this.corners, this.activeIndex = -1});
+  const _DarkCalibrationPainter({
+    required this.corners,
+    this.activeIndex = -1,
+    this.capturing = false,
+  });
 
   final List<ActionTrackerGpsPoint> corners;
   final int activeIndex;
+  final bool capturing;
 
   @override
   void paint(Canvas canvas, Size size) {
+    final bg = Offset.zero & size;
+    canvas.drawRect(bg, Paint()..color = const Color(0xFFF7F8F9));
+    final gridPaint = Paint()
+      ..color = const Color(0xFFE6EAEE)
+      ..strokeWidth = 1;
+    const step = 36.0;
+    for (double x = 0; x <= size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+    }
+    for (double y = 0; y <= size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
     final area = (Offset.zero & size).deflate(18);
     const aspect = 105 / 68;
     var w = area.width;
@@ -2318,36 +2426,81 @@ class _DarkCalibrationPainter extends CustomPainter {
     _DarkHeatmapPainter(points: const [])._drawPitch(canvas, pitch);
 
     final cornersPos = [
-      pitch.topLeft + const Offset(18, 18),
-      pitch.topRight + const Offset(-18, 18),
-      pitch.bottomRight + const Offset(-18, -18),
-      pitch.bottomLeft + const Offset(18, -18),
+      pitch.topLeft + const Offset(22, 22),
+      pitch.topRight + const Offset(-22, 22),
+      pitch.bottomRight + const Offset(-22, -22),
+      pitch.bottomLeft + const Offset(22, -22),
     ];
 
     for (var i = 0; i < 4; i++) {
       final ready = corners.length > i;
-      final active = i == activeIndex;
+      final active = !ready && activeIndex == i;
       final p = cornersPos[i];
-      final color = ready ? _TD.green : active ? const Color(0xFF2563EB) : _TD.dim;
-      canvas.drawCircle(p, active ? 19 : 16, Paint()..color = color);
-      if (ready) {
-        final check = TextPainter(
-          text: const TextSpan(text: '✓', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
-          textDirection: TextDirection.ltr,
-        )..layout();
-        check.paint(canvas, p - Offset(check.width / 2, check.height / 2));
-      } else {
-        final tp = TextPainter(
-          text: TextSpan(text: ['A', 'B', 'C', 'D'][i], style: const TextStyle(color: _TD.bg, fontWeight: FontWeight.w900)),
-          textDirection: TextDirection.ltr,
-        )..layout();
-        tp.paint(canvas, p - Offset(tp.width / 2, tp.height / 2));
+      final color = ready
+          ? _TD.green
+          : active
+              ? const Color(0xFF2563EB)
+              : _TD.dim;
+      final radius = active ? 20.0 : 17.0;
+
+      if (active) {
+        canvas.drawCircle(
+          p,
+          capturing ? 28 : 25,
+          Paint()..color = color.withOpacity(.14),
+        );
       }
+
+      canvas.drawCircle(
+        p,
+        radius,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.fill,
+      );
+      canvas.drawCircle(
+        p,
+        radius,
+        Paint()
+          ..color = Colors.white.withOpacity(.95)
+          ..strokeWidth = active ? 3 : 2
+          ..style = PaintingStyle.stroke,
+      );
+
+      final text = ready ? '✓' : ['A', 'B', 'C', 'D'][i];
+      final tp = TextPainter(
+        text: TextSpan(
+          text: text,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w900,
+            fontSize: 14,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, p - Offset(tp.width / 2, tp.height / 2));
+
+      final label = TextPainter(
+        text: TextSpan(
+          text: ['A', 'B', 'C', 'D'][i],
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.w900,
+            fontSize: 11,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      label.paint(canvas, Offset(p.dx - label.width / 2, p.dy + radius + 4));
     }
   }
 
   @override
-  bool shouldRepaint(covariant _DarkCalibrationPainter oldDelegate) => true;
+  bool shouldRepaint(covariant _DarkCalibrationPainter oldDelegate) =>
+      oldDelegate.corners.length != corners.length ||
+      oldDelegate.activeIndex != activeIndex ||
+      oldDelegate.capturing != capturing;
 }
 
 class _DarkTimelinePainter extends CustomPainter {
