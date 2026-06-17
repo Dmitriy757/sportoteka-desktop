@@ -22,6 +22,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Sportoteka использует Bluetooth для поиска и подключения спортивных GPS-трекеров.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>Sportoteka использует Bluetooth для подключения спортивных GPS-трекеров.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>$(PRODUCT_COPYRIGHT)</string>
 	<key>NSMainNibFile</key>

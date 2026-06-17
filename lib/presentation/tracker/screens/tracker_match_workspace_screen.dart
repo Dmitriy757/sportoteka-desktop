@@ -25,6 +25,7 @@ class TrackerMatchWorkspaceScreen extends StatefulWidget {
     required this.teamName,
     required this.userId,
     this.initialPlayers = const [],
+    this.embeddedInClubWorkspace = false,
   });
 
   final int clubId;
@@ -33,6 +34,11 @@ class TrackerMatchWorkspaceScreen extends StatefulWidget {
   final String teamName;
   final int userId;
   final List<Map<String, dynamic>> initialPlayers;
+
+  /// true — экран трекера открыт внутри Club Workspace.
+  /// В этом режиме внешний Windows-подобный taskbar клуба остаётся на месте,
+  /// а разделы трекера показываются как вкладки отдельной «программы».
+  final bool embeddedInClubWorkspace;
 
   @override
   State<TrackerMatchWorkspaceScreen> createState() => _TrackerMatchWorkspaceScreenState();
@@ -67,6 +73,9 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
   bool _connecting = false;
   bool _savingRecord = false;
   bool _liveRunning = false;
+  bool _trackerWindowMinimized = false;
+  bool _trackerWindowMaximized = false;
+  bool _trackerSideCollapsed = false;
 
   @override
   void initState() {
@@ -194,13 +203,28 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
     return (battery.voltage * 10).round().clamp(0, 100);
   }
 
+  String _friendlyBleError(Object error) {
+    final raw = '$error';
+    final lower = raw.toLowerCase();
+    if (raw.contains('CBManagerStateUnsupported')) {
+      return 'Bluetooth недоступен в текущей среде. На macOS запустите именно desktop-приложение, включите Bluetooth и проверьте разрешения для приложения.';
+    }
+    if (lower.contains('bluetooth must be turned on')) {
+      return 'Bluetooth выключен. Включите Bluetooth на Mac и повторите поиск трекера.';
+    }
+    if (lower.contains('permission') || lower.contains('unauthorized')) {
+      return 'Нет разрешения на Bluetooth. Откройте Системные настройки macOS → Конфиденциальность и безопасность → Bluetooth и разрешите доступ приложению.';
+    }
+    return raw;
+  }
+
   Future<void> _scan() async {
     setState(() => _scanning = true);
     try {
       await TrackerPermissions.ensureBlePermissions();
       await _ble.scan();
     } catch (e) {
-      _toast('Bluetooth', '$e');
+      _toast('Bluetooth', _friendlyBleError(e));
     } finally {
       if (mounted) setState(() => _scanning = false);
     }
@@ -397,11 +421,11 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
           title: const Text(
             'Live-сессия активна',
-            style: TextStyle(fontWeight: FontWeight.w900),
+            style: TextStyle(fontWeight: FontWeight.w500),
           ),
           content: const Text(
             'Вы точно хотите выйти из окна трекера? Локальное чтение GPS/BLE будет остановлено, поэтому лучше сначала остановить Live, если тренировка завершена.',
-            style: TextStyle(height: 1.35, fontWeight: FontWeight.w600),
+            style: TextStyle(height: 1.35, fontWeight: FontWeight.w500),
           ),
           actions: [
             TextButton(
@@ -437,15 +461,31 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
       title,
       message,
       snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: const Color(0xFF111827),
-      colorText: Colors.white,
+      backgroundColor: Colors.white,
+      colorText: _TD.text,
+      borderColor: _TD.softLine,
+      borderWidth: 1,
+      icon: Icon(
+        title.toLowerCase().contains('bluetooth')
+            ? Icons.bluetooth_disabled_rounded
+            : Icons.info_outline_rounded,
+        color: _TD.graphiteSoft,
+        size: 18,
+      ),
       margin: const EdgeInsets.all(14),
-      duration: const Duration(seconds: 3),
+      duration: const Duration(seconds: 4),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    if (widget.embeddedInClubWorkspace) {
+      return WillPopScope(
+        onWillPop: () async => false,
+        child: _buildEmbeddedTrackerProgram(),
+      );
+    }
+
     return WillPopScope(
       onWillPop: _confirmExitTrackerIfNeeded,
       child: Scaffold(
@@ -473,7 +513,7 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
                     Expanded(
                       child: Padding(
                         padding: _section == TrackerWorkspaceSection.live
-                            ? const EdgeInsets.fromLTRB(0, 0, 6, 6)
+                            ? EdgeInsets.zero
                             : const EdgeInsets.fromLTRB(0, 6, 6, 6),
                         child: _buildSection(),
                       ),
@@ -485,6 +525,78 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildEmbeddedTrackerProgram() {
+    if (_trackerWindowMinimized) {
+      return _TrackerProgramCollapsedBar(
+        clubName: widget.clubName,
+        teamName: widget.teamName,
+        liveRunning: _liveRunning,
+        connected: _connected != null,
+        onRestore: () => setState(() => _trackerWindowMinimized = false),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compactNav = constraints.maxWidth < 1180;
+        final mobile = constraints.maxWidth < 720;
+        // На ПК меню трекера теперь открыто по умолчанию и не схлопывается
+        // автоматически из-за ширины окна. На телефоне оставляем компактную
+        // иконную панель, чтобы не съедать рабочую область.
+        final forceIconNav = mobile || _trackerSideCollapsed;
+        final navWidth = mobile ? 48.0 : (forceIconNav ? 54.0 : 156.0);
+
+        final window = Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: _TD.unifiedWindow(radius: _trackerWindowMaximized ? 16 : 24),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                width: navWidth,
+                child: _TrackerProgramSidePanel(
+                  clubName: widget.clubName,
+                  teamName: widget.teamName,
+                  selectedPlayer: _selectedPlayer?.name ?? 'Игрок не выбран',
+                  selected: _section,
+                  loading: _loading,
+                  liveRunning: _liveRunning,
+                  connected: _connected != null,
+                  compact: forceIconNav,
+                  collapsed: forceIconNav,
+                  onSelect: (section) => setState(() => _section = section),
+                  onRefresh: _loadServerData,
+                  onMinimize: () => setState(() => _trackerWindowMinimized = true),
+                  onToggleCollapsed: (compactNav || mobile) ? null : () => setState(() => _trackerSideCollapsed = !_trackerSideCollapsed),
+                ),
+              ),
+              Container(width: 1, color: _TD.softLine),
+              Expanded(child: _buildSection()),
+            ],
+          ),
+        );
+
+        return Container(
+          decoration: _TD.workspaceBg(),
+          padding: EdgeInsets.all(_trackerWindowMaximized ? 0 : 10),
+          child: Stack(
+            children: [
+              Positioned.fill(child: window),
+              Positioned(
+                right: _trackerWindowMaximized ? 8 : 18,
+                bottom: _trackerWindowMaximized ? 8 : 18,
+                child: _TrackerWindowCornerButton(
+                  maximized: _trackerWindowMaximized,
+                  onTap: () => setState(() => _trackerWindowMaximized = !_trackerWindowMaximized),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -648,9 +760,9 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
                           child: Row(
                             children: [
                               Expanded(flex: 3, child: left),
-                              const SizedBox(width: 10),
-                              Expanded(flex: 5, child: center),
-                              const SizedBox(width: 10),
+                              const _WorkspacePaneDivider.vertical(),
+                              Expanded(flex: 6, child: center),
+                              const _WorkspacePaneDivider.vertical(),
                               Expanded(flex: 3, child: right),
                             ],
                           ),
@@ -691,6 +803,8 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
       ble: _ble,
       savedDevices: _savedDevices,
       batteryPercent: _batteryPercent,
+      scanningBluetooth: _scanning,
+      onScanBluetooth: _scanning ? null : _scan,
       onManageTrackers: () => setState(() => _section = TrackerWorkspaceSection.devices),
       onLiveRunningChanged: (running) {
         if (!mounted || _liveRunning == running) return;
@@ -788,9 +902,9 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
 
           return Row(children: [
             Expanded(flex: 3, child: sessionsList),
-            const SizedBox(width: 10),
+            const _WorkspacePaneDivider.vertical(),
             Expanded(flex: 3, child: gpsRecords),
-            const SizedBox(width: 10),
+            const _WorkspacePaneDivider.vertical(),
             Expanded(flex: 8, child: report),
           ]);
         },
@@ -832,7 +946,7 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
             },
           ),
         )),
-        const SizedBox(width: 10),
+        const _WorkspacePaneDivider.vertical(),
         Expanded(child: _DarkCard(
           title: 'Сохранённые трекеры',
           subtitle: '${_savedDevices.length} датчиков',
@@ -840,7 +954,7 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
               ? const _DarkEmpty(icon: Icons.sensors_off_rounded, text: 'После подключения трекер появится здесь.')
               : ListView(children: _savedDevices.map((d) => _SavedDeviceDarkTile(device: d, players: _players, onBind: (p) => _bindSavedDevice(d, p))).toList()),
         )),
-        const SizedBox(width: 10),
+        const _WorkspacePaneDivider.vertical(),
         Expanded(child: _DarkCard(
           title: 'Привязка состава',
           subtitle: '${_players.length} игроков',
@@ -955,7 +1069,7 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
             ]),
           ),
         ),
-        const SizedBox(width: 10),
+        const _WorkspacePaneDivider.vertical(),
         Expanded(
           flex: 8,
           child: _DarkCard(
@@ -1041,7 +1155,7 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
               _DarkMetricTile(icon: Icons.timer_rounded, title: 'Sprint time', value: '${settings.sprintTimeSec.toStringAsFixed(1)} s', subtitle: 'minimum'),
               _DarkMetricTile(icon: Icons.compare_arrows_rounded, title: 'Ускор.', value: '${settings.accelerationRuleMps2.toStringAsFixed(1)} m/s²', subtitle: 'IMA'),
             ]))),
-            const SizedBox(width: 10),
+            const _WorkspacePaneDivider.vertical(),
             Expanded(child: _DarkCard(title: 'Профили', subtitle: 'быстрое применение', child: Column(children: [
               _PresetDarkButton(title: 'U13 / Academy', subtitle: 'мягкие зоны для детского футбола', onTap: () => _saveSettingsPreset(settings.copyWith(preset: 'u13', jogRuleMps: 1.2, mediumRuleMps: 3.0, highRuleMps: 4.0, sprintRuleMps: 5.5, accelerationRuleMps2: 1.8))),
               _PresetDarkButton(title: 'U17 / Semi-pro', subtitle: 'усиленные зоны HIR/VHIR', onTap: () => _saveSettingsPreset(settings.copyWith(preset: 'u17', jogRuleMps: 1.5, mediumRuleMps: 3.5, highRuleMps: 5.0, sprintRuleMps: 6.4, accelerationRuleMps2: 2.0))),
@@ -1066,8 +1180,8 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
         _DarkActionButton(icon: Icons.refresh_rounded, label: 'Обновить', primary: true, onTap: _loadServerData),
       ]),
       child: Row(children: [
-        Expanded(flex: 8, child: _DarkCard(title: 'BLE-логи', subtitle: '${_logs.length} lines', child: _logs.isEmpty ? const _DarkEmpty(icon: Icons.terminal_rounded, text: 'Логи появятся после поиска, подключения и Live.') : ListView.builder(itemCount: _logs.length, itemBuilder: (_, i) => Padding(padding: const EdgeInsets.only(bottom: 5), child: Text(_logs[i], style: const TextStyle(color: _TD.muted, fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.w700)))))),
-        const SizedBox(width: 10),
+        Expanded(flex: 8, child: _DarkCard(title: 'BLE-логи', subtitle: '${_logs.length} lines', child: _logs.isEmpty ? const _DarkEmpty(icon: Icons.terminal_rounded, text: 'Логи появятся после поиска, подключения и Live.') : ListView.builder(itemCount: _logs.length, itemBuilder: (_, i) => Padding(padding: const EdgeInsets.only(bottom: 5), child: Text(_logs[i], style: const TextStyle(color: _TD.muted, fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.w500)))))),
+        const _WorkspacePaneDivider.vertical(),
         Expanded(flex: 4, child: _DarkCard(title: 'Состояние', subtitle: 'быстрая диагностика', child: Column(children: [
           _DarkMetricTile(icon: Icons.bluetooth_rounded, title: 'BLE', value: _ble.connectedInfo?.name ?? 'off', subtitle: _ble.connectedInfo?.id ?? 'не подключён'),
           const SizedBox(height: 8),
@@ -1206,32 +1320,101 @@ class _SelectedTrainingReportPane extends StatelessWidget {
         sessionId: s.id,
         teamId: teamId,
         teamName: teamName,
+        embedded: true,
       ),
     );
   }
 }
 
 class _TD {
-  // Светлый CMR-холст + светлое compact rail-меню как в Club Workspace / Team Match.
-  static const bg = Color(0xFFF4F5F6);
+  // Та же светлая CMR / Windows 11 схема, что в CMR Team Matches.
+  static const bg = Color(0xFFF6F7F9);
   static const rail = Color(0xFFFFFFFF);
   static const panel = Color(0xFFFFFFFF);
+  static const glass = Color(0xF8FFFFFF);
   static const card = Color(0xFFFFFFFF);
-  static const card2 = Color(0xFFF8F9FA);
-  static const border = Color(0xFFE5E7EB);
+  static const card2 = Color(0xFFFAFBFC);
+  static const soft = Color(0xFFF6F7F9);
+  static const soft2 = Color(0xFFF5F7FB);
+  static const border = Color(0xFFF0F2F4);
+  static const borderStrong = Color(0xFFE5E7EB);
+  static const softLine = Color(0xFFF0F2F4);
   static const grid = Color(0xFFD8DEE6);
-  static const text = Color(0xFF111827);
-  static const graphite = Color(0xFF111827);
-  static const muted = Color(0xFF475467);
+
+  static const text = Color(0xFF0B0F14);
+  static const graphite = Color(0xFF344054);
+  static const graphiteSoft = Color(0xFF475467);
+  static const muted = Color(0xFF374151);
   static const dim = Color(0xFF6B7280);
 
-  // Минимальный зелёный акцент: точки, маленькие статусы, активные маркеры.
   static const green = Color(0xFF00A750);
-  static const yellow = Color(0xFFB7791F);
-  static const orange = Color(0xFFB7791F);
-  static const red = Color(0xFFD92D20);
-  static const blue = Color(0xFF344054);
+  static const greenDark = Color(0xFF067A46);
+  static const greenSoft = Color(0xFFF3FBF7);
+  static const greenBorder = Color(0xFFDCEFE5);
+  static const yellow = Color(0xFFF59E0B);
+  static const orange = Color(0xFFF59E0B);
+  static const red = Color(0xFFDC2626);
+  static const redSoft = Color(0xFFFEF2F2);
+  static const blue = Color(0xFF2563EB);
+  static const blueSoft = Color(0xFFF4F7FF);
+  static const cyan = Color(0xFF06B6D4);
+  static const violet = Color(0xFF7C3AED);
+
+  static List<BoxShadow> get windowShadow => [
+        BoxShadow(
+          color: Colors.black.withOpacity(.055),
+          blurRadius: 38,
+          spreadRadius: -18,
+          offset: const Offset(0, 22),
+        ),
+        BoxShadow(
+          color: blue.withOpacity(.035),
+          blurRadius: 24,
+          spreadRadius: -18,
+          offset: const Offset(0, 10),
+        ),
+      ];
+
+  static List<BoxShadow> get cardShadow => [
+        BoxShadow(
+          color: Colors.black.withOpacity(.025),
+          blurRadius: 14,
+          spreadRadius: -10,
+          offset: const Offset(0, 8),
+        ),
+      ];
+
+  static BoxDecoration programWindowDecoration({double radius = 22}) => BoxDecoration(
+        color: glass,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: Colors.white.withOpacity(.86), width: 1),
+        boxShadow: windowShadow,
+      );
+
+  static BoxDecoration unifiedWindow({double radius = 20}) => BoxDecoration(
+        color: glass,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: Colors.white.withOpacity(.86), width: 1),
+        boxShadow: windowShadow,
+      );
+
+
+  static BoxDecoration workspaceBg() => const BoxDecoration(
+        color: bg,
+      );
+
+  static BoxDecoration seamlessPane({double radius = 0}) => BoxDecoration(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(radius),
+      );
+
+  static BoxDecoration softSurface({double radius = 12, bool active = false}) => BoxDecoration(
+        color: active ? Colors.white.withOpacity(.96) : card2,
+        borderRadius: BorderRadius.circular(radius),
+        border: active ? Border.all(color: greenBorder, width: 1) : null,
+      );
 }
+
 
 extension _SectionExt on TrackerWorkspaceSection {
   String get title => switch (this) {
@@ -1257,6 +1440,867 @@ extension _SectionExt on TrackerWorkspaceSection {
       };
 }
 
+
+class _TrackerProgramCollapsedBar extends StatelessWidget {
+  const _TrackerProgramCollapsedBar({
+    required this.clubName,
+    required this.teamName,
+    required this.liveRunning,
+    required this.connected,
+    required this.onRestore,
+  });
+
+  final String clubName;
+  final String teamName;
+  final bool liveRunning;
+  final bool connected;
+  final VoidCallback onRestore;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: Container(
+        height: 64,
+        margin: const EdgeInsets.all(10),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: _TD.panel,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: _TD.windowShadow,
+        ),
+        child: Row(
+          children: [
+            _MacWindowControls(
+              maximized: false,
+              onClose: onRestore,
+              onMinimize: onRestore,
+              onToggleMaximize: onRestore,
+            ),
+            const SizedBox(width: 8),
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: _TD.card2,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.sensors_rounded, color: _TD.dim, size: 19),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Tracker Pro свернут',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: _TD.text, fontSize: 10.8, fontWeight: FontWeight.w500),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$clubName · $teamName',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: _TD.muted, fontSize: 11, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+            _TrackerStatusDot(
+              color: liveRunning ? _TD.green : _TD.dim,
+              label: liveRunning ? 'LIVE' : (connected ? 'READY' : 'OFF'),
+            ),
+            const SizedBox(width: 10),
+            _DarkActionButton(
+              icon: Icons.open_in_full_rounded,
+              label: 'Открыть',
+              primary: true,
+              onTap: onRestore,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+class _TrackerProgramSidePanel extends StatelessWidget {
+  const _TrackerProgramSidePanel({
+    required this.clubName,
+    required this.teamName,
+    required this.selectedPlayer,
+    required this.selected,
+    required this.loading,
+    required this.liveRunning,
+    required this.connected,
+    required this.compact,
+    required this.collapsed,
+    required this.onSelect,
+    required this.onRefresh,
+    required this.onMinimize,
+    this.onToggleCollapsed,
+  });
+
+  final String clubName;
+  final String teamName;
+  final String selectedPlayer;
+  final TrackerWorkspaceSection selected;
+  final bool loading;
+  final bool liveRunning;
+  final bool connected;
+  final bool compact;
+  final bool collapsed;
+  final ValueChanged<TrackerWorkspaceSection> onSelect;
+  final VoidCallback onRefresh;
+  final VoidCallback onMinimize;
+  final VoidCallback? onToggleCollapsed;
+
+  @override
+  Widget build(BuildContext context) {
+    final sections = TrackerWorkspaceSection.values;
+
+    if (compact) {
+      return Container(
+        color: Colors.transparent,
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+        child: Column(
+          children: [
+            _TrackerSideIconButton(
+              icon: Icons.sensors_rounded,
+              active: liveRunning,
+              tooltip: liveRunning ? 'Live идёт' : (connected ? 'Трекер готов' : 'Трекер выключен'),
+              onTap: onRefresh,
+            ),
+            if (onToggleCollapsed != null) ...[
+              const SizedBox(height: 8),
+              _TrackerSideIconButton(
+                icon: Icons.keyboard_double_arrow_right_rounded,
+                active: false,
+                tooltip: 'Развернуть меню',
+                onTap: onToggleCollapsed,
+              ),
+            ],
+            const SizedBox(height: 10),
+            Container(height: 1, color: _TD.softLine),
+            const SizedBox(height: 10),
+            Expanded(
+              child: ListView.separated(
+                padding: EdgeInsets.zero,
+                itemCount: sections.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 4),
+                itemBuilder: (_, i) {
+                  final section = sections[i];
+                  return _TrackerSideIconButton(
+                    icon: section.icon,
+                    active: section == selected,
+                    tooltip: section.title,
+                    onTap: () => onSelect(section),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+            _TrackerSideIconButton(
+              icon: loading ? Icons.hourglass_top_rounded : Icons.refresh_rounded,
+              active: false,
+              tooltip: 'Обновить',
+              onTap: loading ? null : onRefresh,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      color: Colors.transparent,
+      padding: const EdgeInsets.fromLTRB(9, 12, 8, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F5F8),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Stack(
+                  children: [
+                    const Center(child: Icon(Icons.sensors_rounded, color: _TD.dim, size: 20)),
+                    Positioned(
+                      right: 9,
+                      bottom: 9,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: liveRunning ? _TD.green : _TD.dim,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Flexible(
+                          child: Text(
+                            'Трекер',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: _TD.text, fontSize: 15.5, fontWeight: FontWeight.w700, letterSpacing: -.45),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _TrackerStatusDot(
+                          color: liveRunning ? _TD.green : _TD.dim,
+                          label: liveRunning ? 'LIVE' : (connected ? 'READY' : 'OFF'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      teamName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: _TD.muted, fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+              _TrackerSmallGhostButton(
+                icon: loading ? Icons.hourglass_top_rounded : Icons.refresh_rounded,
+                onTap: loading ? null : onRefresh,
+                tooltip: 'Обновить',
+              ),
+              if (onToggleCollapsed != null) ...[
+                const SizedBox(width: 6),
+                _TrackerSmallGhostButton(
+                  icon: Icons.keyboard_double_arrow_left_rounded,
+                  onTap: onToggleCollapsed,
+                  tooltip: 'Сузить меню',
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            clubName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: _TD.muted, fontSize: 10.8, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            selectedPlayer,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: _TD.dim, fontSize: 10.5, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: ListView.separated(
+              padding: EdgeInsets.zero,
+              itemCount: sections.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 6),
+              itemBuilder: (_, i) {
+                final section = sections[i];
+                return _TrackerSideNavItem(
+                  section: section,
+                  active: section == selected,
+                  onTap: () => onSelect(section),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrackerSideNavItem extends StatelessWidget {
+  const _TrackerSideNavItem({required this.section, required this.active, required this.onTap});
+
+  final TrackerWorkspaceSection section;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: active ? _TD.greenSoft : Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          height: 34,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: active ? Border.all(color: _TD.green.withOpacity(.16), width: 1) : null,
+          ),
+          child: Row(
+            children: [
+              Icon(section.icon, color: active ? _TD.green : _TD.dim, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  section.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: active ? _TD.text : _TD.graphite,
+                    fontSize: 10.8,
+                    fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+                    letterSpacing: -.12,
+                  ),
+                ),
+              ),
+              if (active)
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(color: _TD.green, shape: BoxShape.circle),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TrackerSideIconButton extends StatelessWidget {
+  const _TrackerSideIconButton({required this.icon, required this.active, required this.tooltip, this.onTap});
+
+  final IconData icon;
+  final bool active;
+  final String tooltip;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: active ? _TD.greenSoft : _TD.soft,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: active ? Border.all(color: _TD.green.withOpacity(.16)) : null,
+            ),
+            child: Icon(icon, color: active ? _TD.green : _TD.dim, size: 18),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TrackerSmallGhostButton extends StatelessWidget {
+  const _TrackerSmallGhostButton({required this.icon, required this.onTap, required this.tooltip});
+
+  final IconData icon;
+  final VoidCallback? onTap;
+  final String tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: _TD.soft,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            width: 34,
+            height: 34,
+            child: Icon(icon, color: _TD.dim, size: 18),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TrackerSideFooterAction extends StatelessWidget {
+  const _TrackerSideFooterAction({required this.icon, required this.label, required this.onTap});
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _TD.soft,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          height: 34,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: _TD.dim, size: 16),
+              const SizedBox(width: 8),
+              Text(label, style: const TextStyle(color: _TD.graphite, fontSize: 10.8, fontWeight: FontWeight.w700)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TrackerWindowCornerButton extends StatelessWidget {
+  const _TrackerWindowCornerButton({required this.maximized, required this.onTap});
+
+  final bool maximized;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: maximized ? 'Свернуть окно' : 'Развернуть окно',
+      child: Material(
+        color: const Color(0xFFF3F5F8),
+        shape: const CircleBorder(),
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: Container(
+            width: 32,
+            height: 32,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: _TD.softLine),
+              boxShadow: _TD.cardShadow,
+            ),
+            child: Icon(maximized ? Icons.close_fullscreen_rounded : Icons.open_in_full_rounded, size: 15, color: _TD.dim),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TrackerProgramTabsBar extends StatelessWidget {
+  const _TrackerProgramTabsBar({
+    required this.clubName,
+    required this.teamName,
+    required this.selectedPlayer,
+    required this.selected,
+    required this.loading,
+    required this.liveRunning,
+    required this.connected,
+    required this.maximized,
+    required this.onSelect,
+    required this.onRefresh,
+    required this.onClose,
+    required this.onMinimize,
+    required this.onToggleMaximize,
+  });
+
+  final String clubName;
+  final String teamName;
+  final String selectedPlayer;
+  final TrackerWorkspaceSection selected;
+  final bool loading;
+  final bool liveRunning;
+  final bool connected;
+  final bool maximized;
+  final ValueChanged<TrackerWorkspaceSection> onSelect;
+  final VoidCallback onRefresh;
+  final VoidCallback onClose;
+  final VoidCallback onMinimize;
+  final VoidCallback onToggleMaximize;
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final compact = width < 1180;
+
+    return Container(
+      height: compact ? 56 : 60,
+      padding: EdgeInsets.fromLTRB(compact ? 10 : 14, 5, compact ? 10 : 14, 5),
+      decoration: BoxDecoration(
+        color: _TD.panel,
+        border: Border(bottom: BorderSide(color: _TD.softLine.withOpacity(.88), width: 1)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: compact ? 34 : 38,
+            height: compact ? 34 : 38,
+            decoration: BoxDecoration(
+              color: _TD.card2,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Stack(
+              children: [
+                const Center(
+                  child: Icon(Icons.sensors_rounded, color: _TD.dim, size: 20),
+                ),
+                Positioned(
+                  right: 7,
+                  bottom: 7,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: connected ? _TD.green : _TD.dim,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: compact ? 148 : 198,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        'Tracker Pro',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: _TD.text,
+                          fontSize: compact ? 13.5 : 14,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: -.15,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                    _TrackerStatusDot(
+                      color: liveRunning ? _TD.green : _TD.dim,
+                      label: liveRunning ? 'LIVE' : (connected ? 'READY' : 'OFF'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '$clubName · $teamName',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _TD.muted,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+
+              ],
+            ),
+          ),
+          Expanded(
+            child: Align(
+              alignment: Alignment.center,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                child: Row(
+                  children: TrackerWorkspaceSection.values.map((section) {
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: _TrackerProgramTab(
+                        section: section,
+                        active: section == selected,
+                        compact: compact,
+                        onTap: () => onSelect(section),
+                      ),
+                    );
+                  }).toList(growable: false),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          _TrackerProgramIconButton(
+            icon: Icons.refresh_rounded,
+            tooltip: 'Обновить данные трекера',
+            loading: loading,
+            onTap: loading ? null : onRefresh,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MacWindowControls extends StatelessWidget {
+  const _MacWindowControls({
+    required this.maximized,
+    required this.onClose,
+    required this.onMinimize,
+    required this.onToggleMaximize,
+  });
+
+  final bool maximized;
+  final VoidCallback onClose;
+  final VoidCallback onMinimize;
+  final VoidCallback onToggleMaximize;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _MacWindowButton(
+          icon: Icons.close_rounded,
+          tooltip: 'Закрыть окно трекера',
+          onTap: onClose,
+        ),
+        const SizedBox(width: 7),
+        _MacWindowButton(
+          icon: Icons.remove_rounded,
+          tooltip: 'Свернуть',
+          onTap: onMinimize,
+        ),
+        const SizedBox(width: 7),
+        _MacWindowButton(
+          icon: maximized ? Icons.close_fullscreen_rounded : Icons.open_in_full_rounded,
+          tooltip: maximized ? 'Вернуть размер' : 'Развернуть',
+          onTap: onToggleMaximize,
+        ),
+      ],
+    );
+  }
+}
+
+class _MacWindowButton extends StatefulWidget {
+  const _MacWindowButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  State<_MacWindowButton> createState() => _MacWindowButtonState();
+}
+
+class _MacWindowButtonState extends State<_MacWindowButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: widget.tooltip,
+      waitDuration: const Duration(milliseconds: 450),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: Material(
+          color: _hovered ? const Color(0xFFE9EDF2) : const Color(0xFFF3F5F8),
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: widget.onTap,
+            child: SizedBox(
+              width: 22,
+              height: 22,
+              child: Icon(widget.icon, size: 12, color: _TD.dim),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TrackerProgramTab extends StatefulWidget {
+  const _TrackerProgramTab({
+    required this.section,
+    required this.active,
+    required this.compact,
+    required this.onTap,
+  });
+
+  final TrackerWorkspaceSection section;
+  final bool active;
+  final bool compact;
+  final VoidCallback onTap;
+
+  @override
+  State<_TrackerProgramTab> createState() => _TrackerProgramTabState();
+}
+
+class _TrackerProgramTabState extends State<_TrackerProgramTab> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = widget.active;
+    final bg = active ? Colors.white.withOpacity(.92) : (_hovered ? _TD.soft : Colors.transparent);
+    final fg = active ? _TD.text : _TD.graphiteSoft;
+    final iconColor = active ? _TD.green : _TD.dim;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        height: widget.compact ? 34 : 36,
+        constraints: BoxConstraints(minWidth: widget.compact ? 42 : 82),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(13),
+          border: active ? Border.all(color: _TD.greenBorder) : Border.all(color: Colors.transparent),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(13),
+            onTap: widget.onTap,
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: widget.compact ? 10 : 12),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(widget.section.icon, size: 18, color: iconColor),
+                  if (!widget.compact) ...[
+                    const SizedBox(width: 7),
+                    Text(
+                      widget.section.title,
+                      style: TextStyle(
+                        color: fg,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: -.15,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TrackerStatusDot extends StatelessWidget {
+  const _TrackerStatusDot({required this.color, required this.label});
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(.10),
+        borderRadius: BorderRadius.circular(99),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 9,
+              fontWeight: FontWeight.w500,
+              letterSpacing: .2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrackerProgramIconButton extends StatelessWidget {
+  const _TrackerProgramIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.loading = false,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: _TD.card2,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            width: 42,
+            height: 42,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: loading
+                ? const SizedBox(
+                    width: 17,
+                    height: 17,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(icon, size: 20, color: _TD.text),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DarkRail extends StatelessWidget {
   const _DarkRail({
     required this.selected,
@@ -1272,13 +2316,12 @@ class _DarkRail extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = TrackerWorkspaceSection.values;
     return Container(
-      width: 74,
+      width: 72,
       padding: const EdgeInsets.fromLTRB(6, 6, 4, 6),
       child: Container(
         decoration: BoxDecoration(
           color: _TD.rail,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _TD.border),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(.045),
@@ -1307,7 +2350,7 @@ class _DarkRail extends StatelessWidget {
             ),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 6),
-              child: Divider(height: 10, thickness: 1, color: _TD.border),
+              child: SizedBox(height: 10),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
@@ -1339,9 +2382,9 @@ class _RailButtonState extends State<_RailButton> {
   bool _pressed = false;
   @override
   Widget build(BuildContext context) {
-    final bg = widget.active ? _TD.graphite : Colors.transparent;
-    final fg = widget.active ? Colors.white : _TD.text;
-    final subFg = widget.active ? Colors.white : _TD.muted;
+    final bg = widget.active ? _TD.green.withOpacity(.10) : Colors.transparent;
+    final fg = widget.active ? _TD.green : _TD.text;
+    final subFg = widget.active ? _TD.green : _TD.muted;
     return Listener(
       onPointerDown: (_) => setState(() => _pressed = true),
       onPointerUp: (_) => setState(() => _pressed = false),
@@ -1360,23 +2403,9 @@ class _RailButtonState extends State<_RailButton> {
               padding: const EdgeInsets.fromLTRB(4, 5, 4, 4),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(11),
-                border: Border.all(color: widget.active ? _TD.graphite : Colors.transparent),
               ),
               child: Stack(
                 children: [
-                  if (widget.active)
-                    Positioned(
-                      left: 0,
-                      top: 8,
-                      bottom: 8,
-                      child: Container(
-                        width: 3,
-                        decoration: BoxDecoration(
-                          color: _TD.green,
-                          borderRadius: BorderRadius.circular(99),
-                        ),
-                      ),
-                    ),
                   Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -1390,7 +2419,7 @@ class _RailButtonState extends State<_RailButton> {
                           style: TextStyle(
                             color: subFg,
                             fontSize: 8.3,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w500,
                             letterSpacing: -.15,
                           ),
                         ),
@@ -1419,13 +2448,13 @@ class _TopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 54,
-      margin: const EdgeInsets.fromLTRB(0, 6, 6, 0),
+      margin: const EdgeInsets.fromLTRB(0, 8, 8, 0),
       padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(color: _TD.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: _TD.border.withOpacity(.85))),
+      decoration: const BoxDecoration(color: Colors.transparent, border: Border(bottom: BorderSide(color: _TD.softLine))),
       child: Row(children: [
-        Container(width: 34, height: 34, decoration: BoxDecoration(color: _TD.card2, borderRadius: BorderRadius.circular(9)), child: Icon(selectedSection.icon, color: _TD.green, size: 19)),
+        Container(width: 34, height: 34, decoration: _TD.softSurface(radius: 12), child: Icon(selectedSection.icon, color: _TD.dim, size: 18)),
         const SizedBox(width: 10),
-        Expanded(child: Text('Спортотека Трекинг · ${selectedSection.title}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w900, fontSize: 16))),
+        Expanded(child: Text('Спортотека Трекинг · ${selectedSection.title}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w500, fontSize: 12.5))),
         _TopPill(label: clubName, value: teamName),
         const SizedBox(width: 8),
         _TopPill(label: 'Игрок', value: selectedPlayer),
@@ -1446,11 +2475,35 @@ class _TopPill extends StatelessWidget {
       height: 38,
       constraints: const BoxConstraints(maxWidth: 230),
       padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(color: _TD.card, border: Border.all(color: _TD.border), borderRadius: BorderRadius.circular(9)),
+      decoration: _TD.softSurface(radius: 12),
       child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: const TextStyle(color: _TD.dim, fontSize: 8.5, fontWeight: FontWeight.w900)),
-        Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontSize: 11, fontWeight: FontWeight.w900)),
+        Text(label, style: const TextStyle(color: _TD.dim, fontSize: 8.5, fontWeight: FontWeight.w500)),
+        Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontSize: 11, fontWeight: FontWeight.w500)),
       ]),
+    );
+  }
+}
+
+class _WorkspacePaneDivider extends StatelessWidget {
+  const _WorkspacePaneDivider.vertical({this.thickness = 1, this.padding = 0}) : axis = Axis.vertical;
+  const _WorkspacePaneDivider.horizontal({this.thickness = 1, this.padding = 0}) : axis = Axis.horizontal;
+
+  final Axis axis;
+  final double thickness;
+  final double padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final line = Container(color: _TD.border.withOpacity(.82));
+    if (axis == Axis.vertical) {
+      return Padding(
+        padding: EdgeInsets.symmetric(horizontal: padding),
+        child: SizedBox(width: thickness, child: line),
+      );
+    }
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: padding),
+      child: SizedBox(height: thickness, child: line),
     );
   }
 }
@@ -1472,17 +2525,24 @@ class _DarkPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Не рисуем второе окно внутри трекера: внешний programWindowDecoration
+    // уже является общей рамкой. Здесь только плоская рабочая область и
+    // тонкие разделители, как в CMR Trainers / CMR Team Matches.
+    final hasToolbar = title.trim().isNotEmpty || trailing != null;
+
     return Container(
-      color: _TD.bg,
+      color: Colors.transparent,
       child: Column(
         children: [
-          _WorkspaceFlatHeader(
-            icon: icon,
-            title: title,
-            subtitle: subtitle,
-            trailing: trailing,
-          ),
-          const SizedBox(height: 10),
+          if (hasToolbar) ...[
+            _WorkspaceFlatHeader(
+              icon: icon,
+              title: title,
+              subtitle: subtitle,
+              trailing: trailing,
+            ),
+            const _WorkspacePaneDivider.horizontal(),
+          ],
           Expanded(child: child),
         ],
       ),
@@ -1506,23 +2566,20 @@ class _WorkspaceFlatHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 54,
+      height: 42,
       padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: _TD.card,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _TD.border.withOpacity(.9)),
-      ),
+      color: Colors.transparent,
       child: Row(
         children: [
           Container(
-            width: 34,
-            height: 34,
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
-              color: _TD.card2,
+              color: _TD.greenSoft,
               borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: _TD.green.withOpacity(.12)),
             ),
-            child: Icon(icon, color: _TD.green, size: 19),
+            child: Icon(icon, color: _TD.green, size: 17),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -1536,9 +2593,9 @@ class _WorkspaceFlatHeader extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: _TD.text,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -.25,
+                    fontSize: 12.2,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -.28,
                   ),
                 ),
                 if (subtitle.trim().isNotEmpty)
@@ -1548,8 +2605,8 @@ class _WorkspaceFlatHeader extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: _TD.muted,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
+                      fontSize: 9.4,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
               ],
@@ -1579,23 +2636,14 @@ class _DarkCard extends StatelessWidget {
 
     return Container(
       clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: _TD.card,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _TD.border.withOpacity(.94), width: 1),
-      ),
+      decoration: _TD.seamlessPane(),
       child: Column(
         children: [
-          if (hasHeader)
+          if (hasHeader) ...[
             Container(
               height: 34,
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              decoration: BoxDecoration(
-                color: _TD.card2,
-                border: Border(
-                  bottom: BorderSide(color: _TD.border.withOpacity(.9)),
-                ),
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              color: Colors.transparent,
               child: Row(
                 children: [
                   Expanded(
@@ -1605,9 +2653,9 @@ class _DarkCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: _TD.text,
-                        fontSize: 12.6,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -.08,
+                        fontSize: 11.8,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -.18,
                       ),
                     ),
                   ),
@@ -1619,15 +2667,17 @@ class _DarkCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.right,
                         style: const TextStyle(
-                          color: _TD.muted,
-                          fontSize: 9.8,
-                          fontWeight: FontWeight.w800,
+                          color: _TD.dim,
+                          fontSize: 9.4,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
                 ],
               ),
             ),
+            const _WorkspacePaneDivider.horizontal(),
+          ],
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(8),
@@ -1663,19 +2713,19 @@ class _DarkActionButtonState extends State<_DarkActionButton> {
         scale: _pressed ? .96 : 1,
         duration: const Duration(milliseconds: 110),
         child: Material(
-          color: widget.primary ? _TD.green : _TD.card,
-          borderRadius: BorderRadius.circular(9),
+          color: widget.primary ? _TD.greenSoft : _TD.soft,
+          borderRadius: BorderRadius.circular(10),
           child: InkWell(
             onTap: widget.onTap,
-            borderRadius: BorderRadius.circular(9),
+            borderRadius: BorderRadius.circular(10),
             child: Container(
               height: 36,
               padding: const EdgeInsets.symmetric(horizontal: 11),
-              decoration: BoxDecoration(borderRadius: BorderRadius.circular(9), border: Border.all(color: widget.primary ? _TD.green : _TD.border)),
+              decoration: BoxDecoration(borderRadius: BorderRadius.circular(10)),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(widget.icon, color: widget.primary ? _TD.bg : _TD.text, size: 17),
+                Icon(widget.icon, color: widget.primary ? _TD.green : _TD.graphite, size: 16),
                 const SizedBox(width: 6),
-                Text(widget.label, style: TextStyle(color: widget.primary ? _TD.bg : _TD.text, fontSize: 11, fontWeight: FontWeight.w900)),
+                Text(widget.label, style: TextStyle(color: widget.primary ? _TD.green : _TD.graphite, fontSize: 10.5, fontWeight: FontWeight.w500)),
               ]),
             ),
           ),
@@ -1694,15 +2744,15 @@ class _DarkMetricTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(color: _TD.card2, borderRadius: BorderRadius.circular(10), border: Border.all(color: _TD.border)),
+      decoration: _TD.softSurface(radius: 12),
       padding: const EdgeInsets.all(10),
       child: Row(children: [
-        Icon(icon, color: _TD.green),
+        Icon(icon, color: _TD.graphite),
         const SizedBox(width: 9),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontSize: 10, fontWeight: FontWeight.w800)),
-          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontSize: 16, fontWeight: FontWeight.w900)),
-          Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.dim, fontSize: 9, fontWeight: FontWeight.w700)),
+          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontSize: 10, fontWeight: FontWeight.w500)),
+          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontSize: 10.8, fontWeight: FontWeight.w500)),
+          Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.dim, fontSize: 9, fontWeight: FontWeight.w500)),
         ])),
       ]),
     );
@@ -1724,7 +2774,11 @@ class _DarkListTile extends StatelessWidget {
     final color = active ? _TD.green : _TD.muted;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(color: active ? _TD.green.withOpacity(.10) : _TD.card2, borderRadius: BorderRadius.circular(9), border: Border.all(color: active ? _TD.green.withOpacity(.4) : _TD.border)),
+      decoration: BoxDecoration(
+        color: active ? _TD.greenSoft : _TD.soft,
+        borderRadius: BorderRadius.circular(12),
+        border: active ? Border.all(color: _TD.greenBorder) : null,
+      ),
       child: ListTile(
         dense: true,
         onTap: onTap,
@@ -1736,9 +2790,9 @@ class _DarkListTile extends StatelessWidget {
                 size: 38,
                 active: active,
               ),
-        title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w900)),
-        subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontSize: 11, fontWeight: FontWeight.w700)),
-        trailing: trailing == null ? null : Text(trailing!, style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 11)),
+        title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w500)),
+        subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontSize: 11, fontWeight: FontWeight.w500)),
+        trailing: trailing == null ? null : Text(trailing!, style: TextStyle(color: color, fontWeight: FontWeight.w500, fontSize: 11)),
       ),
     );
   }
@@ -1757,7 +2811,7 @@ class _SavedDeviceDarkTile extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: _TD.card2, borderRadius: BorderRadius.circular(9), border: Border.all(color: _TD.border)),
+      decoration: _TD.softSurface(radius: 12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(
           children: [
@@ -1773,13 +2827,13 @@ class _SavedDeviceDarkTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(device.deviceName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w900)),
+                  Text(device.deviceName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w500)),
                   const SizedBox(height: 3),
                   Text(
                     '${device.deviceUuid}${boundPlayer == null && device.playerName == null ? '' : ' · ${boundPlayer?.name ?? device.playerName}'}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: _TD.muted, fontSize: 11, fontWeight: FontWeight.w700),
+                    style: const TextStyle(color: _TD.muted, fontSize: 11, fontWeight: FontWeight.w500),
                   ),
                 ],
               ),
@@ -1797,10 +2851,10 @@ class _SavedDeviceDarkTile extends StatelessWidget {
             labelStyle: const TextStyle(color: _TD.muted),
             filled: true,
             fillColor: _TD.panel,
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(9), borderSide: const BorderSide(color: _TD.border)),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(9), borderSide: const BorderSide(color: _TD.green)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(9), borderSide: BorderSide.none),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(9), borderSide: BorderSide.none),
           ),
-          style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w800),
+          style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w500),
           items: [
             const DropdownMenuItem<int?>(
               value: null,
@@ -1865,7 +2919,6 @@ class _PlayerAvatarDark extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: borderColor, width: active ? 2 : 1),
         boxShadow: active
             ? [
                 BoxShadow(
@@ -1928,7 +2981,7 @@ class _AvatarFallback extends StatelessWidget {
               style: TextStyle(
                 color: _TD.text,
                 fontSize: size * .33,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w500,
                 letterSpacing: -.4,
               ),
             ),
@@ -1993,7 +3046,6 @@ class _DashboardKpiStrip extends StatelessWidget {
           decoration: BoxDecoration(
             color: _TD.card,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: _TD.border),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2004,16 +3056,16 @@ class _DashboardKpiStrip extends StatelessWidget {
                     width: 30,
                     height: 30,
                     decoration: BoxDecoration(color: _TD.green.withOpacity(.10), borderRadius: BorderRadius.circular(9)),
-                    child: Icon(item.icon, color: _TD.green, size: 18),
+                    child: Icon(item.icon, color: _TD.graphite, size: 18),
                   ),
                   const Spacer(),
-                  Text(item.subtitle, style: const TextStyle(color: _TD.dim, fontSize: 9.5, fontWeight: FontWeight.w800)),
+                  Text(item.subtitle, style: const TextStyle(color: _TD.dim, fontSize: 9.5, fontWeight: FontWeight.w500)),
                 ],
               ),
               const Spacer(),
-              Text(item.value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -.4)),
+              Text(item.value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontSize: 15, fontWeight: FontWeight.w500, letterSpacing: -.4)),
               const SizedBox(height: 2),
-              Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontSize: 11, fontWeight: FontWeight.w800)),
+              Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontSize: 11, fontWeight: FontWeight.w500)),
             ],
           ),
         );
@@ -2032,15 +3084,15 @@ class _ReadinessRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: ok ? _TD.green.withOpacity(.08) : _TD.card2, borderRadius: BorderRadius.circular(10), border: Border.all(color: ok ? _TD.green.withOpacity(.35) : _TD.border)),
+      decoration: BoxDecoration(color: ok ? _TD.green.withOpacity(.08) : _TD.card2, borderRadius: BorderRadius.circular(10)),
       child: Row(
         children: [
           Icon(ok ? Icons.check_circle_rounded : Icons.warning_amber_rounded, color: ok ? _TD.green : _TD.orange, size: 19),
           const SizedBox(width: 9),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w900, fontSize: 12)),
-              Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontWeight: FontWeight.w700, fontSize: 10.5)),
+              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w500, fontSize: 12)),
+              Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontWeight: FontWeight.w500, fontSize: 10.5)),
             ]),
           ),
         ],
@@ -2067,17 +3119,17 @@ class _ScenarioButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: Container(
           padding: const EdgeInsets.all(11),
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: _TD.border)),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
           child: Row(
             children: [
-              CircleAvatar(radius: 15, backgroundColor: _TD.graphite, child: Text(step, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900))),
+              CircleAvatar(radius: 15, backgroundColor: _TD.green.withOpacity(.12), child: Text(step, style: const TextStyle(color: _TD.green, fontSize: 11, fontWeight: FontWeight.w500))),
               const SizedBox(width: 10),
-              Icon(icon, color: _TD.green, size: 19),
+              Icon(icon, color: _TD.graphite, size: 18),
               const SizedBox(width: 9),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w900, fontSize: 12.2)),
-                  Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontWeight: FontWeight.w700, fontSize: 10.2)),
+                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w500, fontSize: 11.8)),
+                  Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontWeight: FontWeight.w500, fontSize: 10.2)),
                 ]),
               ),
               const Icon(Icons.chevron_right_rounded, color: _TD.dim),
@@ -2098,7 +3150,7 @@ class _DarkEmpty extends StatelessWidget {
     return Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 360), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
       Icon(icon, size: 38, color: _TD.dim),
       const SizedBox(height: 10),
-      Text(text, textAlign: TextAlign.center, style: const TextStyle(color: _TD.muted, fontWeight: FontWeight.w800)),
+      Text(text, textAlign: TextAlign.center, style: const TextStyle(color: _TD.muted, fontWeight: FontWeight.w500)),
     ])));
   }
 }
@@ -2109,10 +3161,10 @@ class _DarkError extends StatelessWidget {
   final VoidCallback onRetry;
   @override
   Widget build(BuildContext context) {
-    return Center(child: Container(constraints: const BoxConstraints(maxWidth: 560), padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: Color(0xFFFFF1F1), borderRadius: BorderRadius.circular(10), border: Border.all(color: Color(0xFFF7C8C4))), child: Column(mainAxisSize: MainAxisSize.min, children: [
+    return Center(child: Container(constraints: const BoxConstraints(maxWidth: 560), padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: Color(0xFFFFF1F1), borderRadius: BorderRadius.circular(10)), child: Column(mainAxisSize: MainAxisSize.min, children: [
       const Icon(Icons.warning_amber_rounded, color: _TD.red),
       const SizedBox(height: 8),
-      Text(error, textAlign: TextAlign.center, style: const TextStyle(color: _TD.red, fontWeight: FontWeight.w800)),
+      Text(error, textAlign: TextAlign.center, style: const TextStyle(color: _TD.red, fontWeight: FontWeight.w500)),
       const SizedBox(height: 10),
       _DarkActionButton(icon: Icons.refresh_rounded, label: 'Повторить', onTap: onRetry),
     ])));
@@ -2133,7 +3185,7 @@ class _DarkHint extends StatelessWidget {
   final String text;
   @override
   Widget build(BuildContext context) {
-    return Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: _TD.card2, borderRadius: BorderRadius.circular(10), border: Border.all(color: _TD.border)), child: Text(text, style: const TextStyle(color: _TD.green, fontWeight: FontWeight.w800, fontSize: 11.5, height: 1.25)));
+    return Container(padding: const EdgeInsets.all(12), decoration: _TD.softSurface(radius: 12), child: Text(text, style: const TextStyle(color: _TD.graphiteSoft, fontWeight: FontWeight.w500, fontSize: 11.2, height: 1.25)));
   }
 }
 
@@ -2168,14 +3220,6 @@ class _DarkCornerChip extends StatelessWidget {
                   ? const Color(0xFF2563EB).withOpacity(.10)
                   : _TD.card2,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: ready
-                ? _TD.green
-                : active
-                    ? const Color(0xFF2563EB)
-                    : _TD.border,
-            width: ready || active ? 2 : 1,
-          ),
         ),
         child: Row(children: [
           CircleAvatar(
@@ -2183,10 +3227,10 @@ class _DarkCornerChip extends StatelessWidget {
             backgroundColor: color,
             child: ready
                 ? const Icon(Icons.check_rounded, color: Colors.white, size: 15)
-                : Text(label, style: const TextStyle(color: _TD.bg, fontSize: 11, fontWeight: FontWeight.w900)),
+                : Text(label, style: const TextStyle(color: _TD.bg, fontSize: 11, fontWeight: FontWeight.w500)),
           ),
           const SizedBox(width: 10),
-          Expanded(child: Text(value, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontSize: 10, fontWeight: FontWeight.w800))),
+          Expanded(child: Text(value, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontSize: 10, fontWeight: FontWeight.w500))),
         ]),
       ),
     );
@@ -2212,7 +3256,6 @@ class _CalibrationStatusBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: done ? _TD.green.withOpacity(.10) : const Color(0xFF2563EB).withOpacity(.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: done ? _TD.green.withOpacity(.35) : const Color(0xFF2563EB).withOpacity(.22)),
       ),
       child: Row(
         children: [
@@ -2225,12 +3268,12 @@ class _CalibrationStatusBanner extends StatelessWidget {
                   : 'Следующий угол: $nextLabel · перейдите в угол поля и нажмите GPS $nextLabel',
               style: TextStyle(
                 color: done ? _TD.green : _TD.text,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w500,
                 fontSize: 12,
               ),
             ),
           ),
-          Text('$pointCount/4', style: const TextStyle(color: _TD.muted, fontWeight: FontWeight.w900)),
+          Text('$pointCount/4', style: const TextStyle(color: _TD.muted, fontWeight: FontWeight.w500)),
         ],
       ),
     );
@@ -2290,7 +3333,7 @@ class _DarkHeatmapPainter extends CustomPainter {
   }
 
   void _drawText(Canvas canvas, Size size, String text) {
-    final tp = TextPainter(text: TextSpan(text: text, style: const TextStyle(color: _TD.muted, fontSize: 18, fontWeight: FontWeight.w900)), textDirection: TextDirection.ltr)..layout(maxWidth: size.width - 40);
+    final tp = TextPainter(text: TextSpan(text: text, style: const TextStyle(color: _TD.muted, fontSize: 10.8, fontWeight: FontWeight.w500)), textDirection: TextDirection.ltr)..layout(maxWidth: size.width - 40);
     tp.paint(canvas, Offset((size.width - tp.width) / 2, (size.height - tp.height) / 2));
   }
 
@@ -2332,13 +3375,13 @@ class _DarkCalibrationPainter extends CustomPainter {
       canvas.drawCircle(p, active ? 19 : 16, Paint()..color = color);
       if (ready) {
         final check = TextPainter(
-          text: const TextSpan(text: '✓', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
+          text: const TextSpan(text: '✓', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 12.5)),
           textDirection: TextDirection.ltr,
         )..layout();
         check.paint(canvas, p - Offset(check.width / 2, check.height / 2));
       } else {
         final tp = TextPainter(
-          text: TextSpan(text: ['A', 'B', 'C', 'D'][i], style: const TextStyle(color: _TD.bg, fontWeight: FontWeight.w900)),
+          text: TextSpan(text: ['A', 'B', 'C', 'D'][i], style: const TextStyle(color: _TD.bg, fontWeight: FontWeight.w500)),
           textDirection: TextDirection.ltr,
         )..layout();
         tp.paint(canvas, p - Offset(tp.width / 2, tp.height / 2));
@@ -2360,7 +3403,7 @@ class _DarkTimelinePainter extends CustomPainter {
     for (var i = 0; i <= 8; i++) {
       final x = 30 + (size.width - 60) * i / 8;
       canvas.drawCircle(Offset(x, y), 5, Paint()..color = i.isEven ? _TD.green : _TD.orange);
-      final tp = TextPainter(text: TextSpan(text: '${i * 15}’', style: const TextStyle(color: _TD.muted, fontSize: 10, fontWeight: FontWeight.w800)), textDirection: TextDirection.ltr)..layout();
+      final tp = TextPainter(text: TextSpan(text: '${i * 15}’', style: const TextStyle(color: _TD.muted, fontSize: 10, fontWeight: FontWeight.w500)), textDirection: TextDirection.ltr)..layout();
       tp.paint(canvas, Offset(x - tp.width / 2, y + 14));
     }
   }

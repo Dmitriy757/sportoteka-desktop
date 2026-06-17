@@ -1,9 +1,11 @@
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' show FontFeature;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 
 import 'models/action_tracker_protocol.dart';
@@ -29,6 +31,8 @@ required this.selectedField,
 required this.ble,
 this.savedDevices = const [],
 this.batteryPercent,
+this.scanningBluetooth = false,
+this.onScanBluetooth,
 this.onManageTrackers,
 this.onLiveRunningChanged,
 });
@@ -42,6 +46,8 @@ final TrackerFieldModel? selectedField;
 final ActionTrackerBleService ble;
 final List<TrackerDeviceModel> savedDevices;
 final int? batteryPercent;
+final bool scanningBluetooth;
+final VoidCallback? onScanBluetooth;
 final VoidCallback? onManageTrackers;
 final ValueChanged<bool>? onLiveRunningChanged;
 
@@ -62,6 +68,7 @@ Timer? _phoneTimer;
 Timer? _trackerTimer;
 Timer? _heartbeatTimer;
 StreamSubscription<ActionTrackerParseResult>? _bleSub;
+StreamSubscription<String>? _bleLogSub;
 
 int? _myLiveSessionId;
 TrackerLiveSourceMode _mode = TrackerLiveSourceMode.trackerExperimental;
@@ -76,21 +83,31 @@ bool _showTrace = true;
 bool _showVectors = true;
 bool _showHeatmap = true;
 bool _showLabels = true;
+  bool _bottomOperatorExpanded = false;
+String? _floatingLiveTitle;
+IconData _floatingLiveIcon = Icons.open_in_full_rounded;
+Widget Function()? _floatingLiveBuilder;
+bool _floatingLiveMinimized = false;
+bool _floatingLiveMaximized = false;
+Offset? _floatingLiveOffset;
+bool _renderingFloatingLiveContent = false;
 
 String _lastRx = 'нет пакетов';
 String _lastTx = 'нет команд';
 String _lastGps = 'нет GPS';
 String _lastSave = 'нет сохранения';
+String _lastStop = 'нет остановки';
+String _lastPayload = 'нет payload';
+String _lastServer = 'нет ответа';
+String _lastLiveState = 'не загружено';
+String _lastLocalMetrics = 'нет локальных метрик';
+String _lastZeroReason = 'ожидаем GPS';
 String _lastProblem = 'Ожидание старта Live';
 DateTime? _lastGpsAt;
 DateTime? _lastSaveAt;
 DateTime? _startedAt;
 
-final List<_LivePeriod> _periods = <_LivePeriod>[
-_LivePeriod(title: 'РАЗМИНКА', startRatio: .03, endRatio: .30, color: Color(0xFF56CFE1)),
-_LivePeriod(title: 'SMG', startRatio: .34, endRatio: .55, color: Color(0xFF56CFE1)),
-_LivePeriod(title: 'УДАРЫ', startRatio: .58, endRatio: .82, color: Color(0xFF56CFE1)),
-];
+final List<_LivePeriod> _periods = <_LivePeriod>[];
 
 @override
 bool get wantKeepAlive => true;
@@ -110,6 +127,7 @@ _phoneTimer?.cancel();
 _trackerTimer?.cancel();
 _heartbeatTimer?.cancel();
 _bleSub?.cancel();
+_bleLogSub?.cancel();
 super.dispose();
 }
 
@@ -132,6 +150,12 @@ if (oldWidget.teamId != widget.teamId || oldWidget.clubId != widget.clubId) {
     _lastTx = 'нет команд';
     _lastGps = 'нет GPS';
     _lastSave = 'нет сохранения';
+    _lastStop = 'нет остановки';
+    _lastPayload = 'нет payload';
+    _lastServer = 'нет ответа';
+    _lastLiveState = 'не загружено';
+    _lastLocalMetrics = 'нет локальных метрик';
+    _lastZeroReason = 'ожидаем GPS';
   });
 
   _loadLiveState();
@@ -162,6 +186,12 @@ widget.onLiveRunningChanged?.call(value);
 }
 
 void _listenBle() {
+_bleLogSub?.cancel();
+_bleLogSub = widget.ble.logStream.listen((line) {
+  _log('BLE $line');
+  if (mounted) setState(() {});
+});
+
 _bleSub = widget.ble.dataStream.listen((event) async {
   final typeHex = '0x${event.packetType.toRadixString(16).toUpperCase()}';
   _lastRx = '${event.rawHex} · $typeHex';
@@ -230,9 +260,16 @@ try {
     fieldId: widget.selectedField?.id,
   );
   if (!mounted) return;
+
+  final activeCount = data.where((s) => s.status == 'active' || s.status == 'online' || s.status == 'live').length;
+  _lastLiveState = data.isEmpty
+      ? 'sessions=0 active=0 · сервер ничего не вернул'
+      : 'sessions=${data.length} active=$activeCount · ${_debugSessionLine(data.first)}';
+
   setState(() => _sessions = data);
   await _loadLivePeriods();
 } catch (e) {
+  _lastLiveState = 'ОШИБКА load_state: $e';
   _lastProblem = 'Ошибка загрузки Live: $e';
   _log(_lastProblem);
 }
@@ -265,7 +302,7 @@ if (field == null || !field.hasCalibration) {
 
 final device = widget.ble.connectedInfo;
 if (_mode == TrackerLiveSourceMode.trackerExperimental && device == null) {
-  _toast('Сначала подключите BLE-трекер во вкладке «Подключение»');
+  _toast('Сначала нажмите «Поиск Bluetooth» в Live-окне и подключите трекер');
   _lastProblem = 'Трекер не подключён';
   setState(() {});
   return;
@@ -276,7 +313,7 @@ final deviceUuid = _mode == TrackerLiveSourceMode.phoneGps
     : device!.id;
 
 final deviceName = _mode == TrackerLiveSourceMode.phoneGps
-    ? 'Телефон GPS'
+    ? 'Трекер GPS'
     : device!.name;
 
 setState(() {
@@ -356,7 +393,7 @@ Future<void> tick() async {
       latitude: pos.latitude,
       longitude: pos.longitude,
       timeMs: DateTime.now().millisecondsSinceEpoch,
-      packetType: 'PHONE',
+      packetType: 'TRACKER',
       rawHex: null,
     );
   } catch (e) {
@@ -426,21 +463,24 @@ _lastGpsAt = DateTime.now();
 _lastGps =
     '${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)} · $packetType';
 
-if (stat.distanceDeltaM <= 0.25 && track.points.length > 1) {
+_lastLocalMetrics = _debugTrackLine(track);
+_lastZeroReason = _debugZeroReason(track, stat);
+
+if (!stat.acceptedForMetrics) {
+  _lastProblem = stat.rejectReason ?? 'GPS-шум отфильтрован. Скорость и дистанция не засчитаны.';
+} else if (stat.distanceDeltaM <= 0.25 && track.points.length > 1) {
   _lastProblem =
       'GPS приходит, но смещение меньше 25 см. Скорость будет около 0.';
-} else if (stat.rawSpeedKmh > 55) {
-  _lastProblem =
-      'GPS-скачок ${stat.rawSpeedKmh.toStringAsFixed(1)} км/ч. На экране скорость ограничена.';
 } else {
   _lastProblem = 'GPS принят, скорость считается локально';
 }
 
+_log('LOCAL ${_lastLocalMetrics}; reason=$_lastZeroReason');
 if (mounted) setState(() {});
 
 await _savePoint(
-  latitude: latitude,
-  longitude: longitude,
+  latitude: stat.lat,
+  longitude: stat.lon,
   timeMs: timeMs,
   packetType: packetType,
   rawHex: rawHex,
@@ -466,23 +506,56 @@ final deviceUuid = _mode == TrackerLiveSourceMode.phoneGps
     ? 'PHONE-GPS-${widget.teamId}-${widget.selectedPlayer?.id ?? 0}'
     : (device?.id ?? 'TRACKER');
 
+final track = _trackForCurrentDevice();
+final analysis = track.toJson();
+
+final payload = TrackerLivePointPayload(
+  liveSessionId: id,
+  clubId: widget.clubId,
+  teamId: widget.teamId,
+  playerId: widget.selectedPlayer?.id,
+  deviceUuid: deviceUuid,
+  latitude: latitude,
+  longitude: longitude,
+  timeMs: timeMs,
+  batteryPercent: widget.batteryPercent,
+  speedKmh: track.speedKmh,
+  rawSpeedKmh: track.rawSpeedKmh,
+  distanceDeltaM: track.lastDeltaM,
+  totalDistanceM: track.totalDistanceM,
+  maxSpeedKmh: track.maxSpeedKmh,
+  avgSpeedKmh: track.avgSpeedKmh,
+  meteragePerMin: track.metersPerMinute,
+  loadScore: track.loadScore,
+  loadPerMin: track.loadPerMinute,
+  fatigueIndex: track.fatigueIndex,
+  speedDropPercent: track.speedDropPercent,
+  hsrDistanceM: track.hsrDistanceM,
+  hirDistanceM: track.hirDistanceM,
+  vhirDistanceM: track.vhirDistanceM,
+  sprintDistanceM: track.sprintDistanceM,
+  sprintCount: track.sprintCount,
+  accelCount: track.accelCount,
+  decelCount: track.decelCount,
+  changeOfDirectionCount: track.changeOfDirectionCount,
+  footballMovementScore: track.footballMovementScore,
+  metabolicPowerProxy: track.metabolicPowerProxy,
+  durationSec: track.durationSec,
+  analysisJson: analysis,
+);
+
+final payloadJson = payload.toJson();
+_lastPayload = _debugPayloadLine(payloadJson);
+_lastLocalMetrics = _debugTrackLine(track);
+
 setState(() => _savingPoint = true);
 
 try {
-  final result = await _api.saveLivePoint(
-    TrackerLivePointPayload(
-      liveSessionId: id,
-      clubId: widget.clubId,
-      teamId: widget.teamId,
-      playerId: widget.selectedPlayer?.id,
-      deviceUuid: deviceUuid,
-      latitude: latitude,
-      longitude: longitude,
-      timeMs: timeMs,
-      batteryPercent: widget.batteryPercent,
-    ),
-  );
+  _log('PAYLOAD $_lastPayload');
 
+  final result = await _api.saveLivePoint(payload);
+
+  _lastServer = _debugServerLine(result);
   _lastSaveAt = DateTime.now();
   final speed = result['speed_kmh'] ?? 0;
   final delta = result['distance_delta_m'] ?? 0;
@@ -497,19 +570,21 @@ try {
   }
 
   _lastSave = 'OK · $speed км/ч · +$delta м';
+  _log('SERVER $_lastServer');
   _log('Точка сохранена: $_lastSave');
   await _serverLog(
-    'point saved: $_lastSave · $packetType',
+    'point saved: $_lastSave · payload=$_lastPayload · server=$_lastServer · $packetType',
     source: 'save_point',
     rawHex: rawHex,
   );
   await _loadLiveState();
 } catch (e) {
   _lastSave = 'ОШИБКА: $e';
+  _lastServer = 'ОШИБКА: $e';
   _lastProblem = 'Сервер не сохранил точку: $e';
   _log('Сохранение точки: $e');
   await _serverLog(
-    'save point error: $e',
+    'save point error: $e · payload=$_lastPayload',
     level: 'error',
     source: 'save_point',
     rawHex: rawHex,
@@ -551,10 +626,15 @@ try {
     'fatigue_index': track.fatigueIndex,
     'speed_drop_percent': track.speedDropPercent,
     'hsr_distance_m': track.hsrDistanceM,
+    'hir_distance_m': track.hirDistanceM,
+    'vhir_distance_m': track.vhirDistanceM,
     'sprint_distance_m': track.sprintDistanceM,
     'sprint_count': track.sprintCount,
     'accel_count': track.accelCount,
     'decel_count': track.decelCount,
+    'change_of_direction_count': track.changeOfDirectionCount,
+    'football_movement_score': track.footballMovementScore,
+    'metabolic_power_proxy': track.metabolicPowerProxy,
     'work_rest_ratio': track.workRestRatio,
     'recommendation': track.recommendation,
     'analysis_json': track.toJson(),
@@ -576,13 +656,19 @@ _heartbeatTimer?.cancel();
 final id = _myLiveSessionId;
 if (id != null) {
   try {
-    await _api.stopLiveSession(
+    final result = await _api.stopLiveSession(
       liveSessionId: id,
       createFinalSession: true,
     );
-    _lastProblem = 'Live остановлен и сохранён как сессия';
-    _log('Live остановлен: session=$id');
+    _lastStop = _shortJson(result, max: 1200);
+    final finalId = result['final_session_id'] ?? result['session_id'] ?? result['tracker_session_id'];
+    final copied = result['copied_session_points'] ?? result['points_count'] ?? result['copied_points'];
+    _lastProblem = finalId == null
+        ? 'Live остановлен. Сервер ответил без final_session_id — проверь stop_tracker_live_session.php'
+        : 'Live остановлен и сохранён как сессия #$finalId · points=$copied';
+    _log('Live остановлен: session=$id · stop=$_lastStop');
   } catch (e) {
+    _lastStop = 'ОШИБКА: $e';
     _lastProblem = 'Ошибка остановки Live: $e';
     _log(_lastProblem);
   }
@@ -612,6 +698,45 @@ await _handleGpsPoint(
 );
 
 _lastProblem = 'Добавлена тестовая точка на устройстве. Если она двигается — UI работает, проблема в GPS/сервере.';
+if (mounted) setState(() {});
+}
+
+
+Future<void> _addDebugIntensitySequence() async {
+// Диагностический тест: искусственно создаёт HIR/VHIR/SPR/ACC/DEC/COD.
+// Нужен, чтобы быстро понять: UI/Flutter/сервер умеют показывать метрики или нет.
+final now = DateTime.now().millisecondsSinceEpoch;
+final last = _mainTrack?.points.isNotEmpty == true ? _mainTrack!.points.last : null;
+double lat = last?.lat ?? 55.973505;
+double lon = last?.lon ?? 37.399388;
+int t = last?.timeMs ?? now;
+
+final steps = <_DebugStep>[
+  const _DebugStep(northM: 0, eastM: 0, dtMs: 1000, label: 'DEBUG-START'),
+  const _DebugStep(northM: 4.2, eastM: 0, dtMs: 1000, label: 'DEBUG-HIR'),
+  const _DebugStep(northM: 5.8, eastM: 0, dtMs: 1000, label: 'DEBUG-VHIR'),
+  const _DebugStep(northM: 7.4, eastM: 0, dtMs: 1000, label: 'DEBUG-SPR'),
+  const _DebugStep(northM: 0.5, eastM: 0, dtMs: 1000, label: 'DEBUG-DEC'),
+  const _DebugStep(northM: 0, eastM: 5.5, dtMs: 1000, label: 'DEBUG-COD'),
+  const _DebugStep(northM: 0, eastM: 7.2, dtMs: 1000, label: 'DEBUG-SPR2'),
+];
+
+_log('--- DEBUG intensity sequence start ---');
+for (final step in steps) {
+  t += step.dtMs;
+  lat += _latOffsetByMeters(step.northM);
+  lon += _lonOffsetByMeters(step.eastM, lat);
+  await _handleGpsPoint(
+    latitude: lat,
+    longitude: lon,
+    timeMs: t,
+    packetType: step.label,
+    rawHex: null,
+  );
+  await Future<void>.delayed(const Duration(milliseconds: 120));
+}
+_lastProblem = 'Debug HIR/VHIR/SPR выполнен. Если метрики появились локально, но не появились в SQL — проблема PHP/API.';
+_log('--- DEBUG intensity sequence done: ${_debugTrackLine(_mainTrack)} ---');
 if (mounted) setState(() {});
 }
 
@@ -663,7 +788,7 @@ final key = _mode == TrackerLiveSourceMode.phoneGps
 
 final playerName = widget.selectedPlayer?.name ?? 'Игрок';
 final deviceName = _mode == TrackerLiveSourceMode.phoneGps
-    ? 'Телефон GPS'
+    ? 'Трекер GPS'
     : (device?.name ?? 'Трекер');
 
 return _tracks.putIfAbsent(
@@ -708,7 +833,17 @@ setState(() {
 
 void _toast(String text) {
 if (!mounted) return;
-ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+ScaffoldMessenger.of(context).showSnackBar(
+  SnackBar(
+    content: Text(text, style: const TextStyle(color: _OF.text, fontSize: 11.5, fontWeight: FontWeight.w500)),
+    backgroundColor: Colors.white,
+    behavior: SnackBarBehavior.floating,
+    elevation: 8,
+    margin: const EdgeInsets.all(14),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: _OF.line)),
+    duration: const Duration(seconds: 4),
+  ),
+);
 }
 
 _RuntimeTrack? get _mainTrack {
@@ -737,6 +872,10 @@ return server;
 }
 
 int get _displayPoints => _tracks.values.fold<int>(0, (s, t) => s + t.points.length);
+
+Widget _ofVerticalDivider() => Container(width: 1, color: _OF.line.withOpacity(.82));
+Widget _ofHorizontalDivider() => Container(height: 1, color: _OF.line.withOpacity(.82));
+
 @override
 Widget build(BuildContext context) {
 super.build(context);
@@ -748,50 +887,49 @@ return LayoutBuilder(
   builder: (context, constraints) {
     final width = constraints.maxWidth;
     final height = constraints.maxHeight;
+    late final Widget base;
 
     if (width < 720) {
-      return _phoneOpenFieldLayout(online, active.length);
+      base = _phoneOpenFieldLayout(online, active.length);
+    } else if (width < 1120) {
+      base = _tabletOpenFieldLayout(online, active.length, height);
+    } else {
+      base = _desktopOpenFieldLayout(online, active.length);
     }
 
-    if (width < 1120) {
-      return _tabletOpenFieldLayout(online, active.length, height);
-    }
-
-    return _desktopOpenFieldLayout(online, active.length);
+    return _withFloatingLiveWindow(base);
   },
 );
 }
 
 Widget _desktopOpenFieldLayout(int online, int active) {
 return Container(
-  color: _OF.bg,
+  color: Colors.transparent,
   child: Column(
     children: [
-      _operatorSessionHeader(online, active, compact: false),
-      _sessionTimeline(height: 76),
+      _liveControlStrip(online, active, compact: false),
+      _ofHorizontalDivider(),
       Expanded(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(width: 286, child: _activePlayersPanel(online, active)),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  children: [
-                    Expanded(flex: 58, child: _operatorFieldPanel()),
-                    const SizedBox(height: 8),
-                    Expanded(flex: 42, child: _wholeTeamTablePanel()),
-                  ],
-                ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(width: 188, child: _activePlayersPanel(online, active)),
+            _ofVerticalDivider(),
+            Expanded(
+              child: Column(
+                children: [
+                  Expanded(flex: 84, child: _operatorFieldPanel()),
+                  _ofHorizontalDivider(),
+                  Expanded(flex: 16, child: _wholeTeamTablePanel()),
+                ],
               ),
-              const SizedBox(width: 8),
-              SizedBox(width: 306, child: _rightOperatorPanel(online, active)),
-            ],
-          ),
+            ),
+            _ofVerticalDivider(),
+            SizedBox(width: 224, child: _rightOperatorPanel(online, active)),
+          ],
         ),
       ),
+      _ofHorizontalDivider(),
       _bottomOperatorBar(online, active),
     ],
   ),
@@ -800,59 +938,186 @@ return Container(
 
 Widget _tabletOpenFieldLayout(int online, int active, double height) {
 return Container(
-  color: _OF.bg,
+  color: Colors.transparent,
   child: Column(
     children: [
-      _operatorSessionHeader(online, active, compact: true),
-      _sessionTimeline(height: 66),
+      _liveControlStrip(online, active, compact: true),
+      _ofHorizontalDivider(),
       Expanded(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(width: 252, child: _activePlayersPanel(online, active)),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  children: [
-                    Expanded(flex: 62, child: _operatorFieldPanel()),
-                    const SizedBox(height: 8),
-                    Expanded(flex: 38, child: _wholeTeamTablePanel(compact: true)),
-                  ],
-                ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(width: 158, child: _activePlayersPanel(online, active)),
+            _ofVerticalDivider(),
+            Expanded(
+              child: Column(
+                children: [
+                  Expanded(flex: 84, child: _operatorFieldPanel()),
+                  _ofHorizontalDivider(),
+                  Expanded(flex: 16, child: _wholeTeamTablePanel(compact: true)),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-      SizedBox(height: 128, child: Padding(padding: const EdgeInsets.fromLTRB(8, 0, 8, 6), child: _tabletBottomInfoPanel(online, active))),
+      _ofHorizontalDivider(),
       _bottomOperatorBar(online, active),
     ],
   ),
 );
 }
 
+
+Widget _tabletInfoToggleBar(int online, int active) {
+  return Material(
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: () => setState(() => _bottomOperatorExpanded = !_bottomOperatorExpanded),
+      child: Container(
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: Row(
+          children: [
+            Icon(_bottomOperatorExpanded ? Icons.expand_more_rounded : Icons.chevron_right_rounded, size: 17, color: _OF.graphite),
+            const SizedBox(width: 6),
+            const Text('Оператор / трекер / debug', style: TextStyle(color: _OF.text, fontSize: 10.8, fontWeight: FontWeight.w700)),
+            const SizedBox(width: 8),
+            Text('$online/$active онлайн', style: const TextStyle(color: _OF.muted2, fontSize: 9.6, fontWeight: FontWeight.w600)),
+            const Spacer(),
+            Text(_bottomOperatorExpanded ? 'Скрыть' : 'Показать', style: const TextStyle(color: _OF.green, fontSize: 9.8, fontWeight: FontWeight.w700)),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 Widget _phoneOpenFieldLayout(int online, int active) {
 return Container(
-  color: _OF.bg,
+  color: Colors.transparent,
   child: ListView(
-    padding: const EdgeInsets.all(8),
+    padding: EdgeInsets.zero,
     children: [
-      _operatorSessionHeader(online, active, compact: true),
-      const SizedBox(height: 8),
-      _sessionTimeline(height: 72),
-      const SizedBox(height: 8),
-      SizedBox(height: 350, child: _operatorFieldPanel()),
-      const SizedBox(height: 8),
-      SizedBox(height: 320, child: _activePlayersPanel(online, active)),
-      const SizedBox(height: 8),
-      SizedBox(height: 320, child: _wholeTeamTablePanel(compact: true)),
-      const SizedBox(height: 8),
-      SizedBox(height: 440, child: _rightOperatorPanel(online, active)),
-      const SizedBox(height: 8),
+      _liveControlStrip(online, active, compact: true),
+      _ofHorizontalDivider(),
+      SizedBox(height: 470, child: _operatorFieldPanel()),
+      _ofHorizontalDivider(),
+      SizedBox(height: 300, child: _activePlayersPanel(online, active)),
+      _ofHorizontalDivider(),
+      SizedBox(height: 240, child: _wholeTeamTablePanel(compact: true)),
+      _ofHorizontalDivider(),
+      SizedBox(height: 420, child: _rightOperatorPanel(online, active)),
+      _ofHorizontalDivider(),
       _bottomOperatorBar(online, active),
     ],
+  ),
+);
+}
+
+Widget _liveControlStrip(int online, int active, {required bool compact}) {
+final fieldReady = widget.selectedField?.hasCalibration == true;
+final trackerReady = widget.ble.connectedInfo != null;
+final gpsReady = _lastGpsAt != null && DateTime.now().difference(_lastGpsAt!).inSeconds < 8;
+final canStart = fieldReady && trackerReady && !_running && !_starting;
+final duration = _durationText();
+
+return Container(
+  height: compact ? 42 : 44,
+  color: Colors.transparent,
+  padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 12),
+  child: Row(
+    children: [
+      _ofStatusDot(_running ? _OF.green : _OF.orange),
+      const SizedBox(width: 8),
+      Text(
+        _running ? 'Live' : 'Готовность',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(color: _OF.text, fontSize: 11.6, fontWeight: FontWeight.w700, letterSpacing: -.12),
+      ),
+      const SizedBox(width: 10),
+      _liveMiniChip(Icons.timer_rounded, duration, active: _running),
+      if (!compact) ...[
+        const SizedBox(width: 6),
+        _liveMiniChip(Icons.groups_rounded, '$online/$active', active: online > 0),
+        const SizedBox(width: 6),
+        _liveMiniChip(Icons.gps_fixed_rounded, gpsReady ? 'GPS' : 'GPS нет', active: gpsReady),
+        const SizedBox(width: 6),
+        _liveMiniChip(Icons.sensors_rounded, trackerReady ? 'Трекер' : 'Трекер нет', active: trackerReady),
+      ],
+      const SizedBox(width: 10),
+      Expanded(child: _compactLoadTimeline()),
+      const SizedBox(width: 10),
+      if (!compact)
+        SizedBox(
+          height: 30,
+          child: OutlinedButton.icon(
+            onPressed: widget.scanningBluetooth ? null : (widget.onScanBluetooth ?? widget.onManageTrackers),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: _OF.graphite,
+              side: BorderSide.none,
+              backgroundColor: _OF.header,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+            ),
+            icon: widget.scanningBluetooth
+                ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.bluetooth_searching_rounded, size: 14),
+            label: Text(widget.scanningBluetooth ? 'Поиск...' : 'Bluetooth', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700)),
+          ),
+        ),
+      const SizedBox(width: 6),
+      SizedBox(
+        height: 30,
+        child: FilledButton.icon(
+          onPressed: _starting ? null : (_running ? _stopLive : (canStart ? _startLive : _startLive)),
+          style: FilledButton.styleFrom(
+            backgroundColor: _running ? _OF.red : _OF.green,
+            disabledBackgroundColor: _OF.header,
+            disabledForegroundColor: _OF.muted,
+            padding: const EdgeInsets.symmetric(horizontal: 11),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+          ),
+          icon: Icon(_running ? Icons.stop_rounded : Icons.play_arrow_rounded, size: 14),
+          label: Text(_starting ? '...' : (_running ? 'Стоп' : 'Старт'), style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700)),
+        ),
+      ),
+    ],
+  ),
+);
+}
+
+Widget _liveMiniChip(IconData icon, String label, {required bool active}) {
+return Container(
+  height: 26,
+  padding: const EdgeInsets.symmetric(horizontal: 8),
+  decoration: BoxDecoration(
+    color: active ? _OF.greenSoft : _OF.header,
+    borderRadius: BorderRadius.circular(8),
+  ),
+  child: Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, color: active ? _OF.green : _OF.muted, size: 13),
+      const SizedBox(width: 5),
+      Text(label, style: TextStyle(color: active ? _OF.text : _OF.muted, fontSize: 9.4, fontWeight: FontWeight.w700)),
+    ],
+  ),
+);
+}
+
+Widget _compactLoadTimeline() {
+final points = _mainTrack?.points ?? const <_RuntimePoint>[];
+return SizedBox(
+  height: 22,
+  child: CustomPaint(
+    painter: _OpenFieldTimelinePainter(
+      points: points,
+      running: _running,
+      progressRatio: _timelineProgressRatio(),
+    ),
+    child: const SizedBox.expand(),
   ),
 );
 }
@@ -865,7 +1130,7 @@ final canStart = fieldReady && trackerReady && !_running && !_starting;
 final duration = _startedAt == null ? '00:00:00' : _formatDuration(DateTime.now().difference(_startedAt!));
 
 return Container(
-  height: compact ? 48 : 52,
+  height: compact ? 44 : 48,
   decoration: const BoxDecoration(
     color: Colors.white,
     border: Border(bottom: BorderSide(color: _OF.line, width: 1)),
@@ -880,7 +1145,7 @@ return Container(
         decoration: BoxDecoration(
           color: _running ? _OF.green.withOpacity(.12) : _OF.orange.withOpacity(.10),
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: _running ? _OF.green.withOpacity(.35) : _OF.orange.withOpacity(.25)),
+          
         ),
         child: Icon(_running ? Icons.radio_button_checked_rounded : Icons.sports_soccer_rounded, color: _running ? _OF.green : _OF.orange, size: 17),
       ),
@@ -894,14 +1159,14 @@ return Container(
               '${widget.teamName}  •  ${_running ? 'LIVE' : 'готово к запуску'}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: _OF.text, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: -.1),
+              style: const TextStyle(color: _OF.text, fontSize: 11.4, fontWeight: FontWeight.w500, letterSpacing: -.1),
             ),
             if (!compact)
               Text(
                 'Время $duration   ·   Игроки $online/$active   ·   GPS ${gpsReady ? 'есть' : 'нет'}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: _OF.muted, fontSize: 10, fontWeight: FontWeight.w800),
+                style: const TextStyle(color: _OF.muted, fontSize: 10, fontWeight: FontWeight.w500),
               ),
           ],
         ),
@@ -914,8 +1179,43 @@ return Container(
         _operatorMiniStatus('Трекер', trackerReady ? 'онлайн' : 'нет', light: true),
         const SizedBox(width: 10),
       ],
+      if (!trackerReady && widget.onScanBluetooth != null) ...[
+        SizedBox(
+          height: 32,
+          child: TextButton.icon(
+            onPressed: widget.onScanBluetooth,
+            style: TextButton.styleFrom(
+              foregroundColor: _OF.graphite,
+              backgroundColor: const Color(0xFFF1F3F6),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+              padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 11),
+            ),
+            icon: widget.scanningBluetooth
+                ? const SizedBox(width: 13, height: 13, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.bluetooth_searching_rounded, size: 15),
+            label: Text(widget.scanningBluetooth ? 'Поиск...' : (compact ? 'BLE' : 'Поиск Bluetooth')),
+          ),
+        ),
+        const SizedBox(width: 6),
+      ],
       SizedBox(
-        height: 34,
+        height: 32,
+        child: OutlinedButton.icon(
+          onPressed: _openFullDebugDialog,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: _OF.graphite,
+            side: BorderSide.none,
+            backgroundColor: const Color(0xFFF1F3F6),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+            padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 10),
+          ),
+          icon: const Icon(Icons.bug_report_rounded, size: 15),
+          label: Text(compact ? 'DBG' : 'Debug', style: const TextStyle(fontWeight: FontWeight.w500)),
+        ),
+      ),
+      const SizedBox(width: 6),
+      SizedBox(
+        height: 32,
         child: FilledButton.icon(
           onPressed: _running ? _stopLive : (canStart ? _startLive : null),
           style: FilledButton.styleFrom(
@@ -927,22 +1227,22 @@ return Container(
             padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 14),
           ),
           icon: Icon(_running ? Icons.stop_rounded : Icons.play_arrow_rounded, size: 17),
-          label: Text(_running ? 'Стоп' : 'Старт', style: const TextStyle(fontWeight: FontWeight.w900)),
+          label: Text(_running ? 'Стоп' : 'Старт', style: const TextStyle(fontWeight: FontWeight.w500)),
         ),
       ),
       const SizedBox(width: 6),
       SizedBox(
-        height: 34,
+        height: 32,
         child: OutlinedButton.icon(
           onPressed: _addPeriod,
           style: OutlinedButton.styleFrom(
             foregroundColor: _OF.text,
-            side: const BorderSide(color: _OF.line),
+            side: BorderSide.none,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
             padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 12),
           ),
           icon: const Icon(Icons.add_rounded, size: 16),
-          label: Text(compact ? 'Период' : '+ Период', style: const TextStyle(fontWeight: FontWeight.w900)),
+          label: Text(compact ? 'Период' : '+ Период', style: const TextStyle(fontWeight: FontWeight.w500)),
         ),
       ),
     ],
@@ -958,9 +1258,9 @@ return InkWell(
     alignment: Alignment.center,
     padding: const EdgeInsets.symmetric(horizontal: 14),
     decoration: BoxDecoration(
-      border: Border(bottom: BorderSide(color: active ? _OF.orange : Colors.transparent, width: 4)),
+      border: Border(bottom: BorderSide(color: active ? _OF.green : Colors.transparent, width: 3)),
     ),
-    child: Text(text, style: TextStyle(color: active ? Colors.white : Colors.white70, fontSize: 12, fontWeight: FontWeight.w900)),
+    child: Text(text, style: TextStyle(color: active ? _OF.green : _OF.muted, fontSize: 11.5, fontWeight: FontWeight.w600)),
   ),
 );
 }
@@ -974,48 +1274,19 @@ return Container(
     border: Border.all(color: light ? _OF.line : Colors.white12),
   ),
   child: Row(children: [
-    Text(label, style: TextStyle(color: light ? _OF.muted : Colors.white54, fontSize: 9, fontWeight: FontWeight.w800)),
+    Text(label, style: TextStyle(color: light ? _OF.muted : Colors.white54, fontSize: 9, fontWeight: FontWeight.w500)),
     const SizedBox(width: 5),
-    Text(value, style: TextStyle(color: light ? _OF.text : Colors.white, fontSize: 10, fontWeight: FontWeight.w900)),
+    Text(value, style: TextStyle(color: light ? _OF.text : Colors.white, fontSize: 10, fontWeight: FontWeight.w500)),
   ]),
 );
 }
 
 Widget _sessionTimeline({required double height}) {
-final activity = _durationText();
-return Container(
-  height: height,
-  color: Colors.white,
-  padding: const EdgeInsets.fromLTRB(14, 7, 14, 6),
-  child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Row(children: [
-        Expanded(
-          child: Text(
-            '${_todayLabel()}  ${widget.teamName}  ·  Время активности: $activity',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: _OF.text, fontSize: 12, fontWeight: FontWeight.w900),
-          ),
-        ),
-        if (_currentPeriodLabel().isNotEmpty)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: _OF.cyan.withOpacity(.18),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: _OF.cyan.withOpacity(.45)),
-            ),
-            child: Text(
-              _currentPeriodLabel(),
-              style: const TextStyle(color: _OF.text, fontSize: 9, fontWeight: FontWeight.w900),
-            ),
-          ),
-      ]),
-      const SizedBox(height: 8),
-      Expanded(child: CustomPaint(painter: _OpenFieldTimelinePainter(periods: _periods, running: _running, progressRatio: _timelineProgressRatio()), child: const SizedBox.expand())),
-    ],
+return SizedBox(
+  height: math.min(height, 28),
+  child: Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+    child: _compactLoadTimeline(),
   ),
 );
 }
@@ -1025,7 +1296,12 @@ final sessions = _sessions.isNotEmpty ? _sessions : <TrackerLiveSessionModel>[];
 return _ofPanel(
   title: 'Активные игроки',
   subtitle: '$online/$active онлайн',
-  actions: [IconButton(onPressed: () => _openExpandedLiveBlock('Активные игроки', Icons.groups_rounded, () => _playersCard()), icon: const Icon(Icons.open_in_full_rounded, size: 16))],
+  actions: _renderingFloatingLiveContent ? const [] : [
+    _livePanelWindowButton(
+      tooltip: 'Открыть игроков отдельным окном',
+      onTap: () => _openExpandedLiveBlock('Активные игроки', Icons.groups_rounded, () => _activePlayersPanel(online, active)),
+    ),
+  ],
   child: sessions.isEmpty
       ? _playersFallbackList()
       : ListView.builder(
@@ -1033,12 +1309,13 @@ return _ofPanel(
           itemBuilder: (_, i) {
             final s = sessions[i];
             final isSelected = widget.selectedPlayer?.id == s.playerId;
+            final local = _localTrackForPlayer(s.playerId);
             return _ofPlayerRow(
               name: s.playerName ?? 'Игрок ${s.playerId ?? ''}',
               number: '${i + 1}',
-              speed: s.speedKmh,
-              load: s.loadScore,
-              online: s.isOnline,
+              speed: math.max(s.speedKmh, local?.speedKmh ?? 0.0),
+              load: math.max(s.loadScore, local?.loadScore ?? 0.0),
+              online: s.isOnline || (local?.points.isNotEmpty ?? false),
               selected: isSelected,
             );
           },
@@ -1048,7 +1325,7 @@ return _ofPanel(
 
 Widget _playersFallbackList() {
 if (widget.players.isEmpty) {
-  return const Center(child: Text('Нет игроков команды', style: TextStyle(color: _OF.muted, fontWeight: FontWeight.w800)));
+  return const Center(child: Text('Нет игроков команды', style: TextStyle(color: _OF.muted, fontWeight: FontWeight.w500)));
 }
 return ListView.builder(
   itemCount: widget.players.length,
@@ -1075,11 +1352,11 @@ return Container(
     border: Border(left: BorderSide(color: online ? _OF.green : _OF.line, width: 4), bottom: const BorderSide(color: _OF.line)),
   ),
   child: Row(children: [
-    SizedBox(width: 34, child: Center(child: Text(number, style: const TextStyle(color: _OF.text, fontSize: 11, fontWeight: FontWeight.w900)))),
-    Expanded(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _OF.text, fontSize: 11, fontWeight: FontWeight.w800))),
-    Text('${speed.toStringAsFixed(1)}', style: const TextStyle(color: _OF.text, fontSize: 10, fontWeight: FontWeight.w900)),
+    SizedBox(width: 34, child: Center(child: Text(number, style: const TextStyle(color: _OF.text, fontSize: 10.6, fontWeight: FontWeight.w500)))),
+    Expanded(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _OF.text, fontSize: 10.6, fontWeight: FontWeight.w500))),
+    Text('${speed.toStringAsFixed(1)}', style: const TextStyle(color: _OF.text, fontSize: 10, fontWeight: FontWeight.w500)),
     const SizedBox(width: 8),
-    Text(load.toStringAsFixed(0), style: TextStyle(color: load > 70 ? _OF.red : _OF.muted, fontSize: 10, fontWeight: FontWeight.w900)),
+    Text(load.toStringAsFixed(0), style: TextStyle(color: load > 70 ? _OF.red : _OF.muted, fontSize: 10, fontWeight: FontWeight.w500)),
     const SizedBox(width: 8),
   ]),
 );
@@ -1093,7 +1370,11 @@ return _ofPanel(
     _layerButton('Trace', _showTrace, () => setState(() => _showTrace = !_showTrace)),
     _layerButton('Heat', _showHeatmap, () => setState(() => _showHeatmap = !_showHeatmap)),
     _layerButton('Tag', _showLabels, () => setState(() => _showLabels = !_showLabels)),
-    IconButton(onPressed: () => _openExpandedLiveBlock('Поле / тактическая карта', Icons.map_rounded, _rightPitchCard), icon: const Icon(Icons.open_in_full_rounded, size: 16)),
+    if (!_renderingFloatingLiveContent)
+      _livePanelWindowButton(
+        tooltip: 'Открыть поле отдельным окном',
+        onTap: () => _openExpandedLiveBlock('Поле / тактическая карта', Icons.map_rounded, () => _fieldCard()),
+      ),
   ],
   child: _fieldCard(),
 );
@@ -1106,8 +1387,36 @@ return Padding(
     onTap: onTap,
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-      decoration: BoxDecoration(color: active ? _OF.black : Colors.white, border: Border.all(color: _OF.line), borderRadius: BorderRadius.circular(2)),
-      child: Text(label, style: TextStyle(color: active ? Colors.white : _OF.text, fontSize: 9, fontWeight: FontWeight.w900)),
+      decoration: BoxDecoration(color: active ? _OF.greenSoft : Colors.white, border: Border.all(color: active ? _OF.greenBorder : _OF.line), borderRadius: BorderRadius.circular(8)),
+      child: Text(label, style: TextStyle(color: active ? _OF.green : _OF.text, fontSize: 9, fontWeight: FontWeight.w600)),
+    ),
+  ),
+);
+}
+
+Widget _livePanelWindowButton({required String tooltip, required VoidCallback onTap}) {
+return Padding(
+  padding: const EdgeInsets.only(left: 6),
+  child: Tooltip(
+    message: tooltip,
+    waitDuration: const Duration(milliseconds: 350),
+    child: Material(
+      color: const Color(0xFFF4F6F8),
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: Container(
+          width: 30,
+          height: 30,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: _OF.lineStrong.withOpacity(.85)),
+          ),
+          child: const Icon(Icons.open_in_full_rounded, size: 15, color: Color(0xFF8B95A3)),
+        ),
+      ),
     ),
   ),
 );
@@ -1118,8 +1427,11 @@ final rows = _sessions.isNotEmpty ? _sessions : <TrackerLiveSessionModel>[];
 return _ofPanel(
   title: 'Командная таблица',
   subtitle: _running ? 'Live' : 'Готово',
-  actions: [
-    IconButton(onPressed: () => _openExpandedLiveBlock('Командная таблица', Icons.table_chart_rounded, () => _wholeTeamTablePanel(compact: false)), icon: const Icon(Icons.open_in_full_rounded, size: 16)),
+  actions: _renderingFloatingLiveContent ? const [] : [
+    _livePanelWindowButton(
+      tooltip: 'Открыть таблицу отдельным окном',
+      onTap: () => _openExpandedLiveBlock('Командная таблица', Icons.table_chart_rounded, () => _wholeTeamTablePanel(compact: false)),
+    ),
   ],
   child: Column(children: [
     _teamTableHeader(compact: compact),
@@ -1136,17 +1448,17 @@ return _ofPanel(
 Widget _teamTableHeader({required bool compact}) {
 final cells = compact
     ? const ['№', 'ИГРОК', 'ДИСТ.', 'М/МИН', 'MAX']
-    : const ['№', 'ИГРОК', 'ДИСТ.', 'М/МИН', 'НАГРУЗКА', 'MAX', 'HSR', 'SPR'];
+    : const ['№', 'ИГРОК', 'ДИСТ.', 'М/МИН', 'MAX', 'HIR', 'VHIR', 'SPR', 'ACC', 'DEC', 'COD'];
 return Container(
   height: 32,
   color: _OF.header,
-  child: Row(children: cells.map((c) => Expanded(flex: c == 'ИГРОК' ? 3 : 1, child: Center(child: Text(c, style: const TextStyle(color: _OF.text, fontSize: 10, fontWeight: FontWeight.w900))))).toList()),
+  child: Row(children: cells.map((c) => Expanded(flex: c == 'ИГРОК' ? 3 : 1, child: Center(child: Text(c, style: const TextStyle(color: _OF.text, fontSize: 10, fontWeight: FontWeight.w500))))).toList()),
 );
 }
 
 Widget _teamTableFallback({required bool compact}) {
 final players = widget.players;
-if (players.isEmpty) return const Center(child: Text('Live-данные появятся после старта мониторинга', style: TextStyle(color: _OF.muted, fontWeight: FontWeight.w800)));
+if (players.isEmpty) return const Center(child: Text('Live-данные появятся после старта мониторинга', style: TextStyle(color: _OF.muted, fontWeight: FontWeight.w500)));
 return ListView.builder(
   itemCount: players.length,
   itemBuilder: (_, i) {
@@ -1158,8 +1470,12 @@ return ListView.builder(
       metersPerMin: widget.selectedPlayer?.id == p.id ? (_mainTrack?.metersPerMinute ?? 0) : 0,
       load: widget.selectedPlayer?.id == p.id ? (_mainTrack?.loadScore ?? 0) : 0,
       max: widget.selectedPlayer?.id == p.id ? (_mainTrack?.maxSpeedKmh ?? 0) : 0,
-      hsr: widget.selectedPlayer?.id == p.id ? (_mainTrack?.hsrDistanceM ?? 0) : 0,
+      hir: widget.selectedPlayer?.id == p.id ? (_mainTrack?.hirDistanceM ?? 0) : 0,
+      vhir: widget.selectedPlayer?.id == p.id ? (_mainTrack?.vhirDistanceM ?? 0) : 0,
       sprint: widget.selectedPlayer?.id == p.id ? (_mainTrack?.sprintDistanceM ?? 0) : 0,
+      accel: widget.selectedPlayer?.id == p.id ? (_mainTrack?.accelCount ?? 0) : 0,
+      decel: widget.selectedPlayer?.id == p.id ? (_mainTrack?.decelCount ?? 0) : 0,
+      cod: widget.selectedPlayer?.id == p.id ? (_mainTrack?.changeOfDirectionCount ?? 0) : 0,
       compact: compact,
       highlight: widget.selectedPlayer?.id == p.id,
     );
@@ -1168,24 +1484,29 @@ return ListView.builder(
 }
 
 Widget _teamTableRowFromSession(TrackerLiveSessionModel s, int i, {required bool compact}) {
+final local = _localTrackForPlayer(s.playerId);
 return _teamTableRow(
   number: '${i + 1}',
   name: s.playerName ?? 'Игрок ${s.playerId ?? ''}',
-  distance: s.totalDistanceM,
-  metersPerMin: 0,
-  load: s.loadScore,
-  max: s.maxSpeedKmh,
-  hsr: 0,
-  sprint: 0,
+  distance: math.max(s.totalDistanceM, local?.totalDistanceM ?? 0.0),
+  metersPerMin: math.max(s.metersPerMinute, local?.metersPerMinute ?? 0.0),
+  load: math.max(s.loadScore, local?.loadScore ?? 0.0),
+  max: math.max(s.maxSpeedKmh, local?.maxSpeedKmh ?? 0.0),
+  hir: math.max(s.hirDistanceM, local?.hirDistanceM ?? 0.0),
+  vhir: math.max(s.vhirDistanceM, local?.vhirDistanceM ?? 0.0),
+  sprint: math.max(s.sprintDistanceM, local?.sprintDistanceM ?? 0.0),
+  accel: math.max(s.accelCount, local?.accelCount ?? 0),
+  decel: math.max(s.decelCount, local?.decelCount ?? 0),
+  cod: math.max(s.changeOfDirectionCount, local?.changeOfDirectionCount ?? 0),
   compact: compact,
   highlight: widget.selectedPlayer?.id == s.playerId,
 );
 }
 
-Widget _teamTableRow({required String number, required String name, required double distance, required double metersPerMin, required double load, required double max, required double hsr, required double sprint, required bool compact, required bool highlight}) {
+Widget _teamTableRow({required String number, required String name, required double distance, required double metersPerMin, required double load, required double max, required double hir, required double vhir, required double sprint, required num accel, required num decel, required num cod, required bool compact, required bool highlight}) {
 final values = compact
     ? <String>[number, name, distance.toStringAsFixed(0), metersPerMin.toStringAsFixed(1), max.toStringAsFixed(1)]
-    : <String>[number, name, distance.toStringAsFixed(0), metersPerMin.toStringAsFixed(1), load.toStringAsFixed(0), max.toStringAsFixed(1), hsr.toStringAsFixed(0), sprint.toStringAsFixed(0)];
+    : <String>[number, name, distance.toStringAsFixed(0), metersPerMin.toStringAsFixed(1), max.toStringAsFixed(1), hir.toStringAsFixed(0), vhir.toStringAsFixed(0), sprint.toStringAsFixed(0), accel.toStringAsFixed(0), decel.toStringAsFixed(0), cod.toStringAsFixed(0)];
 return Container(
   height: 34,
   color: highlight ? const Color(0xFFFFE7D1) : Colors.white,
@@ -1197,7 +1518,7 @@ return Container(
           alignment: i == 1 ? Alignment.centerLeft : Alignment.center,
           padding: EdgeInsets.only(left: i == 1 ? 8 : 0),
           decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: _OF.line), right: BorderSide(color: _OF.line))),
-          child: Text(values[i], maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _OF.text, fontSize: 10, fontWeight: FontWeight.w800)),
+          child: Text(values[i], maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _OF.text, fontSize: 10, fontWeight: FontWeight.w500)),
         ),
       ),
   ]),
@@ -1220,50 +1541,58 @@ return _ofPanel(
       _trackerDevicePanel(),
       const SizedBox(height: 8),
       _ProblemBox(text: _lastProblem),
+      const SizedBox(height: 8),
+      _debugLiveChainPanel(),
     ],
   ),
 );
 }
 
 Widget _tabletBottomInfoPanel(int online, int active) {
+// Debug виден прямо в нижнем ряду планшетного/оконного layout.
+// На скрине пользователя открывался именно этот layout, поэтому правый блок "Оператор" не отображался.
 return Row(children: [
   Expanded(child: _pipGroupPanel(online, active)),
-  const SizedBox(width: 8),
+  _ofVerticalDivider(),
   Expanded(child: _velocityBandsPanel()),
-  const SizedBox(width: 8),
+  _ofVerticalDivider(),
   Expanded(child: _trackerDevicePanel()),
+  _ofVerticalDivider(),
+  Expanded(flex: 2, child: _debugLiveChainPanel()),
 ]);
 }
 
 Widget _pipGroupPanel(int online, int active) {
 final ids = widget.players.take(12).map((p) => '${p.number ?? p.id}').toList();
-return _miniOfCard('Группа PIP', 'Group ($active)', Wrap(spacing: 5, runSpacing: 5, children: ids.isEmpty ? [const Text('Нет игроков', style: TextStyle(color: _OF.muted, fontWeight: FontWeight.w800))] : ids.map((id) => Container(
+return _miniOfCard('Группа PIP', 'Group ($active)', Wrap(spacing: 5, runSpacing: 5, children: ids.isEmpty ? [const Text('Нет игроков', style: TextStyle(color: _OF.muted, fontWeight: FontWeight.w500))] : ids.map((id) => Container(
   width: 42,
   height: 26,
   alignment: Alignment.center,
   decoration: BoxDecoration(color: _OF.pip, border: Border.all(color: _OF.green.withOpacity(.28)), borderRadius: BorderRadius.circular(4)),
-  child: Text(id, style: const TextStyle(color: _OF.text, fontSize: 11, fontWeight: FontWeight.w900)),
+  child: Text(id, style: const TextStyle(color: _OF.text, fontSize: 10.6, fontWeight: FontWeight.w500)),
 )).toList()));
 }
 
 Widget _selectedAthletePanel() {
 return _miniOfCard('Выбран игрок', widget.selectedPlayer?.name ?? 'не выбран', Row(children: [
-  CircleAvatar(radius: 18, backgroundColor: _OF.green, child: Text(_playerInitials(widget.selectedPlayer?.name ?? 'И'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900))),
+  CircleAvatar(radius: 18, backgroundColor: _OF.green, child: Text(_playerInitials(widget.selectedPlayer?.name ?? 'И'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500))),
   const SizedBox(width: 8),
-  Expanded(child: Text(widget.selectedPlayer?.name ?? 'Выберите игрока слева', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _OF.text, fontSize: 11, fontWeight: FontWeight.w900))),
+  Expanded(child: Text(widget.selectedPlayer?.name ?? 'Выберите игрока слева', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _OF.text, fontSize: 10.6, fontWeight: FontWeight.w500))),
 ]));
 }
 
 Widget _velocityBandsPanel() {
 final track = _mainTrack;
-final double hsr = (track?.hsrDistanceM ?? 0).toDouble();
+final double hir = (track?.hirDistanceM ?? 0).toDouble();
+final double vhir = (track?.vhirDistanceM ?? 0).toDouble();
 final double sprint = (track?.sprintDistanceM ?? 0).toDouble();
-final double run = math.max(0.0, (track?.totalDistanceM ?? 0).toDouble() - hsr - sprint).toDouble();
-final double maxVal = math.max(1.0, math.max(run, math.max(hsr, sprint))).toDouble();
+final double run = math.max(0.0, (track?.totalDistanceM ?? 0).toDouble() - hir - vhir - sprint).toDouble();
+final double maxVal = math.max(1.0, math.max(run, math.max(hir, math.max(vhir, sprint)))).toDouble();
 return _miniOfCard('Зоны скорости', 'бег / HIR / VHIR / спринт', Column(children: [
   _bandRow('Run', run, maxVal, _OF.green),
-  _bandRow('HIR', hsr, maxVal, _OF.orange),
-  _bandRow('Sprint', sprint, maxVal, _OF.red),
+  _bandRow('HIR', hir, maxVal, _OF.orange),
+  _bandRow('VHIR', vhir, maxVal, _OF.cyan),
+  _bandRow('SPR', sprint, maxVal, _OF.red),
 ]));
 }
 
@@ -1271,10 +1600,10 @@ Widget _bandRow(String label, double value, double max, Color color) {
 return Padding(
   padding: const EdgeInsets.only(bottom: 8),
   child: Row(children: [
-    SizedBox(width: 42, child: Text(label, style: const TextStyle(color: _OF.text, fontSize: 10, fontWeight: FontWeight.w900))),
+    SizedBox(width: 42, child: Text(label, style: const TextStyle(color: _OF.text, fontSize: 10, fontWeight: FontWeight.w500))),
     Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(2), child: LinearProgressIndicator(value: (value / max).clamp(0, 1), minHeight: 8, backgroundColor: _OF.line, valueColor: AlwaysStoppedAnimation<Color>(color)))),
     const SizedBox(width: 8),
-    SizedBox(width: 42, child: Text('${value.toStringAsFixed(0)} м', textAlign: TextAlign.right, style: const TextStyle(color: _OF.text, fontSize: 9, fontWeight: FontWeight.w900))),
+    SizedBox(width: 42, child: Text('${value.toStringAsFixed(0)} м', textAlign: TextAlign.right, style: const TextStyle(color: _OF.text, fontSize: 9, fontWeight: FontWeight.w500))),
   ]),
 );
 }
@@ -1293,23 +1622,44 @@ return _miniOfCard('Трекер', device?.name ?? 'Не подключён', Ro
   ),
   const SizedBox(width: 10),
   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-    Text(device == null ? 'SPORTOTEKA GPS PRO' : device.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _OF.text, fontSize: 11, fontWeight: FontWeight.w900)),
+    Text(device == null ? 'SPORTOTEKA GPS PRO' : device.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _OF.text, fontSize: 10.6, fontWeight: FontWeight.w500)),
     const SizedBox(height: 3),
-    Row(children: [_ofStatusDot(device == null ? _OF.red : _OF.green), const SizedBox(width: 5), Text(device == null ? 'Офлайн' : 'Подключён', style: const TextStyle(color: _OF.text, fontSize: 10, fontWeight: FontWeight.w900))]),
+    Row(children: [_ofStatusDot(device == null ? _OF.red : _OF.green), const SizedBox(width: 5), Text(device == null ? 'Офлайн' : 'Подключён', style: const TextStyle(color: _OF.text, fontSize: 10, fontWeight: FontWeight.w500))]),
     const SizedBox(height: 5),
-    SizedBox(height: 28, child: OutlinedButton.icon(onPressed: widget.onManageTrackers, icon: const Icon(Icons.sensors_rounded, size: 14), label: Text(device == null ? 'Подключить' : 'Сменить'), style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), foregroundColor: _OF.orange, side: const BorderSide(color: _OF.orange)))),
+    SizedBox(
+      height: 28,
+      child: OutlinedButton.icon(
+        onPressed: widget.scanningBluetooth
+            ? null
+            : (device == null ? (widget.onScanBluetooth ?? widget.onManageTrackers) : widget.onManageTrackers),
+        icon: widget.scanningBluetooth
+            ? const SizedBox(width: 13, height: 13, child: CircularProgressIndicator(strokeWidth: 2))
+            : Icon(device == null ? Icons.bluetooth_searching_rounded : Icons.sensors_rounded, size: 14),
+        label: Text(widget.scanningBluetooth ? 'Поиск...' : (device == null ? 'Поиск Bluetooth' : 'Сменить')),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          foregroundColor: _OF.graphite,
+          side: BorderSide.none,
+          backgroundColor: const Color(0xFFF1F3F6),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      ),
+    ),
   ])),
 ]));
 }
 
 Widget _miniOfCard(String title, String subtitle, Widget child) {
 return Container(
-  padding: const EdgeInsets.all(8),
-  decoration: BoxDecoration(color: Colors.white, border: Border.all(color: _OF.line), borderRadius: BorderRadius.circular(3)),
+  padding: const EdgeInsets.all(9),
+  decoration: BoxDecoration(
+    color: Colors.white.withOpacity(.64),
+    borderRadius: BorderRadius.circular(10),
+  ),
   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
     Row(children: [
-      Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _OF.text, fontSize: 12, fontWeight: FontWeight.w900))),
-      Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _OF.muted, fontSize: 9, fontWeight: FontWeight.w800)),
+      Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _OF.text, fontSize: 11.4, fontWeight: FontWeight.w700))),
+      Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _OF.muted2, fontSize: 9.2, fontWeight: FontWeight.w600)),
     ]),
     const SizedBox(height: 8),
     child,
@@ -1319,16 +1669,16 @@ return Container(
 
 Widget _ofPanel({required String title, required String subtitle, required Widget child, List<Widget> actions = const []}) {
 return Container(
-  decoration: BoxDecoration(color: Colors.white, border: Border.all(color: _OF.line), borderRadius: BorderRadius.circular(2)),
+  decoration: const BoxDecoration(color: Colors.transparent),
   clipBehavior: Clip.antiAlias,
   child: Column(children: [
     Container(
       height: 34,
-      padding: const EdgeInsets.symmetric(horizontal: 9),
-      decoration: const BoxDecoration(color: _OF.header, border: Border(bottom: BorderSide(color: _OF.line))),
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: const BoxDecoration(color: Colors.transparent, border: Border(bottom: BorderSide(color: _OF.line))),
       child: Row(children: [
-        Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _OF.text, fontSize: 12, fontWeight: FontWeight.w900))),
-        if (subtitle.isNotEmpty) Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _OF.muted, fontSize: 9, fontWeight: FontWeight.w800)),
+        Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _OF.text, fontSize: 11.7, fontWeight: FontWeight.w700, letterSpacing: -.14))),
+        if (subtitle.isNotEmpty) Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _OF.muted2, fontSize: 9.4, fontWeight: FontWeight.w600)),
         ...actions,
       ]),
     ),
@@ -1337,27 +1687,333 @@ return Container(
 );
 }
 
+
+Widget _debugLiveChainPanel() {
+return _miniOfCard(
+  'Debug Live',
+  _running ? 'запись' : 'готово',
+  Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      SizedBox(
+        height: 30,
+        child: OutlinedButton.icon(
+          onPressed: _openFullDebugDialog,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: _OF.graphite,
+            side: BorderSide.none,
+            backgroundColor: const Color(0xFFF1F3F6),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          icon: const Icon(Icons.open_in_full_rounded, size: 14, color: Color(0xFF8B95A3)),
+          label: const Text('Полный debug', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700)),
+        ),
+      ),
+      const SizedBox(height: 6),
+      _DebugLine(label: 'LOCAL', value: _lastLocalMetrics),
+      _DebugLine(label: 'GPS', value: _lastZeroReason),
+      if (_running) _DebugLine(label: 'STATE', value: _lastLiveState),
+    ],
+  ),
+);
+}
+
+_RuntimeTrack? _localTrackForPlayer(int? playerId) {
+if (playerId == null) return null;
+if (widget.selectedPlayer?.id == playerId) return _mainTrack;
+return null;
+}
+
+String _debugTrackLine(_RuntimeTrack? track) {
+if (track == null) return 'local=null';
+return 'pts=${track.points.length} sp=${track.speedKmh.toStringAsFixed(1)} raw=${track.rawSpeedKmh.toStringAsFixed(1)} '
+    'd=${track.totalDistanceM.toStringAsFixed(1)} +${track.lastDeltaM.toStringAsFixed(2)} '
+    'm/min=${track.metersPerMinute.toStringAsFixed(1)} max=${track.maxSpeedKmh.toStringAsFixed(1)} '
+    'HIR=${track.hirDistanceM.toStringAsFixed(1)} VHIR=${track.vhirDistanceM.toStringAsFixed(1)} '
+    'SPR=${track.sprintDistanceM.toStringAsFixed(1)} ACC=${track.accelCount} DEC=${track.decelCount} COD=${track.changeOfDirectionCount} '
+    'dur=${track.durationSec}s';
+}
+
+String _debugSessionLine(TrackerLiveSessionModel s) {
+return 'id=${s.id} st=${s.status} sp=${s.speedKmh.toStringAsFixed(1)} '
+    'd=${s.totalDistanceM.toStringAsFixed(1)} m/min=${s.metersPerMinute.toStringAsFixed(1)} '
+    'max=${s.maxSpeedKmh.toStringAsFixed(1)} HIR=${s.hirDistanceM.toStringAsFixed(1)} '
+    'VHIR=${s.vhirDistanceM.toStringAsFixed(1)} SPR=${s.sprintDistanceM.toStringAsFixed(1)} '
+    'ACC=${s.accelCount} DEC=${s.decelCount} COD=${s.changeOfDirectionCount} dur=${s.durationSec}s';
+}
+
+String _debugPayloadLine(Map<String, dynamic> payload) {
+return 'keys=${payload.keys.length} '
+    'session=${payload['live_session_id']} sp=${_fmt(payload['speed_kmh'])} raw=${_fmt(payload['raw_speed_kmh'])} '
+    '+d=${_fmt(payload['distance_delta_m'])} total=${_fmt(payload['total_distance_m'])} '
+    'm/min=${_fmt(payload['meterage_per_min'])} HIR=${_fmt(payload['hir_distance_m'])} '
+    'VHIR=${_fmt(payload['vhir_distance_m'])} SPR=${_fmt(payload['sprint_distance_m'])} '
+    'ACC=${payload['accel_count'] ?? 0} DEC=${payload['decel_count'] ?? 0} COD=${payload['change_of_direction_count'] ?? 0} '
+    'analysis=${payload['analysis_json'] == null ? 'NULL' : 'YES'}';
+}
+
+String _debugServerLine(Map<String, dynamic> result) {
+return 'point=${result['point_id'] ?? '-'} idx=${result['point_index'] ?? '-'} '
+    'sp=${_fmt(result['speed_kmh'])} +d=${_fmt(result['distance_delta_m'])} zone=${result['speed_zone'] ?? '-'} '
+    'HIR+${_fmt(result['hir_delta_m'])} VHIR+${_fmt(result['vhir_delta_m'])} SPR+${_fmt(result['sprint_delta_m'])} '
+    'ACC=${result['accel_event'] ?? '-'} DEC=${result['decel_event'] ?? '-'} COD=${result['cod_event'] ?? '-'}';
+}
+
+String _debugZeroReason(_RuntimeTrack track, _RuntimePoint stat) {
+if (track.points.length < 2) return 'нужны минимум 2 точки для скорости';
+if (!stat.acceptedForMetrics) return stat.rejectReason ?? 'GPS-шум отфильтрован';
+if (stat.distanceDeltaM <= 0.25) return 'смещение ${stat.distanceDeltaM.toStringAsFixed(2)} м — мало для скорости';
+if (track.speedKmh < 14.4) return 'скорость ${track.speedKmh.toStringAsFixed(1)} км/ч ниже HIR 14.4';
+if (track.speedKmh < 19.8) return 'должен расти HIR, VHIR/SPR ещё нет';
+if (track.speedKmh < 25.2) return 'должен расти VHIR, SPR ещё нет';
+return 'должен расти SPR; если SQL ноль — не доходит payload/PHP';
+}
+
+String _fmt(dynamic value) {
+final n = value is num ? value.toDouble() : double.tryParse('$value');
+if (n == null || n.isNaN || n.isInfinite) return '$value';
+return n.toStringAsFixed(n.abs() >= 100 ? 0 : 2);
+}
+
+String _shortJson(Map<String, dynamic> value, {int max = 900}) {
+final text = jsonEncode(value);
+return text.length <= max ? text : '${text.substring(0, max)}...';
+}
+
+double _latOffsetByMeters(double meters) => meters / 111111.0;
+
+double _lonOffsetByMeters(double meters, double latitude) {
+final c = math.cos(_deg(latitude)).abs().clamp(0.2, 1.0).toDouble();
+return meters / (111111.0 * c);
+}
+
+String _debugDumpText() {
+final device = widget.ble.connectedInfo;
+final field = widget.selectedField;
+final track = _mainTrack;
+final firstSession = _sessions.isNotEmpty ? _sessions.first : null;
+final encoder = const JsonEncoder.withIndent('  ');
+String jsonPretty(dynamic value) {
+  try {
+    return encoder.convert(value);
+  } catch (_) {
+    return '$value';
+  }
+}
+
+return <String>[
+  'SPORTOTEKA TRACKER LIVE DEBUG',
+  'time=${DateTime.now().toIso8601String()}',
+  'club_id=${widget.clubId}',
+  'team_id=${widget.teamId}',
+  'team_name=${widget.teamName}',
+  'player_id=${widget.selectedPlayer?.id}',
+  'player_name=${widget.selectedPlayer?.name}',
+  'live_session_id=$_myLiveSessionId',
+  'running=$_running starting=$_starting saving_point=$_savingPoint mode=${_mode.name}',
+  'field_id=${field?.id} field_title=${field?.title} calibrated=${field?.hasCalibration}',
+  'device_id=${device?.id} device_name=${device?.name} scanning=${widget.scanningBluetooth} battery=${widget.batteryPercent}',
+  '',
+  'LOCAL=$_lastLocalMetrics',
+  'ZERO=$_lastZeroReason',
+  'PAYLOAD=$_lastPayload',
+  'SERVER=$_lastServer',
+  'STATE=$_lastLiveState',
+  'SAVE=$_lastSave',
+  'STOP=$_lastStop',
+  'PROBLEM=$_lastProblem',
+  '',
+  'TX=$_lastTx',
+  'RX=$_lastRx',
+  'GPS=$_lastGps',
+  'gps_age=${_lastGpsAt == null ? 'нет' : '${DateTime.now().difference(_lastGpsAt!).inSeconds}s'}',
+  'save_age=${_lastSaveAt == null ? 'нет' : '${DateTime.now().difference(_lastSaveAt!).inSeconds}s'}',
+  '',
+  'LOCAL_TRACK_JSON:',
+  track == null ? 'null' : jsonPretty(track.toJson()),
+  '',
+  'FIRST_SERVER_SESSION:',
+  firstSession == null ? 'null' : _debugSessionLine(firstSession),
+  '',
+  'LAST_LOGS:',
+  ..._logs.take(90),
+].join('\n');
+}
+
+Future<void> _copyDebugDump() async {
+await Clipboard.setData(ClipboardData(text: _debugDumpText()));
+_toast('Debug скопирован. Можно прислать сюда текст из буфера.');
+}
+
+Future<void> _openFullDebugDialog() async {
+if (!mounted) return;
+await showDialog<void>(
+  context: context,
+  builder: (context) {
+    return Dialog(
+      backgroundColor: Colors.white,
+      insetPadding: const EdgeInsets.all(18),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 980, maxHeight: 760),
+        child: Column(
+          children: [
+            Container(
+              height: 56,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: const BoxDecoration(
+                color: _OF.header,
+                border: Border(bottom: BorderSide(color: _OF.line)),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(color: _OF.graphite.withOpacity(.09), borderRadius: BorderRadius.circular(10)),
+                    child: const Icon(Icons.bug_report_rounded, color: _OF.graphite, size: 18),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Полный Debug Live', style: TextStyle(color: _OF.text, fontSize: 14, fontWeight: FontWeight.w600)),
+                        Text('Реальные данные: BLE → GPS → LOCAL → PAYLOAD → SERVER → STATE → STOP', style: TextStyle(color: _OF.muted, fontSize: 10.5, fontWeight: FontWeight.w500)),
+                      ],
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: _copyDebugDump,
+                    icon: const Icon(Icons.copy_rounded, size: 16),
+                    label: const Text('Скопировать'),
+                    style: TextButton.styleFrom(foregroundColor: _OF.graphite),
+                  ),
+                  _floatingWindowControl(Icons.close_rounded, () => Navigator.of(context).pop(), 'Закрыть'),
+                ],
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _FullDebugLine(label: 'LOCAL', value: _lastLocalMetrics),
+                    _FullDebugLine(label: 'ZERO?', value: _lastZeroReason),
+                    _FullDebugLine(label: 'PAYLOAD', value: _lastPayload),
+                    _FullDebugLine(label: 'SERVER', value: _lastServer),
+                    _FullDebugLine(label: 'STATE', value: _lastLiveState),
+                    _FullDebugLine(label: 'SAVE', value: _lastSave),
+                    _FullDebugLine(label: 'STOP', value: _lastStop),
+                    _FullDebugLine(label: 'PROBLEM', value: _lastProblem),
+                    const SizedBox(height: 10),
+                    _FullDebugLine(label: 'TX', value: _lastTx),
+                    _FullDebugLine(label: 'RX', value: _lastRx),
+                    _FullDebugLine(label: 'GPS', value: _lastGps),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: const Color(0xFF0B0F14), borderRadius: BorderRadius.circular(12)),
+                      child: SelectableText(
+                        _debugDumpText(),
+                        style: const TextStyle(color: Colors.white70, fontSize: 10.6, height: 1.35, fontFamily: 'monospace'),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFFED7AA))),
+                      child: const Text(
+                        'Важно: кнопки тестовых точек ниже создают искусственные данные. Для проверки реального трекера не нажимай их — смотри LOCAL/PAYLOAD/SERVER/STATE после движения с подключённым устройством.',
+                        style: TextStyle(color: _OF.text, fontSize: 10.6, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _addDebugLocalPoint,
+                            icon: const Icon(Icons.add_location_alt_rounded, size: 16),
+                            label: const Text('Тест: точка (не трекер)'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _addDebugIntensitySequence,
+                            icon: const Icon(Icons.flash_on_rounded, size: 16),
+                            label: const Text('Тест: HIR/VHIR/SPR (не трекер)'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  },
+);
+}
+
 Widget _bottomOperatorBar(int online, int active) {
 return Container(
-  height: 36,
-  decoration: const BoxDecoration(color: _OF.black, border: Border(top: BorderSide(color: _OF.orange, width: 2))),
-  padding: const EdgeInsets.symmetric(horizontal: 12),
+  height: 28,
+  decoration: const BoxDecoration(color: Colors.white),
+  padding: const EdgeInsets.symmetric(horizontal: 10),
   child: Row(children: [
     _ofStatusDot(_running ? _OF.green : _OF.red),
     const SizedBox(width: 6),
-    Text(_running ? 'LIVE' : 'READY', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900)),
-    const SizedBox(width: 18),
-    Text('Время ${_durationText()}', style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w800)),
-    const SizedBox(width: 18),
-    Text('Игроки $online/$active', style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w800)),
-    const SizedBox(width: 18),
-    Text('Дистанция ${(_displayDistanceM / 1000).toStringAsFixed(2)} км', style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w800)),
-    const SizedBox(width: 18),
-    Text('Макс. ${(_mainTrack?.maxSpeedKmh ?? 0).toStringAsFixed(1)}', style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w800)),
-    const SizedBox(width: 18),
-    Text(_lastGpsAt == null ? 'GPS нет' : 'GPS ${DateTime.now().difference(_lastGpsAt!).inSeconds}с', style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w800)),
+    Text(_running ? 'LIVE' : 'READY', style: TextStyle(color: _running ? _OF.green : _OF.text, fontSize: 9.4, fontWeight: FontWeight.w700)),
+    const SizedBox(width: 12),
+    Text('Время ${_durationText()}', style: const TextStyle(color: _OF.muted, fontSize: 9.3, fontWeight: FontWeight.w600)),
+    const SizedBox(width: 12),
+    Text('Игроки $online/$active', style: const TextStyle(color: _OF.muted, fontSize: 9.3, fontWeight: FontWeight.w600)),
+    const SizedBox(width: 12),
+    Text('Дистанция ${(_displayDistanceM / 1000).toStringAsFixed(2)} км', style: const TextStyle(color: _OF.muted, fontSize: 9.3, fontWeight: FontWeight.w600)),
+    const SizedBox(width: 12),
+    Text('Макс. ${(_mainTrack?.maxSpeedKmh ?? 0).toStringAsFixed(1)}', style: const TextStyle(color: _OF.muted, fontSize: 9.3, fontWeight: FontWeight.w600)),
+    const SizedBox(width: 12),
+    Text(_lastGpsAt == null ? 'GPS нет' : 'GPS ${DateTime.now().difference(_lastGpsAt!).inSeconds}с', style: const TextStyle(color: _OF.muted, fontSize: 9.3, fontWeight: FontWeight.w600)),
+    const SizedBox(width: 12),
+    SizedBox(
+      height: 24,
+      child: TextButton.icon(
+        onPressed: _openFullDebugDialog,
+        style: TextButton.styleFrom(
+          foregroundColor: _OF.graphite,
+          backgroundColor: _OF.header,
+          padding: const EdgeInsets.symmetric(horizontal: 7),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        icon: const Icon(Icons.bug_report_rounded, size: 12),
+        label: const Text('DEBUG', style: TextStyle(fontSize: 9.4, fontWeight: FontWeight.w700)),
+      ),
+    ),
+    const SizedBox(width: 6),
+    SizedBox(
+      height: 24,
+      child: TextButton.icon(
+        onPressed: () => _openExpandedLiveBlock('Оператор / трекер / debug', Icons.tune_rounded, () => _tabletBottomInfoPanel(online, active)),
+        style: TextButton.styleFrom(
+          foregroundColor: _OF.graphite,
+          backgroundColor: _OF.header,
+          padding: const EdgeInsets.symmetric(horizontal: 7),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        icon: const Icon(Icons.tune_rounded, size: 12),
+        label: const Text('ОПЕРАТОР', style: TextStyle(fontSize: 9.2, fontWeight: FontWeight.w700)),
+      ),
+    ),
     const Spacer(),
-    Text(_lastProblem, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60, fontSize: 10, fontWeight: FontWeight.w700)),
+    Text(_lastProblem, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _OF.muted2, fontSize: 9.3, fontWeight: FontWeight.w600)),
   ]),
 );
 }
@@ -1420,14 +2076,14 @@ return showDialog<String>(
     return AlertDialog(
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      title: const Text('Добавить период', style: TextStyle(fontWeight: FontWeight.w900)),
+      title: const Text('Добавить период', style: TextStyle(fontWeight: FontWeight.w500)),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
             'Период попадёт в таймлайн и будет использоваться в отчётах по сессии.',
-            style: TextStyle(color: _OF.muted, fontWeight: FontWeight.w700, height: 1.3),
+            style: TextStyle(color: _OF.muted, fontWeight: FontWeight.w500, height: 1.3),
           ),
           const SizedBox(height: 12),
           Wrap(
@@ -1435,7 +2091,7 @@ return showDialog<String>(
             runSpacing: 8,
             children: presets.map((p) {
               return ActionChip(
-                label: Text(p, style: const TextStyle(fontWeight: FontWeight.w800)),
+                label: Text(p, style: const TextStyle(fontWeight: FontWeight.w500)),
                 onPressed: () => Navigator.of(context).pop(p),
               );
             }).toList(),
@@ -1580,7 +2236,7 @@ bool allowExpand = true,
 return Stack(
   children: [
     Positioned.fill(child: builder()),
-    if (allowExpand)
+    if (allowExpand && !_renderingFloatingLiveContent)
       Positioned(
         top: 8,
         right: 8,
@@ -1593,75 +2249,221 @@ return Stack(
 );
 }
 
+Widget _buildFloatingLiveContent() {
+_renderingFloatingLiveContent = true;
+final content = _floatingLiveBuilder?.call() ?? const SizedBox.shrink();
+_renderingFloatingLiveContent = false;
+return content;
+}
+
+Widget _withFloatingLiveWindow(Widget child) {
+return Stack(
+  children: [
+    Positioned.fill(child: child),
+    if (_floatingLiveBuilder != null && _floatingLiveMinimized)
+      Positioned(
+        left: 12,
+        bottom: 34,
+        child: _floatingLiveMinimizedBar(),
+      ),
+    if (_floatingLiveBuilder != null && !_floatingLiveMinimized)
+      Positioned.fill(child: _floatingLiveWindowLayer()),
+  ],
+);
+}
+
+Widget _floatingLiveMinimizedBar() {
+return Material(
+  color: Colors.transparent,
+  child: InkWell(
+    onTap: () => setState(() => _floatingLiveMinimized = false),
+    borderRadius: BorderRadius.circular(14),
+    child: Container(
+      height: 38,
+      constraints: const BoxConstraints(minWidth: 220, maxWidth: 340),
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(.96),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _OF.line),
+        boxShadow: const [BoxShadow(color: Color(0x16000000), blurRadius: 20, offset: Offset(0, 10))],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(_floatingLiveIcon, color: _OF.muted2, size: 16),
+          const SizedBox(width: 8),
+          Flexible(child: Text(_floatingLiveTitle ?? 'Окно', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _OF.text, fontSize: 11.2, fontWeight: FontWeight.w700))),
+          const SizedBox(width: 8),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: 'Закрыть окно',
+            onPressed: _closeFloatingLiveWindow,
+            icon: const Icon(Icons.close_rounded, size: 16, color: _OF.muted),
+          ),
+        ],
+      ),
+    ),
+  ),
+);
+}
+
+Widget _floatingLiveWindowLayer() {
+return LayoutBuilder(
+  builder: (context, c) {
+    final compact = c.maxWidth < 760;
+    final margin = compact ? 8.0 : 14.0;
+    final windowWidth = _floatingLiveMaximized
+        ? c.maxWidth - margin * 2
+        : math.min(c.maxWidth - margin * 2, compact ? c.maxWidth - margin * 2 : 980.0);
+    final windowHeight = _floatingLiveMaximized
+        ? c.maxHeight - margin * 2
+        : math.min(c.maxHeight - margin * 2, compact ? c.maxHeight - margin * 2 : 660.0);
+
+    final defaultLeft = (c.maxWidth - windowWidth) / 2;
+    final defaultTop = math.max(margin, (c.maxHeight - windowHeight) / 2);
+    final maxLeft = math.max(margin, c.maxWidth - windowWidth - margin);
+    final maxTop = math.max(margin, c.maxHeight - windowHeight - margin);
+    final raw = _floatingLiveOffset ?? Offset(defaultLeft, defaultTop);
+    final left = _floatingLiveMaximized ? margin : raw.dx.clamp(margin, maxLeft).toDouble();
+    final top = _floatingLiveMaximized ? margin : raw.dy.clamp(margin, maxTop).toDouble();
+
+    void dragWindow(DragUpdateDetails details) {
+      if (_floatingLiveMaximized) return;
+      final current = _floatingLiveOffset ?? Offset(left, top);
+      final next = Offset(
+        (current.dx + details.delta.dx).clamp(margin, maxLeft).toDouble(),
+        (current.dy + details.delta.dy).clamp(margin, maxTop).toDouble(),
+      );
+      setState(() => _floatingLiveOffset = next);
+    }
+
+    return Stack(
+      children: [
+        Positioned(
+          left: left,
+          top: top,
+          width: windowWidth,
+          height: windowHeight,
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(.98),
+                borderRadius: BorderRadius.circular(_floatingLiveMaximized ? 18 : 24),
+                border: Border.all(color: _OF.lineStrong.withOpacity(.85)),
+                boxShadow: const [BoxShadow(color: Color(0x1A344054), blurRadius: 32, spreadRadius: -12, offset: Offset(0, 18))],
+              ),
+              child: Column(
+                children: [
+                  MouseRegion(
+                    cursor: _floatingLiveMaximized ? SystemMouseCursors.basic : SystemMouseCursors.move,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onPanUpdate: dragWindow,
+                      child: Container(
+                        height: 46,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: _OF.line))),
+                        child: Row(
+                          children: [
+                            _floatingWindowControl(Icons.close_rounded, _closeFloatingLiveWindow, 'Закрыть'),
+                            const SizedBox(width: 6),
+                            _floatingWindowControl(Icons.remove_rounded, () => setState(() => _floatingLiveMinimized = true), 'Свернуть'),
+                            const SizedBox(width: 6),
+                            _floatingWindowControl(_floatingLiveMaximized ? Icons.close_fullscreen_rounded : Icons.open_in_full_rounded, () => setState(() => _floatingLiveMaximized = !_floatingLiveMaximized), _floatingLiveMaximized ? 'Вернуть размер' : 'Развернуть'),
+                            const SizedBox(width: 12),
+                            Container(
+                              width: 30,
+                              height: 30,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF3F5F8),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: _OF.lineStrong.withOpacity(.75)),
+                              ),
+                              child: Icon(_floatingLiveIcon, color: _OF.muted2, size: 17),
+                            ),
+                            const SizedBox(width: 9),
+                            Expanded(
+                              child: Text(
+                                _floatingLiveTitle ?? 'Окно',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(color: _OF.text, fontSize: 12.8, fontWeight: FontWeight.w700, letterSpacing: -.2),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(1),
+                      child: _buildFloatingLiveContent(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  },
+);
+}
+
+Widget _floatingWindowControl(IconData icon, VoidCallback onTap, String tooltip) {
+return Tooltip(
+  message: tooltip,
+  child: Material(
+    color: const Color(0xFFF4F6F8),
+    shape: const CircleBorder(),
+    child: InkWell(
+      onTap: onTap,
+      customBorder: const CircleBorder(),
+      child: Container(
+        width: 26,
+        height: 26,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: _OF.lineStrong.withOpacity(.8)),
+        ),
+        child: Icon(icon, size: 13, color: const Color(0xFF8B95A3)),
+      ),
+    ),
+  ),
+);
+}
+
+void _closeFloatingLiveWindow() {
+setState(() {
+  _floatingLiveTitle = null;
+  _floatingLiveBuilder = null;
+  _floatingLiveMinimized = false;
+  _floatingLiveMaximized = false;
+  _floatingLiveOffset = null;
+});
+}
+
 Future<void> _openExpandedLiveBlock(
 String title,
 IconData icon,
 Widget Function() builder,
 ) async {
-await showDialog<void>(
-  context: context,
-  barrierColor: Colors.black.withOpacity(.25),
-  builder: (context) {
-    final size = MediaQuery.of(context).size;
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: EdgeInsets.symmetric(
-        horizontal: size.width < 720 ? 10 : 28,
-        vertical: size.width < 720 ? 14 : 28,
-      ),
-      child: Container(
-        decoration: BoxDecoration(
-          color: _C.bg,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: _C.divider.withOpacity(.82)),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          children: [
-            Container(
-              height: 56,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: const BoxDecoration(
-                color: _C.soft,
-                border: Border(bottom: BorderSide(color: _C.divider)),
-              ),
-              child: Row(
-                children: [
-                  Icon(icon, color: _C.green, size: 21),
-                  const SizedBox(width: 5),
-                  Expanded(
-                    child: Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: _C.text,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -.2,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close_rounded, color: _C.text),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(5),
-                child: builder(),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  },
-);
+setState(() {
+  _floatingLiveTitle = title;
+  _floatingLiveIcon = icon;
+  _floatingLiveBuilder = builder;
+  _floatingLiveMinimized = false;
+  _floatingLiveMaximized = false;
+  _floatingLiveOffset = null;
+});
 }
+
 
 
 
@@ -1742,8 +2544,8 @@ return _LiveCard(
                     style: TextStyle(
                       fontFamily: 'Roboto',
                       color: _C.text,
-                      fontSize: 13.2,
-                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                   Text(
@@ -1754,7 +2556,7 @@ return _LiveCard(
                       fontFamily: 'Roboto',
                       color: _C.subtle,
                       fontSize: 9.8,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
@@ -1871,32 +2673,7 @@ return _LiveCard(
           ),
         ],
       ),
-      const SizedBox(height: 12),
-      SegmentedButton<TrackerLiveSourceMode>(
-        style: SegmentedButton.styleFrom(
-          backgroundColor: _C.soft,
-          foregroundColor: _C.text,
-          selectedBackgroundColor: _C.green,
-          selectedForegroundColor: _C.bg,
-          side: const BorderSide(color: _C.divider),
-        ),
-        segments: const [
-          ButtonSegment(
-            value: TrackerLiveSourceMode.phoneGps,
-            icon: Icon(Icons.phone_iphone_rounded),
-            label: Text('Телефон'),
-          ),
-          ButtonSegment(
-            value: TrackerLiveSourceMode.trackerExperimental,
-            icon: Icon(Icons.sensors_rounded),
-            label: Text('Трекер'),
-          ),
-        ],
-        selected: {_mode},
-        onSelectionChanged: _running
-            ? null
-            : (v) => setState(() => _mode = v.first),
-      ),
+      const SizedBox(height: 10),
       if (_mode == TrackerLiveSourceMode.trackerExperimental) ...[
         const SizedBox(height: 5),
         DropdownButtonFormField<int>(
@@ -2060,8 +2837,8 @@ final content = _LiveCard(
                     style: const TextStyle(
                       color: _C.subtle,
                       fontFamily: 'Roboto',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 11.4,
+                      fontWeight: FontWeight.w500,
                       height: 1.35,
                     ),
                   ),
@@ -2230,7 +3007,7 @@ final content = _LiveCard(
             ? const Center(
                 child: Text(
                   'Запустите Live, чтобы увидеть игрока',
-                  style: TextStyle(color: _C.subtle, fontWeight: FontWeight.w700),
+                  style: TextStyle(color: _C.subtle, fontWeight: FontWeight.w500),
                 ),
               )
             : ListView(
@@ -2266,9 +3043,18 @@ final content = _LiveCard(
               subtitle: 'Показывает, где именно ломается цепочка',
             ),
           ),
-          IconButton(
-            onPressed: () => setState(() => _showDebug = !_showDebug),
-            icon: Icon(_showDebug ? Icons.expand_less_rounded : Icons.expand_more_rounded),
+          Material(
+            color: const Color(0xFFF4F6F8),
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: () => setState(() => _showDebug = !_showDebug),
+              child: SizedBox(
+                width: 30,
+                height: 30,
+                child: Icon(_showDebug ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 16, color: const Color(0xFF8B95A3)),
+              ),
+            ),
           ),
         ],
       ),
@@ -2302,7 +3088,7 @@ final content = _LiveCard(
                 ? const Center(
                     child: Text(
                       'Логи появятся здесь',
-                      style: TextStyle(color: Colors.white54, fontWeight: FontWeight.w700),
+                      style: TextStyle(color: Colors.white54, fontWeight: FontWeight.w500),
                     ),
                   )
                 : ListView.builder(
@@ -2314,7 +3100,7 @@ final content = _LiveCard(
                         style: const TextStyle(
                           color: Color(0xFFE5E7EB),
                           fontSize: 10.8,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w500,
                           fontFamily: 'monospace',
                           height: 1.25,
                         ),
@@ -2360,18 +3146,20 @@ return Tooltip(
       scale: _pressed ? .94 : 1,
       duration: const Duration(milliseconds: 100),
       child: Material(
-        color: Colors.white.withOpacity(.96),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-          side: BorderSide(color: _C.divider.withOpacity(.75)),
-        ),
+        color: const Color(0xFFF4F6F8),
+        shape: const CircleBorder(),
         child: InkWell(
           onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(8),
-          child: const SizedBox(
-            width: 34,
-            height: 34,
-            child: Icon(Icons.open_in_full_rounded, color: _C.green, size: 16),
+          customBorder: const CircleBorder(),
+          child: Container(
+            width: 30,
+            height: 30,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: _OF.lineStrong.withOpacity(.85)),
+            ),
+            child: const Icon(Icons.open_in_full_rounded, color: Color(0xFF8B95A3), size: 15),
           ),
         ),
       ),
@@ -2379,6 +3167,14 @@ return Tooltip(
   ),
 );
 }
+}
+
+class _DebugStep {
+const _DebugStep({required this.northM, required this.eastM, required this.dtMs, required this.label});
+final double northM;
+final double eastM;
+final int dtMs;
+final String label;
 }
 
 class _RuntimePoint {
@@ -2389,6 +3185,8 @@ final double speedKmh;
 final double rawSpeedKmh;
 final double distanceDeltaM;
 final String packetType;
+final bool acceptedForMetrics;
+final String? rejectReason;
 
 const _RuntimePoint({
 required this.lat,
@@ -2398,6 +3196,8 @@ required this.speedKmh,
 required this.rawSpeedKmh,
 required this.distanceDeltaM,
 required this.packetType,
+this.acceptedForMetrics = true,
+this.rejectReason,
 });
 }
 
@@ -2414,6 +3214,15 @@ final String playerName;
 final String deviceName;
 final String? avatar;
 final List<_RuntimePoint> points = <_RuntimePoint>[];
+
+// Live GPS can jump while the tracker is лежит на столе or has weak satellite lock.
+// Do not turn those jumps into 42 км/ч sprints. Keep raw speed only for debug,
+// but send 0 speed / 0 distance to analytics and server for rejected points.
+static const double _maxAcceptedSpeedKmh = 42.0;
+static const double _hardGpsSpikeKmh = 48.0;
+static const double _maxAccelerationMps2 = 7.0;
+static const double _minMovementM = 0.55;
+static const double _maxSingleDeltaM = 12.0;
 
 double speedKmh = 0;
 double rawSpeedKmh = 0;
@@ -2681,39 +3490,75 @@ required double longitude,
 required int timeMs,
 required String packetType,
 }) {
-double delta = 0;
+double rawDelta = 0;
+double acceptedDelta = 0;
 double speed = 0;
 double raw = 0;
+bool accepted = true;
+String? rejectReason;
 
 if (points.isNotEmpty) {
   final prev = points.last;
-  delta = _haversineM(prev.lat, prev.lon, latitude, longitude);
+  rawDelta = _haversineM(prev.lat, prev.lon, latitude, longitude);
   final dt = math.max(0.75, (timeMs - prev.timeMs) / 1000.0);
-  raw = (delta / dt) * 3.6;
-  speed = raw.clamp(0.0, 42.0);
+  raw = (rawDelta / dt) * 3.6;
 
-  if (raw <= 55.0) {
-    totalDistanceM += delta;
+  final acceleration = ((raw - prev.speedKmh) / 3.6) / dt;
+  final allowedDelta = math.max(_maxSingleDeltaM, dt * (_maxAcceptedSpeedKmh / 3.6));
+  final recentRest = points.reversed
+      .take(4)
+      .where((p) => p.speedKmh <= 1.2 && p.distanceDeltaM <= _minMovementM)
+      .length;
+
+  if (rawDelta <= _minMovementM) {
+    acceptedDelta = 0;
+    speed = 0;
+  } else if (raw > _hardGpsSpikeKmh) {
+    accepted = false;
+    rejectReason = 'GPS-шум: raw ${raw.toStringAsFixed(1)} км/ч выше лимита';
+  } else if (rawDelta > allowedDelta) {
+    accepted = false;
+    rejectReason = 'GPS-шум: скачок ${rawDelta.toStringAsFixed(1)} м за ${dt.toStringAsFixed(1)} c';
+  } else if (acceleration.abs() > _maxAccelerationMps2 && raw >= 16.0) {
+    accepted = false;
+    rejectReason = 'GPS-шум: ускорение ${acceleration.toStringAsFixed(1)} м/с²';
+  } else if (recentRest >= 3 && raw >= 12.0 && rawDelta >= 3.0) {
+    accepted = false;
+    rejectReason = 'GPS-шум после покоя: ${rawDelta.toStringAsFixed(1)} м';
+  } else {
+    acceptedDelta = rawDelta;
+    speed = raw.clamp(0.0, _maxAcceptedSpeedKmh).toDouble();
   }
 
-  if (speed >= 20.0 && (points.isEmpty || points.last.speedKmh < 20.0)) {
-    sprintCount += 1;
+  if (accepted) {
+    totalDistanceM += acceptedDelta;
+    if (speed >= 20.0 && points.last.speedKmh < 20.0) {
+      sprintCount += 1;
+    }
+  } else {
+    acceptedDelta = 0;
+    speed = 0;
   }
 }
 
 speedKmh = speed;
 rawSpeedKmh = raw;
-maxSpeedKmh = math.max(maxSpeedKmh, speed);
-lastDeltaM = delta;
+if (accepted) {
+  maxSpeedKmh = math.max(maxSpeedKmh, speed);
+}
+lastDeltaM = acceptedDelta;
 
+final prev = points.isNotEmpty ? points.last : null;
 final p = _RuntimePoint(
-  lat: latitude,
-  lon: longitude,
+  lat: accepted || prev == null ? latitude : prev.lat,
+  lon: accepted || prev == null ? longitude : prev.lon,
   timeMs: timeMs,
   speedKmh: speed,
   rawSpeedKmh: raw,
-  distanceDeltaM: delta,
+  distanceDeltaM: acceptedDelta,
   packetType: packetType,
+  acceptedForMetrics: accepted,
+  rejectReason: rejectReason,
 );
 
 points.add(p);
@@ -3110,7 +3955,7 @@ final tp = TextPainter(
     style: const TextStyle(
       color: Color(0xFFF4F5F6),
       fontSize: 9.2,
-      fontWeight: FontWeight.w900,
+      fontWeight: FontWeight.w500,
       fontFeatures: [FontFeature.tabularFigures()],
     ),
   ),
@@ -3129,7 +3974,7 @@ final tp = TextPainter(
     style: const TextStyle(
       color: Colors.white,
       fontSize: 11.4,
-      fontWeight: FontWeight.w900,
+      fontWeight: FontWeight.w500,
       letterSpacing: -.1,
       shadows: [Shadow(color: Colors.black87, blurRadius: 7)],
     ),
@@ -3167,7 +4012,7 @@ final tp = TextPainter(
     style: TextStyle(
       color: Colors.white.withOpacity(.78),
       fontSize: 10,
-      fontWeight: FontWeight.w800,
+      fontWeight: FontWeight.w500,
     ),
   ),
   textDirection: TextDirection.ltr,
@@ -3205,7 +4050,7 @@ final tp = TextPainter(
     style: TextStyle(
       color: Colors.white.withOpacity(.86),
       fontSize: full.width < 360 ? 12.5 : 14.5,
-      fontWeight: FontWeight.w900,
+      fontWeight: FontWeight.w500,
       letterSpacing: -.15,
     ),
   ),
@@ -3272,7 +4117,7 @@ return Container(
       ? Center(
           child: Text(
             initials,
-            style: TextStyle(color: _C.green, fontSize: size * .28, fontWeight: FontWeight.w900),
+            style: TextStyle(color: _C.green, fontSize: size * .28, fontWeight: FontWeight.w500),
           ),
         )
       : Image.network(
@@ -3281,7 +4126,7 @@ return Container(
           errorBuilder: (_, __, ___) => Center(
             child: Text(
               initials,
-              style: TextStyle(color: _C.green, fontSize: size * .28, fontWeight: FontWeight.w900),
+              style: TextStyle(color: _C.green, fontSize: size * .28, fontWeight: FontWeight.w500),
             ),
           ),
         ),
@@ -3328,19 +4173,19 @@ return Container(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(track.playerName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontWeight: FontWeight.w900)),
+            Text(track.playerName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontWeight: FontWeight.w500)),
             const SizedBox(height: 3),
             Text(
               '${track.speedKmh.toStringAsFixed(1)} км/ч · ${(track.totalDistanceM / 1000).toStringAsFixed(2)} км · точек ${track.points.length}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: _C.muted, fontSize: 12.2, fontWeight: FontWeight.w800),
+              style: const TextStyle(color: _C.muted, fontSize: 11.7, fontWeight: FontWeight.w500),
             ),
           ],
         ),
       ),
       const SizedBox(width: 5),
-      Text('LIVE', style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 12)),
+      Text('LIVE', style: TextStyle(color: color, fontWeight: FontWeight.w500, fontSize: 12)),
     ],
   ),
 );
@@ -3369,12 +4214,12 @@ return Container(
       const SizedBox(width: 8),
       Expanded(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(session.playerName ?? session.deviceName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontWeight: FontWeight.w900)),
+          Text(session.playerName ?? session.deviceName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontWeight: FontWeight.w500)),
           const SizedBox(height: 3),
-          Text('${session.speedKmh.toStringAsFixed(1)} км/ч · ${(session.totalDistanceM / 1000).toStringAsFixed(2)} км · сервер', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.subtle, fontSize: 12.2, fontWeight: FontWeight.w800)),
+          Text('${session.speedKmh.toStringAsFixed(1)} км/ч · ${(session.totalDistanceM / 1000).toStringAsFixed(2)} км · сервер', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.subtle, fontSize: 11.7, fontWeight: FontWeight.w500)),
         ]),
       ),
-      Text(session.isOnline ? 'SERVER' : 'OFF', style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 11)),
+      Text(session.isOnline ? 'SERVER' : 'OFF', style: TextStyle(color: color, fontWeight: FontWeight.w500, fontSize: 11)),
     ],
   ),
 );
@@ -3407,7 +4252,7 @@ return Container(
           track.recommendation,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 12, height: 1.25),
+          style: TextStyle(color: color, fontWeight: FontWeight.w500, fontSize: 11.5, height: 1.25),
         ),
       ),
     ],
@@ -3477,8 +4322,8 @@ return Container(
               style: const TextStyle(
                 color: _C.text,
                 fontFamily: 'Roboto',
-                fontSize: 12.5,
-                fontWeight: FontWeight.w900,
+                fontSize: 11.4,
+                fontWeight: FontWeight.w500,
                 letterSpacing: -0.15,
                 height: 1.12,
               ),
@@ -3492,7 +4337,7 @@ return Container(
                 color: _C.subtle,
                 fontFamily: 'Roboto',
                 fontSize: 10.5,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w500,
                 height: 1.18,
               ),
             ),
@@ -3510,8 +4355,8 @@ return Container(
           style: const TextStyle(
             color: _C.text,
             fontFamily: 'Roboto',
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
             height: 1.1,
             fontFeatures: [FontFeature.tabularFigures()],
           ),
@@ -3557,9 +4402,9 @@ return _LiveCard(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.subtle, fontSize: 10.4, fontWeight: FontWeight.w900, letterSpacing: .05)),
-            Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 17, fontWeight: FontWeight.w900, letterSpacing: -.15, fontFeatures: [FontFeature.tabularFigures()])),
-            Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 9.2, fontWeight: FontWeight.w800)),
+            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.subtle, fontSize: 10.4, fontWeight: FontWeight.w500, letterSpacing: .05)),
+            Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 15, fontWeight: FontWeight.w500, letterSpacing: -.15, fontFeatures: [FontFeature.tabularFigures()])),
+            Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 9.2, fontWeight: FontWeight.w500)),
           ],
         ),
       ),
@@ -3591,7 +4436,7 @@ return Container(
           'Скорость / темп',
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: _C.subtle, fontSize: 9.5, fontWeight: FontWeight.w900),
+          style: TextStyle(color: _C.subtle, fontSize: 9.5, fontWeight: FontWeight.w500),
         ),
       ),
       Expanded(
@@ -3624,7 +4469,7 @@ return _LiveCard(
   child: Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const Text('Зоны интенсивности', style: TextStyle(color: _C.text, fontWeight: FontWeight.w900, fontSize: 12)),
+      const Text('Зоны интенсивности', style: TextStyle(color: _C.text, fontWeight: FontWeight.w500, fontSize: 12)),
       const SizedBox(height: 8),
       _ZoneLine(label: 'Ходьба', value: walk, total: total, color: _C.subtle),
       _ZoneLine(label: 'Бег', value: jog, total: total, color: _C.green),
@@ -3657,7 +4502,7 @@ return Padding(
   padding: const EdgeInsets.only(bottom: 7),
   child: Row(
     children: [
-      SizedBox(width: 54, child: Text(label, style: const TextStyle(color: _C.muted, fontSize: 9.5, fontWeight: FontWeight.w800))),
+      SizedBox(width: 54, child: Text(label, style: const TextStyle(color: _C.muted, fontSize: 9.5, fontWeight: FontWeight.w500))),
       Expanded(
         child: ClipRRect(
           borderRadius: BorderRadius.circular(99),
@@ -3670,7 +4515,7 @@ return Padding(
         ),
       ),
       const SizedBox(width: 7),
-      SizedBox(width: 42, child: Text('${value.toStringAsFixed(0)}м', textAlign: TextAlign.right, style: const TextStyle(color: _C.text, fontSize: 9.5, fontWeight: FontWeight.w900))),
+      SizedBox(width: 42, child: Text('${value.toStringAsFixed(0)}м', textAlign: TextAlign.right, style: const TextStyle(color: _C.text, fontSize: 9.5, fontWeight: FontWeight.w500))),
     ],
   ),
 );
@@ -3713,8 +4558,8 @@ return _LiveCard(
             style: TextStyle(
               color: _C.text,
               fontFamily: 'Roboto',
-              fontSize: 13,
-              fontWeight: FontWeight.w900,
+              fontSize: 11.4,
+              fontWeight: FontWeight.w500,
               letterSpacing: -0.15,
             ),
           ),
@@ -3775,7 +4620,7 @@ return Container(
             color: _C.subtle,
             fontFamily: 'Roboto',
             fontSize: 10.2,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w500,
             height: 1.05,
           ),
         ),
@@ -3786,8 +4631,8 @@ return Container(
         style: const TextStyle(
           color: _C.text,
           fontFamily: 'Roboto',
-          fontSize: 13,
-          fontWeight: FontWeight.w900,
+          fontSize: 11.4,
+          fontWeight: FontWeight.w500,
           fontFeatures: [FontFeature.tabularFigures()],
         ),
       ),
@@ -3815,7 +4660,7 @@ return _LiveCard(
             track.recommendation,
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: _C.greenDark, fontSize: 10, fontWeight: FontWeight.w900, height: 1.25),
+            style: const TextStyle(color: _C.greenDark, fontSize: 10, fontWeight: FontWeight.w500, height: 1.25),
           ),
         ),
       ],
@@ -3862,7 +4707,7 @@ return InkWell(
           style: TextStyle(
             color: active ? _C.greenDark : _C.muted,
             fontSize: 10,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ],
@@ -3891,9 +4736,9 @@ return Container(
   child: Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      Text(label, style: const TextStyle(color: _C.subtle, fontSize: 8, fontWeight: FontWeight.w900)),
+      Text(label, style: const TextStyle(color: _C.subtle, fontSize: 8, fontWeight: FontWeight.w500)),
       const SizedBox(width: 4),
-      Text(value, style: const TextStyle(color: _C.text, fontSize: 9.4, fontWeight: FontWeight.w900)),
+      Text(value, style: const TextStyle(color: _C.text, fontSize: 9.4, fontWeight: FontWeight.w500)),
     ],
   ),
 );
@@ -4018,57 +4863,61 @@ Map<String, dynamic> toJson() {
 }
 
 class _OpenFieldTimelinePainter extends CustomPainter {
-const _OpenFieldTimelinePainter({required this.periods, required this.running, required this.progressRatio});
-final List<_LivePeriod> periods;
+const _OpenFieldTimelinePainter({required this.points, required this.running, required this.progressRatio});
+final List<_RuntimePoint> points;
 final bool running;
 final double progressRatio;
 
 @override
 void paint(Canvas canvas, Size size) {
-final axisPaint = Paint()..color = _OF.line..strokeWidth = 1;
-final textStyle = const TextStyle(color: _OF.muted, fontSize: 8, fontWeight: FontWeight.w700);
-final top = size.height * .08;
-final bottom = size.height * .92;
-final lineY = size.height * .32;
-
-for (var i = 0; i <= 7; i++) {
-  final x = size.width * i / 7;
-  canvas.drawLine(Offset(x, top), Offset(x, bottom), axisPaint);
-  final label = '${16 + i}:${(30 + i * 2).toString().padLeft(2, '0')}';
-  final tp = TextPainter(text: TextSpan(text: label, style: textStyle), textDirection: TextDirection.ltr)..layout();
-  tp.paint(canvas, Offset((x - tp.width / 2).clamp(0, size.width - tp.width), 0));
-}
-
-final main = Paint()
-  ..color = _OF.orange
-  ..strokeWidth = 7
+final baselineY = size.height / 2;
+final linePaint = Paint()
+  ..color = _OF.lineStrong
+  ..strokeWidth = 2
   ..strokeCap = StrokeCap.round;
-canvas.drawLine(Offset(4, lineY), Offset(size.width - 4, lineY), main);
+canvas.drawLine(Offset(4, baselineY), Offset(size.width - 4, baselineY), linePaint);
 
-for (final p in periods) {
-  final start = size.width * p.startRatio.clamp(0.0, 1.0);
-  final end = size.width * p.endRatio.clamp(0.0, 1.0);
-  final rect = RRect.fromRectAndRadius(
-    Rect.fromLTRB(start, size.height * .56, end, size.height * .80),
-    const Radius.circular(9),
-  );
-  canvas.drawRRect(rect, Paint()..color = p.color);
-  final tp = TextPainter(
-    text: TextSpan(text: p.title, style: const TextStyle(color: _OF.text, fontSize: 8, fontWeight: FontWeight.w900)),
-    textDirection: TextDirection.ltr,
-  )..layout(maxWidth: math.max(20, end - start - 8));
-  tp.paint(canvas, Offset(start + ((end - start - tp.width) / 2).clamp(3, 1000), size.height * .61));
+final src = points.length > 160 ? points.sublist(points.length - 160) : points;
+if (src.length >= 2) {
+  final start = src.first.timeMs;
+  final span = math.max(1, src.last.timeMs - start);
+  for (var i = 1; i < src.length; i++) {
+    final p = src[i];
+    final prev = src[i - 1];
+    final ratio = ((p.timeMs - start) / span).clamp(0.0, 1.0).toDouble();
+    final x = 4 + (size.width - 8) * ratio;
+    final dt = math.max(0.2, (p.timeMs - prev.timeMs) / 1000.0);
+    final accel = ((p.speedKmh - prev.speedKmh) / 3.6) / dt;
+    Color? color;
+    double radius = 2.0;
+    if (p.speedKmh >= 25.2) {
+      color = _OF.red;
+      radius = 3.4;
+    } else if (p.speedKmh >= 19.8) {
+      color = _OF.cyan;
+      radius = 3.0;
+    } else if (p.speedKmh >= 14.4) {
+      color = _OF.orange;
+      radius = 2.7;
+    } else if (accel >= 2.0) {
+      color = _OF.green;
+      radius = 2.4;
+    } else if (accel <= -2.0) {
+      color = _OF.blue;
+      radius = 2.4;
+    }
+    if (color != null) {
+      canvas.drawCircle(Offset(x, baselineY), radius + 2, Paint()..color = color.withOpacity(.12));
+      canvas.drawCircle(Offset(x, baselineY), radius, Paint()..color = color);
+    }
+  }
 }
 
 if (running) {
-  final x = size.width * progressRatio.clamp(0.0, 1.0);
-  final marker = Path()
-    ..moveTo(x, lineY - 14)
-    ..lineTo(x - 9, lineY - 28)
-    ..lineTo(x + 9, lineY - 28)
-    ..close();
-  canvas.drawPath(marker, Paint()..color = _OF.orange);
-  canvas.drawLine(Offset(x, lineY - 24), Offset(x, bottom), Paint()..color = _OF.orange..strokeWidth = 2);
+  final x = 4 + (size.width - 8) * progressRatio.clamp(0.0, 1.0);
+  canvas.drawLine(Offset(x, baselineY - 9), Offset(x, baselineY + 9), Paint()..color = _OF.green..strokeWidth = 2);
+  canvas.drawCircle(Offset(x, baselineY), 4, Paint()..color = Colors.white);
+  canvas.drawCircle(Offset(x, baselineY), 3, Paint()..color = _OF.green);
 }
 }
 
@@ -4077,20 +4926,51 @@ bool shouldRepaint(covariant _OpenFieldTimelinePainter oldDelegate) => true;
 }
 
 class _OF {
-static const Color black = Color(0xFF050505);
-static const Color bg = Color(0xFFF3F4F6);
-static const Color header = Color(0xFFF8FAFC);
-static const Color line = Color(0xFFE5E7EB);
-static const Color text = Color(0xFF111827);
-static const Color muted = Color(0xFF64748B);
-static const Color orange = Color(0xFFFF7A00);
-static const Color green = Color(0xFF84CC16);
-static const Color greenSoft = Color(0xFFE8F8CF);
-static const Color pip = Color(0xFFD9FF80);
-static const Color cyan = Color(0xFF56CFE1);
-static const Color blueSoft = Color(0xFFEFF6FF);
-static const Color red = Color(0xFFE11D48);
+static const Color black = Color(0xFF344054);
+static const Color bg = Color(0xFFF6F7F9);
+static const Color header = Color(0xFFFAFBFC);
+static const Color line = Color(0xFFF0F2F4);
+static const Color lineStrong = Color(0xFFE5E7EB);
+static const Color glass = Color(0xF8FFFFFF);
+static const Color text = Color(0xFF0B0F14);
+static const Color muted = Color(0xFF374151);
+static const Color muted2 = Color(0xFF6B7280);
+static const Color graphite = Color(0xFF344054);
+static const Color orange = Color(0xFFF59E0B);
+static const Color green = Color(0xFF00A750);
+static const Color greenSoft = Color(0xFFF3FBF7);
+static const Color greenBorder = Color(0xFFDCEFE5);
+static const Color pip = Color(0xFFF8FEFA);
+static const Color cyan = Color(0xFF06B6D4);
+static const Color cyanSoft = Color(0xFFEFFBFF);
+static const Color blue = Color(0xFF2563EB);
+static const Color blueSoft = Color(0xFFF4F7FF);
+static const Color red = Color(0xFFDC2626);
+static const Color redSoft = Color(0xFFFEF2F2);
+
+static List<BoxShadow> get windowShadow => [
+  BoxShadow(
+    color: Colors.black.withOpacity(.055),
+    blurRadius: 38,
+    spreadRadius: -18,
+    offset: const Offset(0, 22),
+  ),
+  BoxShadow(
+    color: blue.withOpacity(.035),
+    blurRadius: 24,
+    spreadRadius: -18,
+    offset: const Offset(0, 10),
+  ),
+];
+
+static BoxDecoration unifiedWindow({double radius = 20}) => BoxDecoration(
+  color: glass,
+  borderRadius: BorderRadius.circular(radius),
+  border: Border.all(color: Colors.white.withOpacity(.86), width: 1),
+  boxShadow: windowShadow,
+);
 }
+
 
 class _KpiData {
 const _KpiData(this.title, this.value, this.icon);
@@ -4137,7 +5017,7 @@ return Container(
               style: const TextStyle(
                 color: _C.subtle,
                 fontSize: 9.4,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w500,
                 height: 1,
               ),
             ),
@@ -4148,8 +5028,8 @@ return Container(
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: _C.text,
-                fontSize: 13.8,
-                fontWeight: FontWeight.w900,
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
                 height: 1,
                 letterSpacing: -.15,
                 fontFeatures: [FontFeature.tabularFigures()],
@@ -4177,13 +5057,41 @@ return Container(
   decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(8), border: Border.all(color: _C.divider)),
   child: Row(
     children: [
-      SizedBox(width: 72, child: Text(label, style: const TextStyle(color: _C.subtle, fontSize: 11, fontWeight: FontWeight.w900))),
+      SizedBox(width: 72, child: Text(label, style: const TextStyle(color: _C.subtle, fontSize: 10.6, fontWeight: FontWeight.w500))),
       Expanded(
         child: Text(
           value,
-          maxLines: 2,
+          maxLines: 4,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: _C.text, fontSize: 11.2, fontWeight: FontWeight.w800, fontFamily: 'monospace'),
+          style: const TextStyle(color: _C.text, fontSize: 10.4, fontWeight: FontWeight.w500, fontFamily: 'monospace'),
+        ),
+      ),
+    ],
+  ),
+);
+}
+}
+
+
+class _FullDebugLine extends StatelessWidget {
+const _FullDebugLine({required this.label, required this.value});
+final String label;
+final String value;
+
+@override
+Widget build(BuildContext context) {
+return Container(
+  margin: const EdgeInsets.only(bottom: 8),
+  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+  decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(10), border: Border.all(color: _C.divider)),
+  child: Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      SizedBox(width: 82, child: Text(label, style: const TextStyle(color: _C.subtle, fontSize: 10.6, fontWeight: FontWeight.w600))),
+      Expanded(
+        child: SelectableText(
+          value,
+          style: const TextStyle(color: _C.text, fontSize: 10.6, fontWeight: FontWeight.w500, fontFamily: 'monospace', height: 1.25),
         ),
       ),
     ],
@@ -4226,7 +5134,7 @@ return Container(
           text,
           maxLines: 3,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: isBad ? _C.red : _C.text, fontSize: 12, fontWeight: FontWeight.w900, height: 1.25),
+          style: TextStyle(color: isBad ? _C.red : _C.text, fontSize: 11.5, fontWeight: FontWeight.w500, height: 1.25),
         ),
       ),
     ],
@@ -4268,7 +5176,7 @@ return Container(
           label,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: ok ? _C.text : _C.orange, fontSize: 12, fontWeight: FontWeight.w900),
+          style: TextStyle(color: ok ? _C.text : _C.orange, fontSize: 11.5, fontWeight: FontWeight.w500),
         ),
       ),
     ],
@@ -4310,8 +5218,8 @@ return Row(
             style: const TextStyle(
               color: _C.text,
               fontFamily: 'Roboto',
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
               letterSpacing: -0.25,
               height: 1.08,
             ),
@@ -4325,8 +5233,8 @@ return Row(
               style: const TextStyle(
                 color: _C.subtle,
                 fontFamily: 'Roboto',
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
+                fontSize: 10.6,
+                fontWeight: FontWeight.w500,
                 height: 1.28,
               ),
             ),
@@ -4352,17 +5260,8 @@ final EdgeInsetsGeometry padding;
 Widget build(BuildContext context) {
 return Container(
   padding: padding,
-  decoration: BoxDecoration(
-    color: _C.panel,
-    borderRadius: BorderRadius.circular(16),
-    border: Border.all(color: _C.divider, width: 1),
-    boxShadow: [
-      BoxShadow(
-        color: Colors.black.withOpacity(0.035),
-        blurRadius: 18,
-        offset: const Offset(0, 10),
-      ),
-    ],
+  decoration: const BoxDecoration(
+    color: Colors.transparent,
   ),
   child: child,
 );

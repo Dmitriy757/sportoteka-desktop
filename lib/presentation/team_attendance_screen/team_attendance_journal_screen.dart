@@ -57,6 +57,12 @@ class _TeamAttendanceJournalScreenState
   String filter = "all";
   String viewMode = "list"; // list | grid | table
 
+  int? editingPlayerId;
+  int? editingEventId;
+  Map<String, dynamic>? editingPlayer;
+  Map<String, dynamic>? editingEvent;
+  String editingStatus = kStatusUnset;
+
   // Таблица
   static const double _tableLeftWidth = 240;
   static const double _tableCellW = 64;
@@ -626,180 +632,312 @@ class _TeamAttendanceJournalScreenState
     return needQuotes ? '"$escaped"' : escaped;
   }
 
-  // ===== ВЫБОР СТАТУСА (ПОПАП) =====
+  // ===== ВЫБОР СТАТУСА (БОКОВОЙ РЕДАКТОР) =====
+  Map<String, dynamic>? _playerById(int playerId) {
+    for (final p in players) {
+      if ((int.tryParse(p["id"]?.toString() ?? "0") ?? 0) == playerId) return p;
+    }
+    return null;
+  }
+
+  Map<String, dynamic>? _eventById(int eventId) {
+    for (final e in events) {
+      if ((int.tryParse(e["id"]?.toString() ?? "0") ?? 0) == eventId) return e;
+    }
+    return null;
+  }
+
   Future<void> _showStatusSelector(
     BuildContext context,
     int playerId,
     String currentStatus, {
     int? overrideEventId,
   }) async {
-    final statuses = [
-      {
-        "code": kStatusUnset,
-        "label": "Очистить",
-        "symbol": "—",
-        "color": const Color(0xFF64748B)
-      },
-      {
-        "code": "present",
-        "label": "Присутствует",
-        "symbol": "П",
-        "color": const Color(0xFF22C55E)
-      },
-      {
-        "code": "absent",
-        "label": "Отсутствует",
-        "symbol": "Н",
-        "color": const Color(0xFFEF4444)
-      },
-      {
-        "code": "late",
-        "label": "Болен",
-        "symbol": "Б",
-        "color": const Color(0xFFF59E0B)
-      },
-      {
-        "code": "injured",
-        "label": "Травма",
-        "symbol": "Т",
-        "color": const Color(0xFF8B5CF6)
-      },
-      {
-        "code": "individual",
-        "label": "Индивид.",
-        "symbol": "И",
-        "color": const Color(0xFF0EA5E9)
-      },
-      {
-        "code": "dayoff",
-        "label": "Выходной",
-        "symbol": "В",
-        "color": const Color(0xFF9CA3AF)
-      },
-    ];
+    final eventId = overrideEventId ?? selectedEventId;
+    if (eventId == null) {
+      Get.snackbar("Внимание", "Выберите конкретное мероприятие для отметки");
+      return;
+    }
 
-    await showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE5E7EB),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                "Выберите статус",
-                style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 18,
-                  color: Color(0xFF111827),
-                ),
-              ),
-              const SizedBox(height: 16),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 1.2,
-                ),
-                itemCount: statuses.length,
-                itemBuilder: (context, index) {
-                  final status = statuses[index];
-                  final isActive = status["code"] == currentStatus;
+    final event = _eventById(eventId);
+    final player = _playerById(playerId);
+    if (!mounted) return;
+    setState(() {
+      editingEventId = eventId;
+      editingPlayerId = playerId;
+      editingEvent = event;
+      editingPlayer = player;
+      editingStatus = currentStatus;
+      selectedEventId = eventId;
+      selectedEventTitle = event == null ? "Мероприятие" : _eventTitle(event);
+    });
+    _calculateStats();
+  }
 
-                  return Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(16),
-                      onTap: () async {
-                        Navigator.pop(context);
-                        final code = status["code"] as String;
+  void _closeStatusEditor() {
+    setState(() {
+      editingEventId = null;
+      editingPlayerId = null;
+      editingEvent = null;
+      editingPlayer = null;
+      editingStatus = kStatusUnset;
+    });
+  }
 
-                        if (overrideEventId != null) {
-                          await _setStatusForEvent(
-                              overrideEventId, playerId, code);
-                          Get.snackbar("Готово",
-                              "Статус обновлён: ${_getStatusFullText(code)}");
-                        } else {
-                          await _setStatus(playerId, code);
-                        }
-                      },
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: isActive
-                              ? (status["color"] as Color).withOpacity(0.15)
-                              : (status["color"] as Color).withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: isActive
-                                ? (status["color"] as Color)
-                                : (status["color"] as Color).withOpacity(0.3),
-                            width: isActive ? 2 : 1,
-                          ),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: isActive
-                                    ? (status["color"] as Color)
-                                    : (status["color"] as Color)
-                                        .withOpacity(0.1),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Center(
-                                child: Text(
-                                  status["symbol"] as String,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 16,
-                                    color: isActive
-                                        ? Colors.white
-                                        : (status["color"] as Color),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              status["label"] as String,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                color: (status["color"] as Color),
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      ),
+  Future<void> _applyEditorStatus(String status) async {
+    final playerId = editingPlayerId;
+    final eventId = editingEventId;
+    if (playerId == null || eventId == null) return;
+    setState(() => editingStatus = status);
+    await _setStatusForEvent(eventId, playerId, status);
+    if (!mounted) return;
+    setState(() => editingStatus = _getStatusForEvent(playerId, eventId));
+  }
+
+  Widget _buildJournalWorkspace({required Widget child}) {
+    final hasEditor = editingPlayerId != null && editingEventId != null;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final desktop = constraints.maxWidth >= 1120;
+        if (!desktop) {
+          return Container(
+            decoration: const BoxDecoration(gradient: _J.bgGradient),
+            child: Stack(
+              children: [
+                Positioned.fill(child: child),
+                if (hasEditor)
+                  Positioned(
+                    left: 12,
+                    right: 12,
+                    bottom: 12,
+                    child: SizedBox(
+                      height: 292,
+                      child: _buildSideStatusEditor(compact: true),
                     ),
-                  );
-                },
+                  ),
+              ],
+            ),
+          );
+        }
+
+        return Container(
+          decoration: const BoxDecoration(gradient: _J.bgGradient),
+          child: Row(
+            children: [
+              Expanded(child: child),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 240),
+                child: hasEditor
+                    ? Padding(
+                        key: const ValueKey('attendance-journal-editor'),
+                        padding: const EdgeInsets.fromLTRB(0, 16, 16, 16),
+                        child: SizedBox(
+                          width: 366,
+                          child: _buildSideStatusEditor(),
+                        ),
+                      )
+                    : const SizedBox.shrink(key: ValueKey('attendance-journal-editor-empty')),
               ),
-              const SizedBox(height: 24),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildSideStatusEditor({bool compact = false}) {
+    final player = editingPlayer;
+    final event = editingEvent;
+    if (player == null || event == null || editingPlayerId == null || editingEventId == null) {
+      return Container(
+        decoration: _J.glassCard,
+        alignment: Alignment.center,
+        child: const Text(
+          "Выберите игрока для отметки",
+          style: TextStyle(fontSize: 11.55, fontWeight: FontWeight.w700, color: _J.muted),
+        ),
+      );
+    }
+
+    final playerId = editingPlayerId!;
+    final photoUrl = _getPhotoUrl(player);
+    final name = _playerName(player);
+    final number = (player["number"] ?? "").toString();
+    final position = (player["position"] ?? "").toString();
+    final current = editingStatus;
+    final currentColor = _getStatusColor(current);
+
+    final statuses = [
+      [kStatusUnset, "Очистить", "—", const Color(0xFF64748B)],
+      ["present", "Присутствует", "П", const Color(0xFF22C55E)],
+      ["absent", "Отсутствует", "Н", const Color(0xFFEF4444)],
+      ["late", "Болен", "Б", const Color(0xFFF59E0B)],
+      ["injured", "Травма", "Т", const Color(0xFF8B5CF6)],
+      ["individual", "Индивид.", "И", const Color(0xFF0EA5E9)],
+      ["dayoff", "Выходной", "В", const Color(0xFF9CA3AF)],
+    ];
+
+    return Container(
+      decoration: _J.glassCard,
+      padding: EdgeInsets.all(compact ? 14 : 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  gradient: _J.accentGradient,
+                  borderRadius: BorderRadius.circular(13),
+                  boxShadow: [
+                    BoxShadow(color: _J.green.withOpacity(.22), blurRadius: 18, offset: const Offset(0, 8)),
+                  ],
+                ),
+                child: const Icon(Icons.edit_calendar_rounded, color: Colors.white, size: 17),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  "Редактирование отметки",
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 13.55, fontWeight: FontWeight.w800, color: _J.text, letterSpacing: -.2),
+                ),
+              ),
+              InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: _closeStatusEditor,
+                child: Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(color: _J.soft, borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.close_rounded, size: 16, color: _J.muted),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: compact ? 10 : 16),
+          Container(
+            padding: const EdgeInsets.all(13),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: [currentColor.withOpacity(.15), Colors.white]),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              children: [
+                _avatarWithNumber(
+                  photoUrl: photoUrl,
+                  number: number,
+                  accent: currentColor,
+                  size: compact ? 48 : 56,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.85, fontWeight: FontWeight.w900, color: _J.text)),
+                      const SizedBox(height: 4),
+                      Text(position.isEmpty ? "Игрок команды" : position, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.05, fontWeight: FontWeight.w700, color: _J.muted)),
+                      const SizedBox(height: 7),
+                      Text(
+                        "${_eventDateLabel(event).replaceAll('\n', ' · ')} · ${_eventTitle(event)}",
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 10.35, fontWeight: FontWeight.w800, color: currentColor),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(height: compact ? 10 : 16),
+          Expanded(
+            child: GridView.builder(
+              padding: EdgeInsets.zero,
+              itemCount: statuses.length,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: compact ? 4 : 2,
+                crossAxisSpacing: 9,
+                mainAxisSpacing: 9,
+                childAspectRatio: compact ? 1.82 : 2.4,
+              ),
+              itemBuilder: (context, index) {
+                final row = statuses[index];
+                final code = row[0] as String;
+                final label = row[1] as String;
+                final symbol = row[2] as String;
+                final color = row[3] as Color;
+                return _buildEditorStatusTile(
+                  code: code,
+                  label: label,
+                  symbol: symbol,
+                  color: color,
+                  active: code == current,
+                  onTap: () => _applyEditorStatus(code),
+                );
+              },
+            ),
+          ),
+          if (saving) ...[
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: const LinearProgressIndicator(minHeight: 4, color: _J.green, backgroundColor: _J.softGreen),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEditorStatusTile({
+    required String code,
+    required String label,
+    required String symbol,
+    required Color color,
+    required bool active,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: active ? color.withOpacity(.15) : const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: active ? color.withOpacity(.82) : color.withOpacity(.16), width: active ? 1.4 : 1),
+            boxShadow: active ? [BoxShadow(color: color.withOpacity(.18), blurRadius: 18, offset: const Offset(0, 8))] : null,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: code == kStatusUnset ? Colors.white : color.withOpacity(active ? 1 : .12),
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: code == kStatusUnset
+                    ? Icon(Icons.remove_rounded, size: 15, color: color)
+                    : Text(symbol, style: TextStyle(fontSize: 11.55, fontWeight: FontWeight.w900, color: active ? Colors.white : color)),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10.75, fontWeight: FontWeight.w800, color: active ? color : _J.text)),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -846,7 +984,7 @@ class _TeamAttendanceJournalScreenState
                   _monthTitle(),
                   style: const TextStyle(
                     fontWeight: FontWeight.w900,
-                    fontSize: 17,
+                    fontSize: 15.75,
                     color: Color(0xFF111827),
                   ),
                 ),
@@ -854,7 +992,7 @@ class _TeamAttendanceJournalScreenState
                 Text(
                   "${events.length} мероприятий",
                   style: const TextStyle(
-                    fontSize: 13,
+                    fontSize: 12.35,
                     color: Color(0xFF6B7280),
                     fontWeight: FontWeight.w700,
                   ),
@@ -911,7 +1049,7 @@ class _TeamAttendanceJournalScreenState
                 "Мероприятие",
                 style: TextStyle(
                   fontWeight: FontWeight.w900,
-                  fontSize: 15,
+                  fontSize: 14.05,
                   color: eventColor,
                 ),
               ),
@@ -949,7 +1087,7 @@ class _TeamAttendanceJournalScreenState
                             "Выберите мероприятие",
                             style: TextStyle(
                               fontWeight: FontWeight.w900,
-                              fontSize: 18,
+                              fontSize: 16.75,
                               color: Color(0xFF111827),
                             ),
                           ),
@@ -1000,7 +1138,7 @@ class _TeamAttendanceJournalScreenState
                                         "Все мероприятия месяца",
                                         style: TextStyle(
                                           fontWeight: FontWeight.w800,
-                                          fontSize: 15,
+                                          fontSize: 14.05,
                                         ),
                                       ),
                                     ),
@@ -1080,7 +1218,7 @@ class _TeamAttendanceJournalScreenState
                                                   title,
                                                   style: TextStyle(
                                                     fontWeight: FontWeight.w800,
-                                                    fontSize: 15,
+                                                    fontSize: 14.05,
                                                     color: isSelected
                                                         ? Theme.of(context)
                                                             .colorScheme
@@ -1107,7 +1245,7 @@ class _TeamAttendanceJournalScreenState
                                               Text(
                                                 "$date ${time.isNotEmpty ? '· $time' : ''}",
                                                 style: const TextStyle(
-                                                  fontSize: 13,
+                                                  fontSize: 12.35,
                                                   color: Color(0xFF6B7280),
                                                   fontWeight: FontWeight.w700,
                                                 ),
@@ -1155,7 +1293,7 @@ class _TeamAttendanceJournalScreenState
                             selectedEventTitle,
                             style: TextStyle(
                               fontWeight: FontWeight.w800,
-                              fontSize: 15,
+                              fontSize: 14.05,
                               color: eventColor,
                             ),
                             maxLines: 1,
@@ -1166,7 +1304,7 @@ class _TeamAttendanceJournalScreenState
                             Text(
                               "Выбрано для отметки",
                               style: TextStyle(
-                                fontSize: 12,
+                                fontSize: 11.55,
                                 color: eventColor.withOpacity(0.7),
                                 fontWeight: FontWeight.w700,
                               ),
@@ -1304,7 +1442,7 @@ class _TeamAttendanceJournalScreenState
           Text(
             label,
             style: TextStyle(
-              fontSize: 10,
+              fontSize: 9.85,
               fontWeight: FontWeight.w800,
               color: color,
             ),
@@ -1505,7 +1643,7 @@ class _TeamAttendanceJournalScreenState
                 child: Text(
                   "№$number",
                   style: const TextStyle(
-                    fontSize: 10,
+                    fontSize: 9.85,
                     fontWeight: FontWeight.w900,
                     color: Colors.white,
                   ),
@@ -1537,7 +1675,7 @@ class _TeamAttendanceJournalScreenState
               style: TextStyle(
                 color: Color(0xFF6B7280),
                 fontWeight: FontWeight.w800,
-                fontSize: 16,
+                fontSize: 15.05,
               ),
             ),
             const SizedBox(height: 8),
@@ -1545,7 +1683,7 @@ class _TeamAttendanceJournalScreenState
               "Попробуйте изменить поиск или фильтр",
               style: TextStyle(
                 color: Color(0xFF9CA3AF),
-                fontSize: 14,
+                fontSize: 13.05,
               ),
               textAlign: TextAlign.center,
             ),
@@ -1628,7 +1766,7 @@ class _TeamAttendanceJournalScreenState
                         name,
                         style: const TextStyle(
                           fontWeight: FontWeight.w900,
-                          fontSize: 16,
+                          fontSize: 15.05,
                           color: Color(0xFF111827),
                         ),
                         maxLines: 1,
@@ -1646,7 +1784,7 @@ class _TeamAttendanceJournalScreenState
                           child: Text(
                             position,
                             style: const TextStyle(
-                              fontSize: 12,
+                              fontSize: 11.55,
                               fontWeight: FontWeight.w800,
                               color: Color(0xFF374151),
                             ),
@@ -1679,7 +1817,7 @@ class _TeamAttendanceJournalScreenState
                               statusSymbol,
                               style: TextStyle(
                                 fontWeight: FontWeight.w900,
-                                fontSize: 16,
+                                fontSize: 15.05,
                                 color: statusColor,
                               ),
                             ),
@@ -1692,7 +1830,7 @@ class _TeamAttendanceJournalScreenState
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 11,
+                            fontSize: 10.55,
                             fontWeight: FontWeight.w800,
                             color: statusColor,
                           ),
@@ -1833,7 +1971,7 @@ class _TeamAttendanceJournalScreenState
                             statusSymbol,
                             style: const TextStyle(
                               fontWeight: FontWeight.w900,
-                              fontSize: 14,
+                              fontSize: 13.05,
                               color: Colors.white,
                             ),
                           ),
@@ -1851,7 +1989,7 @@ class _TeamAttendanceJournalScreenState
                       name,
                       style: const TextStyle(
                         fontWeight: FontWeight.w900,
-                        fontSize: 14,
+                        fontSize: 13.05,
                         color: Color(0xFF111827),
                         height: 1.2,
                       ),
@@ -1863,7 +2001,7 @@ class _TeamAttendanceJournalScreenState
                       Text(
                         position,
                         style: const TextStyle(
-                          fontSize: 12,
+                          fontSize: 11.55,
                           fontWeight: FontWeight.w700,
                           color: Color(0xFF6B7280),
                         ),
@@ -1882,7 +2020,7 @@ class _TeamAttendanceJournalScreenState
                         child: Text(
                           statusFullText,
                           style: TextStyle(
-                            fontSize: 11,
+                            fontSize: 10.55,
                             fontWeight: FontWeight.w800,
                             color: statusColor,
                           ),
@@ -1901,7 +2039,7 @@ class _TeamAttendanceJournalScreenState
                         child: const Text(
                           "Не отмечено",
                           style: TextStyle(
-                            fontSize: 11,
+                            fontSize: 10.55,
                             fontWeight: FontWeight.w800,
                             color: Color(0xFF64748B),
                           ),
@@ -2061,7 +2199,7 @@ class _TeamAttendanceJournalScreenState
                   _eventDateLabel(e),
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11.55,
                     fontWeight: FontWeight.w900,
                     color: isSel
                         ? Theme.of(context).colorScheme.primary
@@ -2113,7 +2251,7 @@ class _TeamAttendanceJournalScreenState
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontWeight: FontWeight.w900,
-                    fontSize: 14,
+                    fontSize: 13.05,
                     color: Color(0xFF111827),
                   ),
                 ),
@@ -2130,7 +2268,7 @@ class _TeamAttendanceJournalScreenState
                       child: Text(
                         position,
                         style: const TextStyle(
-                          fontSize: 12,
+                          fontSize: 11.55,
                           fontWeight: FontWeight.w800,
                           color: Color(0xFF374151),
                         ),
@@ -2237,7 +2375,7 @@ class _TeamAttendanceJournalScreenState
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF5F8FB),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -2335,8 +2473,9 @@ class _TeamAttendanceJournalScreenState
                     ),
                   ),
                 )
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
+              : _buildJournalWorkspace(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
                       _buildMonthSelector(),
@@ -2380,7 +2519,7 @@ class _TeamAttendanceJournalScreenState
                                     Text(
                                       "Для отметки посещаемости выберите конкретное мероприятие в списке выше",
                                       style: TextStyle(
-                                        fontSize: 13,
+                                        fontSize: 12.35,
                                         color: const Color(0xFF92400E)
                                             .withOpacity(0.8),
                                         fontWeight: FontWeight.w600,
@@ -2398,7 +2537,7 @@ class _TeamAttendanceJournalScreenState
                           Text(
                             "Игроки (${_filteredPlayers.length})",
                             style: const TextStyle(
-                              fontSize: 15,
+                              fontSize: 14.05,
                               fontWeight: FontWeight.w900,
                               color: Color(0xFF111827),
                             ),
@@ -2423,7 +2562,7 @@ class _TeamAttendanceJournalScreenState
                                 Text(
                                   viewLabel,
                                   style: const TextStyle(
-                                    fontSize: 12,
+                                    fontSize: 11.55,
                                     fontWeight: FontWeight.w800,
                                     color: Color(0xFF6B7280),
                                   ),
@@ -2439,6 +2578,40 @@ class _TeamAttendanceJournalScreenState
                     ],
                   ),
                 ),
+              ),
     );
   }
+}
+
+
+class _J {
+  static const Color bg = Color(0xFFF5F8FB);
+  static const Color text = Color(0xFF14211B);
+  static const Color muted = Color(0xFF66736C);
+  static const Color soft = Color(0xFFF2F6F8);
+  static const Color softGreen = Color(0xFFEAF7EF);
+  static const Color green = Color(0xFF18864B);
+  static const Color blue = Color(0xFF2563EB);
+  static const Color cyan = Color(0xFF06B6D4);
+
+  static const LinearGradient bgGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFFF7FBFF), Color(0xFFF3FAF6), Color(0xFFFFFFFF)],
+  );
+
+  static LinearGradient get accentGradient => const LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF0F5F36), Color(0xFF18864B), Color(0xFF06B6D4)],
+  );
+
+  static BoxDecoration get glassCard => BoxDecoration(
+    color: Colors.white.withOpacity(.92),
+    borderRadius: BorderRadius.circular(24),
+    border: Border.all(color: Colors.white.withOpacity(.72)),
+    boxShadow: [
+      BoxShadow(color: const Color(0xFF0F172A).withOpacity(.08), blurRadius: 30, offset: const Offset(0, 18)),
+    ],
+  );
 }

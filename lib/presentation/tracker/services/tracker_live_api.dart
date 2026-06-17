@@ -61,11 +61,11 @@ class TrackerLiveApi {
     });
   }
 
-  Future<void> stopLiveSession({
+  Future<Map<String, dynamic>> stopLiveSession({
     required int liveSessionId,
     bool createFinalSession = true,
   }) async {
-    await _post('$apiBaseUrl/stop_tracker_live_session.php', {
+    return _post('$apiBaseUrl/stop_tracker_live_session.php', {
       'live_session_id': liveSessionId,
       'create_final_session': createFinalSession ? 1 : 0,
     });
@@ -74,6 +74,33 @@ class TrackerLiveApi {
   Future<Map<String, dynamic>> saveLiveMetricSnapshot(Map<String, dynamic> payload) {
     return _post('$apiBaseUrl/save_tracker_metric_snapshot.php', payload);
   }
+
+
+  Future<Map<String, dynamic>> saveLiveAsTrackerSession({
+    required int clubId,
+    required int teamId,
+    int? playerId,
+    int? fieldId,
+    required String deviceUuid,
+    required String deviceName,
+    required Map<String, dynamic> record,
+    required List<Map<String, dynamic>> points,
+    Map<String, dynamic>? analysisJson,
+  }) {
+    return _post('$apiBaseUrl/save_tracker_session.php', {
+      'club_id': clubId,
+      'team_id': teamId,
+      'player_id': playerId,
+      'field_id': fieldId,
+      'device_uuid': deviceUuid,
+      'device_name': deviceName,
+      'record': record,
+      'points': points,
+      'analysis_json': analysisJson,
+      'source': 'live',
+    });
+  }
+
 
   Future<List<Map<String, dynamic>>> loadMetricSnapshotsByDate({
     required int teamId,
@@ -115,9 +142,18 @@ class TrackerLiveApi {
   Future<List<Map<String, dynamic>>> loadLivePeriods({
     required int liveSessionId,
   }) async {
-    final json = await _get('$apiBaseUrl/get_tracker_session_periods.php?live_session_id=$liveSessionId');
-    final list = (json['periods'] as List? ?? json['items'] as List? ?? const []);
-    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    try {
+      final json = await _get('$apiBaseUrl/get_tracker_session_periods.php?live_session_id=$liveSessionId&mode=live');
+      final list = (json['periods'] as List? ?? json['items'] as List? ?? const []);
+      return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    } catch (e) {
+      // Старый PHP падал с Unknown column live_session_id. Периоды не должны ломать Live.
+      final text = e.toString();
+      if (text.contains('live_session_id') || text.contains('get_tracker_session_periods')) {
+        return const <Map<String, dynamic>>[];
+      }
+      rethrow;
+    }
   }
 
   Future<void> saveLivePeriod({

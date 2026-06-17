@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
@@ -7,6 +8,7 @@ import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart' hide FormData, MultipartFile, Response;
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -17,6 +19,9 @@ import 'package:sportoteka/core/constants/app_colors.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/team_video_analysis/match_video_player_screen.dart';
 import 'package:sportoteka/presentation/team_video_analysis/video_match_review_screen.dart';
+import 'package:sportoteka/presentation/advanced_video_analysis/advanced_video_analysis_screen.dart';
+import 'package:sportoteka/presentation/advanced_video_analysis/models/analysis_result.dart';
+import 'package:sportoteka/presentation/advanced_video_analysis/models/player_detection.dart';
 
 class TeamMatchDetailScreen extends StatefulWidget {
   final int? matchId;
@@ -46,12 +51,350 @@ class TeamMatchDetailScreen extends StatefulWidget {
   State<TeamMatchDetailScreen> createState() => _TeamMatchDetailScreenState();
 }
 
+/// Открывает детальный разбор матча как плавающее CMR-окно поверх текущего
+/// экрана. Это не route-переход: список матчей остаётся на месте, а окно можно
+/// двигать, свернуть, развернуть и закрыть.
+void showTeamMatchDetailCmrWindow(
+  BuildContext context, {
+  int? matchId,
+  int? teamId,
+  int? clubId,
+  String? teamName,
+  String? clubName,
+  Map<String, dynamic>? initialMatch,
+  VoidCallback? onClosed,
+}) {
+  OverlayState? overlay;
+  try {
+    overlay = Navigator.of(context, rootNavigator: true).overlay ?? Overlay.maybeOf(context);
+  } catch (_) {
+    overlay = Overlay.maybeOf(context);
+  }
+  if (overlay == null) return;
+
+  late OverlayEntry entry;
+  Offset position = const Offset(42, 32);
+  bool minimized = false;
+  bool maximized = false;
+  bool closed = false;
+
+  void closeWindow() {
+    if (closed) return;
+    closed = true;
+    entry.remove();
+    onClosed?.call();
+  }
+
+  entry = OverlayEntry(
+    builder: (overlayContext) {
+      final media = MediaQuery.of(overlayContext);
+      final screen = media.size;
+
+      final double width = maximized
+          ? screen.width - 28
+          : min(1280.0, max(820.0, screen.width * .84));
+      final double height = maximized
+          ? screen.height - media.padding.top - media.padding.bottom - 28
+          : min(840.0, max(560.0, screen.height * .84));
+
+      final double left = maximized
+          ? 14.0
+          : position.dx
+              .clamp(14.0, max(14.0, screen.width - width - 14.0))
+              .toDouble();
+      final double top = maximized
+          ? media.padding.top + 14.0
+          : position.dy
+              .clamp(
+                media.padding.top + 14.0,
+                max(media.padding.top + 14.0, screen.height - height - 14.0),
+              )
+              .toDouble();
+
+      if (minimized) {
+        return Positioned(
+          left: 18,
+          bottom: media.padding.bottom + 18,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                minimized = false;
+                entry.markNeedsBuild();
+              },
+              borderRadius: BorderRadius.circular(18),
+              child: Container(
+                height: 42,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0xFFE5ECE8)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(.10),
+                      blurRadius: 22,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.sports_soccer_rounded, color: Color(0xFF00A750), size: 17),
+                    SizedBox(width: 8),
+                    Text(
+                      'Матч',
+                      style: TextStyle(
+                        color: Color(0xFF111827),
+                        fontSize: 11.2,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      final headerTitle = 'Матчи';
+      final headerSubtitle = (teamName ?? '').trim().isNotEmpty
+          ? teamName!.trim()
+          : ((clubName ?? '').trim().isNotEmpty ? clubName!.trim() : 'Разбор матча');
+
+      return Positioned(
+        left: left,
+        top: top,
+        width: width,
+        height: height,
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: const Color(0xFFE3EAE7)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(.16),
+                  blurRadius: 44,
+                  offset: const Offset(0, 22),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onPanUpdate: maximized
+                      ? null
+                      : (details) {
+                          position += details.delta;
+                          entry.markNeedsBuild();
+                        },
+                  child: Container(
+                    height: 44,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      border: Border(bottom: BorderSide(color: Color(0xFFE9EEF0))),
+                    ),
+                    child: Row(
+                      children: [
+                        _TeamMatchCmrWindowButton(
+                          icon: Icons.close_rounded,
+                          tooltip: 'Закрыть',
+                          onTap: closeWindow,
+                        ),
+                        const SizedBox(width: 7),
+                        _TeamMatchCmrWindowButton(
+                          icon: Icons.remove_rounded,
+                          tooltip: 'Свернуть',
+                          onTap: () {
+                            minimized = true;
+                            entry.markNeedsBuild();
+                          },
+                        ),
+                        const SizedBox(width: 7),
+                        _TeamMatchCmrWindowButton(
+                          icon: maximized ? Icons.close_fullscreen_rounded : Icons.open_in_full_rounded,
+                          tooltip: maximized ? 'Вернуть размер' : 'Развернуть',
+                          onTap: () {
+                            maximized = !maximized;
+                            entry.markNeedsBuild();
+                          },
+                        ),
+                        const SizedBox(width: 15),
+                        Container(
+                          width: 31,
+                          height: 31,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF3F6F9),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.sports_soccer_rounded, color: Color(0xFF1F2937), size: 16),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                headerTitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: _TeamMatchUiText.title(13.2),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                headerSubtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: _TeamMatchUiText.body(10.5, color: const Color(0xFF667085), weight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: TeamMatchDetailScreen(
+                    matchId: matchId,
+                    teamId: teamId,
+                    clubId: clubId,
+                    teamName: teamName,
+                    clubName: clubName,
+                    initialMatch: initialMatch,
+                    embedded: true,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
+
+  overlay.insert(entry);
+}
+
+
+class _TeamMatchUiText {
+  static const String family = 'Segoe UI';
+  static const List<String> fallback = <String>[
+    'SF Pro Display',
+    'SF Pro Text',
+    'Inter',
+    'Roboto',
+    'Arial',
+  ];
+
+  static TextStyle title(double size, {Color color = const Color(0xFF0B0F14)}) => TextStyle(
+        color: color,
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        fontSize: size,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.22,
+        height: 1.08,
+      );
+
+  static TextStyle body(double size, {Color color = const Color(0xFF374151), FontWeight weight = FontWeight.w600}) => TextStyle(
+        color: color,
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        fontSize: size,
+        fontWeight: weight,
+        letterSpacing: -0.05,
+        height: 1.22,
+      );
+
+  static TextStyle action({Color color = const Color(0xFF0B0F14), double size = 11.4}) => TextStyle(
+        color: color,
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        fontSize: size,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.06,
+        height: 1.08,
+      );
+}
+
+class _TeamMatchCmrWindowButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  const _TeamMatchCmrWindowButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Компактные системные кнопки как в CMR "Команды": слева, маленькие,
+    // светло-серые, без macOS-цветов и без крупных квадратных кнопок.
+    final radius = BorderRadius.circular(99);
+
+    return Tooltip(
+      message: tooltip,
+      waitDuration: const Duration(milliseconds: 250),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: radius,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: radius,
+          child: Container(
+            width: 20,
+            height: 20,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F4F7),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              icon,
+              color: const Color(0xFF667085),
+              size: 11.5,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AiPlayerMotion {
+  final Offset position;
+  final double timeMs;
+  final double speedKmh;
+  final bool sprinting;
+
+  const _AiPlayerMotion({
+    required this.position,
+    required this.timeMs,
+    required this.speedKmh,
+    required this.sprinting,
+  });
+}
+
 class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
     with SingleTickerProviderStateMixin {
   static const String apiBase = "https://sportotekaapp.ru/api";
   static const String detailUrl = "$apiBase/get_team_match_detail.php";
   static const String updateUrl = "$apiBase/update_team_match_info.php";
   static const String deleteVideoUrl = "$apiBase/delete_match_video.php";
+  static const String deleteMatchUrl = "$apiBase/delete_team_match.php";
   static const String ttdReportUrl = "$apiBase/get_match_ttd_report.php";
 
   late TabController _tabController;
@@ -63,11 +406,35 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
   bool saving = false;
   bool uploadingVideo = false;
   bool _isMatchInfoEditing = false;
+  OverlayEntry? _uploadProgressOverlay;
 
   int matchId = 0;
   int teamId = 0;
   int _coachId = 0;
   String teamName = "Моя команда";
+  
+  
+  Map<String, dynamic> _extractTeamColors() {
+  // Пытаемся получить цвета из данных матча
+  // Если нет - используем стандартные
+  final homeColor = _s(match?["home_team_color"]).isNotEmpty
+      ? _s(match?["home_team_color"])
+      : "#00A750"; // Зеленый - ваша команда
+  
+  final awayColor = _s(match?["away_team_color"]).isNotEmpty
+      ? _s(match?["away_team_color"])
+      : "#FF4444"; // Красный - соперник
+
+  // Определяем, какая команда играет дома
+  final isHome = _s(match?["our_team"]).isNotEmpty;
+
+  return {
+    'home': isHome ? homeColor : awayColor,
+    'away': isHome ? awayColor : homeColor,
+  };
+}
+
+
 
   Map<String, dynamic>? match;
 
@@ -75,12 +442,36 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
 
   final Map<String, VideoPlayerController> _analysisVideoControllers = {};
   final Map<String, Future<void>> _analysisVideoInitFutures = {};
+  final Map<String, String> _analysisVideoInitErrors = {};
   final VideoMatchReviewPlaybackController _aiReviewPlayback =
       VideoMatchReviewPlaybackController();
+  final AdvancedVideoAnalysisPlaybackController _embeddedAiPlayback =
+      AdvancedVideoAnalysisPlaybackController();
+  final AdvancedVideoAnalysisPlaybackController _embeddedMainVideoPlayback =
+      AdvancedVideoAnalysisPlaybackController();
 
   String? _activeAnalysisVideoKey;
+  String? _selectedAnalysisPlayerKey;
+  bool _bottomVideoLoading = false;
   double _matchPlaybackSpeed = 1.0;
   final List<Map<String, dynamic>> _localVideoNotes = [];
+
+  // Live AI telemetry: эти данные приходят от встроенного AI-видеоанализа
+  // и оживляют «Обзор» матча: мини-карту, скорость, спринты, нагрузку и события.
+  List<PlayerDetection> _liveAiPlayers = const [];
+  final Map<int, Offset> _liveAiPositions = {};
+  final Map<int, List<Offset>> _liveAiTrails = {};
+  final Map<int, double> _liveAiSpeedsKmh = {};
+  final Map<int, double> _liveAiAccelerations = {};
+  final Map<int, int> _liveAiSprints = {};
+  final Map<int, double> _liveAiLoad = {};
+  final Map<int, _AiPlayerMotion> _lastAiMotion = {};
+  final List<Map<String, dynamic>> _liveAiEvents = [];
+  String _liveAiStatus = 'AI ожидает видео';
+  int _liveAiFrame = 0;
+  double _liveAiTimeMs = 0;
+  DateTime _lastAiSaveAt = DateTime.fromMillisecondsSinceEpoch(0);
+  bool _savingLiveAiFrame = false;
 
   final _competitionCtrl = TextEditingController();
   final _dateCtrl = TextEditingController();
@@ -120,13 +511,13 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
   int? _selectedUploadThumbSize;
 
   // Catapult B/W workspace: графитовые элементы управления + светлые панели аналитики.
-  Color get primary => const Color(0xFF111315);
-  Color get bg => const Color(0xFFF4F5F6);
+  Color get primary => const Color(0xFF28A86B);
+  Color get bg => Colors.white;
   Color get cardBg => Colors.white;
   Color get textPrimary => const Color(0xFF111827);
   Color get textSecondary => const Color(0xFF6B7280);
   Color get borderColor => const Color(0xFFE5E7EB);
-  Color get softAccent => const Color(0xFFF1F2F4);
+  Color get softAccent => const Color(0xFFF3FBF7);
   Color get softSurface => const Color(0xFFF8F9FA);
 
   @override
@@ -215,7 +606,11 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
     }
     _analysisVideoControllers.clear();
     _analysisVideoInitFutures.clear();
+    _analysisVideoInitErrors.clear();
     _aiReviewPlayback.dispose();
+    _embeddedAiPlayback.dispose();
+    _embeddedMainVideoPlayback.dispose();
+    _hideUploadingDialog();
 
     super.dispose();
   }
@@ -420,6 +815,25 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
     final id = _playerId(row);
     if (id.isNotEmpty) return "id:$id";
     return "name:${_playerName(row).toLowerCase()}";
+  }
+
+  String _playerIdentityKey(Map<String, dynamic> row) {
+    final id = _playerId(row).trim();
+    if (id.isNotEmpty) return "id:$id";
+
+    final nestedPlayer = row["player"];
+    if (nestedPlayer is Map) {
+      final nestedId = _playerId(Map<String, dynamic>.from(nestedPlayer)).trim();
+      if (nestedId.isNotEmpty) return "id:$nestedId";
+    }
+
+    final name = _playerName(row).trim().toLowerCase();
+    if (name.isNotEmpty && name != "игрок") return "name:$name";
+
+    final number = _s(row["number"] ?? row["player_number"] ?? row["shirt_number"]).trim();
+    if (number.isNotEmpty) return "number:$number";
+
+    return "row:${row.hashCode}";
   }
 
   List<Map<String, dynamic>> _filteredMainTtdRows() {
@@ -757,7 +1171,30 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
       final data = _decodeResponse(resp);
 
       if (data["success"] == true || data["status"] == "success") {
-        match = Map<String, dynamic>.from(data["match"] ?? {});
+        final loadedMatch = Map<String, dynamic>.from(data["match"] ?? {});
+
+        // Некоторые PHP-обработчики возвращают видео не внутри match["videos"],
+        // а отдельным верхним ключом videos. Экран ожидает именно match["videos"],
+        // поэтому обязательно подкладываем список внутрь матча.
+        final separatedVideos = data["videos"];
+        if (separatedVideos is List) {
+          loadedMatch["videos"] = separatedVideos;
+        }
+
+        // Поддержка альтернативных ключей от API: match_videos / data.videos.
+        final separatedMatchVideos = data["match_videos"];
+        if ((loadedMatch["videos"] is! List || (loadedMatch["videos"] as List).isEmpty) &&
+            separatedMatchVideos is List) {
+          loadedMatch["videos"] = separatedMatchVideos;
+        }
+        final nestedData = data["data"];
+        if ((loadedMatch["videos"] is! List || (loadedMatch["videos"] as List).isEmpty) &&
+            nestedData is Map &&
+            nestedData["videos"] is List) {
+          loadedMatch["videos"] = nestedData["videos"];
+        }
+
+        match = loadedMatch;
         final loadedTeamName = _firstReadableTeamName(match!);
         if (!_looksLikeOnlyId(loadedTeamName)) {
           teamName = loadedTeamName;
@@ -926,6 +1363,309 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
       );
     } finally {
       if (mounted) setState(() => saving = false);
+    }
+  }
+
+
+
+  String get _currentMatchActionTitle {
+    final explicit = _s(match?["title"] ?? match?["match_title"]);
+    if (explicit.isNotEmpty) return explicit;
+    return _matchTitleForReview();
+  }
+
+  Widget _matchActionsButton({String label = 'Действия'}) {
+    return Material(
+      color: const Color(0xFFF6F7F9),
+      borderRadius: BorderRadius.circular(15),
+      child: InkWell(
+        onTap: _showCurrentMatchActions,
+        borderRadius: BorderRadius.circular(15),
+        child: Container(
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 13),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.more_horiz_rounded, color: Color(0xFF344054), size: 18),
+              SizedBox(width: 7),
+              Text(
+                'Действия',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Color(0xFF344054),
+                  fontWeight: FontWeight.w900,
+                  fontSize: 12.2,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showCurrentMatchActions() async {
+    if (!mounted) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 42,
+                  height: 5,
+                  margin: const EdgeInsets.only(bottom: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE5E7EB),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(
+                    Icons.drive_file_rename_outline_rounded,
+                    color: Color(0xFF111827),
+                  ),
+                  title: const Text(
+                    'Переименовать матч',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  subtitle: Text(
+                    _currentMatchActionTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _renameCurrentMatch();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.edit_note_rounded, color: Color(0xFF28A86B)),
+                  title: const Text(
+                    'Редактировать данные матча',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  subtitle: const Text('Турнир, дата, стадион, статистика'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _openMatchInfoEditorSheet();
+                  },
+                ),
+                const Divider(height: 14),
+                ListTile(
+                  leading: const Icon(Icons.delete_forever_outlined, color: Colors.red),
+                  title: const Text(
+                    'Удалить матч',
+                    style: TextStyle(color: Colors.red, fontWeight: FontWeight.w900),
+                  ),
+                  subtitle: const Text('Матч будет удалён полностью'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _deleteCurrentMatch();
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _renameCurrentMatch() async {
+    if (matchId <= 0) {
+      Get.snackbar('Ошибка', 'Некорректный id матча');
+      return;
+    }
+
+    final controller = TextEditingController(text: _currentMatchActionTitle);
+
+    final newTitle = await Get.dialog<String>(
+      AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text(
+          'Переименовать матч',
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textInputAction: TextInputAction.done,
+          decoration: const InputDecoration(
+            labelText: 'Название матча',
+            hintText: 'Например: Гомель U13 — Минск U13',
+          ),
+          onSubmitted: (value) => Get.back(result: value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: const Text('Отмена'),
+          ),
+          ElevatedButton(
+            onPressed: () => Get.back(result: controller.text.trim()),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF28A86B),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+
+    controller.dispose();
+
+    if (newTitle == null) return;
+    final cleanTitle = newTitle.trim();
+    if (cleanTitle.isEmpty) {
+      Get.snackbar('Ошибка', 'Введите название матча');
+      return;
+    }
+
+    Get.dialog(
+      const Center(child: CircularProgressIndicator()),
+      barrierDismissible: false,
+    );
+
+    try {
+      final resp = await http
+          .post(
+            Uri.parse(updateUrl),
+            headers: const {'Content-Type': 'application/json; charset=utf-8'},
+            body: jsonEncode({
+              'id': matchId,
+              'match_id': matchId,
+              'team_id': teamId,
+              'title': cleanTitle,
+              'match_title': cleanTitle,
+            }),
+          )
+          .timeout(const Duration(seconds: 20));
+
+      final data = _decodeResponse(resp);
+
+      if (Get.isDialogOpen ?? false) Get.back();
+
+      final ok = data['success'] == true || data['status'] == 'success';
+      if (ok) {
+        if (mounted) {
+          setState(() {
+            final next = Map<String, dynamic>.from(match ?? const {});
+            next['title'] = cleanTitle;
+            next['match_title'] = cleanTitle;
+            match = next;
+          });
+        }
+        Get.snackbar('Готово', 'Название матча обновлено');
+        await load();
+      } else {
+        Get.snackbar(
+          'Ошибка',
+          _s(data['message']).isNotEmpty
+              ? _s(data['message'])
+              : 'Не удалось переименовать матч',
+        );
+      }
+    } catch (e) {
+      if (Get.isDialogOpen ?? false) Get.back();
+      Get.snackbar('Ошибка', 'Ошибка переименования матча: $e');
+    }
+  }
+
+  Future<void> _deleteCurrentMatch() async {
+    if (matchId <= 0) {
+      Get.snackbar('Ошибка', 'Некорректный id матча');
+      return;
+    }
+
+    final confirmed = await Get.dialog<bool>(
+      AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text(
+          'Удалить матч?',
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+        content: Text(
+          'Матч\n\n$_currentMatchActionTitle\n\nбудет удалён полностью. Это действие нельзя отменить.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(result: false),
+            child: const Text('Отмена'),
+          ),
+          ElevatedButton(
+            onPressed: () => Get.back(result: true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    Get.dialog(
+      const Center(child: CircularProgressIndicator()),
+      barrierDismissible: false,
+    );
+
+    try {
+      final resp = await http
+          .post(
+            Uri.parse(deleteMatchUrl),
+            headers: const {'Content-Type': 'application/json; charset=utf-8'},
+            body: jsonEncode({
+              'id': matchId,
+              'match_id': matchId,
+              'team_id': teamId,
+            }),
+          )
+          .timeout(const Duration(seconds: 20));
+
+      final data = _decodeResponse(resp);
+
+      if (Get.isDialogOpen ?? false) Get.back();
+
+      final ok = data['success'] == true || data['status'] == 'success';
+      if (ok) {
+        Get.snackbar('Готово', 'Матч удалён');
+        if (!mounted) return;
+        if (widget.embedded) {
+          setState(() {
+            match = {
+              'title': 'Матч удалён',
+              'videos': <Map<String, dynamic>>[],
+            };
+          });
+        } else {
+          Get.back(result: {'deleted': true, 'match_id': matchId});
+        }
+      } else {
+        Get.snackbar(
+          'Ошибка',
+          _s(data['message']).isNotEmpty
+              ? _s(data['message'])
+              : 'Не удалось удалить матч',
+        );
+      }
+    } catch (e) {
+      if (Get.isDialogOpen ?? false) Get.back();
+      Get.snackbar('Ошибка', 'Ошибка удаления матча: $e');
     }
   }
 
@@ -1721,7 +2461,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
           backgroundColor: primary,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
           ),
           elevation: 0,
         ),
@@ -2810,7 +3550,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(30),
+                borderRadius: BorderRadius.circular(22),
                 
               ),
               child: Column(
@@ -2913,7 +3653,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(30),
+                borderRadius: BorderRadius.circular(22),
                 
               ),
               child: Column(
@@ -4406,20 +5146,26 @@ String _translatePosition(String key) {
     _selectedUploadThumbName = null;
     _selectedUploadThumbSize = null;
 
+    final overlay = _rootOverlayState() ?? Overlay.of(context, rootOverlay: true);
+    final closed = Completer<void>();
+    late OverlayEntry entry;
     bool localSaving = false;
 
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
+    void closeUploadWindow() {
+      if (closed.isCompleted) return;
+      entry.remove();
+      closed.complete();
+    }
+
+    entry = OverlayEntry(
+      builder: (overlayContext) {
         return StatefulBuilder(
-          builder: (ctx, setSB) {
+          builder: (overlayContext, setSB) {
             Future<void> pickVideo() async {
               try {
                 final result = await FilePicker.platform.pickFiles(
-                  type: FileType.video,
+                  type: FileType.custom,
+                  allowedExtensions: const ['mp4', 'mov', 'm4v', 'avi'],
                   allowMultiple: false,
                   withData: false,
                 );
@@ -4438,11 +5184,31 @@ String _translatePosition(String key) {
                   return;
                 }
 
+                final pickedExt = picked.name.contains('.')
+                    ? picked.name.split('.').last.toLowerCase()
+                    : '';
+                if (!['mp4', 'mov', 'm4v', 'avi'].contains(pickedExt)) {
+                  Get.snackbar(
+                    'Видео',
+                    'Поддерживаются MP4, MOV, M4V и AVI. AVI будет конвертироваться сервером в MP4 для просмотра в приложении.',
+                  );
+                  return;
+                }
+
                 _selectedUploadVideoPath = picked.path!;
                 _selectedUploadVideoName = picked.name;
                 _selectedUploadVideoSize = await file.length();
 
-                if (ctx.mounted) setSB(() {});
+                if (mounted) setSB(() {});
+              } on PlatformException catch (e) {
+                final isEntitlementError = e.code == 'ENTITLEMENT_NOT_FOUND' ||
+                    '${e.message}'.contains('entitlement');
+                Get.snackbar(
+                  'Ошибка',
+                  isEntitlementError
+                      ? 'macOS не разрешает выбрать файл. Добавьте entitlement User Selected File Read-Only/Read-Write в DebugProfile.entitlements и Release.entitlements.'
+                      : 'Не удалось выбрать видео: ${e.message ?? e.code}',
+                );
               } catch (e) {
                 Get.snackbar("Ошибка", "Не удалось выбрать видео: $e");
               }
@@ -4465,277 +5231,291 @@ String _translatePosition(String key) {
                 _selectedUploadThumbName = x.name;
                 _selectedUploadThumbSize = size;
 
-                if (ctx.mounted) setSB(() {});
+                if (mounted) setSB(() {});
+              } on PlatformException catch (e) {
+                final isEntitlementError = e.code == 'ENTITLEMENT_NOT_FOUND' ||
+                    '${e.message}'.contains('entitlement');
+                Get.snackbar(
+                  'Ошибка',
+                  isEntitlementError
+                      ? 'macOS не разрешает выбрать файл. Добавьте entitlement User Selected File Read-Only/Read-Write в DebugProfile.entitlements и Release.entitlements.'
+                      : 'Не удалось выбрать превью: ${e.message ?? e.code}',
+                );
               } catch (e) {
                 Get.snackbar("Ошибка", "Не удалось выбрать превью: $e");
               }
             }
 
+            final media = MediaQuery.of(overlayContext);
+            final size = media.size;
+            final isCompact = size.width < 680;
             final isHighlight = type == "highlight";
             final title = isHighlight ? "Загрузка нарезки" : "Загрузка видео матча";
             final subtitle = isHighlight
                 ? "Добавьте короткий фрагмент для разбора эпизода"
                 : "Добавьте полную запись игры для просмотра и AI-разбора";
+            final dialogWidth = isCompact ? size.width - 20 : min(620.0, size.width - 48);
+            final dialogMaxHeight = max(420.0, size.height - (isCompact ? 22 : 72));
 
-            return DraggableScrollableSheet(
-              initialChildSize: 0.82,
-              minChildSize: 0.52,
-              maxChildSize: 0.96,
-              expand: false,
-              builder: (context, scrollController) {
-                return Container(
-                  margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-                    
-                  ),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 10),
-                      Container(
-                        width: 46,
-                        height: 5,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFD7E8DE),
-                          borderRadius: BorderRadius.circular(99),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 10, 10),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              width: 48,
-                              height: 48,
-                              decoration: BoxDecoration(
-                                color: softAccent,
-                                borderRadius: BorderRadius.circular(18),
-                                
-                              ),
-                              child: Icon(
-                                isHighlight
-                                    ? Icons.video_library_outlined
-                                    : Icons.slow_motion_video_rounded,
-                                color: primary,
-                                size: 25,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      height: 1.12,
-                                      fontWeight: FontWeight.w900,
-                                      color: textPrimary,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    subtitle,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 12.5,
-                                      height: 1.25,
-                                      fontWeight: FontWeight.w700,
-                                      color: textSecondary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            IconButton(
-                              tooltip: 'Закрыть',
-                              onPressed: localSaving ? null : () => Navigator.of(ctx).pop(),
-                              icon: const Icon(Icons.close_rounded),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Expanded(
-                        child: ListView(
-                          controller: scrollController,
-                          padding: EdgeInsets.fromLTRB(
-                            14,
-                            4,
-                            14,
-                            MediaQuery.of(ctx).viewInsets.bottom + 18,
-                          ),
-                          children: [
-                            _uploadPickerCard(
-                              title: 'Видео файл',
-                              subtitle: _selectedUploadVideoPath == null
-                                  ? 'MP4, MOV или другой видеофайл с устройства'
-                                  : 'Файл выбран и готов к загрузке',
-                              buttonText: _selectedUploadVideoPath == null
-                                  ? 'Выбрать видео'
-                                  : 'Заменить видео',
-                              icon: Icons.video_file_outlined,
-                              selected: _selectedUploadVideoPath != null,
-                              fileName: _selectedUploadVideoName,
-                              fileSize: _selectedUploadVideoSize,
-                              onTap: localSaving ? null : pickVideo,
-                            ),
-                            const SizedBox(height: 12),
-                            _uploadPickerCard(
-                              title: 'Превью',
-                              subtitle: _selectedUploadThumbPath == null
-                                  ? 'Необязательно: картинка для красивой карточки видео'
-                                  : 'Превью выбрано для карточки видео',
-                              buttonText: _selectedUploadThumbPath == null
-                                  ? 'Выбрать превью'
-                                  : 'Заменить превью',
-                              icon: Icons.image_outlined,
-                              selected: _selectedUploadThumbPath != null,
-                              fileName: _selectedUploadThumbName,
-                              fileSize: _selectedUploadThumbSize,
-                              onTap: localSaving ? null : pickThumb,
-                            ),
-                            const SizedBox(height: 12),
-                            Container(
-                              padding: const EdgeInsets.all(13),
-                              decoration: BoxDecoration(
-                                color: softSurface,
-                                borderRadius: BorderRadius.circular(20),
-                                
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    width: 34,
-                                    height: 34,
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(13),
-                                      
-                                    ),
-                                    child: Icon(Icons.restart_alt_rounded, color: primary, size: 19),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Загрузка по частям',
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w900,
-                                            color: textPrimary,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 3),
-                                        Text(
-                                          'Большие файлы загружаются порциями. Если соединение прервётся, загрузку можно продолжить.',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            height: 1.28,
-                                            fontWeight: FontWeight.w700,
-                                            color: textSecondary,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      SafeArea(
-                        top: false,
+            return Material(
+              color: Colors.black.withOpacity(0.34),
+              child: SafeArea(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: dialogWidth,
+                      maxHeight: dialogMaxHeight,
+                    ),
+                    child: Dialog(
+                      elevation: 0,
+                      insetPadding: EdgeInsets.zero,
+                      backgroundColor: Colors.transparent,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(isCompact ? 24 : 28),
                         child: Container(
-                          padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                          ),
-                          child: Row(
+                          color: Colors.white,
+                          child: Column(
                             children: [
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: localSaving ? null : () => Navigator.of(ctx).pop(),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: textSecondary,
-                                    side: BorderSide.none,
-                                    backgroundColor: softSurface,
-                                    padding: const EdgeInsets.symmetric(vertical: 14),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(16),
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(16, 16, 10, 10),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      width: 48,
+                                      height: 48,
+                                      decoration: BoxDecoration(
+                                        color: softAccent,
+                                        borderRadius: BorderRadius.circular(18),
+                                      ),
+                                      child: Icon(
+                                        isHighlight
+                                            ? Icons.video_library_outlined
+                                            : Icons.slow_motion_video_rounded,
+                                        color: primary,
+                                        size: 25,
+                                      ),
                                     ),
-                                    textStyle: const TextStyle(fontWeight: FontWeight.w900),
-                                  ),
-                                  child: const Text('Отмена'),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            title,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 18,
+                                              height: 1.12,
+                                              fontWeight: FontWeight.w900,
+                                              color: textPrimary,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            subtitle,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 12.5,
+                                              height: 1.25,
+                                              fontWeight: FontWeight.w700,
+                                              color: textSecondary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    IconButton(
+                                      tooltip: 'Закрыть',
+                                      onPressed: localSaving ? null : closeUploadWindow,
+                                      icon: const Icon(Icons.close_rounded),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(width: 10),
                               Expanded(
-                                flex: 2,
-                                child: FilledButton.icon(
-                                  onPressed: localSaving
-                                      ? null
-                                      : () async {
-                                          if (_selectedUploadVideoPath == null ||
-                                              _selectedUploadVideoPath!.isEmpty) {
-                                            Get.snackbar(
-                                              "Видео",
-                                              "Сначала выберите файл для загрузки",
-                                            );
-                                            return;
-                                          }
-
-                                          final videoFile = File(_selectedUploadVideoPath!);
-                                          if (!await videoFile.exists()) {
-                                            Get.snackbar(
-                                              "Ошибка",
-                                              "Выбранный файл не найден",
-                                            );
-                                            return;
-                                          }
-
-                                          setSB(() => localSaving = true);
-
-                                          if (Navigator.of(ctx).canPop()) {
-                                            Navigator.of(ctx).pop();
-                                          }
-
-                                          await _uploadVideoWithChunks(
-                                            type: type,
-                                            video: videoFile,
-                                            thumbnail: _selectedUploadThumbPath != null
-                                                ? File(_selectedUploadThumbPath!)
-                                                : null,
-                                          );
-                                        },
-                                  icon: localSaving
-                                      ? const SizedBox(
-                                          width: 18,
-                                          height: 18,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: Colors.white,
-                                          ),
-                                        )
-                                      : const Icon(Icons.cloud_upload_rounded),
-                                  label: FittedBox(fit: BoxFit.scaleDown, child: Text(localSaving ? "Подготовка..." : "Загрузить", maxLines: 1, overflow: TextOverflow.ellipsis)),
-                                  style: FilledButton.styleFrom(
-                                    backgroundColor: primary,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 14),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(16),
+                                child: ListView(
+                                  padding: EdgeInsets.fromLTRB(
+                                    14,
+                                    4,
+                                    14,
+                                    media.viewInsets.bottom + 18,
+                                  ),
+                                  children: [
+                                    _uploadPickerCard(
+                                      title: 'Видео файл',
+                                      subtitle: _selectedUploadVideoPath == null
+                                          ? 'MP4, MOV, M4V или AVI с устройства'
+                                          : 'Файл выбран и готов к загрузке',
+                                      buttonText: _selectedUploadVideoPath == null
+                                          ? 'Выбрать видео'
+                                          : 'Заменить видео',
+                                      icon: Icons.video_file_outlined,
+                                      selected: _selectedUploadVideoPath != null,
+                                      fileName: _selectedUploadVideoName,
+                                      fileSize: _selectedUploadVideoSize,
+                                      onTap: localSaving ? null : pickVideo,
                                     ),
-                                    textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                                    const SizedBox(height: 12),
+                                    _uploadPickerCard(
+                                      title: 'Превью',
+                                      subtitle: _selectedUploadThumbPath == null
+                                          ? 'Необязательно: картинка для красивой карточки видео'
+                                          : 'Превью выбрано для карточки видео',
+                                      buttonText: _selectedUploadThumbPath == null
+                                          ? 'Выбрать превью'
+                                          : 'Заменить превью',
+                                      icon: Icons.image_outlined,
+                                      selected: _selectedUploadThumbPath != null,
+                                      fileName: _selectedUploadThumbName,
+                                      fileSize: _selectedUploadThumbSize,
+                                      onTap: localSaving ? null : pickThumb,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Container(
+                                      padding: const EdgeInsets.all(13),
+                                      decoration: BoxDecoration(
+                                        color: softSurface,
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Container(
+                                            width: 34,
+                                            height: 34,
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              borderRadius: BorderRadius.circular(13),
+                                            ),
+                                            child: Icon(Icons.restart_alt_rounded, color: primary, size: 19),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'Загрузка по частям',
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w900,
+                                                    color: textPrimary,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 3),
+                                                Text(
+                                                  'Большие файлы загружаются чанками. Процент загрузки будет показан отдельным окном поверх экрана.',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    height: 1.28,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: textSecondary,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              SafeArea(
+                                top: false,
+                                child: Container(
+                                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+                                  color: Colors.white,
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: OutlinedButton(
+                                          onPressed: localSaving ? null : closeUploadWindow,
+                                          style: OutlinedButton.styleFrom(
+                                            foregroundColor: textSecondary,
+                                            side: BorderSide.none,
+                                            backgroundColor: softSurface,
+                                            padding: const EdgeInsets.symmetric(vertical: 14),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(16),
+                                            ),
+                                            textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                                          ),
+                                          child: const Text('Отмена'),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        flex: 2,
+                                        child: FilledButton.icon(
+                                          onPressed: localSaving
+                                              ? null
+                                              : () async {
+                                                  if (_selectedUploadVideoPath == null ||
+                                                      _selectedUploadVideoPath!.isEmpty) {
+                                                    Get.snackbar(
+                                                      "Видео",
+                                                      "Сначала выберите файл для загрузки",
+                                                    );
+                                                    return;
+                                                  }
+
+                                                  final videoFile = File(_selectedUploadVideoPath!);
+                                                  if (!await videoFile.exists()) {
+                                                    Get.snackbar(
+                                                      "Ошибка",
+                                                      "Выбранный файл не найден",
+                                                    );
+                                                    return;
+                                                  }
+
+                                                  final thumbFile = _selectedUploadThumbPath != null &&
+                                                          _selectedUploadThumbPath!.isNotEmpty
+                                                      ? File(_selectedUploadThumbPath!)
+                                                      : null;
+
+                                                  setSB(() => localSaving = true);
+                                                  closeUploadWindow();
+
+                                                  await _uploadVideoWithChunks(
+                                                    type: type,
+                                                    video: videoFile,
+                                                    thumbnail: thumbFile,
+                                                  );
+                                                },
+                                          icon: localSaving
+                                              ? const SizedBox(
+                                                  width: 18,
+                                                  height: 18,
+                                                  child: CircularProgressIndicator(
+                                                    strokeWidth: 2,
+                                                    color: Colors.white,
+                                                  ),
+                                                )
+                                              : const Icon(Icons.cloud_upload_rounded),
+                                          label: FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            child: Text(
+                                              localSaving ? "Подготовка..." : "Загрузить",
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          style: FilledButton.styleFrom(
+                                            backgroundColor: primary,
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(vertical: 14),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(16),
+                                            ),
+                                            textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
@@ -4743,15 +5523,18 @@ String _translatePosition(String key) {
                           ),
                         ),
                       ),
-                    ],
+                    ),
                   ),
-                );
-              },
+                ),
+              ),
             );
           },
         );
       },
     );
+
+    overlay.insert(entry);
+    await closed.future;
   }
 
   Widget _uploadPickerCard({
@@ -4919,6 +5702,152 @@ String _translatePosition(String key) {
     );
   }
 
+
+  Map<String, dynamic> _mapFromAny(dynamic value) {
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return <String, dynamic>{};
+  }
+
+  String _firstNonEmptyFromMaps(
+    List<Map<String, dynamic>> maps,
+    List<String> keys,
+  ) {
+    for (final map in maps) {
+      for (final key in keys) {
+        final value = _s(map[key]);
+        if (value.isNotEmpty && value.toLowerCase() != 'null') return value;
+      }
+    }
+    return '';
+  }
+
+  int _firstPositiveIntFromMaps(
+    List<Map<String, dynamic>> maps,
+    List<String> keys,
+  ) {
+    for (final map in maps) {
+      for (final key in keys) {
+        final value = _i(map[key]);
+        if (value > 0) return value;
+      }
+    }
+    return 0;
+  }
+
+  Map<String, dynamic>? _uploadedVideoFromResult({
+    required Map<String, dynamic> result,
+    required String type,
+    required File video,
+    File? thumbnail,
+  }) {
+    final data = _mapFromAny(result['data']);
+    final videoMap = _mapFromAny(result['video']);
+    final dataVideoMap = _mapFromAny(data['video']);
+    final fileMap = _mapFromAny(result['file']);
+
+    final maps = <Map<String, dynamic>>[
+      dataVideoMap,
+      videoMap,
+      data,
+      fileMap,
+      result,
+    ];
+
+    final url = _firstNonEmptyFromMaps(maps, const [
+      'video_url',
+      'file_url',
+      'url',
+      'video_path',
+      'file_path',
+      'path',
+      'src',
+    ]);
+
+    if (url.isEmpty) return null;
+
+    final thumbUrl = _firstNonEmptyFromMaps(maps, const [
+      'thumbnail_url',
+      'thumb_url',
+      'preview_url',
+      'poster_url',
+      'thumbnail',
+      'thumb',
+      'preview',
+      'poster',
+    ]);
+
+    final id = _firstPositiveIntFromMaps(maps, const [
+      'id',
+      'video_id',
+      'match_video_id',
+    ]);
+
+    final fileName = _firstNonEmptyFromMaps(maps, const [
+      'file_name',
+      'filename',
+      'name',
+      'title',
+    ]);
+
+    final size = _firstPositiveIntFromMaps(maps, const [
+      'file_size',
+      'size',
+      'bytes',
+    ]);
+
+    return {
+      if (id > 0) 'id': id,
+      'match_id': matchId,
+      'team_id': teamId,
+      'video_type': type,
+      'file_name': fileName.isNotEmpty ? fileName : video.uri.pathSegments.last,
+      'video_url': _normalizeUrl(url) ?? url,
+      if (thumbUrl.isNotEmpty) 'thumbnail_url': _normalizeUrl(thumbUrl) ?? thumbUrl,
+      'file_size': size > 0 ? size : video.lengthSync(),
+      'created_at': DateTime.now().toIso8601String().substring(0, 19),
+      'uploaded_at': DateTime.now().toIso8601String().substring(0, 19),
+    };
+  }
+
+  bool _sameVideoIdentity(Map<String, dynamic> a, Map<String, dynamic> b) {
+    final aId = _i(a['id']);
+    final bId = _i(b['id']);
+    if (aId > 0 && bId > 0 && aId == bId) return true;
+
+    final aUrl = (_normalizeUrl(_s(a['video_url'])) ?? '').trim();
+    final bUrl = (_normalizeUrl(_s(b['video_url'])) ?? '').trim();
+    return aUrl.isNotEmpty && bUrl.isNotEmpty && aUrl == bUrl;
+  }
+
+  bool _currentMatchContainsVideo(Map<String, dynamic> uploadedVideo) {
+    final videos = ((match?['videos'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e));
+
+    for (final video in videos) {
+      if (_sameVideoIdentity(video, uploadedVideo)) return true;
+    }
+    return false;
+  }
+
+  void _ensureUploadedVideoVisible(Map<String, dynamic> uploadedVideo) {
+    if (_currentMatchContainsVideo(uploadedVideo)) return;
+
+    final current = Map<String, dynamic>.from(match ?? <String, dynamic>{});
+    final currentVideos = ((current['videos'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+
+    currentVideos.insert(0, uploadedVideo);
+    current['videos'] = currentVideos;
+
+    if (mounted) {
+      setState(() => match = current);
+    }
+  }
+
   Future<void> _uploadVideoWithChunks({
     required String type,
     required File video,
@@ -4958,18 +5887,47 @@ String _translatePosition(String key) {
         },
       );
 
-      if (Get.isDialogOpen ?? false) {
-        Get.back();
-      }
+      _hideUploadingDialog();
 
       if (result["success"] == true) {
+        developer.log(
+          'UPLOAD VIDEO COMPLETE RESULT: ${jsonEncode(result)}',
+          name: 'TeamMatchDetailScreen',
+        );
+
+        final uploadedVideo = _uploadedVideoFromResult(
+          result: result,
+          type: type,
+          video: video,
+          thumbnail: thumbnail,
+        );
+
+        // После загрузки сбрасываем старые video_player контроллеры. Иначе экран
+        // может пытаться открыть старый повреждённый URL и падать с OSStatus -12848.
+        _clearAnalysisVideoControllers();
+
+        // Сначала обновляем данные с сервера. Если get_team_match_detail.php пока
+        // не возвращает список videos, ниже добавим видео локально из ответа
+        // complete_team_match_video_upload.php, чтобы пользователь сразу увидел файл.
+        await load();
+
+        if (uploadedVideo != null) {
+          _ensureUploadedVideoVisible(uploadedVideo);
+        }
+
+        final serverReturnedVideo = uploadedVideo == null
+            ? (((match?["videos"] as List?) ?? const []).isNotEmpty)
+            : _currentMatchContainsVideo(uploadedVideo);
+
         Get.snackbar(
           "Успешно",
-          "Видео добавлено",
+          serverReturnedVideo
+              ? "Видео добавлено"
+              : "Сервер принял видео, но detail API пока не вернул его в списке videos",
           backgroundColor: primary,
           colorText: Colors.white,
+          duration: const Duration(seconds: 4),
         );
-        await load();
       } else {
         Get.snackbar(
           "Ошибка загрузки",
@@ -4979,9 +5937,7 @@ String _translatePosition(String key) {
         );
       }
     } catch (e) {
-      if (Get.isDialogOpen ?? false) {
-        Get.back();
-      }
+      _hideUploadingDialog();
       Get.snackbar(
         "Ошибка сети",
         "Не удалось загрузить видео: $e",
@@ -4993,237 +5949,1135 @@ String _translatePosition(String key) {
     }
   }
 
+  void _hideUploadingDialog() {
+    _uploadProgressOverlay?.remove();
+    _uploadProgressOverlay = null;
+  }
+
+  OverlayState? _rootOverlayState() {
+    try {
+      return Navigator.of(context, rootNavigator: true).overlay ??
+          Overlay.maybeOf(context, rootOverlay: true);
+    } catch (_) {
+      try {
+        return Overlay.maybeOf(context, rootOverlay: true);
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+
+  void _showRootBanner(
+    String title,
+    String message, {
+    Color? backgroundColor,
+    IconData icon = Icons.info_outline_rounded,
+  }) {
+    final overlay = _rootOverlayState();
+    if (overlay == null) {
+      Get.snackbar(title, message);
+      return;
+    }
+
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (overlayContext) {
+        final media = MediaQuery.of(overlayContext);
+        return Positioned(
+          top: media.padding.top + 16,
+          left: 18,
+          right: 18,
+          child: IgnorePointer(
+            ignoring: false,
+            child: Material(
+              color: Colors.transparent,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: backgroundColor ?? const Color(0xFF101828),
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.18),
+                          blurRadius: 22,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(icon, color: Colors.white, size: 21),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 13.5,
+                                ),
+                              ),
+                              if (message.trim().isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  message,
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.86),
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                    height: 1.18,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        InkWell(
+                          onTap: () {
+                            if (entry.mounted) entry.remove();
+                          },
+                          borderRadius: BorderRadius.circular(999),
+                          child: const Padding(
+                            padding: EdgeInsets.all(5),
+                            child: Icon(Icons.close_rounded, color: Colors.white, size: 18),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    overlay.insert(entry);
+    Future.delayed(const Duration(seconds: 4), () {
+      if (entry.mounted) entry.remove();
+    });
+  }
+
+  Future<bool> _confirmDeleteVideoOverlay(String fileName) async {
+    final overlay = _rootOverlayState();
+    if (overlay == null) {
+      final result = await showDialog<bool>(
+        context: context,
+        useRootNavigator: true,
+        builder: (_) => AlertDialog(
+          title: const Text('Удалить видео?'),
+          content: Text('Будет удалено только это видео:\n\n$fileName\n\nСам матч останется без изменений.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context, rootNavigator: true).pop(false), child: const Text('Отмена')),
+            FilledButton(onPressed: () => Navigator.of(context, rootNavigator: true).pop(true), child: const Text('Удалить')),
+          ],
+        ),
+      );
+      return result == true;
+    }
+
+    final completer = Completer<bool>();
+    late OverlayEntry entry;
+
+    void close(bool result) {
+      if (!completer.isCompleted) completer.complete(result);
+      if (entry.mounted) entry.remove();
+    }
+
+    entry = OverlayEntry(
+      builder: (overlayContext) {
+        return Material(
+          color: Colors.black.withOpacity(0.42),
+          child: SafeArea(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 430),
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 18),
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(26),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.22),
+                        blurRadius: 34,
+                        offset: const Offset(0, 18),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFE9E7),
+                              borderRadius: BorderRadius.circular(17),
+                            ),
+                            child: const Icon(Icons.delete_outline_rounded, color: Color(0xFFD92D20)),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Text(
+                              'Удалить видео?',
+                              style: TextStyle(
+                                fontSize: 18,
+                                height: 1.1,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF101828),
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => close(false),
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Будет удалено только это видео. Сам матч останется без изменений.',
+                        style: const TextStyle(
+                          color: Color(0xFF667085),
+                          fontSize: 13,
+                          height: 1.32,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF6F8FA),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          fileName,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF101828),
+                            fontWeight: FontWeight.w900,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => close(false),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF475467),
+                                side: BorderSide.none,
+                                backgroundColor: const Color(0xFFF2F4F7),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              ),
+                              child: const Text('Отмена', style: TextStyle(fontWeight: FontWeight.w900)),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: () => close(true),
+                              icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                              label: const Text('Удалить'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFFD92D20),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    overlay.insert(entry);
+    return completer.future;
+  }
+
   void _showUploadingDialog({
     required ValueNotifier<double> progressNotifier,
     required ValueNotifier<String> textNotifier,
   }) {
-    Get.dialog(
-      PopScope(
-        canPop: false,
-        child: Dialog(
-          elevation: 0,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 22),
-          backgroundColor: Colors.transparent,
-          child: ValueListenableBuilder<double>(
-            valueListenable: progressNotifier,
-            builder: (_, progress, __) {
-              return ValueListenableBuilder<String>(
-                valueListenable: textNotifier,
-                builder: (_, text, __) {
-                  final percent = (progress * 100).clamp(0, 100).round();
+    _hideUploadingDialog();
 
-                  return Container(
-                    width: 360,
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(26),
-                      
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 66,
-                          height: 66,
-                          decoration: BoxDecoration(
-                            color: softAccent,
-                            borderRadius: BorderRadius.circular(22),
-                            
-                          ),
-                          child: Icon(
-                            Icons.cloud_upload_rounded,
-                            color: primary,
-                            size: 32,
-                          ),
+    final overlay = _rootOverlayState() ?? Overlay.of(context, rootOverlay: true);
+
+    _uploadProgressOverlay = OverlayEntry(
+      builder: (overlayContext) {
+        return Material(
+          color: Colors.black.withOpacity(0.36),
+          child: Center(
+            child: Dialog(
+              elevation: 0,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 22),
+              backgroundColor: Colors.transparent,
+              child: ValueListenableBuilder<double>(
+                valueListenable: progressNotifier,
+                builder: (_, progress, __) {
+                  return ValueListenableBuilder<String>(
+                    valueListenable: textNotifier,
+                    builder: (_, text, __) {
+                      final normalized = progress.clamp(0.0, 1.0);
+                      final percent = (normalized * 100).round();
+
+                      return Container(
+                        width: 380,
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(26),
                         ),
-                        const SizedBox(height: 14),
-                        Text(
-                          "Загружаем видео",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 18,
-                            height: 1.12,
-                            fontWeight: FontWeight.w900,
-                            color: textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          "Файл отправляется на сервер по частям",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            height: 1.25,
-                            fontWeight: FontWeight.w700,
-                            color: textSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(999),
-                          child: LinearProgressIndicator(
-                            value: progress <= 0 ? null : progress,
-                            minHeight: 10,
-                            backgroundColor: const Color(0xFFD7E8DE),
-                            valueColor: AlwaysStoppedAnimation<Color>(primary),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Expanded(
-                              child: Text(
-                                text,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  height: 1.22,
-                                  fontWeight: FontWeight.w800,
-                                  color: textSecondary,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              width: 66,
+                              height: 66,
                               decoration: BoxDecoration(
                                 color: softAccent,
-                                borderRadius: BorderRadius.circular(999),
+                                borderRadius: BorderRadius.circular(22),
                               ),
-                              child: Text(
-                                progress <= 0 ? '...' : '$percent%',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w900,
-                                  color: primary,
+                              child: Icon(
+                                Icons.cloud_upload_rounded,
+                                color: primary,
+                                size: 32,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            Text(
+                              "Загружаем видео",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 18,
+                                height: 1.12,
+                                fontWeight: FontWeight.w900,
+                                color: textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              "Файл отправляется на сервер чанками",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                height: 1.25,
+                                fontWeight: FontWeight.w700,
+                                color: textSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: 18),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(999),
+                              child: LinearProgressIndicator(
+                                value: normalized <= 0 ? 0 : normalized,
+                                minHeight: 10,
+                                backgroundColor: const Color(0xFFD7E8DE),
+                                valueColor: AlwaysStoppedAnimation<Color>(primary),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    text,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      height: 1.22,
+                                      fontWeight: FontWeight.w800,
+                                      color: textSecondary,
+                                    ),
+                                  ),
                                 ),
-                              ),
+                                const SizedBox(width: 10),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: softAccent,
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    '$percent%',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w900,
+                                      color: primary,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                      ],
-                    ),
+                      );
+                    },
                   );
                 },
-              );
-            },
+              ),
+            ),
           ),
-        ),
-      ),
-      barrierDismissible: false,
+        );
+      },
     );
+
+    overlay.insert(_uploadProgressOverlay!);
   }
 
-  void _watchVideo(String videoUrl, {String? title}) {
-    final normalized = _normalizeUrl(videoUrl) ?? "";
-    if (normalized.isEmpty) {
-      Get.snackbar("Видео", "URL отсутствует");
-      return;
-    }
+  // ============================================================
+// МЕТОД ДЛЯ ОТКРЫТИЯ ВИДЕО В CMR-ОКНЕ
+// ============================================================
+void _openVideoPlayerCmrWindow(String videoUrl, {String? title}) {
+  final resolvedTitle = (title ?? _matchTitleForReview()).trim().isEmpty
+      ? 'Видео матча'
+      : (title ?? _matchTitleForReview()).trim();
+  final overlay = _rootOverlayState();
 
+  if (overlay == null) {
     Get.to(
       () => MatchVideoPlayerScreen(
-        videoUrl: normalized,
-        title: title ?? _matchTitleForReview(),
+        videoUrl: videoUrl,
+        title: resolvedTitle,
       ),
     );
+    return;
   }
 
-  Future<void> _openMatchVideoAnalysis(Map<String, dynamic> video) async {
-    final videoUrl = _s(video["video_url"]);
-    final normalized = _normalizeUrl(videoUrl) ?? "";
+  // ← ВЕСЬ ЭТОТ КОД ДОЛЖЕН БЫТЬ ЗДЕСЬ, ВНУТРИ МЕТОДА!
+  late OverlayEntry entry;
+  Offset position = const Offset(82, 54);
+  bool minimized = false;
+  bool maximized = false;
+  bool closed = false;
 
-    if (normalized.isEmpty) {
-      Get.snackbar("Внимание", "Видео матча отсутствует");
-      return;
-    }
-
-    // ИИ-разбор больше не открывается отдельным маршрутом.
-    // Переключаемся на встроенную вкладку внутри TeamMatchDetailScreen,
-    // чтобы слева оставалось меню матча, а справа открывался VideoMatchReviewScreen.
-    _openMatchDetailTab(5);
+  void closeWindow() {
+    if (closed) return;
+    closed = true;
+    entry.remove();
   }
- 
-    Future<void> _deleteVideo(Map<String, dynamic> video) async {
-    final videoId = int.tryParse('${video["id"] ?? 0}') ?? 0;
-    final fileName =
-        _s(video["file_name"]).isEmpty ? "видео" : _s(video["file_name"]);
 
-    if (videoId <= 0) {
-      Get.snackbar(
-        "Ошибка",
-        "Не найден id видео",
-      );
-      return;
-    }
+  entry = OverlayEntry(
+    builder: (overlayContext) {
+      final media = MediaQuery.of(overlayContext);
+      final screen = media.size;
+      final compact = screen.width < 720;
+      final double width = maximized
+          ? screen.width - 20
+          : compact
+              ? screen.width - 16
+              : min(1120.0, max(760.0, screen.width * .76));
+      final double height = maximized
+          ? screen.height - media.padding.top - media.padding.bottom - 20
+          : compact
+              ? screen.height - media.padding.top - media.padding.bottom - 20
+              : min(720.0, max(500.0, screen.height * .74));
+      final double left = maximized || compact
+          ? (compact ? 8.0 : 10.0)
+          : position.dx.clamp(12.0, max(12.0, screen.width - width - 12.0)).toDouble();
+      final double top = maximized || compact
+          ? media.padding.top + (compact ? 8.0 : 10.0)
+          : position.dy
+              .clamp(
+                media.padding.top + 12.0,
+                max(media.padding.top + 12.0, screen.height - height - 12.0),
+              )
+              .toDouble();
 
-    final confirmed = await Get.dialog<bool>(
-      AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-        ),
-        title: const Text(
-          "Удалить видео?",
-          style: TextStyle(fontWeight: FontWeight.w900),
-        ),
-        content: Text('Вы действительно хотите удалить "$fileName"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Get.back(result: false),
-            child: const Text("Отмена"),
-          ),
-          ElevatedButton(
-            onPressed: () => Get.back(result: true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
+      if (minimized) {
+        return Positioned(
+          left: 18,
+          bottom: media.padding.bottom + 18,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                minimized = false;
+                entry.markNeedsBuild();
+              },
+              borderRadius: BorderRadius.circular(18),
+              child: Container(
+                height: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 13),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0xFFE5ECE8)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(.10),
+                      blurRadius: 22,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.play_circle_outline_rounded, color: Color(0xFF00A750), size: 16),
+                    const SizedBox(width: 8),
+                    Text(
+                      resolvedTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF111827),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            child: const Text("Удалить"),
           ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    try {
-      final resp = await http
-          .post(
-            Uri.parse(deleteVideoUrl),
-            headers: const {"Content-Type": "application/json; charset=utf-8"},
-            body: jsonEncode({
-              "video_id": videoId,
-              "match_id": matchId,
-              "team_id": teamId,
-            }),
-          )
-          .timeout(const Duration(seconds: 20));
-
-      final data = _decodeResponse(resp);
-
-      if (data["success"] == true || data["status"] == "success") {
-        Get.snackbar(
-          "Успешно",
-          "Видео удалено",
-          backgroundColor: primary,
-          colorText: Colors.white,
-        );
-        await load();
-      } else {
-        Get.snackbar(
-          "Ошибка удаления",
-          data["message"]?.toString() ?? "Не удалось удалить видео",
         );
       }
-    } catch (_) {
-      Get.snackbar(
-        "Ошибка сети",
-        "Не удалось удалить видео",
+
+      return Positioned(
+        left: left,
+        top: top,
+        width: width,
+        height: height,
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(compact || maximized ? 18 : 24),
+              border: Border.all(color: const Color(0xFFE3EAE7)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(.16),
+                  blurRadius: 44,
+                  offset: const Offset(0, 22),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onPanUpdate: maximized || compact
+                      ? null
+                      : (details) {
+                          position += details.delta;
+                          entry.markNeedsBuild();
+                        },
+                  child: Container(
+                    height: 42,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      border: Border(bottom: BorderSide(color: Color(0xFFE8EEE9))),
+                    ),
+                    child: Row(
+                      children: [
+                        _TeamMatchCmrWindowButton(icon: Icons.close_rounded, tooltip: 'Закрыть', onTap: closeWindow),
+                        const SizedBox(width: 7),
+                        _TeamMatchCmrWindowButton(
+                          icon: Icons.remove_rounded,
+                          tooltip: 'Свернуть',
+                          onTap: () {
+                            minimized = true;
+                            entry.markNeedsBuild();
+                          },
+                        ),
+                        const SizedBox(width: 7),
+                        _TeamMatchCmrWindowButton(
+                          icon: maximized ? Icons.close_fullscreen_rounded : Icons.open_in_full_rounded,
+                          tooltip: maximized ? 'Вернуть размер' : 'Развернуть',
+                          onTap: () {
+                            maximized = !maximized;
+                            entry.markNeedsBuild();
+                          },
+                        ),
+                        const SizedBox(width: 15),
+                        Container(
+                          width: 31,
+                          height: 31,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF3F6F9),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.play_circle_outline_rounded, color: Color(0xFF1F2937), size: 16),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Видео матча',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: _TeamMatchUiText.title(13.0),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                resolvedTitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: _TeamMatchUiText.body(10.4, color: const Color(0xFF667085), weight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: ClipRect(
+                    child: MatchVideoPlayerScreen(
+                      videoUrl: videoUrl,
+                      title: resolvedTitle,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
+
+  overlay.insert(entry);
+}  // ← ЗАКРЫВАЮЩАЯ СКОБКА МЕТОДА _openVideoPlayerCmrWindow
+
+// ============================================================
+// МЕТОД ДЛЯ ПРОСМОТРА ВИДЕО
+// ============================================================
+void _watchVideo(String videoUrl, {String? title}) {
+  final normalized = _normalizeUrl(videoUrl) ?? "";
+  if (normalized.isEmpty) {
+    Get.snackbar("Видео", "URL отсутствует");
+    return;
+  }
+
+  _openVideoPlayerCmrWindow(
+    normalized,
+    title: title ?? _matchTitleForReview(),
+  );
+}
+
+Map<String, dynamic> _analysisParamsForVideo(Map<String, dynamic> video, {String? fallbackUrl}) {
+  final rawUrl = _s(video["video_url"]).isNotEmpty
+      ? _s(video["video_url"])
+      : (_s(video["file_url"]).isNotEmpty ? _s(video["file_url"]) : (fallbackUrl ?? ''));
+  final normalized = _normalizeUrl(rawUrl) ?? '';
+  final resolvedTeamId = teamId > 0 ? teamId : (widget.teamId ?? _i(match?["team_id"]));
+  final resolvedTeamName = teamName.trim().isNotEmpty
+      ? teamName.trim()
+      : ((widget.teamName ?? '').trim().isNotEmpty ? widget.teamName!.trim() : 'Команда');
+  final players = ((match?["players"] as List?) ?? [])
+      .whereType<Map>()
+      .map((e) => Map<String, dynamic>.from(e))
+      .toList();
+
+  return {
+    'matchId': matchId,
+    'teamId': resolvedTeamId,
+    'videoUrl': normalized,
+    'teamName': resolvedTeamName,
+    'matchTitle': _matchTitleForReview(),
+    'videoId': _i(video["id"]),
+    'teamColors': _extractTeamColors(),
+    'players': players.map((player) {
+      return {
+        'id': player['id'],
+        'number': player['number'],
+        'name': _playerName(player),
+        'position': player['position'],
+      };
+    }).toList(),
+  };
+}
+
+// ============================================================
+// МЕТОД ДЛЯ ОТКРЫТИЯ AI-АНАЛИЗА
+// ============================================================
+Future<void> _openMatchVideoAnalysis(Map<String, dynamic> video) async {
+  final analysisParams = _analysisParamsForVideo(video);
+  final normalized = _s(analysisParams['videoUrl']);
+
+  if (normalized.isEmpty) {
+    Get.snackbar("Внимание", "Видео матча отсутствует");
+    return;
+  }
+
+  if (!mounted) return;
+
+  await showAdvancedVideoAnalysisWindow(
+    context,
+    analysisParams,
+    externalPlaybackController: _embeddedAiPlayback,
+    hideControls: true,
+  );
+}
+
+// ============================================================
+// МЕТОД ДЛЯ ОТКРЫТИЯ CMR-ОКНА С AI-АНАЛИЗОМ
+// ============================================================
+void _openAiReviewCmrWindow() {
+  final video = _primaryAiVideo();
+  if (video == null) {
+    Get.snackbar('Ошибка', 'Сначала загрузите видео матча');
+    return;
+  }
+  _openMatchVideoAnalysis(video);
+}  // ← ЗАКРЫТИЕ МЕТОДА
+
+
+// ============================================================
+// МЕТОД ДЛЯ ПОКАЗА ДЕТАЛЕЙ ВИДЕО (Overlay)
+// ============================================================
+void _showVideoDetailsOverlay(
+  Map<String, dynamic> video, {
+  required String title,
+  required bool canAnalyze,
+}) {
+  final overlay = _rootOverlayState();
+  if (overlay == null) {
+    _showRootBanner(
+      'Видео',
+      'Не удалось открыть детали поверх экрана',
+      icon: Icons.info_outline_rounded,
+    );
+    return;
+  }
+
+  final fileName = _s(video['file_name']).isNotEmpty
+      ? _s(video['file_name'])
+      : (_s(video['title']).isNotEmpty ? _s(video['title']) : title);
+  final videoUrl = _s(video['video_url']).isNotEmpty
+      ? _s(video['video_url'])
+      : _s(video['file_url']);
+  final meta = _videoMeta(video);
+
+  late OverlayEntry entry;
+
+  void close() {
+    if (entry.mounted) entry.remove();
+  }
+
+  Widget action({
+    required IconData icon,
+    required String label,
+    required Color accent,
+    required VoidCallback onTap,
+    bool danger = false,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          height: 42,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: danger ? const Color(0xFFFEF2F2) : Colors.white.withOpacity(.90),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: danger ? const Color(0xFFFECACA) : accent.withOpacity(.16),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(.035),
+                blurRadius: 14,
+                spreadRadius: -10,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: danger ? const Color(0xFFDC2626) : accent, size: 17),
+              const SizedBox(width: 7),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _TeamMatchUiText.action(
+                    color: danger ? const Color(0xFFDC2626) : const Color(0xFF0B0F14),
+                    size: 11.6,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  entry = OverlayEntry(
+    builder: (overlayContext) {
+      final media = MediaQuery.of(overlayContext);
+      final screen = media.size;
+      final isPhone = screen.width < 640;
+
+      return Material(
+        color: Colors.black.withOpacity(.24),
+        child: SafeArea(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: close,
+                  child: const SizedBox.expand(),
+                ),
+              ),
+              Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: isPhone ? screen.width - 28 : 460),
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 14),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white.withOpacity(.86), width: 1),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(.14),
+                          blurRadius: 38,
+                          spreadRadius: -16,
+                          offset: const Offset(0, 22),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 38,
+                              height: 38,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF3FBF7),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: const Color(0xFFDCEFE5)),
+                              ),
+                              child: const Icon(Icons.video_file_outlined, color: Color(0xFF00A750), size: 19),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Детали видео',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: _TeamMatchUiText.title(15.2),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    meta.isEmpty ? 'Файл матча' : meta,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: _TeamMatchUiText.body(
+                                      11,
+                                      color: const Color(0xFF6B7280),
+                                      weight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _TeamMatchCmrWindowButton(
+                              icon: Icons.close_rounded,
+                              tooltip: 'Закрыть',
+                              onTap: close,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8F9FA),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title.isEmpty ? fileName : title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: _TeamMatchUiText.title(13.2),
+                              ),
+                              if (fileName.trim().isNotEmpty && fileName != title) ...[
+                                const SizedBox(height: 5),
+                                Text(
+                                  fileName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: _TeamMatchUiText.body(
+                                    10.8,
+                                    color: const Color(0xFF6B7280),
+                                    weight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (isPhone)
+                          Column(
+                            children: [
+                              action(
+                                icon: Icons.visibility_outlined,
+                                label: 'Смотреть',
+                                accent: primary,
+                                onTap: videoUrl.trim().isEmpty
+                                    ? () {
+                                        close();
+                                        _showRootBanner('Видео', 'Ссылка на видео отсутствует');
+                                      }
+                                    : () {
+                                        close();
+                                        _watchVideo(videoUrl, title: title);
+                                      },
+                              ),
+                              if (canAnalyze) ...[
+                                const SizedBox(height: 8),
+                                action(
+                                  icon: Icons.analytics_outlined,
+                                  label: 'ИИ-анализ',
+                                  accent: const Color(0xFF2563EB),
+                                  onTap: () {
+                                    close();
+                                    _openMatchVideoAnalysis(video);
+                                  },
+                                ),
+                              ],
+                              const SizedBox(height: 8),
+                              action(
+                                icon: Icons.delete_outline_rounded,
+                                label: 'Удалить',
+                                accent: const Color(0xFFDC2626),
+                                danger: true,
+                                onTap: () {
+                                  close();
+                                  _deleteVideo(video);
+                                },
+                              ),
+                            ],
+                          )
+                        else
+                          Row(
+                            children: [
+                              Expanded(
+                                child: action(
+                                  icon: Icons.visibility_outlined,
+                                  label: 'Смотреть',
+                                  accent: primary,
+                                  onTap: videoUrl.trim().isEmpty
+                                      ? () {
+                                          close();
+                                          _showRootBanner('Видео', 'Ссылка на видео отсутствует');
+                                        }
+                                      : () {
+                                          close();
+                                          _watchVideo(videoUrl, title: title);
+                                        },
+                                ),
+                              ),
+                              if (canAnalyze) ...[
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: action(
+                                    icon: Icons.analytics_outlined,
+                                    label: 'ИИ-анализ',
+                                    accent: const Color(0xFF2563EB),
+                                    onTap: () {
+                                      close();
+                                      _openMatchVideoAnalysis(video);
+                                    },
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: action(
+                                  icon: Icons.delete_outline_rounded,
+                                  label: 'Удалить',
+                                  accent: const Color(0xFFDC2626),
+                                  danger: true,
+                                  onTap: () {
+                                    close();
+                                    _deleteVideo(video);
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+
+  overlay.insert(entry);
+}  // ← ЗАКРЫВАЮЩАЯ СКОБКА МЕТОДА _showVideoDetailsOverlay
+
+// ============================================================
+// МЕТОД ДЛЯ УДАЛЕНИЯ ВИДЕО
+// ============================================================
+Future<void> _deleteVideo(Map<String, dynamic> video) async {
+  final videoId = int.tryParse('${video["id"] ?? 0}') ?? 0;
+  final videoUrl = _s(video["video_url"]).isNotEmpty
+      ? _s(video["video_url"])
+      : _s(video["file_url"]);
+  final fileName = _s(video["file_name"]).isNotEmpty
+      ? _s(video["file_name"])
+      : (_s(video["title"]).isNotEmpty ? _s(video["title"]) : "Видео матча");
+
+  if (videoId <= 0 && videoUrl.trim().isEmpty) {
+    _showRootBanner(
+      "Ошибка",
+      "Не найден id или ссылка видео для удаления",
+      backgroundColor: const Color(0xFFD92D20),
+      icon: Icons.error_outline_rounded,
+    );
+    return;
+  }
+
+  final confirmed = await _confirmDeleteVideoOverlay(fileName);
+  if (confirmed != true) return;
+
+  try {
+    final payload = {
+      "video_id": videoId,
+      "id": videoId,
+      "match_video_id": videoId,
+      "match_id": matchId,
+      "team_id": teamId,
+      "video_url": videoUrl,
+      "file_url": videoUrl,
+    };
+
+    http.Response resp = await http
+        .post(
+          Uri.parse(deleteVideoUrl),
+          headers: const {"Content-Type": "application/json; charset=utf-8"},
+          body: jsonEncode(payload),
+        )
+        .timeout(const Duration(seconds: 20));
+
+    Map<String, dynamic> data = _decodeResponse(resp);
+
+    if (!(data["success"] == true || data["status"] == "success") && resp.statusCode >= 400) {
+      resp = await http
+          .post(
+            Uri.parse(deleteVideoUrl),
+            body: payload.map((key, value) => MapEntry(key, '$value')),
+          )
+          .timeout(const Duration(seconds: 20));
+      data = _decodeResponse(resp);
+    }
+
+    if (data["success"] == true || data["status"] == "success") {
+      final current = match;
+      if (current != null) {
+        final list = ((current["videos"] as List?) ?? const [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .where((e) {
+              final currentId = int.tryParse('${e["id"] ?? 0}') ?? 0;
+              final currentUrl = _s(e["video_url"]).isNotEmpty ? _s(e["video_url"]) : _s(e["file_url"]);
+              if (videoId > 0 && currentId == videoId) return false;
+              if (videoUrl.trim().isNotEmpty && currentUrl == videoUrl) return false;
+              return true;
+            })
+            .toList();
+        current["videos"] = list;
+        if (mounted) setState(() => match = current);
+      }
+
+      _clearAnalysisVideoControllers();
+      _showRootBanner(
+        "Видео удалено",
+        "Матч остался без изменений",
+        backgroundColor: primary,
+        icon: Icons.check_circle_outline_rounded,
+      );
+      await load();
+    } else {
+      _showRootBanner(
+        "Ошибка удаления",
+        data["message"]?.toString() ?? "Не удалось удалить видео",
+        backgroundColor: const Color(0xFFD92D20),
+        icon: Icons.error_outline_rounded,
       );
     }
+  } catch (e) {
+    _showRootBanner(
+      "Ошибка сети",
+      "Не удалось удалить видео: $e",
+      backgroundColor: const Color(0xFFD92D20),
+      icon: Icons.wifi_off_rounded,
+    );
   }
+}  // ← ЗАКРЫВАЮЩАЯ СКОБКА МЕТОДА _deleteVideo
 
   Widget _videoAddButton({
     required String label,
@@ -5305,6 +7159,11 @@ String _translatePosition(String key) {
                         _s(v["video_url"]),
                         title: title,
                       ),
+                      onDetails: () => _showVideoDetailsOverlay(
+                        v,
+                        title: title,
+                        canAnalyze: false,
+                      ),
                       onDelete: () => _deleteVideo(v),
                       primary: primary,
                     );
@@ -5332,10 +7191,17 @@ String _translatePosition(String key) {
         _buildSectionCard(
           title: "Видео матча",
           subtitle: "Полные записи игры без широких растянутых баннеров",
-          trailing: _videoAddButton(
-            label: uploadingVideo ? "Загрузка..." : "Добавить",
-            icon: Icons.cloud_upload_outlined,
-            onTap: uploadingVideo ? null : () => _showUploadVideoSheet("full"),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _matchActionsButton(),
+              const SizedBox(width: 8),
+              _videoAddButton(
+                label: uploadingVideo ? "Загрузка..." : "Добавить",
+                icon: Icons.cloud_upload_outlined,
+                onTap: uploadingVideo ? null : () => _showUploadVideoSheet("full"),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -5358,6 +7224,11 @@ String _translatePosition(String key) {
                         title: title,
                       ),
                       onAnalyze: () => _openMatchVideoAnalysis(v),
+                      onDetails: () => _showVideoDetailsOverlay(
+                        v,
+                        title: title,
+                        canAnalyze: true,
+                      ),
                       onDelete: () => _deleteVideo(v),
                       primary: primary,
                     );
@@ -5416,6 +7287,10 @@ String _translatePosition(String key) {
 
   void _openMatchDetailTab(int index) {
     final target = _safeMatchTabIndex(index);
+    if (target == 5) {
+      _openAiReviewCmrWindow();
+      return;
+    }
     if (_tabController.index != target) {
       _tabController.animateTo(
         target,
@@ -5496,91 +7371,33 @@ String _translatePosition(String key) {
   }
 
   Widget _buildAiVideoAnalysisTab() {
-    final video = _primaryAiVideo();
-    final normalizedVideoUrl = video == null ? "" : (_normalizeUrl(_s(video["video_url"])) ?? "");
-    final resolvedTeamId = teamId > 0 ? teamId : (widget.teamId ?? _i(match?["team_id"]));
-    final resolvedTeamName = teamName.trim().isNotEmpty
-        ? teamName.trim()
-        : ((widget.teamName ?? '').trim().isNotEmpty ? widget.teamName!.trim() : 'Команда');
-    final resolvedCoachId = _coachId > 0 ? _coachId : _i(match?["coach_id"]);
-    final resolvedVideoId = video == null ? 0 : _i(video["id"]);
+  final video = _primaryAiVideo();
+  final normalizedVideoUrl = video == null ? "" : (_normalizeUrl(_s(video["video_url"])) ?? "");
+  final resolvedTeamId = teamId > 0 ? teamId : (widget.teamId ?? _i(match?["team_id"]));
+  final resolvedTeamName = teamName.trim().isNotEmpty
+      ? teamName.trim()
+      : ((widget.teamName ?? '').trim().isNotEmpty ? widget.teamName!.trim() : 'Команда');
 
-    if (resolvedTeamId <= 0) {
-      return _buildSectionCard(
-        title: 'Видеоанализ ИИ',
-        subtitle: 'Не удалось определить ID команды для открытия модуля видеоанализа',
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: borderColor),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.info_outline_rounded, color: primary),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Откройте матч из карточки команды или передайте teamId при переходе в TeamMatchDetailScreen.',
-                  style: TextStyle(
-                    color: textSecondary,
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                    height: 1.35,
-                  ),
-                ),
-              ),
-            ],
-          ),
+  if (resolvedTeamId <= 0) {
+    return _buildSectionCard(
+      title: 'Видеоанализ ИИ',
+      subtitle: 'Не удалось определить ID команды',
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: borderColor),
         ),
-      );
-    }
-
-    if (normalizedVideoUrl.isEmpty) {
-      return _buildSectionCard(
-        title: 'Видеоанализ ИИ',
-        subtitle: 'Для AI-разбора нужно сначала загрузить полное видео матча',
-        trailing: _videoAddButton(
-          label: uploadingVideo ? 'Загрузка...' : 'Загрузить видео',
-          icon: Icons.cloud_upload_outlined,
-          onTap: uploadingVideo ? null : () => _showUploadVideoSheet('full'),
-        ),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(22),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: borderColor),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: softAccent,
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Icon(Icons.psychology_alt_rounded, color: primary, size: 28),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                'AI-видеоанализ откроется после загрузки видео матча',
-                style: TextStyle(
-                  color: textPrimary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  height: 1.15,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Загрузите запись в разделе «Видео», после этого здесь появится полноценный экран разбора: видео, игроки, эпизоды, ТТД и AI-аналитика.',
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.info_outline_rounded, color: primary),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Откройте матч из карточки команды или передайте teamId.',
                 style: TextStyle(
                   color: textSecondary,
                   fontSize: 13.5,
@@ -5588,52 +7405,145 @@ String _translatePosition(String key) {
                   height: 1.35,
                 ),
               ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  _proOutlineButton(
-                    icon: Icons.play_circle_outline_rounded,
-                    text: 'Открыть раздел видео',
-                    onTap: () => _openMatchDetailTab(4),
-                  ),
-                  _proOutlineButton(
-                    icon: Icons.cloud_upload_outlined,
-                    text: uploadingVideo ? 'Загрузка...' : 'Загрузить видео',
-                    onTap: uploadingVideo ? null : () => _showUploadVideoSheet('full'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return SizedBox.expand(
-      child: ColoredBox(
-        color: const Color(0xFFF4F7FB),
-        child: KeyedSubtree(
-          key: ValueKey('ai-match-review-$matchId-$resolvedTeamId-$resolvedVideoId'),
-          child: VideoMatchReviewScreen(
-            matchId: matchId,
-            teamId: resolvedTeamId,
-            coachId: resolvedCoachId,
-            teamName: resolvedTeamName,
-            matchTitle: _matchTitleForReview(),
-            videoUrl: normalizedVideoUrl,
-            videoId: resolvedVideoId,
-            embedded: true,
-            forceLandscape: false,
-            railOnLeft: true,
-            playbackController: _aiReviewPlayback,
-            showInternalVideoControls: false,
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
+
+  if (normalizedVideoUrl.isEmpty) {
+    return _buildSectionCard(
+      title: 'Видеоанализ ИИ',
+      subtitle: 'Для AI-разбора нужно сначала загрузить полное видео матча',
+      trailing: _videoAddButton(
+        label: uploadingVideo ? 'Загрузка...' : 'Загрузить видео',
+        icon: Icons.cloud_upload_outlined,
+        onTap: uploadingVideo ? null : () => _showUploadVideoSheet('full'),
+      ),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(22),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: borderColor),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: softAccent,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Icon(Icons.psychology_alt_rounded, color: primary, size: 28),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'AI-видеоанализ откроется после загрузки видео матча',
+              style: TextStyle(
+                color: textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                height: 1.15,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Загрузите запись в разделе «Видео», после этого здесь появится экран разбора.',
+              style: TextStyle(
+                color: textSecondary,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _proOutlineButton(
+                  icon: Icons.play_circle_outline_rounded,
+                  text: 'Открыть раздел видео',
+                  onTap: () => _openMatchDetailTab(4),
+                ),
+                _proOutlineButton(
+                  icon: Icons.cloud_upload_outlined,
+                  text: uploadingVideo ? 'Загрузка...' : 'Загрузить видео',
+                  onTap: uploadingVideo ? null : () => _showUploadVideoSheet('full'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ЕСЛИ ВИДЕО ЕСТЬ - ОТКРЫВАЕМ НОВЫЙ ЭКРАН
+  return Center(
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Container(
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(
+            color: softAccent,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Icon(
+            Icons.analytics_outlined,
+            color: primary,
+            size: 40,
+          ),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          'AI-анализ матча',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w900,
+            color: textPrimary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Видео загружено, можно начать анализ',
+          style: TextStyle(
+            color: textSecondary,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 24),
+        SizedBox(
+          width: 240,
+          child: ElevatedButton.icon(
+            onPressed: () => _openMatchVideoAnalysis(video!),
+            icon: const Icon(Icons.analytics_outlined),
+            label: const Text(
+              'Запустить AI-анализ',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00A750),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   // ---------------------------------------------------------------------------
   // Professional white Match Center layout for tablets / desktop.
@@ -5922,10 +7832,10 @@ String _translatePosition(String key) {
     final stadium = _s(_stadiumCtrl.text).isEmpty ? _s(match?["stadium"]) : _s(_stadiumCtrl.text);
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(26, 24, 26, 20),
+      padding: const EdgeInsets.fromLTRB(18, 17, 18, 16),
       decoration: BoxDecoration(
         color: const Color(0xFF0B1F16),
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(22),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -5934,13 +7844,13 @@ String _translatePosition(String key) {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 54,
-                height: 54,
+                width: 42,
+                height: 42,
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(.12),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(15),
                 ),
-                child: const Icon(Icons.sports_soccer_rounded, color: Colors.white, size: 30),
+                child: const Icon(Icons.sports_soccer_rounded, color: Colors.white, size: 22),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -5953,9 +7863,9 @@ String _translatePosition(String key) {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: Colors.white.withOpacity(.64),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: .9,
+                        fontSize: 9.7,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: .55,
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -5965,9 +7875,9 @@ String _translatePosition(String key) {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 24,
-                        height: 1.08,
-                        fontWeight: FontWeight.w900,
+                        fontSize: 18.5,
+                        height: 1.10,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
@@ -5975,7 +7885,7 @@ String _translatePosition(String key) {
               ),
               const SizedBox(width: 18),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
@@ -5984,8 +7894,8 @@ String _translatePosition(String key) {
                   '$ourScore:$oppScore',
                   style: TextStyle(
                     color: primary,
-                    fontSize: 30,
-                    fontWeight: FontWeight.w900,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
                     height: 1,
                   ),
                 ),
@@ -6022,15 +7932,15 @@ String _translatePosition(String key) {
           Icon(icon, size: 15, color: Colors.white.withOpacity(.82)),
           const SizedBox(width: 7),
           ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 260),
+            constraints: const BoxConstraints(maxWidth: 210),
             child: Text(
               text,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: Colors.white.withOpacity(.86),
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
+                fontSize: 10.6,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -6088,7 +7998,7 @@ String _translatePosition(String key) {
         children: [
           Container(
             width: 46,
-            height: 46,
+            height: 40,
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(17),
@@ -6101,15 +8011,15 @@ String _translatePosition(String key) {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900, color: textSecondary)),
+                Text(item.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10.4, fontWeight: FontWeight.w600, color: textSecondary)),
                 const SizedBox(height: 5),
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
-                  child: Text(item.value, maxLines: 1, style: TextStyle(fontSize: 23, height: 1, fontWeight: FontWeight.w900, color: textPrimary)),
+                  child: Text(item.value, maxLines: 1, style: TextStyle(fontSize: 18.5, height: 1, fontWeight: FontWeight.w700, color: textPrimary)),
                 ),
                 const SizedBox(height: 5),
-                Text(item.hint, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.2, fontWeight: FontWeight.w800, color: textSecondary.withOpacity(.86))),
+                Text(item.hint, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10.2, fontWeight: FontWeight.w600, color: textSecondary.withOpacity(.86))),
               ],
             ),
           ),
@@ -6133,14 +8043,14 @@ String _translatePosition(String key) {
             risk,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 20, height: 1.08, fontWeight: FontWeight.w900, color: textPrimary),
+            style: TextStyle(fontSize: 16.2, height: 1.12, fontWeight: FontWeight.w700, color: textPrimary),
           ),
           const SizedBox(height: 10),
           Text(
             'Система сопоставляет ТТД, эпизоды, владение и видео. Главная задача после матча — быстро понять сильные отрезки, провалы и нагрузку.',
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 13, height: 1.35, fontWeight: FontWeight.w700, color: textSecondary),
+            style: TextStyle(fontSize: 11.4, height: 1.30, fontWeight: FontWeight.w600, color: textSecondary),
           ),
           const SizedBox(height: 16),
           _proInsightRow(Icons.trending_up_rounded, 'Лучший отрезок', bestPeriod, primary),
@@ -7423,103 +9333,147 @@ String _translatePosition(String key) {
     required String date,
     required String score,
   }) {
+    const railWidth = 156.0;
+    final safeTitle = title.trim().isEmpty ? 'Матч' : title.trim();
+    final safeOpponent = opponent.trim().isEmpty ? 'Соперник' : opponent.trim();
+
     return Container(
-      width: 248,
-      margin: const EdgeInsets.fromLTRB(12, 12, 0, 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(30),
-      ),
+      width: railWidth,
+      color: Colors.transparent,
+      padding: const EdgeInsets.fromLTRB(9, 12, 8, 10),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: softSurface,
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F5F8),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFF0F2F4), width: 1),
+                ),
+                child: const Icon(Icons.sports_soccer_rounded, color: Color(0xFF6B7280), size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: softAccent,
-                        borderRadius: BorderRadius.circular(16),
+                    Text(
+                      safeTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF0B0F14),
+                        fontSize: 12.0,
+                        height: 1.05,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -.18,
                       ),
-                      child: Icon(Icons.sports_soccer_rounded, color: primary, size: 24),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        "Детали матча",
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: textPrimary,
-                        ),
+                    const SizedBox(height: 3),
+                    Text(
+                      safeOpponent,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF6B7280),
+                        fontSize: 9.6,
+                        height: 1.1,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -.05,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    height: 1.2,
-                    fontWeight: FontWeight.w800,
-                    color: textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _CmrMiniPill(icon: Icons.scoreboard_outlined, text: score),
-                    if (date.isNotEmpty) _CmrMiniPill(icon: Icons.calendar_today_outlined, text: date),
-                    if (opponent.isNotEmpty) _CmrMiniPill(icon: Icons.shield_outlined, text: opponent),
-                  ],
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 14),
           Expanded(
             child: AnimatedBuilder(
               animation: _tabController,
               builder: (context, _) {
                 return ListView.separated(
-                  padding: const EdgeInsets.only(bottom: 2),
+                  padding: EdgeInsets.zero,
+                  physics: const BouncingScrollPhysics(),
                   itemCount: _matchNavItems.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 4),
+                  separatorBuilder: (_, __) => const SizedBox(height: 6),
                   itemBuilder: (context, index) {
                     final item = _matchNavItems[index];
-                    final active = _tabController.index == index;
+                    final active = _safeMatchTabIndex(_tabController.index) == index;
                     return _MatchSidebarButton(
                       item: item,
                       active: active,
-                      primary: primary,
-                      onTap: () {
-                        _openMatchDetailTab(index);
-                      },
+                      primary: const Color(0xFF28A86B),
+                      onTap: () => _openMatchDetailTab(index),
                     );
                   },
                 );
               },
             ),
           ),
+          const SizedBox(height: 10),
+          _buildMatchSidebarFooterAction(
+            icon: Icons.refresh_rounded,
+            label: 'Обновить',
+            onTap: () { _init(); },
+          ),
+          const SizedBox(height: 6),
+          _buildMatchSidebarFooterAction(
+            icon: Icons.more_horiz_rounded,
+            label: 'Действия',
+            onTap: _showCurrentMatchActions,
+          ),
+          const SizedBox(height: 6),
+          _buildMatchSidebarFooterAction(
+            icon: Icons.edit_rounded,
+            label: 'Редактировать',
+            onTap: _openMatchInfoEditorSheet,
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMatchSidebarFooterAction({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: const Color(0xFFF6F7F9),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          height: 34,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Row(
+            children: [
+              Icon(icon, color: const Color(0xFF6B7280), size: 17),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF344054),
+                    fontSize: 10.8,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -.12,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -7844,22 +9798,27 @@ String _translatePosition(String key) {
   // Existing tabs stay the same: Обзор / Основные ТТД / Эпизоды / Нарезка / Видео.
   // ---------------------------------------------------------------------------
 
-  Color get _mcBg => const Color(0xFFF4F5F6);
-  Color get _mcRail => const Color(0xFF111315);
-  Color get _mcHeader => const Color(0xFF111315);
+  Color get _mcBg => Colors.white;
+  Color get _mcRail => Colors.white;
+  Color get _mcHeader => Colors.white;
   Color get _mcPanel => const Color(0xFFFFFFFF);
   Color get _mcPanelTop => const Color(0xFFF8F9FA);
   Color get _mcLine => const Color(0xFFE5E7EB);
   Color get _mcText => const Color(0xFF111827);
   Color get _mcSub => const Color(0xFF6B7280);
-  Color get _mcGreen => const Color(0xFF111315);
-  Color get _mcBlue => const Color(0xFF111315);
+  Color get _mcGreen => const Color(0xFF28A86B);
+  Color get _mcBlue => const Color(0xFF28A86B);
   Color get _mcRed => const Color(0xFFD64545);
   Color get _mcYellow => const Color(0xFFD99A00);
-  Color get _mcControl => const Color(0xFF111315);
-  Color get _mcControlLine => const Color(0xFF2B2F34);
-  Color get _mcOnDark => const Color(0xFFF8FAFC);
-  Color get _mcOnDarkSub => const Color(0xFFA3AAB3);
+  Color get _mcControl => const Color(0xFFF6F7F9);
+  Color get _mcControlLine => const Color(0xFFE8EEE9);
+  Color get _mcOnDark => const Color(0xFF111827);
+  Color get _mcOnDarkSub => const Color(0xFF6B7280);
+  Color get _cmrMatchGreen => const Color(0xFF28A86B);
+  Color get _cmrMatchGreenSoft => const Color(0xFFEAF7F0);
+  Color get _cmrMatchSurface => const Color(0xFFF7F9F8);
+  Color get _cmrMatchMuted => const Color(0xFF667085);
+  Color get _cmrMatchInk => const Color(0xFF111827);
 
   Widget _buildMatchAnalysisWorkspace({
     required String title,
@@ -7869,178 +9828,473 @@ String _translatePosition(String key) {
     required String score,
   }) {
     return Container(
-      color: _mcBg,
-      child: Column(
+      color: Colors.white,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _matchAnalysisTopTabs(),
+          _buildCmrSidebar(
+            title: title,
+            opponent: opponent,
+            date: date,
+            score: score,
+          ),
+          Container(width: 1, color: const Color(0xFFE8EEE9)),
           Expanded(
-            child: AnimatedBuilder(
-              animation: _tabController,
-              builder: (context, _) {
-                final index = _safeMatchTabIndex(_tabController.index);
-                final isAiVideoAnalysis = index == 5;
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildMatchWorkspaceContentHeader(
+                  title: title,
+                  opponent: opponent,
+                  date: date,
+                  competition: competition,
+                  score: score,
+                ),
+                Container(height: 1, color: const Color(0xFFE8EEE9)),
+                Expanded(
+                  child: AnimatedBuilder(
+                    animation: _tabController,
+                    builder: (context, _) {
+                      final index = _safeMatchTabIndex(_tabController.index);
+                      final content = index == 0
+                          ? _matchAnalysisOverview(
+                              title: title,
+                              opponent: opponent,
+                              date: date,
+                              competition: competition,
+                              score: score,
+                            )
+                          : _activeTabWidgetByIndex(index);
 
-                Widget content;
-                if (index == 0) {
-                  content = _matchAnalysisOverview(
-                    title: title,
-                    opponent: opponent,
-                    date: date,
-                    competition: competition,
-                    score: score,
-                  );
-                } else {
-                  content = Container(
-                    color: _mcBg,
-                    child: _activeTabWidgetByIndex(index),
-                  );
-                }
-
-                return Row(
-                  children: [
-                    // В режиме «Видеоанализ ИИ» общее меню матча убираем:
-                    // его место занимает встроенное меню самого AI-видеоразбора.
-                    if (!isAiVideoAnalysis) ...[
-                      _matchAnalysisRail(
-                        title: title,
-                        opponent: opponent,
-                        score: score,
-                      ),
-                      const SizedBox(width: 6),
-                    ],
-                    Expanded(child: content),
-                  ],
-                );
-              },
+                      return ColoredBox(
+                        color: Colors.white,
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 160),
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeOutCubic,
+                          child: KeyedSubtree(
+                            key: ValueKey('match-detail-cmr-tab-$index'),
+                            child: content,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                _matchAnalysisVideoBottomTimeline(),
+              ],
             ),
           ),
-          _matchAnalysisBottomTimeline(),
         ],
       ),
     );
   }
 
-  Widget _matchAnalysisTopTabs() {
+  Widget _buildMatchWorkspaceContentHeader({
+    required String title,
+    required String opponent,
+    required String date,
+    required String competition,
+    required String score,
+  }) {
+    final safeTitle = title.trim().isEmpty ? 'Матч' : title.trim();
+    final safeOpponent = opponent.trim().isEmpty ? 'Соперник' : opponent.trim();
+
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      color: Colors.white,
+      child: Row(
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF3FBF7),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFDCEFE5)),
+            ),
+            child: const Icon(Icons.sports_soccer_rounded, color: Color(0xFF28A86B), size: 16),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  safeTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF0B0F14),
+                    fontSize: 12.4,
+                    fontWeight: FontWeight.w700,
+                    height: 1.05,
+                    letterSpacing: -.18,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  [
+                    teamName,
+                    safeOpponent,
+                    if (date.trim().isNotEmpty) date.trim(),
+                    if (competition.trim().isNotEmpty) competition.trim(),
+                  ].where((e) => e.trim().isNotEmpty).join(' • '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontSize: 9.8,
+                    fontWeight: FontWeight.w600,
+                    height: 1.05,
+                    letterSpacing: -.05,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            height: 28,
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF3FBF7),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFDCEFE5)),
+            ),
+            child: Text(
+              score,
+              style: const TextStyle(
+                color: Color(0xFF28A86B),
+                fontSize: 10.8,
+                fontWeight: FontWeight.w800,
+                height: 1,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          _analysisTopIcon(Icons.more_horiz_rounded, onTap: _showCurrentMatchActions),
+          const SizedBox(width: 8),
+          _analysisTopIcon(Icons.tune_rounded, onTap: _openMatchInfoEditorSheet),
+          const SizedBox(width: 8),
+          _analysisTopIcon(Icons.save_rounded, onTap: saving ? null : _saveAll),
+        ],
+      ),
+    );
+  }
+
+  Widget _matchWindowChrome({
+    required String title,
+    required String opponent,
+    required String date,
+    required String competition,
+    required String score,
+  }) {
+    final safeTitle = title.trim().isEmpty ? 'Матч' : title.trim();
+    final safeOpponent = opponent.trim().isEmpty ? 'Соперник' : opponent.trim();
+
     return SafeArea(
       bottom: false,
       child: Container(
-        height: 46,
-        decoration: BoxDecoration(
-          color: _mcHeader,
-          border: Border(bottom: BorderSide(color: _mcControlLine.withOpacity(.92))),
-        ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 48,
-              child: IconButton(
-                onPressed: widget.embedded ? null : () => Get.back(),
-                icon: Icon(widget.embedded ? Icons.menu_rounded : Icons.arrow_back_rounded, color: _mcOnDark, size: 21),
-                tooltip: widget.embedded ? 'Меню' : 'Назад',
-              ),
-            ),
-            Expanded(
-              child: AnimatedBuilder(
-                animation: _tabController,
-                builder: (context, _) {
-                  return SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: List.generate(_matchNavItems.length, (index) {
-                        final item = _matchNavItems[index];
-                        final active = _tabController.index == index;
-                        return InkWell(
-                          onTap: () => _openMatchDetailTab(index),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 160),
-                            height: 46,
-                            width: index == 1 ? 132 : (index == 5 ? 132 : 104),
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: active ? Colors.white.withOpacity(.10) : Colors.transparent,
-                              border: Border(bottom: BorderSide(color: active ? Colors.white : Colors.transparent, width: 2)),
-                            ),
+        color: Colors.white,
+        padding: const EdgeInsets.fromLTRB(12, 9, 12, 7),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 860;
+            return Row(
+              children: [
+                if (!widget.embedded) ...[
+                  InkWell(
+                    onTap: () => Get.back(),
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: _cmrMatchSurface,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(Icons.arrow_back_rounded, color: _cmrMatchInk, size: 21),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                ] else ...[
+                  Container(
+                    width: 30,
+                    height: 30,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF7F9F8),
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: const Icon(Icons.drag_indicator_rounded, color: Color(0xFF667085), size: 16),
+                  ),
+                  const SizedBox(width: 10),
+                ],
+                Container(
+                  width: 36,
+                  height: 36,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: _cmrMatchGreenSoft,
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: Icon(Icons.sports_soccer_rounded, color: _cmrMatchGreen, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
                             child: Text(
-                              item.title,
+                              safeTitle,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                color: active ? Colors.white : Colors.white.withOpacity(.68),
-                                fontSize: 11.4,
-                                fontWeight: FontWeight.w900,
+                                color: _cmrMatchInk,
+                                fontSize: compact ? 13.2 : 14.4,
+                                height: 1.08,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
-                        );
-                      }),
-                    ),
-                  );
-                },
-              ),
-            ),
-            _analysisTopIcon(Icons.info_outline_rounded),
-            const SizedBox(width: 8),
-            _analysisTopButton('Экспорт', Icons.keyboard_arrow_down_rounded, _exportPdfStub, true),
-            const SizedBox(width: 8),
-            _analysisTopButton('Поделиться', Icons.share_rounded, _exportPdfStub, false),
-            const SizedBox(width: 8),
-            _analysisTopIcon(Icons.settings_rounded, onTap: _openMatchInfoEditorSheet),
-            const SizedBox(width: 10),
-          ],
+                          const SizedBox(width: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: _cmrMatchGreenSoft,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              score,
+                              style: TextStyle(
+                                color: _cmrMatchGreen,
+                                fontSize: 10.8,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        [
+                          teamName,
+                          safeOpponent,
+                          if (date.trim().isNotEmpty) date.trim(),
+                          if (!compact && competition.trim().isNotEmpty) competition.trim(),
+                        ].join(' • '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: _cmrMatchMuted,
+                          fontSize: 10.4,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                if (!compact) ...[
+                  _analysisTopButton('Экспорт', Icons.file_download_outlined, _exportPdfStub, false),
+                  const SizedBox(width: 8),
+                  _analysisTopButton(saving ? 'Сохраняем' : 'Сохранить', saving ? Icons.hourglass_top_rounded : Icons.save_rounded, saving ? null : _saveAll, true),
+                  const SizedBox(width: 8),
+                ],
+                _analysisTopIcon(Icons.tune_rounded, onTap: _openMatchInfoEditorSheet),
+              ],
+            );
+          },
         ),
       ),
     );
   }
+
+  Widget _matchAnalysisTopTabs() {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(14, 2, 14, 10),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 720;
+          return Row(
+            children: [
+              Expanded(
+                child: AnimatedBuilder(
+                  animation: _tabController,
+                  builder: (context, _) {
+                    return SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      child: Row(
+                        children: List.generate(_matchNavItems.length, (index) {
+                          final item = _matchNavItems[index];
+                          final active = _safeMatchTabIndex(_tabController.index) == index;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: InkWell(
+                              onTap: () => _openMatchDetailTab(index),
+                              borderRadius: BorderRadius.circular(18),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 180),
+                                curve: Curves.easeOutCubic,
+                                height: 40,
+                                padding: EdgeInsets.only(
+                                  left: active ? 13 : 12,
+                                  right: compact ? 13 : 16,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: active ? _cmrMatchGreenSoft : _cmrMatchSurface,
+                                  borderRadius: BorderRadius.circular(18),
+                                  boxShadow: active
+                                      ? [
+                                          BoxShadow(
+                                            color: _cmrMatchGreen.withOpacity(.10),
+                                            blurRadius: 18,
+                                            offset: const Offset(0, 8),
+                                          ),
+                                        ]
+                                      : const [],
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    AnimatedContainer(
+                                      duration: const Duration(milliseconds: 180),
+                                      width: 4,
+                                      height: active ? 22 : 0,
+                                      decoration: BoxDecoration(
+                                        color: _cmrMatchGreen,
+                                        borderRadius: BorderRadius.circular(99),
+                                      ),
+                                    ),
+                                    if (active) const SizedBox(width: 9),
+                                    Icon(
+                                      item.icon,
+                                      size: 16,
+                                      color: active ? _cmrMatchGreen : _cmrMatchMuted,
+                                    ),
+                                    const SizedBox(width: 7),
+                                    Text(
+                                      compact && index == 5 ? 'ИИ' : item.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: active ? _cmrMatchInk : _cmrMatchMuted,
+                                        fontSize: 11.2,
+                                        fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+                                      ),
+                                    ),
+                                    if (active) ...[
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        width: 6,
+                                        height: 6,
+                                        decoration: BoxDecoration(
+                                          color: _cmrMatchGreen,
+                                          borderRadius: BorderRadius.circular(99),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              if (!compact) ...[
+                const SizedBox(width: 10),
+                Text(
+                  _currentTabTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: _cmrMatchMuted,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+
 
 
   Widget _analysisTopIcon(IconData icon, {VoidCallback? onTap}) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(14),
       child: Container(
-        width: 30,
-        height: 30,
+        width: 38,
+        height: 38,
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(.08),
-          borderRadius: BorderRadius.circular(6),
+          color: _cmrMatchSurface,
+          borderRadius: BorderRadius.circular(14),
         ),
-        child: Icon(icon, color: _mcOnDark.withOpacity(.92), size: 17),
+        child: Icon(icon, color: _cmrMatchInk, size: 18),
       ),
     );
   }
-
 
 
   Widget _analysisTopButton(String label, IconData icon, VoidCallback? onTap, bool filled) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        height: 30,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        height: 38,
+        padding: const EdgeInsets.symmetric(horizontal: 13),
         decoration: BoxDecoration(
-          color: filled ? Colors.white : Colors.white.withOpacity(.08),
-          borderRadius: BorderRadius.circular(6),
+          color: filled ? _cmrMatchGreen : _cmrMatchSurface,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: filled
+              ? [
+                  BoxShadow(
+                    color: _cmrMatchGreen.withOpacity(.12),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ]
+              : const [],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            Icon(icon, color: filled ? Colors.white : _cmrMatchInk, size: 17),
+            const SizedBox(width: 7),
             Text(
               label,
               style: TextStyle(
-                color: filled ? _mcControl : _mcOnDark.withOpacity(.92),
-                fontSize: 11.2,
+                color: filled ? Colors.white : _cmrMatchInk,
+                fontSize: 11.5,
                 fontWeight: FontWeight.w900,
               ),
             ),
-            const SizedBox(width: 5),
-            Icon(icon, color: filled ? _mcControl : _mcOnDark.withOpacity(.92), size: 16),
           ],
         ),
       ),
     );
   }
-
 
 
   Widget _matchAnalysisRail({
@@ -8316,15 +10570,16 @@ String _translatePosition(String key) {
                           flexCard(
                             flex: 3,
                             height: topHeight,
-                            title: 'Интеллект матча',
-                            subtitle: 'AI анализ',
-                            child: _analysisAiBlock(compact: true),
+                            title: 'Игроки в матче',
+                            subtitle: 'Выбор игрока и быстрые ТТД',
+                            child: _analysisMatchPlayersPane(),
                           ),
                           flexCard(
                             flex: 2,
                             height: topHeight,
-                            title: 'Статистика матча',
-                            child: _analysisStatsTable(compact: true),
+                            title: 'Видеоаналитика',
+                            subtitle: 'Тактический AI-ракурс',
+                            child: _analysisVideoPane(tactical: true),
                           ),
                         ]),
                         rowGap(),
@@ -8355,8 +10610,13 @@ String _translatePosition(String key) {
                       title: 'Мини-карта поля',
                       subtitle: 'Вертикально: позиции и передачи',
                       trailing: _analysisDropDown(teamName),
-                      child: const CustomPaint(
-                        painter: _MatchPitchNetworkPainter(vertical: true),
+                      child: CustomPaint(
+                        painter: _MatchPitchNetworkPainter(
+                          vertical: true,
+                          livePositions: _liveAiPositions,
+                          liveTrails: _liveAiTrails,
+                          liveSpeeds: _liveAiSpeedsKmh,
+                        ),
                       ),
                     ),
                   ),
@@ -8367,23 +10627,22 @@ String _translatePosition(String key) {
                 flexCard(
                   flex: 1,
                   height: 300,
-                  title: 'Видеоаналитика',
-                  subtitle: 'Прямая трансляция',
-                  child: _analysisVideoPane(tactical: false),
+                  title: 'Интеллект матча',
+                  subtitle: 'AI анализ',
+                  child: _analysisAiBlock(compact: true),
                 ),
                 flexCard(
                   flex: 1,
                   height: 300,
-                  title: 'Видеоаналитика',
-                  subtitle: 'Тактический ракурс',
-                  child: _analysisVideoPane(tactical: true),
+                  title: 'Статистика матча',
+                  child: _analysisStatsTable(compact: true),
                 ),
                 flexCard(
                   flex: 1,
                   height: 300,
                   title: 'Интенсивность спринтов',
                   subtitle: 'По 15-минутным отрезкам',
-                  child: const CustomPaint(painter: _MatchStackedBarsPainter()),
+                  child: _analysisLiveSprintBars(),
                 ),
               ]),
               rowGap(),
@@ -8393,7 +10652,7 @@ String _translatePosition(String key) {
                   height: 250,
                   title: 'Нагрузка игроков (IMA)',
                   subtitle: 'Импакт по отрезкам',
-                  child: const CustomPaint(painter: _MatchLoadBarsPainter()),
+                  child: _analysisLiveLoadBars(),
                 ),
                 flexCard(
                   flex: 3,
@@ -8443,15 +10702,16 @@ String _translatePosition(String key) {
                         flexCard(
                           flex: 1,
                           height: topHeight,
-                          title: 'Интеллект матча',
-                          subtitle: 'AI анализ',
-                          child: _analysisAiBlock(compact: true),
+                          title: 'Игроки в матче',
+                          subtitle: 'Выбор игрока и быстрые ТТД',
+                          child: _analysisMatchPlayersPane(),
                         ),
                         flexCard(
                           flex: 1,
                           height: topHeight,
-                          title: 'Статистика матча',
-                          child: _analysisStatsTable(compact: true),
+                          title: 'Видеоаналитика',
+                          subtitle: 'Тактический AI-ракурс',
+                          child: _analysisVideoPane(tactical: true),
                         ),
                       ]),
                       rowGap(),
@@ -8482,8 +10742,13 @@ String _translatePosition(String key) {
                     title: 'Мини-карта поля',
                     subtitle: 'Вертикально: позиции и передачи',
                     trailing: _analysisDropDown(teamName),
-                    child: const CustomPaint(
-                      painter: _MatchPitchNetworkPainter(vertical: true),
+                    child: CustomPaint(
+                      painter: _MatchPitchNetworkPainter(
+                        vertical: true,
+                        livePositions: _liveAiPositions,
+                        liveTrails: _liveAiTrails,
+                        liveSpeeds: _liveAiSpeedsKmh,
+                      ),
                     ),
                   ),
                 ),
@@ -8494,23 +10759,22 @@ String _translatePosition(String key) {
               flexCard(
                 flex: 1,
                 height: 256,
-                title: 'Видеоаналитика',
-                subtitle: 'Прямая трансляция',
-                child: _analysisVideoPane(tactical: false),
+                title: 'Интеллект матча',
+                subtitle: 'AI анализ',
+                child: _analysisAiBlock(compact: true),
               ),
               flexCard(
                 flex: 1,
                 height: 256,
-                title: 'Видеоаналитика',
-                subtitle: 'Тактический ракурс',
-                child: _analysisVideoPane(tactical: true),
+                title: 'Статистика матча',
+                child: _analysisStatsTable(compact: true),
               ),
               flexCard(
                 flex: 1,
                 height: 256,
                 title: 'Интенсивность спринтов',
                 subtitle: 'По 15-минутным отрезкам',
-                child: const CustomPaint(painter: _MatchStackedBarsPainter()),
+                child: _analysisLiveSprintBars(),
               ),
             ]),
             rowGap(),
@@ -8520,7 +10784,7 @@ String _translatePosition(String key) {
                 height: 248,
                 title: 'Нагрузка игроков (IMA)',
                 subtitle: 'Импакт по отрезкам',
-                child: const CustomPaint(painter: _MatchLoadBarsPainter()),
+                child: _analysisLiveLoadBars(),
               ),
               flexCard(
                 flex: 2,
@@ -8571,15 +10835,16 @@ String _translatePosition(String key) {
                         flexCard(
                           flex: 1,
                           height: topHeight,
-                          title: 'Интеллект матча',
-                          subtitle: 'AI анализ',
-                          child: _analysisAiBlock(compact: true),
+                          title: 'Игроки в матче',
+                          subtitle: 'Выбор игрока и быстрые ТТД',
+                          child: _analysisMatchPlayersPane(),
                         ),
                         flexCard(
                           flex: 1,
                           height: topHeight,
-                          title: 'Статистика матча',
-                          child: _analysisStatsTable(compact: true),
+                          title: 'Видеоаналитика',
+                          subtitle: 'Тактический AI-ракурс',
+                          child: _analysisVideoPane(tactical: true),
                         ),
                       ]),
                       rowGap(),
@@ -8610,8 +10875,13 @@ String _translatePosition(String key) {
                     title: 'Мини-карта поля',
                     subtitle: 'Вертикально: позиции и передачи',
                     trailing: _analysisDropDown(teamName),
-                    child: const CustomPaint(
-                      painter: _MatchPitchNetworkPainter(vertical: true),
+                    child: CustomPaint(
+                      painter: _MatchPitchNetworkPainter(
+                        vertical: true,
+                        livePositions: _liveAiPositions,
+                        liveTrails: _liveAiTrails,
+                        liveSpeeds: _liveAiSpeedsKmh,
+                      ),
                     ),
                   ),
                 ),
@@ -8624,14 +10894,14 @@ String _translatePosition(String key) {
                 height: 248,
                 title: 'Спринты',
                 subtitle: '15-минутные отрезки',
-                child: const CustomPaint(painter: _MatchStackedBarsPainter()),
+                child: _analysisLiveSprintBars(),
               ),
               flexCard(
                 flex: 1,
                 height: 248,
                 title: 'Нагрузка',
                 subtitle: 'IMA',
-                child: const CustomPaint(painter: _MatchLoadBarsPainter()),
+                child: _analysisLiveLoadBars(),
               ),
               flexCard(
                 flex: 1,
@@ -8645,16 +10915,15 @@ String _translatePosition(String key) {
               flexCard(
                 flex: 1,
                 height: 260,
-                title: 'Видеоаналитика',
-                subtitle: 'Прямая трансляция',
-                child: _analysisVideoPane(tactical: false),
+                title: 'Интеллект матча',
+                subtitle: 'AI анализ',
+                child: _analysisAiBlock(compact: true),
               ),
               flexCard(
                 flex: 1,
                 height: 260,
-                title: 'Видеоаналитика',
-                subtitle: 'Тактический ракурс',
-                child: _analysisVideoPane(tactical: true),
+                title: 'Статистика матча',
+                child: _analysisStatsTable(compact: true),
               ),
             ]),
             rowGap(),
@@ -8690,15 +10959,16 @@ String _translatePosition(String key) {
         List<Widget> phoneRows() {
           final tiles = <Widget>[
             card(
-              height: 238,
-              title: 'Интеллект матча',
-              subtitle: 'AI анализ',
-              child: _analysisAiBlock(compact: compactCards),
+              height: 260,
+              title: 'Игроки в матче',
+              subtitle: 'Выбор игрока и быстрые ТТД',
+              child: _analysisMatchPlayersPane(),
             ),
             card(
-              height: 238,
-              title: 'Статистика матча',
-              child: _analysisStatsTable(compact: true),
+              height: 260,
+              title: 'Видеоаналитика',
+              subtitle: 'Тактический AI-ракурс',
+              child: _analysisVideoPane(tactical: true),
             ),
             card(
               height: 238,
@@ -8711,7 +10981,13 @@ String _translatePosition(String key) {
               title: 'Мини-карта поля',
               subtitle: 'Позиции и передачи',
               trailing: _analysisDropDown(teamName),
-              child: const CustomPaint(painter: _MatchPitchNetworkPainter()),
+              child: CustomPaint(
+                painter: _MatchPitchNetworkPainter(
+                  livePositions: _liveAiPositions,
+                  liveTrails: _liveAiTrails,
+                  liveSpeeds: _liveAiSpeedsKmh,
+                ),
+              ),
             ),
             card(
               height: 238,
@@ -8723,25 +10999,24 @@ String _translatePosition(String key) {
               height: 238,
               title: 'Интенсивность спринтов',
               subtitle: 'По 15-минутным отрезкам',
-              child: const CustomPaint(painter: _MatchStackedBarsPainter()),
+              child: _analysisLiveSprintBars(),
             ),
             card(
               height: 238,
               title: 'Нагрузка игроков (IMA)',
               subtitle: 'Импакт по отрезкам',
-              child: const CustomPaint(painter: _MatchLoadBarsPainter()),
+              child: _analysisLiveLoadBars(),
             ),
             card(
-              height: 260,
-              title: 'Видеоаналитика',
-              subtitle: 'Прямая трансляция',
-              child: _analysisVideoPane(tactical: false),
+              height: 238,
+              title: 'Интеллект матча',
+              subtitle: 'AI анализ',
+              child: _analysisAiBlock(compact: compactCards),
             ),
             card(
-              height: 260,
-              title: 'Видеоаналитика',
-              subtitle: 'Тактический ракурс',
-              child: _analysisVideoPane(tactical: true),
+              height: 238,
+              title: 'Статистика матча',
+              child: _analysisStatsTable(compact: true),
             ),
             card(
               height: 244,
@@ -8839,25 +11114,19 @@ String _translatePosition(String key) {
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: _mcPanel,
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(.045),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE8EEE9), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
-            height: 29,
+            height: 32,
             padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(
-              color: _mcPanelTop,
-              border: Border(bottom: BorderSide(color: _mcLine.withOpacity(.72))),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: Color(0xFFE8EEE9))),
             ),
             child: Row(
               children: [
@@ -8870,11 +11139,12 @@ String _translatePosition(String key) {
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: _mcText,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w900,
+                        style: const TextStyle(
+                          color: Color(0xFF0B0F14),
+                          fontSize: 10.8,
+                          fontWeight: FontWeight.w700,
                           height: .95,
+                          letterSpacing: -.12,
                         ),
                       ),
                       if (subtitle != null)
@@ -8882,10 +11152,10 @@ String _translatePosition(String key) {
                           subtitle,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: _mcSub,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
+                          style: const TextStyle(
+                            color: Color(0xFF6B7280),
+                            fontSize: 8.9,
+                            fontWeight: FontWeight.w600,
                             height: .95,
                           ),
                         ),
@@ -8911,7 +11181,7 @@ String _translatePosition(String key) {
           ),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.all(9),
+              padding: const EdgeInsets.all(8),
               child: child,
             ),
           ),
@@ -8954,17 +11224,23 @@ String _translatePosition(String key) {
   }) {
     final enabled = onTap != null;
     final button = Material(
-      color: Colors.transparent,
+      color: const Color(0xFFF6F7F9),
+      borderRadius: BorderRadius.circular(10),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(4),
-        child: SizedBox(
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
           width: 24,
           height: 24,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFF0F2F4)),
+          ),
           child: Icon(
             icon,
             size: iconSize,
-            color: enabled ? _mcText.withOpacity(.92) : _mcSub.withOpacity(.62),
+            color: enabled ? const Color(0xFF6B7280) : const Color(0xFF98A2B3),
           ),
         ),
       ),
@@ -8982,51 +11258,173 @@ String _translatePosition(String key) {
     String? subtitle,
     required Widget child,
   }) {
-    showGeneralDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: 'Закрыть',
-      barrierColor: Colors.black.withOpacity(.38),
-      transitionDuration: const Duration(milliseconds: 180),
-      pageBuilder: (dialogContext, _, __) {
-        final media = MediaQuery.of(dialogContext);
-        final isCompact = media.size.width < 760;
-        final dialogWidth = isCompact ? media.size.width : media.size.width * .94;
-        final dialogHeight = isCompact ? media.size.height : media.size.height * .90;
+    OverlayState? overlay;
+    try {
+      overlay = Navigator.of(context, rootNavigator: true).overlay ?? Overlay.maybeOf(context);
+    } catch (_) {
+      overlay = Overlay.maybeOf(context);
+    }
+    if (overlay == null) return;
 
-        return SafeArea(
-          child: Center(
+    late OverlayEntry entry;
+    Offset position = const Offset(74, 54);
+    bool minimized = false;
+    bool maximized = false;
+    bool closed = false;
+
+    void closeWindow() {
+      if (closed) return;
+      closed = true;
+      if (entry.mounted) entry.remove();
+    }
+
+    entry = OverlayEntry(
+      builder: (overlayContext) {
+        final media = MediaQuery.of(overlayContext);
+        final screen = media.size;
+        final isCompact = screen.width < 760;
+
+        final double width = maximized
+            ? screen.width - 28
+            : (isCompact ? screen.width - 24 : min(1180.0, max(760.0, screen.width * .78)));
+        final double height = maximized
+            ? screen.height - media.padding.top - media.padding.bottom - 28
+            : (isCompact ? screen.height - media.padding.top - media.padding.bottom - 24 : min(760.0, max(520.0, screen.height * .78)));
+
+        final double left = maximized
+            ? 14.0
+            : position.dx.clamp(12.0, max(12.0, screen.width - width - 12.0)).toDouble();
+        final double top = maximized
+            ? media.padding.top + 14.0
+            : position.dy
+                .clamp(
+                  media.padding.top + 12.0,
+                  max(media.padding.top + 12.0, screen.height - height - media.padding.bottom - 12.0),
+                )
+                .toDouble();
+
+        if (minimized) {
+          return Positioned(
+            left: 22,
+            bottom: media.padding.bottom + 22,
             child: Material(
               color: Colors.transparent,
-              child: Container(
-                width: dialogWidth,
-                height: dialogHeight,
-                margin: EdgeInsets.all(isCompact ? 0 : 18),
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  color: _mcPanel,
-                  borderRadius: BorderRadius.circular(isCompact ? 0 : 8),
-                  border: Border.all(color: _mcLine.withOpacity(.92)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(.14),
-                      blurRadius: 28,
-                      offset: const Offset(0, 16),
-                    ),
-                  ],
+              child: InkWell(
+                onTap: () {
+                  minimized = false;
+                  entry.markNeedsBuild();
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  height: 40,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE4ECE8)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(.10),
+                        blurRadius: 22,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.open_in_full_rounded, color: Color(0xFF00A750), size: 16),
+                      const SizedBox(width: 8),
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF111827),
+                          fontSize: 11.2,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Container(
-                      height: 46,
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
+              ),
+            ),
+          );
+        }
+
+        return Positioned(
+          left: left,
+          top: top,
+          width: width,
+          height: height,
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: _mcPanel,
+                borderRadius: BorderRadius.circular(isCompact || maximized ? 8 : 18),
+                border: Border.all(color: _mcLine.withOpacity(.92)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(.16),
+                    blurRadius: 34,
+                    offset: const Offset(0, 18),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onPanUpdate: maximized || isCompact
+                        ? null
+                        : (details) {
+                            position += details.delta;
+                            entry.markNeedsBuild();
+                          },
+                    child: Container(
+                      height: 42,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(
                         color: _mcPanelTop,
                         border: Border(bottom: BorderSide(color: _mcLine.withOpacity(.82))),
                       ),
                       child: Row(
                         children: [
+                          _TeamMatchCmrWindowButton(icon: Icons.close_rounded, tooltip: 'Закрыть', onTap: closeWindow),
+                          const SizedBox(width: 7),
+                          _TeamMatchCmrWindowButton(
+                            icon: Icons.remove_rounded,
+                            tooltip: 'Свернуть',
+                            onTap: () {
+                              minimized = true;
+                              entry.markNeedsBuild();
+                            },
+                          ),
+                          const SizedBox(width: 7),
+                          _TeamMatchCmrWindowButton(
+                            icon: maximized ? Icons.close_fullscreen_rounded : Icons.open_in_full_rounded,
+                            tooltip: maximized ? 'Вернуть размер' : 'Развернуть',
+                            onTap: () {
+                              maximized = !maximized;
+                              entry.markNeedsBuild();
+                            },
+                          ),
+                          const SizedBox(width: 12),
+                          Container(
+                            width: 30,
+                            height: 30,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF3F6F9),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(Icons.analytics_outlined, color: _mcText, size: 16),
+                          ),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -9036,60 +11434,39 @@ String _translatePosition(String key) {
                                   title,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: _mcText,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w900,
-                                  ),
+                                  style: TextStyle(color: _mcText, fontSize: 13.2, fontWeight: FontWeight.w900),
                                 ),
-                                if (subtitle != null)
+                                if (subtitle != null && subtitle.trim().isNotEmpty) ...[
+                                  const SizedBox(height: 2),
                                   Text(
                                     subtitle,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: _mcSub,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w800,
-                                    ),
+                                    style: TextStyle(color: _mcSub, fontSize: 10.4, fontWeight: FontWeight.w700),
                                   ),
+                                ],
                               ],
-                            ),
-                          ),
-                          Tooltip(
-                            message: 'Закрыть',
-                            child: IconButton(
-                              onPressed: () => Navigator.of(dialogContext).maybePop(),
-                              icon: Icon(Icons.close_fullscreen_rounded, color: _mcText, size: 20),
                             ),
                           ),
                         ],
                       ),
                     ),
-                    Expanded(
-                      child: Padding(
-                        padding: EdgeInsets.all(isCompact ? 10 : 16),
-                        child: child,
-                      ),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.all(isCompact ? 10 : 16),
+                      child: child,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
         );
       },
-      transitionBuilder: (context, animation, secondaryAnimation, child) {
-        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
-        return FadeTransition(
-          opacity: curved,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: .98, end: 1).animate(curved),
-            child: child,
-          ),
-        );
-      },
     );
+
+    overlay.insert(entry);
   }
 
   Widget _analysisDropDown(String text) {
@@ -9135,13 +11512,283 @@ String _translatePosition(String key) {
     );
   }
 
+
+  bool get _hasLiveAiData => _liveAiPlayers.isNotEmpty;
+
+  String _liveAiPlayerLabel(int trackId, {PlayerDetection? player}) {
+    if (player != null) {
+      final name = player.name.trim();
+      if (name.isNotEmpty && !name.toLowerCase().contains('игрок')) return name;
+      if (player.number > 0) return '№${player.number}';
+    }
+    return 'Игрок $trackId';
+  }
+
+  void _onLiveAiStatus(String status) {
+    if (!mounted) return;
+    setState(() => _liveAiStatus = status.replaceAll('✅', '').replaceAll('❌', '').replaceAll('⚠️', '').replaceAll('🔄', '').trim());
+  }
+
+  void _onLiveAiFrame(AnalysisResult result) {
+    if (result.players.isEmpty) return;
+
+    final timeMs = result.timestamp > 0 ? result.timestamp : result.frame * 20.0;
+    final dtSec = ((_liveAiTimeMs > 0) ? (timeMs - _liveAiTimeMs) / 1000.0 : 0.0).clamp(0.04, 1.8).toDouble();
+    final nextPositions = <int, Offset>{};
+    final nextTrails = <int, List<Offset>>{};
+    final nextSpeeds = Map<int, double>.from(_liveAiSpeedsKmh);
+    final nextAccels = Map<int, double>.from(_liveAiAccelerations);
+    final nextSprints = Map<int, int>.from(_liveAiSprints);
+    final nextLoad = Map<int, double>.from(_liveAiLoad);
+    final nextMotion = Map<int, _AiPlayerMotion>.from(_lastAiMotion);
+    final events = List<Map<String, dynamic>>.from(_liveAiEvents);
+
+    for (final player in result.players) {
+      final trackId = player.trackId > 0 ? player.trackId : int.tryParse(player.id) ?? player.bbox.hashCode.abs();
+      if (player.bbox.isEmpty) continue;
+
+      // Для мини-карты используем нижнюю точку bbox — условные "ноги" игрока.
+      // Карта в CMR-обзоре вертикальная: X = ширина поля, Y = длина поля.
+      // Камера матча перспективная, поэтому rawY из видео сжимает игроков к центру.
+      // Небольшая коррекция перспективы распределяет точки по полю заметно естественнее
+      // до полноценной калибровки 4 точек поля.
+      final footX = player.bbox.center.dx;
+      final footY = player.bbox.bottom;
+      final rawX = (footX / 1920.0).clamp(0.0, 1.0).toDouble();
+      final rawY = (footY / 1080.0).clamp(0.0, 1.0).toDouble();
+      final fieldX = rawX;
+      const visibleFieldTop = 0.22;
+      const visibleFieldBottom = 0.94;
+      final fieldY = ((rawY - visibleFieldTop) / (visibleFieldBottom - visibleFieldTop))
+          .clamp(0.0, 1.0)
+          .toDouble();
+
+      final prev = _lastAiMotion[trackId];
+      final rawPos = Offset(fieldX, fieldY);
+      Offset pos = rawPos;
+      var speedKmh = nextSpeeds[trackId] ?? 0.0;
+      var accel = nextAccels[trackId] ?? 0.0;
+
+      // Если трек не перескочил резко, слегка сглаживаем точку на мини-карте.
+      // Если скачок большой — считаем, что YOLO/track_id сменился, и начинаем новый след.
+      final bool resetTrail = prev != null && (rawPos - prev.position).distance > .22;
+      if (prev != null && !resetTrail) {
+        pos = Offset(
+          prev.position.dx * .42 + rawPos.dx * .58,
+          prev.position.dy * .42 + rawPos.dy * .58,
+        );
+      }
+      nextPositions[trackId] = pos;
+
+      final trail = resetTrail ? <Offset>[] : List<Offset>.from(_liveAiTrails[trackId] ?? const []);
+      trail.add(pos);
+      if (trail.length > 70) trail.removeRange(0, trail.length - 70);
+      nextTrails[trackId] = trail;
+
+      if (prev != null && dtSec > 0 && !resetTrail) {
+        final dxM = (pos.dx - prev.position.dx) * 105.0;
+        final dyM = (pos.dy - prev.position.dy) * 68.0;
+        final meters = sqrt(dxM * dxM + dyM * dyM);
+        final rawSpeed = (meters / dtSec) * 3.6;
+        // Фильтр скачков bbox: YOLO иногда перескакивает между игроками.
+        final filtered = rawSpeed.isFinite ? rawSpeed.clamp(0.0, 38.0).toDouble() : 0.0;
+        speedKmh = speedKmh <= 0 ? filtered : speedKmh * .58 + filtered * .42;
+        accel = ((speedKmh / 3.6) - (prev.speedKmh / 3.6)) / dtSec;
+        accel = accel.clamp(-8.0, 8.0).toDouble();
+      } else if (resetTrail) {
+        speedKmh = 0.0;
+        accel = 0.0;
+      }
+
+      nextSpeeds[trackId] = speedKmh;
+      nextAccels[trackId] = accel;
+      nextLoad[trackId] = ((nextLoad[trackId] ?? 0.0) + speedKmh * .035 + accel.abs() * .18).clamp(0.0, 100.0).toDouble();
+
+      final sprintNow = speedKmh >= 22.0;
+      final prevSprint = _lastAiMotion[trackId]?.sprinting == true;
+      if (sprintNow && !prevSprint) {
+        nextSprints[trackId] = (nextSprints[trackId] ?? 0) + 1;
+        final label = _liveAiPlayerLabel(trackId, player: player);
+        events.insert(0, {
+          'minute': _formatMatchPlayerTime(Duration(milliseconds: timeMs.round())),
+          'title': 'Спринт $label',
+          'subtitle': '${speedKmh.toStringAsFixed(1)} км/ч',
+          'icon': Icons.bolt_rounded,
+          'color': _mcGreen,
+        });
+      }
+
+      nextMotion[trackId] = _AiPlayerMotion(position: pos, timeMs: timeMs, speedKmh: speedKmh, sprinting: sprintNow);
+    }
+
+    if (events.length > 30) events.removeRange(30, events.length);
+
+    if (!mounted) return;
+    setState(() {
+      _liveAiPlayers = result.players;
+      _liveAiPositions
+        ..clear()
+        ..addAll(nextPositions);
+      _liveAiTrails
+        ..clear()
+        ..addAll(nextTrails);
+      _liveAiSpeedsKmh
+        ..clear()
+        ..addAll(nextSpeeds);
+      _liveAiAccelerations
+        ..clear()
+        ..addAll(nextAccels);
+      _liveAiSprints
+        ..clear()
+        ..addAll(nextSprints);
+      _liveAiLoad
+        ..clear()
+        ..addAll(nextLoad);
+      _lastAiMotion
+        ..clear()
+        ..addAll(nextMotion);
+      _liveAiEvents
+        ..clear()
+        ..addAll(events);
+      _liveAiFrame = result.frame;
+      _liveAiTimeMs = timeMs;
+      _liveAiStatus = 'Live AI: ${result.players.length} игроков';
+    });
+
+    _queueSaveLiveAiFrame(result);
+  }
+
+  void _queueSaveLiveAiFrame(AnalysisResult result) {
+    final now = DateTime.now();
+    if (_savingLiveAiFrame || now.difference(_lastAiSaveAt).inMilliseconds < 2200) return;
+    _lastAiSaveAt = now;
+    _savingLiveAiFrame = true;
+
+    final payload = {
+      'match_id': matchId,
+      'team_id': teamId,
+      'frame': result.frame,
+      'time_ms': result.timestamp,
+      'players_count': result.players.length,
+      'players': result.players.map((p) => {
+            'id': p.id,
+            'track_id': p.trackId,
+            'name': p.name,
+            'confidence': p.confidence,
+            'bbox': [p.bbox.left, p.bbox.top, p.bbox.right, p.bbox.bottom],
+            'speed_kmh': _liveAiSpeedsKmh[p.trackId] ?? 0,
+            'acceleration': _liveAiAccelerations[p.trackId] ?? 0,
+            'sprints': _liveAiSprints[p.trackId] ?? 0,
+            'load': _liveAiLoad[p.trackId] ?? 0,
+          }).toList(),
+      'events': _liveAiEvents.take(12).map((e) => {
+            'minute': _s(e['minute']),
+            'title': _s(e['title']),
+            'subtitle': _s(e['subtitle']),
+          }).toList(),
+    };
+
+    unawaited(
+      http
+          .post(
+            Uri.parse('$apiBase/save_match_ai_live_frame.php'),
+            headers: const {'Content-Type': 'application/json; charset=utf-8'},
+            body: jsonEncode(payload),
+          )
+          .timeout(const Duration(seconds: 6))
+          .catchError((Object error) {
+            developer.log('AI live save skipped/failed: $error', name: 'TeamMatchDetailScreen');
+            return http.Response('{}', 499);
+          })
+          .whenComplete(() => _savingLiveAiFrame = false),
+    );
+  }
+
   Widget _analysisTeamBadge(String name, IconData icon, Color color, {bool right = false}) {
     final logo = Container(width: 54, height: 54, decoration: BoxDecoration(shape: BoxShape.circle, color: color.withOpacity(.14), border: Border.all(color: color.withOpacity(.78), width: 2)), child: Icon(icon, color: color, size: 30));
     final text = Flexible(child: Column(crossAxisAlignment: right ? CrossAxisAlignment.end : CrossAxisAlignment.start, children: [Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: right ? TextAlign.right : TextAlign.left, style: TextStyle(color: _mcText, fontSize: 14.5, height: 1.1, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.star_rounded, color: _mcYellow, size: 14), const SizedBox(width: 4), Text('команда', style: TextStyle(color: _mcSub, fontSize: 9.5, fontWeight: FontWeight.w700))])]));
     return Row(mainAxisAlignment: right ? MainAxisAlignment.end : MainAxisAlignment.start, children: right ? [text, const SizedBox(width: 10), logo] : [logo, const SizedBox(width: 10), text]);
   }
 
+  Widget _analysisLiveSprintBars() {
+    if (!_hasLiveAiData || _liveAiSprints.isEmpty) {
+      return const CustomPaint(painter: _MatchStackedBarsPainter());
+    }
+    final rows = _liveAiSprints.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: rows.take(7).map((entry) {
+        final value = entry.value;
+        return Expanded(
+          child: Row(
+            children: [
+              SizedBox(width: 74, child: Text('Игрок ${entry.key}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w800))),
+              Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(value: (value / 8).clamp(0, 1), minHeight: 5, color: _mcGreen, backgroundColor: const Color(0xFFE5E7EB)))),
+              const SizedBox(width: 8),
+              SizedBox(width: 28, child: Text('$value', textAlign: TextAlign.right, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w900))),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _analysisLiveLoadBars() {
+    if (!_hasLiveAiData || _liveAiLoad.isEmpty) {
+      return const CustomPaint(painter: _MatchLoadBarsPainter());
+    }
+    final rows = _liveAiLoad.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: rows.take(8).map((entry) {
+        final value = entry.value.clamp(0.0, 100.0).toDouble();
+        final color = value >= 70 ? const Color(0xFFEF4444) : value >= 45 ? const Color(0xFFF59E0B) : _mcGreen;
+        return Expanded(
+          child: Row(
+            children: [
+              SizedBox(width: 74, child: Text('Игрок ${entry.key}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w800))),
+              Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(value: (value / 100).clamp(0, 1), minHeight: 5, color: color, backgroundColor: const Color(0xFFE5E7EB)))),
+              const SizedBox(width: 8),
+              SizedBox(width: 36, child: Text('${value.round()}%', textAlign: TextAlign.right, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w900))),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
   Widget _analysisSpeedBars() {
+    if (_hasLiveAiData && _liveAiSpeedsKmh.isNotEmpty) {
+      final rows = _liveAiSpeedsKmh.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      final visible = rows.take(10).toList();
+      return Column(
+        children: visible.map((entry) {
+          final trackId = entry.key;
+          final v = entry.value;
+          PlayerDetection? player;
+          for (final p in _liveAiPlayers) {
+            final id = p.trackId > 0 ? p.trackId : int.tryParse(p.id) ?? -1;
+            if (id == trackId) {
+              player = p;
+              break;
+            }
+          }
+          final label = _liveAiPlayerLabel(trackId, player: player);
+          return Expanded(
+            child: Row(
+              children: [
+                SizedBox(width: 82, child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w700))),
+                Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(value: (v / 34).clamp(0, 1), minHeight: 4, color: v >= 22 ? _mcGreen : _mcBlue, backgroundColor: const Color(0xFFE5E7EB)))),
+                const SizedBox(width: 8),
+                SizedBox(width: 34, child: Text(v.toStringAsFixed(1), textAlign: TextAlign.right, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w900))),
+              ],
+            ),
+          );
+        }).toList(),
+      );
+    }
+
     final names = _analysisPlayerNames();
     final values = [33.4, 32.1, 31.8, 31.2, 30.9, 30.2, 29.8, 29.5, 29.1, 28.7];
     return Column(children: List.generate(min(names.length, values.length), (index) {
@@ -9155,6 +11802,118 @@ String _translatePosition(String key) {
     return names.length >= 6 ? names : ['Бахар', 'Седько', 'Лисакович', 'Гречихо', 'Бегунов', 'Зеньков', 'Барковский', 'Пащенко', 'Коваль', 'Журавлев'];
   }
 
+
+  List<Map<String, dynamic>> _analysisMatchPlayerRows() {
+    final byKey = <String, Map<String, dynamic>>{};
+
+    void addRows(dynamic source) {
+      if (source is! Iterable) return;
+      for (final item in source) {
+        if (item is! Map) continue;
+        final row = Map<String, dynamic>.from(item);
+        final name = _playerName(row).trim();
+        if (name.isEmpty || name.toLowerCase() == 'суммарно по матчу') continue;
+        final key = _playerIdentityKey(row);
+        byKey.putIfAbsent(key, () => row);
+      }
+    }
+
+    addRows(match?['players']);
+    addRows(ttdPlayers);
+    addRows(playerVideoTotals);
+    addRows(mainReport);
+    addRows(passReport);
+
+    if (byKey.isEmpty) {
+      for (final name in _analysisPlayerNames()) {
+        byKey['name:${name.toLowerCase()}'] = {'player_name': name};
+      }
+    }
+
+    final rows = byKey.values.toList();
+    rows.sort((a, b) => _playerMvpScore(b).compareTo(_playerMvpScore(a)));
+    return rows.take(18).toList();
+  }
+
+  Widget _analysisMatchPlayersPane() {
+    final rows = _analysisMatchPlayerRows();
+    if (rows.isEmpty) {
+      return _emptyState('Игроки матча пока не загружены', icon: Icons.groups_2_outlined);
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 360;
+        final avatarSize = compact ? 34.0 : 40.0;
+        final rowHeight = compact ? 54.0 : 62.0;
+        return Scrollbar(
+          thumbVisibility: false,
+          child: ListView.separated(
+            padding: EdgeInsets.zero,
+            physics: const BouncingScrollPhysics(),
+            itemCount: rows.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 6),
+            itemBuilder: (_, index) {
+              final row = rows[index];
+              final key = _playerIdentityKey(row);
+              final selected = _selectedAnalysisPlayerKey == key || (_selectedAnalysisPlayerKey == null && index == 0);
+              final name = _playerName(row);
+              final photo = _playerPhotoUrl(row);
+              final rating = _playerRating(row);
+              final total = _playerTotalTtdActions(row);
+              final goals = _playerGoalCount(row);
+              final assists = _playerAssistCount(row);
+
+              return Material(
+                color: selected ? _mcGreen.withOpacity(.10) : const Color(0xFFF8FAF9),
+                borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () {
+                    setState(() => _selectedAnalysisPlayerKey = key);
+                  },
+                  child: Container(
+                    height: rowHeight,
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: selected ? _mcGreen.withOpacity(.42) : _mcLine.withOpacity(.72)),
+                    ),
+                    child: Row(
+                      children: [
+                        _PlayerAvatar(imageUrl: photo, name: name, primary: _mcGreen, size: avatarSize),
+                        const SizedBox(width: 9),
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcText, fontSize: compact ? 10.5 : 11.4, fontWeight: FontWeight.w900)),
+                              const SizedBox(height: 3),
+                              Text('ТТД: $total · Г: $goals · А: $assists', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: compact ? 9.0 : 9.8, fontWeight: FontWeight.w700)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          width: compact ? 34 : 40,
+                          height: compact ? 24 : 28,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(color: selected ? _mcGreen : Colors.white, borderRadius: BorderRadius.circular(9), border: Border.all(color: selected ? _mcGreen : _mcLine)),
+                          child: Text(rating, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: selected ? Colors.white : _mcText, fontSize: compact ? 10 : 11, fontWeight: FontWeight.w900)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
   Widget _analysisStatsTable({bool compact = false}) {
     final rows = _matchStatsRows();
     final opp = _s(match?['opponent']).isEmpty ? 'Соперник' : _s(match?['opponent']);
@@ -9162,15 +11921,24 @@ String _translatePosition(String key) {
   }
 
   Widget _analysisAiBlock({bool compact = false}) {
-    final displayScore = (_efficiency <= 0 ? 83 : _efficiency.clamp(0, 100).round());
+    final liveLoad = _liveAiLoad.isEmpty ? 0.0 : _liveAiLoad.values.reduce((a, b) => a + b) / _liveAiLoad.length;
+    final displayScore = _hasLiveAiData ? liveLoad.clamp(0, 100).round() : (_efficiency <= 0 ? 83 : _efficiency.clamp(0, 100).round());
+    final liveTopSpeed = _liveAiSpeedsKmh.isEmpty ? 0.0 : _liveAiSpeedsKmh.values.reduce((a, b) => a > b ? a : b);
+    final liveSprints = _liveAiSprints.values.fold<int>(0, (sum, value) => sum + value);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [Container(width: compact ? 58 : 70, height: compact ? 58 : 70, alignment: Alignment.center, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: _mcGreen, width: 5), color: _mcGreen.withOpacity(.12)), child: Text('$displayScore', style: TextStyle(color: _mcGreen, fontSize: compact ? 19 : 23, fontWeight: FontWeight.w900))), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Высокая эффективность', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcGreen, fontSize: 12.5, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text(_aiCoachText(), maxLines: compact ? 3 : 4, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: 10.5, height: 1.25, fontWeight: FontWeight.w700))]))]),
+      Row(children: [Container(width: compact ? 58 : 70, height: compact ? 58 : 70, alignment: Alignment.center, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: _mcGreen, width: 5), color: _mcGreen.withOpacity(.12)), child: Text('$displayScore', style: TextStyle(color: _mcGreen, fontSize: compact ? 19 : 23, fontWeight: FontWeight.w900))), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(_hasLiveAiData ? 'Live AI подключен' : 'Высокая эффективность', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcGreen, fontSize: 12.5, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text(_hasLiveAiData ? 'Кадр $_liveAiFrame · ${_liveAiPlayers.length} игроков · ${_formatMatchPlayerTime(Duration(milliseconds: _liveAiTimeMs.round()))}' : _aiCoachText(), maxLines: compact ? 3 : 4, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: 10.5, height: 1.25, fontWeight: FontWeight.w700))]))]),
       const SizedBox(height: 10),
       Text('Ключевые инсайты', style: TextStyle(color: _mcText, fontSize: 11.5, fontWeight: FontWeight.w900)),
       const SizedBox(height: 6),
-      _analysisBullet('64% атак начинались через центр'),
-      _analysisBullet('Высокая интенсивность в финальной трети'),
-      _analysisBullet('Компактность проседала после 60-й минуты'),
+      if (_hasLiveAiData) ...[
+        _analysisBullet('В кадре сейчас: ${_liveAiPlayers.length} игроков'),
+        _analysisBullet('Максимальная скорость live: ${liveTopSpeed.toStringAsFixed(1)} км/ч'),
+        _analysisBullet('Спринтов за просмотр: $liveSprints'),
+      ] else ...[
+        _analysisBullet('64% атак начинались через центр'),
+        _analysisBullet('Высокая интенсивность в финальной трети'),
+        _analysisBullet('Компактность проседала после 60-й минуты'),
+      ],
       if (!compact) ...[const SizedBox(height: 8), Text('Рекомендации', style: TextStyle(color: _mcText, fontSize: 11.5, fontWeight: FontWeight.w900)), const SizedBox(height: 6), _analysisBullet(_aiRecommendation()), _analysisBullet('Ускорять переход в атаку коротким пасом')],
     ]);
   }
@@ -9236,6 +12004,29 @@ String _translatePosition(String key) {
     return null;
   }
 
+  String _friendlyVideoPlayerError(Object error) {
+    final text = error.toString();
+    if (text.contains('OSStatus error -12848') ||
+        text.toLowerCase().contains('cannot open') ||
+        text.toLowerCase().contains('damaged')) {
+      return 'Плеер macOS не смог открыть файл. Обычно это битый файл, неподдерживаемый кодек MOV/HEVC или старый повреждённый URL в базе.';
+    }
+    if (text.toLowerCase().contains('source error') || text.toLowerCase().contains('404')) {
+      return 'Файл не найден по ссылке. Проверьте, что видео реально лежит в /uploads/team_matches/.';
+    }
+    return 'Видео загружено, но встроенный плеер не смог его открыть.';
+  }
+
+  void _clearAnalysisVideoControllers() {
+    for (final controller in _analysisVideoControllers.values) {
+      controller.dispose();
+    }
+    _analysisVideoControllers.clear();
+    _analysisVideoInitFutures.clear();
+    _analysisVideoInitErrors.clear();
+    _activeAnalysisVideoKey = null;
+  }
+
   String _analysisVideoControllerKey(String url, {required bool tactical}) {
     return '${tactical ? 'tactical' : 'main'}::$url';
   }
@@ -9250,11 +12041,23 @@ String _translatePosition(String key) {
 
     final controller = VideoPlayerController.network(url);
     _analysisVideoControllers[key] = controller;
+    _analysisVideoInitErrors.remove(key);
     _analysisVideoInitFutures[key] = controller.initialize().then((_) async {
       await controller.setLooping(true);
       await controller.setVolume(0);
       if (mounted) setState(() {});
+    }).catchError((Object error, StackTrace stackTrace) {
+      final message = _friendlyVideoPlayerError(error);
+      _analysisVideoInitErrors[key] = message;
+      developer.log(
+        'Video player init failed: $url',
+        name: 'TeamMatchDetailScreen',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (mounted) setState(() {});
     });
+    _analysisVideoControllers[key] = controller;
 
     return controller;
   }
@@ -9278,35 +12081,16 @@ String _translatePosition(String key) {
   }
 
   Map<String, dynamic>? _activeMatchVideoSourceForBottom() {
-    final sources = <Map<String, dynamic>>[];
-    final main = _matchVideoSourceForBottom(tactical: false);
     final tactical = _matchVideoSourceForBottom(tactical: true);
-
-    if (main != null) sources.add(main);
-    if (tactical != null && tactical['key'] != main?['key']) {
-      sources.add(tactical);
-    }
-
-    if (sources.isEmpty) return null;
-
-    if (_activeAnalysisVideoKey != null) {
-      for (final source in sources) {
-        if (source['key'] == _activeAnalysisVideoKey) return source;
-      }
-    }
-
-    _activeAnalysisVideoKey = sources.first['key'] as String;
-    return sources.first;
+    if (tactical == null) return null;
+    _activeAnalysisVideoKey ??= tactical['key'] as String;
+    return tactical;
   }
 
   VideoPlayerController? _activeMatchVideoControllerForBottom() {
-    final source = _activeMatchVideoSourceForBottom();
-    if (source == null) return null;
-
-    return _analysisVideoController(
-      source['url'] as String,
-      tactical: source['tactical'] as bool,
-    );
+    // Нижняя панель теперь управляет только WebView-плеером AI-тактического ракурса.
+    // Нативный video_player здесь не используем, чтобы не блокировать Play.
+    return null;
   }
 
   void _activateMatchVideo(String key) {
@@ -9319,66 +12103,98 @@ String _translatePosition(String key) {
     }
   }
 
+  bool _isBottomPlaybackPlaying() {
+    return _embeddedAiPlayback.isPlaying;
+  }
+
+  bool _isBottomPlaybackReady() {
+    return _embeddedAiPlayback.isReady || _embeddedAiPlayback.attached;
+  }
+
+  Duration _currentBottomPlaybackDuration() {
+    return _embeddedAiPlayback.duration;
+  }
+
+  String _bottomPlaybackStatusText() {
+    if (_bottomVideoLoading) return 'Подготовка AI-тактического ракурса...';
+    if (!_isBottomPlaybackReady()) return 'AI-видео загружается...';
+    if (_liveAiStatus.trim().isNotEmpty && !_liveAiStatus.toLowerCase().contains('ожидает')) {
+      return _liveAiStatus;
+    }
+    return 'Готово к воспроизведению';
+  }
+
   Future<void> _toggleBottomMatchVideo() async {
     final source = _activeMatchVideoSourceForBottom();
-    final controller = _activeMatchVideoControllerForBottom();
+    if (source == null) return;
 
-    if (source == null || controller == null) return;
-    if (!controller.value.isInitialized) return;
+    final shouldPause = _isBottomPlaybackPlaying();
+
+    if (shouldPause) {
+      await _embeddedAiPlayback.pause();
+      if (mounted) {
+        setState(() {
+          _bottomVideoLoading = false;
+          _liveAiStatus = 'Пауза';
+        });
+      }
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _bottomVideoLoading = true;
+        _liveAiStatus = 'Подготовка AI-тактического ракурса...';
+      });
+    }
 
     _activateMatchVideo(source['key'] as String);
 
-    if (controller.value.isPlaying) {
-      await controller.pause();
-    } else {
-      await controller.setPlaybackSpeed(_matchPlaybackSpeed);
-      await controller.play();
+    try {
+      await _embeddedAiPlayback.setSpeed(_matchPlaybackSpeed);
+      // Управляем только тактическим AI-плеером. Внутренние кнопки в карточке скрыты.
+      await _embeddedAiPlayback.play();
+    } catch (e) {
+      developer.log('Bottom AI play failed', name: 'TeamMatchDetailScreen', error: e);
     }
 
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {
+        _bottomVideoLoading = false;
+      });
+    }
   }
 
   Future<void> _seekBottomMatchVideoRelative(int seconds) async {
-    final controller = _activeMatchVideoControllerForBottom();
-    if (controller == null || !controller.value.isInitialized) return;
-
-    final duration = controller.value.duration;
-    final current = controller.value.position;
+    final duration = _currentBottomPlaybackDuration();
+    final current = _currentBottomPlaybackPosition();
     final target = current + Duration(seconds: seconds);
     final safeTarget = target < Duration.zero
         ? Duration.zero
-        : target > duration
-            ? duration
-            : target;
+        : (duration.inMilliseconds > 0 && target > duration ? duration : target);
 
-    await controller.seekTo(safeTarget);
+    await _embeddedAiPlayback.seekTo(safeTarget);
     if (mounted) setState(() {});
   }
 
   Future<void> _seekBottomMatchVideoToFraction(double value) async {
-    final controller = _activeMatchVideoControllerForBottom();
-    if (controller == null || !controller.value.isInitialized) return;
-
-    final duration = controller.value.duration;
+    final duration = _currentBottomPlaybackDuration();
     if (duration.inMilliseconds <= 0) return;
 
     final targetMs = (duration.inMilliseconds * value).round();
-    await controller.seekTo(Duration(milliseconds: targetMs));
+    final target = Duration(milliseconds: targetMs);
+
+    await _embeddedAiPlayback.seekTo(target);
     if (mounted) setState(() {});
   }
 
   Future<void> _seekBottomMatchVideoTo(Duration position) async {
-    final controller = _activeMatchVideoControllerForBottom();
-    if (controller == null || !controller.value.isInitialized) return;
-
-    final duration = controller.value.duration;
+    final duration = _currentBottomPlaybackDuration();
     final safePosition = position < Duration.zero
         ? Duration.zero
-        : position > duration
-            ? duration
-            : position;
+        : (duration.inMilliseconds > 0 && position > duration ? duration : position);
 
-    await controller.seekTo(safePosition);
+    await _embeddedAiPlayback.seekTo(safePosition);
     if (mounted) setState(() {});
   }
 
@@ -9408,35 +12224,33 @@ String _translatePosition(String key) {
       return _aiReviewPlayback.position;
     }
 
-    final controller = _activeMatchVideoControllerForBottom();
-    if (controller != null && controller.value.isInitialized) {
-      return controller.value.position;
-    }
+    if (_embeddedAiPlayback.attached) return _embeddedAiPlayback.position;
 
     return Duration.zero;
   }
 
   Future<void> _cycleBottomMatchVideoSpeed() async {
-    final controller = _activeMatchVideoControllerForBottom();
-    if (controller == null || !controller.value.isInitialized) return;
-
     const speeds = [0.5, 1.0, 1.25, 1.5, 2.0];
     final currentIndex = speeds.indexWhere((s) => s == _matchPlaybackSpeed);
     final nextSpeed = speeds[(currentIndex + 1) % speeds.length];
 
     _matchPlaybackSpeed = nextSpeed;
-    await controller.setPlaybackSpeed(nextSpeed);
+    await _embeddedAiPlayback.setSpeed(nextSpeed);
 
     if (mounted) setState(() {});
   }
 
   void _openActiveMatchVideoFullscreen() {
-    final source = _activeMatchVideoSourceForBottom();
-    if (source == null) return;
+    final video = _firstUploadedMatchVideo(tactical: true);
+    final url = _analysisVideoUrl(video);
+    if (url == null || url.isEmpty) return;
 
-    _watchVideo(
-      source['url'] as String,
-      title: source['title'] as String,
+    final params = _analysisParamsForVideo(video ?? <String, dynamic>{}, fallbackUrl: url);
+    showAdvancedVideoAnalysisWindow(
+      context,
+      params,
+      externalPlaybackController: _embeddedAiPlayback,
+      hideControls: true,
     );
   }
 
@@ -9444,18 +12258,9 @@ String _translatePosition(String key) {
     VideoPlayerController controller,
     String key,
   ) async {
-    if (!controller.value.isInitialized) return;
-
-    _activateMatchVideo(key);
-
-    if (controller.value.isPlaying) {
-      await controller.pause();
-    } else {
-      await controller.setPlaybackSpeed(_matchPlaybackSpeed);
-      await controller.play();
-    }
-
-    if (mounted) setState(() {});
+    // Старый нативный плеер оставлен только для совместимости. Основное управление
+    // теперь идёт через нижнюю общую панель и WebView-плееры.
+    await _toggleBottomMatchVideo();
   }
 
   List<Map<String, dynamic>> _bottomMatchEvents() {
@@ -9835,8 +12640,8 @@ String _translatePosition(String key) {
                               '${_localVideoNotes.length}',
                               style: TextStyle(
                                 color: _mcSub,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w900,
+                                fontSize: 10.8,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                         ],
@@ -9938,7 +12743,12 @@ String _translatePosition(String key) {
               child: Padding(
                 padding: const EdgeInsets.all(14),
                 child: CustomPaint(
-                  painter: _MatchPitchNetworkPainter(vertical: true),
+                  painter: _MatchPitchNetworkPainter(
+                    vertical: true,
+                    livePositions: _liveAiPositions,
+                    liveTrails: _liveAiTrails,
+                    liveSpeeds: _liveAiSpeedsKmh,
+                  ),
                 ),
               ),
             ),
@@ -10013,6 +12823,10 @@ String _translatePosition(String key) {
 
 
   Widget _analysisVideoPane({required bool tactical}) {
+    if (!tactical) {
+      return _analysisMatchPlayersPane();
+    }
+
     final video = _firstUploadedMatchVideo(tactical: tactical);
     final url = _analysisVideoUrl(video);
 
@@ -10021,11 +12835,61 @@ String _translatePosition(String key) {
     }
 
     final title = tactical ? 'Тактический ракурс' : _formatVideoTitle(_s(video?['file_name']), 'Видео матча');
-    final thumb = _analysisVideoThumb(video);
-    final controller = _analysisVideoController(url, tactical: tactical);
-    final key = _analysisVideoControllerKey(url, tactical: tactical);
-    _activeAnalysisVideoKey ??= key;
-    final initFuture = _analysisVideoInitFutures[key];
+
+    if (!tactical) {
+      return _analysisMatchPlayersPane();
+    }
+
+    if (tactical) {
+      final params = _analysisParamsForVideo(video ?? <String, dynamic>{}, fallbackUrl: url);
+      return Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: _mcControl,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            AdvancedVideoAnalysisScreen(
+              params: params,
+              embedded: true,
+              modalWindow: false,
+              hideControls: true,
+              externalPlaybackController: _embeddedAiPlayback,
+              onAnalysisFrame: _onLiveAiFrame,
+              onStatusChanged: _onLiveAiStatus,
+            ),
+            Positioned(
+              right: 10,
+              top: 10,
+              child: InkWell(
+                onTap: () => showAdvancedVideoAnalysisWindow(
+                  context,
+                  params,
+                  externalPlaybackController: _embeddedAiPlayback,
+                  hideControls: true,
+                ),
+                borderRadius: BorderRadius.circular(999),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(.94),
+                    borderRadius: BorderRadius.circular(999),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(.16), blurRadius: 18, offset: const Offset(0, 8))],
+                  ),
+                  child: Icon(Icons.open_in_full_rounded, color: _mcText, size: 16),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final params = _analysisParamsForVideo(video ?? <String, dynamic>{}, fallbackUrl: url);
+    _activeAnalysisVideoKey ??= _analysisVideoControllerKey(url, tactical: false);
 
     return Container(
       clipBehavior: Clip.antiAlias,
@@ -10036,54 +12900,14 @@ String _translatePosition(String key) {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          FutureBuilder<void>(
-            future: initFuture,
-            builder: (context, snapshot) {
-              final initialized = snapshot.connectionState == ConnectionState.done && controller.value.isInitialized;
-
-              if (initialized) {
-                return GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    _toggleAnalysisVideoFromPane(controller, key);
-                  },
-                  onDoubleTap: () => _watchVideo(url, title: title),
-                  child: FittedBox(
-                    fit: BoxFit.cover,
-                    child: SizedBox(
-                      width: controller.value.size.width,
-                      height: controller.value.size.height,
-                      child: VideoPlayer(controller),
-                    ),
-                  ),
-                );
-              }
-
-              return Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (thumb != null)
-                    Image.network(
-                      thumb,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => CustomPaint(painter: _MatchVideoFieldPainter(tactical: tactical)),
-                    )
-                  else
-                    CustomPaint(painter: _MatchVideoFieldPainter(tactical: tactical)),
-                  Center(
-                    child: SizedBox(
-                      width: 28,
-                      height: 28,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        valueColor: AlwaysStoppedAnimation<Color>(_mcOnDark),
-                        backgroundColor: Colors.white.withOpacity(.25),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
+          AdvancedVideoAnalysisScreen(
+            params: params,
+            embedded: true,
+            modalWindow: false,
+            hideControls: true,
+            connectAi: false,
+            showAiOverlay: false,
+            externalPlaybackController: _embeddedMainVideoPlayback,
           ),
           Positioned.fill(
             child: IgnorePointer(
@@ -10095,7 +12919,7 @@ String _translatePosition(String key) {
                     colors: [
                       Colors.black.withOpacity(.08),
                       Colors.transparent,
-                      Colors.black.withOpacity(.54),
+                      Colors.black.withOpacity(.52),
                     ],
                   ),
                 ),
@@ -10110,105 +12934,44 @@ String _translatePosition(String key) {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
-                    color: tactical ? _mcGreen : const Color(0xFFD64545),
+                    color: const Color(0xFFD64545),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Text(
-                    tactical ? 'ТАКТИКА' : 'ВИДЕО',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w900,
-                    ),
+                  child: const Text(
+                    'ВИДЕО',
+                    style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900),
                   ),
                 ),
                 const SizedBox(width: 6),
                 ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 160),
+                  constraints: const BoxConstraints(maxWidth: 170),
                   child: Text(
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w900,
-                    ),
+                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900),
                   ),
                 ),
               ],
             ),
           ),
           Positioned(
-            left: 10,
             right: 10,
-            bottom: 8,
-            child: Row(
-              children: [
-                ValueListenableBuilder<VideoPlayerValue>(
-                  valueListenable: controller,
-                  builder: (_, value, __) {
-                    return InkWell(
-                      onTap: value.isInitialized
-                          ? () {
-                              _toggleAnalysisVideoFromPane(controller, key);
-                            }
-                          : null,
-                      borderRadius: BorderRadius.circular(99),
-                      child: Icon(
-                        value.isPlaying ? Icons.pause_circle_filled_rounded : Icons.play_circle_fill_rounded,
-                        color: Colors.white.withOpacity(.92),
-                        size: 25,
-                      ),
-                    );
-                  },
+            top: 10,
+            child: InkWell(
+              onTap: () => _watchVideo(url, title: title),
+              borderRadius: BorderRadius.circular(999),
+              child: Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(.94),
+                  borderRadius: BorderRadius.circular(999),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(.16), blurRadius: 18, offset: const Offset(0, 8))],
                 ),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(99),
-                    child: SizedBox(
-                      height: 4,
-                      child: controller.value.isInitialized
-                          ? VideoProgressIndicator(
-                              controller,
-                              allowScrubbing: true,
-                              colors: VideoProgressColors(
-                                playedColor: Colors.white,
-                                bufferedColor: Colors.white.withOpacity(.42),
-                                backgroundColor: Colors.white.withOpacity(.22),
-                              ),
-                            )
-                          : Container(color: Colors.white.withOpacity(.22)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 7),
-                InkWell(
-                  onTap: () {
-                    _activateMatchVideo(key);
-                    _watchVideo(url, title: title);
-                  },
-                  borderRadius: BorderRadius.circular(99),
-                  child: Icon(Icons.fullscreen_rounded, color: Colors.white.withOpacity(.86), size: 20),
-                ),
-              ],
+                child: Icon(Icons.open_in_full_rounded, color: _mcText, size: 16),
+              ),
             ),
-          ),
-          ValueListenableBuilder<VideoPlayerValue>(
-            valueListenable: controller,
-            builder: (_, value, __) {
-              if (value.isPlaying) return const SizedBox.shrink();
-              return Center(
-                child: IgnorePointer(
-                  child: Icon(
-                    Icons.play_circle_fill_rounded,
-                    color: Colors.white.withOpacity(.68),
-                    size: 54,
-                  ),
-                ),
-              );
-            },
           ),
         ],
       ),
@@ -10303,7 +13066,13 @@ String _translatePosition(String key) {
   Widget _analysisKeyStat(String label, String value) => Padding(padding: const EdgeInsets.only(bottom: 4), child: Row(children: [Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: 10.5, fontWeight: FontWeight.w700))), const SizedBox(width: 8), Text(value, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w900))]));
 
   Widget _analysisEventTimeline({required bool wide}) {
-    final rows = _timelineRows();
+    final liveRows = _liveAiEvents.map((e) => _analysisEventLine(
+          _s(e['minute']),
+          e['icon'] is IconData ? e['icon'] as IconData : Icons.bolt_rounded,
+          '${_s(e['title'])}${_s(e['subtitle']).isNotEmpty ? ' · ${_s(e['subtitle'])}' : ''}',
+          e['color'] is Color ? e['color'] as Color : _mcGreen,
+        )).toList();
+    final rows = liveRows.isNotEmpty ? liveRows : _timelineRows();
     final fallback = [_analysisEventLine('12’', Icons.sports_soccer_rounded, '1-0 Бахар Ф.', _mcGreen), _analysisEventLine('27’', Icons.sports_soccer_rounded, '1-1 соперник', _mcGreen), _analysisEventLine('45+2’', Icons.sports_soccer_rounded, '2-1 Лисакович Е.', _mcGreen), _analysisEventLine('61’', Icons.crop_square_rounded, 'Жёлтая карточка', _mcYellow), _analysisEventLine('74’', Icons.swap_vert_rounded, 'Замена', _mcBlue)];
     final list = rows.isEmpty ? fallback : rows.take(wide ? 8 : 5).toList();
     if (!wide) return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: list.map((e) => Expanded(child: e)).toList());
@@ -10325,23 +13094,37 @@ String _translatePosition(String key) {
   Widget _analysisNumberCircle(int number) => Container(width: 22, height: 22, alignment: Alignment.center, decoration: BoxDecoration(shape: BoxShape.circle, color: _mcBlue, border: Border.all(color: Colors.white.withOpacity(.5))), child: Text('$number', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900)));
 
   Widget _matchAnalysisBottomTimeline() {
-    return AnimatedBuilder(
-      animation: Listenable.merge([_tabController, _aiReviewPlayback]),
-      builder: (context, _) {
-        final isAiTab = _safeMatchTabIndex(_tabController.index) == 5;
-        if (isAiTab) return _aiMatchReviewBottomTimeline();
-
-        return _matchAnalysisVideoBottomTimeline();
-      },
+    return Container(
+      height: 64,
+      decoration: BoxDecoration(
+        color: _mcControl,
+        border: Border(top: BorderSide(color: _mcControlLine.withOpacity(.92))),
+      ),
+      child: Row(
+        children: [
+          const Spacer(),
+          InkWell(
+            onTap: _openBottomMatchEventsSheet,
+            borderRadius: BorderRadius.circular(4),
+            child: _analysisBottomButton('События'),
+          ),
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: _openBottomMatchNotesSheet,
+            borderRadius: BorderRadius.circular(4),
+            child: _analysisBottomButton('Заметки'),
+          ),
+          const SizedBox(width: 18),
+        ],
+      ),
     );
   }
 
 
   Widget _matchAnalysisVideoBottomTimeline() {
     final source = _activeMatchVideoSourceForBottom();
-    final controller = _activeMatchVideoControllerForBottom();
 
-    if (source == null || controller == null) {
+    if (source == null) {
       return Container(
         height: 64,
         decoration: BoxDecoration(
@@ -10353,44 +13136,33 @@ String _translatePosition(String key) {
             const SizedBox(width: 24),
             Icon(Icons.video_file_outlined, color: _mcOnDarkSub, size: 22),
             const SizedBox(width: 10),
-            Text(
-              'Видео матча не загружено',
-              style: TextStyle(
-                color: _mcOnDarkSub,
-                fontSize: 11.5,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
+            Text('Видео матча не загружено', style: TextStyle(color: _mcOnDarkSub, fontSize: 11.5, fontWeight: FontWeight.w900)),
             const Spacer(),
-            InkWell(
-              onTap: _openBottomMatchEventsSheet,
-              borderRadius: BorderRadius.circular(4),
-              child: _analysisBottomButton('События'),
-            ),
+            InkWell(onTap: _openBottomMatchEventsSheet, borderRadius: BorderRadius.circular(4), child: _analysisBottomButton('События')),
             const SizedBox(width: 8),
-            InkWell(
-              onTap: _openBottomMatchNotesSheet,
-              borderRadius: BorderRadius.circular(4),
-              child: _analysisBottomButton('Заметки'),
-            ),
+            InkWell(onTap: _openBottomMatchNotesSheet, borderRadius: BorderRadius.circular(4), child: _analysisBottomButton('Заметки')),
             const SizedBox(width: 18),
           ],
         ),
       );
     }
 
-    return ValueListenableBuilder<VideoPlayerValue>(
-      valueListenable: controller,
-      builder: (context, value, _) {
-        final initialized = value.isInitialized;
-        final duration = initialized ? value.duration : Duration.zero;
-        final position = initialized ? value.position : Duration.zero;
+    final listenables = <Listenable>[
+      _embeddedAiPlayback,
+    ];
+
+    return AnimatedBuilder(
+      animation: Listenable.merge(listenables),
+      builder: (context, _) {
+        final duration = _currentBottomPlaybackDuration();
+        final position = _currentBottomPlaybackPosition();
         final hasDuration = duration.inMilliseconds > 0;
         final progress = hasDuration
-            ? (position.inMilliseconds / duration.inMilliseconds)
-                .clamp(0.0, 1.0)
-                .toDouble()
+            ? (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0).toDouble()
             : 0.0;
+        final ready = _isBottomPlaybackReady();
+        final playing = _isBottomPlaybackPlaying();
+        final statusText = _bottomPlaybackStatusText();
 
         return Container(
           height: 64,
@@ -10405,68 +13177,69 @@ String _translatePosition(String key) {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _aiPlayerIconButton(
-                      icon: Icons.fast_rewind_rounded,
-                      onTap: initialized ? () { _seekBottomMatchVideoRelative(-10); } : null,
-                    ),
+                    _aiPlayerIconButton(icon: Icons.fast_rewind_rounded, onTap: ready ? () { _seekBottomMatchVideoRelative(-10); } : null),
                     const SizedBox(width: 12),
                     _aiPlayerIconButton(
-                      icon: value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                      icon: playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
                       large: true,
                       filled: true,
-                      onTap: initialized ? _toggleBottomMatchVideo : null,
+                      // Play разрешён сразу: если видео/AI ещё грузятся, они стартуют после canplay.
+                      onTap: _toggleBottomMatchVideo,
                     ),
                     const SizedBox(width: 12),
-                    _aiPlayerIconButton(
-                      icon: Icons.fast_forward_rounded,
-                      onTap: initialized ? () { _seekBottomMatchVideoRelative(10); } : null,
-                    ),
+                    _aiPlayerIconButton(icon: Icons.fast_forward_rounded, onTap: ready ? () { _seekBottomMatchVideoRelative(10); } : null),
                     const SizedBox(width: 14),
                     InkWell(
                       borderRadius: BorderRadius.circular(10),
-                      onTap: initialized ? () { _cycleBottomMatchVideoSpeed(); } : null,
+                      onTap: () { _cycleBottomMatchVideoSpeed(); },
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
                         child: Text(
                           '${_matchPlaybackSpeed.toStringAsFixed(_matchPlaybackSpeed == _matchPlaybackSpeed.roundToDouble() ? 0 : 2)}x',
-                          style: TextStyle(
-                            color: initialized ? _mcOnDarkSub : _mcOnDarkSub.withOpacity(.45),
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w900,
-                          ),
+                          style: TextStyle(color: _mcOnDarkSub, fontSize: 11.5, fontWeight: FontWeight.w900),
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
-              Text(
-                _formatMatchPlayerTime(position),
-                style: TextStyle(color: _mcOnDarkSub, fontSize: 10.5, fontWeight: FontWeight.w900),
-              ),
+              Text(_formatMatchPlayerTime(position), style: TextStyle(color: _mcOnDarkSub, fontSize: 10.5, fontWeight: FontWeight.w900)),
               const SizedBox(width: 10),
               Expanded(
-                child: SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    trackHeight: 3,
-                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
-                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
-                  ),
-                  child: Slider(
-                    value: progress,
-                    min: 0,
-                    max: 1,
-                    onChanged: initialized && hasDuration ? (newValue) { _seekBottomMatchVideoToFraction(newValue); } : null,
-                    activeColor: Colors.white,
-                    inactiveColor: Colors.white.withOpacity(.18),
-                  ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        trackHeight: 3,
+                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+                        overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                      ),
+                      child: Slider(
+                        value: progress,
+                        min: 0,
+                        max: 1,
+                        onChanged: hasDuration ? (newValue) { _seekBottomMatchVideoToFraction(newValue); } : null,
+                        activeColor: Colors.white,
+                        inactiveColor: Colors.white.withOpacity(.18),
+                      ),
+                    ),
+                    if (!ready || _bottomVideoLoading)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 3, top: 0),
+                        child: Text(
+                          statusText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: _mcOnDarkSub.withOpacity(.82), fontSize: 9.5, fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                  ],
                 ),
               ),
               const SizedBox(width: 10),
-              Text(
-                _formatMatchPlayerTime(duration),
-                style: TextStyle(color: _mcOnDarkSub, fontSize: 10.5, fontWeight: FontWeight.w900),
-              ),
+              Text(hasDuration ? _formatMatchPlayerTime(duration) : '00:00', style: TextStyle(color: _mcOnDarkSub, fontSize: 10.5, fontWeight: FontWeight.w900)),
               const SizedBox(width: 14),
               InkWell(onTap: _openBottomMatchEventsSheet, borderRadius: BorderRadius.circular(4), child: _analysisBottomButton('События')),
               const SizedBox(width: 8),
@@ -10474,8 +13247,8 @@ String _translatePosition(String key) {
               const SizedBox(width: 14),
               IconButton(
                 tooltip: 'Во весь экран',
-                onPressed: initialized ? _openActiveMatchVideoFullscreen : null,
-                icon: Icon(Icons.fullscreen_rounded, color: initialized ? _mcOnDark : _mcOnDarkSub.withOpacity(.45), size: 24),
+                onPressed: _openActiveMatchVideoFullscreen,
+                icon: Icon(Icons.fullscreen_rounded, color: _mcOnDark, size: 24),
               ),
               const SizedBox(width: 10),
             ],
@@ -10650,7 +13423,7 @@ String _translatePosition(String key) {
 
         final body = loading
             ? Container(
-                color: useWorkspace ? _mcBg : bg,
+                color: Colors.white,
                 child: Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -10699,13 +13472,13 @@ String _translatePosition(String key) {
 
         if (widget.embedded) {
           return Container(
-            color: bg,
+            color: Colors.white,
             child: body,
           );
         }
 
         return Scaffold(
-          backgroundColor: bg,
+          backgroundColor: Colors.white,
           body: body,
           bottomNavigationBar: isPhone ? _buildMatchMobileBottomMenu(context) : null,
         );
@@ -10805,8 +13578,16 @@ class _MatchLoadBarsPainter extends CustomPainter {
 
 class _MatchPitchNetworkPainter extends CustomPainter {
   final bool vertical;
+  final Map<int, Offset> livePositions;
+  final Map<int, List<Offset>> liveTrails;
+  final Map<int, double> liveSpeeds;
 
-  const _MatchPitchNetworkPainter({this.vertical = false});
+  const _MatchPitchNetworkPainter({
+    this.vertical = false,
+    this.livePositions = const {},
+    this.liveTrails = const {},
+    this.liveSpeeds = const {},
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -10816,51 +13597,13 @@ class _MatchPitchNetworkPainter extends CustomPainter {
     }
 
     final field = Rect.fromLTWH(6, 8, size.width - 12, size.height - 16);
-    canvas.drawRect(field, Paint()..color = const Color(0xFF08751B));
-    for (int i = 0; i < 9; i++) {
-      canvas.drawRect(
-        Rect.fromLTWH(
-          field.left,
-          field.top + field.height * i / 9,
-          field.width,
-          field.height / 18,
-        ),
-        Paint()..color = const Color(0xFFFFFFFF).withOpacity(.08),
-      );
+    _paintField(canvas, field, verticalMode: false);
+    if (livePositions.isNotEmpty) {
+      _paintLivePlayers(canvas, field);
+      return;
     }
-    final line = Paint()
-      ..color = const Color(0xFFFFFFFF)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4;
-    canvas.drawRect(field, line);
-    canvas.drawLine(
-      Offset(field.center.dx, field.top),
-      Offset(field.center.dx, field.bottom),
-      line,
-    );
-    canvas.drawCircle(field.center, field.height * .14, line);
-    canvas.drawRect(
-      Rect.fromLTWH(
-        field.left,
-        field.top + field.height * .28,
-        field.width * .16,
-        field.height * .44,
-      ),
-      line,
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(
-        field.right - field.width * .16,
-        field.top + field.height * .28,
-        field.width * .16,
-        field.height * .44,
-      ),
-      line,
-    );
-    Offset p(double x, double y) => Offset(
-          field.left + field.width * x,
-          field.top + field.height * y,
-        );
+
+    Offset p(double x, double y) => Offset(field.left + field.width * x, field.top + field.height * y);
     final pts = <int, Offset>{
       77: p(.24, .32),
       10: p(.47, .35),
@@ -10874,42 +13617,43 @@ class _MatchPitchNetworkPainter extends CustomPainter {
       2: p(.75, .72),
       30: p(.57, .78),
     };
-    final pass = Paint()
-      ..color = const Color(0xFFEBD33D).withOpacity(.86)
-      ..strokeWidth = 1.6;
-    for (final pair in const [
-      [77, 10],
-      [10, 25],
-      [25, 21],
-      [10, 8],
-      [8, 21],
-      [77, 6],
-      [6, 4],
-      [4, 3],
-      [3, 2],
-      [4, 55],
-      [55, 30],
-      [30, 2],
-      [10, 4],
-      [6, 10],
-    ]) {
-      canvas.drawLine(pts[pair[0]]!, pts[pair[1]]!, pass);
-    }
+    _paintStaticConnections(canvas, pts);
     _paintPlayerDots(canvas, pts, 10, 8.5);
   }
 
   void _paintVertical(Canvas canvas, Size size) {
     final field = Rect.fromLTWH(6, 8, size.width - 12, size.height - 16);
-    canvas.drawRect(field, Paint()..color = const Color(0xFF08751B));
+    _paintField(canvas, field, verticalMode: true);
+    if (livePositions.isNotEmpty) {
+      _paintLivePlayers(canvas, field);
+      return;
+    }
 
-    for (int i = 0; i < 11; i++) {
+    Offset p(double x, double y) => Offset(field.left + field.width * y, field.top + field.height * x);
+    final pts = <int, Offset>{
+      77: p(.24, .32),
+      10: p(.47, .35),
+      25: p(.58, .20),
+      8: p(.70, .34),
+      21: p(.83, .28),
+      6: p(.36, .54),
+      4: p(.51, .55),
+      3: p(.67, .60),
+      55: p(.44, .72),
+      2: p(.75, .72),
+      30: p(.57, .78),
+    };
+    _paintStaticConnections(canvas, pts);
+    final dotRadius = min(10.0, max(7.0, min(size.width, size.height) * .046));
+    _paintPlayerDots(canvas, pts, dotRadius, 8.2);
+  }
+
+  void _paintField(Canvas canvas, Rect field, {required bool verticalMode}) {
+    canvas.drawRect(field, Paint()..color = const Color(0xFF08751B));
+    final stripeCount = verticalMode ? 11 : 9;
+    for (int i = 0; i < stripeCount; i++) {
       canvas.drawRect(
-        Rect.fromLTWH(
-          field.left,
-          field.top + field.height * i / 11,
-          field.width,
-          field.height / 22,
-        ),
+        Rect.fromLTWH(field.left, field.top + field.height * i / stripeCount, field.width, field.height / (stripeCount * 2)),
         Paint()..color = const Color(0xFFFFFFFF).withOpacity(.08),
       );
     }
@@ -10918,110 +13662,88 @@ class _MatchPitchNetworkPainter extends CustomPainter {
       ..color = const Color(0xFFFFFFFF)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.35;
-
     canvas.drawRect(field, line);
-    canvas.drawLine(
-      Offset(field.left, field.center.dy),
-      Offset(field.right, field.center.dy),
-      line,
-    );
-    canvas.drawCircle(field.center, min(field.width, field.height) * .22, line);
 
-    final penaltyW = field.width * .68;
-    final penaltyH = field.height * .15;
-    final sixW = field.width * .38;
-    final sixH = field.height * .07;
-
-    canvas.drawRect(
-      Rect.fromLTWH(field.center.dx - penaltyW / 2, field.top, penaltyW, penaltyH),
-      line,
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(field.center.dx - penaltyW / 2, field.bottom - penaltyH, penaltyW, penaltyH),
-      line,
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(field.center.dx - sixW / 2, field.top, sixW, sixH),
-      line,
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(field.center.dx - sixW / 2, field.bottom - sixH, sixW, sixH),
-      line,
-    );
-
-    Offset p(double x, double y) => Offset(
-          field.left + field.width * y,
-          field.top + field.height * x,
-        );
-
-    final pts = <int, Offset>{
-      77: p(.24, .32),
-      10: p(.47, .35),
-      25: p(.58, .20),
-      8: p(.70, .34),
-      21: p(.83, .28),
-      6: p(.36, .54),
-      4: p(.51, .55),
-      3: p(.67, .60),
-      55: p(.44, .72),
-      2: p(.75, .72),
-      30: p(.57, .78),
-    };
-
-    final pass = Paint()
-      ..color = const Color(0xFFEBD33D).withOpacity(.88)
-      ..strokeWidth = 1.55;
-    for (final pair in const [
-      [77, 10],
-      [10, 25],
-      [25, 21],
-      [10, 8],
-      [8, 21],
-      [77, 6],
-      [6, 4],
-      [4, 3],
-      [3, 2],
-      [4, 55],
-      [55, 30],
-      [30, 2],
-      [10, 4],
-      [6, 10],
-    ]) {
-      canvas.drawLine(pts[pair[0]]!, pts[pair[1]]!, pass);
+    if (verticalMode) {
+      canvas.drawLine(Offset(field.left, field.center.dy), Offset(field.right, field.center.dy), line);
+      canvas.drawCircle(field.center, min(field.width, field.height) * .22, line);
+      final penaltyW = field.width * .68;
+      final penaltyH = field.height * .15;
+      final sixW = field.width * .38;
+      final sixH = field.height * .07;
+      canvas.drawRect(Rect.fromLTWH(field.center.dx - penaltyW / 2, field.top, penaltyW, penaltyH), line);
+      canvas.drawRect(Rect.fromLTWH(field.center.dx - penaltyW / 2, field.bottom - penaltyH, penaltyW, penaltyH), line);
+      canvas.drawRect(Rect.fromLTWH(field.center.dx - sixW / 2, field.top, sixW, sixH), line);
+      canvas.drawRect(Rect.fromLTWH(field.center.dx - sixW / 2, field.bottom - sixH, sixW, sixH), line);
+    } else {
+      canvas.drawLine(Offset(field.center.dx, field.top), Offset(field.center.dx, field.bottom), line);
+      canvas.drawCircle(field.center, field.height * .14, line);
+      canvas.drawRect(Rect.fromLTWH(field.left, field.top + field.height * .28, field.width * .16, field.height * .44), line);
+      canvas.drawRect(Rect.fromLTWH(field.right - field.width * .16, field.top + field.height * .28, field.width * .16, field.height * .44), line);
     }
-
-    final dotRadius = min(10.0, max(7.0, min(size.width, size.height) * .046));
-    _paintPlayerDots(canvas, pts, dotRadius, 8.2);
   }
 
-  void _paintPlayerDots(
-    Canvas canvas,
-    Map<int, Offset> pts,
-    double radius,
-    double fontSize,
-  ) {
-    final tp = TextPainter(
-      textDirection: TextDirection.ltr,
-      textAlign: TextAlign.center,
-    );
+  void _paintStaticConnections(Canvas canvas, Map<int, Offset> pts) {
+    final pass = Paint()
+      ..color = const Color(0xFFEBD33D).withOpacity(.86)
+      ..strokeWidth = 1.55;
+    for (final pair in const [
+      [77, 10], [10, 25], [25, 21], [10, 8], [8, 21], [77, 6], [6, 4],
+      [4, 3], [3, 2], [4, 55], [55, 30], [30, 2], [10, 4], [6, 10],
+    ]) {
+      if (pts[pair[0]] != null && pts[pair[1]] != null) canvas.drawLine(pts[pair[0]]!, pts[pair[1]]!, pass);
+    }
+  }
+
+  void _paintLivePlayers(Canvas canvas, Rect field) {
+    final trailPaint = Paint()
+      ..color = const Color(0xFF00A750).withOpacity(.46)
+      ..strokeWidth = 1.8
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    Offset mapPoint(Offset p) => Offset(field.left + field.width * p.dx, field.top + field.height * p.dy);
+
+    for (final entry in liveTrails.entries) {
+      final points = entry.value.map(mapPoint).toList();
+      if (points.length < 2) continue;
+      final path = Path()..moveTo(points.first.dx, points.first.dy);
+      for (final point in points.skip(1)) {
+        path.lineTo(point.dx, point.dy);
+      }
+      canvas.drawPath(path, trailPaint);
+    }
+
+    final tp = TextPainter(textDirection: TextDirection.ltr, textAlign: TextAlign.center);
+    for (final entry in livePositions.entries) {
+      final id = entry.key;
+      final pos = mapPoint(entry.value);
+      final speed = liveSpeeds[id] ?? 0.0;
+      final color = speed >= 22 ? const Color(0xFFFFB000) : const Color(0xFF00A750);
+      final radius = speed >= 22 ? 7.2 : 6.2;
+      canvas.drawCircle(pos, radius + 2.4, Paint()..color = Colors.white.withOpacity(.94));
+      canvas.drawCircle(pos, radius, Paint()..color = color);
+      final outline = Paint()
+        ..color = const Color(0xFF111827).withOpacity(.20)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1;
+      canvas.drawCircle(pos, radius, outline);
+      tp.text = TextSpan(text: '$id', style: const TextStyle(color: Colors.white, fontSize: 8.2, fontWeight: FontWeight.w900));
+      tp.layout();
+      tp.paint(canvas, pos - Offset(tp.width / 2, tp.height / 2));
+    }
+  }
+
+  void _paintPlayerDots(Canvas canvas, Map<int, Offset> pts, double radius, double fontSize) {
+    final tp = TextPainter(textDirection: TextDirection.ltr, textAlign: TextAlign.center);
     pts.forEach((n, o) {
       canvas.drawCircle(o, radius, Paint()..color = const Color(0xFF1D7DE0));
-      canvas.drawCircle(
-        o,
-        radius,
-        Paint()
-          ..color = const Color(0xFFFFFFFF).withOpacity(.90)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.2,
-      );
-      tp.text = TextSpan(
-        text: '$n',
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: fontSize,
-          fontWeight: FontWeight.w900,
-        ),
-      );
+      final stroke = Paint()
+        ..color = const Color(0xFFFFFFFF).withOpacity(.90)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2;
+      canvas.drawCircle(o, radius, stroke);
+      tp.text = TextSpan(text: '$n', style: TextStyle(color: Colors.white, fontSize: fontSize, fontWeight: FontWeight.w900));
       tp.layout();
       tp.paint(canvas, o - Offset(tp.width / 2, tp.height / 2));
     });
@@ -11029,7 +13751,10 @@ class _MatchPitchNetworkPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _MatchPitchNetworkPainter oldDelegate) =>
-      oldDelegate.vertical != vertical;
+      oldDelegate.vertical != vertical ||
+      oldDelegate.livePositions != livePositions ||
+      oldDelegate.liveTrails != liveTrails ||
+      oldDelegate.liveSpeeds != liveSpeeds;
 }
 
 class _MatchVideoFieldPainter extends CustomPainter {
@@ -11334,6 +14059,8 @@ class _OverviewMetricData {
   });
 }
 
+
+
 class _MatchDetailNavItem {
   final String title;
   final String subtitle;
@@ -11606,7 +14333,7 @@ class _CmrToolbarButton extends StatelessWidget {
     final child = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 19, color: filled ? Colors.white : primary),
+        Icon(icon, size: 16, color: filled ? Colors.white : primary),
         if (label.isNotEmpty) ...[
           const SizedBox(width: 7),
           Flexible(
@@ -11616,8 +14343,8 @@ class _CmrToolbarButton extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: filled ? Colors.white : const Color(0xFF101828),
-                fontWeight: FontWeight.w900,
-                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                fontSize: 11.2,
               ),
             ),
           ),
@@ -11631,8 +14358,8 @@ class _CmrToolbarButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Container(
-          height: 42,
-          padding: EdgeInsets.symmetric(horizontal: label.isEmpty ? 12 : 14),
+          height: 36,
+          padding: EdgeInsets.symmetric(horizontal: label.isEmpty ? 10 : 12),
           decoration: BoxDecoration(
             color: filled ? primary : const Color(0xFFF6F8FA),
             borderRadius: BorderRadius.circular(14),
@@ -11701,70 +14428,49 @@ class _MatchSidebarButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = active ? primary : const Color(0xFF667085);
-    final titleColor = active ? const Color(0xFF101828) : const Color(0xFF101828);
+    final bgColor = active ? const Color(0xFFF3FBF7) : Colors.transparent;
+    final iconColor = active ? const Color(0xFF28A86B) : const Color(0xFF6B7280);
+    final textColor = active ? const Color(0xFF0B0F14) : const Color(0xFF344054);
 
     return Material(
-      color: Colors.transparent,
+      color: bgColor,
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOut,
+          height: 34,
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
-            color: active ? const Color(0xFFF2F7F4) : Colors.transparent,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(12),
+            border: active ? Border.all(color: const Color(0xFFDCEFE5), width: 1) : null,
           ),
           child: Row(
             children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: active ? Colors.white : const Color(0xFFF6F8FA),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(item.icon, color: fg, size: 18),
-              ),
+              Icon(item.icon, color: iconColor, size: 18),
               const SizedBox(width: 10),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w900,
-                        color: titleColor,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      item.subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
-                        color: active ? primary : const Color(0xFF667085),
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  item.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 10.8,
+                    height: 1,
+                    fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+                    letterSpacing: -.12,
+                  ),
                 ),
               ),
               if (active)
                 Container(
-                  width: 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: primary,
-                    shape: BoxShape.circle,
-                  ),
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(color: Color(0xFF28A86B), shape: BoxShape.circle),
                 ),
             ],
           ),
@@ -11780,6 +14486,7 @@ class _VideoTile extends StatelessWidget {
   final String url;
   final VoidCallback onWatch;
   final VoidCallback? onAnalyze;
+  final VoidCallback onDetails;
   final VoidCallback? onDelete;
   final Color primary;
 
@@ -11789,153 +14496,162 @@ class _VideoTile extends StatelessWidget {
     required this.url,
     required this.onWatch,
     this.onAnalyze,
+    required this.onDetails,
     this.onDelete,
     required this.primary,
   });
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF6F8FA),
-            borderRadius: BorderRadius.circular(22),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                height: 116,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF2F7F4),
-                  borderRadius: BorderRadius.circular(18),
+    final cleanSubtitle = (subtitle ?? '').trim();
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF7F9FA),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF8F3),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(Icons.play_arrow_rounded, color: primary, size: 22),
                 ),
-                child: Stack(
-                  children: [
-                    Positioned(
-                      right: -18,
-                      top: -24,
-                      child: Container(
-                        width: 108,
-                        height: 108,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: primary.withOpacity(0.08),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF101828),
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12.8,
+                          height: 1.12,
                         ),
                       ),
-                    ),
-                    Center(
-                      child: Container(
-                        width: 58,
-                        height: 58,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(Icons.play_arrow_rounded, color: primary, size: 34),
-                      ),
-                    ),
-                    if (onDelete != null)
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: PopupMenuButton<String>(
-                          tooltip: 'Действия',
-                          onSelected: (value) {
-                            if (value == 'delete') onDelete?.call();
-                          },
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          itemBuilder: (_) => const [
-                            PopupMenuItem(
-                              value: 'delete',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.delete_outline_rounded, color: Colors.red, size: 19),
-                                  SizedBox(width: 8),
-                                  Text('Удалить'),
-                                ],
-                              ),
-                            ),
-                          ],
-                          child: Container(
-                            width: 34,
-                            height: 34,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(Icons.more_horiz_rounded, size: 20),
+                      if (cleanSubtitle.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          cleanSubtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF667085),
+                            fontSize: 10.8,
+                            height: 1.15,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Color(0xFF101828),
-                  fontWeight: FontWeight.w900,
-                  fontSize: 14.5,
-                  height: 1.15,
-                ),
-              ),
-              if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
-                const SizedBox(height: 5),
-                Text(
-                  subtitle!,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF667085),
-                    fontSize: 12,
-                    height: 1.2,
-                    fontWeight: FontWeight.w700,
+                      ],
+                    ],
                   ),
                 ),
+                const SizedBox(width: 8),
+                _VideoIconButton(
+                  icon: Icons.tune_rounded,
+                  tooltip: 'Детали',
+                  onTap: onDetails,
+                  color: const Color(0xFF0B0F14),
+                ),
               ],
-              const SizedBox(height: 12),
-              Row(
-                children: [
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: _VideoActionPill(
+                    label: "Смотреть",
+                    icon: Icons.visibility_outlined,
+                    onTap: onWatch,
+                    foreground: primary,
+                    background: Colors.white,
+                    borderColor: primary.withOpacity(0.14),
+                    expanded: true,
+                  ),
+                ),
+                if (onAnalyze != null) ...[
+                  const SizedBox(width: 8),
                   Expanded(
                     child: _VideoActionPill(
-                      label: "Смотреть",
-                      icon: Icons.visibility_outlined,
-                      onTap: onWatch,
-                      foreground: primary,
-                      background: Colors.white,
-                      borderColor: primary.withOpacity(0.20),
+                      label: "Анализ",
+                      icon: Icons.analytics_outlined,
+                      onTap: onAnalyze!,
+                      foreground: Colors.white,
+                      background: primary,
+                      borderColor: primary,
                       expanded: true,
                     ),
                   ),
-                  if (onAnalyze != null) ...[
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _VideoActionPill(
-                        label: "Анализ",
-                        icon: Icons.analytics_outlined,
-                        onTap: onAnalyze!,
-                        foreground: Colors.white,
-                        background: primary,
-                        borderColor: primary,
-                        expanded: true,
-                      ),
-                    ),
-                  ],
                 ],
-              ),
-            ],
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _VideoActionPill(
+                    label: "Детали",
+                    icon: Icons.tune_rounded,
+                    onTap: onDetails,
+                    foreground: const Color(0xFF0B0F14),
+                    background: Colors.white,
+                    borderColor: const Color(0xFFE8EEF2),
+                    expanded: true,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _VideoIconButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  final Color color;
+
+  const _VideoIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, size: 16, color: color),
           ),
         ),
       ),
@@ -11971,18 +14687,18 @@ class _VideoActionPill extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Container(
-          height: 38,
+          height: 34,
           width: expanded ? double.infinity : null,
-          padding: const EdgeInsets.symmetric(horizontal: 11),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            
+            border: Border.all(color: borderColor, width: 1),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: expanded ? MainAxisSize.max : MainAxisSize.min,
             children: [
-              Icon(icon, size: 16, color: foreground),
+              Icon(icon, size: 15, color: foreground),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
@@ -11991,8 +14707,8 @@ class _VideoActionPill extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: foreground,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
+                    fontSize: 11.3,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
@@ -12184,6 +14900,13 @@ class ChunkUploadService {
     final ext =
         fileName.contains('.') ? fileName.split('.').last.toLowerCase() : 'mp4';
 
+    if (!['mp4', 'mov', 'm4v', 'avi'].contains(ext)) {
+      return {
+        'success': false,
+        'message': 'Неподдерживаемый формат видео. Поддерживаются MP4, MOV, M4V и AVI. AVI после загрузки конвертируется сервером в MP4.',
+      };
+    }
+
     const int chunkSize = 1 * 1024 * 1024;
     final int totalChunks = (fileLength / chunkSize).ceil();
 
@@ -12239,26 +14962,39 @@ class ChunkUploadService {
         raf.setPositionSync(start);
         final chunkBytes = raf.readSync(currentSize);
 
-        final formData = FormData.fromMap({
-          "upload_id": uploadId,
-          "match_id": matchId.toString(),
-          "team_id": teamId.toString(),
-          "coach_id": coachId.toString(),
-          "file_name": fileName,
-          "file_ext": ext,
-          "file_size": fileLength.toString(),
-          "chunk_index": chunkIndex.toString(),
-          "total_chunks": totalChunks.toString(),
-          "chunk_size": currentSize.toString(),
-          "notes": notes,
-          "video_type": videoType,
-          "chunk": MultipartFile.fromBytes(
-            chunkBytes,
-            filename: "chunk_$chunkIndex.part",
-          ),
-        });
+        FormData buildChunkFormData() {
+          return FormData.fromMap({
+            "upload_id": uploadId,
+            "match_id": matchId.toString(),
+            "team_id": teamId.toString(),
+            "coach_id": coachId.toString(),
+            "file_name": fileName,
+            "file_ext": ext,
+            "file_size": fileLength.toString(),
+            "chunk_index": chunkIndex.toString(),
+            "total_chunks": totalChunks.toString(),
+            "chunk_size": currentSize.toString(),
+            "notes": notes,
+            "video_type": videoType,
+            "chunk": MultipartFile.fromBytes(
+              chunkBytes,
+              filename: "chunk_$chunkIndex.part",
+            ),
+          });
+        }
 
-        final response = await _postChunkWithRetry(formData);
+        final response = await _postChunkWithRetry(
+          buildChunkFormData,
+          onSendProgress: (sent, total) {
+            if (total <= 0) return;
+            final chunkProgress = sent / total;
+            final overall = (chunkIndex + chunkProgress) / totalChunks;
+            onProgress(
+              overall.clamp(0.0, 0.97),
+              "Загрузка чанка ${chunkIndex + 1}/$totalChunks",
+            );
+          },
+        );
         final decoded = _decodePlain(response.data);
 
         if (decoded["success"] != true) {
@@ -12281,7 +15017,7 @@ class ChunkUploadService {
       raf.closeSync();
     }
 
-    onProgress(0.98, "Сборка файла на сервере...");
+    onProgress(0.98, ext == "avi" ? "Сборка и конвертация AVI в MP4..." : "Сборка файла на сервере...");
 
     String? thumbnailBase64;
     String? thumbnailName;
@@ -12323,21 +15059,33 @@ class ChunkUploadService {
     return result;
   }
 
-  Future<Response<dynamic>> _postChunkWithRetry(FormData formData) async {
+  Future<Response<dynamic>> _postChunkWithRetry(
+    FormData Function() buildFormData, {
+    ProgressCallback? onSendProgress,
+  }) async {
     DioException? lastError;
 
     for (int attempt = 0; attempt < 3; attempt++) {
       try {
+        // Важно: FormData в Dio одноразовый. После первой отправки он
+        // finalizes, поэтому при повторной попытке нужно создать новый
+        // FormData, иначе будет ошибка:
+        // Bad state: The FormData has already been finalized.
+        final freshFormData = buildFormData();
+
         return await dio.post(
           uploadChunkUrl,
-          data: formData,
+          data: freshFormData,
+          onSendProgress: onSendProgress,
           options: Options(
             contentType: 'multipart/form-data',
           ),
         );
       } on DioException catch (e) {
         lastError = e;
-        await Future.delayed(Duration(seconds: attempt + 1));
+        if (attempt < 2) {
+          await Future.delayed(Duration(seconds: attempt + 1));
+        }
       }
     }
 

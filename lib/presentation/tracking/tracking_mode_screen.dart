@@ -5,9 +5,9 @@ import 'models/tracking_models.dart';
 class TrackingModeScreen extends StatelessWidget {
   const TrackingModeScreen({super.key});
 
-  static const Color primary = Color(0xFF00A750);
-  static const Color primaryDark = Color(0xFF008C40);
-  static const Color bg = Color(0xFFF4F7F6);
+  static const Color primary = Color(0xFF12B76A);
+  static const Color primaryDark = Color(0xFF067A46);
+  static const Color bg = Color(0xFFFFFFFF);
   static const Color card = Colors.white;
   static const Color text = Color(0xFF102027);
   static const Color muted = Color(0xFF6B7280);
@@ -22,7 +22,7 @@ class TrackingModeScreen extends StatelessWidget {
         foregroundColor: text,
         title: const Text(
           'Трекинг',
-          style: TextStyle(fontWeight: FontWeight.w800),
+          style: TextStyle(fontWeight: FontWeight.w500),
         ),
       ),
       body: ListView(
@@ -34,7 +34,7 @@ class TrackingModeScreen extends StatelessWidget {
             'Выберите формат работы',
             style: TextStyle(
               fontSize: 20,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
               color: text,
             ),
           ),
@@ -117,7 +117,7 @@ class TrackingModeScreen extends StatelessWidget {
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 20,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 SizedBox(height: 6),
@@ -162,7 +162,7 @@ class TrackingModeScreen extends StatelessWidget {
           decoration: BoxDecoration(
             color: card,
             borderRadius: BorderRadius.circular(26),
-            border: Border.all(color: const Color(0xFFE5E7EB)),
+            border: Border.all(color: const Color(0xFFF1F3F6)),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.05),
@@ -202,7 +202,7 @@ class TrackingModeScreen extends StatelessWidget {
                           badge,
                           style: const TextStyle(
                             fontSize: 11,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w500,
                             color: primary,
                           ),
                         ),
@@ -212,7 +212,7 @@ class TrackingModeScreen extends StatelessWidget {
                         title,
                         style: const TextStyle(
                           fontSize: 18,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w600,
                           color: text,
                         ),
                       ),
@@ -248,7 +248,7 @@ class TrackingModeScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: card,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: const Color(0xFFF1F3F6)),
       ),
       child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -257,7 +257,7 @@ class TrackingModeScreen extends StatelessWidget {
             'Что будет доступно после подключения',
             style: TextStyle(
               fontSize: 16,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w500,
               color: text,
             ),
           ),

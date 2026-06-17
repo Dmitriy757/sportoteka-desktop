@@ -12,8 +12,9 @@ import '../services/tracker_pro_api.dart';
 import '../tracker_live_panel.dart';
 import '../tracker_player_activity_screen.dart';
 import '../widgets/tracker_pro_analytics_panel.dart';
+import '../reports/tracker_training_report_screen.dart';
 
-enum TrackerWorkspaceSection { live, activity, analytics, sessions, devices, heatmap, field, video, settings, debug }
+enum TrackerWorkspaceSection { dashboard, live, activity, sessions, devices, field, settings, debug }
 
 class TrackerMatchWorkspaceScreen extends StatefulWidget {
   const TrackerMatchWorkspaceScreen({
@@ -24,6 +25,7 @@ class TrackerMatchWorkspaceScreen extends StatefulWidget {
     required this.teamName,
     required this.userId,
     this.initialPlayers = const [],
+    this.embeddedInClubWorkspace = false,
   });
 
   final int clubId;
@@ -32,6 +34,11 @@ class TrackerMatchWorkspaceScreen extends StatefulWidget {
   final String teamName;
   final int userId;
   final List<Map<String, dynamic>> initialPlayers;
+
+  /// true — экран трекера открыт внутри Club Workspace.
+  /// В этом режиме внешний Windows-подобный taskbar клуба остаётся на месте,
+  /// а разделы трекера показываются как вкладки отдельной «программы».
+  final bool embeddedInClubWorkspace;
 
   @override
   State<TrackerMatchWorkspaceScreen> createState() => _TrackerMatchWorkspaceScreenState();
@@ -50,12 +57,13 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
   List<TrackerDeviceModel> _savedDevices = <TrackerDeviceModel>[];
   List<TrackerFieldModel> _fields = <TrackerFieldModel>[];
 
-  TrackerWorkspaceSection _section = TrackerWorkspaceSection.live;
+  TrackerWorkspaceSection _section = TrackerWorkspaceSection.dashboard;
   TrackerPlayerOption? _selectedPlayer;
   TrackerFieldModel? _selectedField;
   ActionTrackerDevice? _connected;
   ActionTrackerBatteryState? _battery;
   ActionTrackerRecord? _selectedRecord;
+  TrackerSessionModel? _selectedReportSession;
 
   StreamSubscription<ActionTrackerParseResult>? _dataSub;
   StreamSubscription<String>? _logSub;
@@ -65,6 +73,8 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
   bool _connecting = false;
   bool _savingRecord = false;
   bool _liveRunning = false;
+  bool _trackerWindowMinimized = false;
+  bool _trackerWindowMaximized = false;
 
   @override
   void initState() {
@@ -106,6 +116,7 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
       _selectedPlayer = null;
       _selectedField = null;
       _selectedRecord = null;
+      _selectedReportSession = null;
       _battery = null;
       _connected = _ble.connectedInfo;
       _liveRunning = false;
@@ -191,13 +202,38 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
     return (battery.voltage * 10).round().clamp(0, 100);
   }
 
+  String _friendlyBleError(Object e) {
+    final raw = '$e';
+    if (raw.contains('CBManagerStateUnsupported')) {
+      return 'Bluetooth недоступен в этой среде. На macOS проверьте, что Bluetooth включён, приложение имеет разрешение Bluetooth, а устройство не занято другим приложением.';
+    }
+    if (raw.toLowerCase().contains('bluetooth must be turned on') || raw.toLowerCase().contains('poweredoff')) {
+      return 'Bluetooth выключен. Включите Bluetooth на компьютере и повторите поиск трекеров.';
+    }
+    return raw;
+  }
+
   Future<void> _scan() async {
+    if (_scanning) return;
     setState(() => _scanning = true);
     try {
       await TrackerPermissions.ensureBlePermissions();
       await _ble.scan();
+      if (mounted) {
+        setState(() {
+          _logs.insert(0, '[BLE] поиск завершён');
+          if (_logs.length > 220) _logs.removeRange(220, _logs.length);
+        });
+      }
     } catch (e) {
-      _toast('Bluetooth', '$e');
+      final msg = _friendlyBleError(e);
+      if (mounted) {
+        setState(() {
+          _logs.insert(0, '[BLE] $msg');
+          if (_logs.length > 220) _logs.removeRange(220, _logs.length);
+        });
+      }
+      _toast('Bluetooth', msg);
     } finally {
       if (mounted) setState(() => _scanning = false);
     }
@@ -285,16 +321,59 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
     }
   }
 
-  Future<void> _captureCalibrationPoint() async {
-    if (_points.isEmpty) {
-      _toast('Калибровка', 'Нет GPS-точки. Запустите Live или загрузите запись.');
+  void _createNewFieldDraft() {
+    final index = _fields.length + 1;
+    setState(() {
+      _selectedField = TrackerFieldModel(
+        clubId: widget.clubId,
+        teamId: widget.teamId,
+        title: index <= 1 ? 'Основное поле' : 'Поле $index',
+        lengthM: 105,
+        widthM: 68,
+        isDefault: true,
+      );
+      _calibrationCorners.clear();
+    });
+    _toast('Поле', 'Создано новое поле. Пройдите углы A → B → C → D и нажмите «Сохранить».');
+  }
+
+  void _resetCalibrationCorners() {
+    setState(() => _calibrationCorners.clear());
+    _toast('Калибровка', 'Точки A/B/C/D сброшены.');
+  }
+
+  Future<void> _handleCornerTap(int index) async {
+    if (index != _calibrationCorners.length) {
+      final labels = const ['A', 'B', 'C', 'D'];
+      _toast('Калибровка', 'Сейчас нужна точка ${labels[_calibrationCorners.length.clamp(0, 3)]}. Идите по порядку A → B → C → D.');
       return;
     }
+    await _captureCalibrationPoint();
+  }
+
+  Future<void> _captureCalibrationPoint() async {
+    final labels = const ['A', 'B', 'C', 'D'];
+    if (_calibrationCorners.length >= 4) {
+      _toast('Калибровка', 'Все 4 точки уже получены. Нажмите «Сохранить» или «Сбросить».');
+      return;
+    }
+
+    if (_points.isEmpty) {
+      _toast('Калибровка', 'Нет GPS-точки от трекера. Подключите датчик и дождитесь GPS-пакета.');
+      return;
+    }
+
+    final nextIndex = _calibrationCorners.length;
+    final point = _points.last;
+
     setState(() {
-      if (_calibrationCorners.length >= 4) _calibrationCorners.clear();
-      _calibrationCorners.add(_points.last);
+      _calibrationCorners.add(point);
     });
-    _toast('Калибровка', 'Точка ${_calibrationCorners.length}/4 сохранена');
+
+    _toast(
+      'Калибровка',
+      'Точка ${labels[nextIndex]} сохранена (${_calibrationCorners.length}/4).',
+    );
   }
 
   Future<void> _saveCapturedField() async {
@@ -351,7 +430,7 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
           title: const Text(
             'Live-сессия активна',
-            style: TextStyle(fontWeight: FontWeight.w900),
+            style: TextStyle(fontWeight: FontWeight.w600),
           ),
           content: const Text(
             'Вы точно хотите выйти из окна трекера? Локальное чтение GPS/BLE будет остановлено, поэтому лучше сначала остановить Live, если тренировка завершена.',
@@ -391,38 +470,117 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
       title,
       message,
       snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: const Color(0xFF111827),
-      colorText: Colors.white,
+      backgroundColor: Colors.white,
+      colorText: _TD.text,
+      borderColor: _TD.softLine,
+      borderWidth: 1,
       margin: const EdgeInsets.all(14),
-      duration: const Duration(seconds: 3),
+      duration: const Duration(seconds: 4),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    if (widget.embeddedInClubWorkspace) {
+      return WillPopScope(
+        onWillPop: () async => false,
+        child: _buildEmbeddedTrackerProgram(),
+      );
+    }
+
     return WillPopScope(
       onWillPop: _confirmExitTrackerIfNeeded,
       child: Scaffold(
-        backgroundColor: _TD.bg,
+        backgroundColor: Colors.white,
         body: SafeArea(
           child: Row(
             children: [
               _DarkRail(
                 selected: _section,
-                teamName: widget.teamName,
-                clubName: widget.clubName,
                 onSelect: (section) => setState(() => _section = section),
                 onBack: _handleBackPressed,
               ),
               Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(0, 6, 6, 6),
-                  child: _buildSection(),
+                child: Column(
+                  children: [
+                    if (_section != TrackerWorkspaceSection.live)
+                      _TopBar(
+                        teamName: widget.teamName,
+                        clubName: widget.clubName,
+                        selectedPlayer: _selectedPlayer?.name ?? 'Игрок не выбран',
+                        selectedSection: _section,
+                        loading: _loading,
+                        onRefresh: _loadServerData,
+                      ),
+                    Expanded(
+                      child: Padding(
+                        padding: _section == TrackerWorkspaceSection.live
+                            ? const EdgeInsets.fromLTRB(0, 0, 6, 6)
+                            : const EdgeInsets.fromLTRB(0, 6, 6, 6),
+                        child: _buildSection(),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildEmbeddedTrackerProgram() {
+    if (_trackerWindowMinimized) {
+      return _TrackerProgramCollapsedBar(
+        clubName: widget.clubName,
+        teamName: widget.teamName,
+        liveRunning: _liveRunning,
+        connected: _connected != null,
+        onRestore: () => setState(() => _trackerWindowMinimized = false),
+      );
+    }
+
+    final radius = _trackerWindowMaximized ? 14.0 : 20.0;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      decoration: BoxDecoration(
+        color: _TD.bg,
+        borderRadius: BorderRadius.circular(radius),
+        boxShadow: _TD.windowShadow,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          _TrackerProgramTabsBar(
+            clubName: widget.clubName,
+            teamName: widget.teamName,
+            selectedPlayer: _selectedPlayer?.name ?? 'Игрок не выбран',
+            selected: _section,
+            loading: _loading,
+            liveRunning: _liveRunning,
+            connected: _connected != null,
+            maximized: _trackerWindowMaximized,
+            onSelect: (section) => setState(() => _section = section),
+            onRefresh: _loadServerData,
+            onClose: () => setState(() => _trackerWindowMinimized = true),
+            onMinimize: () => setState(() => _trackerWindowMinimized = true),
+            onToggleMaximize: () => setState(() => _trackerWindowMaximized = !_trackerWindowMaximized),
+          ),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                _trackerWindowMaximized ? 6 : 10,
+                _trackerWindowMaximized ? 6 : 10,
+                _trackerWindowMaximized ? 6 : 10,
+                _trackerWindowMaximized ? 6 : 10,
+              ),
+              child: _buildSection(),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -438,27 +596,184 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
 
   Widget _sectionWidget(TrackerWorkspaceSection section) {
     switch (section) {
+      case TrackerWorkspaceSection.dashboard:
+        return _dashboard();
       case TrackerWorkspaceSection.live:
         return _live();
       case TrackerWorkspaceSection.activity:
         return _activity();
-      case TrackerWorkspaceSection.analytics:
-        return _analytics();
       case TrackerWorkspaceSection.sessions:
         return _sessions();
       case TrackerWorkspaceSection.devices:
         return _devices();
-      case TrackerWorkspaceSection.heatmap:
-        return _heatmap();
       case TrackerWorkspaceSection.field:
         return _field();
-      case TrackerWorkspaceSection.video:
-        return _video();
       case TrackerWorkspaceSection.settings:
         return _settings();
       case TrackerWorkspaceSection.debug:
         return _debug();
     }
+  }
+
+  Widget _dashboard() {
+    return FutureBuilder<TrackerDashboardModel>(
+      future: _api.loadDashboard(teamId: widget.teamId),
+      builder: (context, snapshot) {
+        final dashboard = snapshot.data;
+        final summary = dashboard?.summary ?? const <String, dynamic>{};
+        final rows = dashboard?.players ?? const <TrackerPlayerLoadRow>[];
+        final connected = _savedDevices.where((d) => d.playerId != null).length;
+        final readyFields = _fields.where((f) => f.hasCalibration).length;
+        final gpsReady = _points.isNotEmpty || _connected != null;
+
+        return _DarkPage(
+          title: 'Tracker Pro',
+          subtitle: 'Catapult-режим: подключение, Live, команда, отчёты и поле в одном рабочем сценарии',
+          icon: Icons.dashboard_customize_rounded,
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _DarkActionButton(
+                icon: Icons.play_arrow_rounded,
+                label: 'Открыть Live',
+                primary: true,
+                onTap: () => setState(() => _section = TrackerWorkspaceSection.live),
+              ),
+              const SizedBox(width: 8),
+              _DarkActionButton(
+                icon: Icons.sensors_rounded,
+                label: 'Трекеры',
+                onTap: () => setState(() => _section = TrackerWorkspaceSection.devices),
+              ),
+            ],
+          ),
+          child: LayoutBuilder(
+            builder: (context, c) {
+              final compact = c.maxWidth < 920;
+              final kpi = _dashboardKpis(summary, rows.length, connected, readyFields);
+              final left = _DarkCard(
+                title: 'Готовность команды',
+                subtitle: '$connected/${_players.length} трекеров',
+                child: Column(
+                  children: [
+                    _ReadinessRow(title: 'Игроки', text: _players.isEmpty ? 'Состав не загружен' : '${_players.length} игроков', ok: _players.isNotEmpty),
+                    const SizedBox(height: 8),
+                    _ReadinessRow(title: 'Трекеры', text: connected == 0 ? 'Подключите датчики' : '$connected подключено', ok: connected > 0),
+                    const SizedBox(height: 8),
+                    _ReadinessRow(title: 'Поле', text: readyFields == 0 ? 'Нужна калибровка' : '$readyFields готово', ok: readyFields > 0),
+                    const SizedBox(height: 8),
+                    _ReadinessRow(title: 'GPS', text: gpsReady ? 'Сигнал есть' : 'Ожидаем пакет', ok: gpsReady),
+                    const Spacer(),
+                    _DarkActionButton(
+                      icon: Icons.sensors_rounded,
+                      label: connected == 0 ? 'Подключить трекеры' : 'Управлять трекерами',
+                      primary: connected == 0,
+                      onTap: () => setState(() => _section = TrackerWorkspaceSection.devices),
+                    ),
+                    const SizedBox(height: 8),
+                    _DarkActionButton(
+                      icon: Icons.map_rounded,
+                      label: readyFields == 0 ? 'Настроить поле' : 'Проверить поле',
+                      onTap: () => setState(() => _section = TrackerWorkspaceSection.field),
+                    ),
+                  ],
+                ),
+              );
+
+              final center = _DarkCard(
+                title: 'Команда онлайн',
+                subtitle: snapshot.connectionState == ConnectionState.waiting && dashboard == null ? 'загрузка' : '${rows.length} игроков в аналитике',
+                child: rows.isEmpty
+                    ? const _DarkEmpty(icon: Icons.groups_rounded, text: 'После подключения трекеров и запуска Live здесь появится таблица игроков.')
+                    : ListView(
+                        children: rows.take(12).map((p) {
+                          return _DarkListTile(
+                            icon: Icons.person_rounded,
+                            avatarUrl: p.avatar,
+                            initials: _playerInitials(p.playerName),
+                            title: p.playerName,
+                            subtitle: '${(p.distanceM / 1000).toStringAsFixed(2)} км · max ${p.maxSpeedKmh.toStringAsFixed(1)} км/ч · спринты ${p.sprintCount}',
+                            trailing: 'анализ',
+                            active: _selectedPlayer?.id == p.playerId,
+                            onTap: () {
+                              final matches = _players.where((x) => x.id == p.playerId).toList();
+                              setState(() {
+                                if (matches.isNotEmpty) _selectedPlayer = matches.first;
+                                _section = TrackerWorkspaceSection.activity;
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+              );
+
+              final right = _DarkCard(
+                title: 'Рабочий сценарий',
+                subtitle: 'как в Catapult',
+                child: Column(
+                  children: [
+                    _ScenarioButton(step: '1', title: 'Подключить трекеры', text: 'Датчики и привязка к игрокам', icon: Icons.sensors_rounded, onTap: () => setState(() => _section = TrackerWorkspaceSection.devices)),
+                    const SizedBox(height: 8),
+                    _ScenarioButton(step: '2', title: 'Проверить поле', text: 'Калибровка A/B/C/D', icon: Icons.map_rounded, onTap: () => setState(() => _section = TrackerWorkspaceSection.field)),
+                    const SizedBox(height: 8),
+                    _ScenarioButton(step: '3', title: 'Начать Live', text: 'Поле, точки, зоны, сигналы', icon: Icons.play_arrow_rounded, onTap: () => setState(() => _section = TrackerWorkspaceSection.live)),
+                    const SizedBox(height: 8),
+                    _ScenarioButton(step: '4', title: 'Открыть отчёты', text: 'Сессии, таблицы, экспорт', icon: Icons.table_chart_rounded, onTap: () => setState(() => _section = TrackerWorkspaceSection.sessions)),
+                    const Spacer(),
+                    const _DarkHint(text: 'Главная показывает команду и готовность. Live — только рабочий мониторинг. Активность — графики игрока. Сессии — отчёты и экспорт.'),
+                  ],
+                ),
+              );
+
+              final content = compact
+                  ? ListView(
+                      children: [
+                        SizedBox(height: 140, child: _DashboardKpiStrip(items: kpi)),
+                        const SizedBox(height: 10),
+                        SizedBox(height: 360, child: center),
+                        const SizedBox(height: 10),
+                        SizedBox(height: 310, child: left),
+                        const SizedBox(height: 10),
+                        SizedBox(height: 360, child: right),
+                      ],
+                    )
+                  : Column(
+                      children: [
+                        SizedBox(height: 118, child: _DashboardKpiStrip(items: kpi)),
+                        const SizedBox(height: 10),
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Expanded(flex: 3, child: left),
+                              const SizedBox(width: 12),
+                              Expanded(flex: 6, child: center),
+                              const SizedBox(width: 12),
+                              Expanded(flex: 3, child: right),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+
+              return content;
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  List<_DashboardKpiData> _dashboardKpis(Map<String, dynamic> summary, int analyticPlayers, int connected, int readyFields) {
+    double d(dynamic v) => v is num ? v.toDouble() : double.tryParse('$v') ?? 0;
+    int i(dynamic v) => v is num ? v.toInt() : int.tryParse('$v') ?? 0;
+    return [
+      _DashboardKpiData(icon: Icons.groups_rounded, title: 'Игроки онлайн', value: '$connected/${_players.length}', subtitle: 'трекеры'),
+      _DashboardKpiData(icon: Icons.route_rounded, title: 'Дистанция', value: '${(d(summary['total_distance_m']) / 1000).toStringAsFixed(2)} км', subtitle: 'команда'),
+      _DashboardKpiData(icon: Icons.speed_rounded, title: 'Макс. скорость', value: '${d(summary['max_speed_kmh']).toStringAsFixed(1)}', subtitle: 'км/ч'),
+      _DashboardKpiData(icon: Icons.local_fire_department_rounded, title: 'Спринты', value: '${i(summary['sprint_count'])}', subtitle: 'команда'),
+      _DashboardKpiData(icon: Icons.monitor_heart_rounded, title: 'Нагрузка', value: d(summary['avg_load_score']).toStringAsFixed(1), subtitle: 'средняя'),
+      _DashboardKpiData(icon: Icons.map_rounded, title: 'Поля', value: '$readyFields/${_fields.length}', subtitle: 'калибровка'),
+    ];
   }
 
   Widget _live() {
@@ -473,23 +788,13 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
       ble: _ble,
       savedDevices: _savedDevices,
       batteryPercent: _batteryPercent,
+      scanningBluetooth: _scanning,
+      onScanBluetooth: _scan,
       onManageTrackers: () => setState(() => _section = TrackerWorkspaceSection.devices),
       onLiveRunningChanged: (running) {
         if (!mounted || _liveRunning == running) return;
         setState(() => _liveRunning = running);
       },
-    );
-  }
-
-
-  Widget _activity() {
-    return TrackerPlayerActivityScreen(
-      key: ValueKey('activity_${widget.teamId}_${_selectedPlayer?.id ?? 0}_${_selectedField?.id ?? 0}'),
-      teamId: widget.teamId,
-      teamName: widget.teamName,
-      rosterPlayers: _players,
-      selectedPlayer: _selectedPlayer,
-      fieldId: _selectedField?.id,
     );
   }
 
@@ -513,69 +818,82 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
     );
   }
 
+  Widget _activity() {
+    return TrackerPlayerActivityScreen(
+      key: ValueKey('activity_${widget.clubId}_${widget.teamId}_${_selectedPlayer?.id ?? 0}_${_selectedField?.id ?? 0}'),
+      teamId: widget.teamId,
+      teamName: widget.teamName,
+      rosterPlayers: _players,
+      selectedPlayer: _selectedPlayer,
+      fieldId: _selectedField?.id,
+    );
+  }
+
   Widget _sessions() {
     return _DarkPage(
-      title: 'Сессии / выгрузка',
-      subtitle: 'поиск записей, выгрузка GPS, серверные сессии',
-      icon: Icons.download_rounded,
+      title: 'Отчёты / сессии',
+      subtitle: 'календарь тренировок, расшифровка, PDF и Excel',
+      icon: Icons.table_chart_rounded,
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
         _DarkActionButton(icon: Icons.refresh_rounded, label: 'Обновить', onTap: () => setState(() {})),
         const SizedBox(width: 8),
-        _DarkActionButton(icon: Icons.cloud_upload_rounded, label: _savingRecord ? 'Сохраняю...' : 'Сохранить', primary: true, onTap: _savingRecord ? null : _saveRecordAsSession),
-      ]),
-      child: Row(children: [
-        Expanded(
-          flex: 5,
-          child: _DarkCard(
-            title: 'GPS-записи',
-            subtitle: _selectedRecord == null ? '${_records.length} записей на устройстве' : 'selected ${_selectedRecord!.fileId} · ${_points.length} points',
-            child: _records.isEmpty
-                ? const _DarkEmpty(icon: Icons.download_rounded, text: 'Подключите трекер и загрузите записи.')
-                : ListView(children: _records.map((r) => _DarkListTile(
-                      icon: Icons.route_rounded,
-                      title: 'Record ${r.fileId}',
-                      subtitle: '${r.length} bytes${_selectedRecord?.fileId == r.fileId ? ' · ${_points.length} points' : ''}',
-                      active: _selectedRecord?.fileId == r.fileId,
-                      trailing: _selectedRecord?.fileId == r.fileId ? 'выбрано' : 'загрузить',
-                      onTap: () => _loadGpsRecord(r),
-                    )).toList()),
-          ),
+        _DarkActionButton(
+          icon: Icons.cloud_upload_rounded,
+          label: _savingRecord ? 'Сохраняю...' : 'Сохранить GPS',
+          primary: true,
+          onTap: _savingRecord ? null : _saveRecordAsSession,
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          flex: 7,
-          child: FutureBuilder<List<TrackerSessionModel>>(
-            future: _api.loadSessions(teamId: widget.teamId, playerId: _selectedPlayer?.id),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting && snapshot.data == null) {
-                return const _DarkCard(title: 'Сессии на сервере', subtitle: 'загрузка', child: Center(child: CircularProgressIndicator()));
+      ]),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 980;
+          final sessionsList = _SessionsListPane(
+            api: _api,
+            teamId: widget.teamId,
+            playerId: _selectedPlayer?.id,
+            selectedSession: _selectedReportSession,
+            onSelect: (session) => setState(() => _selectedReportSession = session),
+            onProcess: (session) async {
+              try {
+                await _api.processSession(sessionId: session.id);
+                _toast('Сессия', 'Обработка запущена');
+                setState(() {});
+              } catch (e) {
+                _toast('Сессия', '$e');
               }
-              final sessions = snapshot.data ?? const <TrackerSessionModel>[];
-              return _DarkCard(
-                title: 'Сессии на сервере',
-                subtitle: '${sessions.length} сохранённых сессий',
-                child: sessions.isEmpty
-                    ? const _DarkEmpty(icon: Icons.storage_rounded, text: 'Сессии появятся после сохранения GPS-записи.')
-                    : ListView(children: sessions.map((s) => _DarkListTile(
-                          icon: Icons.storage_rounded,
-                          title: s.title,
-                          subtitle: '${s.playerName ?? 'Игрок'} · ${s.createdAt} · ${(s.distanceM / 1000).toStringAsFixed(2)} km · max ${s.maxSpeedKmh.toStringAsFixed(1)}',
-                          trailing: 'обработать',
-                          onTap: () async {
-                            try {
-                              await _api.processSession(sessionId: s.id);
-                              _toast('Session', 'Processed');
-                              setState(() {});
-                            } catch (e) {
-                              _toast('Session', '$e');
-                            }
-                          },
-                        )).toList()),
-              );
             },
-          ),
-        ),
-      ]),
+          );
+          final gpsRecords = _GpsRecordsPane(
+            records: _records,
+            selectedRecord: _selectedRecord,
+            pointsCount: _points.length,
+            onLoad: _loadGpsRecord,
+          );
+          final report = _SelectedTrainingReportPane(
+            session: _selectedReportSession,
+            teamId: widget.teamId,
+            teamName: widget.teamName,
+          );
+
+          if (compact) {
+            return Column(children: [
+              SizedBox(height: 210, child: sessionsList),
+              const SizedBox(height: 10),
+              SizedBox(height: 150, child: gpsRecords),
+              const SizedBox(height: 10),
+              Expanded(child: report),
+            ]);
+          }
+
+          return Row(children: [
+            Expanded(flex: 3, child: sessionsList),
+            const SizedBox(width: 10),
+            Expanded(flex: 3, child: gpsRecords),
+            const SizedBox(width: 10),
+            Expanded(flex: 8, child: report),
+          ]);
+        },
+      ),
     );
   }
 
@@ -676,47 +994,110 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
   }
 
   Widget _field() {
+    final labels = const ['A', 'B', 'C', 'D'];
+    final nextIndex = _calibrationCorners.length >= 4 ? -1 : _calibrationCorners.length;
+    final nextLabel = nextIndex < 0 ? 'готово' : labels[nextIndex];
+
     return _DarkPage(
       title: 'Калибровка поля',
-      subtitle: '4 GPS corners, projection 105×68, one field for all trackers',
+      subtitle: 'создайте поле и пройдите углы GPS-трекером: A верхний левый → B верхний правый → C нижний правый → D нижний левый',
       icon: Icons.map_rounded,
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-        _DarkActionButton(icon: Icons.add_location_alt_rounded, label: 'Точка', primary: true, onTap: _captureCalibrationPoint),
+        _DarkActionButton(icon: Icons.add_rounded, label: 'Новое поле', onTap: _createNewFieldDraft),
+        const SizedBox(width: 8),
+        _DarkActionButton(
+          icon: Icons.gps_fixed_rounded,
+          label: nextIndex < 0 ? 'GPS готов' : 'GPS $nextLabel',
+          primary: true,
+          onTap: nextIndex < 0 ? null : _captureCalibrationPoint,
+        ),
+        const SizedBox(width: 8),
+        _DarkActionButton(
+          icon: Icons.restart_alt_rounded,
+          label: 'Сбросить',
+          onTap: _calibrationCorners.isEmpty ? null : _resetCalibrationCorners,
+        ),
         const SizedBox(width: 8),
         _DarkActionButton(icon: Icons.save_rounded, label: 'Сохранить', onTap: _calibrationCorners.length >= 4 ? _saveCapturedField : null),
       ]),
       child: Row(children: [
-        Expanded(flex: 4, child: _DarkCard(
-          title: 'Поля команды',
-          subtitle: '${_fields.length} fields',
-          child: _fields.isEmpty
-              ? const _DarkEmpty(icon: Icons.map_rounded, text: 'Создайте поле через 4 угла.')
-              : ListView(children: _fields.map((f) => _DarkListTile(
+        Expanded(
+          flex: 4,
+          child: _DarkCard(
+            title: 'Поля команды',
+            subtitle: '${_fields.length} полей',
+            child: ListView(children: [
+              _DarkActionButton(icon: Icons.add_rounded, label: 'Новое поле', onTap: _createNewFieldDraft),
+              const SizedBox(height: 10),
+              if (_selectedField?.id == null && _selectedField != null)
+                _DarkListTile(
+                  icon: Icons.add_location_alt_rounded,
+                  title: _selectedField!.title,
+                  subtitle: '${_selectedField!.lengthM.toStringAsFixed(0)}×${_selectedField!.widthM.toStringAsFixed(0)} м · черновик, нужны 4 точки',
+                  active: true,
+                  trailing: 'новое',
+                  onTap: () {},
+                ),
+              if (_fields.isEmpty && _selectedField == null)
+                const _DarkEmpty(icon: Icons.map_rounded, text: 'Нажмите «Новое поле», затем поставьте 4 угла GPS-трекером.'),
+              ..._fields.map((f) => _DarkListTile(
                     icon: f.hasCalibration ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
                     title: f.title,
-                    subtitle: '${f.lengthM.toStringAsFixed(0)}×${f.widthM.toStringAsFixed(0)} m · ${f.hasCalibration ? 'откалибровано' : 'нужна калибровка'}',
+                    subtitle: '${f.lengthM.toStringAsFixed(0)}×${f.widthM.toStringAsFixed(0)} м · ${f.hasCalibration ? 'откалибровано' : 'нужна калибровка'}',
                     active: _selectedField?.id == f.id,
                     trailing: _selectedField?.id == f.id ? 'выбрано' : 'выбрать',
-                    onTap: () => setState(() => _selectedField = f),
-                  )).toList()),
-        )),
+                    onTap: () => setState(() {
+                      _selectedField = f;
+                      _calibrationCorners.clear();
+                    }),
+                  )),
+            ]),
+          ),
+        ),
         const SizedBox(width: 10),
-        Expanded(flex: 8, child: _DarkCard(
-          title: 'Калибровка по 4 точкам',
-          subtitle: 'go to each corner and press Point',
-          child: Column(children: [
-            Expanded(child: CustomPaint(painter: _DarkCalibrationPainter(corners: _calibrationCorners), child: const SizedBox.expand())),
-            const SizedBox(height: 8),
-            Wrap(spacing: 8, runSpacing: 8, children: List.generate(4, (i) {
-              final ready = _calibrationCorners.length > i;
-              return _DarkCornerChip(
-                label: ['A', 'B', 'C', 'D'][i],
-                value: ready ? '${_calibrationCorners[i].latitude.toStringAsFixed(6)}, ${_calibrationCorners[i].longitude.toStringAsFixed(6)}' : 'не задано',
-                ready: ready,
-              );
-            })),
-          ]),
-        )),
+        Expanded(
+          flex: 8,
+          child: _DarkCard(
+            title: 'Калибровка по 4 точкам',
+            subtitle: nextIndex < 0 ? 'все точки получены' : 'следующая точка: $nextLabel',
+            child: Column(children: [
+              _CalibrationStatusBanner(
+                nextLabel: nextLabel,
+                done: nextIndex < 0,
+                pointCount: _calibrationCorners.length,
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: CustomPaint(
+                  painter: _DarkCalibrationPainter(corners: _calibrationCorners, activeIndex: nextIndex),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+              const SizedBox(height: 8),
+              _DarkHint(
+                text: _points.isEmpty
+                    ? 'GPS-точек пока нет. Подключите трекер, выйдите на поле и дождитесь координат.'
+                    : 'Последняя GPS-точка готова. Нажмите ${nextIndex < 0 ? '«Сохранить»' : '«GPS $nextLabel»'}.',
+              ),
+              const SizedBox(height: 8),
+              Wrap(spacing: 8, runSpacing: 8, children: List.generate(4, (i) {
+                final ready = _calibrationCorners.length > i;
+                final active = !ready && i == _calibrationCorners.length && _calibrationCorners.length < 4;
+                return _DarkCornerChip(
+                  label: labels[i],
+                  value: ready
+                      ? '${_calibrationCorners[i].latitude.toStringAsFixed(6)}\n${_calibrationCorners[i].longitude.toStringAsFixed(6)}'
+                      : active
+                          ? 'ожидает GPS'
+                          : 'после предыдущей',
+                  ready: ready,
+                  active: active,
+                  onTap: () => _handleCornerTap(i),
+                );
+              })),
+            ]),
+          ),
+        ),
       ]),
     );
   }
@@ -784,7 +1165,7 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
         _DarkActionButton(icon: Icons.refresh_rounded, label: 'Обновить', primary: true, onTap: _loadServerData),
       ]),
       child: Row(children: [
-        Expanded(flex: 8, child: _DarkCard(title: 'BLE-логи', subtitle: '${_logs.length} lines', child: _logs.isEmpty ? const _DarkEmpty(icon: Icons.terminal_rounded, text: 'Логи появятся после поиска, подключения и Live.') : ListView.builder(itemCount: _logs.length, itemBuilder: (_, i) => Padding(padding: const EdgeInsets.only(bottom: 5), child: Text(_logs[i], style: const TextStyle(color: _TD.muted, fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.w700)))))),
+        Expanded(flex: 8, child: _DarkCard(title: 'BLE-логи', subtitle: '${_logs.length} lines', child: _logs.isEmpty ? const _DarkEmpty(icon: Icons.terminal_rounded, text: 'Логи появятся после поиска, подключения и Live.') : ListView.builder(itemCount: _logs.length, itemBuilder: (_, i) => Padding(padding: const EdgeInsets.only(bottom: 5), child: Text(_logs[i], style: const TextStyle(color: _TD.muted, fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.w500)))))),
         const SizedBox(width: 10),
         Expanded(flex: 4, child: _DarkCard(title: 'Состояние', subtitle: 'быстрая диагностика', child: Column(children: [
           _DarkMetricTile(icon: Icons.bluetooth_rounded, title: 'BLE', value: _ble.connectedInfo?.name ?? 'off', subtitle: _ble.connectedInfo?.id ?? 'не подключён'),
@@ -800,68 +1181,691 @@ class _TrackerMatchWorkspaceScreenState extends State<TrackerMatchWorkspaceScree
   }
 }
 
+
+class _SessionsListPane extends StatelessWidget {
+  const _SessionsListPane({
+    required this.api,
+    required this.teamId,
+    required this.playerId,
+    required this.selectedSession,
+    required this.onSelect,
+    required this.onProcess,
+  });
+
+  final TrackerProApi api;
+  final int teamId;
+  final int? playerId;
+  final TrackerSessionModel? selectedSession;
+  final ValueChanged<TrackerSessionModel> onSelect;
+  final ValueChanged<TrackerSessionModel> onProcess;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<TrackerSessionModel>>(
+      future: api.loadSessions(teamId: teamId, playerId: playerId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting && snapshot.data == null) {
+          return const _DarkCard(title: 'Сессии', subtitle: 'загрузка', child: Center(child: CircularProgressIndicator()));
+        }
+        if (snapshot.hasError) {
+          return _DarkCard(
+            title: 'Сессии',
+            subtitle: 'ошибка',
+            child: _DarkError(error: '${snapshot.error}', onRetry: () {}),
+          );
+        }
+        final sessions = snapshot.data ?? const <TrackerSessionModel>[];
+        return _DarkCard(
+          title: 'Сессии',
+          subtitle: '${sessions.length} тренировок',
+          child: sessions.isEmpty
+              ? const _DarkEmpty(icon: Icons.storage_rounded, text: 'Сессии появятся после Live или сохранения GPS-записи.')
+              : ListView.builder(
+                  itemCount: sessions.length,
+                  itemBuilder: (context, index) {
+                    final s = sessions[index];
+                    final active = selectedSession?.id == s.id || (selectedSession == null && index == 0);
+                    return _DarkListTile(
+                      icon: Icons.assignment_rounded,
+                      title: s.title,
+                      subtitle: '${s.playerName ?? 'Команда'} · ${s.createdAt} · ${(s.distanceM / 1000).toStringAsFixed(2)} км · max ${s.maxSpeedKmh.toStringAsFixed(1)}',
+                      active: active,
+                      trailing: active ? 'отчёт' : 'открыть',
+                      onTap: () => onSelect(s),
+                    );
+                  },
+                ),
+        );
+      },
+    );
+  }
+}
+
+class _GpsRecordsPane extends StatelessWidget {
+  const _GpsRecordsPane({
+    required this.records,
+    required this.selectedRecord,
+    required this.pointsCount,
+    required this.onLoad,
+  });
+
+  final List<ActionTrackerRecord> records;
+  final ActionTrackerRecord? selectedRecord;
+  final int pointsCount;
+  final ValueChanged<ActionTrackerRecord> onLoad;
+
+  @override
+  Widget build(BuildContext context) {
+    return _DarkCard(
+      title: 'GPS-записи',
+      subtitle: selectedRecord == null ? '${records.length} записей' : 'Record ${selectedRecord!.fileId} · $pointsCount точек',
+      child: records.isEmpty
+          ? const _DarkEmpty(icon: Icons.download_rounded, text: 'Подключите трекер и загрузите записи.')
+          : ListView(
+              children: records
+                  .map((r) => _DarkListTile(
+                        icon: Icons.route_rounded,
+                        title: 'Record ${r.fileId}',
+                        subtitle: '${r.length} bytes${selectedRecord?.fileId == r.fileId ? ' · $pointsCount точек' : ''}',
+                        active: selectedRecord?.fileId == r.fileId,
+                        trailing: selectedRecord?.fileId == r.fileId ? 'выбрано' : 'загрузить',
+                        onTap: () => onLoad(r),
+                      ))
+                  .toList(),
+            ),
+    );
+  }
+}
+
+class _SelectedTrainingReportPane extends StatelessWidget {
+  const _SelectedTrainingReportPane({
+    required this.session,
+    required this.teamId,
+    required this.teamName,
+  });
+
+  final TrackerSessionModel? session;
+  final int teamId;
+  final String teamName;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = session;
+    if (s == null) {
+      return const _DarkCard(
+        title: 'Отчёт тренировки',
+        subtitle: 'выберите сессию слева',
+        child: _DarkEmpty(icon: Icons.analytics_rounded, text: 'Выберите тренировку в списке «Сессии», чтобы открыть сводку, локомоторную, механическую и внутреннюю нагрузку.'),
+      );
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: TrackerTrainingReportScreen(
+        key: ValueKey('training_report_${s.id}'),
+        sessionId: s.id,
+        teamId: teamId,
+        teamName: teamName,
+      ),
+    );
+  }
+}
+
 class _TD {
-  // Светлый CMR-холст + светлое compact rail-меню как в Club Workspace / Team Match.
-  static const bg = Color(0xFFF4F5F6);
+  // Чистый светлый CMR-холст: без внешних рамок, только белые поверхности и мягкая тень.
+  static const bg = Color(0xFFF7F8FA);
   static const rail = Color(0xFFFFFFFF);
   static const panel = Color(0xFFFFFFFF);
   static const card = Color(0xFFFFFFFF);
-  static const card2 = Color(0xFFF8F9FA);
-  static const border = Color(0xFFE5E7EB);
+  static const card2 = Color(0xFFF8FAFC);
+  static const border = Color(0xFFE9EDF2);
+  static const softLine = Color(0xFFF1F3F6);
   static const grid = Color(0xFFD8DEE6);
-  static const text = Color(0xFF111827);
-  static const graphite = Color(0xFF111827);
-  static const muted = Color(0xFF475467);
-  static const dim = Color(0xFF6B7280);
+  static const text = Color(0xFF1F2933);
+  static const graphite = Color(0xFF344054);
+  static const graphiteSoft = Color(0xFF475467);
+  static const muted = Color(0xFF667085);
+  static const dim = Color(0xFF98A2B3);
 
-  // Минимальный зелёный акцент: точки, маленькие статусы, активные маркеры.
-  static const green = Color(0xFF00A750);
+  // Зелёный оставляем только для статусов LIVE/готовности, не для крупных кнопок и иконок.
+  static const green = Color(0xFF12B76A);
   static const yellow = Color(0xFFB7791F);
   static const orange = Color(0xFFB7791F);
   static const red = Color(0xFFD92D20);
   static const blue = Color(0xFF344054);
+
+  static List<BoxShadow> get windowShadow => [
+        BoxShadow(
+          color: Colors.black.withOpacity(.055),
+          blurRadius: 34,
+          offset: const Offset(0, 18),
+        ),
+      ];
+
+  static List<BoxShadow> get cardShadow => [
+        BoxShadow(
+          color: Colors.black.withOpacity(.026),
+          blurRadius: 18,
+          offset: const Offset(0, 8),
+        ),
+      ];
 }
 
 extension _SectionExt on TrackerWorkspaceSection {
   String get title => switch (this) {
-        TrackerWorkspaceSection.live => 'Онлайн',
-        TrackerWorkspaceSection.activity => 'Активность',
-        TrackerWorkspaceSection.analytics => 'Аналитика',
-        TrackerWorkspaceSection.sessions => 'Сессии',
-        TrackerWorkspaceSection.devices => 'Датчики',
-        TrackerWorkspaceSection.heatmap => 'Теплокарта',
+        TrackerWorkspaceSection.dashboard => 'Главная',
+        TrackerWorkspaceSection.live => 'Live',
+        TrackerWorkspaceSection.activity => 'Игроки',
+        TrackerWorkspaceSection.sessions => 'Отчёты',
+        TrackerWorkspaceSection.devices => 'Трекеры',
         TrackerWorkspaceSection.field => 'Поле',
-        TrackerWorkspaceSection.video => 'Видео',
-        TrackerWorkspaceSection.settings => 'Настройки',
+        TrackerWorkspaceSection.settings => 'Пороги',
         TrackerWorkspaceSection.debug => 'Диагн.',
       };
 
   IconData get icon => switch (this) {
+        TrackerWorkspaceSection.dashboard => Icons.dashboard_customize_rounded,
         TrackerWorkspaceSection.live => Icons.radio_button_checked_rounded,
-        TrackerWorkspaceSection.activity => Icons.show_chart_rounded,
-        TrackerWorkspaceSection.analytics => Icons.analytics_rounded,
-        TrackerWorkspaceSection.sessions => Icons.download_rounded,
+        TrackerWorkspaceSection.activity => Icons.monitor_heart_rounded,
+        TrackerWorkspaceSection.sessions => Icons.table_chart_rounded,
         TrackerWorkspaceSection.devices => Icons.sensors_rounded,
-        TrackerWorkspaceSection.heatmap => Icons.local_fire_department_rounded,
         TrackerWorkspaceSection.field => Icons.map_rounded,
-        TrackerWorkspaceSection.video => Icons.video_library_rounded,
         TrackerWorkspaceSection.settings => Icons.tune_rounded,
         TrackerWorkspaceSection.debug => Icons.bug_report_rounded,
       };
 }
 
+
+class _TrackerProgramCollapsedBar extends StatelessWidget {
+  const _TrackerProgramCollapsedBar({
+    required this.clubName,
+    required this.teamName,
+    required this.liveRunning,
+    required this.connected,
+    required this.onRestore,
+  });
+
+  final String clubName;
+  final String teamName;
+  final bool liveRunning;
+  final bool connected;
+  final VoidCallback onRestore;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: Container(
+        height: 64,
+        margin: const EdgeInsets.all(10),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: _TD.panel,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: _TD.windowShadow,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: _TD.card2,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.sensors_rounded, color: _TD.graphite, size: 19),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Tracker Pro свернут',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: _TD.text, fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$clubName · $teamName',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: _TD.muted, fontSize: 11, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+            _TrackerStatusDot(
+              color: liveRunning ? _TD.green : (connected ? _TD.graphiteSoft : _TD.dim),
+              label: liveRunning ? 'LIVE' : (connected ? 'READY' : 'OFF'),
+            ),
+            const SizedBox(width: 10),
+            _DarkActionButton(
+              icon: Icons.open_in_full_rounded,
+              label: 'Открыть',
+              primary: true,
+              onTap: onRestore,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TrackerProgramTabsBar extends StatelessWidget {
+  const _TrackerProgramTabsBar({
+    required this.clubName,
+    required this.teamName,
+    required this.selectedPlayer,
+    required this.selected,
+    required this.loading,
+    required this.liveRunning,
+    required this.connected,
+    required this.maximized,
+    required this.onSelect,
+    required this.onRefresh,
+    required this.onClose,
+    required this.onMinimize,
+    required this.onToggleMaximize,
+  });
+
+  final String clubName;
+  final String teamName;
+  final String selectedPlayer;
+  final TrackerWorkspaceSection selected;
+  final bool loading;
+  final bool liveRunning;
+  final bool connected;
+  final bool maximized;
+  final ValueChanged<TrackerWorkspaceSection> onSelect;
+  final VoidCallback onRefresh;
+  final VoidCallback onClose;
+  final VoidCallback onMinimize;
+  final VoidCallback onToggleMaximize;
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final compact = width < 1180;
+
+    return Container(
+      height: compact ? 72 : 78,
+      padding: EdgeInsets.fromLTRB(compact ? 10 : 14, 8, compact ? 10 : 14, 8),
+      decoration: const BoxDecoration(
+        color: _TD.panel,
+        border: Border(bottom: BorderSide(color: _TD.softLine)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: compact ? 38 : 42,
+            height: compact ? 38 : 42,
+            decoration: BoxDecoration(
+              color: _TD.card2,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Stack(
+              children: [
+                const Center(
+                  child: Icon(Icons.sensors_rounded, color: _TD.graphite, size: 20),
+                ),
+                Positioned(
+                  right: 7,
+                  bottom: 7,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: connected ? _TD.green : _TD.dim,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: compact ? 168 : 232,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        'Tracker Pro',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: _TD.text,
+                          fontSize: compact ? 14 : 15,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: -.15,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                    _TrackerStatusDot(
+                      color: liveRunning ? _TD.green : (connected ? _TD.graphiteSoft : _TD.dim),
+                      label: liveRunning ? 'LIVE' : (connected ? 'READY' : 'OFF'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '$clubName · $teamName',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _TD.muted,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                if (!compact) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    selectedPlayer,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _TD.dim,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Expanded(
+            child: Align(
+              alignment: Alignment.center,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                child: Row(
+                  children: TrackerWorkspaceSection.values.map((section) {
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: _TrackerProgramTab(
+                        section: section,
+                        active: section == selected,
+                        compact: compact,
+                        onTap: () => onSelect(section),
+                      ),
+                    );
+                  }).toList(growable: false),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          _TrackerProgramIconButton(
+            icon: Icons.refresh_rounded,
+            tooltip: 'Обновить данные трекера',
+            loading: loading,
+            onTap: loading ? null : onRefresh,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MacWindowControls extends StatelessWidget {
+  const _MacWindowControls({
+    required this.maximized,
+    required this.onClose,
+    required this.onMinimize,
+    required this.onToggleMaximize,
+  });
+
+  final bool maximized;
+  final VoidCallback onClose;
+  final VoidCallback onMinimize;
+  final VoidCallback onToggleMaximize;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _MacWindowButton(
+          icon: Icons.close_rounded,
+          tooltip: 'Закрыть окно трекера',
+          onTap: onClose,
+        ),
+        const SizedBox(width: 7),
+        _MacWindowButton(
+          icon: Icons.remove_rounded,
+          tooltip: 'Свернуть',
+          onTap: onMinimize,
+        ),
+        const SizedBox(width: 7),
+        _MacWindowButton(
+          icon: maximized ? Icons.close_fullscreen_rounded : Icons.open_in_full_rounded,
+          tooltip: maximized ? 'Вернуть размер' : 'Развернуть',
+          onTap: onToggleMaximize,
+        ),
+      ],
+    );
+  }
+}
+
+class _MacWindowButton extends StatefulWidget {
+  const _MacWindowButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  State<_MacWindowButton> createState() => _MacWindowButtonState();
+}
+
+class _MacWindowButtonState extends State<_MacWindowButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: widget.tooltip,
+      waitDuration: const Duration(milliseconds: 450),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: Material(
+          color: _hovered ? const Color(0xFFE7EAEE) : const Color(0xFFF1F3F6),
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: widget.onTap,
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: Icon(widget.icon, size: 11, color: _TD.graphiteSoft),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TrackerProgramTab extends StatefulWidget {
+  const _TrackerProgramTab({
+    required this.section,
+    required this.active,
+    required this.compact,
+    required this.onTap,
+  });
+
+  final TrackerWorkspaceSection section;
+  final bool active;
+  final bool compact;
+  final VoidCallback onTap;
+
+  @override
+  State<_TrackerProgramTab> createState() => _TrackerProgramTabState();
+}
+
+class _TrackerProgramTabState extends State<_TrackerProgramTab> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = widget.active;
+    final bg = active ? _TD.graphite : (_hovered ? _TD.card2 : _TD.card2.withOpacity(.62));
+    final fg = active ? Colors.white : _TD.text;
+    final iconColor = active ? Colors.white : _TD.dim;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        height: widget.compact ? 34 : 38,
+        constraints: BoxConstraints(minWidth: widget.compact ? 42 : 86),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(13),
+            onTap: widget.onTap,
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: widget.compact ? 10 : 12),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(widget.section.icon, size: 18, color: iconColor),
+                  if (!widget.compact) ...[
+                    const SizedBox(width: 7),
+                    Text(
+                      widget.section.title,
+                      style: TextStyle(
+                        color: fg,
+                        fontSize: 11.2,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: -.15,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TrackerStatusDot extends StatelessWidget {
+  const _TrackerStatusDot({required this.color, required this.label});
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(.10),
+        borderRadius: BorderRadius.circular(99),
+        border: Border.all(color: color.withOpacity(.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
+              letterSpacing: .2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrackerProgramIconButton extends StatelessWidget {
+  const _TrackerProgramIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.loading = false,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: _TD.card2,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            width: 42,
+            height: 42,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              
+            ),
+            child: loading
+                ? const SizedBox(
+                    width: 17,
+                    height: 17,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(icon, size: 20, color: _TD.text),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DarkRail extends StatelessWidget {
   const _DarkRail({
     required this.selected,
-    required this.teamName,
-    required this.clubName,
     required this.onSelect,
     required this.onBack,
   });
 
   final TrackerWorkspaceSection selected;
-  final String teamName;
-  final String clubName;
   final ValueChanged<TrackerWorkspaceSection> onSelect;
   final VoidCallback onBack;
 
@@ -869,13 +1873,13 @@ class _DarkRail extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = TrackerWorkspaceSection.values;
     return Container(
-      width: 82,
+      width: 74,
       padding: const EdgeInsets.fromLTRB(6, 6, 4, 6),
       child: Container(
         decoration: BoxDecoration(
           color: _TD.rail,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _TD.border),
+          
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(.045),
@@ -886,17 +1890,25 @@ class _DarkRail extends StatelessWidget {
         ),
         child: Column(
           children: [
-            _RailTeamBadge(teamName: teamName, clubName: clubName),
             Expanded(
               child: ListView.separated(
-                padding: const EdgeInsets.fromLTRB(6, 4, 6, 6),
+                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
                 itemCount: items.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 5),
                 itemBuilder: (context, i) {
                   final item = items[i];
-                  return _RailButton(icon: item.icon, label: item.title, active: item == selected, onTap: () => onSelect(item));
+                  return _RailButton(
+                    icon: item.icon,
+                    label: item.title,
+                    active: item == selected,
+                    onTap: () => onSelect(item),
+                  );
                 },
               ),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 6),
+              child: Divider(height: 10, thickness: 1, color: _TD.border),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
@@ -908,54 +1920,6 @@ class _DarkRail extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _RailTeamBadge extends StatelessWidget {
-  const _RailTeamBadge({required this.teamName, required this.clubName});
-
-  final String teamName;
-  final String clubName;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(6, 6, 6, 4),
-      child: Tooltip(
-        message: '$clubName · $teamName',
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 5),
-          decoration: BoxDecoration(
-            color: _TD.card,
-            borderRadius: BorderRadius.circular(11),
-            border: Border.all(color: _TD.border.withOpacity(.9)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: _TD.green.withOpacity(.10),
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: const Icon(Icons.shield_rounded, color: _TD.green, size: 18),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                teamName,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: _TD.text, fontSize: 8.4, height: 1.05, fontWeight: FontWeight.w900),
-              ),
-            ],
-          ),
         ),
       ),
     );
@@ -1001,19 +1965,6 @@ class _RailButtonState extends State<_RailButton> {
               ),
               child: Stack(
                 children: [
-                  if (widget.active)
-                    Positioned(
-                      left: 0,
-                      top: 8,
-                      bottom: 8,
-                      child: Container(
-                        width: 3,
-                        decoration: BoxDecoration(
-                          color: _TD.green,
-                          borderRadius: BorderRadius.circular(99),
-                        ),
-                      ),
-                    ),
                   Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -1027,7 +1978,7 @@ class _RailButtonState extends State<_RailButton> {
                           style: TextStyle(
                             color: subFg,
                             fontSize: 8.3,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w600,
                             letterSpacing: -.15,
                           ),
                         ),
@@ -1045,27 +1996,24 @@ class _RailButtonState extends State<_RailButton> {
 }
 
 class _TopBar extends StatelessWidget {
-  const _TopBar({required this.teamName, required this.clubName, required this.selectedPlayer, required this.selectedSection, required this.loading, required this.onRefresh, required this.onBack});
+  const _TopBar({required this.teamName, required this.clubName, required this.selectedPlayer, required this.selectedSection, required this.loading, required this.onRefresh});
   final String teamName;
   final String clubName;
   final String selectedPlayer;
   final TrackerWorkspaceSection selectedSection;
   final bool loading;
   final VoidCallback onRefresh;
-  final VoidCallback onBack;
   @override
   Widget build(BuildContext context) {
     return Container(
       height: 54,
-      margin: const EdgeInsets.fromLTRB(0, 6, 6, 0),
+      margin: const EdgeInsets.fromLTRB(0, 8, 8, 0),
       padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(color: _TD.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: _TD.border.withOpacity(.85))),
+      decoration: BoxDecoration(color: _TD.card, borderRadius: BorderRadius.circular(14), boxShadow: _TD.cardShadow),
       child: Row(children: [
-        IconButton(onPressed: onBack, icon: const Icon(Icons.arrow_back_rounded, color: _TD.text)),
-        const SizedBox(width: 6),
-        Container(width: 34, height: 34, decoration: BoxDecoration(color: _TD.card2, borderRadius: BorderRadius.circular(9)), child: Icon(selectedSection.icon, color: _TD.green, size: 19)),
+        Container(width: 34, height: 34, decoration: BoxDecoration(color: _TD.card2, borderRadius: BorderRadius.circular(9)), child: Icon(selectedSection.icon, color: _TD.graphite, size: 18)),
         const SizedBox(width: 10),
-        Expanded(child: Text('Спортотека Трекинг · ${selectedSection.title}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w900, fontSize: 16))),
+        Expanded(child: Text('Спортотека Трекинг · ${selectedSection.title}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w600, fontSize: 14))),
         _TopPill(label: clubName, value: teamName),
         const SizedBox(width: 8),
         _TopPill(label: 'Игрок', value: selectedPlayer),
@@ -1086,10 +2034,10 @@ class _TopPill extends StatelessWidget {
       height: 38,
       constraints: const BoxConstraints(maxWidth: 230),
       padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(color: _TD.card, border: Border.all(color: _TD.border), borderRadius: BorderRadius.circular(9)),
+      decoration: BoxDecoration(color: _TD.card,  borderRadius: BorderRadius.circular(9)),
       child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: const TextStyle(color: _TD.dim, fontSize: 8.5, fontWeight: FontWeight.w900)),
-        Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontSize: 11, fontWeight: FontWeight.w900)),
+        Text(label, style: const TextStyle(color: _TD.dim, fontSize: 8.5, fontWeight: FontWeight.w600)),
+        Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontSize: 11, fontWeight: FontWeight.w600)),
       ]),
     );
   }
@@ -1113,7 +2061,7 @@ class _DarkPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: _TD.bg,
+      color: Colors.transparent,
       child: Column(
         children: [
           _WorkspaceFlatHeader(
@@ -1150,8 +2098,8 @@ class _WorkspaceFlatHeader extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
         color: _TD.card,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _TD.border.withOpacity(.9)),
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: _TD.cardShadow,
       ),
       child: Row(
         children: [
@@ -1162,7 +2110,7 @@ class _WorkspaceFlatHeader extends StatelessWidget {
               color: _TD.card2,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: _TD.green, size: 19),
+            child: Icon(icon, color: _TD.graphite, size: 18),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -1176,8 +2124,8 @@ class _WorkspaceFlatHeader extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: _TD.text,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w900,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
                     letterSpacing: -.25,
                   ),
                 ),
@@ -1189,7 +2137,7 @@ class _WorkspaceFlatHeader extends StatelessWidget {
                     style: const TextStyle(
                       color: _TD.muted,
                       fontSize: 11,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
               ],
@@ -1221,20 +2169,17 @@ class _DarkCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: _TD.card,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _TD.border.withOpacity(.94), width: 1),
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: _TD.cardShadow,
       ),
       child: Column(
         children: [
           if (hasHeader)
             Container(
-              height: 34,
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              decoration: BoxDecoration(
-                color: _TD.card2,
-                border: Border(
-                  bottom: BorderSide(color: _TD.border.withOpacity(.9)),
-                ),
+              height: 38,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: _TD.softLine)),
               ),
               child: Row(
                 children: [
@@ -1245,9 +2190,8 @@ class _DarkCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: _TD.text,
-                        fontSize: 12.6,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -.08,
+                        fontSize: 12.2,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -1261,7 +2205,7 @@ class _DarkCard extends StatelessWidget {
                         style: const TextStyle(
                           color: _TD.muted,
                           fontSize: 9.8,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
@@ -1270,7 +2214,7 @@ class _DarkCard extends StatelessWidget {
             ),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(10),
               child: child,
             ),
           ),
@@ -1303,7 +2247,7 @@ class _DarkActionButtonState extends State<_DarkActionButton> {
         scale: _pressed ? .96 : 1,
         duration: const Duration(milliseconds: 110),
         child: Material(
-          color: widget.primary ? _TD.green : _TD.card,
+          color: widget.primary ? _TD.graphite : _TD.card,
           borderRadius: BorderRadius.circular(9),
           child: InkWell(
             onTap: widget.onTap,
@@ -1311,11 +2255,11 @@ class _DarkActionButtonState extends State<_DarkActionButton> {
             child: Container(
               height: 36,
               padding: const EdgeInsets.symmetric(horizontal: 11),
-              decoration: BoxDecoration(borderRadius: BorderRadius.circular(9), border: Border.all(color: widget.primary ? _TD.green : _TD.border)),
+              decoration: BoxDecoration(borderRadius: BorderRadius.circular(9), border: Border.all(color: widget.primary ? _TD.graphite : _TD.softLine)),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(widget.icon, color: widget.primary ? _TD.bg : _TD.text, size: 17),
+                Icon(widget.icon, color: widget.primary ? Colors.white : _TD.graphite, size: 16),
                 const SizedBox(width: 6),
-                Text(widget.label, style: TextStyle(color: widget.primary ? _TD.bg : _TD.text, fontSize: 11, fontWeight: FontWeight.w900)),
+                Text(widget.label, style: TextStyle(color: widget.primary ? Colors.white : _TD.graphite, fontSize: 10.5, fontWeight: FontWeight.w500)),
               ]),
             ),
           ),
@@ -1334,15 +2278,15 @@ class _DarkMetricTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(color: _TD.card2, borderRadius: BorderRadius.circular(10), border: Border.all(color: _TD.border)),
+      decoration: BoxDecoration(color: _TD.card2, borderRadius: BorderRadius.circular(10), border: Border.all(color: _TD.softLine)),
       padding: const EdgeInsets.all(10),
       child: Row(children: [
-        Icon(icon, color: _TD.green),
+        Icon(icon, color: _TD.graphite),
         const SizedBox(width: 9),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontSize: 10, fontWeight: FontWeight.w800)),
-          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontSize: 16, fontWeight: FontWeight.w900)),
-          Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.dim, fontSize: 9, fontWeight: FontWeight.w700)),
+          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontSize: 10, fontWeight: FontWeight.w500)),
+          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontSize: 14, fontWeight: FontWeight.w600)),
+          Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.dim, fontSize: 9, fontWeight: FontWeight.w500)),
         ])),
       ]),
     );
@@ -1361,10 +2305,10 @@ class _DarkListTile extends StatelessWidget {
   final String? initials;
   @override
   Widget build(BuildContext context) {
-    final color = active ? _TD.green : _TD.muted;
+    final color = active ? _TD.graphite : _TD.muted;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(color: active ? _TD.green.withOpacity(.10) : _TD.card2, borderRadius: BorderRadius.circular(9), border: Border.all(color: active ? _TD.green.withOpacity(.4) : _TD.border)),
+      decoration: BoxDecoration(color: active ? _TD.graphite.withOpacity(.055) : _TD.card2, borderRadius: BorderRadius.circular(10), border: Border.all(color: active ? _TD.graphite.withOpacity(.14) : _TD.softLine)),
       child: ListTile(
         dense: true,
         onTap: onTap,
@@ -1376,9 +2320,9 @@ class _DarkListTile extends StatelessWidget {
                 size: 38,
                 active: active,
               ),
-        title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w900)),
-        subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontSize: 11, fontWeight: FontWeight.w700)),
-        trailing: trailing == null ? null : Text(trailing!, style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 11)),
+        title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w600)),
+        subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontSize: 11, fontWeight: FontWeight.w500)),
+        trailing: trailing == null ? null : Text(trailing!, style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 11)),
       ),
     );
   }
@@ -1397,7 +2341,7 @@ class _SavedDeviceDarkTile extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: _TD.card2, borderRadius: BorderRadius.circular(9), border: Border.all(color: _TD.border)),
+      decoration: BoxDecoration(color: _TD.card2, borderRadius: BorderRadius.circular(9), border: Border.all(color: _TD.softLine)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(
           children: [
@@ -1413,13 +2357,13 @@ class _SavedDeviceDarkTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(device.deviceName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w900)),
+                  Text(device.deviceName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 3),
                   Text(
                     '${device.deviceUuid}${boundPlayer == null && device.playerName == null ? '' : ' · ${boundPlayer?.name ?? device.playerName}'}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: _TD.muted, fontSize: 11, fontWeight: FontWeight.w700),
+                    style: const TextStyle(color: _TD.muted, fontSize: 11, fontWeight: FontWeight.w500),
                   ),
                 ],
               ),
@@ -1437,10 +2381,10 @@ class _SavedDeviceDarkTile extends StatelessWidget {
             labelStyle: const TextStyle(color: _TD.muted),
             filled: true,
             fillColor: _TD.panel,
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(9), borderSide: const BorderSide(color: _TD.border)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(9), borderSide: const BorderSide(color: _TD.softLine)),
             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(9), borderSide: const BorderSide(color: _TD.green)),
           ),
-          style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w800),
+          style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w500),
           items: [
             const DropdownMenuItem<int?>(
               value: null,
@@ -1568,7 +2512,7 @@ class _AvatarFallback extends StatelessWidget {
               style: TextStyle(
                 color: _TD.text,
                 fontSize: size * .33,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w600,
                 letterSpacing: -.4,
               ),
             ),
@@ -1607,6 +2551,128 @@ String? _normalizeAvatarUrl(String? raw) {
 }
 
 
+class _DashboardKpiData {
+  const _DashboardKpiData({required this.icon, required this.title, required this.value, required this.subtitle});
+  final IconData icon;
+  final String title;
+  final String value;
+  final String subtitle;
+}
+
+class _DashboardKpiStrip extends StatelessWidget {
+  const _DashboardKpiStrip({required this.items});
+  final List<_DashboardKpiData> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      scrollDirection: Axis.horizontal,
+      itemCount: items.length,
+      separatorBuilder: (_, __) => const SizedBox(width: 10),
+      itemBuilder: (context, index) {
+        final item = items[index];
+        return Container(
+          width: 176,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: _TD.card,
+            borderRadius: BorderRadius.circular(12),
+            
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(color: _TD.green.withOpacity(.10), borderRadius: BorderRadius.circular(9)),
+                    child: Icon(item.icon, color: _TD.graphite, size: 18),
+                  ),
+                  const Spacer(),
+                  Text(item.subtitle, style: const TextStyle(color: _TD.dim, fontSize: 9.5, fontWeight: FontWeight.w500)),
+                ],
+              ),
+              const Spacer(),
+              Text(item.value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontSize: 19, fontWeight: FontWeight.w600, letterSpacing: -.4)),
+              const SizedBox(height: 2),
+              Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontSize: 11, fontWeight: FontWeight.w500)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ReadinessRow extends StatelessWidget {
+  const _ReadinessRow({required this.title, required this.text, required this.ok});
+  final String title;
+  final String text;
+  final bool ok;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(color: ok ? _TD.green.withOpacity(.08) : _TD.card2, borderRadius: BorderRadius.circular(10), border: Border.all(color: ok ? _TD.green.withOpacity(.35) : _TD.border)),
+      child: Row(
+        children: [
+          Icon(ok ? Icons.check_circle_rounded : Icons.warning_amber_rounded, color: ok ? _TD.green : _TD.orange, size: 19),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w600, fontSize: 12)),
+              Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontWeight: FontWeight.w500, fontSize: 10.5)),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScenarioButton extends StatelessWidget {
+  const _ScenarioButton({required this.step, required this.title, required this.text, required this.icon, required this.onTap});
+  final String step;
+  final String title;
+  final String text;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _TD.card2,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(11),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: _TD.softLine)),
+          child: Row(
+            children: [
+              CircleAvatar(radius: 15, backgroundColor: _TD.graphite, child: Text(step, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600))),
+              const SizedBox(width: 10),
+              Icon(icon, color: _TD.graphite, size: 18),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.text, fontWeight: FontWeight.w600, fontSize: 11.8)),
+                  Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontWeight: FontWeight.w500, fontSize: 10.2)),
+                ]),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: _TD.dim),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DarkEmpty extends StatelessWidget {
   const _DarkEmpty({required this.icon, required this.text});
   final IconData icon;
@@ -1616,7 +2682,7 @@ class _DarkEmpty extends StatelessWidget {
     return Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 360), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
       Icon(icon, size: 38, color: _TD.dim),
       const SizedBox(height: 10),
-      Text(text, textAlign: TextAlign.center, style: const TextStyle(color: _TD.muted, fontWeight: FontWeight.w800)),
+      Text(text, textAlign: TextAlign.center, style: const TextStyle(color: _TD.muted, fontWeight: FontWeight.w500)),
     ])));
   }
 }
@@ -1630,7 +2696,7 @@ class _DarkError extends StatelessWidget {
     return Center(child: Container(constraints: const BoxConstraints(maxWidth: 560), padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: Color(0xFFFFF1F1), borderRadius: BorderRadius.circular(10), border: Border.all(color: Color(0xFFF7C8C4))), child: Column(mainAxisSize: MainAxisSize.min, children: [
       const Icon(Icons.warning_amber_rounded, color: _TD.red),
       const SizedBox(height: 8),
-      Text(error, textAlign: TextAlign.center, style: const TextStyle(color: _TD.red, fontWeight: FontWeight.w800)),
+      Text(error, textAlign: TextAlign.center, style: const TextStyle(color: _TD.red, fontWeight: FontWeight.w500)),
       const SizedBox(height: 10),
       _DarkActionButton(icon: Icons.refresh_rounded, label: 'Повторить', onTap: onRetry),
     ])));
@@ -1651,26 +2717,106 @@ class _DarkHint extends StatelessWidget {
   final String text;
   @override
   Widget build(BuildContext context) {
-    return Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: _TD.card2, borderRadius: BorderRadius.circular(10), border: Border.all(color: _TD.border)), child: Text(text, style: const TextStyle(color: _TD.green, fontWeight: FontWeight.w800, fontSize: 11.5, height: 1.25)));
+    return Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: _TD.card2, borderRadius: BorderRadius.circular(10), border: Border.all(color: _TD.softLine)), child: Text(text, style: const TextStyle(color: _TD.graphiteSoft, fontWeight: FontWeight.w500, fontSize: 11.2, height: 1.25)));
   }
 }
 
 class _DarkCornerChip extends StatelessWidget {
-  const _DarkCornerChip({required this.label, required this.value, required this.ready});
+  const _DarkCornerChip({
+    required this.label,
+    required this.value,
+    required this.ready,
+    this.active = false,
+    this.onTap,
+  });
+
   final String label;
   final String value;
   final bool ready;
+  final bool active;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = ready ? _TD.green : active ? const Color(0xFF2563EB) : _TD.dim;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Container(
+        width: 230,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: ready
+              ? _TD.green.withOpacity(.10)
+              : active
+                  ? const Color(0xFF2563EB).withOpacity(.10)
+                  : _TD.card2,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: ready
+                ? _TD.green
+                : active
+                    ? const Color(0xFF2563EB)
+                    : _TD.border,
+            width: ready || active ? 2 : 1,
+          ),
+        ),
+        child: Row(children: [
+          CircleAvatar(
+            radius: 15,
+            backgroundColor: color,
+            child: ready
+                ? const Icon(Icons.check_rounded, color: Colors.white, size: 15)
+                : Text(label, style: const TextStyle(color: _TD.bg, fontSize: 11, fontWeight: FontWeight.w600)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: Text(value, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontSize: 10, fontWeight: FontWeight.w500))),
+        ]),
+      ),
+    );
+  }
+}
+
+class _CalibrationStatusBanner extends StatelessWidget {
+  const _CalibrationStatusBanner({
+    required this.nextLabel,
+    required this.done,
+    required this.pointCount,
+  });
+
+  final String nextLabel;
+  final bool done;
+  final int pointCount;
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 230,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(color: ready ? _TD.green.withOpacity(.10) : _TD.card2, borderRadius: BorderRadius.circular(9), border: Border.all(color: ready ? _TD.green.withOpacity(.35) : _TD.border)),
-      child: Row(children: [
-        CircleAvatar(radius: 13, backgroundColor: ready ? _TD.green : _TD.dim, child: Text(label, style: const TextStyle(color: _TD.bg, fontSize: 11, fontWeight: FontWeight.w900))),
-        const SizedBox(width: 8),
-        Expanded(child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _TD.muted, fontSize: 10, fontWeight: FontWeight.w800))),
-      ]),
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: done ? _TD.green.withOpacity(.10) : const Color(0xFF2563EB).withOpacity(.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: done ? _TD.green.withOpacity(.35) : const Color(0xFF2563EB).withOpacity(.22)),
+      ),
+      child: Row(
+        children: [
+          Icon(done ? Icons.check_circle_rounded : Icons.gps_fixed_rounded, color: done ? _TD.green : const Color(0xFF2563EB)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              done
+                  ? 'Все 4 угла получены. Нажмите «Сохранить».'
+                  : 'Следующий угол: $nextLabel · перейдите в угол поля и нажмите GPS $nextLabel',
+              style: TextStyle(
+                color: done ? _TD.green : _TD.text,
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          Text('$pointCount/4', style: const TextStyle(color: _TD.muted, fontWeight: FontWeight.w600)),
+        ],
+      ),
     );
   }
 }
@@ -1728,7 +2874,7 @@ class _DarkHeatmapPainter extends CustomPainter {
   }
 
   void _drawText(Canvas canvas, Size size, String text) {
-    final tp = TextPainter(text: TextSpan(text: text, style: const TextStyle(color: _TD.muted, fontSize: 18, fontWeight: FontWeight.w900)), textDirection: TextDirection.ltr)..layout(maxWidth: size.width - 40);
+    final tp = TextPainter(text: TextSpan(text: text, style: const TextStyle(color: _TD.muted, fontSize: 15, fontWeight: FontWeight.w600)), textDirection: TextDirection.ltr)..layout(maxWidth: size.width - 40);
     tp.paint(canvas, Offset((size.width - tp.width) / 2, (size.height - tp.height) / 2));
   }
 
@@ -1737,8 +2883,11 @@ class _DarkHeatmapPainter extends CustomPainter {
 }
 
 class _DarkCalibrationPainter extends CustomPainter {
-  const _DarkCalibrationPainter({required this.corners});
+  const _DarkCalibrationPainter({required this.corners, this.activeIndex = -1});
+
   final List<ActionTrackerGpsPoint> corners;
+  final int activeIndex;
+
   @override
   void paint(Canvas canvas, Size size) {
     final area = (Offset.zero & size).deflate(18);
@@ -1751,15 +2900,36 @@ class _DarkCalibrationPainter extends CustomPainter {
     }
     final pitch = Rect.fromCenter(center: area.center, width: w, height: h);
     _DarkHeatmapPainter(points: const [])._drawPitch(canvas, pitch);
-    final cornersPos = [pitch.topLeft + const Offset(18, 18), pitch.topRight + const Offset(-18, 18), pitch.bottomRight + const Offset(-18, -18), pitch.bottomLeft + const Offset(18, -18)];
+
+    final cornersPos = [
+      pitch.topLeft + const Offset(18, 18),
+      pitch.topRight + const Offset(-18, 18),
+      pitch.bottomRight + const Offset(-18, -18),
+      pitch.bottomLeft + const Offset(18, -18),
+    ];
+
     for (var i = 0; i < 4; i++) {
       final ready = corners.length > i;
+      final active = i == activeIndex;
       final p = cornersPos[i];
-      canvas.drawCircle(p, 16, Paint()..color = ready ? _TD.green : _TD.dim);
-      final tp = TextPainter(text: TextSpan(text: ['A', 'B', 'C', 'D'][i], style: const TextStyle(color: _TD.bg, fontWeight: FontWeight.w900)), textDirection: TextDirection.ltr)..layout();
-      tp.paint(canvas, p - Offset(tp.width / 2, tp.height / 2));
+      final color = ready ? _TD.green : active ? const Color(0xFF2563EB) : _TD.dim;
+      canvas.drawCircle(p, active ? 19 : 16, Paint()..color = color);
+      if (ready) {
+        final check = TextPainter(
+          text: const TextSpan(text: '✓', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14)),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        check.paint(canvas, p - Offset(check.width / 2, check.height / 2));
+      } else {
+        final tp = TextPainter(
+          text: TextSpan(text: ['A', 'B', 'C', 'D'][i], style: const TextStyle(color: _TD.bg, fontWeight: FontWeight.w600)),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(canvas, p - Offset(tp.width / 2, tp.height / 2));
+      }
     }
   }
+
   @override
   bool shouldRepaint(covariant _DarkCalibrationPainter oldDelegate) => true;
 }
@@ -1774,7 +2944,7 @@ class _DarkTimelinePainter extends CustomPainter {
     for (var i = 0; i <= 8; i++) {
       final x = 30 + (size.width - 60) * i / 8;
       canvas.drawCircle(Offset(x, y), 5, Paint()..color = i.isEven ? _TD.green : _TD.orange);
-      final tp = TextPainter(text: TextSpan(text: '${i * 15}’', style: const TextStyle(color: _TD.muted, fontSize: 10, fontWeight: FontWeight.w800)), textDirection: TextDirection.ltr)..layout();
+      final tp = TextPainter(text: TextSpan(text: '${i * 15}’', style: const TextStyle(color: _TD.muted, fontSize: 10, fontWeight: FontWeight.w500)), textDirection: TextDirection.ltr)..layout();
       tp.paint(canvas, Offset(x - tp.width / 2, y + 14));
     }
   }

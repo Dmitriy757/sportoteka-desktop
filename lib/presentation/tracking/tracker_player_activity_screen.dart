@@ -566,13 +566,13 @@ class _RadarAxis {
 }
 
 class _AA {
-  static const Color bg = Color(0xFFF6F8FB);
+  static const Color bg = Color(0xFFFFFFFF);
   static const Color card = Colors.white;
   static const Color card2 = Color(0xFFF8FAFC);
-  static const Color border = Color(0xFFE2E8F0);
+  static const Color border = Color(0xFFF1F3F6);
   static const Color text = Color(0xFF0F172A);
   static const Color muted = Color(0xFF64748B);
-  static const Color green = Color(0xFF00B957);
+  static const Color green = Color(0xFF12B76A);
   static const Color blue = Color(0xFF2563EB);
   static const Color orange = Color(0xFFF97316);
   static const Color red = Color(0xFFE11D48);
@@ -749,8 +749,8 @@ class _TeamBadge extends StatelessWidget {
           const SizedBox(width: 9),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Активная команда', style: TextStyle(color: _AA.muted, fontSize: 10.5, fontWeight: FontWeight.w800)),
-              Text(teamName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.text, fontSize: 14, fontWeight: FontWeight.w900)),
+              const Text('Активная команда', style: TextStyle(color: _AA.muted, fontSize: 10.5, fontWeight: FontWeight.w500)),
+              Text(teamName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.text, fontSize: 14, fontWeight: FontWeight.w600)),
             ]),
           ),
         ],
@@ -766,8 +766,8 @@ class _SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(children: [
-      Expanded(child: Text(title, style: const TextStyle(color: _AA.text, fontSize: 13, fontWeight: FontWeight.w900))),
-      Text(subtitle, style: const TextStyle(color: _AA.muted, fontSize: 10.5, fontWeight: FontWeight.w800)),
+      Expanded(child: Text(title, style: const TextStyle(color: _AA.text, fontSize: 13, fontWeight: FontWeight.w600))),
+      Text(subtitle, style: const TextStyle(color: _AA.muted, fontSize: 10.5, fontWeight: FontWeight.w500)),
     ]);
   }
 }
@@ -793,8 +793,8 @@ class _SessionTile extends StatelessWidget {
           Icon(selected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded, color: selected ? _AA.green : _AA.muted, size: 18),
           const SizedBox(width: 8),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(session.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.text, fontSize: 12.2, fontWeight: FontWeight.w900)),
-            Text('${_meters(session.distanceM)} · ${session.maxSpeedKmh.toStringAsFixed(1)} км/ч · ${session.createdAt}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.muted, fontSize: 10.2, fontWeight: FontWeight.w800)),
+            Text(session.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.text, fontSize: 12.2, fontWeight: FontWeight.w600)),
+            Text('${_meters(session.distanceM)} · ${session.maxSpeedKmh.toStringAsFixed(1)} км/ч · ${session.createdAt}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.muted, fontSize: 10.2, fontWeight: FontWeight.w500)),
           ])),
         ]),
       ),
@@ -825,8 +825,8 @@ class _PlayerTile extends StatelessWidget {
           _Avatar(url: avatar, text: title, size: 36),
           const SizedBox(width: 8),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.text, fontSize: 12.2, fontWeight: FontWeight.w900)),
-            Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.muted, fontSize: 10.2, fontWeight: FontWeight.w800)),
+            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.text, fontSize: 12.2, fontWeight: FontWeight.w600)),
+            Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.muted, fontSize: 10.2, fontWeight: FontWeight.w500)),
           ])),
         ]),
       ),
@@ -870,7 +870,7 @@ class _ActivityChartCard extends StatelessWidget {
     return _ActivityCard(
       title: 'График активности',
       subtitle: 'выберите показатель: скорость, ускорение, дистанция, зоны или нагрузка',
-      trailing: Text(metric.unit, style: const TextStyle(color: _AA.green, fontSize: 11, fontWeight: FontWeight.w900)),
+      trailing: Text(metric.unit, style: const TextStyle(color: _AA.green, fontSize: 11, fontWeight: FontWeight.w600)),
       child: Column(children: [
         SizedBox(
           height: 42,
@@ -887,7 +887,7 @@ class _ActivityChartCard extends StatelessWidget {
                   selectedColor: const Color(0xFFEFFDF5),
                   backgroundColor: _AA.card2,
                   side: BorderSide(color: active ? _AA.green.withOpacity(.4) : _AA.border),
-                  labelStyle: TextStyle(color: active ? _AA.green : _AA.muted, fontSize: 10.5, fontWeight: FontWeight.w900),
+                  labelStyle: TextStyle(color: active ? _AA.green : _AA.muted, fontSize: 10.5, fontWeight: FontWeight.w600),
                   onSelected: (_) => onMetricChanged(m),
                 ),
               );
@@ -924,7 +924,7 @@ class _StatsStrip extends StatelessWidget {
         onPressed: onReport,
         icon: const Icon(Icons.description_rounded, size: 15),
         label: const Text('Отчёт'),
-        style: TextButton.styleFrom(foregroundColor: _AA.green, textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
+        style: TextButton.styleFrom(foregroundColor: _AA.green, textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -959,8 +959,8 @@ class _MetricTile extends StatelessWidget {
         Container(width: 30, height: 30, decoration: BoxDecoration(color: const Color(0xFFDDFBEA), borderRadius: BorderRadius.circular(10)), child: Icon(data.icon, color: _AA.green, size: 17)),
         const SizedBox(width: 8),
         Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(data.value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.text, fontSize: 14.2, fontWeight: FontWeight.w900, fontFeatures: [FontFeature.tabularFigures()])),
-          Text(data.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.muted, fontSize: 9.7, fontWeight: FontWeight.w800)),
+          Text(data.value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.text, fontSize: 14.2, fontWeight: FontWeight.w600, fontFeatures: [FontFeature.tabularFigures()])),
+          Text(data.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.muted, fontSize: 9.7, fontWeight: FontWeight.w500)),
         ])),
       ]),
     );
@@ -985,8 +985,8 @@ class _ActivityCard extends StatelessWidget {
           decoration: const BoxDecoration(color: _AA.card2, border: Border(bottom: BorderSide(color: _AA.border))),
           child: Row(children: [
             Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.text, fontSize: 13, fontWeight: FontWeight.w900)),
-              if (subtitle.isNotEmpty) Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.muted, fontSize: 10.3, fontWeight: FontWeight.w800)),
+              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.text, fontSize: 13, fontWeight: FontWeight.w600)),
+              if (subtitle.isNotEmpty) Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.muted, fontSize: 10.3, fontWeight: FontWeight.w500)),
             ])),
             if (trailing != null) trailing!,
           ]),
@@ -1025,8 +1025,8 @@ class _Avatar extends StatelessWidget {
         height: size,
         color: const Color(0xFFEFFDF5),
         child: normalized == null
-            ? Center(child: Text(_initials(text), style: const TextStyle(color: _AA.green, fontWeight: FontWeight.w900)))
-            : Image.network(normalized, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Center(child: Text(_initials(text), style: const TextStyle(color: _AA.green, fontWeight: FontWeight.w900)))),
+            ? Center(child: Text(_initials(text), style: const TextStyle(color: _AA.green, fontWeight: FontWeight.w600)))
+            : Image.network(normalized, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Center(child: Text(_initials(text), style: const TextStyle(color: _AA.green, fontWeight: FontWeight.w600)))),
       ),
     );
   }
@@ -1040,7 +1040,7 @@ class _EmptyMini extends StatelessWidget {
     return Container(
       alignment: Alignment.center,
       decoration: BoxDecoration(color: _AA.card2, borderRadius: BorderRadius.circular(12), border: Border.all(color: _AA.border)),
-      child: Text(text, style: const TextStyle(color: _AA.muted, fontSize: 12, fontWeight: FontWeight.w800)),
+      child: Text(text, style: const TextStyle(color: _AA.muted, fontSize: 12, fontWeight: FontWeight.w500)),
     );
   }
 }
@@ -1059,9 +1059,9 @@ class _ActivityError extends StatelessWidget {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           const Icon(Icons.error_outline_rounded, color: _AA.red, size: 34),
           const SizedBox(height: 8),
-          const Text('Не удалось загрузить активность', style: TextStyle(color: _AA.text, fontSize: 16, fontWeight: FontWeight.w900)),
+          const Text('Не удалось загрузить активность', style: TextStyle(color: _AA.text, fontSize: 16, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
-          Text(error, textAlign: TextAlign.center, style: const TextStyle(color: _AA.muted, fontSize: 12, fontWeight: FontWeight.w700)),
+          Text(error, textAlign: TextAlign.center, style: const TextStyle(color: _AA.muted, fontSize: 12, fontWeight: FontWeight.w500)),
           const SizedBox(height: 10),
           ElevatedButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh_rounded), label: const Text('Повторить')),
         ]),
@@ -1140,12 +1140,12 @@ class _ActivityLinePainter extends CustomPainter {
   }
 
   void _drawText(Canvas canvas, Size size, String text) {
-    final tp = TextPainter(text: TextSpan(text: text, style: const TextStyle(color: _AA.muted, fontSize: 13, fontWeight: FontWeight.w900)), textDirection: TextDirection.ltr)..layout(maxWidth: size.width - 30);
+    final tp = TextPainter(text: TextSpan(text: text, style: const TextStyle(color: _AA.muted, fontSize: 13, fontWeight: FontWeight.w600)), textDirection: TextDirection.ltr)..layout(maxWidth: size.width - 30);
     tp.paint(canvas, Offset((size.width - tp.width) / 2, (size.height - tp.height) / 2));
   }
 
   void _axisText(Canvas canvas, double x, double y, String text) {
-    final tp = TextPainter(text: TextSpan(text: text, style: const TextStyle(color: _AA.muted, fontSize: 9, fontWeight: FontWeight.w800)), textDirection: TextDirection.ltr)..layout();
+    final tp = TextPainter(text: TextSpan(text: text, style: const TextStyle(color: _AA.muted, fontSize: 9, fontWeight: FontWeight.w500)), textDirection: TextDirection.ltr)..layout();
     tp.paint(canvas, Offset(x, y));
   }
 
@@ -1181,7 +1181,7 @@ class _RadarActivityPainter extends CustomPainter {
       final p = center + Offset(math.cos(angle), math.sin(angle)) * radius * axes[i].value.clamp(0.0, 1.0);
       points.add(p);
       final label = axes[i].label;
-      final tp = TextPainter(text: TextSpan(text: label, style: const TextStyle(color: _AA.muted, fontSize: 10, fontWeight: FontWeight.w900)), textDirection: TextDirection.ltr)..layout(maxWidth: 82);
+      final tp = TextPainter(text: TextSpan(text: label, style: const TextStyle(color: _AA.muted, fontSize: 10, fontWeight: FontWeight.w600)), textDirection: TextDirection.ltr)..layout(maxWidth: 82);
       final labelPos = center + Offset(math.cos(angle), math.sin(angle)) * (radius + 20);
       tp.paint(canvas, labelPos - Offset(tp.width / 2, tp.height / 2));
     }
@@ -1261,7 +1261,7 @@ class _ReportDialogShell extends StatelessWidget {
           child: Row(children: [
             const Icon(Icons.description_rounded, color: _AA.green),
             const SizedBox(width: 8),
-            Expanded(child: Text(title, style: const TextStyle(color: _AA.text, fontSize: 17, fontWeight: FontWeight.w900))),
+            Expanded(child: Text(title, style: const TextStyle(color: _AA.text, fontSize: 17, fontWeight: FontWeight.w600))),
             IconButton(onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.close_rounded, color: _AA.text)),
           ]),
         ),
@@ -1294,9 +1294,9 @@ class _SessionReportView extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       children: [
         _Panel(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(session.title, style: const TextStyle(color: _AA.text, fontSize: 18, fontWeight: FontWeight.w900)),
+          Text(session.title, style: const TextStyle(color: _AA.text, fontSize: 18, fontWeight: FontWeight.w600)),
           const SizedBox(height: 4),
-          Text('${player?.name ?? 'Вся команда'} · ${session.createdAt} · точек: $pointsCount', style: const TextStyle(color: _AA.muted, fontSize: 12, fontWeight: FontWeight.w800)),
+          Text('${player?.name ?? 'Вся команда'} · ${session.createdAt} · точек: $pointsCount', style: const TextStyle(color: _AA.muted, fontSize: 12, fontWeight: FontWeight.w500)),
         ])),
         const SizedBox(height: 10),
         GridView.builder(

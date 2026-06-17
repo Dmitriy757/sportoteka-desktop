@@ -25,14 +25,14 @@ class CmrTextStyle {
   static TextStyle title(double size) => TextStyle(
         color: CmrColors.text,
         fontSize: size,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
         height: 1.12,
       );
 
   static TextStyle section({double size = 16}) => TextStyle(
         color: CmrColors.text,
         fontSize: size,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
         height: 1.18,
       );
 
@@ -59,13 +59,13 @@ class CmrTextStyle {
   static TextStyle tab({bool selected = false}) => TextStyle(
         color: selected ? CmrColors.green : CmrColors.text,
         fontSize: 13,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
       );
 
   static TextStyle action({bool danger = false}) => TextStyle(
         color: danger ? CmrColors.red : CmrColors.green,
         fontSize: 13,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
       );
 }
 
@@ -388,7 +388,7 @@ class CmrPrimaryButton extends StatelessWidget {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w800),
+                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
                   ),
                 ),
               ],

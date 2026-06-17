@@ -131,7 +131,7 @@ class TeamWorkspaceOverviewPanel extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Быстрый доступ', style: TextStyle(color: CmrColors.text, fontSize: 18, fontWeight: FontWeight.w900)),
+                const Text('Быстрый доступ', style: TextStyle(color: CmrColors.text, fontSize: 18, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 12),
                 LayoutBuilder(builder: (_, c) {
                   final cols = c.maxWidth > 900 ? 4 : 2;
@@ -175,9 +175,9 @@ class _Stat extends StatelessWidget {
         Container(width: 44, height: 44, decoration: BoxDecoration(color: color.withOpacity(0.10), borderRadius: BorderRadius.circular(15)), child: Icon(icon, color: color)),
         const SizedBox(width: 12),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: CmrColors.muted, fontSize: 11, fontWeight: FontWeight.w800)),
+          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: CmrColors.muted, fontSize: 11, fontWeight: FontWeight.w600)),
           const SizedBox(height: 5),
-          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: CmrColors.text, fontSize: 18, fontWeight: FontWeight.w900)),
+          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: CmrColors.text, fontSize: 18, fontWeight: FontWeight.w700)),
         ])),
       ]),
     );
@@ -201,7 +201,7 @@ class _Action extends StatelessWidget {
         child: Row(children: [
           Icon(icon, color: CmrColors.blue, size: 21),
           const SizedBox(width: 10),
-          Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: CmrColors.text, fontSize: 13, fontWeight: FontWeight.w900))),
+          Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: CmrColors.text, fontSize: 13, fontWeight: FontWeight.w700))),
           const Icon(Icons.chevron_right_rounded, color: CmrColors.muted),
         ]),
       ),

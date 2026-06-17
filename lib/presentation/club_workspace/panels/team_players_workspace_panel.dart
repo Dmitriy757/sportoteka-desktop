@@ -107,7 +107,7 @@ class TeamPlayersWorkspacePanel extends StatelessWidget {
                                                 style: const TextStyle(
                                                   color: CmrColors.text,
                                                   fontSize: 16,
-                                                  fontWeight: FontWeight.w900,
+                                                  fontWeight: FontWeight.w700,
                                                 ),
                                               ),
                                             ),
@@ -123,7 +123,7 @@ class TeamPlayersWorkspacePanel extends StatelessWidget {
                                                   style: const TextStyle(
                                                     color: CmrColors.blue,
                                                     fontSize: 11,
-                                                    fontWeight: FontWeight.w900,
+                                                    fontWeight: FontWeight.w700,
                                                   ),
                                                 ),
                                               ),
@@ -194,7 +194,7 @@ class _Chip extends StatelessWidget {
             style: const TextStyle(
               color: CmrColors.text,
               fontSize: 11,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],

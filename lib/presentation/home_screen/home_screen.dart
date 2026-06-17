@@ -27,6 +27,7 @@ import 'package:sportoteka/presentation/home_screen/home_screen_design.dart';
 import 'package:sportoteka/presentation/home_screen/widget/tracking_hero_widget.dart';
 import 'package:sportoteka/presentation/player_screen/player_dashboard_screen.dart';
 import 'package:sportoteka/presentation/profile_screen/profile_screen.dart';
+import 'package:sportoteka/presentation/my_profile_screen/my_profile_screen.dart';
 import 'package:sportoteka/presentation/reels_screen/reels_screen.dart';
 import 'package:sportoteka/presentation/service_screens/event_detail_screen.dart';
 import 'package:sportoteka/presentation/service_screens/generic_service_screen.dart';
@@ -983,6 +984,10 @@ class _HomeScreenState extends State<HomeScreen> {
   String _currentTeamLogoUrl = '';
   String _currentLocation = '';
   bool _hasBoundClub = false;
+  bool _workspaceContextLoaded = false;
+  bool _loginContextLoaded = false;
+  bool _myTeamsRequestFinished = false;
+  bool _myTeamsRequestSucceeded = false;
   int? _currentAge;
 
  List<Map<String, dynamic>> _catalogPreview = [];
@@ -1045,11 +1050,30 @@ String _selectedWorkspaceTeamName = '';
   bool get _isParentRole => _roleKey == 'parent' || _roleKey == 'родитель';
 bool get _isPlayerLikeRole => _isPlayerRole || _isParentRole;
 
+bool get _hasAnyWorkspaceBinding =>
+    _hasBoundClub ||
+    _currentClubId > 0 ||
+    _currentTeamId > 0 ||
+    _currentClubName.trim().isNotEmpty ||
+    _currentTeamName.trim().isNotEmpty ||
+    _myTeams.isNotEmpty ||
+    _clubTeams.isNotEmpty ||
+    ((_selectedWorkspaceTeamId ?? 0) > 0);
+
+// Важно для Web/планшета/ПК: кнопку «Создать команду» показываем только
+// когда сервер ТОЧНО ответил, что у тренера нет команды. Если get_user.php
+// или get_my_teams.php временно не ответили, не считаем это отсутствием клуба.
 bool get _isCoachWithoutTeam =>
-    _isCoachRole && _currentTeamId <= 0 && _myTeams.isEmpty;
+    _isCoachRole &&
+    _workspaceContextLoaded &&
+    _loginContextLoaded &&
+    _myTeamsRequestFinished &&
+    _myTeamsRequestSucceeded &&
+    !_hasAnyWorkspaceBinding;
 
 bool get _hasCoachOwnedTeams =>
-    _isCoachRole && _myTeams.isNotEmpty;
+    _isCoachRole &&
+    (_myTeams.isNotEmpty || _clubTeams.isNotEmpty || _currentTeamId > 0);
     
   @override
   void initState() {
@@ -1090,7 +1114,7 @@ bool get _hasCoachOwnedTeams =>
         }
       });
 
-    _initAll();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _redirectDeprecatedHomeToProfile());
   }
 
   @override
@@ -1100,6 +1124,18 @@ bool get _hasCoachOwnedTeams =>
     _homeModeController.dispose();
     _dashboardPreviewController.dispose();
     super.dispose();
+  }
+
+  Future<void> _redirectDeprecatedHomeToProfile() async {
+    final profileUserId = await PrefUtils.getUserId();
+    if (!mounted) return;
+
+    if (profileUserId == null || profileUserId <= 0) {
+      Get.offAllNamed(AppRoutes.loginScreen);
+      return;
+    }
+
+    Get.offAll(() => MyProfileScreen(userId: profileUserId));
   }
 
   bool _isTablet(BuildContext context) {
@@ -1709,6 +1745,9 @@ String _buildClubPlanPreview() {
       _clubTrainers = clubTrainers;
       _clubEvents = clubEvents;
       _clubPlans = clubPlans.take(8).toList();
+      if (_clubTeams.isNotEmpty || clubProfile.isNotEmpty || _currentClubId > 0) {
+        _hasBoundClub = true;
+      }
 
       final loadedClubName = _pickMapString(
         clubProfile,
@@ -1759,8 +1798,16 @@ String _buildClubPlanPreview() {
   final userId = _userId ?? await PrefUtils.getUserId() ?? 0;
   if (userId <= 0) return;
 
+  if (mounted) {
+    setState(() {
+      _myTeamsRequestFinished = false;
+      _myTeamsRequestSucceeded = false;
+    });
+  }
+
   try {
     final groups = <List<Map<String, dynamic>>>[];
+    bool didReceiveAnyTeamResponse = false;
     final variants = <Map<String, dynamic>>[
       {'user_id': userId},
       {'trainer_id': userId},
@@ -1771,10 +1818,12 @@ String _buildClubPlanPreview() {
     for (final params in variants) {
       try {
         final response = await dio.get('get_my_teams.php', queryParameters: params);
+        didReceiveAnyTeamResponse = true;
         groups.add(_asMapList(response.data));
       } catch (_) {}
       try {
         final response = await dio.post('get_my_teams.php', data: params);
+        didReceiveAnyTeamResponse = true;
         groups.add(_asMapList(response.data));
       } catch (_) {}
     }
@@ -1794,13 +1843,61 @@ String _buildClubPlanPreview() {
 
     if (!mounted) return;
     setState(() {
-      _myTeams = teams;
+      _myTeamsRequestFinished = true;
+      _myTeamsRequestSucceeded = didReceiveAnyTeamResponse;
+      _myTeams = didReceiveAnyTeamResponse ? teams : _myTeams;
+
+      // Если get_user.php не вернул team_id/club_id, берём первую доступную
+      // команду из get_my_teams.php. Иначе HomeScreen ошибочно считает,
+      // что тренеру нужно создать новую команду.
+      if (teams.isNotEmpty) {
+        final first = teams.first;
+        final firstTeamId =
+            int.tryParse('${first['id'] ?? first['team_id'] ?? first['teamId'] ?? 0}') ?? 0;
+        final firstClubId =
+            int.tryParse('${first['club_id'] ?? first['clubId'] ?? first['owner_club_id'] ?? 0}') ?? 0;
+        final firstTeamName =
+            (first['name'] ?? first['team_name'] ?? first['teamName'] ?? '').toString().trim();
+        final firstClubName =
+            (first['club_name'] ?? first['clubName'] ?? '').toString().trim();
+        final firstLogo = _teamLogoFromAnyKey({
+          'logo': first['logo'] ?? first['team_logo'] ?? first['club_logo'] ?? first['photo'],
+          'logo_url': first['logo_url'] ?? first['team_logo_url'] ?? first['club_logo_url'] ?? first['photo_url'],
+          'club_logo': first['club_logo'],
+          'club_logo_url': first['club_logo_url'],
+          'image': first['image'] ?? first['photo'],
+          'image_url': first['image_url'],
+        });
+
+        if (_currentTeamId <= 0 && firstTeamId > 0) {
+          _currentTeamId = firstTeamId;
+        }
+        if (_currentTeamName.isEmpty && firstTeamName.isNotEmpty) {
+          _currentTeamName = firstTeamName;
+        }
+        if (_currentClubId <= 0 && firstClubId > 0) {
+          _currentClubId = firstClubId;
+        }
+        if (_currentClubName.isEmpty && firstClubName.isNotEmpty) {
+          _currentClubName = firstClubName;
+        }
+        if (_currentTeamLogoUrl.isEmpty && firstLogo.isNotEmpty) {
+          _currentTeamLogoUrl = firstLogo;
+        }
+        _selectedWorkspaceTeamId ??= firstTeamId > 0 ? firstTeamId : null;
+        if (_selectedWorkspaceTeamName.isEmpty && firstTeamName.isNotEmpty) {
+          _selectedWorkspaceTeamName = firstTeamName;
+        }
+        _hasBoundClub = true;
+      }
     });
   } catch (e) {
     debugPrint('Ошибка загрузки моих команд: $e');
     if (!mounted) return;
     setState(() {
-      _myTeams = [];
+      _myTeamsRequestFinished = true;
+      _myTeamsRequestSucceeded = false;
+      // Не очищаем _myTeams: ошибка сети/API не означает, что команды нет.
     });
   }
 }
@@ -1826,6 +1923,9 @@ String _buildClubPlanPreview() {
     try {
       final userId = await PrefUtils.getUserId() ?? 0;
       final role = (await PrefUtils.getRole() ?? '').trim().toLowerCase();
+      if (mounted) {
+        setState(() => _loginContextLoaded = false);
+      }
       if (userId <= 0) return;
 
       final response = await dio.get(
@@ -1919,6 +2019,7 @@ String _buildClubPlanPreview() {
 
       if (!mounted) return;
       setState(() {
+        _loginContextLoaded = true;
         _currentRole = role;
         _currentClubId = clubId;
         _currentTeamId = teamId;
@@ -1929,6 +2030,8 @@ String _buildClubPlanPreview() {
       });
     } catch (e) {
       debugPrint('Ошибка _loadCurrentLoginContext: $e');
+      if (!mounted) return;
+      setState(() => _loginContextLoaded = false);
     }
   }
 
@@ -2233,12 +2336,49 @@ void _runWorkspaceModuleById(String id) {
     ];
   }
 
+  String _friendlyHomeError(Object error) {
+    final text = error.toString();
+
+    if (text.contains('XMLHttpRequest') ||
+        text.contains('NetworkError') ||
+        text.contains('connection errored') ||
+        text.contains('SocketException') ||
+        text.contains('TimeoutException') ||
+        text.contains('Connection closed') ||
+        text.contains('Failed host lookup')) {
+      return 'Не удалось подключиться к серверу. Проверьте интернет или повторите попытку.';
+    }
+
+    if (text.contains('FormatException')) {
+      return 'Сервер временно вернул некорректный ответ. Повторите попытку.';
+    }
+
+    if (text.contains('Нет интернет-соединения')) {
+      return 'Нет интернет-соединения. Проверьте сеть и повторите попытку.';
+    }
+
+    return 'Не удалось загрузить данные. Повторите попытку.';
+  }
+
+  Future<void> _runHomeLoadSafely(
+    String label,
+    Future<void> Function() task,
+  ) async {
+    try {
+      await task().timeout(const Duration(seconds: 18));
+    } catch (e) {
+      debugPrint('HomeScreen: не удалось загрузить $label: $e');
+    }
+  }
+
   Future<void> _loadInitialData() async {
     if (!mounted) return;
 
     setState(() {
       isLoading = true;
+      _workspaceContextLoaded = false;
       hasError = false;
+      errorMessage = null;
     });
 
     try {
@@ -2247,34 +2387,47 @@ void _runWorkspaceModuleById(String id) {
         throw Exception('Нет интернет-соединения');
       }
 
- await Future.wait([
-  _loadEvents(selectedSport ?? 'Футбол'),
-  _loadCachedData('venues', () => _fetchVenues('Все')),
-  _loadCachedData(
-    'teams',
-    () => _fetchTeamsBySport(selectedSport ?? 'Футбол'),
-  ),
-  _loadCachedData('catalog_preview', () async {
-    final data = await _fetchCatalogPreview();
-    _catalogPreview = data;
-    return data;
-  }),
-  _loadUserPosts(selectedSport ?? 'Футбол'),
-  _loadReels(),
-  _loadRecommendedVideoFolders(),
-  _loadClubWorkspaceExtras(),
-  _loadRecentChats(),
-]);
+      final sport = selectedSport ?? 'Футбол';
 
-      await _loadRoleWorkspaceData();
+      await Future.wait([
+        _runHomeLoadSafely('мероприятия', () => _loadEvents(sport)),
+        _runHomeLoadSafely(
+          'площадки',
+          () => _loadCachedData('venues', () => _fetchVenues('Все')),
+        ),
+        _runHomeLoadSafely(
+          'команды',
+          () => _loadCachedData('teams', () => _fetchTeamsBySport(sport)),
+        ),
+        _runHomeLoadSafely(
+          'каталог',
+          () => _loadCachedData('catalog_preview', () async {
+            final data = await _fetchCatalogPreview();
+            _catalogPreview = data;
+            return data;
+          }),
+        ),
+        _runHomeLoadSafely('посты', () => _loadUserPosts(sport)),
+        _runHomeLoadSafely('reels', _loadReels),
+        _runHomeLoadSafely('видеоуроки', _loadRecommendedVideoFolders),
+        _runHomeLoadSafely('рабочую панель клуба', _loadClubWorkspaceExtras),
+        _runHomeLoadSafely('чаты', _loadRecentChats),
+      ]);
+
+      await _runHomeLoadSafely('роль и рабочую область', _loadRoleWorkspaceData);
     } catch (e) {
       if (!mounted) return;
       setState(() {
         hasError = true;
-        errorMessage = e.toString();
+        errorMessage = _friendlyHomeError(e);
       });
     } finally {
-      if (mounted) setState(() => isLoading = false);
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+          _workspaceContextLoaded = true;
+        });
+      }
     }
   }
   
@@ -2614,7 +2767,11 @@ Future<void> _loadRoleWorkspaceData() async {
 
       return [];
     } on DioException catch (e) {
-      throw Exception('Ошибка загрузки мероприятий: ${e.message}');
+      debugPrint('Ошибка загрузки мероприятий: ${e.message}');
+      return [];
+    } catch (e) {
+      debugPrint('Ошибка загрузки мероприятий: $e');
+      return [];
     }
   }
 
@@ -2832,13 +2989,22 @@ Future<void> _loadRoleWorkspaceData() async {
       return;
     }
 
-    final events = await _fetchWeeklyEvents(sport);
-    if (!mounted) return;
+    try {
+      final events = await _fetchWeeklyEvents(sport);
+      if (!mounted) return;
 
-    setState(() {
-      _eventsCache[sport] = events;
-      _eventsCacheTimestamps[sport] = now;
-    });
+      setState(() {
+        _eventsCache[sport] = events;
+        _eventsCacheTimestamps[sport] = now;
+      });
+    } catch (e) {
+      debugPrint('Ошибка загрузки мероприятий: $e');
+      if (!mounted) return;
+      setState(() {
+        _eventsCache.putIfAbsent(sport, () => <Map<String, dynamic>>[]);
+        _eventsCacheTimestamps[sport] = now;
+      });
+    }
   }
 
   Future<void> _loadRecommendedVideoFolders() async {
@@ -3190,10 +3356,10 @@ Future<void> _loadRoleWorkspaceData() async {
     setState(() {
       _homeWorkspaceTab = tab;
 
-      if (tab == 'overview' || tab == 'news') {
-        _homeModeIndex = 1; // Главная область открывает текущую новостную ленту.
-      } else if (tab == 'dashboard') {
-        _homeModeIndex = 0; // Старый внутренний режим рабочей панели оставляем только для внутренних переходов.
+      if (tab == 'overview' || tab == 'dashboard') {
+        _homeModeIndex = 0; // Обзор теперь открывает рабочие функции, как Club Workspace.
+      } else if (tab == 'news') {
+        _homeModeIndex = 1; // Социальная лента и новости вынесены отдельно.
       } else if (tab == 'services') {
         _homeModeIndex = 2;
       } else if (tab == 'tips') {
@@ -3223,14 +3389,14 @@ Future<void> _loadRoleWorkspaceData() async {
       _HomeSideMenuItem.group('Основное'),
       _HomeSideMenuItem(
         id: 'news',
-        title: 'Главные новости',
-        subtitle: 'Новости клуба и сообщества',
+        title: 'Соцлента и новости',
+        subtitle: 'Публикации, новости и reels',
         icon: Icons.newspaper_rounded,
       ),
       _HomeSideMenuItem(
         id: 'clubs',
-        title: 'Клубы и команды',
-        subtitle: 'Команды, составы и переход в CMR',
+        title: 'Команды / CMR',
+        subtitle: 'Команды, составы и рабочий режим',
         icon: Icons.groups_rounded,
       ),
       _HomeSideMenuItem(
@@ -3270,7 +3436,7 @@ Future<void> _loadRoleWorkspaceData() async {
       _HomeSideMenuItem(
         id: 'services',
         title: 'Сервисы',
-        subtitle: 'Инструменты приложения',
+        subtitle: 'Дополнительные инструменты',
         icon: Icons.apps_rounded,
       ),
       _HomeSideMenuItem(
@@ -3467,7 +3633,7 @@ Future<void> _loadRoleWorkspaceData() async {
     final accountName = _currentFullName.trim().isEmpty ? 'Спортотека' : _currentFullName.trim();
     final safeName = targetName.isNotEmpty ? targetName : accountName;
     final logoUrl = _currentTeamLogoUrl.trim();
-    final overviewActive = _homeWorkspaceTab == 'overview';
+    final overviewActive = _homeWorkspaceTab == 'overview' || _homeWorkspaceTab == 'dashboard';
 
     String railLabel(_HomeSideMenuItem item) {
       switch (item.id) {
@@ -3564,7 +3730,7 @@ Future<void> _loadRoleWorkspaceData() async {
           const SizedBox(height: 6),
           _HomeClubRailUtilityButton(
             icon: Icons.dashboard_customize_rounded,
-            label: 'Обзор',
+            label: 'Функции',
             tooltip: 'Обзор главной',
             active: overviewActive,
             onTap: () => _selectHomeWorkspaceTab('overview'),
@@ -3778,7 +3944,7 @@ Future<void> _loadRoleWorkspaceData() async {
       case 'news':
         return 1;
       case 'dashboard':
-        return 4;
+        return 0;
       case 'chat':
         return 2;
       case 'profile':
@@ -3825,11 +3991,11 @@ Future<void> _loadRoleWorkspaceData() async {
             items: const [
               BottomNavigationBarItem(
                 icon: Icon(Icons.space_dashboard_rounded),
-                label: 'Обзор',
+                label: 'Функции',
               ),
               BottomNavigationBarItem(
                 icon: Icon(Icons.newspaper_rounded),
-                label: 'Новости',
+                label: 'Лента',
               ),
               BottomNavigationBarItem(
                 icon: Icon(Icons.forum_rounded),
@@ -4225,8 +4391,22 @@ Future<void> _loadRoleWorkspaceData() async {
     _scaffoldKey.currentState?.openDrawer();
   }
 
+  bool get _redirectDeprecatedHomeEnabled => true;
+
   @override
   Widget build(BuildContext context) {
+    // HomeScreen оставлен только как безопасный redirect-экран для старых маршрутов.
+    // Если после обновления/перезапуска приложение всё ещё попадает сюда,
+    // пользователь сразу отправляется в MyProfileScreen или на логин при отсутствии user_id.
+    if (_redirectDeprecatedHomeEnabled) {
+      return const Scaffold(
+        backgroundColor: _homePageBackground,
+        body: Center(
+          child: CircularProgressIndicator(color: _workspaceMenuGreen),
+        ),
+      );
+    }
+
     if (hasError) {
       return Scaffold(
         key: _scaffoldKey,
@@ -4252,7 +4432,7 @@ Future<void> _loadRoleWorkspaceData() async {
                   const Icon(Icons.error_outline, size: 56, color: Colors.red),
                   const SizedBox(height: 20),
                   Text(
-                    errorMessage ?? 'Произошла ошибка',
+                    errorMessage ?? 'Не удалось загрузить данные. Повторите попытку.',
                     style: AppText.h3.copyWith(color: _homeDesign.textColor),
                     textAlign: TextAlign.center,
                   ),
@@ -4323,6 +4503,8 @@ Future<void> _loadRoleWorkspaceData() async {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              _buildHomeModeGate(context),
+              const SizedBox(height: 12),
               if (showCurrentHub) ...[
                 AnimatedSwitcher(
                   duration: const Duration(milliseconds: 220),
@@ -4345,6 +4527,8 @@ Future<void> _loadRoleWorkspaceData() async {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              _buildHomeModeGate(context),
+              const SizedBox(height: 12),
               if (showCurrentHub) ...[
                 AnimatedSwitcher(
                   duration: const Duration(milliseconds: 220),
@@ -4364,6 +4548,8 @@ Future<void> _loadRoleWorkspaceData() async {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        _buildHomeModeGate(context),
+        const SizedBox(height: 10),
         if (showCurrentHub) ...[
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 220),
@@ -4374,6 +4560,220 @@ Future<void> _loadRoleWorkspaceData() async {
           const SizedBox(height: 10),
         ...currentSections,
       ],
+    );
+  }
+
+  Widget _buildHomeModeGate(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final wide = width >= 760;
+    final targetName = _getDashboardTargetName().trim().isNotEmpty
+        ? _getDashboardTargetName().trim()
+        : (_currentFullName.trim().isNotEmpty ? _currentFullName.trim() : 'Спортотека');
+
+    final functionActive = _homeModeIndex == 0;
+    final socialActive = _homeModeIndex == 1;
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(wide ? 14 : 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFEFF2F5)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.035),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF7F8FA),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                ),
+                child: Icon(
+                  Icons.alt_route_rounded,
+                  color: _workspaceMenuGraphite,
+                  size: 21,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Спортотека: функции отдельно, лента отдельно',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF111827),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        height: 1.05,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      targetName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF667085),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (wide)
+            Row(
+              children: [
+                Expanded(
+                  child: _buildHomeModeGateTile(
+                    title: _isClubRole ? 'Club Workspace' : 'Рабочая система',
+                    subtitle: _isClubRole
+                        ? 'Команды, состав, тренеры, календарь и матчи'
+                        : 'Функции команды: тренировки, матчи, планы и чат',
+                    icon: Icons.dashboard_customize_rounded,
+                    active: functionActive,
+                    accent: _workspaceMenuGreen,
+                    onTap: () => _selectHomeWorkspaceTab('dashboard'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _buildHomeModeGateTile(
+                    title: 'Социальная лента',
+                    subtitle: 'Новости, публикации, reels и материалы сообщества',
+                    icon: Icons.dynamic_feed_rounded,
+                    active: socialActive,
+                    accent: const Color(0xFFE1306C),
+                    onTap: () => _selectHomeWorkspaceTab('news'),
+                  ),
+                ),
+              ],
+            )
+          else ...[
+            _buildHomeModeGateTile(
+              title: _isClubRole ? 'Club Workspace' : 'Рабочая система',
+              subtitle: _isClubRole
+                  ? 'Команды, состав, тренеры, календарь и матчи'
+                  : 'Функции команды: тренировки, матчи, планы и чат',
+              icon: Icons.dashboard_customize_rounded,
+              active: functionActive,
+              accent: _workspaceMenuGreen,
+              onTap: () => _selectHomeWorkspaceTab('dashboard'),
+            ),
+            const SizedBox(height: 8),
+            _buildHomeModeGateTile(
+              title: 'Социальная лента',
+              subtitle: 'Новости, публикации, reels и материалы сообщества',
+              icon: Icons.dynamic_feed_rounded,
+              active: socialActive,
+              accent: const Color(0xFFE1306C),
+              onTap: () => _selectHomeWorkspaceTab('news'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHomeModeGateTile({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required bool active,
+    required Color accent,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: active ? _workspaceMenuGraphite : const Color(0xFFF7F8FA),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: active ? _workspaceMenuGraphite : const Color(0xFFEFF2F5),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: active ? Colors.white.withOpacity(.12) : Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: active ? Colors.white.withOpacity(.10) : const Color(0xFFE5E7EB),
+                  ),
+                ),
+                child: Icon(icon, color: active ? Colors.white : accent, size: 21),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: active ? Colors.white : const Color(0xFF111827),
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w800,
+                        height: 1.05,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: active ? Colors.white.withOpacity(.70) : const Color(0xFF667085),
+                        fontSize: 11.2,
+                        fontWeight: FontWeight.w600,
+                        height: 1.15,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                active ? Icons.check_circle_rounded : Icons.arrow_forward_rounded,
+                color: active ? Colors.white : accent,
+                size: active ? 19 : 18,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -7300,8 +7700,8 @@ Widget _buildHeroStatCardHome({
 
   switch (_homeModeIndex) {
     case 1:
-      title = 'Главные новости';
-      subtitle = 'Лента клуба и сообщества';
+      title = 'Социальная лента';
+      subtitle = 'Новости, публикации и материалы сообщества';
       icon = Icons.newspaper_rounded;
       break;
     case 2:
@@ -7315,8 +7715,8 @@ Widget _buildHeroStatCardHome({
       icon = Icons.tips_and_updates_rounded;
       break;
     default:
-      title = 'Главная';
-      subtitle = 'Новости и быстрые разделы';
+      title = 'Рабочая система';
+      subtitle = 'Функции клуба, команды и тренера';
       icon = Icons.dashboard_customize_rounded;
   }
 
@@ -7389,16 +7789,16 @@ Widget _buildHeroStatCardHome({
               Expanded(
                 child: _buildHubModeChip(
                   index: 0,
-                  title: 'Инструменты',
-                  icon: Icons.widgets_rounded,
+                  title: 'Функции',
+                  icon: Icons.dashboard_customize_rounded,
                 ),
               ),
               const SizedBox(width: 4),
               Expanded(
                 child: _buildHubModeChip(
                   index: 1,
-                  title: 'Новости',
-                  icon: Icons.forum_rounded,
+                  title: 'Лента',
+                  icon: Icons.dynamic_feed_rounded,
                 ),
               ),
               const SizedBox(width: 4),

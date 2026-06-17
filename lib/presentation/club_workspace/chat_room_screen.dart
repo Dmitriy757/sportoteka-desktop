@@ -1,7 +1,9 @@
 // lib/presentation/chat_screen/chat_room_screen.dart
+// Windows 11 / Fluent refresh based on CMR workspace typography.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' show FontFeature;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -16,6 +18,130 @@ import 'package:shimmer/shimmer.dart';
 import 'package:sportoteka/presentation/my_profile_screen/my_profile_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/edit_group_chat_screen.dart';
 import 'package:sportoteka/call/audio_call_screen.dart';
+
+
+class _WinChatColors {
+  static const Color bg = Color(0xFFFFFFFF);
+  static const Color panel = Colors.white;
+  static const Color glass = Color(0xF7FFFFFF);
+  static const Color soft = Color(0xFFFAFBFC);
+  static const Color soft2 = Color(0xFFF6F7F9);
+  static const Color text = Color(0xFF0B0F14);
+  static const Color muted = Color(0xFF6B7280);
+  static const Color graphite = Color(0xFF111827);
+  static const Color graphite2 = Color(0xFF1F2937);
+  static const Color green = Color(0xFF00A750);
+  static const Color greenSoft = Color(0xFFF3FBF7);
+  static const Color blue = Color(0xFF2563EB);
+  static const Color blueSoft = Color(0xFFF4F7FF);
+  static const Color cyan = Color(0xFF06B6D4);
+  static const Color cyanSoft = Color(0xFFEFFBFF);
+  static const Color violet = Color(0xFF7C3AED);
+  static const Color violetSoft = Color(0xFFF5F0FF);
+  static const Color pink = Color(0xFFEC4899);
+  static const Color pinkSoft = Color(0xFFFFF1F8);
+  static const Color amber = Color(0xFFF59E0B);
+  static const Color amberSoft = Color(0xFFFFFBEB);
+  static const Color red = Color(0xFFD92D20);
+}
+
+Color _messageAccent(int index) {
+  const colors = <Color>[
+    _WinChatColors.green,
+    _WinChatColors.blue,
+    _WinChatColors.cyan,
+    _WinChatColors.violet,
+    _WinChatColors.pink,
+    _WinChatColors.amber,
+  ];
+  return colors[index.abs() % colors.length];
+}
+
+Color _messageAccentSoft(int index) {
+  const colors = <Color>[
+    _WinChatColors.greenSoft,
+    _WinChatColors.blueSoft,
+    _WinChatColors.cyanSoft,
+    _WinChatColors.violetSoft,
+    _WinChatColors.pinkSoft,
+    _WinChatColors.amberSoft,
+  ];
+  return colors[index.abs() % colors.length];
+}
+
+
+class _WinChatText {
+  static const String family = 'Segoe UI';
+  static const List<String> fallback = <String>[
+    'SF Pro Display',
+    'SF Pro Text',
+    'Inter',
+    'Roboto',
+    'Arial',
+  ];
+
+  static double compact(double size) => size <= 10 ? size : size - .65;
+
+  static TextStyle title(double size) => TextStyle(
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        color: _WinChatColors.text,
+        fontSize: compact(size),
+        fontWeight: FontWeight.w700,
+        letterSpacing: -.35,
+        height: 1.08,
+      );
+
+  static TextStyle body(double size, {Color color = _WinChatColors.text, FontWeight weight = FontWeight.w500}) => TextStyle(
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        color: color,
+        fontSize: compact(size),
+        fontWeight: weight,
+        letterSpacing: -.05,
+        height: 1.32,
+      );
+
+  static TextStyle caption({Color color = _WinChatColors.muted}) => const TextStyle(
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        color: _WinChatColors.muted,
+        fontSize: 10.75,
+        fontWeight: FontWeight.w600,
+        letterSpacing: .05,
+        height: 1.12,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      ).copyWith(color: color);
+}
+
+class _WinChatDecor {
+  static BoxDecoration workspaceBg() => const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFFFFFFFF),
+            Color(0xFFF6FFF9),
+            Color(0xFFF4F7FF),
+            Color(0xFFFFF7FB),
+          ],
+          stops: [0.0, .38, .72, 1.0],
+        ),
+      );
+
+  static BoxDecoration inputBar() => BoxDecoration(
+        color: _WinChatColors.glass,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.035),
+            blurRadius: 24,
+            spreadRadius: -16,
+            offset: const Offset(0, -10),
+          ),
+        ],
+      );
+}
+
 
 class ChatRoomScreen extends StatefulWidget {
   final int chatId;
@@ -1003,9 +1129,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Ответ на $author',
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.35)),
                   const SizedBox(height: 2),
-                  Text(preview, style: const TextStyle(color: Colors.black54, fontSize: 12)),
+                  Text(preview, style: const TextStyle(color: Colors.black54, fontSize: 11.55)),
                 ],
               ),
             ),
@@ -1016,7 +1142,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
               replyingToId = null;
               replyingToMessage = null;
             }),
-            icon: const Icon(Icons.close, size: 18),
+            icon: const Icon(Icons.close, size: 16),
           ),
         ],
       ),
@@ -1040,18 +1166,18 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
       ),
       child: Row(
         children: [
-          const Icon(Icons.edit, size: 16),
+          const Icon(Icons.edit, size: 15),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               preview.isEmpty ? 'Редактирование сообщения' : 'Редактирование: $preview',
-              style: const TextStyle(fontSize: 13),
+              style: const TextStyle(fontSize: 12.35),
             ),
           ),
           IconButton(
             tooltip: 'Отменить',
             onPressed: () => setState(() => editingMessageId = null),
-            icon: const Icon(Icons.close, size: 18),
+            icon: const Icon(Icons.close, size: 16),
           ),
         ],
       ),
@@ -1204,12 +1330,12 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
             if ((replyAuthor ?? '').toString().isNotEmpty)
               Text(
                 (replyAuthor ?? '').toString(),
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11.55),
               ),
             const SizedBox(height: 2),
             Text(
               preview,
-              style: const TextStyle(color: Colors.black54, fontSize: 12),
+              style: const TextStyle(color: Colors.black54, fontSize: 11.55),
             ),
           ],
         ),
@@ -1230,6 +1356,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
     final heroTag = 'img_$id';
 
     final isLocalSending = msg['_local'] == true && (msg['_status'] == 'sending');
+    final bubbleAccent = isMine ? _WinChatColors.green : _messageAccent(senderName.hashCode);
+    final bubbleSoft = isMine ? _WinChatColors.greenSoft : _messageAccentSoft(senderName.hashCode);
 
     return Container(
       key: key,
@@ -1257,7 +1385,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                       radius: 18,
                       backgroundImage:
                           msg['avatar_url'] != null ? NetworkImage(msg['avatar_url']) : null,
-                      backgroundColor: const Color(0xFF1E74C4),
+                      backgroundColor: bubbleAccent,
                       child: msg['avatar_url'] == null
                           ? Text(
                               (msg['first_name'] ?? 'U').toString().substring(0, 1),
@@ -1277,9 +1405,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                         child: Text(
                           senderName,
                           style: const TextStyle(
-                            fontSize: 13,
+                            fontSize: 12.35,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF1E74C4),
+                            color: bubbleAccent,
                           ),
                         ),
                       ),
@@ -1291,13 +1419,31 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                           ),
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                           decoration: BoxDecoration(
-                            color: isMine ? const Color(0xFFE3F2FD) : Colors.white,
-                            borderRadius: BorderRadius.circular(12),
+                            gradient: isMine
+                                ? const LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [_WinChatColors.green, _WinChatColors.blue],
+                                  )
+                                : LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [Colors.white, bubbleSoft.withOpacity(.74)],
+                                  ),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.white.withOpacity(.78)),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
+                                color: (isMine ? _WinChatColors.green : bubbleAccent).withOpacity(0.14),
+                                blurRadius: 18,
+                                spreadRadius: -10,
+                                offset: const Offset(0, 10),
+                              ),
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.026),
+                                blurRadius: 10,
+                                spreadRadius: -8,
+                                offset: const Offset(0, 4),
                               ),
                             ],
                           ),
@@ -1409,7 +1555,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                                             fit: BoxFit.cover,
                                             errorBuilder: (_, __, ___) => Text(
                                               text,
-                                              style: const TextStyle(fontSize: 16),
+                                              style: const TextStyle(fontSize: 15.05),
                                             ),
                                           ),
                                         ),
@@ -1417,7 +1563,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                                     )
                                   ];
                                 } else {
-                                  final style = const TextStyle(fontSize: 16);
+                                  final style = TextStyle(
+                                    fontFamily: _WinChatText.family,
+                                    fontFamilyFallback: _WinChatText.fallback,
+                                    fontSize: 14.55,
+                                    fontWeight: FontWeight.w500,
+                                    height: 1.28,
+                                    color: isMine ? Colors.white : _WinChatColors.text,
+                                  );
                                   if (searchQuery.isNotEmpty &&
                                       text.toLowerCase().contains(searchQuery.toLowerCase())) {
                                     return [_highlightedText(text, searchQuery, style)];
@@ -1432,10 +1585,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                                   Text(
                                     DateFormat.Hm().format(messageDate),
                                     style: TextStyle(
-                                      fontSize: 12,
-                                      color: isMine
-                                          ? Colors.blueGrey.shade300
-                                          : Colors.grey.shade600,
+                                      fontSize: 11.55,
+                                      color: isMine ? Colors.white.withOpacity(.72) : Colors.grey.shade600,
                                     ),
                                   ),
                                   if (isEdited)
@@ -1443,7 +1594,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                                       padding: EdgeInsets.only(left: 6),
                                       child: Text(
                                         '· изменено',
-                                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                                        style: TextStyle(fontSize: 10.55, color: Colors.grey),
                                       ),
                                     ),
                                   if (isMine)
@@ -1452,7 +1603,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                                       child: Icon(
                                         Icons.done_all,
                                         size: 16,
-                                        color: msg['is_read'] == 1 ? Colors.blue : Colors.grey,
+                                        color: msg['is_read'] == 1 ? Colors.white : Colors.white.withOpacity(.62),
                                       ),
                                     ),
                                 ],
@@ -1499,11 +1650,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: _WinChatColors.bg,
       appBar: AppBar(
         automaticallyImplyLeading: !widget.embedded,
         elevation: 0,
-        backgroundColor: Colors.white,
+        backgroundColor: _WinChatColors.glass,
+        surfaceTintColor: Colors.transparent,
+        systemOverlayStyle: SystemUiOverlayStyle.dark,
         leading: widget.embedded
             ? null
             : IconButton(
@@ -1531,18 +1684,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                     _chatTitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontSize: compact ? 16 : 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: _WinChatText.title(compact ? 15.5 : 17.2),
                   ),
                   if (members.isNotEmpty)
                     Text(
                       '${members.length} участников',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.grey, fontSize: 12),
+                      style: _WinChatText.caption(),
                     ),
                 ],
               ),
@@ -1555,7 +1704,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                       searchHits.isEmpty
                           ? '0/0'
                           : '${(currentHit >= 0 ? currentHit + 1 : 0)}/${searchHits.length}',
-                      style: const TextStyle(color: Colors.black87, fontSize: 13),
+                      style: const TextStyle(color: Colors.black87, fontSize: 12.35),
                     ),
                   ),
                 ),
@@ -1657,7 +1806,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
             child: Stack(
               children: [
                 Container(
-                  color: Colors.white,
+                  decoration: _WinChatDecor.workspaceBg(),
                   child: isLoading
                       ? Shimmer.fromColors(
                           baseColor: Colors.grey.shade300,
@@ -1697,12 +1846,17 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                                     margin: const EdgeInsets.only(bottom: 4),
                                     padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
                                     decoration: BoxDecoration(
-                                      color: Colors.grey.shade200,
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [Colors.white.withOpacity(.92), _WinChatColors.blueSoft.withOpacity(.86)],
+                                      ),
                                       borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: Colors.white.withOpacity(.78)),
                                     ),
                                     child: Text(
                                       DateFormat.yMMMMd('ru_RU').format(currentDate),
-                                      style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                                      style: _WinChatText.caption(),
                                     ),
                                   ),
                                   messageWidget,
@@ -1723,9 +1877,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                         opacity: visible ? 1.0 : 0.0,
                         duration: const Duration(milliseconds: 200),
                         child: FloatingActionButton.small(
-                          backgroundColor: Colors.blue,
+                          backgroundColor: _WinChatColors.blue,
                           onPressed: _scrollToBottom,
-                          child: const Icon(Icons.arrow_downward, size: 20),
+                          child: const Icon(Icons.arrow_downward, size: 18),
                         ),
                       );
                     },
@@ -1737,21 +1891,26 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
           SafeArea(
             top: false,
             child: Container(
-              color: Colors.white,
+              decoration: _WinChatDecor.inputBar(),
               padding: EdgeInsets.fromLTRB(compact ? 8 : 16, 8, compact ? 8 : 16, 8),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   IconButton(
                     visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
-                    icon: const Icon(Icons.attach_file, color: Colors.grey),
+                    icon: const Icon(Icons.attach_file, color: _WinChatColors.muted),
                     onPressed: _pickImage,
                   ),
                   Expanded(
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade100,
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Colors.white, _WinChatColors.blueSoft.withOpacity(.72)],
+                        ),
                         borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.white.withOpacity(.82)),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.end,
@@ -1777,7 +1936,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                           if (isTyping)
                             IconButton(
                               visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
-                              icon: const Icon(Icons.send, color: Colors.blue),
+                              icon: const Icon(Icons.send, color: _WinChatColors.green),
                               onPressed: _sendMessage,
                             ),
                         ],
@@ -1791,7 +1950,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                       child: IconButton(
                         visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
                         icon: Icon(isRecording ? Icons.mic_off : Icons.mic),
-                        color: isRecording ? Colors.red : Colors.grey,
+                        color: isRecording ? _WinChatColors.red : _WinChatColors.muted,
                         onPressed: () {},
                       ),
                     ),

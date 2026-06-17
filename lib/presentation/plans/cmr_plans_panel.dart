@@ -7,6 +7,8 @@ import 'package:http/http.dart' as http;
 
 import 'package:sportoteka/presentation/plans/plan_detail_screen.dart';
 import 'package:sportoteka/presentation/plans/plan_folders_screen.dart';
+import 'package:sportoteka/presentation/plans/plans_embedded_file_viewer.dart';
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:sportoteka/presentation/plans/api/training_graphics_api.dart';
 
 class CmrPlansPanel extends StatefulWidget {
@@ -34,6 +36,7 @@ class CmrPlansPanel extends StatefulWidget {
 }
 
 enum _UnsavedDraftChoice { stay, openOther, exitWithoutSaving }
+enum _ExplorerViewMode { grid, list }
 
 class _CmrPlansPanelState extends State<CmrPlansPanel> {
   bool loading = true;
@@ -62,6 +65,8 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
 
   bool editMode = false;
   bool showFoldersList = false;
+  bool _showPreviewPane = true;
+  _ExplorerViewMode _viewMode = _ExplorerViewMode.grid;
   final Set<int> _expandedFolderIds = <int>{};
 
   int get _activeFolderId => selectedFolderId ?? 0;
@@ -610,7 +615,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                             ),
                             textStyle: const TextStyle(
                               fontSize: 13.5,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
@@ -631,7 +636,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                             ),
                             textStyle: const TextStyle(
                               fontSize: 13.5,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
@@ -651,7 +656,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                             ),
                             textStyle: const TextStyle(
                               fontSize: 13.2,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
@@ -843,7 +848,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                           style: TextStyle(
                             color: selected ? _C.greenDark : _C.text,
                             fontSize: 12.5,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -937,7 +942,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                             style: const TextStyle(
                               color: _C.text,
                               fontSize: 15,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w700,
                             ),
                             decoration: InputDecoration(
                               labelText: 'Название папки',
@@ -962,7 +967,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                           const SizedBox(height: 16),
                           const Text(
                             'Тип папки',
-                            style: TextStyle(color: _C.text, fontSize: 12.5, fontWeight: FontWeight.w900),
+                            style: TextStyle(color: _C.text, fontSize: 12.5, fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 9),
                           isMobile
@@ -1024,7 +1029,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                                     side: const BorderSide(color: _C.line),
                                     minimumSize: const Size.fromHeight(46),
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                    textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                                    textStyle: const TextStyle(fontWeight: FontWeight.w700),
                                   ),
                                   child: const Text('Отмена'),
                                 ),
@@ -1041,7 +1046,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                                     elevation: 0,
                                     minimumSize: const Size.fromHeight(46),
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                    textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                                    textStyle: const TextStyle(fontWeight: FontWeight.w700),
                                   ),
                                 ),
                               ),
@@ -1168,7 +1173,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                         style: const TextStyle(
                           color: _C.text,
                           fontSize: 15,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                         ),
                         decoration: InputDecoration(
                           labelText: 'Название папки',
@@ -1201,7 +1206,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                                 side: const BorderSide(color: _C.line),
                                 minimumSize: const Size.fromHeight(46),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                                textStyle: const TextStyle(fontWeight: FontWeight.w700),
                               ),
                               child: const Text('Отмена'),
                             ),
@@ -1218,7 +1223,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                                 elevation: 0,
                                 minimumSize: const Size.fromHeight(46),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                                textStyle: const TextStyle(fontWeight: FontWeight.w700),
                               ),
                             ),
                           ),
@@ -1764,25 +1769,130 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final sidebarWidth = width < 1180 ? 224.0 : 238.0;
-        final filesWidth = width < 1180 ? 292.0 : 314.0;
+        final sidebarWidth = width < 1160 ? 238.0 : 252.0;
+        final previewWidth = width < 1260 ? 0.0 : (width < 1460 ? 430.0 : 500.0);
+        final showPreview = _showPreviewPane && previewWidth > 0;
 
         return Container(
           color: _C.page,
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              SizedBox(width: sidebarWidth, child: _SoftPanel(child: _buildSidebar())),
-              const SizedBox(width: 10),
-              SizedBox(width: filesWidth, child: _SoftPanel(child: _buildFilesColumn())),
-              const SizedBox(width: 10),
-              Expanded(child: _SoftPanel(child: _buildPreviewPane())),
-            ],
+          padding: const EdgeInsets.all(14),
+          child: Container(
+            decoration: _C.explorerDecoration,
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                _buildExplorerTopBar(),
+                const _PaneDivider(horizontal: true),
+                Expanded(
+                  child: Row(
+                    children: [
+                      SizedBox(width: sidebarWidth, child: _buildSidebar()),
+                      const _PaneDivider(),
+                      Expanded(child: _buildFilesColumn()),
+                      if (showPreview) ...[
+                        const _PaneDivider(),
+                        SizedBox(width: previewWidth, child: _buildPreviewPane()),
+                      ],
+                    ],
+                  ),
+                ),
+                _buildExplorerStatusBar(showPreview: showPreview),
+              ],
+            ),
           ),
         );
       },
     );
   }
+
+  Widget _buildExplorerTopBar() {
+    final subtitle = widget.teamName.isEmpty
+        ? widget.clubName
+        : '${widget.clubName} • ${widget.teamName}';
+
+    return Container(
+      height: 66,
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      child: Row(
+        children: [
+          const _PlanMark(size: 42),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Планы',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _C.h1.copyWith(fontSize: 15.4),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _C.caption.copyWith(fontSize: 10.6),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          _ExplorerCommand(
+            icon: Icons.note_add_rounded,
+            label: 'Новый план',
+            primary: true,
+            onTap: saving ? null : _createPlanInCurrentFolder,
+          ),
+          const SizedBox(width: 8),
+          _ExplorerCommand(
+            icon: Icons.create_new_folder_rounded,
+            label: 'Папка',
+            onTap: saving ? null : _createFolder,
+          ),
+          const SizedBox(width: 8),
+          _RoundTool(icon: Icons.refresh_rounded, onTap: saving ? null : _load, tooltip: 'Обновить'),
+          const SizedBox(width: 8),
+          _RoundTool(
+            icon: _showPreviewPane ? Icons.view_sidebar_rounded : Icons.view_sidebar_outlined,
+            onTap: () => setState(() => _showPreviewPane = !_showPreviewPane),
+            tooltip: _showPreviewPane ? 'Скрыть область просмотра' : 'Показать область просмотра',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExplorerStatusBar({required bool showPreview}) {
+    final total = _currentChildFolders.length + plans.length + graphics.length + files.length;
+    return Container(
+      height: 34,
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
+        children: [
+          const Icon(Icons.folder_open_rounded, size: 15, color: _C.muted),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(
+              '$selectedFolderTitle • $total объект${_ruPlural(total, '', 'а', 'ов')} • ${plans.length} план${_ruPlural(plans.length, '', 'а', 'ов')}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _C.caption.copyWith(fontSize: 10.3),
+            ),
+          ),
+          if (!showPreview)
+            Text(
+              'Просмотр скрыт',
+              style: _C.caption.copyWith(fontSize: 10.2),
+            ),
+        ],
+      ),
+    );
+  }
+
 
   Widget _buildMobileFinder() {
     final showPlan = selectedPlan != null && !showFoldersList;
@@ -1852,43 +1962,61 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
       color: _C.sidebar,
       child: Column(
         children: [
-          if (!mobile)
-            _FinderHeader(
-              title: 'Планы',
-              subtitle: widget.teamName.isEmpty
-                  ? widget.clubName
-                  : '${widget.clubName} • ${widget.teamName}',
-              onBack: _handleBack,
-              onRefresh: saving ? null : _load,
-            ),
           Padding(
-            padding: EdgeInsets.fromLTRB(12, mobile ? 12 : 6, 12, 10),
-            child: Row(
+            padding: EdgeInsets.fromLTRB(12, mobile ? 12 : 12, 12, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: _ActionPill(
-                    label: 'Папка',
-                    icon: Icons.create_new_folder_rounded,
-                    onTap: saving ? null : _createFolder,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Навигация',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _C.h1.copyWith(fontSize: mobile ? 14.2 : 13.6),
+                      ),
+                    ),
+                    _RoundTool(
+                      icon: Icons.refresh_rounded,
+                      size: 34,
+                      onTap: saving ? null : _load,
+                      tooltip: 'Обновить',
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                _SquareTool(
-                  icon: Icons.drive_file_rename_outline_rounded,
-                  onTap: saving ? null : _renameSelectedFolder,
-                  tooltip: 'Переименовать папку',
-                ),
-                const SizedBox(width: 8),
-                _SquareTool(
-                  icon: Icons.delete_outline_rounded,
-                  danger: true,
-                  onTap: saving ? null : _deleteSelectedFolder,
-                  tooltip: 'Удалить папку',
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _ExplorerCommand(
+                        label: 'Папка',
+                        icon: Icons.create_new_folder_rounded,
+                        compact: true,
+                        onTap: saving ? null : _createFolder,
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                    _RoundTool(
+                      icon: Icons.drive_file_rename_outline_rounded,
+                      size: 34,
+                      onTap: saving ? null : _renameSelectedFolder,
+                      tooltip: 'Переименовать папку',
+                    ),
+                    const SizedBox(width: 7),
+                    _RoundTool(
+                      icon: Icons.delete_outline_rounded,
+                      danger: true,
+                      size: 34,
+                      onTap: saving ? null : _deleteSelectedFolder,
+                      tooltip: 'Удалить папку',
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          const _PaneDivider(horizontal: true),
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
@@ -1939,28 +2067,38 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
       child: Column(
         children: [
           _buildFileToolbar(mobile: mobile),
-          const SizedBox(height: 8),
+          const _PaneDivider(horizontal: true),
           Expanded(
             child: RefreshIndicator(
               color: _C.green,
               onRefresh: () async => _loadPlansForTeam(),
               child: LayoutBuilder(
                 builder: (context, constraints) {
+                  final hasInfoCard = loadingMaterials || materialsError != null || total == 0;
+
+                  if (_viewMode == _ExplorerViewMode.list && !mobile) {
+                    return _buildExplorerListView(
+                      childFolders: childFolders,
+                      hasInfoCard: hasInfoCard,
+                    );
+                  }
+
                   final width = constraints.maxWidth;
                   final columns = mobile
                       ? 2
-                      : width >= 620
-                          ? 4
-                          : width >= 440
-                              ? 3
-                              : 2;
-                  final spacing = mobile ? 10.0 : 12.0;
-                  final aspect = mobile ? .82 : .86;
-                  final hasInfoCard = loadingMaterials || materialsError != null || total == 0;
+                      : width >= 820
+                          ? 5
+                          : width >= 650
+                              ? 4
+                              : width >= 460
+                                  ? 3
+                                  : 2;
+                  final spacing = mobile ? 10.0 : 10.0;
+                  final aspect = mobile ? .82 : .90;
 
                   return GridView.builder(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: EdgeInsets.fromLTRB(mobile ? 10 : 14, 12, mobile ? 10 : 14, 18),
+                    padding: EdgeInsets.fromLTRB(mobile ? 10 : 12, 12, mobile ? 10 : 12, 18),
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: columns,
                       crossAxisSpacing: spacing,
@@ -1973,8 +2111,8 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                         return _CreatePlanGridCard(
                           title: 'Новый план',
                           text: selectedFolderId == null
-                              ? 'Создать в материалах и открыть справа'
-                              : 'Создать в папке «$selectedFolderTitle» и открыть справа',
+                              ? 'Создать в корне материалов'
+                              : 'Создать в «$selectedFolderTitle»',
                           onTap: saving ? null : _createPlanInCurrentFolder,
                         );
                       }
@@ -2075,6 +2213,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                         meta: _shortDate(_asStr(f['created_at'])),
                         icon: _fileIcon(_asStr(f['file_ext']).isNotEmpty ? _asStr(f['file_ext']) : _asStr(f['file_name'])),
                         previewUrl: _materialImageUrl(f),
+                        onPreview: () => _openFilePreview(f),
                       );
                     },
                   );
@@ -2084,6 +2223,124 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildExplorerListView({
+    required List<Map<String, dynamic>> childFolders,
+    required bool hasInfoCard,
+  }) {
+    final rows = <Widget>[];
+
+    rows.add(
+      _ExplorerListRow(
+        title: 'Новый план',
+        subtitle: selectedFolderId == null ? 'Создать в корне материалов' : 'Создать в «$selectedFolderTitle»',
+        type: 'План',
+        meta: 'Черновик',
+        icon: Icons.note_add_rounded,
+        active: false,
+        create: true,
+        onTap: saving ? null : _createPlanInCurrentFolder,
+      ),
+    );
+
+    if (loadingMaterials) {
+      rows.add(const _ExplorerListRow(
+        title: 'Загрузка',
+        subtitle: 'Собираем файлы, схемы и планы',
+        type: 'Система',
+        meta: '',
+        icon: Icons.sync_rounded,
+        active: false,
+      ));
+    } else if (materialsError != null) {
+      rows.add(_ExplorerListRow(
+        title: 'Ошибка',
+        subtitle: materialsError!,
+        type: 'Ошибка',
+        meta: '',
+        icon: Icons.warning_amber_rounded,
+        active: false,
+      ));
+    } else if (childFolders.isEmpty && plans.isEmpty && graphics.isEmpty && files.isEmpty) {
+      rows.add(const _ExplorerListRow(
+        title: 'Папка пустая',
+        subtitle: 'Здесь пока нет материалов',
+        type: 'Папка',
+        meta: '',
+        icon: Icons.folder_open_rounded,
+        active: false,
+      ));
+    }
+
+    for (final f in childFolders) {
+      final folderId = _asInt(f['id']);
+      rows.add(_ExplorerListRow(
+        title: _asStr(f['title']).isEmpty ? 'Папка' : _asStr(f['title']),
+        subtitle: _folderCounterText(f),
+        type: 'Папка',
+        meta: _folderHasChildren(folderId) ? 'есть подпапки' : '',
+        icon: Icons.folder_rounded,
+        active: selectedFolderId == folderId,
+        onTap: () => _selectFolder(f),
+      ));
+    }
+
+    for (final plan in plans) {
+      final active = _asInt(plan['id']) == _asInt(selectedPlan?['id']);
+      rows.add(_ExplorerListRow(
+        title: _planTitle(plan),
+        subtitle: _asStr(plan['trainer_name']).isNotEmpty
+            ? _asStr(plan['trainer_name'])
+            : (_asStr(plan['team_name']).isNotEmpty ? _asStr(plan['team_name']) : 'План-конспект'),
+        type: 'План',
+        meta: _shortDate(_asStr(plan['plan_date']).isNotEmpty ? _asStr(plan['plan_date']) : _asStr(plan['created_at'])),
+        badge: _planBadgesText(plan),
+        icon: Icons.description_rounded,
+        active: active,
+        onTap: () => _selectPlan(plan),
+        onRename: active ? _renameSelectedPlan : null,
+      ));
+    }
+
+    for (final g in graphics) {
+      rows.add(_ExplorerListRow(
+        title: _asStr(g['title']).isNotEmpty
+            ? _asStr(g['title'])
+            : (_asStr(g['name']).isNotEmpty ? _asStr(g['name']) : 'Схема #${_asInt(g['id'])}'),
+        subtitle: 'Схема тренировки',
+        type: 'Схема',
+        meta: _shortDate(_asStr(g['created_at'])),
+        icon: Icons.account_tree_rounded,
+        active: false,
+        onTap: () => _openSchemePreview(g),
+      ));
+    }
+
+    for (final f in files) {
+      final title = _asStr(f['title']).isNotEmpty
+          ? _asStr(f['title'])
+          : (_asStr(f['file_name']).isNotEmpty ? _asStr(f['file_name']) : 'Файл #${_asInt(f['id'])}');
+      final ext = _asStr(f['file_ext']).isNotEmpty ? _asStr(f['file_ext']).toUpperCase() : 'Файл';
+      rows.add(_ExplorerListRow(
+        title: title,
+        subtitle: ext,
+        type: ext,
+        meta: _shortDate(_asStr(f['created_at'])),
+        icon: _fileIcon(_asStr(f['file_ext']).isNotEmpty ? _asStr(f['file_ext']) : _asStr(f['file_name'])),
+        active: false,
+        onTap: () => _openFilePreview(f),
+      ));
+    }
+
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 18),
+      children: [
+        const _ExplorerListHeader(),
+        ...rows,
+      ],
     );
   }
 
@@ -2142,6 +2399,133 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
     return '';
   }
 
+  String _materialFileUrl(Map<String, dynamic> item) {
+    final candidates = <String>[
+      _asStr(item['file_url']),
+      _asStr(item['url']),
+      _asStr(item['path']),
+      _asStr(item['file_path']),
+      _asStr(item['download_url']),
+      _asStr(item['secure_url']),
+      _asStr(item['file_name']),
+    ];
+
+    for (final c in candidates) {
+      final value = c.trim();
+      if (value.isEmpty || value == 'null') continue;
+      return _absoluteMaterialUrl(value);
+    }
+
+    return '';
+  }
+
+  void _openFilePreview(Map<String, dynamic> file) {
+    final title = _asStr(file['title']).isNotEmpty
+        ? _asStr(file['title'])
+        : (_asStr(file['file_name']).isNotEmpty ? _asStr(file['file_name']) : 'Файл');
+    final url = _materialFileUrl(file);
+
+    if (url.isEmpty) {
+      Get.snackbar('Файл', 'Не найдена ссылка для просмотра файла');
+      return;
+    }
+
+    final ext = _fileExtension(url, fallback: _asStr(file['file_ext']));
+    final lower = url.toLowerCase();
+    final isImage = lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.png') ||
+        lower.endsWith('.webp') ||
+        ext == 'jpg' ||
+        ext == 'jpeg' ||
+        ext == 'png' ||
+        ext == 'webp';
+    final isPdf = lower.endsWith('.pdf') || ext == 'pdf';
+    final isOffice = const <String>{'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'rtf'}.contains(ext);
+    final isText = const <String>{'txt', 'csv', 'json'}.contains(ext);
+
+    Widget viewer;
+    IconData icon;
+    String subtitle;
+
+    if (isImage) {
+      icon = Icons.image_rounded;
+      subtitle = 'Изображение открыто внутри программы';
+      viewer = Container(
+        color: const Color(0xFFF6F7F8),
+        padding: const EdgeInsets.all(14),
+        child: InteractiveViewer(
+          minScale: .65,
+          maxScale: 4,
+          child: Center(
+            child: Image.network(
+              url,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => _CmrFileViewerFallback(url: url, text: 'Не удалось загрузить изображение.'),
+            ),
+          ),
+        ),
+      );
+    } else if (isPdf) {
+      icon = Icons.picture_as_pdf_rounded;
+      subtitle = 'PDF открыт внутри программы';
+      viewer = Container(
+        color: Colors.white,
+        child: SfPdfViewer.network(url),
+      );
+    } else if (isOffice) {
+      icon = Icons.article_rounded;
+      subtitle = 'Документ открыт внутри программы';
+      viewer = PlansEmbeddedFileViewer(
+        url: _officeViewerUrl(url),
+        sourceUrl: url,
+        title: title,
+      );
+    } else if (isText) {
+      icon = Icons.description_rounded;
+      subtitle = 'Файл открыт внутри программы';
+      viewer = PlansEmbeddedFileViewer(
+        url: url,
+        sourceUrl: url,
+        title: title,
+      );
+    } else {
+      icon = Icons.insert_drive_file_rounded;
+      subtitle = 'Предпросмотр файла';
+      viewer = _CmrFileViewerFallback(
+        url: url,
+        text: 'Для этого типа файла нет нативного просмотрщика. Файл оставлен внутри окна программы — ссылку можно скопировать или скачать.',
+      );
+    }
+
+    Get.dialog(
+      _CmrFileWindowDialog(
+        title: title,
+        subtitle: subtitle,
+        icon: icon,
+        child: viewer,
+      ),
+      barrierColor: Colors.black.withOpacity(.18),
+      barrierDismissible: false,
+    );
+  }
+
+  String _fileExtension(String url, {String fallback = ''}) {
+    final f = fallback.trim().replaceAll('.', '').toLowerCase();
+    if (f.isNotEmpty && f != 'null') return f;
+
+    final path = Uri.tryParse(url)?.path.toLowerCase() ?? url.toLowerCase();
+    final dot = path.lastIndexOf('.');
+    if (dot < 0 || dot == path.length - 1) return '';
+    return path.substring(dot + 1).split('?').first.split('#').first;
+  }
+
+  String _officeViewerUrl(String url) {
+    // Встроенный просмотр Word/Excel/PowerPoint внутри Web/desktop-окна.
+    // Не открывает новый браузер, а отдаёт URL в iframe/embedded viewer.
+    return 'https://view.officeapps.live.com/op/embed.aspx?src=${Uri.encodeComponent(url)}';
+  }
+
   void _openSchemePreview(Map<String, dynamic> scheme) {
     final title = _asStr(scheme['title']).isNotEmpty
         ? _asStr(scheme['title'])
@@ -2177,53 +2561,41 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
   Widget _buildFileToolbar({bool mobile = false}) {
     return Container(
       color: Colors.white,
-      padding: EdgeInsets.fromLTRB(mobile ? 10 : 10, mobile ? 8 : 8, mobile ? 10 : 10, mobile ? 8 : 8),
+      padding: EdgeInsets.fromLTRB(mobile ? 10 : 12, mobile ? 8 : 10, mobile ? 10 : 12, mobile ? 8 : 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: _C.greenSoft,
-                  borderRadius: BorderRadius.circular(11),
-                  border: Border.all(color: _C.greenBorder),
-                ),
-                child: const Icon(Icons.folder_open_rounded, color: _C.greenDark, size: 17),
-              ),
-              const SizedBox(width: 7),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Материалы',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: _C.h1.copyWith(fontSize: mobile ? 15 : 16),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${plans.length} планов • ${graphics.length} схем • ${files.length} файлов',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: _C.caption.copyWith(fontSize: mobile ? 10 : 10.2),
-                    ),
-                  ],
-                ),
-              ),
+              Expanded(child: _buildBreadcrumbs()),
               const SizedBox(width: 8),
-              _SquareTool(
+              if (!mobile) ...[
+                _SegmentedIconButton(
+                  icon: Icons.grid_view_rounded,
+                  active: _viewMode == _ExplorerViewMode.grid,
+                  tooltip: 'Плитка',
+                  onTap: () => setState(() => _viewMode = _ExplorerViewMode.grid),
+                ),
+                const SizedBox(width: 5),
+                _SegmentedIconButton(
+                  icon: Icons.view_list_rounded,
+                  active: _viewMode == _ExplorerViewMode.list,
+                  tooltip: 'Список',
+                  onTap: () => setState(() => _viewMode = _ExplorerViewMode.list),
+                ),
+              ],
+              const SizedBox(width: 8),
+              _RoundTool(
                 icon: Icons.refresh_rounded,
+                size: 34,
                 onTap: saving ? null : () => _loadPlansForTeam(),
                 tooltip: 'Обновить список',
               ),
               if (selectedPlan != null) ...[
                 const SizedBox(width: 6),
-                _SquareTool(
+                _RoundTool(
                   icon: Icons.drive_file_rename_outline_rounded,
+                  size: 34,
                   onTap: saving ? null : _renameSelectedPlan,
                   tooltip: 'Переименовать выбранный план',
                 ),
@@ -2231,37 +2603,106 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
             ],
           ),
           const SizedBox(height: 8),
-          TextField(
-            controller: searchCtrl,
-            onSubmitted: (_) => _loadPlansForTeam(),
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-            decoration: InputDecoration(
-              hintText: 'Поиск: план, схема, файл',
-              hintStyle: const TextStyle(fontSize: 11.5, color: _C.muted),
-              prefixIcon: const Icon(Icons.search_rounded, size: 19),
-              suffixIcon: searchCtrl.text.isEmpty
-                  ? null
-                  : IconButton(
-                      onPressed: () {
-                        searchCtrl.clear();
-                        _loadPlansForTeam();
-                      },
-                      icon: const Icon(Icons.close_rounded, size: 18),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: searchCtrl,
+                  onSubmitted: (_) => _loadPlansForTeam(),
+                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: _C.text),
+                  decoration: InputDecoration(
+                    hintText: 'Поиск в планах, схемах и файлах',
+                    hintStyle: const TextStyle(fontSize: 11, color: _C.muted, fontWeight: FontWeight.w600),
+                    prefixIcon: const Icon(Icons.search_rounded, size: 18, color: _C.muted),
+                    suffixIcon: searchCtrl.text.isEmpty
+                        ? null
+                        : IconButton(
+                            onPressed: () {
+                              searchCtrl.clear();
+                              _loadPlansForTeam();
+                            },
+                            icon: const Icon(Icons.close_rounded, size: 17),
+                          ),
+                    filled: true,
+                    fillColor: _C.input,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
                     ),
-              filled: true,
-              fillColor: _C.input,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(18),
-                borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              if (selectedPlan != null) ...[
+                const SizedBox(width: 8),
+                Flexible(child: _PinnedPlanChip(title: _planTitle(selectedPlan!))),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBreadcrumbs() {
+    final crumbs = <_ExplorerBreadcrumbData>[
+      _ExplorerBreadcrumbData('Все материалы', () => _selectFolder(null)),
+    ];
+
+    final activeId = selectedFolderId ?? 0;
+    if (activeId > 0) {
+      final chain = <Map<String, dynamic>>[];
+      Map<String, dynamic>? current = _allFolders.firstWhereOrNull((f) => _asInt(f['id']) == activeId);
+      while (current != null) {
+        chain.insert(0, current);
+        final parentId = _asInt(current['parent_id']);
+        current = parentId > 0 ? _allFolders.firstWhereOrNull((f) => _asInt(f['id']) == parentId) : null;
+      }
+      for (final f in chain) {
+        final id = _asInt(f['id']);
+        final title = _asStr(f['title']).isEmpty ? 'Папка' : _asStr(f['title']);
+        crumbs.add(_ExplorerBreadcrumbData(title, () => _selectFolder(f)));
+      }
+    }
+
+    return Container(
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: _C.input,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _C.line),
+      ),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: crumbs.length,
+        separatorBuilder: (_, __) => const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 3),
+          child: Icon(Icons.chevron_right_rounded, size: 16, color: _C.muted),
+        ),
+        itemBuilder: (_, index) {
+          final c = crumbs[index];
+          final active = index == crumbs.length - 1;
+          return Center(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: active ? null : c.onTap,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+                child: Text(
+                  c.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: active ? _C.text : _C.muted,
+                    fontSize: 11.2,
+                    fontWeight: active ? FontWeight.w800 : FontWeight.w700,
+                  ),
+                ),
               ),
             ),
-          ),
-          if (selectedPlan != null) ...[
-            const SizedBox(height: 8),
-            _PinnedPlanChip(title: _planTitle(selectedPlan!)),
-          ],
-        ],
+          );
+        },
       ),
     );
   }
@@ -2486,6 +2927,19 @@ class _C {
         ],
       );
 
+  static BoxDecoration get explorerDecoration => BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: line),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.030),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      );
+
   static BoxDecoration softCard({double radius = 18}) => BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(radius),
@@ -2501,23 +2955,649 @@ class _C {
 
   static const TextStyle h1 = TextStyle(
     color: text,
-    fontSize: 17,
-    fontWeight: FontWeight.w900,
+    fontSize: 16,
+    fontWeight: FontWeight.w700,
     height: 1.12,
   );
 
   static const TextStyle body = TextStyle(
     color: muted,
-    fontSize: 12.2,
+    fontSize: 11.8,
     fontWeight: FontWeight.w600,
     height: 1.4,
   );
 
   static const TextStyle caption = TextStyle(
     color: muted,
-    fontSize: 10.6,
+    fontSize: 10.2,
     fontWeight: FontWeight.w700,
   );
+}
+
+class _GenericFilePreviewDialog extends StatelessWidget {
+  final String title;
+  final String url;
+
+  const _GenericFilePreviewDialog({required this.title, required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(22),
+      child: Container(
+        width: width < 720 ? width - 44 : 620,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: _C.line),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(.12),
+              blurRadius: 26,
+              offset: const Offset(0, 14),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const _RoundTool(icon: Icons.insert_drive_file_rounded, onTap: null, size: 40),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _C.h1.copyWith(fontSize: 15),
+                  ),
+                ),
+                _RoundTool(icon: Icons.close_rounded, onTap: () => Get.back(), size: 36),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'Файл найден, но встроенный просмотр доступен для PDF и изображений. Ссылку можно использовать для загрузки или открытия через системный просмотрщик.',
+              style: _C.body,
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: _C.input,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: _C.line),
+              ),
+              child: SelectableText(
+                url,
+                style: _C.caption.copyWith(fontSize: 10.5),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+class _CmrFileWindowDialog extends StatefulWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Widget child;
+
+  const _CmrFileWindowDialog({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.child,
+  });
+
+  @override
+  State<_CmrFileWindowDialog> createState() => _CmrFileWindowDialogState();
+}
+
+class _CmrFileWindowDialogState extends State<_CmrFileWindowDialog> {
+  bool _minimized = false;
+  bool _maximized = false;
+  Offset _offset = Offset.zero;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final isSmall = size.width < 780;
+
+    if (_minimized) {
+      return Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: SizedBox(
+          width: size.width,
+          height: size.height,
+          child: Stack(
+            children: [
+              Positioned(
+                left: isSmall ? 12 : 26,
+                bottom: isSmall ? 12 : 24,
+                child: _minimizedBar(),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final defaultWidth = isSmall ? size.width - 22 : (size.width * .78).clamp(820.0, 1180.0);
+    final defaultHeight = isSmall ? size.height - 34 : (size.height * .80).clamp(560.0, 820.0);
+    final windowWidth = _maximized ? size.width - 26 : defaultWidth;
+    final windowHeight = _maximized ? size.height - 26 : defaultHeight;
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: EdgeInsets.zero,
+      child: SizedBox(
+        width: size.width,
+        height: size.height,
+        child: Stack(
+          children: [
+            Positioned(
+              left: _maximized ? 13 : (size.width - windowWidth) / 2 + _offset.dx,
+              top: _maximized ? 13 : (size.height - windowHeight) / 2 + _offset.dy,
+              child: SizedBox(
+                width: windowWidth,
+                height: windowHeight,
+                child: _windowBody(isSmall: isSmall),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _minimizedBar() {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        width: 360,
+        height: 54,
+        padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: _C.line),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(.12),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            _FileWindowControl(icon: Icons.open_in_full_rounded, onTap: () => setState(() => _minimized = false)),
+            const SizedBox(width: 8),
+            Icon(widget.icon, color: _C.muted, size: 19),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Text(
+                widget.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: _C.text, fontSize: 12.4, fontWeight: FontWeight.w800),
+              ),
+            ),
+            const SizedBox(width: 8),
+            _FileWindowControl(icon: Icons.close_rounded, onTap: () => Get.back(), danger: true),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _windowBody({required bool isSmall}) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(_maximized ? 22 : 26),
+          border: Border.all(color: _C.line),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(.14),
+              blurRadius: 32,
+              offset: const Offset(0, 18),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onPanUpdate: _maximized ? null : (d) => setState(() => _offset += d.delta),
+              child: Container(
+                height: isSmall ? 56 : 62,
+                padding: EdgeInsets.fromLTRB(isSmall ? 10 : 14, 9, isSmall ? 10 : 14, 9),
+                decoration: const BoxDecoration(color: Colors.white),
+                child: Row(
+                  children: [
+                    _FileWindowControl(icon: Icons.close_rounded, onTap: () => Get.back(), danger: true),
+                    const SizedBox(width: 7),
+                    _FileWindowControl(icon: Icons.remove_rounded, onTap: () => setState(() => _minimized = true)),
+                    const SizedBox(width: 7),
+                    _FileWindowControl(
+                      icon: _maximized ? Icons.close_fullscreen_rounded : Icons.open_in_full_rounded,
+                      onTap: () => setState(() => _maximized = !_maximized),
+                    ),
+                    const SizedBox(width: 12),
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: _C.input,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: _C.line),
+                      ),
+                      child: Icon(widget.icon, color: _C.muted, size: 20),
+                    ),
+                    const SizedBox(width: 11),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            widget.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: _C.text, fontSize: 14.2, fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            widget.subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _C.caption.copyWith(fontSize: 10.5),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const _PaneDivider(horizontal: true),
+            Expanded(child: widget.child),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FileWindowControl extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool danger;
+
+  const _FileWindowControl({required this.icon, required this.onTap, this.danger = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(15),
+      onTap: onTap,
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: danger ? const Color(0xFFFFF1F2) : _C.input,
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: danger ? const Color(0xFFFECACA) : _C.line),
+        ),
+        child: Icon(icon, size: 18, color: danger ? _C.red : _C.muted),
+      ),
+    );
+  }
+}
+
+class _CmrFileViewerFallback extends StatelessWidget {
+  final String url;
+  final String text;
+
+  const _CmrFileViewerFallback({required this.url, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFF6F7F8),
+      padding: const EdgeInsets.all(18),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: _C.line),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: _C.greenSoft,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: _C.greenBorder),
+                      ),
+                      child: const Icon(Icons.insert_drive_file_rounded, color: _C.greenDark, size: 19),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Файл найден',
+                        style: _C.h1.copyWith(fontSize: 14),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(text, style: _C.body.copyWith(fontSize: 11.8)),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: _C.input,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: _C.line),
+                  ),
+                  child: SelectableText(url, style: _C.caption.copyWith(fontSize: 10.5)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ExplorerBreadcrumbData {
+  final String title;
+  final VoidCallback onTap;
+
+  const _ExplorerBreadcrumbData(this.title, this.onTap);
+}
+
+class _PaneDivider extends StatelessWidget {
+  final bool horizontal;
+
+  const _PaneDivider({this.horizontal = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: horizontal ? double.infinity : 1,
+      height: horizontal ? 1 : double.infinity,
+      child: const ColoredBox(color: _C.line),
+    );
+  }
+}
+
+class _RoundTool extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool danger;
+  final String? tooltip;
+  final double size;
+
+  const _RoundTool({
+    required this.icon,
+    required this.onTap,
+    this.danger = false,
+    this.tooltip,
+    this.size = 40,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final w = InkWell(
+      borderRadius: BorderRadius.circular(size * .35),
+      onTap: onTap,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: danger ? const Color(0xFFFFF1F2) : _C.input,
+          borderRadius: BorderRadius.circular(size * .35),
+          border: Border.all(color: danger ? const Color(0xFFFECACA) : _C.line),
+        ),
+        child: Icon(icon, color: danger ? _C.red : _C.muted, size: size * .48),
+      ),
+    );
+    return tooltip == null ? w : Tooltip(message: tooltip!, child: w);
+  }
+}
+
+class _ExplorerCommand extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool primary;
+  final bool compact;
+
+  const _ExplorerCommand({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    this.primary = false,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(compact ? 14 : 16),
+      onTap: onTap,
+      child: Container(
+        height: compact ? 34 : 40,
+        padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 13),
+        decoration: BoxDecoration(
+          color: primary ? _C.greenSoft : _C.input,
+          borderRadius: BorderRadius.circular(compact ? 14 : 16),
+          border: Border.all(color: primary ? _C.greenBorder : _C.line),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: primary ? _C.greenDark : _C.muted, size: compact ? 16 : 17),
+            const SizedBox(width: 7),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: primary ? _C.greenDark : _C.text,
+                  fontSize: compact ? 11.2 : 11.7,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SegmentedIconButton extends StatelessWidget {
+  final IconData icon;
+  final bool active;
+  final VoidCallback onTap;
+  final String tooltip;
+
+  const _SegmentedIconButton({
+    required this.icon,
+    required this.active,
+    required this.onTap,
+    required this.tooltip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: active ? _C.greenSoft : _C.input,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: active ? _C.greenBorder : _C.line),
+          ),
+          child: Icon(icon, size: 17, color: active ? _C.greenDark : _C.muted),
+        ),
+      ),
+    );
+  }
+}
+
+class _ExplorerListHeader extends StatelessWidget {
+  const _ExplorerListHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: _C.line)),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(width: 42),
+          Expanded(flex: 5, child: Text('Имя', style: _C.caption.copyWith(fontSize: 10.3))),
+          Expanded(flex: 2, child: Text('Тип', style: _C.caption.copyWith(fontSize: 10.3))),
+          Expanded(flex: 2, child: Text('Дата', style: _C.caption.copyWith(fontSize: 10.3))),
+          const SizedBox(width: 38),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExplorerListRow extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final String type;
+  final String meta;
+  final String badge;
+  final IconData icon;
+  final bool active;
+  final bool create;
+  final VoidCallback? onTap;
+  final VoidCallback? onRename;
+
+  const _ExplorerListRow({
+    required this.title,
+    required this.subtitle,
+    required this.type,
+    required this.meta,
+    required this.icon,
+    required this.active,
+    this.badge = '',
+    this.create = false,
+    this.onTap,
+    this.onRename,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            height: 54,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: active ? _C.greenSoft : (create ? const Color(0xFFFAFFFC) : Colors.white),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: active ? _C.greenBorder : _C.line),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: active ? Colors.white : _C.input,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: active ? _C.greenBorder : _C.line),
+                  ),
+                  child: Icon(icon, color: active || create ? _C.greenDark : _C.muted, size: 18),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 5,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 11.8, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 2),
+                      Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.caption.copyWith(fontSize: 9.8)),
+                    ],
+                  ),
+                ),
+                Expanded(flex: 2, child: Text(type, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.caption.copyWith(fontSize: 10.2))),
+                Expanded(flex: 2, child: Text(meta, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.caption.copyWith(fontSize: 10.2))),
+                if (badge.isNotEmpty) _TinyBadge(text: badge),
+                SizedBox(
+                  width: 36,
+                  child: onRename == null
+                      ? const Icon(Icons.chevron_right_rounded, size: 18, color: _C.muted)
+                      : IconButton(
+                          tooltip: 'Переименовать',
+                          onPressed: onRename,
+                          icon: const Icon(Icons.drive_file_rename_outline_rounded, size: 17, color: _C.greenDark),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _FinderHeader extends StatelessWidget {
@@ -2724,7 +3804,7 @@ class _FinderFolderTile extends StatelessWidget {
                         style: TextStyle(
                           color: active ? _C.graphite : _C.text,
                           fontSize: 12,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -2772,7 +3852,7 @@ class _MiniSectionHeader extends StatelessWidget {
             title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: _C.text, fontSize: 12.5, fontWeight: FontWeight.w900),
+            style: const TextStyle(color: _C.text, fontSize: 12.5, fontWeight: FontWeight.w700),
           ),
         ),
         Container(
@@ -2781,7 +3861,7 @@ class _MiniSectionHeader extends StatelessWidget {
             color: _C.input,
             borderRadius: BorderRadius.circular(999),
           ),
-          child: Text('$count', style: const TextStyle(color: _C.muted, fontSize: 10.5, fontWeight: FontWeight.w900)),
+          child: Text('$count', style: const TextStyle(color: _C.muted, fontSize: 10.5, fontWeight: FontWeight.w700)),
         ),
         if (actionIcon != null) ...[
           const SizedBox(width: 6),
@@ -2867,7 +3947,7 @@ class _CreatePlanGridCard extends StatelessWidget {
                 style: const TextStyle(
                   color: _C.graphite,
                   fontSize: 13.6,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   height: 1.1,
                 ),
               ),
@@ -2927,7 +4007,7 @@ class _FinderGridInfoCard extends StatelessWidget {
             title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: _C.text, fontSize: 12.8, fontWeight: FontWeight.w900),
+            style: const TextStyle(color: _C.text, fontSize: 12.8, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 5),
           Text(
@@ -3085,7 +4165,7 @@ class _FinderGridItem extends StatelessWidget {
                 style: TextStyle(
                   color: active ? _C.graphite : _C.text,
                   fontSize: 12.5,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   height: 1.12,
                 ),
               ),
@@ -3219,7 +4299,7 @@ class _CompactEmptyBlock extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(color: _C.text, fontSize: 12.5, fontWeight: FontWeight.w900)),
+          Text(title, style: const TextStyle(color: _C.text, fontSize: 12.5, fontWeight: FontWeight.w700)),
           const SizedBox(height: 4),
           Text(text, style: _C.caption.copyWith(height: 1.35)),
         ],
@@ -3354,13 +4434,13 @@ class _BrowserGroupLabel extends StatelessWidget {
           const SizedBox(width: 7),
           Text(
             title,
-            style: const TextStyle(color: _C.text, fontSize: 10.8, fontWeight: FontWeight.w900),
+            style: const TextStyle(color: _C.text, fontSize: 10.8, fontWeight: FontWeight.w700),
           ),
           const SizedBox(width: 6),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(999), border: Border.all(color: _C.line)),
-            child: Text('$count', style: const TextStyle(color: _C.muted, fontSize: 10, fontWeight: FontWeight.w900)),
+            child: Text('$count', style: const TextStyle(color: _C.muted, fontSize: 10, fontWeight: FontWeight.w700)),
           ),
           if (hint != null) ...[
             const SizedBox(width: 7),
@@ -3412,7 +4492,7 @@ class _BrowserFileRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
-    final compact = width < 720;
+    final compact = width < 640;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 2),
@@ -3450,7 +4530,7 @@ class _BrowserFileRow extends StatelessWidget {
                         style: TextStyle(
                           color: active ? _C.graphite : _C.text,
                           fontSize: 11.8,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                           height: 1.1,
                         ),
                       ),
@@ -3646,7 +4726,7 @@ class _SchemePreviewDialog extends StatelessWidget {
                               title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: _C.text, fontSize: 15, fontWeight: FontWeight.w900),
+                              style: const TextStyle(color: _C.text, fontSize: 15, fontWeight: FontWeight.w700),
                             ),
                             const SizedBox(height: 2),
                             Text(
@@ -3711,7 +4791,7 @@ class _SchemePreviewDialog extends StatelessWidget {
                                   Text(
                                     'Не удалось открыть изображение схемы',
                                     textAlign: TextAlign.center,
-                                    style: TextStyle(color: _C.text, fontWeight: FontWeight.w900),
+                                    style: TextStyle(color: _C.text, fontWeight: FontWeight.w700),
                                   ),
                                 ],
                               ),
@@ -3749,7 +4829,7 @@ class _TinyBadge extends StatelessWidget {
         text,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(color: _C.muted, fontSize: 9.5, fontWeight: FontWeight.w900),
+        style: const TextStyle(color: _C.muted, fontSize: 9.5, fontWeight: FontWeight.w700),
       ),
     );
   }
@@ -3809,7 +4889,7 @@ class _FinderPlanRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 13.5, fontWeight: FontWeight.w900)),
+                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 13.5, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 3),
                     Text(meta.isEmpty ? 'План-конспект' : meta, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.caption),
                     if (materials.isNotEmpty) ...[
@@ -3863,7 +4943,7 @@ class _PinnedPlanChip extends StatelessWidget {
               style: const TextStyle(
                 color: _C.graphite,
                 fontSize: 11.5,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -3905,7 +4985,7 @@ class _InlineBadges extends StatelessWidget {
                 style: TextStyle(
                   color: isScheme ? const Color(0xFF1D4ED8) : _C.muted,
                   fontSize: 10.5,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
@@ -3964,7 +5044,7 @@ class _FullEditorBanner extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.graphite, fontSize: 13.2, fontWeight: FontWeight.w900)),
+                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.graphite, fontSize: 13.2, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 3),
                     Text(text, maxLines: 2, overflow: TextOverflow.ellipsis, style: _C.caption.copyWith(height: 1.28)),
                   ],
@@ -3980,7 +5060,7 @@ class _FullEditorBanner extends StatelessWidget {
                   children: [
                     Icon(Icons.fullscreen_rounded, color: _C.green, size: 16),
                     SizedBox(width: 6),
-                    Text('Открыть', style: TextStyle(color: Colors.white, fontSize: 11.8, fontWeight: FontWeight.w900)),
+                    Text('Открыть', style: TextStyle(color: Colors.white, fontSize: 11.8, fontWeight: FontWeight.w700)),
                   ],
                 ),
               ),
@@ -4019,7 +5099,7 @@ class _FinderEditorSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(color: _C.muted, fontSize: 11.5, fontWeight: FontWeight.w900)),
+          Text(title, style: const TextStyle(color: _C.muted, fontSize: 11.5, fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
           if (editMode)
             TextField(
@@ -4066,8 +5146,8 @@ class _MetaPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('$label: ', style: const TextStyle(color: _C.muted, fontSize: 11.5, fontWeight: FontWeight.w800)),
-          Text(value, style: const TextStyle(color: _C.text, fontSize: 11.5, fontWeight: FontWeight.w900)),
+          Text('$label: ', style: const TextStyle(color: _C.muted, fontSize: 11.5, fontWeight: FontWeight.w600)),
+          Text(value, style: const TextStyle(color: _C.text, fontSize: 11.5, fontWeight: FontWeight.w700)),
         ],
       ),
     );
@@ -4109,7 +5189,7 @@ class _HintStrip extends StatelessWidget {
             child: const Icon(Icons.info_outline_rounded, color: _C.greenDark, size: 17),
           ),
           const SizedBox(width: 9),
-          Expanded(child: Text(text, style: const TextStyle(color: _C.graphite, fontSize: 12, fontWeight: FontWeight.w800, height: 1.35))),
+          Expanded(child: Text(text, style: const TextStyle(color: _C.graphite, fontSize: 12, fontWeight: FontWeight.w600, height: 1.35))),
         ],
       ),
     );
@@ -4133,11 +5213,11 @@ class _SquareTool extends StatelessWidget {
         width: 38,
         height: 38,
         decoration: BoxDecoration(
-          color: danger ? const Color(0xFFFFF1F2) : Colors.white,
+          color: danger ? const Color(0xFFFFF1F2) : _C.input,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: danger ? const Color(0xFFFECACA) : _C.line),
         ),
-        child: Icon(icon, color: danger ? _C.red : _C.graphite, size: 19),
+        child: Icon(icon, color: danger ? _C.red : _C.muted, size: 19),
       ),
     );
     return tooltip == null ? w : Tooltip(message: tooltip!, child: w);
@@ -4160,17 +5240,17 @@ class _ActionPill extends StatelessWidget {
         height: 38,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
-          color: _C.graphite,
+          color: _C.greenSoft,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _C.graphite),
+          border: Border.all(color: _C.greenBorder),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: _C.green, size: 17),
+            Icon(icon, color: _C.greenDark, size: 17),
             const SizedBox(width: 7),
-            Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900))),
+            Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.greenDark, fontSize: 11.8, fontWeight: FontWeight.w800))),
           ],
         ),
       ),
@@ -4197,7 +5277,7 @@ class _PrimaryButton extends StatelessWidget {
         elevation: 0,
         minimumSize: const Size.fromHeight(46),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        textStyle: const TextStyle(fontWeight: FontWeight.w900),
+        textStyle: const TextStyle(fontWeight: FontWeight.w700),
       ),
     );
   }
@@ -4221,7 +5301,7 @@ class _DangerButton extends StatelessWidget {
         side: const BorderSide(color: _C.line),
         minimumSize: const Size(126, 46),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        textStyle: const TextStyle(fontWeight: FontWeight.w900),
+        textStyle: const TextStyle(fontWeight: FontWeight.w700),
       ),
     );
   }

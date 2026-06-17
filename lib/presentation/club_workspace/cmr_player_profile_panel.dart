@@ -1,5 +1,7 @@
 // lib/presentation/club_workspace/cmr_player_profile_panel.dart
+// Windows 11 / Fluent refresh based on CmrClubTeamsPanel typography and glass cards.
 import 'dart:math' as math;
+import 'dart:ui' show FontFeature;
 
 import 'package:flutter/material.dart';
 
@@ -270,7 +272,7 @@ class _FullscreenPhotoDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: Colors.black87,
+      backgroundColor: const Color(0xFF3A3F47),
       insetPadding: EdgeInsets.zero,
       child: Stack(
         children: [
@@ -312,7 +314,7 @@ class _FullscreenPhotoDialog extends StatelessWidget {
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 18,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
@@ -420,8 +422,14 @@ class _ProfileHero extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _ProfileColors.greenSoft,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_ProfileColors.greenSoft, _ProfileColors.blueSoft.withOpacity(.82), _ProfileColors.pinkSoft.withOpacity(.52)],
+        ),
         borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: Colors.white.withOpacity(.82)),
+        boxShadow: [BoxShadow(color: _ProfileColors.green.withOpacity(.11), blurRadius: 24, spreadRadius: -12, offset: const Offset(0, 12))],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -485,8 +493,13 @@ class _HeaderPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(.82),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Colors.white.withOpacity(.92), (color == null ? _ProfileColors.blueSoft : color!.withOpacity(.10))],
+        ),
         borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: Colors.white.withOpacity(.78)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -569,13 +582,23 @@ class _ProfileActionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: color.withOpacity(.09),
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: disabled ? null : onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Colors.white, color.withOpacity(disabled ? .05 : .13)],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withOpacity(.82)),
+            boxShadow: disabled ? null : [BoxShadow(color: color.withOpacity(.12), blurRadius: 18, spreadRadius: -10, offset: const Offset(0, 9))],
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -585,7 +608,7 @@ class _ProfileActionTile extends StatelessWidget {
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: color, fontSize: 11.5, fontWeight: FontWeight.w800),
+                style: TextStyle(color: color, fontSize: 11.5, fontWeight: FontWeight.w500),
               ),
             ],
           ),
@@ -722,7 +745,7 @@ class _EnhancedAvatarState extends State<_EnhancedAvatar> {
         boxShadow: widget.photo.isNotEmpty && !_hasError
             ? [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withOpacity(0.055),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -865,7 +888,7 @@ class _EnhancedProfileButtonState extends State<_EnhancedProfileButton> with Sin
                       ),
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color: _isHovered ? Colors.transparent : _ProfileColors.greenBorder,
+                  color: _isHovered ? Colors.transparent : const Color(0xFFEFF1F4),
                 ),
                 boxShadow: _isHovered
                     ? [
@@ -892,7 +915,7 @@ class _EnhancedProfileButtonState extends State<_EnhancedProfileButton> with Sin
                     style: TextStyle(
                       color: _isHovered ? Colors.white : _ProfileColors.green,
                       fontSize: 13,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
@@ -1113,16 +1136,13 @@ class _ProfileTabButton extends StatelessWidget {
           height: 46,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: selected ? Colors.white : Colors.transparent,
+            gradient: selected
+                ? const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [_ProfileColors.green, _ProfileColors.blue])
+                : null,
+            color: selected ? null : Colors.transparent,
             borderRadius: BorderRadius.circular(18),
             boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(.025),
-                      blurRadius: 12,
-                      offset: const Offset(0, 5),
-                    ),
-                  ]
+                ? [BoxShadow(color: _ProfileColors.green.withOpacity(.16), blurRadius: 18, spreadRadius: -10, offset: const Offset(0, 8))]
                 : null,
           ),
           child: Text(
@@ -1130,8 +1150,8 @@ class _ProfileTabButton extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: selected
-                ? _ProfileText.tabSelected()
-                : _ProfileText.tab().copyWith(color: _ProfileColors.muted, fontWeight: FontWeight.w700),
+                ? _ProfileText.tabSelected().copyWith(color: Colors.white)
+                : _ProfileText.tab().copyWith(color: _ProfileColors.muted, fontWeight: FontWeight.w500),
           ),
         ),
       ),
@@ -1355,7 +1375,7 @@ class _ProfileContactCard extends StatelessWidget {
                   value,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: _ProfileColors.text),
+                  style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w500, color: _ProfileColors.text),
                 ),
               ],
             ),
@@ -1545,101 +1565,207 @@ class _RoundIcon extends StatelessWidget {
 
 class _ProfileColors {
   static const Color panel = Colors.white;
-  static const Color soft = Color(0xFFF6F8FA);
-  static const Color text = Color(0xFF101828);
-  static const Color muted = Color(0xFF667085);
-  static const Color green = Color(0xFF1F7A4D);
-  static const Color greenDark = Color(0xFF0D5C3A);
-  static const Color greenSoft = Color(0xFFF2F7F4);
-  static const Color greenBorder = Color(0xFFD7E8DE);
-  static const Color blue = Color(0xFF3B82F6);
+  static const Color glass = Color(0xF7FFFFFF);
+  static const Color soft = Color(0xFFFAFBFC);
+  static const Color soft2 = Color(0xFFF6F7F9);
+  static const Color text = Color(0xFF0B0F14);
+  static const Color muted = Color(0xFF6B7280);
+  static const Color green = Color(0xFF00A750);
+  static const Color greenDark = Color(0xFF067A46);
+  static const Color greenSoft = Color(0xFFF3FBF7);
+  static const Color greenBorder = Color(0xFFD7F0E2);
+  static const Color blue = Color(0xFF2563EB);
+  static const Color blueSoft = Color(0xFFF4F7FF);
+  static const Color cyan = Color(0xFF06B6D4);
+  static const Color cyanSoft = Color(0xFFEFFBFF);
+  static const Color violet = Color(0xFF7C3AED);
+  static const Color violetSoft = Color(0xFFF5F0FF);
+  static const Color pink = Color(0xFFEC4899);
+  static const Color pinkSoft = Color(0xFFFFF1F8);
   static const Color amber = Color(0xFFF59E0B);
+  static const Color amberSoft = Color(0xFFFFFBEB);
   static const Color red = Color(0xFFD92D20);
+}
+
+
+Color _profileAccent(int index) {
+  const colors = <Color>[
+    _ProfileColors.green,
+    _ProfileColors.blue,
+    _ProfileColors.cyan,
+    _ProfileColors.violet,
+    _ProfileColors.pink,
+    _ProfileColors.amber,
+  ];
+  return colors[index.abs() % colors.length];
+}
+
+Color _profileAccentSoft(int index) {
+  const colors = <Color>[
+    _ProfileColors.greenSoft,
+    _ProfileColors.blueSoft,
+    _ProfileColors.cyanSoft,
+    _ProfileColors.violetSoft,
+    _ProfileColors.pinkSoft,
+    _ProfileColors.amberSoft,
+  ];
+  return colors[index.abs() % colors.length];
 }
 
 class _ProfileDecor {
   static BoxDecoration panel() => BoxDecoration(
-        color: _ProfileColors.panel,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFFFFFFFF),
+            Color(0xFFF6FFF9),
+            Color(0xFFF4F7FF),
+            Color(0xFFFFF7FB),
+          ],
+          stops: [0.0, .38, .72, 1.0],
+        ),
         borderRadius: BorderRadius.circular(30),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.08),
+            color: _ProfileColors.blue.withOpacity(.055),
             blurRadius: 34,
+            spreadRadius: -16,
             offset: const Offset(0, 18),
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(.025),
+            blurRadius: 10,
+            spreadRadius: -7,
+            offset: const Offset(0, 4),
           ),
         ],
       );
 
   static BoxDecoration softCard({double radius = 22}) => BoxDecoration(
-        color: _ProfileColors.soft,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_ProfileColors.glass, _ProfileColors.blueSoft.withOpacity(.45)],
+        ),
         borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: Colors.white.withOpacity(.78)),
+        boxShadow: [
+          BoxShadow(
+            color: _ProfileColors.blue.withOpacity(.06),
+            blurRadius: 22,
+            spreadRadius: -14,
+            offset: const Offset(0, 12),
+          ),
+        ],
       );
 }
 
 class _ProfileText {
+  static const String family = 'Segoe UI';
+  static const List<String> fallback = <String>[
+    'SF Pro Display',
+    'SF Pro Text',
+    'Inter',
+    'Roboto',
+    'Arial',
+  ];
+
   static TextStyle title(double size) => TextStyle(
         color: _ProfileColors.text,
+        fontFamily: family,
+        fontFamilyFallback: fallback,
         fontSize: size,
-        fontWeight: FontWeight.w800,
-        height: 1.12,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -.38,
+        height: 1.08,
+        fontFeatures: const [FontFeature.tabularFigures()],
       );
 
   static TextStyle section() => const TextStyle(
         color: _ProfileColors.text,
-        fontSize: 16,
-        fontWeight: FontWeight.w800,
-        height: 1.18,
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        fontSize: 14.2,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -.22,
+        height: 1.12,
       );
 
   static TextStyle value(double size) => TextStyle(
         color: _ProfileColors.text,
+        fontFamily: family,
+        fontFamilyFallback: fallback,
         fontSize: size,
         fontWeight: FontWeight.w700,
-        height: 1.35,
+        letterSpacing: -.22,
+        height: 1.22,
+        fontFeatures: const [FontFeature.tabularFigures()],
       );
 
   static TextStyle muted(double size) => TextStyle(
         color: _ProfileColors.muted,
+        fontFamily: family,
+        fontFamilyFallback: fallback,
         fontSize: size,
-        fontWeight: FontWeight.w600,
-        height: 1.42,
+        fontWeight: FontWeight.w500,
+        letterSpacing: -.05,
+        height: 1.36,
       );
 
   static TextStyle caption() => const TextStyle(
         color: _ProfileColors.muted,
-        fontSize: 12,
-        fontWeight: FontWeight.w700,
-        height: 1.15,
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        fontSize: 11.1,
+        fontWeight: FontWeight.w600,
+        letterSpacing: .08,
+        height: 1.12,
       );
 
   static TextStyle pill() => const TextStyle(
         color: _ProfileColors.text,
-        fontSize: 12,
-        fontWeight: FontWeight.w700,
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        fontSize: 11.3,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -.02,
       );
 
   static TextStyle tab() => const TextStyle(
         color: _ProfileColors.text,
-        fontSize: 13,
-        fontWeight: FontWeight.w800,
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -.04,
       );
 
   static TextStyle tabSelected() => const TextStyle(
         color: _ProfileColors.green,
-        fontSize: 13,
-        fontWeight: FontWeight.w800,
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -.04,
       );
 
   static TextStyle action() => const TextStyle(
         color: _ProfileColors.green,
-        fontSize: 13,
-        fontWeight: FontWeight.w800,
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -.08,
       );
 
   static TextStyle danger() => const TextStyle(
         color: _ProfileColors.red,
-        fontSize: 13,
-        fontWeight: FontWeight.w800,
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -.08,
       );
 }
 

@@ -1,4 +1,5 @@
 // lib/presentation/club_workspace/cmr_club_teams_panel.dart
+// Typography updated: Windows 11 / Fluent-style Segoe UI hierarchy with platform fallbacks.
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' show FontFeature;
@@ -9,14 +10,14 @@ import 'package:http/http.dart' as http;
 import '../testing/cmr_testing_panel.dart';
 
 class _CmrColors {
-  static const Color bg = Color(0xFFF5F6F7);
+  static const Color bg = Color(0xFFFFFFFF);
   static const Color panel = Colors.white;
-  static const Color soft = Color(0xFFF8F9FA);
-  static const Color soft2 = Color(0xFFF1F3F5);
+  static const Color soft = Color(0xFFFAFBFC);
+  static const Color soft2 = Color(0xFFF6F7F9);
   static const Color text = Color(0xFF0B0F14);
   static const Color muted = Color(0xFF374151);
   static const Color subtle = Color(0xFF6B7280);
-  static const Color divider = Color(0xFFE5E7EB);
+  static const Color divider = Color(0xFFF0F2F4);
   static const Color graphite = Color(0xFF111827);
   static const Color graphite2 = Color(0xFF1F2937);
   static const Color green = Color(0xFF00A750);
@@ -29,103 +30,275 @@ class _CmrColors {
   static const Color redSoft = Color(0xFFFEF2F2);
   static const Color blue = Color(0xFF2563EB);
   static const Color blueSoft = Color(0xFFF4F7FF);
+
+  // Windows 11 / Fluent-like accents: ярко, но мягко на белом фоне.
+  static const Color cyan = Color(0xFF06B6D4);
+  static const Color cyanSoft = Color(0xFFEFFBFF);
+  static const Color violet = Color(0xFF7C3AED);
+  static const Color violetSoft = Color(0xFFF5F0FF);
+  static const Color pink = Color(0xFFEC4899);
+  static const Color pinkSoft = Color(0xFFFFF1F8);
+  static const Color amber = Color(0xFFF59E0B);
+  static const Color amberSoft = Color(0xFFFFFBEB);
+  static const Color mint = Color(0xFF10B981);
+  static const Color glass = Color(0xF7FFFFFF);
+}
+
+Color _winAccent(int index) {
+  const colors = <Color>[
+    _CmrColors.green,
+    _CmrColors.blue,
+    _CmrColors.cyan,
+    _CmrColors.violet,
+    _CmrColors.pink,
+    _CmrColors.amber,
+  ];
+  return colors[index.abs() % colors.length];
+}
+
+Color _winAccentSoft(int index) {
+  const colors = <Color>[
+    _CmrColors.greenSoft,
+    _CmrColors.blueSoft,
+    _CmrColors.cyanSoft,
+    _CmrColors.violetSoft,
+    _CmrColors.pinkSoft,
+    _CmrColors.amberSoft,
+  ];
+  return colors[index.abs() % colors.length];
 }
 
 class _CmrText {
+  // Windows 11 / Fluent typography.
+  // На Windows берётся Segoe UI, на macOS/iOS — системный SF, на web/Android — Inter/Roboto.
+  static const String _family = 'Segoe UI';
+  static const List<String> _fallback = <String>[
+    'SF Pro Display',
+    'SF Pro Text',
+    'Inter',
+    'Roboto',
+    'Arial',
+  ];
+
   static TextStyle title(double size) => TextStyle(
         color: _CmrColors.text,
-        fontFamily: 'Roboto',
+        fontFamily: _family,
+        fontFamilyFallback: _fallback,
         fontSize: size,
-        fontWeight: FontWeight.w900,
-        letterSpacing: -0.25,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.42,
         height: 1.08,
       );
 
   static TextStyle section() => const TextStyle(
         color: _CmrColors.text,
-        fontFamily: 'Roboto',
-        fontSize: 14,
-        fontWeight: FontWeight.w900,
-        letterSpacing: -0.15,
-        height: 1.14,
+        fontFamily: _family,
+        fontFamilyFallback: _fallback,
+        fontSize: 13.4,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.22,
+        height: 1.12,
       );
 
   static TextStyle value(double size) => TextStyle(
         color: _CmrColors.text,
-        fontFamily: 'Roboto',
+        fontFamily: _family,
+        fontFamilyFallback: _fallback,
         fontSize: size,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.28,
         fontFeatures: const [FontFeature.tabularFigures()],
-        height: 1.18,
+        height: 1.08,
       );
 
   static TextStyle muted(double size) => TextStyle(
         color: _CmrColors.muted,
-        fontFamily: 'Roboto',
+        fontFamily: _family,
+        fontFamilyFallback: _fallback,
         fontSize: size,
-        fontWeight: FontWeight.w600,
-        height: 1.32,
+        fontWeight: FontWeight.w500,
+        letterSpacing: -0.06,
+        height: 1.34,
       );
 
   static TextStyle subtle(double size) => TextStyle(
         color: _CmrColors.subtle,
-        fontFamily: 'Roboto',
+        fontFamily: _family,
+        fontFamilyFallback: _fallback,
         fontSize: size,
-        fontWeight: FontWeight.w600,
+        fontWeight: FontWeight.w500,
+        letterSpacing: -0.04,
         height: 1.28,
       );
 
   static TextStyle caption() => const TextStyle(
         color: _CmrColors.subtle,
-        fontFamily: 'Roboto',
-        fontSize: 10.5,
-        fontWeight: FontWeight.w800,
-        letterSpacing: 0.12,
-        height: 1.05,
+        fontFamily: _family,
+        fontFamilyFallback: _fallback,
+        fontSize: 10.6,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.08,
+        height: 1.08,
       );
 
   static TextStyle action() => const TextStyle(
         color: _CmrColors.text,
-        fontFamily: 'Roboto',
-        fontSize: 12,
-        fontWeight: FontWeight.w900,
-        height: 1.1,
+        fontFamily: _family,
+        fontFamilyFallback: _fallback,
+        fontSize: 11.8,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.08,
+        height: 1.08,
+      );
+
+  static TextStyle whiteAction({double size = 11.8}) => TextStyle(
+        color: Colors.white,
+        fontFamily: _family,
+        fontFamilyFallback: _fallback,
+        fontSize: size,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.08,
+        height: 1.08,
+      );
+
+  static TextStyle chip({double size = 10.8, Color? color}) => TextStyle(
+        color: color ?? _CmrColors.text,
+        fontFamily: _family,
+        fontFamilyFallback: _fallback,
+        fontSize: size,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.02,
+        height: 1.08,
+      );
+
+  static TextStyle microCaps({Color? color}) => TextStyle(
+        color: color ?? _CmrColors.subtle,
+        fontFamily: _family,
+        fontFamilyFallback: _fallback,
+        fontSize: 8.7,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.32,
+        height: 1,
       );
 }
-
 class _CmrDecor {
-  static BoxDecoration panel({double radius = 20, bool elevated = true}) => BoxDecoration(
+  static BoxDecoration panel({double radius = 22, bool elevated = true}) => BoxDecoration(
         color: _CmrColors.panel,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: _CmrColors.divider, width: 1),
         boxShadow: elevated
             ? [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.035),
-                  blurRadius: 18,
-                  offset: const Offset(0, 10),
+                  color: Colors.black.withOpacity(0.045),
+                  blurRadius: 34,
+                  spreadRadius: -14,
+                  offset: const Offset(0, 20),
+                ),
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.025),
+                  blurRadius: 10,
+                  spreadRadius: -7,
+                  offset: const Offset(0, 4),
                 ),
               ]
             : null,
       );
 
-  static BoxDecoration softCard({double radius = 16, bool active = false}) => BoxDecoration(
+  static BoxDecoration softCard({double radius = 18, bool active = false}) => BoxDecoration(
         color: active ? _CmrColors.panel : _CmrColors.soft,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(
-          color: active ? _CmrColors.green.withOpacity(0.42) : _CmrColors.divider,
-          width: active ? 1.2 : 1,
-        ),
         boxShadow: active
             ? [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 14,
-                  offset: const Offset(0, 8),
+                  color: Colors.black.withOpacity(0.045),
+                  blurRadius: 24,
+                  spreadRadius: -12,
+                  offset: const Offset(0, 14),
                 ),
               ]
             : null,
       );
+
+  static BoxDecoration workspaceBg() => const BoxDecoration(
+        color: Color(0xFFF6F7F9),
+      );
+
+  static BoxDecoration glassCard({double radius = 22, Color? tint}) => BoxDecoration(
+        color: tint ?? _CmrColors.glass,
+        borderRadius: BorderRadius.circular(radius),
+        boxShadow: [
+          BoxShadow(
+            color: _CmrColors.blue.withOpacity(.055),
+            blurRadius: 30,
+            spreadRadius: -18,
+            offset: const Offset(0, 18),
+          ),
+          BoxShadow(
+            color: _CmrColors.green.withOpacity(.045),
+            blurRadius: 22,
+            spreadRadius: -18,
+            offset: const Offset(-8, 12),
+          ),
+        ],
+      );
+
+  // Единое окно Windows 11: общий светлый контейнер вместо двух отдельных
+  // карточек с рамками вокруг списка и деталей.
+  static BoxDecoration unifiedWindow({double radius = 24}) => BoxDecoration(
+        color: _CmrColors.glass,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: Colors.white.withOpacity(.86), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.055),
+            blurRadius: 38,
+            spreadRadius: -18,
+            offset: const Offset(0, 22),
+          ),
+          BoxShadow(
+            color: _CmrColors.blue.withOpacity(.035),
+            blurRadius: 24,
+            spreadRadius: -18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      );
+
+  static BoxDecoration seamlessPane({double radius = 0}) => BoxDecoration(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(radius),
+      );
+
+  // Fluent / Windows 11 surface: без чёрной заливки и без цветного градиента.
+  // Светлое стекло, мягкая тень, цвет остаётся только в тонком активном акценте.
+  static BoxDecoration fluentSurface({
+    double radius = 16,
+    Color accent = _CmrColors.blue,
+    bool active = false,
+    bool compact = false,
+  }) {
+    return BoxDecoration(
+      color: active ? Colors.white.withOpacity(.96) : Colors.white.withOpacity(.82),
+      borderRadius: BorderRadius.circular(radius),
+      border: Border.all(
+        color: active ? accent.withOpacity(.20) : Colors.white.withOpacity(.78),
+        width: active ? 1.05 : 1,
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(active ? .070 : .040),
+          blurRadius: compact ? 14 : 22,
+          spreadRadius: compact ? -9 : -12,
+          offset: Offset(0, compact ? 7 : 12),
+        ),
+        BoxShadow(
+          color: accent.withOpacity(active ? .055 : .025),
+          blurRadius: compact ? 10 : 16,
+          spreadRadius: compact ? -9 : -11,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    );
+  }
 }
 
 
@@ -301,10 +474,16 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
       _selectedIndex = math.max(0, index);
     });
 
-    // Важно: обычный клик по карточке команды больше НЕ открывает "Обзор".
-    // Если родительскому workspace нужно просто запомнить выбранную команду без навигации,
-    // он может передать onSelectTeam. Старый onOpenTeam оставлен только для явного открытия обзора.
-    widget.onSelectTeam?.call(team);
+    // Важно: обычный клик по карточке команды выбирает её как рабочую.
+    // Если родитель передал onSelectTeam — остаёмся в разделе "Команды".
+    // Если callback не передан, используем onOpenTeam как безопасный fallback,
+    // чтобы выбор команды не "терялся" в старых местах подключения панели.
+    final selectCallback = widget.onSelectTeam;
+    if (selectCallback != null) {
+      selectCallback(team);
+    } else {
+      widget.onOpenTeam(team);
+    }
   }
 
   void _openTeamOverview(Map<String, dynamic> team) {
@@ -468,7 +647,7 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
             width: double.infinity,
             height: safeHeight,
             child: Container(
-              color: _CmrColors.bg,
+              decoration: _CmrDecor.workspaceBg(),
               padding: const EdgeInsets.all(10),
               child: _EmptyTeams(onCreateTeam: widget.onCreateTeam),
             ),
@@ -476,8 +655,8 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
         }
 
         final visibleTeams = _visibleTeams;
-        final mobile = width < 720;
-        final compact = width < 980;
+        final mobile = width < 640;
+        final compact = width < 880;
         final selected = _selectedTeam;
         final displaySelectedTeamName = selected == null ? widget.selectedTeamName : _teamName(selected);
         final listWidth = mobile ? width : math.min(480.0, math.max(320.0, width * .42));
@@ -543,14 +722,20 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
             width: double.infinity,
             height: safeHeight,
             child: Container(
-              color: _CmrColors.bg,
+              decoration: _CmrDecor.workspaceBg(),
               padding: const EdgeInsets.all(8),
-              child: Column(
-                children: [
-                  SizedBox(height: listHeight, child: list),
-                  const SizedBox(height: 10),
-                  Expanded(child: details),
-                ],
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(22),
+                child: Container(
+                  decoration: _CmrDecor.unifiedWindow(radius: 22),
+                  child: Column(
+                    children: [
+                      SizedBox(height: listHeight, child: list),
+                      Container(height: 1, color: _CmrColors.divider.withOpacity(.70)),
+                      Expanded(child: details),
+                    ],
+                  ),
+                ),
               ),
             ),
           );
@@ -560,14 +745,21 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
           width: double.infinity,
           height: safeHeight,
           child: Container(
-            color: _CmrColors.bg,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(width: listWidth, child: list),
-                const SizedBox(width: 12),
-                Expanded(child: details),
-              ],
+            decoration: _CmrDecor.workspaceBg(),
+            padding: const EdgeInsets.all(10),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Container(
+                decoration: _CmrDecor.unifiedWindow(radius: 24),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(width: listWidth, child: list),
+                    Container(width: 1, color: _CmrColors.divider.withOpacity(.70)),
+                    Expanded(child: details),
+                  ],
+                ),
+              ),
             ),
           ),
         );
@@ -650,7 +842,7 @@ class _TinyStatus extends StatelessWidget {
       decoration: BoxDecoration(
         color: _CmrColors.panel,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: _CmrColors.divider),
+        border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -666,12 +858,7 @@ class _TinyStatus extends StatelessWidget {
           const SizedBox(width: 5),
           Text(
             text,
-            style: const TextStyle(
-              color: _CmrColors.text,
-              fontSize: 11,
-              fontWeight: FontWeight.w900,
-              height: 1,
-            ),
+            style: _CmrText.chip(size: 10.8).copyWith(height: 1),
           ),
         ],
       ),
@@ -693,7 +880,7 @@ class _MobileIconAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: filled ? _CmrColors.graphite : _CmrColors.panel,
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
@@ -701,13 +888,15 @@ class _MobileIconAction extends StatelessWidget {
         child: Container(
           width: 38,
           height: 38,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: filled ? _CmrColors.graphite : _CmrColors.divider),
+          decoration: _CmrDecor.fluentSurface(
+            radius: 12,
+            accent: filled ? _CmrColors.green : _CmrColors.blue,
+            active: filled,
+            compact: true,
           ),
           child: Icon(
             icon,
-            color: filled ? _CmrColors.green : _CmrColors.text,
+            color: filled ? _CmrColors.greenDark : _CmrColors.muted,
             size: 18,
           ),
         ),
@@ -834,7 +1023,7 @@ class _TeamsList extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      decoration: _CmrDecor.panel(),
+      decoration: _CmrDecor.seamlessPane(),
       padding: EdgeInsets.all(outerPadding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1027,7 +1216,7 @@ class _TeamsIconButton extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: emphasized ? _CmrColors.graphite : _CmrColors.panel,
+        color: Colors.transparent,
         borderRadius: radius,
         child: InkWell(
           onTap: onTap,
@@ -1035,13 +1224,15 @@ class _TeamsIconButton extends StatelessWidget {
           child: Container(
             width: compact ? 36 : 38,
             height: compact ? 36 : 38,
-            decoration: BoxDecoration(
-              borderRadius: radius,
-              border: Border.all(color: emphasized ? _CmrColors.graphite : _CmrColors.divider),
+            decoration: _CmrDecor.fluentSurface(
+              radius: compact ? 12 : 13,
+              accent: emphasized ? _CmrColors.green : _CmrColors.blue,
+              active: emphasized,
+              compact: true,
             ),
             child: Icon(
               icon,
-              color: emphasized ? _CmrColors.green : _CmrColors.text,
+              color: emphasized ? _CmrColors.greenDark : _CmrColors.blue,
               size: compact ? 18 : 18,
             ),
           ),
@@ -1074,6 +1265,8 @@ class _TeamTile extends StatelessWidget {
     final players = _teamPlayersCount(team);
     final trainers = _teamTrainersCount(team);
     final meta = [sport, subtitle].where((e) => e.trim().isNotEmpty).join('  •  ');
+    final accent = _winAccent(_teamId(team));
+    final accentSoft = _winAccentSoft(_teamId(team));
 
     return Material(
       color: Colors.transparent,
@@ -1085,14 +1278,21 @@ class _TeamTile extends StatelessWidget {
           duration: const Duration(milliseconds: 170),
           padding: EdgeInsets.symmetric(horizontal: mobile ? 9 : 10, vertical: mobile ? 8 : 9),
           decoration: BoxDecoration(
-            color: _CmrColors.panel,
-            borderRadius: BorderRadius.circular(11),
-            border: Border.all(color: active ? _CmrColors.green.withOpacity(.42) : _CmrColors.divider),
+            color: active ? Colors.white.withOpacity(.96) : Colors.white.withOpacity(.76),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withOpacity(active ? .92 : .65)),
             boxShadow: active
                 ? [
                     BoxShadow(
+                      color: accent.withOpacity(.16),
+                      blurRadius: 22,
+                      spreadRadius: -10,
+                      offset: const Offset(0, 12),
+                    ),
+                    BoxShadow(
                       color: Colors.black.withOpacity(.035),
-                      blurRadius: 12,
+                      blurRadius: 14,
+                      spreadRadius: -10,
                       offset: const Offset(0, 7),
                     ),
                   ]
@@ -1105,7 +1305,7 @@ class _TeamTile extends StatelessWidget {
                 width: 3,
                 height: mobile ? 42 : 46,
                 decoration: BoxDecoration(
-                  color: active ? _CmrColors.green : Colors.transparent,
+                  color: active ? accent : Colors.transparent,
                   borderRadius: BorderRadius.circular(99),
                 ),
               ),
@@ -1188,7 +1388,7 @@ class _TeamInlineMetric extends StatelessWidget {
       decoration: BoxDecoration(
         color: _CmrColors.soft,
         borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: _CmrColors.divider),
+        border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1216,15 +1416,16 @@ class _ChevronBadge extends StatelessWidget {
       width: 28,
       height: 28,
       alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: active ? _CmrColors.graphite : _CmrColors.soft,
-        borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: active ? _CmrColors.graphite : _CmrColors.divider),
+      decoration: _CmrDecor.fluentSurface(
+        radius: 9,
+        accent: active ? _CmrColors.green : _CmrColors.blue,
+        active: active,
+        compact: true,
       ),
       child: Icon(
         Icons.chevron_right_rounded,
         size: 18,
-        color: active ? Colors.white : _CmrColors.subtle,
+        color: active ? _CmrColors.greenDark : _CmrColors.subtle,
       ),
     );
   }
@@ -1305,7 +1506,7 @@ class _TeamStateChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: _CmrColors.panel,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: active ? _CmrColors.green.withOpacity(.5) : _CmrColors.divider),
+        border: Border.all(color: active ? _CmrColors.green.withOpacity(.20) : _CmrColors.divider.withOpacity(0.0)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1338,7 +1539,7 @@ class _TeamMiniStat extends StatelessWidget {
       decoration: BoxDecoration(
         color: _CmrColors.panel,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _CmrColors.divider),
+        border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1365,7 +1566,7 @@ class _TeamCountStack extends StatelessWidget {
       decoration: BoxDecoration(
         color: _CmrColors.panel,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _CmrColors.divider),
+        border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1455,7 +1656,7 @@ class _TeamDetails extends StatelessWidget {
 
         return Container(
           width: double.infinity,
-          decoration: _CmrDecor.panel(radius: radius),
+          decoration: _CmrDecor.seamlessPane(radius: radius),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(radius),
             child: SingleChildScrollView(
@@ -1587,9 +1788,17 @@ class _TeamDetails extends StatelessWidget {
       width: double.infinity,
       padding: EdgeInsets.all(compact ? 12 : 14),
       decoration: BoxDecoration(
-        color: _CmrColors.soft,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _CmrColors.divider),
+        color: Colors.white.withOpacity(.96),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white.withOpacity(.86)),
+        boxShadow: [
+          BoxShadow(
+            color: (active ? _CmrColors.green : _CmrColors.blue).withOpacity(.12),
+            blurRadius: 28,
+            spreadRadius: -14,
+            offset: const Offset(0, 16),
+          ),
+        ],
       ),
       child: Wrap(
         spacing: 12,
@@ -1603,7 +1812,7 @@ class _TeamDetails extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(active ? 'АКТИВНАЯ КОМАНДА' : 'КОМАНДА КЛУБА', style: _CmrText.caption().copyWith(color: _CmrColors.greenDark)),
+                Text(active ? 'АКТИВНАЯ КОМАНДА' : 'КОМАНДА КЛУБА', style: _CmrText.caption().copyWith(color: _CmrColors.graphite2)),
                 const SizedBox(height: 6),
                 Text(name, maxLines: compact ? 2 : 1, overflow: TextOverflow.ellipsis, style: _CmrText.title(compact ? 20 : 24)),
                 const SizedBox(height: 6),
@@ -1627,21 +1836,41 @@ class _TeamDetails extends StatelessWidget {
         return Wrap(
           spacing: gap,
           runSpacing: gap,
-          children: items.map((item) {
+          children: items.asMap().entries.map((entry) {
+            final index = entry.key;
+            final item = entry.value;
+            final accent = _winAccent(index);
+            final accentSoft = _winAccentSoft(index);
             return SizedBox(
               width: itemWidth,
               child: Container(
                 padding: EdgeInsets.all(compact ? 10 : 12),
                 decoration: BoxDecoration(
-                  color: _CmrColors.panel,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: _CmrColors.divider),
+                  color: Colors.white.withOpacity(.94),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: Colors.white.withOpacity(.86)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: accent.withOpacity(.10),
+                      blurRadius: 18,
+                      spreadRadius: -11,
+                      offset: const Offset(0, 9),
+                    ),
+                  ],
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(item.icon, color: _CmrColors.greenDark, size: 18),
+                    Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(.82),
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: Icon(item.icon, color: accent, size: 17),
+                    ),
                     const SizedBox(height: 9),
                     Text(item.value.trim().isEmpty ? '—' : item.value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.value(compact ? 16 : 18)),
                     const SizedBox(height: 2),
@@ -1672,21 +1901,35 @@ class _TeamDetails extends StatelessWidget {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: actions.map((action) {
+      children: actions.asMap().entries.map((entry) {
+        final index = entry.key;
+        final action = entry.value;
+        final accent = _winAccent(index);
+        final accentSoft = _winAccentSoft(index);
         return InkWell(
           onTap: action.onTap,
           borderRadius: BorderRadius.circular(14),
           child: Container(
             padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 12, vertical: 10),
             decoration: BoxDecoration(
-              color: action.onTap == null ? _CmrColors.soft : _CmrColors.panel,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: _CmrColors.divider),
+              color: action.onTap == null ? _CmrColors.soft : Colors.white.withOpacity(.94),
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(color: Colors.white.withOpacity(.82)),
+              boxShadow: action.onTap == null
+                  ? null
+                  : [
+                      BoxShadow(
+                        color: accent.withOpacity(.09),
+                        blurRadius: 15,
+                        spreadRadius: -9,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(action.icon, color: action.onTap == null ? _CmrColors.subtle : _CmrColors.greenDark, size: 16),
+                Icon(action.icon, color: action.onTap == null ? _CmrColors.subtle : accent, size: 16),
                 const SizedBox(width: 7),
                 Text(action.title, style: _CmrText.action()),
               ],
@@ -1752,13 +1995,23 @@ class _TeamDetails extends StatelessWidget {
     required List<Map<String, dynamic>> items,
     required VoidCallback? onTap,
   }) {
+    final accent = _winAccent(icon.codePoint);
+    final accentSoft = _winAccentSoft(icon.codePoint);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: _CmrColors.soft,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _CmrColors.divider),
+        color: Colors.white.withOpacity(.94),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withOpacity(.78)),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withOpacity(.075),
+            blurRadius: 18,
+            spreadRadius: -12,
+            offset: const Offset(0, 9),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1768,7 +2021,15 @@ class _TeamDetails extends StatelessWidget {
             runSpacing: 6,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Icon(icon, color: _CmrColors.greenDark, size: 17),
+              Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(.82),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: accent, size: 15),
+              ),
               Text(title, style: _CmrText.section()),
               if (onTap != null) _safeTextButton('Открыть', onTap),
             ],
@@ -1796,7 +2057,7 @@ class _TeamDetails extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(13),
-          border: Border.all(color: _CmrColors.divider),
+          border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1817,7 +2078,7 @@ class _TeamDetails extends StatelessWidget {
       decoration: BoxDecoration(
         color: _CmrColors.panel,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _CmrColors.divider),
+        border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1854,7 +2115,7 @@ class _TeamDetails extends StatelessWidget {
       decoration: BoxDecoration(
         color: _CmrColors.panel,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _CmrColors.divider),
+        border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1883,7 +2144,7 @@ class _TeamDetails extends StatelessWidget {
         decoration: BoxDecoration(
           color: _CmrColors.soft,
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: _CmrColors.divider),
+          border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
         ),
         child: Text(text, style: _CmrText.action().copyWith(fontSize: 10.5)),
       ),
@@ -2068,27 +2329,28 @@ class _TeamHeroButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: _CmrColors.graphite,
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _CmrColors.graphite),
+          decoration: _CmrDecor.fluentSurface(
+            radius: 14,
+            accent: _CmrColors.green,
+            active: true,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
-            children: const [
-              Icon(Icons.open_in_new_rounded, color: _CmrColors.green, size: 17),
-              SizedBox(width: 8),
-              Text(
-                'Открыть обзор',
-                style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900),
-              ),
-            ],
+            children: [
+  const Icon(Icons.open_in_new_rounded, color: _CmrColors.greenDark, size: 17),
+  const SizedBox(width: 8),
+  Text(
+    'Открыть обзор',
+    style: _CmrText.action().copyWith(color: _CmrColors.text),
+  ),
+],
           ),
         ),
       ),
@@ -2110,7 +2372,7 @@ class _TeamLightPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: active ? _CmrColors.greenSoft2 : _CmrColors.panel,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: active ? _CmrColors.green.withOpacity(.42) : _CmrColors.divider),
+        border: Border.all(color: active ? _CmrColors.green.withOpacity(.20) : _CmrColors.divider.withOpacity(0.0)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -2124,17 +2386,15 @@ class _TeamLightPill extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 6),
-          Icon(icon, color: active ? _CmrColors.greenDark : _CmrColors.text, size: 12),
+          Icon(icon, color: active ? _CmrColors.graphite2 : _CmrColors.text, size: 12),
           const SizedBox(width: 5),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 150),
             child: Text(
               text.trim().isEmpty ? 'Не указано' : text.trim(),
-              style: TextStyle(
-                color: active ? _CmrColors.greenDark : _CmrColors.text,
-                fontSize: 10,
-                fontWeight: FontWeight.w900,
-                height: 1.05,
+              style: _CmrText.chip(
+                size: 10.3,
+                color: active ? _CmrColors.graphite2 : _CmrColors.text,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -2204,7 +2464,7 @@ class _TeamKpiCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: _CmrColors.panel,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _CmrColors.divider),
+        border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(.025),
@@ -2224,7 +2484,7 @@ class _TeamKpiCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(13),
               border: Border.all(color: _CmrColors.green.withOpacity(.14)),
             ),
-            child: Icon(data.icon, color: _CmrColors.greenDark, size: 18),
+            child: Icon(data.icon, color: _CmrColors.graphite2, size: 18),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -2271,7 +2531,7 @@ class _TeamOverviewNotice extends StatelessWidget {
               borderRadius: BorderRadius.circular(13),
               border: Border.all(color: _CmrColors.green.withOpacity(.18)),
             ),
-            child: const Icon(Icons.space_dashboard_rounded, color: _CmrColors.greenDark, size: 18),
+            child: const Icon(Icons.space_dashboard_rounded, color: _CmrColors.graphite2, size: 18),
           ),
           const SizedBox(width: 11),
           Expanded(
@@ -2339,7 +2599,7 @@ class _TeamPassportBlock extends StatelessWidget {
             decoration: BoxDecoration(
               color: _CmrColors.soft,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _CmrColors.divider),
+              border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2382,9 +2642,9 @@ class _TeamInfoRow extends StatelessWidget {
             decoration: BoxDecoration(
               color: _CmrColors.soft,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: _CmrColors.divider),
+              border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
             ),
-            child: Icon(icon, color: _CmrColors.greenDark, size: 15),
+            child: Icon(icon, color: _CmrColors.graphite2, size: 15),
           ),
           const SizedBox(width: 9),
           Expanded(
@@ -2483,22 +2743,28 @@ class _TeamWorkAction extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: Container(
           padding: const EdgeInsets.all(11),
-          decoration: BoxDecoration(
-            color: primary ? _CmrColors.graphite : _CmrColors.panel,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: primary ? _CmrColors.graphite : _CmrColors.divider),
-          ),
+          decoration: primary
+              ? _CmrDecor.fluentSurface(
+                  radius: 16,
+                  accent: _CmrColors.green,
+                  active: true,
+                )
+              : BoxDecoration(
+                  color: _CmrColors.panel,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: _CmrColors.divider.withOpacity(.55)),
+                ),
           child: Row(
             children: [
               Container(
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: primary ? Colors.white.withOpacity(.08) : _CmrColors.greenSoft,
+                  color: primary ? _CmrColors.greenSoft2 : _CmrColors.greenSoft,
                   borderRadius: BorderRadius.circular(13),
-                  border: Border.all(color: primary ? Colors.white.withOpacity(.12) : _CmrColors.green.withOpacity(.14)),
+                  border: Border.all(color: primary ? _CmrColors.green.withOpacity(.20) : _CmrColors.green.withOpacity(.14)),
                 ),
-                child: Icon(icon, color: primary ? _CmrColors.green : _CmrColors.greenDark, size: 18),
+                child: Icon(icon, color: primary ? _CmrColors.greenDark : _CmrColors.graphite2, size: 18),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -2507,14 +2773,14 @@ class _TeamWorkAction extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: _CmrText.value(12.8).copyWith(color: primary ? Colors.white : _CmrColors.text),
+                      style: _CmrText.value(12.8).copyWith(color: _CmrColors.text),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 3),
                     Text(
                       enabled ? subtitle : 'Раздел будет доступен после подключения обработчика',
-                      style: _CmrText.subtle(10.5).copyWith(color: primary ? Colors.white.withOpacity(.72) : _CmrColors.subtle),
+                      style: _CmrText.subtle(10.5).copyWith(color: _CmrColors.subtle),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -2895,7 +3161,7 @@ class _TeamRecentTestingBlockState extends State<_TeamRecentTestingBlock> {
         final hasProblems = problems.isNotEmpty;
         final bg = hasProblems ? _CmrColors.redSoft : _CmrColors.greenSoft2;
         final border = hasProblems ? _CmrColors.red.withOpacity(.22) : _CmrColors.green.withOpacity(.18);
-        final iconColor = hasProblems ? _CmrColors.red : _CmrColors.greenDark;
+        final iconColor = hasProblems ? _CmrColors.red : _CmrColors.graphite2;
 
         return Container(
           padding: const EdgeInsets.all(12),
@@ -3042,7 +3308,7 @@ class _RecentTestingProblemTile extends StatelessWidget {
                             ),
                             child: Text(
                               problem.critical ? 'КРАСНАЯ ЗОНА' : 'ПЛОХО',
-                              style: TextStyle(color: badgeColor, fontSize: 8.5, fontWeight: FontWeight.w900, letterSpacing: .2),
+                              style: _CmrText.microCaps(color: badgeColor),
                             ),
                           ),
                         ],
@@ -3630,7 +3896,7 @@ class _TeamSnapshotMetricCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(data.icon, color: data.danger ? _CmrColors.orange : _CmrColors.greenDark, size: 17),
+                  Icon(data.icon, color: data.danger ? _CmrColors.orange : _CmrColors.graphite2, size: 17),
                   const SizedBox(width: 6),
                   const Expanded(child: SizedBox()),
                   Icon(Icons.chevron_right_rounded, color: _CmrColors.subtle, size: 16),
@@ -3683,7 +3949,7 @@ class _TeamTestingWarningsBlock extends StatelessWidget {
                 ),
                 child: Icon(
                   hasWarnings ? Icons.warning_amber_rounded : Icons.verified_rounded,
-                  color: hasWarnings ? _CmrColors.orange : _CmrColors.greenDark,
+                  color: hasWarnings ? _CmrColors.orange : _CmrColors.graphite2,
                   size: 18,
                 ),
               ),
@@ -3792,14 +4058,14 @@ class _TeamCompactFeedBlock extends StatelessWidget {
       decoration: BoxDecoration(
         color: _CmrColors.soft,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _CmrColors.divider),
+        border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, color: _CmrColors.greenDark, size: 17),
+              Icon(icon, color: _CmrColors.graphite2, size: 17),
               const SizedBox(width: 7),
               Expanded(child: Text(title, style: _CmrText.value(12.8), maxLines: 1, overflow: TextOverflow.ellipsis)),
               if (onTap != null)
@@ -3847,7 +4113,7 @@ class _TeamFeedTile extends StatelessWidget {
             padding: const EdgeInsets.all(9),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: _CmrColors.divider),
+              border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
             ),
             child: Row(
               children: [
@@ -3903,7 +4169,7 @@ class _TeamPlayersPreviewBlock extends StatelessWidget {
       decoration: BoxDecoration(
         color: _CmrColors.panel,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _CmrColors.divider),
+        border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
       ),
       child: Row(
         children: [
@@ -3964,9 +4230,9 @@ class _TeamSmallAvatar extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: url.isEmpty
-          ? Center(child: Text(_initials(name), style: _CmrText.value(size * .26).copyWith(color: _CmrColors.greenDark)))
+          ? Center(child: Text(_initials(name), style: _CmrText.value(size * .26).copyWith(color: _CmrColors.graphite2)))
           : Image.network(url, fit: BoxFit.cover, errorBuilder: (_, __, ___) {
-              return Center(child: Text(_initials(name), style: _CmrText.value(size * .26).copyWith(color: _CmrColors.greenDark)));
+              return Center(child: Text(_initials(name), style: _CmrText.value(size * .26).copyWith(color: _CmrColors.graphite2)));
             }),
     );
   }
@@ -3981,14 +4247,20 @@ class _TeamSmallRoundButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: _CmrColors.graphite,
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(999),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(999),
-        child: Padding(
+        child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-          child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w900)),
+          decoration: _CmrDecor.fluentSurface(
+            radius: 999,
+            accent: _CmrColors.green,
+            active: true,
+            compact: true,
+          ),
+          child: Text(text, style: _CmrText.chip(size: 10.5, color: _CmrColors.text)),
         ),
       ),
     );
@@ -4007,7 +4279,7 @@ class _TeamInlineEmptyState extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _CmrColors.divider),
+        border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
       ),
       child: Text(text, style: _CmrText.subtle(10.5), textAlign: TextAlign.center),
     );
@@ -4257,7 +4529,7 @@ class _TeamCompletionChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(done ? Icons.check_rounded : Icons.add_rounded, color: done ? _CmrColors.greenDark : _CmrColors.muted, size: 14),
+          Icon(done ? Icons.check_rounded : Icons.add_rounded, color: done ? _CmrColors.graphite2 : _CmrColors.muted, size: 14),
           const SizedBox(width: 6),
           Text(title, style: _CmrText.action().copyWith(fontSize: 10.5)),
         ],
@@ -4285,12 +4557,12 @@ class _TeamMiniButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _CmrColors.divider),
+            border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: _CmrColors.greenDark, size: 16),
+              Icon(icon, color: _CmrColors.graphite2, size: 16),
               const SizedBox(width: 7),
               Text(text, style: _CmrText.action(), maxLines: 1, overflow: TextOverflow.ellipsis),
             ],
@@ -4323,7 +4595,7 @@ class _TeamPremiumBlock extends StatelessWidget {
       decoration: BoxDecoration(
         color: _CmrColors.panel,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _CmrColors.divider),
+        border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(.022),
@@ -4343,9 +4615,9 @@ class _TeamPremiumBlock extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: _CmrColors.soft,
                   borderRadius: BorderRadius.circular(13),
-                  border: Border.all(color: _CmrColors.divider),
+                  border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
                 ),
-                child: Icon(icon, color: _CmrColors.greenDark, size: 17),
+                child: Icon(icon, color: _CmrColors.graphite2, size: 17),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -4360,7 +4632,7 @@ class _TeamPremiumBlock extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: _CmrColors.soft,
                       borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: _CmrColors.divider),
+                      border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
                     ),
                     child: Text(actionText ?? '', style: _CmrText.action().copyWith(fontSize: 10.5)),
                   ),
@@ -4472,7 +4744,18 @@ class _SearchField extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: mobile ? 40 : 42,
-      decoration: _CmrDecor.softCard(radius: mobile ? 16 : 18),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(.86),
+        borderRadius: BorderRadius.circular(mobile ? 16 : 18),
+        boxShadow: [
+          BoxShadow(
+            color: _CmrColors.blue.withOpacity(.06),
+            blurRadius: 18,
+            spreadRadius: -11,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
       padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 12),
       child: Row(
         children: [
@@ -4531,14 +4814,18 @@ class _FilterChip extends StatelessWidget {
             horizontal: dense ? 10 : 12,
             vertical: dense ? 6 : 7,
           ),
-          decoration: BoxDecoration(
-            color: selected ? _CmrColors.panel : _CmrColors.soft,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: selected ? _CmrColors.graphite : _CmrColors.divider,
-              width: selected ? 1.1 : 1,
-            ),
-          ),
+          decoration: selected
+              ? _CmrDecor.fluentSurface(
+                  radius: 999,
+                  accent: _CmrColors.green,
+                  active: true,
+                  compact: true,
+                )
+              : BoxDecoration(
+                  color: Colors.white.withOpacity(.70),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: Colors.white.withOpacity(.86)),
+                ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -4555,10 +4842,9 @@ class _FilterChip extends StatelessWidget {
               ],
               Text(
                 label,
-                style: TextStyle(
-                  color: selected ? _CmrColors.text : _CmrColors.muted,
-                  fontSize: dense ? 11 : 11.5,
-                  fontWeight: FontWeight.w900,
+                style: _CmrText.chip(
+                  size: dense ? 10.9 : 11.4,
+                  color: selected ? _CmrColors.greenDark : _CmrColors.muted,
                 ),
               ),
             ],
@@ -4578,26 +4864,28 @@ class _ActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: _CmrColors.graphite,
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: _CmrColors.graphite),
+          decoration: _CmrDecor.fluentSurface(
+            radius: 12,
+            accent: _CmrColors.green,
+            active: true,
+            compact: true,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: _CmrColors.green, size: 17),
+              Icon(icon, color: _CmrColors.greenDark, size: 17),
               const SizedBox(width: 8),
               Text(
                 text,
-                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900),
+                style: _CmrText.action().copyWith(color: _CmrColors.text),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -4623,11 +4911,19 @@ class _IconAction extends StatelessWidget {
         width: 38,
         height: 38,
         decoration: BoxDecoration(
-          color: _CmrColors.panel,
+          color: Colors.white.withOpacity(.94),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: _CmrColors.divider),
+          border: Border.all(color: Colors.white.withOpacity(.76)),
+          boxShadow: [
+            BoxShadow(
+              color: _CmrColors.cyan.withOpacity(.10),
+              blurRadius: 14,
+              spreadRadius: -8,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
-        child: Icon(icon, color: _CmrColors.text, size: 18),
+        child: Icon(icon, color: _CmrColors.cyan, size: 18),
       ),
     );
   }
@@ -4645,18 +4941,25 @@ class _IconBadge extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: _CmrColors.panel,
+        color: Colors.white.withOpacity(.94),
         borderRadius: BorderRadius.circular(size * .28),
-        border: Border.all(color: _CmrColors.divider),
+        border: Border.all(color: Colors.white.withOpacity(.82)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.025),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
+            color: _CmrColors.blue.withOpacity(0.10),
+            blurRadius: 18,
+            spreadRadius: -8,
+            offset: const Offset(0, 10),
+          ),
+          BoxShadow(
+            color: _CmrColors.green.withOpacity(0.08),
+            blurRadius: 16,
+            spreadRadius: -9,
+            offset: const Offset(-5, 7),
           ),
         ],
       ),
-      child: Icon(icon, color: _CmrColors.green, size: iconSize),
+      child: Icon(icon, color: _CmrColors.graphite2, size: iconSize),
     );
   }
 }
@@ -4687,7 +4990,7 @@ class _TeamLogo extends StatelessWidget {
           ? Center(
               child: Text(
                 _initials(name),
-                style: TextStyle(color: _CmrColors.text, fontSize: size * .28, fontWeight: FontWeight.w900),
+                style: _CmrText.value(size * .28),
               ),
             )
           : Image(
@@ -4696,7 +4999,7 @@ class _TeamLogo extends StatelessWidget {
               errorBuilder: (_, __, ___) => Center(
                 child: Text(
                   _initials(name),
-                  style: TextStyle(color: _CmrColors.text, fontSize: size * .28, fontWeight: FontWeight.w900),
+                  style: _CmrText.value(size * .28),
                 ),
               ),
             ),
@@ -4747,7 +5050,7 @@ class _BigMetric extends StatelessWidget {
         decoration: BoxDecoration(
           color: _CmrColors.panel,
           borderRadius: BorderRadius.circular(11),
-          border: Border.all(color: _CmrColors.divider),
+          border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -4758,9 +5061,9 @@ class _BigMetric extends StatelessWidget {
               decoration: BoxDecoration(
                 color: _CmrColors.soft,
                 borderRadius: BorderRadius.circular(7),
-                border: Border.all(color: _CmrColors.divider),
+                border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
               ),
-              child: Icon(icon, color: _CmrColors.greenDark, size: 11.5),
+              child: Icon(icon, color: _CmrColors.graphite2, size: 11.5),
             ),
             const SizedBox(width: 6),
             ConstrainedBox(
@@ -4847,7 +5150,7 @@ class _DetailAction extends StatelessWidget {
           decoration: BoxDecoration(
             color: _CmrColors.panel,
             borderRadius: BorderRadius.circular(11),
-            border: Border.all(color: _CmrColors.divider),
+            border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.max,
@@ -4858,9 +5161,9 @@ class _DetailAction extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: _CmrColors.soft,
                   borderRadius: BorderRadius.circular(7),
-                  border: Border.all(color: _CmrColors.divider),
+                  border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
                 ),
-                child: Icon(icon, color: _CmrColors.greenDark, size: 12),
+                child: Icon(icon, color: _CmrColors.graphite2, size: 12),
               ),
               const SizedBox(width: 6),
               Expanded(
@@ -4896,7 +5199,7 @@ class _Pill extends StatelessWidget {
       decoration: BoxDecoration(
         color: _CmrColors.panel,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: _CmrColors.divider),
+        border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

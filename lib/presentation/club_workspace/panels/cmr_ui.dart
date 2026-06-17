@@ -78,7 +78,7 @@ class CmrSectionTitle extends StatelessWidget {
                 style: const TextStyle(
                   color: CmrColors.text,
                   fontSize: 22,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   height: 1.05,
                 ),
               ),
@@ -130,7 +130,7 @@ class CmrPrimaryButton extends StatelessWidget {
         elevation: 0,
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        textStyle: const TextStyle(fontWeight: FontWeight.w900),
+        textStyle: const TextStyle(fontWeight: FontWeight.w700),
       ),
     );
   }
@@ -159,7 +159,7 @@ class CmrGhostButton extends StatelessWidget {
         side: const BorderSide(color: CmrColors.border),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        textStyle: const TextStyle(fontWeight: FontWeight.w800),
+        textStyle: const TextStyle(fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -205,7 +205,7 @@ class CmrEmptyState extends StatelessWidget {
                 style: const TextStyle(
                   color: CmrColors.text,
                   fontSize: 20,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 8),

@@ -21,13 +21,13 @@ class TrackingDeviceSetupScreen extends StatefulWidget {
 }
 
 class _TrackingDeviceSetupScreenState extends State<TrackingDeviceSetupScreen> {
-  static const Color primary = Color(0xFF00A750);
-  static const Color primaryDark = Color(0xFF008C40);
-  static const Color bg = Color(0xFFF4F7F6);
+  static const Color primary = Color(0xFF12B76A);
+  static const Color primaryDark = Color(0xFF067A46);
+  static const Color bg = Color(0xFFFFFFFF);
   static const Color card = Colors.white;
   static const Color text = Color(0xFF102027);
   static const Color muted = Color(0xFF6B7280);
-  static const Color border = Color(0xFFE5E7EB);
+  static const Color border = Color(0xFFF1F3F6);
 
   final Dio _dio = Dio(
     BaseOptions(
@@ -479,7 +479,7 @@ class _TrackingDeviceSetupScreenState extends State<TrackingDeviceSetupScreen> {
           widget.mode == TrackingMode.team && _isCoachLike
               ? 'Командная тренировка'
               : 'Индивидуальная тренировка',
-          style: const TextStyle(fontWeight: FontWeight.w800),
+          style: const TextStyle(fontWeight: FontWeight.w500),
         ),
       ),
       bottomNavigationBar: SafeArea(
@@ -509,7 +509,7 @@ class _TrackingDeviceSetupScreenState extends State<TrackingDeviceSetupScreen> {
                   'Начать тренировку',
                   style: TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
         ),
@@ -573,7 +573,7 @@ class _TrackingDeviceSetupScreenState extends State<TrackingDeviceSetupScreen> {
                   trackingStatusText(_state),
                   style: const TextStyle(
                     fontSize: 17,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                     color: text,
                   ),
                 ),
@@ -598,7 +598,7 @@ class _TrackingDeviceSetupScreenState extends State<TrackingDeviceSetupScreen> {
               trackingStatusText(_state),
               style: TextStyle(
                 color: color,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w500,
                 fontSize: 12,
               ),
             ),
@@ -623,7 +623,7 @@ class _TrackingDeviceSetupScreenState extends State<TrackingDeviceSetupScreen> {
             'Команда и игроки',
             style: TextStyle(
               fontSize: 16,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w500,
               color: text,
             ),
           ),
@@ -692,7 +692,7 @@ class _TrackingDeviceSetupScreenState extends State<TrackingDeviceSetupScreen> {
                   'Спортсмен',
                   style: TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w500,
                     color: text,
                   ),
                 ),
@@ -715,7 +715,7 @@ class _TrackingDeviceSetupScreenState extends State<TrackingDeviceSetupScreen> {
                         _selectedAthlete?.fullName ?? 'Профиль не найден',
                         style: const TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w500,
                           color: text,
                         ),
                       ),
@@ -743,7 +743,7 @@ class _TrackingDeviceSetupScreenState extends State<TrackingDeviceSetupScreen> {
               icon: const Icon(Icons.search_rounded),
               label: const Text(
                 'Найти устройства',
-                style: TextStyle(fontWeight: FontWeight.w800),
+                style: TextStyle(fontWeight: FontWeight.w500),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: primary,
@@ -772,7 +772,7 @@ class _TrackingDeviceSetupScreenState extends State<TrackingDeviceSetupScreen> {
             ),
             child: const Text(
               'Стоп',
-              style: TextStyle(fontWeight: FontWeight.w700),
+              style: TextStyle(fontWeight: FontWeight.w500),
             ),
           ),
         ],
@@ -795,7 +795,7 @@ class _TrackingDeviceSetupScreenState extends State<TrackingDeviceSetupScreen> {
             'Найденные устройства',
             style: TextStyle(
               fontSize: 16,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w500,
               color: text,
             ),
           ),
@@ -853,7 +853,7 @@ class _TrackingDeviceSetupScreenState extends State<TrackingDeviceSetupScreen> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w500,
                         fontSize: 15,
                         color: text,
                       ),
@@ -956,7 +956,7 @@ class _TrackingDeviceSetupScreenState extends State<TrackingDeviceSetupScreen> {
             'Привязка устройств к игрокам',
             style: TextStyle(
               fontSize: 16,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w500,
               color: text,
             ),
           ),
@@ -1006,7 +1006,7 @@ class _TrackingDeviceSetupScreenState extends State<TrackingDeviceSetupScreen> {
                       : 'И',
                   style: const TextStyle(
                     color: primary,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -1016,7 +1016,7 @@ class _TrackingDeviceSetupScreenState extends State<TrackingDeviceSetupScreen> {
                   binding.athleteName,
                   style: const TextStyle(
                     fontSize: 15,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w500,
                     color: text,
                   ),
                 ),
@@ -1101,7 +1101,7 @@ class _TrackingDeviceSetupScreenState extends State<TrackingDeviceSetupScreen> {
                   'Устройства назначены',
                   style: TextStyle(
                     color: primaryDark,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w500,
                     fontSize: 12.5,
                   ),
                 ),
@@ -1130,7 +1130,7 @@ class _TrackingDeviceSetupScreenState extends State<TrackingDeviceSetupScreen> {
             'Мои привязки устройств',
             style: TextStyle(
               fontSize: 16,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w500,
               color: text,
             ),
           ),
@@ -1174,7 +1174,7 @@ class _TrackingDeviceSetupScreenState extends State<TrackingDeviceSetupScreen> {
               title,
               style: const TextStyle(
                 fontSize: 14,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w500,
                 color: text,
               ),
             ),

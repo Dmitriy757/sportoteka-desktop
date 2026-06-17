@@ -361,10 +361,10 @@ class _OverviewTab extends StatelessWidget {
                         physics: const NeverScrollableScrollPhysics(),
                         itemCount: grid.length,
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: c.maxWidth < 760 ? 2 : 4,
+                          crossAxisCount: c.maxWidth < 680 ? 2 : 4,
                           mainAxisSpacing: 8,
                           crossAxisSpacing: 8,
-                          childAspectRatio: c.maxWidth < 760 ? 2.45 : 2.75,
+                          childAspectRatio: c.maxWidth < 680 ? 2.45 : 2.75,
                         ),
                         itemBuilder: (_, i) => _StatPairCard(data: grid[i]),
                       ),
@@ -683,7 +683,7 @@ class _TopMatchHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(10, 7, 8, 7),
       child: LayoutBuilder(
         builder: (context, c) {
-          final narrow = c.maxWidth < 720;
+          final narrow = c.maxWidth < 640;
           final tiny = c.maxWidth < 560;
           return Row(
             children: [
@@ -770,7 +770,7 @@ class _AnalyticsTabs extends StatelessWidget {
                   tabs[i],
                   style: TextStyle(
                     color: active ? _A.green : _A.mutedColor,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     fontSize: 12,
                   ),
                 ),
@@ -1038,7 +1038,7 @@ class _PitchPainter extends CustomPainter {
 
   void _drawText(Canvas canvas, String text, Offset center, double size, Color color) {
     final tp = TextPainter(
-      text: TextSpan(text: text, style: TextStyle(color: color, fontSize: size, fontWeight: FontWeight.w900, height: 1.25)),
+      text: TextSpan(text: text, style: TextStyle(color: color, fontSize: size, fontWeight: FontWeight.w700, height: 1.25)),
       textDirection: TextDirection.ltr,
       textAlign: TextAlign.center,
     )..layout(maxWidth: 110);
@@ -1129,7 +1129,7 @@ class _BestPlayers extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 14),
           child: Row(
             children: [
-              CircleAvatar(radius: 16, backgroundColor: _A.accentSoft, child: Text(r.$1, style: const TextStyle(color: _A.green, fontWeight: FontWeight.w900))),
+              CircleAvatar(radius: 16, backgroundColor: _A.accentSoft, child: Text(r.$1, style: const TextStyle(color: _A.green, fontWeight: FontWeight.w700))),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1141,7 +1141,7 @@ class _BestPlayers extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(color: const Color(0xFFEAF7EF), borderRadius: BorderRadius.circular(10), border: Border.all(color: _A.green.withOpacity(.25))),
-                child: Text('${r.$4} ★', style: const TextStyle(color: _A.green, fontWeight: FontWeight.w900, fontSize: 12)),
+                child: Text('${r.$4} ★', style: const TextStyle(color: _A.green, fontWeight: FontWeight.w700, fontSize: 12)),
               ),
             ],
           ),
@@ -1191,7 +1191,7 @@ class _MatchTile extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
-            CircleAvatar(radius: 16, backgroundColor: _A.cardSoft, child: Text(opponent.isEmpty ? '?' : opponent.characters.first, style: const TextStyle(fontWeight: FontWeight.w900, color: _A.green))),
+            CircleAvatar(radius: 16, backgroundColor: _A.cardSoft, child: Text(opponent.isEmpty ? '?' : opponent.characters.first, style: const TextStyle(fontWeight: FontWeight.w700, color: _A.green))),
             const SizedBox(width: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1202,9 +1202,9 @@ class _MatchTile extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text('$scoreFor:$scoreAgainst', style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 15)),
+              Text('$scoreFor:$scoreAgainst', style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 15)),
               const SizedBox(height: 4),
-              Text(statusText, style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 10)),
+              Text(statusText, style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 10)),
             ]),
           ],
         ),
@@ -1231,7 +1231,7 @@ class _FilterChip extends StatelessWidget {
         visualDensity: VisualDensity.compact,
         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
         selectedColor: _A.accentSoft,
-        labelStyle: TextStyle(color: selected ? _A.green : _A.mutedColor, fontWeight: FontWeight.w900, fontSize: 11),
+        labelStyle: TextStyle(color: selected ? _A.green : _A.mutedColor, fontWeight: FontWeight.w700, fontSize: 11),
         side: BorderSide(color: selected ? _A.accentBorder : _A.border),
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
@@ -1352,7 +1352,7 @@ class _HeaderButton extends StatelessWidget {
       label: Text(text),
       style: OutlinedButton.styleFrom(
         foregroundColor: _A.text,
-        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
         side: const BorderSide(color: _A.border),
         minimumSize: const Size(0, 34),
         padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -1416,7 +1416,7 @@ class _A {
         border: Border.all(color: border),
       );
 
-  static TextStyle title(double size) => TextStyle(fontSize: size, fontWeight: FontWeight.w900, color: text, height: 1.12);
+  static TextStyle title(double size) => TextStyle(fontSize: size, fontWeight: FontWeight.w700, color: text, height: 1.12);
   static TextStyle body(double size) => TextStyle(fontSize: size, fontWeight: FontWeight.w700, color: text, height: 1.22);
   static TextStyle muted(double size) => TextStyle(fontSize: size, fontWeight: FontWeight.w700, color: mutedColor, height: 1.2);
 }
