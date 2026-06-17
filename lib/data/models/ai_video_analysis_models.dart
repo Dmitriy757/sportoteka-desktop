@@ -1,126 +1,164 @@
 class AiJobCreateRequest {
   final int? matchId;
+  final String? title;
   final String? videoUrl;
   final String? localVideoPath;
+  final String? videoPath;
+  final String homeTeamKey;
+  final String awayTeamKey;
 
   const AiJobCreateRequest({
     this.matchId,
+    this.title,
     this.videoUrl,
     this.localVideoPath,
+    this.videoPath,
+    this.homeTeamKey = 'home',
+    this.awayTeamKey = 'away',
   });
 
   Map<String, dynamic> toJson() {
-    return {
+    final data = <String, dynamic>{
       'match_id': matchId,
+      'title': title,
       'video_url': videoUrl,
       'local_video_path': localVideoPath,
+      'video_path': videoPath,
+      'home_team_key': homeTeamKey,
+      'away_team_key': awayTeamKey,
     };
+    data.removeWhere((_, v) => v == null || (v is String && v.trim().isEmpty));
+    return data;
   }
 }
 
 class AiJobCreateResponse {
   final bool success;
   final String jobId;
+  final String status;
+  final Map<String, dynamic> raw;
 
   const AiJobCreateResponse({
     required this.success,
     required this.jobId,
+    required this.status,
+    required this.raw,
   });
 
   factory AiJobCreateResponse.fromJson(Map<String, dynamic> json) {
     return AiJobCreateResponse(
-      success: json['success'] == true,
-      jobId: json['job_id']?.toString() ?? '',
+      success: json['success'] != false,
+      jobId: (json['job_id'] ?? json['jobId'] ?? json['id'] ?? '').toString(),
+      status: (json['status'] ?? 'created').toString(),
+      raw: json,
     );
   }
 }
 
 class AiJobStatusResponse {
+  final bool success;
   final String jobId;
   final String status;
   final int progress;
   final String? error;
+  final Map<String, dynamic> raw;
 
   const AiJobStatusResponse({
+    required this.success,
     required this.jobId,
     required this.status,
     required this.progress,
+    required this.raw,
     this.error,
   });
 
-  bool get isDone => status == 'done';
-  bool get isFailed => status == 'failed';
-  bool get isProcessing => status == 'processing';
-  bool get isQueued => status == 'queued';
+  bool get isDone {
+    final s = status.toLowerCase().trim();
+    return s == 'done' ||
+        s == 'completed' ||
+        s == 'complete' ||
+        s == 'success' ||
+        s == 'finished' ||
+        progress >= 100;
+  }
+
+  bool get isFailed {
+    final s = status.toLowerCase().trim();
+    return s == 'failed' || s == 'error' || s == 'cancelled';
+  }
 
   factory AiJobStatusResponse.fromJson(Map<String, dynamic> json) {
     return AiJobStatusResponse(
-      jobId: json['job_id']?.toString() ?? '',
-      status: json['status']?.toString() ?? 'queued',
-      progress: (json['progress'] ?? 0) is int
-          ? (json['progress'] ?? 0) as int
-          : int.tryParse(json['progress'].toString()) ?? 0,
+      success: json['success'] != false,
+      jobId: (json['job_id'] ?? json['jobId'] ?? '').toString(),
+      status: (json['status'] ?? 'unknown').toString(),
+      progress: _asInt(json['progress']),
       error: json['error']?.toString(),
+      raw: json,
     );
   }
 }
 
-class AiBBox {
-  final double left;
-  final double top;
-  final double right;
-  final double bottom;
+class AiFramePacket {
+  final bool success;
+  final bool hasFrame;
+  final String jobId;
+  final int requestedTimeMs;
+  final int timeMs;
+  final int? frameIndex;
+  final List<AiTrackPacket> tracks;
+  final Map<String, dynamic>? frame;
+  final Map<String, dynamic>? ball;
+  final Map<String, dynamic>? pitchRoi;
+  final Map<String, dynamic> raw;
 
-  const AiBBox({
-    required this.left,
-    required this.top,
-    required this.right,
-    required this.bottom,
+  const AiFramePacket({
+    required this.success,
+    required this.hasFrame,
+    required this.jobId,
+    required this.requestedTimeMs,
+    required this.timeMs,
+    required this.tracks,
+    required this.raw,
+    this.frameIndex,
+    this.frame,
+    this.ball,
+    this.pitchRoi,
   });
 
-  double get width => right - left;
-  double get height => bottom - top;
+  factory AiFramePacket.fromJson(Map<String, dynamic> json) {
+    final frame = _asMap(json['frame']);
+    final rawTracks = _asList(json['tracks']).isNotEmpty
+        ? _asList(json['tracks'])
+        : _asList(json['players']).isNotEmpty
+            ? _asList(json['players'])
+            : _asList(frame?['tracks']).isNotEmpty
+                ? _asList(frame?['tracks'])
+                : _asList(frame?['players']);
 
-  factory AiBBox.fromJson(Map<String, dynamic> json) {
-    return AiBBox(
-      left: (json['left'] ?? 0).toDouble(),
-      top: (json['top'] ?? 0).toDouble(),
-      right: (json['right'] ?? 0).toDouble(),
-      bottom: (json['bottom'] ?? 0).toDouble(),
+    final time = _asInt(json['time_ms'] ?? frame?['time_ms']);
+
+    return AiFramePacket(
+      success: json['success'] != false,
+      hasFrame: json['has_frame'] == true || frame != null || rawTracks.isNotEmpty,
+      jobId: (json['job_id'] ?? json['jobId'] ?? '').toString(),
+      requestedTimeMs: _asInt(json['requested_time_ms'] ?? json['requestedTimeMs']),
+      timeMs: time,
+      frameIndex: json.containsKey('frame_index')
+          ? _asInt(json['frame_index'])
+          : frame != null && frame.containsKey('frame_index')
+              ? _asInt(frame['frame_index'])
+              : null,
+      frame: frame,
+      ball: _asMap(json['ball'] ?? frame?['ball']),
+      pitchRoi: _asMap(json['pitch_roi'] ?? frame?['pitch_roi']),
+      tracks: rawTracks
+          .whereType<Map>()
+          .map((e) => AiTrackPacket.fromJson(Map<String, dynamic>.from(e), fallbackTimeMs: time))
+          .where((e) => e.trackId.trim().isNotEmpty)
+          .toList(),
+      raw: json,
     );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'left': left,
-      'top': top,
-      'right': right,
-      'bottom': bottom,
-    };
-  }
-}
-
-class AiPoint2D {
-  final double x;
-  final double y;
-
-  const AiPoint2D({
-    required this.x,
-    required this.y,
-  });
-
-  factory AiPoint2D.fromJson(Map<String, dynamic> json) {
-    return AiPoint2D(
-      x: (json['x'] ?? 0).toDouble(),
-      y: (json['y'] ?? 0).toDouble(),
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'x': x,
-      'y': y,
-    };
   }
 }
 
@@ -129,161 +167,233 @@ class AiTrackPacket {
   final int? playerId;
   final String playerName;
   final String? teamTag;
-  final int? jerseyNumber;
-  final AiBBox? bbox;
-  final AiBBox? displayBBox;
-  final AiPoint2D? imagePoint;
-  final AiPoint2D? fieldPointM;
   final double speedKmh;
+  final int? jerseyNumber;
+  final AiBox? bbox;
+  final AiBox? displayBBox;
+  final AiPoint? imagePoint;
+  final int timeMs;
   final double confidence;
-  final bool isOccluded;
+  final bool hasBall;
+  final Map<String, dynamic> raw;
 
   const AiTrackPacket({
     required this.trackId,
-    this.playerId,
     required this.playerName,
+    required this.timeMs,
+    required this.raw,
+    this.playerId,
     this.teamTag,
+    this.speedKmh = 0,
     this.jerseyNumber,
     this.bbox,
     this.displayBBox,
     this.imagePoint,
-    this.fieldPointM,
-    required this.speedKmh,
-    required this.confidence,
-    required this.isOccluded,
+    this.confidence = 0,
+    this.hasBall = false,
   });
 
-  factory AiTrackPacket.fromJson(Map<String, dynamic> json) {
+  factory AiTrackPacket.fromJson(
+    Map<String, dynamic> json, {
+    int fallbackTimeMs = 0,
+  }) {
+    final rawTrackId = json['track_id'] ?? json['trackId'] ?? json['id'];
+    final trackId = rawTrackId == null || rawTrackId.toString().trim().isEmpty
+        ? (json['player_id'] ?? '').toString()
+        : rawTrackId.toString();
+
+    final bbox = AiBox.fromAny(json['bbox'] ?? json['box'] ?? json['rect']);
+
+    // Новый AI-сервер отдаёт x/y как координаты стандартного поля 0..100.
+    final x = _firstDouble([
+      json['field_x'],
+      json['fieldX'],
+      json['pitch_x'],
+      json['pitchX'],
+      json['x'],
+    ]);
+    final y = _firstDouble([
+      json['field_y'],
+      json['fieldY'],
+      json['pitch_y'],
+      json['pitchY'],
+      json['y'],
+    ]);
+
+    AiPoint? point;
+    if (x != null && y != null) {
+      point = AiPoint(x: x.clamp(0.0, 100.0), y: y.clamp(0.0, 100.0));
+    } else if (json['point'] is Map) {
+      final p = Map<String, dynamic>.from(json['point'] as Map);
+      point = AiPoint(
+        x: _asDouble(p['x']).clamp(0.0, 100.0),
+        y: _asDouble(p['y']).clamp(0.0, 100.0),
+      );
+    } else if (bbox != null) {
+      point = AiPoint(x: bbox.centerX, y: bbox.bottom);
+    }
+
     return AiTrackPacket(
-      trackId: json['track_id']?.toString() ?? '',
-      playerId: json['player_id'] as int?,
-      playerName: json['player_name']?.toString() ?? 'Игрок',
-      teamTag: json['team_tag']?.toString(),
-      jerseyNumber: json['jersey_number'] as int?,
-      bbox: json['bbox'] is Map<String, dynamic>
-          ? AiBBox.fromJson(json['bbox'] as Map<String, dynamic>)
-          : null,
-      displayBBox: json['display_bbox'] is Map<String, dynamic>
-          ? AiBBox.fromJson(json['display_bbox'] as Map<String, dynamic>)
-          : null,
-      imagePoint: json['image_point'] is Map<String, dynamic>
-          ? AiPoint2D.fromJson(json['image_point'] as Map<String, dynamic>)
-          : null,
-      fieldPointM: json['field_point_m'] is Map<String, dynamic>
-          ? AiPoint2D.fromJson(json['field_point_m'] as Map<String, dynamic>)
-          : null,
-      speedKmh: (json['speed_kmh'] ?? 0).toDouble(),
-      confidence: (json['confidence'] ?? 0).toDouble(),
-      isOccluded: json['is_occluded'] == true,
+      trackId: trackId,
+      playerId: _nullableInt(json['player_id'] ?? json['playerId']),
+      playerName: (json['name'] ??
+              json['player_name'] ??
+              json['playerName'] ??
+              'Трек $trackId')
+          .toString(),
+      teamTag: (json['team'] ?? json['team_key'] ?? json['teamTag'])?.toString(),
+      speedKmh: _asDouble(json['speed_kmh'] ?? json['speedKmh'] ?? json['speed']),
+      jerseyNumber: _nullableInt(json['jersey_number'] ?? json['number']),
+      bbox: bbox,
+      displayBBox: AiBox.fromAny(json['display_bbox'] ?? json['displayBBox']) ?? bbox,
+      imagePoint: point,
+      timeMs: _asInt(json['time_ms'] ?? json['timeMs'] ?? fallbackTimeMs),
+      confidence: _asDouble(json['confidence'] ?? json['conf']),
+      hasBall: _asBool(json['has_ball'] ?? json['hasBall']),
+      raw: json,
     );
   }
 }
 
-class AiBallPacket {
-  final AiBBox? bbox;
-  final AiPoint2D? imagePoint;
-  final AiPoint2D? fieldPointM;
-  final double confidence;
+class AiBox {
+  final double left;
+  final double top;
+  final double right;
+  final double bottom;
 
-  const AiBallPacket({
-    this.bbox,
-    this.imagePoint,
-    this.fieldPointM,
-    required this.confidence,
+  const AiBox({
+    required this.left,
+    required this.top,
+    required this.right,
+    required this.bottom,
   });
 
-  factory AiBallPacket.fromJson(Map<String, dynamic> json) {
-    return AiBallPacket(
-      bbox: json['bbox'] is Map<String, dynamic>
-          ? AiBBox.fromJson(json['bbox'] as Map<String, dynamic>)
-          : null,
-      imagePoint: json['image_point'] is Map<String, dynamic>
-          ? AiPoint2D.fromJson(json['image_point'] as Map<String, dynamic>)
-          : null,
-      fieldPointM: json['field_point_m'] is Map<String, dynamic>
-          ? AiPoint2D.fromJson(json['field_point_m'] as Map<String, dynamic>)
-          : null,
-      confidence: (json['confidence'] ?? 0).toDouble(),
-    );
+  double get centerX => (left + right) / 2.0;
+  double get centerY => (top + bottom) / 2.0;
+
+  static AiBox? fromAny(dynamic raw) {
+    if (raw is List && raw.length >= 4) {
+      return AiBox(
+        left: _asDouble(raw[0]),
+        top: _asDouble(raw[1]),
+        right: _asDouble(raw[2]),
+        bottom: _asDouble(raw[3]),
+      );
+    }
+
+    if (raw is Map) {
+      final m = Map<String, dynamic>.from(raw);
+      final left = _asDouble(m['left'] ?? m['x1'] ?? m['x']);
+      final top = _asDouble(m['top'] ?? m['y1'] ?? m['y']);
+
+      if (m.containsKey('right') || m.containsKey('x2')) {
+        return AiBox(
+          left: left,
+          top: top,
+          right: _asDouble(m['right'] ?? m['x2']),
+          bottom: _asDouble(m['bottom'] ?? m['y2']),
+        );
+      }
+
+      return AiBox(
+        left: left,
+        top: top,
+        right: left + _asDouble(m['width'] ?? m['w']),
+        bottom: top + _asDouble(m['height'] ?? m['h']),
+      );
+    }
+
+    return null;
   }
 }
 
-class AiFramePacket {
-  final int timeMs;
-  final List<AiTrackPacket> tracks;
-  final AiBallPacket? ball;
+class AiPoint {
+  final double x;
+  final double y;
 
-  const AiFramePacket({
-    required this.timeMs,
-    required this.tracks,
-    this.ball,
+  const AiPoint({
+    required this.x,
+    required this.y,
   });
-
-  factory AiFramePacket.fromJson(Map<String, dynamic> json) {
-    final rawTracks = (json['tracks'] as List?) ?? const [];
-
-    return AiFramePacket(
-      timeMs: (json['time_ms'] ?? 0) is int
-          ? (json['time_ms'] ?? 0) as int
-          : int.tryParse(json['time_ms'].toString()) ?? 0,
-      tracks: rawTracks
-          .whereType<Map>()
-          .map((e) => AiTrackPacket.fromJson(Map<String, dynamic>.from(e)))
-          .toList(),
-      ball: json['ball'] is Map<String, dynamic>
-          ? AiBallPacket.fromJson(json['ball'] as Map<String, dynamic>)
-          : null,
-    );
-  }
 }
 
 class AiCalibrationPoint {
-  final double imageX;
-  final double imageY;
-  final double fieldXM;
-  final double fieldYM;
+  final String key;
+  final double x;
+  final double y;
 
   const AiCalibrationPoint({
-    required this.imageX,
-    required this.imageY,
-    required this.fieldXM,
-    required this.fieldYM,
+    required this.key,
+    required this.x,
+    required this.y,
   });
 
-  Map<String, dynamic> toJson() {
-    return {
-      'image_x': imageX,
-      'image_y': imageY,
-      'field_x_m': fieldXM,
-      'field_y_m': fieldYM,
-    };
-  }
+  Map<String, dynamic> toJson() => {
+        'key': key,
+        'x': x,
+        'y': y,
+      };
 }
 
 class AiPlayerSummary {
   final String trackId;
-  final double distanceM;
-  final double avgSpeedKmh;
-  final double maxSpeedKmh;
-  final int sprintCount;
+  final Map<String, dynamic> raw;
 
   const AiPlayerSummary({
     required this.trackId,
-    required this.distanceM,
-    required this.avgSpeedKmh,
-    required this.maxSpeedKmh,
-    required this.sprintCount,
+    required this.raw,
   });
 
   factory AiPlayerSummary.fromJson(Map<String, dynamic> json) {
     return AiPlayerSummary(
-      trackId: json['track_id']?.toString() ?? '',
-      distanceM: (json['distance_m'] ?? 0).toDouble(),
-      avgSpeedKmh: (json['avg_speed_kmh'] ?? 0).toDouble(),
-      maxSpeedKmh: (json['max_speed_kmh'] ?? 0).toDouble(),
-      sprintCount: (json['sprint_count'] ?? 0) is int
-          ? (json['sprint_count'] ?? 0) as int
-          : int.tryParse(json['sprint_count'].toString()) ?? 0,
+      trackId: (json['track_id'] ?? json['trackId'] ?? '').toString(),
+      raw: json,
     );
   }
+}
+
+Map<String, dynamic>? _asMap(dynamic value) {
+  if (value is Map<String, dynamic>) return value;
+  if (value is Map) return Map<String, dynamic>.from(value);
+  return null;
+}
+
+List<dynamic> _asList(dynamic value) {
+  if (value is List) return value;
+  return const [];
+}
+
+int _asInt(dynamic value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse('${value ?? ''}') ?? 0;
+}
+
+int? _nullableInt(dynamic value) {
+  if (value == null) return null;
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse('$value');
+}
+
+double _asDouble(dynamic value) {
+  if (value is double) return value;
+  if (value is num) return value.toDouble();
+  return double.tryParse('${value ?? ''}'.replaceAll(',', '.')) ?? 0.0;
+}
+
+double? _firstDouble(List<dynamic> values) {
+  for (final value in values) {
+    if (value == null) continue;
+    if (value is num) return value.toDouble();
+    final parsed = double.tryParse('$value'.replaceAll(',', '.'));
+    if (parsed != null) return parsed;
+  }
+  return null;
+}
+
+bool _asBool(dynamic value) {
+  if (value == true || value == 1) return true;
+  final s = '${value ?? ''}'.toLowerCase().trim();
+  return s == 'true' || s == '1' || s == 'yes';
 }

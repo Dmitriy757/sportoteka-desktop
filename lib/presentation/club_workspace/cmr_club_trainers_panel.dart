@@ -1,4 +1,5 @@
 // lib/presentation/club_workspace/cmr_club_trainers_panel.dart
+// Windows 11 / Fluent refresh based on CmrClubTeamsPanel typography and glass cards.
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -118,20 +119,23 @@ String _teamsText(Map<String, dynamic> trainer) {
 // ==================== Цветовая схема ====================
 
 class _CmrColors {
-  static const Color bg = Color(0xFFF5F6F7);
+  static const Color bg = Color(0xFFFFFFFF);
   static const Color panel = Colors.white;
-  static const Color soft = Color(0xFFF8F9FA);
-  static const Color soft2 = Color(0xFFF1F3F5);
+  static const Color glass = Color(0xF7FFFFFF);
+  static const Color soft = Color(0xFFFAFBFC);
+  static const Color soft2 = Color(0xFFF6F7F9);
   static const Color active = Colors.white;
 
   static const Color text = Color(0xFF0B0F14);
   static const Color muted = Color(0xFF374151);
   static const Color muted2 = Color(0xFF6B7280);
-  static const Color line = Color(0xFFE5E7EB);
+  static const Color subtle = Color(0xFF6B7280);
+  static const Color line = Color(0xFFEFF1F4);
   static const Color graphite = Color(0xFF111827);
   static const Color graphite2 = Color(0xFF1F2937);
+  static const Color graphiteButton = Color(0xFF111827);
+  static const Color graphiteButtonHover = Color(0xFF1F2937);
 
-  // Фирменный цвет — только как тонкий премиальный акцент.
   static const Color green = Color(0xFF00A750);
   static const Color greenDark = Color(0xFF067A46);
   static const Color greenSoft = Color(0xFFF3FBF7);
@@ -142,144 +146,253 @@ class _CmrColors {
   static const Color redSoft = Color(0xFFFFF1F1);
   static const Color redBorder = Color(0xFFFEE4E2);
   static const Color amber = Color(0xFFF59E0B);
-  static const Color amberSoft = Color(0xFFFFF7E8);
+  static const Color amberSoft = Color(0xFFFFFBEB);
   static const Color blue = Color(0xFF2563EB);
   static const Color blueSoft = Color(0xFFF4F7FF);
+  static const Color cyan = Color(0xFF06B6D4);
+  static const Color cyanSoft = Color(0xFFEFFBFF);
+  static const Color violet = Color(0xFF7C3AED);
+  static const Color violetSoft = Color(0xFFF5F0FF);
+  static const Color pink = Color(0xFFEC4899);
+  static const Color pinkSoft = Color(0xFFFFF1F8);
+}
+
+
+Color _cmrAccent(int index) {
+  const colors = <Color>[
+    _CmrColors.green,
+    _CmrColors.blue,
+    _CmrColors.cyan,
+    _CmrColors.violet,
+    _CmrColors.pink,
+    _CmrColors.amber,
+  ];
+  return colors[index.abs() % colors.length];
+}
+
+Color _cmrAccentSoft(int index) {
+  const colors = <Color>[
+    _CmrColors.greenSoft,
+    _CmrColors.blueSoft,
+    _CmrColors.cyanSoft,
+    _CmrColors.violetSoft,
+    _CmrColors.pinkSoft,
+    _CmrColors.amberSoft,
+  ];
+  return colors[index.abs() % colors.length];
 }
 
 // ==================== Текстовые стили ====================
 
 class _CmrText {
-  static const String family = 'Roboto';
+  static const String family = 'Segoe UI';
+  static const List<String> fallback = <String>[
+    'SF Pro Display',
+    'SF Pro Text',
+    'Inter',
+    'Roboto',
+    'Arial',
+  ];
 
   static TextStyle title(double size) => TextStyle(
         color: _CmrColors.text,
         fontFamily: family,
+        fontFamilyFallback: fallback,
         fontSize: size,
-        fontWeight: FontWeight.w900,
+        fontWeight: FontWeight.w700,
         height: 1.08,
-        letterSpacing: -.2,
+        letterSpacing: -.40,
         fontFeatures: const [FontFeature.tabularFigures()],
       );
 
   static TextStyle section() => const TextStyle(
         color: _CmrColors.text,
         fontFamily: family,
-        fontSize: 14,
-        fontWeight: FontWeight.w900,
-        height: 1.16,
-        letterSpacing: -.1,
+        fontFamilyFallback: fallback,
+        fontSize: 12.75,
+        fontWeight: FontWeight.w700,
+        height: 1.12,
+        letterSpacing: -.22,
       );
 
   static TextStyle value(double size) => TextStyle(
         color: _CmrColors.text,
         fontFamily: family,
+        fontFamilyFallback: fallback,
         fontSize: size,
-        fontWeight: FontWeight.w800,
-        height: 1.22,
+        fontWeight: FontWeight.w700,
+        height: 1.08,
+        letterSpacing: -.28,
         fontFeatures: const [FontFeature.tabularFigures()],
       );
 
   static TextStyle muted(double size) => TextStyle(
         color: _CmrColors.muted,
         fontFamily: family,
+        fontFamilyFallback: fallback,
         fontSize: size,
-        fontWeight: FontWeight.w600,
-        height: 1.32,
+        fontWeight: FontWeight.w500,
+        height: 1.34,
+        letterSpacing: -.06,
       );
 
   static TextStyle caption() => const TextStyle(
         color: _CmrColors.muted2,
         fontFamily: family,
-        fontSize: 10.5,
-        fontWeight: FontWeight.w800,
-        height: 1.12,
-        letterSpacing: .1,
+        fontFamilyFallback: fallback,
+        fontSize: 10.15,
+        fontWeight: FontWeight.w600,
+        height: 1.08,
+        letterSpacing: .08,
       );
 
   static TextStyle pill() => const TextStyle(
         color: _CmrColors.text,
         fontFamily: family,
-        fontSize: 11,
-        fontWeight: FontWeight.w800,
+        fontFamilyFallback: fallback,
+        fontSize: 10.45,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -.02,
       );
 
   static TextStyle tab() => const TextStyle(
         color: _CmrColors.text,
         fontFamily: family,
-        fontSize: 12,
-        fontWeight: FontWeight.w800,
+        fontFamilyFallback: fallback,
+        fontSize: 11.35,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -.04,
       );
 
   static TextStyle tabSelected() => const TextStyle(
         color: _CmrColors.text,
         fontFamily: family,
-        fontSize: 12,
-        fontWeight: FontWeight.w900,
+        fontFamilyFallback: fallback,
+        fontSize: 11.35,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -.04,
       );
 
   static TextStyle action() => const TextStyle(
         color: _CmrColors.text,
         fontFamily: family,
-        fontSize: 12.5,
-        fontWeight: FontWeight.w900,
+        fontFamilyFallback: fallback,
+        fontSize: 11.35,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -.08,
       );
 
   static TextStyle danger() => const TextStyle(
         color: _CmrColors.red,
         fontFamily: family,
-        fontSize: 12.5,
-        fontWeight: FontWeight.w900,
+        fontFamilyFallback: fallback,
+        fontSize: 11.35,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -.08,
       );
 }
 
 // ==================== Декораторы ====================
 
 class _CmrDecor {
-  static double _hardRadius(double radius, {double max = 16}) => math.min(radius, max);
-
-  static BoxDecoration panel({double radius = 16}) => BoxDecoration(
-        color: _CmrColors.panel,
-        borderRadius: BorderRadius.circular(_hardRadius(radius, max: 16)),
-        border: Border.all(color: _CmrColors.line, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(.035),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
-          ),
-        ],
+  static BoxDecoration workspaceBg() => const BoxDecoration(
+        color: Color(0xFFF6F7F9),
       );
 
-  static BoxDecoration softCard({double radius = 14, bool active = false}) => BoxDecoration(
-        color: active ? _CmrColors.panel : _CmrColors.soft,
-        borderRadius: BorderRadius.circular(_hardRadius(radius, max: 16)),
-        border: Border.all(
-          color: active ? _CmrColors.green.withOpacity(.42) : _CmrColors.line,
-          width: active ? 1.2 : 1,
-        ),
-        boxShadow: active
+  static BoxDecoration panel({double radius = 22, bool elevated = true}) => BoxDecoration(
+        color: _CmrColors.panel,
+        borderRadius: BorderRadius.circular(radius),
+        boxShadow: elevated
             ? [
                 BoxShadow(
-                  color: Colors.black.withOpacity(.04),
-                  blurRadius: 14,
-                  offset: const Offset(0, 8),
+                  color: Colors.black.withOpacity(.045),
+                  blurRadius: 34,
+                  spreadRadius: -14,
+                  offset: const Offset(0, 20),
+                ),
+                BoxShadow(
+                  color: Colors.black.withOpacity(.025),
+                  blurRadius: 10,
+                  spreadRadius: -7,
+                  offset: const Offset(0, 4),
                 ),
               ]
             : null,
       );
 
-  static BoxDecoration greenCard({double radius = 14}) => BoxDecoration(
-        color: _CmrColors.panel,
-        borderRadius: BorderRadius.circular(_hardRadius(radius, max: 16)),
-        border: Border.all(color: _CmrColors.green.withOpacity(.30), width: 1.1),
+  static BoxDecoration unifiedWindow({double radius = 24}) => BoxDecoration(
+        color: _CmrColors.glass,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: Colors.white.withOpacity(.86), width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.035),
-            blurRadius: 14,
-            offset: const Offset(0, 8),
+            color: Colors.black.withOpacity(.055),
+            blurRadius: 38,
+            spreadRadius: -18,
+            offset: const Offset(0, 22),
+          ),
+          BoxShadow(
+            color: _CmrColors.blue.withOpacity(.035),
+            blurRadius: 24,
+            spreadRadius: -18,
+            offset: const Offset(0, 10),
           ),
         ],
+      );
+
+  static BoxDecoration seamlessPane({double radius = 0}) => BoxDecoration(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(radius),
+      );
+
+  static BoxDecoration softCard({double radius = 18, bool active = false}) => BoxDecoration(
+        color: active ? Colors.white.withOpacity(.96) : Colors.white.withOpacity(.78),
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: active ? _CmrColors.green.withOpacity(.18) : Colors.white.withOpacity(.72)),
+        boxShadow: active
+            ? [
+                BoxShadow(
+                  color: Colors.black.withOpacity(.050),
+                  blurRadius: 24,
+                  spreadRadius: -12,
+                  offset: const Offset(0, 14),
+                ),
+              ]
+            : null,
+      );
+
+  static BoxDecoration fluentSurface({
+    double radius = 16,
+    Color accent = _CmrColors.green,
+    bool active = false,
+    bool compact = false,
+  }) => BoxDecoration(
+        color: active ? Colors.white.withOpacity(.96) : Colors.white.withOpacity(.82),
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(
+          color: active ? accent.withOpacity(.20) : Colors.white.withOpacity(.78),
+          width: active ? 1.05 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(active ? .070 : .040),
+            blurRadius: compact ? 14 : 22,
+            spreadRadius: compact ? -9 : -12,
+            offset: Offset(0, compact ? 7 : 12),
+          ),
+          BoxShadow(
+            color: accent.withOpacity(active ? .055 : .025),
+            blurRadius: compact ? 10 : 16,
+            spreadRadius: compact ? -9 : -11,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      );
+
+  static BoxDecoration greenCard({double radius = 18}) => fluentSurface(
+        radius: radius,
+        accent: _CmrColors.green,
+        active: true,
       );
 }
 
@@ -297,7 +410,7 @@ class _FullscreenPhotoDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: Colors.black87,
+      backgroundColor: const Color(0xFF3A3F47),
       insetPadding: EdgeInsets.zero,
       child: Stack(
         children: [
@@ -310,7 +423,7 @@ class _FullscreenPhotoDialog extends StatelessWidget {
                 errorBuilder: (_, __, ___) => Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.broken_image, size: 80, color: Colors.grey[600]),
+                    Icon(Icons.broken_image, size: 72, color: Colors.grey[600]),
                     const SizedBox(height: 16),
                     Text(
                       'Не удалось загрузить фото',
@@ -325,7 +438,7 @@ class _FullscreenPhotoDialog extends StatelessWidget {
             top: 40,
             right: 20,
             child: IconButton(
-              icon: const Icon(Icons.close, color: Colors.white, size: 32),
+              icon: const Icon(Icons.close, color: Colors.white, size: 28),
               onPressed: () => Navigator.of(context).pop(),
             ),
           ),
@@ -338,8 +451,8 @@ class _FullscreenPhotoDialog extends StatelessWidget {
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
+                fontSize: 16.75,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
@@ -402,6 +515,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
   String _selectedTrainerKey = '';
   List<Map<String, dynamic>> _trainers = [];
   final Map<int, Future<Map<String, dynamic>>> _trainerProfileFutures = {};
+  Map<String, dynamic>? _editingTrainer;
 
   @override
   void initState() {
@@ -636,7 +750,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final mobile = constraints.maxWidth < 720;
+        final mobile = constraints.maxWidth < 640;
         final compact = constraints.maxWidth < 980;
         final listWidth = math.min(480.0, constraints.maxWidth * .45);
 
@@ -664,36 +778,61 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
           compact: compact,
         );
 
-        if (mobile) {
-          return Container(
-            width: double.infinity,
-            color: _CmrColors.bg,
-            child: list,
-          );
-        }
+        final content = mobile
+            ? Container(
+                width: double.infinity,
+                decoration: _CmrDecor.workspaceBg(),
+                child: list,
+              )
+            : Container(
+                decoration: _CmrDecor.workspaceBg(),
+                padding: const EdgeInsets.all(10),
+                child: Container(
+                  clipBehavior: Clip.antiAlias,
+                  decoration: _CmrDecor.unifiedWindow(radius: 24),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(width: listWidth, child: list),
+                      Container(width: 1, color: _CmrColors.line),
+                      Expanded(
+                        child: _TrainerDetailPanel(
+                          trainer: selected,
+                          clubName: widget.clubName,
+                          selectedTeamName: widget.selectedTeamName,
+                          onMessage: selected == null ? null : () => _messageTrainer(selected),
+                          onEdit: selected == null ? null : () => _editTrainer(selected),
+                          onAssign: selected == null ? null : () => _assignTrainer(selected),
+                          onUnlinkTeam: selected == null ? null : () => _unlinkTrainerFromTeam(selected),
+                          onRemoveClub: selected == null ? null : () => _removeFromClub(selected),
+                          onAddTrainer: _saving ? null : _searchAndAddTrainer,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
 
-        return Container(
-          color: _CmrColors.bg,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(width: listWidth, child: list),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _TrainerDetailPanel(
-                  trainer: selected,
-                  clubName: widget.clubName,
-                  selectedTeamName: widget.selectedTeamName,
-                  onMessage: selected == null ? null : () => _messageTrainer(selected),
-                  onEdit: selected == null ? null : () => _editTrainer(selected),
-                  onAssign: selected == null ? null : () => _assignTrainer(selected),
-                  onUnlinkTeam: selected == null ? null : () => _unlinkTrainerFromTeam(selected),
-                  onRemoveClub: selected == null ? null : () => _removeFromClub(selected),
-                  onAddTrainer: _saving ? null : _searchAndAddTrainer,
+        return Stack(
+          children: [
+            content,
+            if (_editingTrainer != null)
+              Positioned.fill(
+                child: _TrainerEditSidePanel(
+                  trainer: _editingTrainer!,
+                  compact: mobile || constraints.maxWidth < 980,
+                  onClose: () {
+                    if (mounted) setState(() => _editingTrainer = null);
+                  },
+                  onLoadProfile: _loadTrainerEditProfile,
+                  onSaveProfile: _saveTrainerEditProfile,
+                  onSaved: () async {
+                    if (mounted) setState(() => _editingTrainer = null);
+                    await _afterMutation('Профиль тренера обновлён');
+                  },
                 ),
               ),
-            ],
-          ),
+          ],
         );
       },
     );
@@ -1049,171 +1188,69 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
   Future<void> _editTrainer(Map<String, dynamic> trainer, {bool closeCurrentSheet = false}) async {
     if (closeCurrentSheet) {
       Navigator.of(context).pop();
-      await Future.delayed(const Duration(milliseconds: 220));
+      await Future<void>.delayed(const Duration(milliseconds: 220));
     }
-    
+
     final trainerId = _trainerId(trainer);
     if (trainerId <= 0) {
       Get.snackbar('Тренер', 'Не найден ID тренера');
       return;
     }
 
-    final positionC = TextEditingController(text: _trainerRole(trainer));
-    final birthdayC = TextEditingController();
-    final experienceC = TextEditingController();
-    final bioC = TextEditingController();
-    final picker = ImagePicker();
-    XFile? pickedPhoto;
-    String currentPhoto = _trainerPhoto(trainer);
-    bool loadingProfile = true;
-    bool savingProfile = false;
+    if (!mounted) return;
+    setState(() => _editingTrainer = Map<String, dynamic>.from(trainer));
+  }
 
-    Future<void> loadProfile(void Function(void Function()) setSheet) async {
-      try {
-        final data = await _postJson(getTrainerProfileUrl, {'trainer_id': trainerId});
-        final p = _pickMap(data, const ['profile', 'trainer', 'user', 'data']) ?? data;
-        positionC.text = _s(p['position']).isNotEmpty ? _s(p['position']) : positionC.text;
-        birthdayC.text = _s(p['birthday']);
-        experienceC.text = _s(p['experience']);
-        bioC.text = _s(p['bio']);
-        final serverPhoto = _normalizeImage(_s(p['photo'] ?? p['photo_url'] ?? p['avatar']));
-        if (serverPhoto.isNotEmpty) currentPhoto = serverPhoto;
-      } catch (_) {}
-      setSheet(() => loadingProfile = false);
-    }
+  Future<Map<String, dynamic>> _loadTrainerEditProfile(int trainerId) async {
+    final data = await _postJson(getTrainerProfileUrl, {'trainer_id': trainerId});
+    return _pickMap(data, const ['profile', 'trainer', 'user', 'data']) ?? data;
+  }
 
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setSheet) {
-            if (loadingProfile) {
-              Future.microtask(() => loadProfile(setSheet));
-            }
-
-            Future<void> pickPhoto() async {
-              final x = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
-              if (x != null) setSheet(() => pickedPhoto = x);
-            }
-
-            Future<void> save() async {
-              setSheet(() => savingProfile = true);
-              try {
-                http.Response resp;
-                if (pickedPhoto != null) {
-                  final req = http.MultipartRequest('POST', Uri.parse(updateTrainerProfileUrl));
-                  req.fields['trainer_id'] = '$trainerId';
-                  req.fields['position'] = positionC.text.trim();
-                  req.fields['birthday'] = birthdayC.text.trim();
-                  req.fields['experience'] = experienceC.text.trim();
-                  req.fields['bio'] = bioC.text.trim();
-                  req.files.add(await http.MultipartFile.fromPath('photo', File(pickedPhoto!.path).path));
-                  final streamed = await req.send();
-                  resp = http.Response(await streamed.stream.bytesToString(), streamed.statusCode);
-                } else {
-                  resp = await http.post(
-                    Uri.parse(updateTrainerProfileUrl),
-                    headers: const {'Content-Type': 'application/json; charset=utf-8'},
-                    body: jsonEncode({
-                      'trainer_id': trainerId,
-                      'position': positionC.text.trim(),
-                      'birthday': birthdayC.text.trim(),
-                      'experience': experienceC.text.trim(),
-                      'bio': bioC.text.trim(),
-                    }),
-                  );
-                }
-                final data = _tryDecode(resp.body);
-                final ok = data is Map && (data['success'] == true || data['status'] == 'success');
-                if (!ok) throw Exception(_s(data is Map ? data['message'] : ''));
-                if (mounted) Navigator.pop(context);
-                await _afterMutation('Профиль тренера обновлён');
-              } catch (e) {
-                Get.snackbar('Ошибка', 'Не удалось сохранить профиль');
-              }
-              if (mounted) setSheet(() => savingProfile = false);
-            }
-
-            return _CmrBottomPanel(
-              maxHeightFactor: .92,
-              child: loadingProfile
-                  ? const Padding(
-                      padding: EdgeInsets.all(38),
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  : Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _CmrSheetHandle(),
-                        _CmrSheetTitle(
-                          icon: Icons.edit_rounded,
-                          title: 'Редактирование тренера',
-                          subtitle: _trainerName(trainer),
-                        ),
-                        const SizedBox(height: 16),
-                        Center(
-                          child: InkWell(
-                            onTap: pickPhoto,
-                            borderRadius: BorderRadius.circular(12),
-                            child: Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                pickedPhoto != null
-                                    ? ClipRRect(
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: Image.file(File(pickedPhoto!.path), width: 104, height: 104, fit: BoxFit.cover),
-                                      )
-                                    : _CmrAvatar(photo: currentPhoto, name: _trainerName(trainer), size: 104),
-                                Positioned(
-                                  right: -4,
-                                  bottom: -4,
-                                  child: Container(
-                                    width: 34,
-                                    height: 34,
-                                    decoration: BoxDecoration(
-                                      color: _CmrColors.green,
-                                      borderRadius: BorderRadius.circular(9),
-                                    ),
-                                    child: const Icon(Icons.photo_camera_rounded, color: Colors.white, size: 18),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        _CmrInput(controller: positionC, hint: 'Должность / роль', icon: Icons.badge_rounded),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(child: _CmrInput(controller: birthdayC, hint: 'Дата рождения', icon: Icons.cake_rounded)),
-                            const SizedBox(width: 10),
-                            Expanded(child: _CmrInput(controller: experienceC, hint: 'Опыт', icon: Icons.workspace_premium_rounded)),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        _CmrInput(controller: bioC, hint: 'Описание / биография', icon: Icons.notes_rounded, maxLines: 4),
-                        const SizedBox(height: 16),
-                        _CmrPrimaryButton(
-                          icon: Icons.save_rounded,
-                          title: savingProfile ? 'Сохранение...' : 'Сохранить изменения',
-                          onTap: savingProfile ? null : save,
-                        ),
-                      ],
-                    ),
-            );
-          },
+  Future<bool> _saveTrainerEditProfile({
+    required int trainerId,
+    required String position,
+    required String birthday,
+    required String experience,
+    required String bio,
+    XFile? pickedPhoto,
+  }) async {
+    try {
+      http.Response resp;
+      if (pickedPhoto != null) {
+        final req = http.MultipartRequest('POST', Uri.parse(updateTrainerProfileUrl));
+        req.fields['trainer_id'] = '$trainerId';
+        req.fields['position'] = position.trim();
+        req.fields['birthday'] = birthday.trim();
+        req.fields['experience'] = experience.trim();
+        req.fields['bio'] = bio.trim();
+        req.files.add(await http.MultipartFile.fromPath('photo', File(pickedPhoto.path).path));
+        final streamed = await req.send();
+        resp = http.Response(await streamed.stream.bytesToString(), streamed.statusCode);
+      } else {
+        resp = await http.post(
+          Uri.parse(updateTrainerProfileUrl),
+          headers: const {'Content-Type': 'application/json; charset=utf-8'},
+          body: jsonEncode({
+            'trainer_id': trainerId,
+            'position': position.trim(),
+            'birthday': birthday.trim(),
+            'experience': experience.trim(),
+            'bio': bio.trim(),
+          }),
         );
-      },
-    );
+      }
 
-    positionC.dispose();
-    birthdayC.dispose();
-    experienceC.dispose();
-    bioC.dispose();
+      final data = _tryDecode(resp.body);
+      final ok = data is Map && (data['success'] == true || data['status'] == 'success');
+      if (!ok) {
+        final msg = data is Map ? _s(data['message'] ?? data['error']) : '';
+        Get.snackbar('Ошибка', msg.isEmpty ? 'Не удалось сохранить профиль' : msg);
+      }
+      return ok;
+    } catch (_) {
+      Get.snackbar('Ошибка', 'Не удалось сохранить профиль');
+      return false;
+    }
   }
 
   Future<void> _assignTrainer(Map<String, dynamic> trainer, {bool closeCurrentSheet = false}) async {
@@ -1400,7 +1437,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const _CmrSheetHandle(),
-            _CmrRoundIcon(icon: danger ? Icons.warning_amber_rounded : Icons.verified_rounded, color: danger ? _CmrColors.red : _CmrColors.green, size: 58),
+            _CmrRoundIcon(icon: danger ? Icons.warning_amber_rounded : Icons.verified_rounded, color: danger ? _CmrColors.red : _CmrColors.green, size: 52),
             const SizedBox(height: 14),
             Text(title, textAlign: TextAlign.center, style: _CmrText.title(20)),
             const SizedBox(height: 8),
@@ -1471,7 +1508,7 @@ class _TrainerListPanel extends StatelessWidget {
     final padding = mobile ? 10.0 : 12.0;
 
     return Container(
-      decoration: _CmrDecor.panel(radius: mobile ? 14 : 16),
+      decoration: mobile ? _CmrDecor.panel(radius: 14) : _CmrDecor.seamlessPane(),
       padding: EdgeInsets.all(padding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1564,12 +1601,8 @@ class _TrainerHeader extends StatelessWidget {
         Container(
           width: mobile ? 34 : 36,
           height: mobile ? 34 : 36,
-          decoration: BoxDecoration(
-            color: _CmrColors.graphite,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: _CmrColors.green.withOpacity(.36)),
-          ),
-          child: const Icon(Icons.badge_rounded, color: _CmrColors.green, size: 18),
+          decoration: _CmrDecor.fluentSurface(radius: 10, accent: _CmrColors.green, active: true, compact: true),
+          child: const Icon(Icons.badge_rounded, color: _CmrColors.green, size: 16),
         ),
         const SizedBox(width: 10),
         Expanded(
@@ -1628,17 +1661,13 @@ class _TinyCounter extends StatelessWidget {
       height: 28,
       alignment: Alignment.center,
       padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: _CmrColors.graphite,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _CmrColors.green.withOpacity(.42)),
-      ),
+      decoration: _CmrDecor.fluentSurface(radius: 8, accent: _CmrColors.green, active: true, compact: true),
       child: Text(
         text,
         style: const TextStyle(
-          color: Colors.white,
-          fontSize: 12,
-          fontWeight: FontWeight.w900,
+          color: _CmrColors.green,
+          fontSize: 11.55,
+          fontWeight: FontWeight.w500,
           height: 1,
         ),
       ),
@@ -1672,7 +1701,7 @@ class _TrainerStatChip extends StatelessWidget {
               color: Colors.white,
               borderRadius: BorderRadius.circular(9),
             ),
-            child: Icon(icon, size: 17, color: _CmrColors.green),
+            child: Icon(icon, size: 15, color: _CmrColors.green),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -1712,9 +1741,11 @@ class _TrainerIconButton extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: emphasized ? _CmrColors.graphite : _CmrColors.soft,
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(10),
-        child: InkWell(
+        child: Ink(
+          decoration: _CmrDecor.fluentSurface(radius: 10, accent: _CmrColors.green, active: emphasized, compact: true),
+          child: InkWell(
           borderRadius: BorderRadius.circular(10),
           onTap: onTap,
           child: Opacity(
@@ -1722,9 +1753,10 @@ class _TrainerIconButton extends StatelessWidget {
             child: SizedBox(
               width: compact ? 34 : 38,
               height: compact ? 34 : 38,
-              child: Icon(icon, color: emphasized ? _CmrColors.green : _CmrColors.text, size: compact ? 17 : 18),
+              child: Icon(icon, color: emphasized ? _CmrColors.green : _CmrColors.text, size: compact ? 15 : 16),
             ),
           ),
+        ),
         ),
       ),
     );
@@ -1745,7 +1777,7 @@ class _TrainerSearch extends StatelessWidget {
       padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 12),
       child: Row(
         children: [
-          const Icon(Icons.search_rounded, color: _CmrColors.muted, size: 21),
+          const Icon(Icons.search_rounded, color: _CmrColors.muted, size: 18),
           const SizedBox(width: 8),
           Expanded(
             child: TextField(
@@ -1764,7 +1796,7 @@ class _TrainerSearch extends StatelessWidget {
               onTap: controller.clear,
               child: const Padding(
                 padding: EdgeInsets.all(4),
-                child: Icon(Icons.close_rounded, color: _CmrColors.muted, size: 18),
+                child: Icon(Icons.close_rounded, color: _CmrColors.muted, size: 16),
               ),
             ),
         ],
@@ -1837,6 +1869,8 @@ class _StaffFilterPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accent = _cmrAccent(icon.codePoint);
+    final accentSoft = _cmrAccentSoft(icon.codePoint);
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(10),
@@ -1846,11 +1880,7 @@ class _StaffFilterPill extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           padding: EdgeInsets.symmetric(horizontal: dense ? 9 : 11, vertical: dense ? 7 : 8),
-          decoration: BoxDecoration(
-            color: active ? _CmrColors.graphite : _CmrColors.soft,
-            borderRadius: BorderRadius.circular(9),
-            border: Border.all(color: active ? _CmrColors.green.withOpacity(.45) : _CmrColors.line),
-          ),
+          decoration: _CmrDecor.fluentSurface(radius: 9, accent: accent, active: active, compact: true),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1858,18 +1888,18 @@ class _StaffFilterPill extends StatelessWidget {
                 width: dense ? 18 : 20,
                 height: dense ? 18 : 20,
                 decoration: BoxDecoration(
-                  color: active ? _CmrColors.green.withOpacity(.18) : Colors.white,
+                  color: active ? accent.withOpacity(.10) : Colors.white.withOpacity(.86),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: Icon(icon, color: active ? _CmrColors.green : _CmrColors.muted, size: dense ? 14 : 15),
+                child: Icon(icon, color: accent, size: dense ? 13 : 14),
               ),
               const SizedBox(width: 7),
               Text(
                 label,
                 style: TextStyle(
-                  color: active ? Colors.white : _CmrColors.text,
+                  color: active ? _CmrColors.text : _CmrColors.text,
                   fontSize: dense ? 11.5 : 12,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w500,
                   height: 1,
                 ),
               ),
@@ -1905,6 +1935,8 @@ class _TrainerTile extends StatelessWidget {
     final email = _trainerEmail(trainer);
     final contact = phone.isNotEmpty ? phone : email;
     final meta = [role, team, if (contact.isNotEmpty) contact].where((e) => e.trim().isNotEmpty).join('  •  ');
+    final accent = _cmrAccent(name.hashCode + role.hashCode);
+    final accentSoft = _cmrAccentSoft(name.hashCode + role.hashCode);
 
     return Material(
       color: Colors.transparent,
@@ -1916,16 +1948,13 @@ class _TrainerTile extends StatelessWidget {
           duration: const Duration(milliseconds: 170),
           padding: EdgeInsets.symmetric(horizontal: mobile ? 9 : 10, vertical: mobile ? 8 : 9),
           decoration: BoxDecoration(
-            color: _CmrColors.panel,
-            borderRadius: BorderRadius.circular(11),
-            border: Border.all(color: active ? _CmrColors.green.withOpacity(.42) : _CmrColors.line),
+            color: active ? Colors.white.withOpacity(.96) : Colors.white.withOpacity(.72),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: active ? accent.withOpacity(.20) : Colors.white.withOpacity(.66)),
             boxShadow: active
                 ? [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(.035),
-                      blurRadius: 12,
-                      offset: const Offset(0, 7),
-                    ),
+                    BoxShadow(color: Colors.black.withOpacity(.050), blurRadius: 22, spreadRadius: -10, offset: const Offset(0, 12)),
+                    BoxShadow(color: accent.withOpacity(.045), blurRadius: 16, spreadRadius: -11, offset: const Offset(0, 5)),
                   ]
                 : null,
           ),
@@ -1936,7 +1965,7 @@ class _TrainerTile extends StatelessWidget {
                 width: 3,
                 height: mobile ? 42 : 46,
                 decoration: BoxDecoration(
-                  color: active ? _CmrColors.green : Colors.transparent,
+                  color: active ? accent : Colors.transparent,
                   borderRadius: BorderRadius.circular(99),
                 ),
               ),
@@ -1997,9 +2026,9 @@ class _TrainerStatusBadge extends StatelessWidget {
       width: 19,
       height: 19,
       decoration: BoxDecoration(
-        color: main || active ? _CmrColors.graphite : _CmrColors.panel,
+        color: main || active ? _CmrColors.green.withOpacity(.10) : _CmrColors.panel,
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: main || active ? _CmrColors.green.withOpacity(.45) : _CmrColors.line),
+        border: Border.all(color: main || active ? _CmrColors.green.withOpacity(.18) : _CmrColors.line),
       ),
       child: Icon(
         main ? Icons.workspace_premium_rounded : Icons.badge_rounded,
@@ -2021,11 +2050,11 @@ class _ChevronBadge extends StatelessWidget {
       width: 26,
       height: 26,
       decoration: BoxDecoration(
-        color: active ? _CmrColors.graphite : _CmrColors.soft,
+        color: active ? _CmrColors.green.withOpacity(.10) : _CmrColors.soft,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: active ? _CmrColors.green.withOpacity(.45) : _CmrColors.line),
+        border: Border.all(color: active ? _CmrColors.green.withOpacity(.18) : _CmrColors.line),
       ),
-      child: Icon(Icons.chevron_right_rounded, size: 18, color: active ? _CmrColors.green : _CmrColors.muted2),
+      child: Icon(Icons.chevron_right_rounded, size: 16, color: active ? _CmrColors.green : _CmrColors.muted2),
     );
   }
 }
@@ -2058,7 +2087,7 @@ class _TrainerDetailPanel extends StatelessWidget {
     final t = trainer;
     if (t == null) {
       return Container(
-        decoration: _CmrDecor.panel(),
+        decoration: _CmrDecor.seamlessPane(),
         padding: const EdgeInsets.all(18),
         child: _TrainerEmptyDetail(onAddTrainer: onAddTrainer),
       );
@@ -2078,9 +2107,9 @@ class _TrainerDetailPanel extends StatelessWidget {
     final main = _isMain(t);
 
     return Container(
-      decoration: _CmrDecor.panel(),
+      decoration: _CmrDecor.seamlessPane(),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(0),
         child: ListView(
           padding: const EdgeInsets.all(14),
           children: [
@@ -2092,17 +2121,20 @@ class _TrainerDetailPanel extends StatelessWidget {
               main: main,
             ),
             const SizedBox(height: 12),
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                Expanded(
+                SizedBox(
+                  width: 148,
                   child: _TrainerPrimaryActionButton(
                     icon: Icons.edit_rounded,
                     text: 'Редактировать',
                     onTap: onEdit,
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
+                SizedBox(
+                  width: 136,
                   child: _TrainerSecondaryActionButton(
                     icon: Icons.chat_bubble_outline_rounded,
                     text: 'Сообщение',
@@ -2224,7 +2256,7 @@ class _TrainerSummaryCard extends StatelessWidget {
       decoration: _CmrDecor.greenCard(radius: 26),
       child: Row(
         children: [
-          _CmrRoundIcon(icon: main ? Icons.workspace_premium_rounded : Icons.sports_rounded, color: _CmrColors.green, size: 54),
+          _CmrRoundIcon(icon: main ? Icons.workspace_premium_rounded : Icons.sports_rounded, color: _CmrColors.green, size: 48),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -2265,7 +2297,7 @@ class _TrainerMiniMetric extends StatelessWidget {
       decoration: _CmrDecor.softCard(radius: 20),
       child: Row(
         children: [
-          _CmrRoundIcon(icon: icon, color: _CmrColors.green, size: 38),
+          _CmrRoundIcon(icon: icon, color: _CmrColors.green, size: 34),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -2326,7 +2358,7 @@ class _TrainerDetailRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _CmrRoundIcon(icon: icon, color: _CmrColors.green, size: 28),
+          _CmrRoundIcon(icon: icon, color: _CmrColors.green, size: 25),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -2360,7 +2392,7 @@ class _TrainerCommentBox extends StatelessWidget {
         children: [
           Row(
             children: [
-              _CmrRoundIcon(icon: Icons.notes_rounded, color: _CmrColors.green, size: 30),
+              _CmrRoundIcon(icon: Icons.notes_rounded, color: _CmrColors.green, size: 26),
               const SizedBox(width: 10),
               Expanded(child: Text(title, style: _CmrText.section())),
             ],
@@ -2383,7 +2415,7 @@ class _TrainerPrimaryActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: _CmrColors.graphite,
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(10),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
@@ -2391,20 +2423,21 @@ class _TrainerPrimaryActionButton extends StatelessWidget {
         child: Opacity(
           opacity: onTap == null ? .55 : 1,
           child: Container(
-            height: 42,
+            height: 34,
             alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: _CmrDecor.fluentSurface(radius: 10, accent: _CmrColors.green, active: true, compact: true),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, color: _CmrColors.green, size: 19),
-                const SizedBox(width: 8),
+                Icon(icon, color: _CmrColors.green, size: 15),
+                const SizedBox(width: 6),
                 Flexible(
                   child: Text(
                     text,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w900),
+                    style: const TextStyle(color: _CmrColors.green, fontSize: 11.55, fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -2426,7 +2459,7 @@ class _TrainerSecondaryActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: _CmrColors.soft,
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(10),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
@@ -2434,14 +2467,15 @@ class _TrainerSecondaryActionButton extends StatelessWidget {
         child: Opacity(
           opacity: onTap == null ? .55 : 1,
           child: Container(
-            height: 40,
+            height: 34,
             alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: _CmrDecor.fluentSurface(radius: 10, accent: _CmrColors.blue, active: false, compact: true),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, color: _CmrColors.green, size: 18),
-                const SizedBox(width: 7),
+                Icon(icon, color: _CmrColors.blue, size: 15),
+                const SizedBox(width: 6),
                 Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.action())),
               ],
             ),
@@ -2477,14 +2511,14 @@ class _TrainerDangerActionButton extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, color: color, size: 18),
+                Icon(icon, color: color, size: 16),
                 const SizedBox(width: 7),
                 Flexible(
                   child: Text(
                     text,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w900),
+                    style: TextStyle(color: color, fontSize: 12.35, fontWeight: FontWeight.w500),
                   ),
                 ),
               ],
@@ -2512,7 +2546,7 @@ class _TrainerEmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _CmrRoundIcon(icon: Icons.badge_rounded, color: _CmrColors.muted, size: 58),
+            _CmrRoundIcon(icon: Icons.badge_rounded, color: _CmrColors.muted, size: 52),
             const SizedBox(height: 12),
             Text(title, textAlign: TextAlign.center, style: _CmrText.title(16)),
             const SizedBox(height: 6),
@@ -2523,6 +2557,418 @@ class _TrainerEmptyState extends StatelessWidget {
               child: _CmrPrimaryButton(icon: Icons.person_add_alt_1_rounded, title: 'Добавить тренера', onTap: onTap),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+
+class _TrainerEditSidePanel extends StatefulWidget {
+  final Map<String, dynamic> trainer;
+  final bool compact;
+  final VoidCallback onClose;
+  final Future<Map<String, dynamic>> Function(int trainerId) onLoadProfile;
+  final Future<bool> Function({
+    required int trainerId,
+    required String position,
+    required String birthday,
+    required String experience,
+    required String bio,
+    XFile? pickedPhoto,
+  }) onSaveProfile;
+  final Future<void> Function() onSaved;
+
+  const _TrainerEditSidePanel({
+    required this.trainer,
+    required this.compact,
+    required this.onClose,
+    required this.onLoadProfile,
+    required this.onSaveProfile,
+    required this.onSaved,
+  });
+
+  @override
+  State<_TrainerEditSidePanel> createState() => _TrainerEditSidePanelState();
+}
+
+class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
+  late final TextEditingController _positionC;
+  late final TextEditingController _birthdayC;
+  late final TextEditingController _experienceC;
+  late final TextEditingController _bioC;
+  final ImagePicker _picker = ImagePicker();
+
+  XFile? _pickedPhoto;
+  String _currentPhoto = '';
+  bool _loading = true;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _positionC = TextEditingController(text: _trainerRole(widget.trainer));
+    _birthdayC = TextEditingController(text: _trainerBirthday(widget.trainer));
+    _experienceC = TextEditingController(text: _trainerExperience(widget.trainer));
+    _bioC = TextEditingController(text: _trainerBio(widget.trainer));
+    _currentPhoto = _trainerPhoto(widget.trainer);
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _TrainerEditSidePanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_trainerIdentityLocal(oldWidget.trainer) != _trainerIdentityLocal(widget.trainer)) {
+      _positionC.text = _trainerRole(widget.trainer);
+      _birthdayC.text = _trainerBirthday(widget.trainer);
+      _experienceC.text = _trainerExperience(widget.trainer);
+      _bioC.text = _trainerBio(widget.trainer);
+      _currentPhoto = _trainerPhoto(widget.trainer);
+      _pickedPhoto = null;
+      _loading = true;
+      _load();
+    }
+  }
+
+  @override
+  void dispose() {
+    _positionC.dispose();
+    _birthdayC.dispose();
+    _experienceC.dispose();
+    _bioC.dispose();
+    super.dispose();
+  }
+
+  int _trainerIdLocal(Map<String, dynamic> trainer) => _i(trainer['id'] ?? trainer['trainer_id'] ?? trainer['trainerId'] ?? trainer['user_id'] ?? trainer['userId'] ?? trainer['coach_id']);
+
+  String _trainerIdentityLocal(Map<String, dynamic> trainer) {
+    final id = _trainerIdLocal(trainer);
+    if (id > 0) return 'id:$id';
+    final email = _trainerEmail(trainer).toLowerCase();
+    return email.isEmpty ? _trainerName(trainer).toLowerCase() : 'email:$email';
+  }
+
+  Future<void> _load() async {
+    final trainerId = _trainerIdLocal(widget.trainer);
+    if (trainerId <= 0) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+
+    try {
+      final p = await widget.onLoadProfile(trainerId);
+      if (!mounted) return;
+      final position = _s(p['position'] ?? p['role_title'] ?? p['specialization']);
+      final birthday = _s(p['birthday'] ?? p['birth_date'] ?? p['date_birth'] ?? p['dob']);
+      final experience = _s(p['experience'] ?? p['experience_text'] ?? p['work_experience']);
+      final bio = _s(p['bio'] ?? p['description'] ?? p['about'] ?? p['about_me']);
+      final photo = _normalizeImage(_s(p['photo'] ?? p['photo_url'] ?? p['avatar'] ?? p['avatar_url']));
+
+      setState(() {
+        if (position.isNotEmpty) _positionC.text = position;
+        if (birthday.isNotEmpty) _birthdayC.text = birthday;
+        if (experience.isNotEmpty) _experienceC.text = experience;
+        if (bio.isNotEmpty) _bioC.text = bio;
+        if (photo.isNotEmpty) _currentPhoto = photo;
+        _loading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _pickPhoto() async {
+    final x = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (x != null && mounted) setState(() => _pickedPhoto = x);
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    final trainerId = _trainerIdLocal(widget.trainer);
+    if (trainerId <= 0) {
+      Get.snackbar('Тренер', 'Не найден ID тренера');
+      return;
+    }
+
+    setState(() => _saving = true);
+    final ok = await widget.onSaveProfile(
+      trainerId: trainerId,
+      position: _positionC.text,
+      birthday: _birthdayC.text,
+      experience: _experienceC.text,
+      bio: _bioC.text,
+      pickedPhoto: _pickedPhoto,
+    );
+
+    if (ok) {
+      await widget.onSaved();
+      return;
+    }
+
+    if (mounted) setState(() => _saving = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name = _trainerName(widget.trainer);
+    final role = _trainerRole(widget.trainer);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final mobile = constraints.maxWidth < 640;
+        final width = mobile ? math.max(0.0, constraints.maxWidth - 16) : math.min(448.0, math.max(390.0, constraints.maxWidth * .38));
+        final radius = mobile ? 18.0 : 20.0;
+
+        return Align(
+          alignment: Alignment.centerRight,
+          child: SafeArea(
+            left: false,
+            child: Container(
+              width: width,
+              height: double.infinity,
+              margin: EdgeInsets.fromLTRB(mobile ? 8 : 0, mobile ? 8 : 0, mobile ? 8 : 0, mobile ? 8 : 0),
+              decoration: BoxDecoration(
+                color: _CmrColors.glass,
+                borderRadius: BorderRadius.horizontal(left: Radius.circular(radius), right: Radius.circular(mobile ? radius : 0)),
+                border: Border.all(color: Colors.white.withOpacity(.86)),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(.055), blurRadius: 30, spreadRadius: -14, offset: const Offset(-10, 0)),
+                  BoxShadow(color: _CmrColors.green.withOpacity(.030), blurRadius: 18, spreadRadius: -12, offset: const Offset(-6, 8)),
+                ],
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  _TrainerEditSideHeader(
+                    title: 'Редактирование',
+                    subtitle: name,
+                    onClose: widget.onClose,
+                  ),
+                  Expanded(
+                    child: _loading
+                        ? const Center(child: CircularProgressIndicator())
+                        : ListView(
+                            padding: const EdgeInsets.fromLTRB(18, 4, 18, 18),
+                            children: [
+                              Center(
+                                child: InkWell(
+                                  onTap: _pickPhoto,
+                                  borderRadius: BorderRadius.circular(18),
+                                  child: Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      _pickedPhoto != null
+                                          ? ClipRRect(
+                                              borderRadius: BorderRadius.circular(18),
+                                              child: Image.file(File(_pickedPhoto!.path), width: 106, height: 106, fit: BoxFit.cover),
+                                            )
+                                          : _CmrAvatar(photo: _currentPhoto, name: name, size: 106),
+                                      Positioned(
+                                        right: -3,
+                                        bottom: -3,
+                                        child: Container(
+                                          width: 30,
+                                          height: 30,
+                                          decoration: BoxDecoration(
+                                            color: _CmrColors.green,
+                                            borderRadius: BorderRadius.circular(9),
+                                            border: Border.all(color: Colors.white, width: 2),
+                                          ),
+                                          child: const Icon(Icons.photo_camera_rounded, color: Colors.white, size: 14),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              Text(name, textAlign: TextAlign.center, style: _CmrText.title(18)),
+                              const SizedBox(height: 4),
+                              Text(role, textAlign: TextAlign.center, style: _CmrText.muted(12.5)),
+                              const SizedBox(height: 18),
+                              _CmrInput(controller: _positionC, hint: 'Должность / роль', icon: Icons.badge_rounded),
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  Expanded(child: _CmrInput(controller: _birthdayC, hint: 'Дата рождения', icon: Icons.cake_rounded)),
+                                  const SizedBox(width: 10),
+                                  Expanded(child: _CmrInput(controller: _experienceC, hint: 'Опыт', icon: Icons.workspace_premium_rounded)),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              _CmrInput(controller: _bioC, hint: 'Описание / биография', icon: Icons.notes_rounded, maxLines: 5),
+                              const SizedBox(height: 14),
+                              _CmrNotice(
+                                icon: Icons.info_outline_rounded,
+                                title: 'Боковое редактирование',
+                                text: 'Карточка тренера остаётся открытой, а изменения вносятся в отдельной панели справа.',
+                              ),
+                            ],
+                          ),
+                  ),
+                  _TrainerEditSideFooter(
+                    saving: _saving,
+                    onClose: widget.onClose,
+                    onSave: _save,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TrainerEditSideHeader extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final VoidCallback onClose;
+
+  const _TrainerEditSideHeader({required this.title, required this.subtitle, required this.onClose});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
+      decoration: const BoxDecoration(color: _CmrColors.panel, border: Border(bottom: BorderSide(color: _CmrColors.line))),
+      child: Row(
+        children: [
+          _CmrRoundIcon(icon: Icons.tune_rounded, color: _CmrColors.green, size: 34),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.title(15.5)),
+                const SizedBox(height: 2),
+                Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.muted(12)),
+              ],
+            ),
+          ),
+          Material(
+            color: _CmrColors.soft,
+            borderRadius: BorderRadius.circular(10),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: onClose,
+              child: const SizedBox(
+                width: 34,
+                height: 34,
+                child: Icon(Icons.close_rounded, size: 15, color: _CmrColors.muted),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrainerEditSideFooter extends StatelessWidget {
+  final bool saving;
+  final VoidCallback onClose;
+  final VoidCallback onSave;
+
+  const _TrainerEditSideFooter({required this.saving, required this.onClose, required this.onSave});
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+        decoration: const BoxDecoration(color: _CmrColors.panel, border: Border(top: BorderSide(color: _CmrColors.line))),
+        child: Row(
+          children: [
+            Expanded(
+              child: _TrainerPanelSoftButton(
+                title: 'Закрыть',
+                icon: Icons.close_rounded,
+                onTap: saving ? null : onClose,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _TrainerPanelGraphiteButton(
+                title: saving ? 'Сохранение...' : 'Сохранить',
+                icon: Icons.check_rounded,
+                onTap: saving ? null : onSave,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TrainerPanelSoftButton extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  const _TrainerPanelSoftButton({required this.title, required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _CmrColors.soft,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Opacity(
+          opacity: onTap == null ? .55 : 1,
+          child: Container(
+            height: 38,
+            alignment: Alignment.center,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 15, color: _CmrColors.muted),
+                const SizedBox(width: 6),
+                Text(title, style: _CmrText.action()),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TrainerPanelGraphiteButton extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  const _TrainerPanelGraphiteButton({required this.title, required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Opacity(
+          opacity: onTap == null ? .55 : 1,
+          child: Container(
+            height: 38,
+            alignment: Alignment.center,
+            decoration: _CmrDecor.fluentSurface(radius: 10, accent: _CmrColors.green, active: true, compact: true),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 15, color: _CmrColors.green),
+                const SizedBox(width: 6),
+                Text(title, style: const TextStyle(color: _CmrColors.green, fontSize: 11.55, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -2543,7 +2989,7 @@ class _TrainerEmptyDetail extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _CmrRoundIcon(icon: Icons.badge_rounded, color: _CmrColors.green, size: 62),
+            _CmrRoundIcon(icon: Icons.badge_rounded, color: _CmrColors.green, size: 56),
             const SizedBox(height: 14),
             Text('Выберите тренера', textAlign: TextAlign.center, style: _CmrText.title(18)),
             const SizedBox(height: 7),
@@ -2634,7 +3080,7 @@ class _TrainerModalSheetState extends State<_TrainerModalSheet> with SingleTicke
             color: _CmrColors.panel,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: _CmrColors.line),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(.08), blurRadius: 24, offset: const Offset(0, 14))],
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(.045), blurRadius: 24, offset: const Offset(0, 14))],
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(
@@ -2699,7 +3145,7 @@ class _ModalTopBar extends StatelessWidget {
           const _CmrSheetHandle(),
           Row(
             children: [
-              _CmrRoundIcon(icon: Icons.badge_rounded, color: _CmrColors.green, size: 40),
+              _CmrRoundIcon(icon: Icons.badge_rounded, color: _CmrColors.green, size: 36),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -2720,7 +3166,7 @@ class _ModalTopBar extends StatelessWidget {
                   child: const SizedBox(
                     width: 38,
                     height: 38,
-                    child: Icon(Icons.close_rounded, color: _CmrColors.text, size: 20),
+                    child: Icon(Icons.close_rounded, color: _CmrColors.text, size: 18),
                   ),
                 ),
               ),
@@ -2755,8 +3201,8 @@ class _ModalHeaderCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: _CmrColors.panel,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _CmrColors.green.withOpacity(.30)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(.025), blurRadius: 12, offset: const Offset(0, 7))],
+        border: Border.all(color: _CmrColors.green.withOpacity(.14)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(.018), blurRadius: 12, offset: const Offset(0, 7))],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -2781,11 +3227,11 @@ class _ModalHeaderCard extends StatelessWidget {
                       width: 24,
                       height: 24,
                       decoration: BoxDecoration(
-                        color: _CmrColors.graphite,
+                        color: Colors.white,
                         borderRadius: const BorderRadius.all(Radius.circular(7)),
-                        border: Border.all(color: _CmrColors.green.withOpacity(.45)),
+                        border: Border.all(color: _CmrColors.green.withOpacity(.16)),
                       ),
-                      child: const Icon(Icons.check_rounded, color: _CmrColors.green, size: 15),
+                      child: const Icon(Icons.check_rounded, color: _CmrColors.green, size: 14),
                     ),
                   ),
               ],
@@ -2852,7 +3298,7 @@ class _ModalQuickActions extends StatelessWidget {
           _ModalActionButton(
             icon: Icons.edit_rounded,
             label: 'Редактировать',
-            color: _CmrColors.blue,
+            color: _CmrColors.green,
             onTap: onEdit,
           ),
           const SizedBox(width: 8),
@@ -2888,14 +3334,14 @@ class _ModalTabBar extends StatelessWidget {
         indicator: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: _CmrColors.green.withOpacity(.38)),
+          border: Border.all(color: _CmrColors.green.withOpacity(.14)),
         ),
         dividerColor: Colors.transparent,
         indicatorSize: TabBarIndicatorSize.tab,
         labelColor: _CmrColors.text,
         unselectedLabelColor: _CmrColors.muted,
-        labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
-        unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+        labelStyle: const TextStyle(fontSize: 12.35, fontWeight: FontWeight.w500),
+        unselectedLabelStyle: const TextStyle(fontSize: 12.35, fontWeight: FontWeight.w500),
         tabs: const [
           Tab(text: 'Обзор'),
           Tab(text: 'Команды'),
@@ -2937,7 +3383,7 @@ class _ModalPill extends StatelessWidget {
               color: accent.withOpacity(.08),
               borderRadius: BorderRadius.circular(6),
             ),
-            child: Icon(icon, size: 13, color: accent),
+            child: Icon(icon, size: 12, color: accent),
           ),
           const SizedBox(width: 6),
           Text(text, style: _CmrText.muted(12)),
@@ -2970,17 +3416,17 @@ class _ModalActionButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 21, color: color),
-                const SizedBox(height: 6),
+                Icon(icon, size: 15, color: color),
+                const SizedBox(height: 4),
                 Text(
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: color, fontSize: 11.5, fontWeight: FontWeight.w800),
+                  style: TextStyle(color: color, fontSize: 10.35, fontWeight: FontWeight.w500),
                 ),
               ],
             ),
@@ -3055,14 +3501,14 @@ class _ModalDangerButton extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 18, color: color),
+              Icon(icon, size: 16, color: color),
               const SizedBox(width: 7),
               Flexible(
                 child: Text(
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: color, fontSize: 12.5, fontWeight: FontWeight.w800),
+                  style: TextStyle(color: color, fontSize: 11.85, fontWeight: FontWeight.w500),
                 ),
               ),
             ],
@@ -3132,7 +3578,7 @@ class _ModalOverviewTab extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    _CmrRoundIcon(icon: Icons.notes_rounded, color: _CmrColors.green, size: 30),
+                    _CmrRoundIcon(icon: Icons.notes_rounded, color: _CmrColors.green, size: 26),
                     const SizedBox(width: 10),
                     Text('О тренере', style: _CmrText.title(15)),
                   ],
@@ -3278,7 +3724,7 @@ class _ModalInfoRow extends StatelessWidget {
       decoration: _CmrDecor.softCard(radius: 20),
       child: Row(
         children: [
-          _CmrRoundIcon(icon: icon, color: _CmrColors.green, size: 38),
+          _CmrRoundIcon(icon: icon, color: _CmrColors.green, size: 34),
           const SizedBox(width: 11),
           Expanded(
             child: Column(
@@ -3323,7 +3769,7 @@ class _ModalContactCard extends StatelessWidget {
               color: color.withOpacity(.1),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Icon(icon, size: 22, color: color),
+            child: Icon(icon, size: 19, color: color),
           ),
           const SizedBox(width: 13),
           Expanded(
@@ -3336,7 +3782,7 @@ class _ModalContactCard extends StatelessWidget {
                   value,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: _CmrColors.text),
+                  style: TextStyle(fontSize: 13.55, fontWeight: FontWeight.w500, color: _CmrColors.text),
                 ),
               ],
             ),
@@ -3365,7 +3811,7 @@ class _ModalEmptyBlock extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _CmrRoundIcon(icon: icon, color: _CmrColors.green, size: 58),
+              _CmrRoundIcon(icon: icon, color: _CmrColors.green, size: 52),
               const SizedBox(height: 12),
               Text(title, textAlign: TextAlign.center, style: _CmrText.title(18)),
               const SizedBox(height: 7),
@@ -3411,7 +3857,7 @@ class _CompactTrainersHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              _CmrRoundIcon(icon: Icons.badge_rounded, color: _CmrColors.green, size: 36),
+              _CmrRoundIcon(icon: Icons.badge_rounded, color: _CmrColors.green, size: 32),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -3462,7 +3908,7 @@ class _CompactActionButton extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
         onTap: onTap,
-        child: Container(padding: const EdgeInsets.all(10), child: Icon(icon, size: 20, color: _CmrColors.green)),
+        child: Container(padding: const EdgeInsets.all(10), child: Icon(icon, size: 18, color: _CmrColors.green)),
       ),
     );
   }
@@ -3507,7 +3953,7 @@ class _CompactSearchBar extends StatelessWidget {
       decoration: InputDecoration(
         hintText: 'Поиск тренера...',
         hintStyle: _CmrText.muted(12),
-        prefixIcon: Icon(Icons.search_rounded, color: _CmrColors.muted, size: 18),
+        prefixIcon: Icon(Icons.search_rounded, color: _CmrColors.muted, size: 16),
         filled: true,
         fillColor: _CmrColors.soft,
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -3554,11 +4000,11 @@ class _CompactFilters extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: active ? _CmrColors.panel : _CmrColors.soft,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: active ? _CmrColors.green.withOpacity(.42) : _CmrColors.line),
+                    border: Border.all(color: active ? _CmrColors.green.withOpacity(.16) : _CmrColors.line),
                   ),
                   child: Text(
                     item.$2,
-                    style: active ? _CmrText.tabSelected().copyWith(fontSize: 12) : _CmrText.tab().copyWith(fontSize: 12),
+                    style: active ? _CmrText.tabSelected().copyWith(fontSize: 11.55) : _CmrText.tab().copyWith(fontSize: 11.55),
                   ),
                 ),
               ),
@@ -3614,7 +4060,7 @@ class _CmrTrainerTile extends StatelessWidget {
                         Expanded(
                           child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.title(14.5)),
                         ),
-                        if (main) Icon(Icons.workspace_premium_rounded, color: _CmrColors.green, size: 17),
+                        if (main) Icon(Icons.workspace_premium_rounded, color: _CmrColors.green, size: 15),
                       ],
                     ),
                     const SizedBox(height: 6),
@@ -3630,7 +4076,7 @@ class _CmrTrainerTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Icon(Icons.chevron_right_rounded, color: _CmrColors.muted, size: 20),
+              Icon(Icons.chevron_right_rounded, color: _CmrColors.muted, size: 18),
             ],
           ),
         ),
@@ -3788,7 +4234,7 @@ class _CmrRoundIcon extends StatelessWidget {
       decoration: BoxDecoration(
         color: _CmrColors.soft,
         borderRadius: BorderRadius.circular(math.min(size * .22, 10)),
-        border: Border.all(color: color == _CmrColors.green ? _CmrColors.green.withOpacity(.26) : _CmrColors.line),
+        border: Border.all(color: color == _CmrColors.green ? _CmrColors.green.withOpacity(.14) : _CmrColors.line),
       ),
       child: Icon(icon, size: size * .52, color: color),
     );
@@ -3814,19 +4260,21 @@ class _CmrPrimaryButton extends StatelessWidget {
         child: Opacity(
           opacity: onTap == null ? .55 : 1,
           child: Container(
-            decoration: BoxDecoration(
-              color: color == _CmrColors.green ? _CmrColors.graphite : color,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: color == _CmrColors.green ? _CmrColors.green.withOpacity(.42) : color.withOpacity(.25)),
-            ),
+            decoration: color == _CmrColors.green
+                ? _CmrDecor.fluentSurface(radius: 10, accent: _CmrColors.green, active: true, compact: true)
+                : BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: color.withOpacity(.25)),
+                  ),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, size: 18, color: color == _CmrColors.green ? _CmrColors.green : Colors.white),
+                Icon(icon, size: 15, color: color == _CmrColors.green ? _CmrColors.green : Colors.white),
                 const SizedBox(width: 8),
-                Flexible(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w800))),
+                Flexible(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: color == _CmrColors.green ? _CmrColors.green : Colors.white, fontSize: 11.85, fontWeight: FontWeight.w600))),
               ],
             ),
           ),
@@ -3893,7 +4341,7 @@ class _CmrInput extends StatelessWidget {
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: _CmrText.muted(12.5),
-        prefixIcon: Icon(icon, color: _CmrColors.muted, size: 20),
+        prefixIcon: Icon(icon, color: _CmrColors.muted, size: 18),
         suffixIcon: suffix,
         filled: true,
         fillColor: _CmrColors.soft,
@@ -3923,7 +4371,7 @@ class _CmrEmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _CmrRoundIcon(icon: Icons.badge_rounded, color: _CmrColors.muted, size: 58),
+            _CmrRoundIcon(icon: Icons.badge_rounded, color: _CmrColors.muted, size: 52),
             const SizedBox(height: 12),
             Text(title, textAlign: TextAlign.center, style: _CmrText.title(16)),
             const SizedBox(height: 6),
@@ -3952,7 +4400,7 @@ class _CmrErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline_rounded, color: _CmrColors.red, size: 42),
+            const Icon(Icons.error_outline_rounded, color: _CmrColors.red, size: 38),
             const SizedBox(height: 10),
             Text(text, textAlign: TextAlign.center, style: _CmrText.muted(13)),
             const SizedBox(height: 14),
@@ -3978,7 +4426,7 @@ class _CmrNotice extends StatelessWidget {
       decoration: _CmrDecor.softCard(radius: 24),
       child: Row(
         children: [
-          _CmrRoundIcon(icon: icon, color: _CmrColors.green, size: 40),
+          _CmrRoundIcon(icon: icon, color: _CmrColors.green, size: 36),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -4046,7 +4494,7 @@ class _CmrSheetTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        _CmrRoundIcon(icon: icon, color: _CmrColors.green, size: 50),
+        _CmrRoundIcon(icon: icon, color: _CmrColors.green, size: 44),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -4346,12 +4794,12 @@ class _ProfileAppBar extends StatelessWidget implements PreferredSizeWidget {
               onTap: onBack,
               child: const Padding(
                 padding: EdgeInsets.all(10),
-                child: Icon(Icons.arrow_back_rounded, size: 22, color: _CmrColors.text),
+                child: Icon(Icons.arrow_back_rounded, size: 19, color: _CmrColors.text),
               ),
             ),
           ),
           const SizedBox(width: 12),
-          _CmrRoundIcon(icon: Icons.badge_rounded, color: _CmrColors.green, size: 36),
+          _CmrRoundIcon(icon: Icons.badge_rounded, color: _CmrColors.green, size: 32),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -4479,7 +4927,7 @@ class _ProfilePill extends StatelessWidget {
               color: Colors.white,
               borderRadius: BorderRadius.circular(6),
             ),
-            child: Icon(icon, size: 15, color: accent),
+            child: Icon(icon, size: 14, color: accent),
           ),
           const SizedBox(width: 7),
           Text(text, style: _CmrText.muted(13)),
@@ -4519,7 +4967,7 @@ class _ProfileActions extends StatelessWidget {
             child: _ProfileActionButton(
               icon: Icons.edit_rounded,
               label: 'Редактировать',
-              color: _CmrColors.blue,
+              color: _CmrColors.green,
               onTap: onEdit,
             ),
           ),
@@ -4560,15 +5008,15 @@ class _ProfileActionButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          padding: const EdgeInsets.symmetric(vertical: 10),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 24, color: color),
-              const SizedBox(height: 6),
+              Icon(icon, size: 16, color: color),
+              const SizedBox(height: 4),
               Text(
                 label,
-                style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
+                style: TextStyle(color: color, fontSize: 10.55, fontWeight: FontWeight.w500),
               ),
             ],
           ),
@@ -4598,15 +5046,15 @@ class _ProfileTabBar extends StatelessWidget {
       child: TabBar(
         controller: tabController,
         indicator: BoxDecoration(
-          color: _CmrColors.graphite,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(40),
-          border: Border.all(color: _CmrColors.green.withOpacity(.38)),
+          border: Border.all(color: _CmrColors.green.withOpacity(.18)),
         ),
         indicatorSize: TabBarIndicatorSize.tab,
-        labelColor: Colors.white,
+        labelColor: _CmrColors.green,
         unselectedLabelColor: _CmrColors.muted,
-        labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-        unselectedLabelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        labelStyle: const TextStyle(fontSize: 13.05, fontWeight: FontWeight.w500),
+        unselectedLabelStyle: const TextStyle(fontSize: 13.05, fontWeight: FontWeight.w500),
         tabs: const [
           Tab(text: 'Обзор'),
           Tab(text: 'Назначения'),
@@ -4686,9 +5134,9 @@ class _ProfileOverviewTab extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: _CmrColors.soft,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: _CmrColors.green.withOpacity(.26)),
+                        border: Border.all(color: _CmrColors.green.withOpacity(.12)),
                       ),
-                      child: Icon(Icons.notes_rounded, size: 20, color: _CmrColors.green),
+                      child: Icon(Icons.notes_rounded, size: 18, color: _CmrColors.green),
                     ),
                     const SizedBox(width: 12),
                     Text('О тренере', style: _CmrText.title(16)),
@@ -4733,9 +5181,9 @@ class _ProfileInfoCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: _CmrColors.soft,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _CmrColors.green.withOpacity(.26)),
+              border: Border.all(color: _CmrColors.green.withOpacity(.12)),
             ),
-            child: Icon(icon, size: 24, color: _CmrColors.green),
+            child: Icon(icon, size: 21, color: _CmrColors.green),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -4766,7 +5214,7 @@ class _ProfileAssignmentsTab extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.groups_2_rounded, size: 72, color: _CmrColors.muted.withOpacity(0.4)),
+            Icon(Icons.groups_2_rounded, size: 64, color: _CmrColors.muted.withOpacity(0.4)),
             const SizedBox(height: 20),
             Text('Нет назначений', style: _CmrText.title(20)),
             const SizedBox(height: 8),
@@ -4823,7 +5271,7 @@ class _ProfileAssignmentsTab extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: _CmrColors.panel,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: _CmrColors.green.withOpacity(.35)),
+                    border: Border.all(color: _CmrColors.green.withOpacity(.14)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -4832,7 +5280,7 @@ class _ProfileAssignmentsTab extends StatelessWidget {
                       const SizedBox(width: 4),
                       Text(
                         'Главный',
-                        style: TextStyle(color: _CmrColors.green, fontSize: 11, fontWeight: FontWeight.w700),
+                        style: TextStyle(color: _CmrColors.green, fontSize: 10.55, fontWeight: FontWeight.w500),
                       ),
                     ],
                   ),
@@ -4924,7 +5372,7 @@ class _ProfileContactCard extends StatelessWidget {
                   color: color.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, size: 28, color: color),
+                child: Icon(icon, size: 25, color: color),
               ),
               const SizedBox(width: 20),
               Expanded(
@@ -4935,13 +5383,13 @@ class _ProfileContactCard extends StatelessWidget {
                     const SizedBox(height: 6),
                     Text(
                       value,
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _CmrColors.text),
+                      style: TextStyle(fontSize: 15.05, fontWeight: FontWeight.w500, color: _CmrColors.text),
                     ),
                   ],
                 ),
               ),
               if (onTap != null)
-                Icon(Icons.chevron_right_rounded, color: _CmrColors.muted, size: 24),
+                Icon(Icons.chevron_right_rounded, color: _CmrColors.muted, size: 21),
             ],
           ),
         ),
@@ -5022,11 +5470,11 @@ class _ProfileDangerButton extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 20, color: color),
+              Icon(icon, size: 18, color: color),
               const SizedBox(width: 8),
               Text(
                 label,
-                style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w700),
+                style: TextStyle(color: color, fontSize: 12.35, fontWeight: FontWeight.w500),
               ),
             ],
           ),

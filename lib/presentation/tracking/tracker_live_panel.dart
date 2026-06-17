@@ -30,6 +30,8 @@ class TrackerLivePanel extends StatefulWidget {
     required this.ble,
     this.savedDevices = const [],
     this.batteryPercent,
+    this.scanningBluetooth = false,
+    this.onScanBluetooth,
     this.onManageTrackers,
     this.onLiveRunningChanged,
   });
@@ -43,6 +45,8 @@ class TrackerLivePanel extends StatefulWidget {
   final ActionTrackerBleService ble;
   final List<TrackerDeviceModel> savedDevices;
   final int? batteryPercent;
+  final bool scanningBluetooth;
+  final VoidCallback? onScanBluetooth;
   final VoidCallback? onManageTrackers;
   final ValueChanged<bool>? onLiveRunningChanged;
 
@@ -1071,7 +1075,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
             decoration: BoxDecoration(
               color: _C.bg,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: _C.divider.withOpacity(.82)),
+              
             ),
             clipBehavior: Clip.antiAlias,
             child: Column(
@@ -1095,7 +1099,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                           style: const TextStyle(
                             color: _C.text,
                             fontSize: 17,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w600,
                             letterSpacing: -.2,
                           ),
                         ),
@@ -1201,7 +1205,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                           fontFamily: 'Roboto',
                           color: _C.text,
                           fontSize: 13.2,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       Text(
@@ -1212,7 +1216,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                           fontFamily: 'Roboto',
                           color: _C.subtle,
                           fontSize: 9.8,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
@@ -1329,14 +1333,23 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               ),
             ],
           ),
+          if (_mode == TrackerLiveSourceMode.trackerExperimental) ...[
+            const SizedBox(height: 8),
+            _BluetoothSearchButton(
+              scanning: widget.scanningBluetooth,
+              connected: device != null,
+              savedCount: widget.savedDevices.length,
+              onTap: widget.onScanBluetooth,
+            ),
+          ],
           const SizedBox(height: 12),
           SegmentedButton<TrackerLiveSourceMode>(
             style: SegmentedButton.styleFrom(
-              backgroundColor: _C.soft,
+              backgroundColor: _C.soft2,
               foregroundColor: _C.text,
-              selectedBackgroundColor: _C.green,
-              selectedForegroundColor: _C.bg,
-              side: const BorderSide(color: _C.divider),
+              selectedBackgroundColor: _C.graphite,
+              selectedForegroundColor: Colors.white,
+              side: BorderSide.none,
             ),
             segments: const [
               ButtonSegment(
@@ -1400,7 +1413,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                   onPressed: _running ? _stopLive : null,
                   style: OutlinedButton.styleFrom(
                     foregroundColor: _C.red,
-                    side: const BorderSide(color: _C.green),
+                    side: BorderSide.none,
                     minimumSize: const Size(0, 48),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
@@ -1415,7 +1428,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
             onPressed: _running || _testingCommands ? null : _testGpsCommands,
             style: OutlinedButton.styleFrom(
               foregroundColor: _C.green,
-              side: const BorderSide(color: _C.green),
+              side: BorderSide.none,
               minimumSize: const Size(double.infinity, 42),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
@@ -1433,7 +1446,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
             onPressed: _addDebugLocalPoint,
             style: OutlinedButton.styleFrom(
               foregroundColor: _C.orange,
-              side: const BorderSide(color: _C.orange),
+              side: BorderSide.none,
               minimumSize: const Size(double.infinity, 42),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
@@ -1540,7 +1553,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                           color: _C.subtle,
                           fontFamily: 'Roboto',
                           fontSize: 12.8,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w500,
                           height: 1.35,
                         ),
                       ),
@@ -1566,7 +1579,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                       onPressed: () => _saveMetricSnapshot(manual: true),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: _C.green,
-                        side: const BorderSide(color: _C.green),
+                        side: BorderSide.none,
                         minimumSize: const Size(0, 36),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
@@ -1709,7 +1722,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                 ? const Center(
                     child: Text(
                       'Запустите онлайн, чтобы увидеть игрока',
-                      style: TextStyle(color: _C.subtle, fontWeight: FontWeight.w700),
+                      style: TextStyle(color: _C.subtle, fontWeight: FontWeight.w500),
                     ),
                   )
                 : ListView(
@@ -1781,7 +1794,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                     ? const Center(
                         child: Text(
                           'Логи появятся здесь',
-                          style: TextStyle(color: Colors.white54, fontWeight: FontWeight.w700),
+                          style: TextStyle(color: Colors.white54, fontWeight: FontWeight.w500),
                         ),
                       )
                     : ListView.builder(
@@ -1810,6 +1823,84 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
   }
 }
 
+
+
+class _BluetoothSearchButton extends StatelessWidget {
+  const _BluetoothSearchButton({
+    required this.scanning,
+    required this.connected,
+    required this.savedCount,
+    required this.onTap,
+  });
+
+  final bool scanning;
+  final bool connected;
+  final int savedCount;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null && !scanning;
+    final label = scanning ? 'Идёт поиск Bluetooth...' : 'Поиск Bluetooth-трекеров';
+    final subtitle = connected
+        ? 'Устройство подключено, можно обновить список рядом'
+        : (savedCount == 0 ? 'Нажмите, чтобы найти датчики рядом' : 'Сохранено датчиков: $savedCount');
+
+    return Material(
+      color: _C.soft2,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          minHeight: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          child: Row(
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: scanning
+                    ? const Padding(
+                        padding: EdgeInsets.all(8),
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(Icons.bluetooth_searching_rounded, color: connected ? _C.green : _C.graphite, size: 17),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: _C.text, fontSize: 12.2, fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: _C.subtle, fontSize: 10.2, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: _C.subtle, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _LiveExpandButton extends StatefulWidget {
   const _LiveExpandButton({
@@ -2589,7 +2680,7 @@ class _RuntimeFieldPainter extends CustomPainter {
         style: const TextStyle(
           color: Color(0xFFF4F5F6),
           fontSize: 9.2,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w600,
           fontFeatures: [FontFeature.tabularFigures()],
         ),
       ),
@@ -2608,7 +2699,7 @@ class _RuntimeFieldPainter extends CustomPainter {
         style: const TextStyle(
           color: Colors.white,
           fontSize: 11.4,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w600,
           letterSpacing: -.1,
           shadows: [Shadow(color: Colors.black87, blurRadius: 7)],
         ),
@@ -2646,7 +2737,7 @@ class _RuntimeFieldPainter extends CustomPainter {
         style: TextStyle(
           color: Colors.white.withOpacity(.78),
           fontSize: 10,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w500,
         ),
       ),
       textDirection: TextDirection.ltr,
@@ -2684,7 +2775,7 @@ class _RuntimeFieldPainter extends CustomPainter {
         style: TextStyle(
           color: Colors.white.withOpacity(.86),
           fontSize: full.width < 360 ? 12.5 : 14.5,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w600,
           letterSpacing: -.15,
         ),
       ),
@@ -2751,7 +2842,7 @@ class _TrackerPlayerAvatarDark extends StatelessWidget {
           ? Center(
               child: Text(
                 initials,
-                style: TextStyle(color: _C.green, fontSize: size * .28, fontWeight: FontWeight.w900),
+                style: TextStyle(color: _C.green, fontSize: size * .28, fontWeight: FontWeight.w600),
               ),
             )
           : Image.network(
@@ -2760,7 +2851,7 @@ class _TrackerPlayerAvatarDark extends StatelessWidget {
               errorBuilder: (_, __, ___) => Center(
                 child: Text(
                   initials,
-                  style: TextStyle(color: _C.green, fontSize: size * .28, fontWeight: FontWeight.w900),
+                  style: TextStyle(color: _C.green, fontSize: size * .28, fontWeight: FontWeight.w600),
                 ),
               ),
             ),
@@ -2807,19 +2898,19 @@ class _RuntimePlayerTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(track.playerName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontWeight: FontWeight.w900)),
+                Text(track.playerName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 3),
                 Text(
                   '${track.speedKmh.toStringAsFixed(1)} км/ч · ${(track.totalDistanceM / 1000).toStringAsFixed(2)} км · точек ${track.points.length}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _C.muted, fontSize: 12.2, fontWeight: FontWeight.w800),
+                  style: const TextStyle(color: _C.muted, fontSize: 12.2, fontWeight: FontWeight.w500),
                 ),
               ],
             ),
           ),
           const SizedBox(width: 5),
-          Text('ОНЛАЙН', style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 12)),
+          Text('ОНЛАЙН', style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12)),
         ],
       ),
     );
@@ -2840,7 +2931,7 @@ class _ServerPlayerTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: session.isOnline ? _C.soft : _C.panel,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _C.divider),
+        
       ),
       child: Row(
         children: [
@@ -2848,12 +2939,12 @@ class _ServerPlayerTile extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(session.playerName ?? session.deviceName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontWeight: FontWeight.w900)),
+              Text(session.playerName ?? session.deviceName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontWeight: FontWeight.w600)),
               const SizedBox(height: 3),
-              Text('${session.speedKmh.toStringAsFixed(1)} км/ч · ${(session.totalDistanceM / 1000).toStringAsFixed(2)} км · сервер', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.subtle, fontSize: 12.2, fontWeight: FontWeight.w800)),
+              Text('${session.speedKmh.toStringAsFixed(1)} км/ч · ${(session.totalDistanceM / 1000).toStringAsFixed(2)} км · сервер', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.subtle, fontSize: 12.2, fontWeight: FontWeight.w500)),
             ]),
           ),
-          Text(session.isOnline ? 'СЕРВЕР' : 'ВЫКЛ', style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 11)),
+          Text(session.isOnline ? 'СЕРВЕР' : 'ВЫКЛ', style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 11)),
         ],
       ),
     );
@@ -2886,7 +2977,7 @@ class _CoachAlert extends StatelessWidget {
               track.recommendation,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 12, height: 1.25),
+              style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12, height: 1.25),
             ),
           ),
         ],
@@ -2918,7 +3009,7 @@ class _ProMetricRow extends StatelessWidget {
       decoration: BoxDecoration(
         color: _C.panel,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _C.divider, width: 1),
+        
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.025),
@@ -2957,7 +3048,7 @@ class _ProMetricRow extends StatelessWidget {
                     color: _C.text,
                     fontFamily: 'Roboto',
                     fontSize: 12.5,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                     letterSpacing: -0.15,
                     height: 1.12,
                   ),
@@ -2990,7 +3081,7 @@ class _ProMetricRow extends StatelessWidget {
                 color: _C.text,
                 fontFamily: 'Roboto',
                 fontSize: 16,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w500,
                 height: 1.1,
                 fontFeatures: [FontFeature.tabularFigures()],
               ),
@@ -3036,9 +3127,9 @@ class _ProTile extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.subtle, fontSize: 10.4, fontWeight: FontWeight.w900, letterSpacing: .05)),
-                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 17, fontWeight: FontWeight.w900, letterSpacing: -.15, fontFeatures: [FontFeature.tabularFigures()])),
-                Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 9.2, fontWeight: FontWeight.w800)),
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.subtle, fontSize: 10.4, fontWeight: FontWeight.w600, letterSpacing: .05)),
+                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 17, fontWeight: FontWeight.w600, letterSpacing: -.15, fontFeatures: [FontFeature.tabularFigures()])),
+                Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 9.2, fontWeight: FontWeight.w500)),
               ],
             ),
           ),
@@ -3059,7 +3150,7 @@ class _SpeedLoadChart extends StatelessWidget {
       decoration: BoxDecoration(
         color: _C.soft,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _C.divider),
+        
       ),
       padding: const EdgeInsets.all(5),
       child: Row(
@@ -3070,7 +3161,7 @@ class _SpeedLoadChart extends StatelessWidget {
               'Скорость / темп',
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: _C.subtle, fontSize: 9.5, fontWeight: FontWeight.w900),
+              style: TextStyle(color: _C.subtle, fontSize: 9.5, fontWeight: FontWeight.w600),
             ),
           ),
           Expanded(
@@ -3103,7 +3194,7 @@ class _ZoneDistribution extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Зоны интенсивности', style: TextStyle(color: _C.text, fontWeight: FontWeight.w900, fontSize: 12)),
+          const Text('Зоны интенсивности', style: TextStyle(color: _C.text, fontWeight: FontWeight.w600, fontSize: 12)),
           const SizedBox(height: 8),
           _ZoneLine(label: 'Ходьба', value: walk, total: total, color: _C.subtle),
           _ZoneLine(label: 'Бег', value: jog, total: total, color: _C.green),
@@ -3136,7 +3227,7 @@ class _ZoneLine extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 7),
       child: Row(
         children: [
-          SizedBox(width: 54, child: Text(label, style: const TextStyle(color: _C.muted, fontSize: 9.5, fontWeight: FontWeight.w800))),
+          SizedBox(width: 54, child: Text(label, style: const TextStyle(color: _C.muted, fontSize: 9.5, fontWeight: FontWeight.w500))),
           Expanded(
             child: ClipRRect(
               borderRadius: BorderRadius.circular(99),
@@ -3149,7 +3240,7 @@ class _ZoneLine extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 7),
-          SizedBox(width: 42, child: Text('${value.toStringAsFixed(0)}м', textAlign: TextAlign.right, style: const TextStyle(color: _C.text, fontSize: 9.5, fontWeight: FontWeight.w900))),
+          SizedBox(width: 42, child: Text('${value.toStringAsFixed(0)}м', textAlign: TextAlign.right, style: const TextStyle(color: _C.text, fontSize: 9.5, fontWeight: FontWeight.w600))),
         ],
       ),
     );
@@ -3193,7 +3284,7 @@ class _FootballMovementProfileBox extends StatelessWidget {
                   color: _C.text,
                   fontFamily: 'Roboto',
                   fontSize: 13,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                   letterSpacing: -0.15,
                 ),
               ),
@@ -3241,7 +3332,7 @@ class _MiniFmpTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: _C.soft,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _C.divider),
+        
       ),
       child: Row(
         children: [
@@ -3254,7 +3345,7 @@ class _MiniFmpTile extends StatelessWidget {
                 color: _C.subtle,
                 fontFamily: 'Roboto',
                 fontSize: 10.2,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w500,
                 height: 1.05,
               ),
             ),
@@ -3266,7 +3357,7 @@ class _MiniFmpTile extends StatelessWidget {
               color: _C.text,
               fontFamily: 'Roboto',
               fontSize: 13,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
               fontFeatures: [FontFeature.tabularFigures()],
             ),
           ),
@@ -3294,7 +3385,7 @@ class _RecommendationBox extends StatelessWidget {
                 track.recommendation,
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: _C.greenDark, fontSize: 10, fontWeight: FontWeight.w900, height: 1.25),
+                style: const TextStyle(color: _C.greenDark, fontSize: 10, fontWeight: FontWeight.w600, height: 1.25),
               ),
             ),
           ],
@@ -3341,7 +3432,7 @@ class _LayerChip extends StatelessWidget {
               style: TextStyle(
                 color: active ? _C.greenDark : _C.muted,
                 fontSize: 10,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -3365,14 +3456,14 @@ class _TinyMetric extends StatelessWidget {
       decoration: BoxDecoration(
         color: _C.soft,
         borderRadius: BorderRadius.circular(7),
-        border: Border.all(color: _C.divider),
+        
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label, style: const TextStyle(color: _C.subtle, fontSize: 8, fontWeight: FontWeight.w900)),
+          Text(label, style: const TextStyle(color: _C.subtle, fontSize: 8, fontWeight: FontWeight.w600)),
           const SizedBox(width: 4),
-          Text(value, style: const TextStyle(color: _C.text, fontSize: 9.4, fontWeight: FontWeight.w900)),
+          Text(value, style: const TextStyle(color: _C.text, fontSize: 9.4, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -3436,7 +3527,7 @@ class _KpiCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: _C.panel,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _C.divider.withOpacity(.92)),
+        
       ),
       child: Row(
         children: [
@@ -3463,7 +3554,7 @@ class _KpiCard extends StatelessWidget {
                   style: const TextStyle(
                     color: _C.text,
                     fontSize: 12.8,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                     height: 1,
                     letterSpacing: -.15,
                     fontFeatures: [FontFeature.tabularFigures()],
@@ -3477,7 +3568,7 @@ class _KpiCard extends StatelessWidget {
                   style: const TextStyle(
                     color: _C.subtle,
                     fontSize: 9,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w500,
                     height: 1,
                   ),
                 ),
@@ -3504,13 +3595,13 @@ class _DebugLine extends StatelessWidget {
       decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(8), border: Border.all(color: _C.divider)),
       child: Row(
         children: [
-          SizedBox(width: 72, child: Text(label, style: const TextStyle(color: _C.subtle, fontSize: 11, fontWeight: FontWeight.w900))),
+          SizedBox(width: 72, child: Text(label, style: const TextStyle(color: _C.subtle, fontSize: 11, fontWeight: FontWeight.w600))),
           Expanded(
             child: Text(
               value,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: _C.text, fontSize: 11.2, fontWeight: FontWeight.w800, fontFamily: 'monospace'),
+              style: const TextStyle(color: _C.text, fontSize: 11.2, fontWeight: FontWeight.w500, fontFamily: 'monospace'),
             ),
           ),
         ],
@@ -3553,7 +3644,7 @@ class _ProblemBox extends StatelessWidget {
               text,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: isBad ? _C.red : _C.text, fontSize: 12, fontWeight: FontWeight.w900, height: 1.25),
+              style: TextStyle(color: isBad ? _C.red : _C.text, fontSize: 12, fontWeight: FontWeight.w600, height: 1.25),
             ),
           ),
         ],
@@ -3595,7 +3686,7 @@ class _StatePill extends StatelessWidget {
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: ok ? _C.text : _C.orange, fontSize: 12, fontWeight: FontWeight.w900),
+              style: TextStyle(color: ok ? _C.text : _C.orange, fontSize: 12, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -3638,7 +3729,7 @@ class _TitleRow extends StatelessWidget {
                   color: _C.text,
                   fontFamily: 'Roboto',
                   fontSize: 16,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                   letterSpacing: -0.25,
                   height: 1.08,
                 ),
@@ -3682,7 +3773,7 @@ class _LiveCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: _C.panel,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _C.divider, width: 1),
+        
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.035),
@@ -3705,14 +3796,15 @@ InputDecoration _input(String label) => InputDecoration(
     );
 
 class _C {
-  static const Color bg = Color(0xFFF5F6F7);
+  static const Color bg = Color(0xFFFFFFFF);
   static const Color panel = Color(0xFFFFFFFF);
-  static const Color soft = Color(0xFFF8F9FA);
-  static const Color soft2 = Color(0xFFF1F3F5);
+  static const Color soft = Color(0xFFF9FAFB);
+  static const Color soft2 = Color(0xFFF2F4F7);
   static const Color text = Color(0xFF0B0F14);
+  static const Color graphite = Color(0xFF344054);
   static const Color muted = Color(0xFF374151);
   static const Color subtle = Color(0xFF6B7280);
-  static const Color divider = Color(0xFFE5E7EB);
+  static const Color divider = Color(0xFFF1F3F6);
 
   // CMR-акцент: приглушённый зелёный только для статусов и точек.
   static const Color green = Color(0xFF067A46);

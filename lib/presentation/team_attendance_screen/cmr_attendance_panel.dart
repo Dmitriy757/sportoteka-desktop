@@ -62,6 +62,12 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
   final TextEditingController searchC = TextEditingController();
   String filter = 'all';
 
+  int? editingEventId;
+  int? editingPlayerId;
+  Map<String, dynamic>? editingEvent;
+  Map<String, dynamic>? editingPlayer;
+  String editingStatus = kStatusUnset;
+
   Map<String, int> stats = const {
     'unset': 0,
     'present': 0,
@@ -445,6 +451,233 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
     }
   }
 
+  Map<String, dynamic>? _eventById(int eventId) {
+    for (final e in events) {
+      if (_asInt(e['id']) == eventId) return e;
+    }
+    return null;
+  }
+
+  Map<String, dynamic>? _playerById(int playerId) {
+    for (final p in players) {
+      if (_asInt(p['id']) == playerId) return p;
+    }
+    return null;
+  }
+
+  void _openAttendanceEditor(int eventId, int playerId, String currentStatus) {
+    final event = _eventById(eventId);
+    final player = _playerById(playerId);
+    setState(() {
+      editingEventId = eventId;
+      editingPlayerId = playerId;
+      editingEvent = event;
+      editingPlayer = player;
+      editingStatus = currentStatus;
+      selectedEventId = eventId;
+      selectedEventTitle = event == null ? 'Мероприятие' : _eventTitle(event);
+    });
+    _calculateStats();
+  }
+
+  void _closeAttendanceEditor() {
+    setState(() {
+      editingEventId = null;
+      editingPlayerId = null;
+      editingEvent = null;
+      editingPlayer = null;
+      editingStatus = kStatusUnset;
+    });
+  }
+
+  Future<void> _applyEditorStatus(String status) async {
+    final eventId = editingEventId;
+    final playerId = editingPlayerId;
+    if (eventId == null || playerId == null) return;
+    setState(() => editingStatus = status);
+    await _setStatusForEvent(eventId, playerId, status);
+    if (!mounted) return;
+    setState(() => editingStatus = _getStatusForEvent(playerId, eventId));
+  }
+
+  Widget _attendanceWorkspace() {
+    final hasEditor = editingEventId != null && editingPlayerId != null;
+    return LayoutBuilder(
+      builder: (_, constraints) {
+        final compact = constraints.maxWidth < 1040;
+        if (compact) {
+          return Column(
+            children: [
+              Expanded(child: _journalTable()),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                child: hasEditor
+                    ? Padding(
+                        key: const ValueKey('attendance-side-editor-mobile'),
+                        padding: const EdgeInsets.only(top: 10),
+                        child: SizedBox(
+                          height: 250,
+                          child: _attendanceEditorPanel(compact: true),
+                        ),
+                      )
+                    : const SizedBox.shrink(key: ValueKey('attendance-side-editor-empty')),
+              ),
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: _journalTable()),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 240),
+              child: hasEditor
+                  ? Padding(
+                      key: const ValueKey('attendance-side-editor-desktop'),
+                      padding: const EdgeInsets.only(left: 12),
+                      child: SizedBox(
+                        width: 334,
+                        child: _attendanceEditorPanel(),
+                      ),
+                    )
+                  : const SizedBox.shrink(key: ValueKey('attendance-side-editor-empty-desktop')),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _attendanceEditorPanel({bool compact = false}) {
+    final event = editingEvent;
+    final player = editingPlayer;
+    final photo = player == null ? null : _photo(player);
+    final status = editingStatus;
+    final statusColor = _statusColor(status);
+    final items = [
+      [kStatusUnset, 'Очистить', '—', const Color(0xFF64748B)],
+      ['present', 'Присутствует', 'П', const Color(0xFF22C55E)],
+      ['absent', 'Отсутствует', 'Н', const Color(0xFFEF4444)],
+      ['late', 'Болен', 'Б', const Color(0xFFF59E0B)],
+      ['injured', 'Травма', 'Т', const Color(0xFF8B5CF6)],
+      ['individual', 'Индивидуально', 'И', const Color(0xFF0EA5E9)],
+      ['dayoff', 'Выходной', 'В', const Color(0xFF94A3B8)],
+    ];
+
+    if (event == null || player == null) {
+      return Container(
+        decoration: _C.glassCard,
+        alignment: Alignment.center,
+        child: const Text('Выберите ячейку посещаемости', style: TextStyle(fontSize: 11.55, fontWeight: FontWeight.w700, color: _C.muted)),
+      );
+    }
+
+    return Container(
+      decoration: _C.glassCard,
+      padding: EdgeInsets.all(compact ? 14 : 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  gradient: _C.accentGradient,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [BoxShadow(color: _C.green.withOpacity(.22), blurRadius: 18, offset: const Offset(0, 8))],
+                ),
+                child: const Icon(Icons.edit_calendar_rounded, color: Colors.white, size: 16),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text('Редактирование', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13.55, fontWeight: FontWeight.w800, color: _C.text, letterSpacing: -.2)),
+              ),
+              InkWell(
+                borderRadius: BorderRadius.circular(11),
+                onTap: _closeAttendanceEditor,
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(11)),
+                  child: const Icon(Icons.close_rounded, size: 16, color: _C.muted),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: compact ? 10 : 14),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: [statusColor.withOpacity(.14), Colors.white]),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: compact ? 42 : 48,
+                  height: compact ? 42 : 48,
+                  decoration: BoxDecoration(color: _C.softGreen, borderRadius: BorderRadius.circular(15)),
+                  clipBehavior: Clip.antiAlias,
+                  child: photo != null ? Image.network(photo, fit: BoxFit.cover) : const Icon(Icons.person_rounded, color: _C.green),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_playerName(player), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.55, fontWeight: FontWeight.w800, color: _C.text)),
+                      const SizedBox(height: 3),
+                      Text(_playerSub(player), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10.75, fontWeight: FontWeight.w700, color: _C.muted)),
+                      const SizedBox(height: 6),
+                      Text('${_eventDateLabel(event).replaceAll('\n', ' · ')} · ${_eventTitle(event)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10.35, fontWeight: FontWeight.w700, color: statusColor)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(height: compact ? 10 : 14),
+          Expanded(
+            child: GridView.builder(
+              padding: EdgeInsets.zero,
+              itemCount: items.length,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: compact ? 4 : 2,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                childAspectRatio: compact ? 1.9 : 2.58,
+              ),
+              itemBuilder: (_, index) {
+                final code = items[index][0] as String;
+                final label = items[index][1] as String;
+                final symbol = items[index][2] as String;
+                final color = items[index][3] as Color;
+                final active = code == status;
+                return _EditorStatusTile(
+                  code: code,
+                  label: label,
+                  symbol: symbol,
+                  color: color,
+                  active: active,
+                  onTap: () => _applyEditorStatus(code),
+                );
+              },
+            ),
+          ),
+          if (saving) ...[
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: const LinearProgressIndicator(minHeight: 4, color: _C.green, backgroundColor: _C.softGreen),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Future<void> _showStatusSelector(int eventId, int playerId, String currentStatus) async {
     final items = [
       [kStatusUnset, 'Очистить', '—'],
@@ -491,12 +724,12 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
                   const SizedBox(height: 16),
                   const Text(
                     'Отметка посещаемости',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: _C.text),
+                    style: TextStyle(fontSize: 16.75, fontWeight: FontWeight.w700, color: _C.text),
                   ),
                   const SizedBox(height: 5),
                   const Text(
                     'Выберите статус игрока для выбранной тренировки или мероприятия.',
-                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: _C.muted, height: 1.35),
+                    style: TextStyle(fontSize: 11.85, fontWeight: FontWeight.w700, color: _C.muted, height: 1.35),
                   ),
                   const SizedBox(height: 16),
                   GridView.builder(
@@ -529,14 +762,14 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
                           ),
                           child: Row(
                             children: [
-                              _StatusCircle(status: code, symbol: symbol, size: 34),
+                              _StatusCircle(status: code, symbol: symbol, size: 30),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
                                   label,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(fontSize: 12, height: 1.15, fontWeight: FontWeight.w900, color: active ? color : _C.text),
+                                  style: TextStyle(fontSize: 11.55, height: 1.15, fontWeight: FontWeight.w700, color: active ? color : _C.text),
                                 ),
                               ),
                             ],
@@ -587,7 +820,7 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
     if (error != null) return _ErrorPanel(text: error!, onRetry: _loadAll);
 
     final content = Container(
-      color: widget.fullScreen ? Colors.white : _C.bg,
+      decoration: BoxDecoration(gradient: _C.bgGradient),
       padding: EdgeInsets.all(widget.fullScreen ? 10 : 14),
       child: Column(
         children: [
@@ -595,7 +828,7 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
           const SizedBox(height: 8),
           _compactControlStrip(),
           const SizedBox(height: 8),
-          Expanded(child: _journalTable()),
+          Expanded(child: _attendanceWorkspace()),
         ],
       ),
     );
@@ -613,7 +846,7 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
           'Журнал посещаемости · ${widget.teamName}',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+          style: const TextStyle(fontSize: 15.05, fontWeight: FontWeight.w700),
         ),
       ),
       body: content,
@@ -627,7 +860,7 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
       decoration: _C.cardCompact,
       child: LayoutBuilder(
         builder: (_, constraints) {
-          final compact = constraints.maxWidth < 760;
+          final compact = constraints.maxWidth < 680;
           final title = Row(
             children: [
               _TeamLogoMark(
@@ -645,14 +878,14 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
                       widget.teamName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w900, color: _C.text),
+                      style: const TextStyle(fontSize: 14.55, fontWeight: FontWeight.w700, color: _C.text),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       '${widget.clubName} · ${_monthTitle()}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _C.muted),
+                      style: const TextStyle(fontSize: 10.55, fontWeight: FontWeight.w700, color: _C.muted),
                     ),
                   ],
                 ),
@@ -671,7 +904,7 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
                 constraints: const BoxConstraints(minWidth: 118),
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(12)),
-                child: Text(_monthTitle(), textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w900, color: _C.text, fontSize: 11.5)),
+                child: Text(_monthTitle(), textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w700, color: _C.text, fontSize: 11.05)),
               ),
               _MonthButton(icon: Icons.chevron_right_rounded, onTap: () => _changeMonth(1), compact: true),
               _GhostButton(icon: Icons.refresh_rounded, text: 'Обновить', onTap: _loadAll, compact: true),
@@ -732,10 +965,10 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
                 height: 38,
                 child: TextField(
                   controller: searchC,
-                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                  style: const TextStyle(fontSize: 11.85, fontWeight: FontWeight.w700),
                   decoration: InputDecoration(
                     hintText: 'Поиск игрока',
-                    prefixIcon: const Icon(Icons.search_rounded, size: 18),
+                    prefixIcon: const Icon(Icons.search_rounded, size: 16),
                     isDense: true,
                     filled: true,
                     fillColor: _C.soft,
@@ -786,7 +1019,7 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
         height: 38,
         padding: const EdgeInsets.symmetric(horizontal: 11),
         decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(12)),
-        child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.tune_rounded, size: 17, color: _C.green), SizedBox(width: 6), Text('Фильтр', style: TextStyle(fontWeight: FontWeight.w900, color: _C.text, fontSize: 11.5))]),
+        child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.tune_rounded, size: 15, color: _C.green), SizedBox(width: 6), Text('Фильтр', style: TextStyle(fontWeight: FontWeight.w700, color: _C.text, fontSize: 11.05))]),
       ),
     );
   }
@@ -842,7 +1075,7 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: const BoxDecoration(color: _C.header),
       alignment: Alignment.centerLeft,
-      child: Text('Игроки (${_filteredPlayers.length})', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: _C.text)),
+      child: Text('Игроки (${_filteredPlayers.length})', style: const TextStyle(fontSize: 12.35, fontWeight: FontWeight.w700, color: _C.text)),
     );
   }
 
@@ -858,7 +1091,7 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
             child: Tooltip(
               message: _eventTitle(event),
               child: Center(
-                child: Text(_eventDateLabel(event), textAlign: TextAlign.center, style: const TextStyle(fontSize: 10.5, height: 1.1, fontWeight: FontWeight.w900, color: _C.text)),
+                child: Text(_eventDateLabel(event), textAlign: TextAlign.center, style: const TextStyle(fontSize: 10.35, height: 1.1, fontWeight: FontWeight.w700, color: _C.text)),
               ),
             ),
           );
@@ -888,7 +1121,7 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
             clipBehavior: Clip.antiAlias,
             child: photo != null
                 ? Image.network(photo, fit: BoxFit.cover)
-                : Icon(Icons.shield_outlined, color: _C.green, size: 18),
+                : Icon(Icons.shield_outlined, color: _C.green, size: 16),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -896,9 +1129,9 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_playerName(player), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.6, fontWeight: FontWeight.w900, color: _C.text)),
+                Text(_playerName(player), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.95, fontWeight: FontWeight.w700, color: _C.text)),
                 const SizedBox(height: 3),
-                Text(_playerSub(player), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10.6, fontWeight: FontWeight.w700, color: _C.muted)),
+                Text(_playerSub(player), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10.15, fontWeight: FontWeight.w700, color: _C.muted)),
               ],
             ),
           ),
@@ -918,10 +1151,10 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
           final eventId = _asInt(event['id']);
           final status = _getStatusForEvent(playerId, eventId);
           return InkWell(
-            onTap: () => _showStatusSelector(eventId, playerId, status),
+            onTap: () => _openAttendanceEditor(eventId, playerId, status),
             child: SizedBox(
               width: _cellWidth,
-              child: Center(child: _StatusCircle(status: status, symbol: _symbol(status), size: 28)),
+              child: Center(child: _StatusCircle(status: status, symbol: _symbol(status), size: 25)),
             ),
           );
         }).toList(),
@@ -931,26 +1164,116 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
 }
 
 class _C {
-  static const Color bg = Colors.white;
+  static const Color bg = Color(0xFFF5F8FB);
   static const Color cardColor = Colors.white;
-  static const Color header = Color(0xFFF3F7F5);
-  static const Color soft = Color(0xFFF2F6F4);
+  static const Color header = Color(0xFFEFF6F4);
+  static const Color soft = Color(0xFFF2F6F8);
   static const Color softGreen = Color(0xFFEAF7EF);
   static const Color green = Color(0xFF18864B);
   static const Color greenDark = Color(0xFF0F5F36);
-  static const Color text = Color(0xFF17211B);
+  static const Color blue = Color(0xFF2563EB);
+  static const Color cyan = Color(0xFF06B6D4);
+  static const Color text = Color(0xFF14211B);
   static const Color muted = Color(0xFF66736C);
-  static const Color border = Color(0xFFE5ECE8);
+  static const Color border = Color(0xFFDDE7E2);
+
+  static LinearGradient get bgGradient => const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFFF7FBFF), Color(0xFFF3FAF6), Color(0xFFFFFFFF)],
+      );
+
+  static LinearGradient get accentGradient => const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFF0F5F36), Color(0xFF18864B), Color(0xFF06B6D4)],
+      );
 
   static BoxDecoration get card => BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(18),
+        color: cardColor.withOpacity(.92),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white.withOpacity(.72)),
+        boxShadow: [
+          BoxShadow(color: const Color(0xFF0F172A).withOpacity(.06), blurRadius: 28, offset: const Offset(0, 16)),
+        ],
       );
 
   static BoxDecoration get cardCompact => BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(16),
+        color: cardColor.withOpacity(.88),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withOpacity(.70)),
+        boxShadow: [
+          BoxShadow(color: const Color(0xFF0F172A).withOpacity(.045), blurRadius: 20, offset: const Offset(0, 10)),
+        ],
       );
+
+  static BoxDecoration get glassCard => BoxDecoration(
+        color: Colors.white.withOpacity(.9),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(.72)),
+        boxShadow: [
+          BoxShadow(color: const Color(0xFF0F172A).withOpacity(.08), blurRadius: 30, offset: const Offset(0, 18)),
+        ],
+      );
+}
+
+class _EditorStatusTile extends StatelessWidget {
+  final String code;
+  final String label;
+  final String symbol;
+  final Color color;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _EditorStatusTile({
+    required this.code,
+    required this.label,
+    required this.symbol,
+    required this.color,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: active ? color.withOpacity(.15) : const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: active ? color.withOpacity(.82) : color.withOpacity(.16), width: active ? 1.4 : 1),
+            boxShadow: active ? [BoxShadow(color: color.withOpacity(.18), blurRadius: 18, offset: const Offset(0, 8))] : null,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: code == _CmrAttendancePanelState.kStatusUnset ? Colors.white : color.withOpacity(active ? 1 : .12),
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: code == _CmrAttendancePanelState.kStatusUnset
+                    ? Icon(Icons.remove_rounded, size: 15, color: color)
+                    : Text(symbol, style: TextStyle(fontSize: 11.55, fontWeight: FontWeight.w800, color: active ? Colors.white : color)),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10.75, fontWeight: FontWeight.w800, color: active ? color : _C.text)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 
@@ -987,7 +1310,7 @@ class _TeamLogoMark extends StatelessWidget {
         style: TextStyle(
           color: _C.green,
           fontSize: size * .42,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -1049,7 +1372,7 @@ class _StatusCircle extends StatelessWidget {
         shape: BoxShape.circle,
       ),
       alignment: Alignment.center,
-      child: empty ? null : Text(symbol, style: TextStyle(fontSize: size * .43, fontWeight: FontWeight.w900, color: color)),
+      child: empty ? null : Text(symbol, style: TextStyle(fontSize: size * .43, fontWeight: FontWeight.w700, color: color)),
     );
   }
 }
@@ -1073,9 +1396,9 @@ class _TinyStat extends StatelessWidget {
         children: [
           Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
           const SizedBox(width: 6),
-          Text(value, style: TextStyle(fontWeight: FontWeight.w900, color: color, fontSize: 12.5)),
+          Text(value, style: TextStyle(fontWeight: FontWeight.w700, color: color, fontSize: 11.85)),
           const SizedBox(width: 4),
-          Text(title, style: TextStyle(fontWeight: FontWeight.w800, color: color, fontSize: 10.5)),
+          Text(title, style: TextStyle(fontWeight: FontWeight.w600, color: color, fontSize: 10.35)),
         ],
       ),
     );
@@ -1097,9 +1420,9 @@ class _StatPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(value, style: TextStyle(fontWeight: FontWeight.w900, color: color, fontSize: 14)),
+          Text(value, style: TextStyle(fontWeight: FontWeight.w700, color: color, fontSize: 13.05)),
           const SizedBox(width: 5),
-          Text(title, style: TextStyle(fontWeight: FontWeight.w800, color: color, fontSize: 11)),
+          Text(title, style: TextStyle(fontWeight: FontWeight.w600, color: color, fontSize: 10.55)),
         ],
       ),
     );
@@ -1119,9 +1442,9 @@ class _LegendItem extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _StatusCircle(status: status, symbol: _symbolStatic(status), size: 18),
+          _StatusCircle(status: status, symbol: _symbolStatic(status), size: 16),
           const SizedBox(width: 5),
-          Text(label, style: const TextStyle(fontSize: 11.2, fontWeight: FontWeight.w700, color: _C.muted)),
+          Text(label, style: const TextStyle(fontSize: 10.75, fontWeight: FontWeight.w700, color: _C.muted)),
         ],
       ),
     );
@@ -1153,7 +1476,7 @@ class _MonthButton extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: onTap,
-      child: Container(width: side, height: side, decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: _C.green, size: compact ? 20 : 24)),
+      child: Container(width: side, height: side, decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: _C.green, size: compact ? 18 : 21)),
     );
   }
 }
@@ -1175,7 +1498,7 @@ class _GhostButton extends StatelessWidget {
         height: compact ? 36 : 40,
         padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 13),
         decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(12)),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, color: _C.green, size: compact ? 16 : 18), const SizedBox(width: 6), Text(text, style: TextStyle(color: _C.text, fontWeight: FontWeight.w900, fontSize: compact ? 11.5 : 12.5))]),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, color: _C.green, size: compact ? 15 : 16), const SizedBox(width: 6), Text(text, style: TextStyle(color: _C.text, fontWeight: FontWeight.w700, fontSize: compact ? 11.5 : 12.5))]),
       ),
     );
   }
@@ -1198,7 +1521,7 @@ class _AccentButton extends StatelessWidget {
         height: compact ? 36 : 40,
         padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 13),
         decoration: BoxDecoration(color: _C.green, borderRadius: BorderRadius.circular(12)),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, color: Colors.white, size: compact ? 16 : 18), const SizedBox(width: 6), Text(text, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: compact ? 11.5 : 12.5))]),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, color: Colors.white, size: compact ? 15 : 16), const SizedBox(width: 6), Text(text, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: compact ? 11.5 : 12.5))]),
       ),
     );
   }
@@ -1253,9 +1576,9 @@ class _LoadingPanelState extends State<_LoadingPanel> with SingleTickerProviderS
                 ),
               ),
               const SizedBox(height: 14),
-              const Text('Загружаем журнал посещаемости', textAlign: TextAlign.center, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: _C.text)),
+              const Text('Загружаем журнал посещаемости', textAlign: TextAlign.center, style: TextStyle(fontSize: 14.05, fontWeight: FontWeight.w700, color: _C.text)),
               const SizedBox(height: 6),
-              const Text('Подгружаем игроков, мероприятия и отметки', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _C.muted)),
+              const Text('Подгружаем игроков, мероприятия и отметки', textAlign: TextAlign.center, style: TextStyle(fontSize: 11.55, fontWeight: FontWeight.w700, color: _C.muted)),
               const SizedBox(height: 16),
               ClipRRect(
                 borderRadius: BorderRadius.circular(99),
@@ -1284,7 +1607,7 @@ class _ErrorPanel extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(24),
           decoration: _C.card,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.warning_rounded, color: Colors.redAccent, size: 42), const SizedBox(height: 12), Text(text, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w700, color: _C.muted)), const SizedBox(height: 16), _AccentButton(icon: Icons.refresh_rounded, text: 'Повторить', onTap: onRetry)]),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.warning_rounded, color: Colors.redAccent, size: 38), const SizedBox(height: 12), Text(text, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w700, color: _C.muted)), const SizedBox(height: 16), _AccentButton(icon: Icons.refresh_rounded, text: 'Повторить', onTap: onRetry)]),
         ),
       ),
     );
@@ -1308,9 +1631,9 @@ class _EmptyPanel extends StatelessWidget {
                     color: _C.softGreen,
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: const Icon(Icons.groups_rounded, color: _C.green, size: 28),
+                  child: const Icon(Icons.groups_rounded, color: _C.green, size: 25),
                 ),
-                const SizedBox(height: 14), Text(text, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: _C.text)), const SizedBox(height: 6), const Text('Проверьте выбранный месяц или состав команды', style: TextStyle(fontWeight: FontWeight.w700, color: _C.muted))]),
+                const SizedBox(height: 14), Text(text, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15.05, fontWeight: FontWeight.w700, color: _C.text)), const SizedBox(height: 6), const Text('Проверьте выбранный месяц или состав команды', style: TextStyle(fontWeight: FontWeight.w700, color: _C.muted))]),
       ),
     );
   }

@@ -20,21 +20,23 @@ import 'package:sportoteka/presentation/profile_screen/help_profile_screen.dart'
 import 'controller/profile_controller.dart';
 
 class ProfilePalette {
-  static const background = Color(0xFFF6F7F8);
+  // Палитра синхронизирована с ClubWorkspace: белый кабинет,
+  // мягкий системный фон, графитовый основной action и зелёный акцент.
+  static const background = Color(0xFFF4F5F6);
   static const card = Color(0xFFFFFFFF);
-  static const surface = Color(0xFFF9FAFB);
-  static const surfaceMuted = Color(0xFFF2F4F7);
-  static const graphite = Color(0xFF111827);
-  static const graphiteSoft = Color(0xFF1F2937);
+  static const surface = Color(0xFFF7F8FA);
+  static const surfaceMuted = Color(0xFFF1F3F5);
+  static const graphite = Color(0xFF252A31);
+  static const graphiteSoft = Color(0xFF344054);
   static const text = Color(0xFF111827);
   static const muted = Color(0xFF667085);
   static const lightMuted = Color(0xFF98A2B3);
-  static const border = Color(0xFFE4E7EC);
-  static const borderSoft = Color(0xFFF0F2F5);
+  static const border = Color(0xFFE5E7EB);
+  static const borderSoft = Color(0xFFEFF2F5);
 
   static const green = Color(0xFF00A750);
-  static const greenDark = Color(0xFF08723A);
-  static const greenSoft = Color(0xFFEAF8F0);
+  static const greenDark = Color(0xFF087A3A);
+  static const greenSoft = Color(0xFFE8F7EF);
 
   static const blue = Color(0xFF2563EB);
   static const blueSoft = Color(0xFFEFF6FF);
@@ -67,30 +69,30 @@ class ProfilePalette {
 
 class ProfileText {
   static const title = TextStyle(
-    fontSize: 22,
-    fontWeight: FontWeight.w900,
+    fontSize: 21,
+    fontWeight: FontWeight.w700,
     letterSpacing: -0.6,
     height: 1.08,
     color: ProfilePalette.text,
   );
 
   static const section = TextStyle(
-    fontSize: 15,
-    fontWeight: FontWeight.w900,
+    fontSize: 14,
+    fontWeight: FontWeight.w700,
     letterSpacing: -0.2,
     color: ProfilePalette.text,
   );
 
   static const rowTitle = TextStyle(
-    fontSize: 15,
-    fontWeight: FontWeight.w800,
+    fontSize: 13.6,
+    fontWeight: FontWeight.w600,
     color: ProfilePalette.text,
     height: 1.15,
   );
 
   static const caption = TextStyle(
-    fontSize: 12,
-    fontWeight: FontWeight.w600,
+    fontSize: 11.4,
+    fontWeight: FontWeight.w500,
     color: ProfilePalette.muted,
     height: 1.25,
   );
@@ -160,6 +162,9 @@ class _ProfileScreenState extends State<ProfileScreen>
   bool clubTeamsLoading = false;
   int myTeamId = 0;
   int clubTeamsCount = 0;
+  String clubPrimaryTeamName = '';
+  String clubPrimaryTeamLogo = '';
+  String clubPrimaryTeamCategory = '';
   String myTeamName = '';
   String myTeamLogo = '';
   String myTeamCategory = '';
@@ -404,8 +409,20 @@ class _ProfileScreenState extends State<ProfileScreen>
       final raw = data['teams'] ?? data['data'] ?? data['items'];
       int count = 0;
 
+      String firstTeamName = '';
+      String firstTeamLogo = '';
+      String firstTeamCategory = '';
+
       if (raw is List) {
         count = raw.length;
+        if (raw.isNotEmpty && raw.first is Map) {
+          final first = Map<String, dynamic>.from(raw.first as Map);
+          firstTeamName = (first['name'] ?? first['team_name'] ?? first['title'] ?? '').toString();
+          firstTeamCategory = (first['category'] ?? first['sport_type'] ?? first['sport'] ?? '').toString();
+          firstTeamLogo = _normalizeFileUrl(
+            (first['logo'] ?? first['logo_url'] ?? first['team_logo'] ?? first['teamLogo'] ?? '').toString(),
+          );
+        }
       } else {
         count = _asInt(
           data['teams_count'] ??
@@ -418,6 +435,9 @@ class _ProfileScreenState extends State<ProfileScreen>
       if (mounted) {
         setState(() {
           clubTeamsCount = count;
+          clubPrimaryTeamName = firstTeamName;
+          clubPrimaryTeamLogo = firstTeamLogo;
+          clubPrimaryTeamCategory = firstTeamCategory;
           clubTeamsLoading = false;
         });
       }
@@ -617,22 +637,28 @@ class _ProfileScreenState extends State<ProfileScreen>
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Левая панель: профиль + быстрый доступ
             SizedBox(
               width: leftWidth,
               child: Column(
                 children: [
                   _accountCard(compact: true),
-                  const SizedBox(height: 16),
-                  _quickAccessPanel(),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
+                  _profileModeLegendCard(),
+                  const SizedBox(height: 12),
                   _dangerSectionCompact(),
                 ],
               ),
             ),
             const SizedBox(width: 16),
-            // Правая панель: все сервисы единым списком
-            Expanded(child: _unifiedServicesBoard(isTablet: isTablet)),
+            Expanded(
+              child: Column(
+                children: [
+                  _workspaceHeroEntryCard(isDesktop: true),
+                  const SizedBox(height: 14),
+                  Expanded(child: _unifiedServicesBoard(isTablet: isTablet)),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -641,32 +667,241 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   // Панель быстрого доступа — только самое главное (рабочая зона + Моя страница)
   Widget _quickAccessPanel() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: ProfilePalette.border),
-        boxShadow: ProfilePalette.cardShadow,
-      ),
+    return _profileModeLegendCard();
+  }
+
+  Widget _profileModeLegendCard() {
+    return _plainCard(
+      padding: const EdgeInsets.all(12),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            children: const [
+              Icon(Icons.alt_route_rounded, color: ProfilePalette.graphite, size: 18),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Два режима работы',
+                  style: ProfileText.section,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
           _quickAccessTile(
-            title: isClub ? 'Панель клуба' : (isCoach ? 'Панель тренера' : 'Моя команда'),
+            title: 'Рабочая система',
             subtitle: _workspaceSubtitle(),
-            icon: isClub ? Icons.apartment_rounded : Icons.sports_soccer_rounded,
+            icon: isClub ? Icons.apartment_rounded : Icons.dashboard_customize_rounded,
             color: ProfilePalette.green,
             onTap: _workspaceOpenAction() ?? () {},
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
           _quickAccessTile(
-            title: 'Моя страница',
-            subtitle: 'Публикации, фото, лента',
-            icon: Icons.person_rounded, 
+            title: 'Социальная страница',
+            subtitle: 'Публикации, фото, новости и лента',
+            icon: Icons.person_rounded,
             color: ProfilePalette.instagram,
             onTap: () => Get.toNamed(AppRoutes.myProfileScreen),
             isHighlighted: true,
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _workspaceHeroEntryCard({required bool isDesktop}) {
+    final title = _workspaceIdentityTitle();
+    final subtitle = _workspaceHeroSubtitle();
+    final action = _workspaceOpenAction();
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(isDesktop ? 18 : 16),
+      decoration: BoxDecoration(
+        color: ProfilePalette.card,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: ProfilePalette.borderSoft),
+        boxShadow: ProfilePalette.cardShadow,
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth >= 720;
+          final header = Row(
+            children: [
+              _workspaceIdentityLogo(size: wide ? 58 : 52),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        _workspaceTinyBadge('ФУНКЦИИ'),
+                        if (isClub) _workspaceTinyBadge('КЛУБ'),
+                        if (isCoach) _workspaceTinyBadge('ТРЕНЕР'),
+                        if (isPlayer) _workspaceTinyBadge('ИГРОК'),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: ProfileText.title.copyWith(fontSize: wide ? 24 : 21),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: ProfileText.caption.copyWith(fontSize: 12.2),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+
+          final actions = Row(
+            children: [
+              Expanded(
+                child: _workspaceActionButton(
+                  text: _workspaceCtaText(),
+                  icon: Icons.open_in_new_rounded,
+                  onTap: action ?? () { _loadUserData(); },
+                  primary: true,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _workspaceActionButton(
+                  text: 'Соцстраница',
+                  icon: Icons.dynamic_feed_rounded,
+                  onTap: () => Get.toNamed(AppRoutes.myProfileScreen),
+                  primary: false,
+                ),
+              ),
+            ],
+          );
+
+          if (wide) {
+            return Row(
+              children: [
+                Expanded(child: header),
+                const SizedBox(width: 20),
+                SizedBox(width: 360, child: actions),
+              ],
+            );
+          }
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              header,
+              const SizedBox(height: 14),
+              actions,
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _workspaceIdentityLogo({required double size}) {
+    final logo = _workspaceLogoUrl();
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: ProfilePalette.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: ProfilePalette.borderSoft),
+      ),
+      clipBehavior: Clip.hardEdge,
+      child: logo.isNotEmpty
+          ? Image.network(
+              logo,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => _workspaceLogoFallback(),
+            )
+          : _workspaceLogoFallback(),
+    );
+  }
+
+  Widget _workspaceLogoFallback() {
+    final title = _workspaceIdentityTitle();
+    final letters = title.trim().isEmpty
+        ? 'S'
+        : title
+            .trim()
+            .split(RegExp(r'\s+'))
+            .where((part) => part.isNotEmpty)
+            .take(2)
+            .map((part) => String.fromCharCode(part.runes.first).toUpperCase())
+            .join();
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            ProfilePalette.green.withOpacity(.14),
+            ProfilePalette.green.withOpacity(.04),
+          ],
+        ),
+      ),
+      child: Center(
+        child: Text(
+          letters.isEmpty ? 'S' : letters,
+          style: const TextStyle(
+            color: ProfilePalette.green,
+            fontSize: 17,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _workspaceTinyBadge(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: ProfilePalette.surface,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: ProfilePalette.borderSoft),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: ProfilePalette.graphiteSoft,
+          fontSize: 9.5,
+          fontWeight: FontWeight.w900,
+          letterSpacing: .6,
+        ),
+      ),
+    );
+  }
+
+  Widget _workspaceActionButton({
+    required String text,
+    required IconData icon,
+    required VoidCallback onTap,
+    required bool primary,
+  }) {
+    return ElevatedButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, size: 16),
+      label: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis),
+      style: ElevatedButton.styleFrom(
+        elevation: 0,
+        backgroundColor: primary ? ProfilePalette.graphite : ProfilePalette.surface,
+        foregroundColor: primary ? Colors.white : ProfilePalette.graphite,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        textStyle: const TextStyle(fontSize: 12.4, fontWeight: FontWeight.w800),
       ),
     );
   }
@@ -772,7 +1007,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               children: [
                 const Icon(Icons.grid_view_rounded, color: ProfilePalette.green, size: 22),
                 const SizedBox(width: 10),
-                const Text('Все сервисы', style: ProfileText.title),
+                const Text('Сервисы и настройки', style: ProfileText.title),
                 const Spacer(),
                 Text('${allItems.length}', style: ProfileText.caption),
               ],
@@ -1038,7 +1273,9 @@ class _ProfileScreenState extends State<ProfileScreen>
               delegate: SliverChildListDelegate([
                 _accountCard(compact: true),
                 const SizedBox(height: 12),
-                _quickAccessPanel(),
+                _workspaceHeroEntryCard(isDesktop: false),
+                const SizedBox(height: 12),
+                _profileModeLegendCard(),
                 const SizedBox(height: 12),
                 _mobileUnifiedServicesPanel(),
                 const SizedBox(height: 12),
@@ -1072,7 +1309,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 ),
                 const SizedBox(width: 10),
                 const Expanded(
-                  child: Text('Все сервисы', style: ProfileText.section),
+                  child: Text('Сервисы и настройки', style: ProfileText.section),
                 ),
                 _smallCounter('${allItems.length}'),
               ],
@@ -1805,6 +2042,68 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
+  String _accountDisplayName() {
+    final fullName = '$firstName $lastName'.trim();
+    return fullName.isEmpty ? 'Пользователь' : fullName;
+  }
+
+  String _workspaceIdentityTitle() {
+    if (isClub) {
+      final name = _accountDisplayName();
+      return name == 'Пользователь' ? 'Панель клуба' : name;
+    }
+    if (isCoach) {
+      if (myTeamName.trim().isNotEmpty) return myTeamName.trim();
+      if (assignedTeamName.trim().isNotEmpty) return assignedTeamName.trim();
+      if (assignedTeams.isNotEmpty) {
+        final first = assignedTeams.first;
+        final name = (first['name'] ?? first['team_name'] ?? '').toString().trim();
+        if (name.isNotEmpty) return name;
+      }
+      return 'Панель тренера';
+    }
+    if (isPlayer && playerTeamName.trim().isNotEmpty) return playerTeamName.trim();
+    return 'Рабочая зона Спортотеки';
+  }
+
+  String _workspaceHeroSubtitle() {
+    if (isClub) {
+      if (clubTeamsLoading) return 'Загружаем команды, тренеров и рабочие разделы клуба';
+      final team = clubPrimaryTeamName.trim();
+      if (team.isNotEmpty) {
+        final total = clubTeamsCount > 0 ? ' • всего команд: $clubTeamsCount' : '';
+        return 'Активная команда: $team$total';
+      }
+      return clubTeamsCount > 0
+          ? 'Клубная система управления: $clubTeamsCount команд, составы, тренеры, календарь и матчи'
+          : 'Клубная система управления: команды, составы, тренеры, календарь и матчи';
+    }
+    if (isCoach) {
+      return 'Рабочие функции тренера: состав, календарь, матчи, планы и коммуникация с командой';
+    }
+    if (isPlayer) {
+      return 'Командный раздел игрока: тренировки, матчи, достижения и связь с командой';
+    }
+    return 'Функциональные разделы находятся отдельно от социальной ленты и публикаций';
+  }
+
+  String _workspaceCtaText() {
+    if (isClub) return 'Открыть Club Workspace';
+    if (isCoach) return 'Открыть панель тренера';
+    if (isPlayer) return 'Открыть команду';
+    return 'Открыть функции';
+  }
+
+  String _workspaceLogoUrl() {
+    if (isClub && clubPrimaryTeamLogo.trim().isNotEmpty) return clubPrimaryTeamLogo.trim();
+    if (isCoach) {
+      if (myTeamLogo.trim().isNotEmpty) return myTeamLogo.trim();
+      if (assignedTeamLogo.trim().isNotEmpty) return assignedTeamLogo.trim();
+    }
+    if (isPlayer && playerTeamLogo.trim().isNotEmpty) return playerTeamLogo.trim();
+    return avatarUrl.trim();
+  }
+
   String _teamCountText() {
     if (isClub) return clubTeamsLoading ? '...' : '$clubTeamsCount';
     if (isCoach) {
@@ -1816,7 +2115,11 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   String _mainTeamLabel() {
-    if (isClub) return clubTeamsLoading ? '' : 'Команд: $clubTeamsCount';
+    if (isClub) {
+      if (clubTeamsLoading) return '';
+      if (clubPrimaryTeamName.trim().isNotEmpty) return clubPrimaryTeamName.trim();
+      return 'Команд: $clubTeamsCount';
+    }
     if (isCoach && myTeamName.trim().isNotEmpty) return myTeamName.trim();
     if (isCoach && assignedTeams.length > 1) return 'Назначено команд: ${assignedTeams.length}';
     if (isCoach && assignedTeamName.trim().isNotEmpty) return assignedTeamName.trim();
@@ -1826,7 +2129,9 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   String _workspaceSubtitle() {
     if (isClub) {
-      return clubTeamsLoading ? 'Загрузка команд клуба...' : 'Команды, тренеры и управление клубом';
+      if (clubTeamsLoading) return 'Загрузка команд клуба...';
+      if (clubPrimaryTeamName.trim().isNotEmpty) return 'Команда: ${clubPrimaryTeamName.trim()}';
+      return 'Команды, тренеры и управление клубом';
     }
     if (isCoach && myTeamName.trim().isNotEmpty) {
       return myTeamName.trim();

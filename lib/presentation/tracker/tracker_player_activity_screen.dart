@@ -137,7 +137,7 @@ class _TrackerPlayerActivityScreenState extends State<TrackerPlayerActivityScree
                         onChanged: _selectPlayer,
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    Container(width: 1, color: _AA.border.withOpacity(.75)),
                     Expanded(
                       child: LayoutBuilder(
                         builder: (context, right) {
@@ -163,12 +163,12 @@ class _TrackerPlayerActivityScreenState extends State<TrackerPlayerActivityScree
                               Expanded(
                                 child: _RadarAndFieldCard(radar: radar, heatmap: bundle.heatmap),
                               ),
-                              const SizedBox(height: 8),
+                              Container(height: 1, color: _AA.border.withOpacity(.75)),
                               SizedBox(
                                 height: speedHeight,
                                 child: _SpeedChartCard(points: speedPoints, maxSpeed: stats.maxSpeedKmh),
                               ),
-                              const SizedBox(height: 8),
+                              Container(height: 1, color: _AA.border.withOpacity(.75)),
                               SizedBox(
                                 height: kpiHeight,
                                 child: _StatsGrid(stats: stats, compact: false),
@@ -192,11 +192,11 @@ class _TrackerPlayerActivityScreenState extends State<TrackerPlayerActivityScree
                 padding: EdgeInsets.zero,
                 children: [
                   selector,
-                  const SizedBox(height: 8),
+                  Container(height: 1, color: _AA.border.withOpacity(.75)),
                   SizedBox(height: 286, child: _RadarAndFieldCard(radar: radar, heatmap: bundle.heatmap)),
-                  const SizedBox(height: 8),
+                  Container(height: 1, color: _AA.border.withOpacity(.75)),
                   SizedBox(height: 208, child: _SpeedChartCard(points: speedPoints, maxSpeed: stats.maxSpeedKmh)),
-                  const SizedBox(height: 8),
+                  Container(height: 1, color: _AA.border.withOpacity(.75)),
                   SizedBox(height: 92, child: _StatsGrid(stats: stats, compact: true)),
                 ],
               );
@@ -398,7 +398,7 @@ class _ActivityPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: _AA.bg,
+      color: Colors.transparent,
       child: child,
     );
   }
@@ -451,7 +451,7 @@ class _PlayerActivitySidebar extends StatelessWidget {
                       child: Text(
                         'Игроки появятся здесь после загрузки состава команды.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: _AA.muted, fontSize: 12, fontWeight: FontWeight.w800),
+                        style: TextStyle(color: _AA.muted, fontSize: 12, fontWeight: FontWeight.w500),
                       ),
                     ),
                   )
@@ -547,14 +547,14 @@ class _PlayerListTile extends StatelessWidget {
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: _AA.text, fontSize: 12.6, fontWeight: FontWeight.w900, letterSpacing: -.15),
+                      style: const TextStyle(color: _AA.text, fontSize: 12.6, fontWeight: FontWeight.w500, letterSpacing: -.15),
                     ),
                     const SizedBox(height: 3),
                     Text(
                       subtitle.isEmpty ? 'активность игрока' : subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: _AA.muted, fontSize: 10.4, fontWeight: FontWeight.w800),
+                      style: const TextStyle(color: _AA.muted, fontSize: 10.4, fontWeight: FontWeight.w500),
                     ),
                   ],
                 ),
@@ -571,7 +571,7 @@ class _PlayerListTile extends StatelessWidget {
                     style: TextStyle(
                       color: active ? _AA.green : _AA.text,
                       fontSize: 12.4,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w500,
                       fontFeatures: const [FontFeature.tabularFigures()],
                     ),
                   ),
@@ -645,7 +645,7 @@ class _ActivityAvatarFallback extends StatelessWidget {
           ? Icon(icon, color: _AA.green, size: size * .45)
           : Text(
               initials,
-              style: TextStyle(color: _AA.text, fontSize: size * .30, fontWeight: FontWeight.w900),
+              style: TextStyle(color: _AA.text, fontSize: size * .30, fontWeight: FontWeight.w500),
             ),
     );
   }
@@ -683,9 +683,9 @@ class _PlayerSelectorBar extends StatelessWidget {
             decoration: BoxDecoration(color: _AA.green.withOpacity(.10), borderRadius: BorderRadius.circular(10)),
             child: const Icon(Icons.person_search_rounded, color: _AA.green, size: 19),
           ),
-          const SizedBox(width: 10),
-          const Text('Игрок', style: TextStyle(color: _AA.text, fontSize: 13, fontWeight: FontWeight.w900)),
-          const SizedBox(width: 10),
+          Container(width: 1, color: _AA.border.withOpacity(.75)),
+          const Text('Игрок', style: TextStyle(color: _AA.text, fontSize: 12.5, fontWeight: FontWeight.w500)),
+          Container(width: 1, color: _AA.border.withOpacity(.75)),
           Expanded(
             child: DropdownButtonHideUnderline(
               child: DropdownButton<int?>(
@@ -693,7 +693,7 @@ class _PlayerSelectorBar extends StatelessWidget {
                 isExpanded: true,
                 icon: const Icon(Icons.keyboard_arrow_down_rounded, color: _AA.green),
                 dropdownColor: _AA.card,
-                style: const TextStyle(color: _AA.text, fontSize: 12.2, fontWeight: FontWeight.w900),
+                style: const TextStyle(color: _AA.text, fontSize: 12.2, fontWeight: FontWeight.w500),
                 items: [
                   const DropdownMenuItem<int?>(value: null, child: Text('Вся команда')),
                   ...players.map((p) => DropdownMenuItem<int?>(
@@ -752,18 +752,15 @@ class _ActivityCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: _AA.card,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _AA.border.withOpacity(.95)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(.025), blurRadius: 16, offset: const Offset(0, 8))],
+      decoration: const BoxDecoration(
+        color: Colors.transparent,
       ),
       child: Column(
         children: [
           Container(
             height: 38,
             padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(color: _AA.card2, border: Border(bottom: BorderSide(color: _AA.border.withOpacity(.85)))),
+            decoration: BoxDecoration(color: Colors.transparent, border: Border(bottom: BorderSide(color: _AA.border.withOpacity(.85)))),
             child: Row(
               children: [
                 Expanded(
@@ -771,8 +768,8 @@ class _ActivityCard extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.text, fontSize: 12.8, fontWeight: FontWeight.w900)),
-                      if (subtitle.isNotEmpty) Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.muted, fontSize: 10.5, fontWeight: FontWeight.w800)),
+                      Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.text, fontSize: 12.8, fontWeight: FontWeight.w500)),
+                      if (subtitle.isNotEmpty) Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.muted, fontSize: 10.5, fontWeight: FontWeight.w500)),
                     ],
                   ),
                 ),
@@ -798,7 +795,7 @@ class _SpeedChartCard extends StatelessWidget {
     return _ActivityCard(
       title: 'График скорости',
       subtitle: 'скорость по сессиям / онлайн-профиль',
-      trailing: Text('${maxSpeed.toStringAsFixed(1)} км/ч макс.', style: const TextStyle(color: _AA.green, fontSize: 11, fontWeight: FontWeight.w900)),
+      trailing: Text('${maxSpeed.toStringAsFixed(1)} км/ч макс.', style: const TextStyle(color: _AA.green, fontSize: 11, fontWeight: FontWeight.w500)),
       child: CustomPaint(
         painter: _SpeedDiagramPainter(points: points),
         child: const SizedBox.expand(),
@@ -873,7 +870,7 @@ class _StatsGrid extends StatelessWidget {
           minimumSize: const Size(0, 30),
         ),
         icon: const Icon(Icons.open_in_full_rounded, size: 14),
-        label: const Text('Развернуть', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900)),
+        label: const Text('Развернуть', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w500)),
       ),
       child: LayoutBuilder(
         builder: (context, c) {
@@ -922,7 +919,7 @@ class _StatsGrid extends StatelessWidget {
                     children: [
                       const Icon(Icons.dashboard_rounded, color: _AA.green, size: 20),
                       const SizedBox(width: 8),
-                      const Expanded(child: Text('Онлайн обзор KPI', style: TextStyle(color: _AA.text, fontSize: 16, fontWeight: FontWeight.w900))),
+                      const Expanded(child: Text('Онлайн обзор KPI', style: TextStyle(color: _AA.text, fontSize: 15, fontWeight: FontWeight.w500))),
                       IconButton(onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.close_rounded, color: _AA.text)),
                     ],
                   ),
@@ -1006,7 +1003,7 @@ class _MetricTile extends StatelessWidget {
                     color: _AA.text,
                     fontSize: valueSize,
                     height: 1.0,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w500,
                     letterSpacing: -.25,
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),
@@ -1020,7 +1017,7 @@ class _MetricTile extends StatelessWidget {
                     color: _AA.muted,
                     fontSize: titleSize,
                     height: 1.0,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
@@ -1037,7 +1034,7 @@ class _MetricTile extends StatelessWidget {
                 style: const TextStyle(
                   color: _AA.dim,
                   fontSize: 10,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ),
@@ -1060,7 +1057,7 @@ class _MiniPitchActivityPainter extends CustomPainter {
     _drawPitch(canvas, pitch);
 
     if (points.isEmpty) {
-      _drawCentered(canvas, pitch.center, 'Нет теплокарты', const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900, shadows: [Shadow(color: Colors.black45, blurRadius: 6)]));
+      _drawCentered(canvas, pitch.center, 'Нет теплокарты', const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500, shadows: [Shadow(color: Colors.black45, blurRadius: 6)]));
       return;
     }
 
@@ -1162,7 +1159,7 @@ class _MiniButton extends StatelessWidget {
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             Icon(icon, color: Colors.white, size: 16),
             const SizedBox(width: 6),
-            Text(label, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900)),
+            Text(label, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500)),
           ]),
         ),
       ),
@@ -1188,9 +1185,9 @@ class _ActivityError extends StatelessWidget {
           children: [
             const Icon(Icons.error_outline_rounded, color: _AA.red, size: 36),
             const SizedBox(height: 10),
-            const Text('Не удалось загрузить активность', style: TextStyle(color: _AA.text, fontSize: 16, fontWeight: FontWeight.w900)),
+            const Text('Не удалось загрузить активность', style: TextStyle(color: _AA.text, fontSize: 15, fontWeight: FontWeight.w500)),
             const SizedBox(height: 6),
-            Text(error, textAlign: TextAlign.center, style: const TextStyle(color: _AA.muted, fontSize: 12, fontWeight: FontWeight.w700)),
+            Text(error, textAlign: TextAlign.center, style: const TextStyle(color: _AA.muted, fontSize: 12, fontWeight: FontWeight.w500)),
             const SizedBox(height: 12),
             _MiniButton(icon: Icons.refresh_rounded, label: 'Повторить', onTap: onRetry),
           ],
@@ -1208,7 +1205,7 @@ class _SpeedDiagramPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final area = (Offset.zero & size).deflate(18);
-    final labelStyle = const TextStyle(color: _AA.dim, fontSize: 10, fontWeight: FontWeight.w800);
+    final labelStyle = const TextStyle(color: _AA.dim, fontSize: 10, fontWeight: FontWeight.w500);
     final grid = Paint()
       ..color = _AA.border.withOpacity(.9)
       ..strokeWidth = 1;
@@ -1228,7 +1225,7 @@ class _SpeedDiagramPainter extends CustomPainter {
     _drawText(canvas, 'км/ч', Offset(area.left + 2, area.top), labelStyle);
 
     if (points.isEmpty) {
-      _drawText(canvas, 'Нет данных скорости', chart.center - const Offset(58, 8), const TextStyle(color: _AA.muted, fontSize: 13, fontWeight: FontWeight.w900));
+      _drawText(canvas, 'Нет данных скорости', chart.center - const Offset(58, 8), const TextStyle(color: _AA.muted, fontSize: 12.5, fontWeight: FontWeight.w500));
       return;
     }
 
@@ -1329,7 +1326,7 @@ class _RadarActivityPainter extends CustomPainter {
       }
 
       final labelPos = center + Offset(math.cos(a), math.sin(a)) * (radius + 24);
-      _drawCenteredText(canvas, axes[i].label, labelPos, const TextStyle(color: _AA.muted, fontSize: 10, fontWeight: FontWeight.w900));
+      _drawCenteredText(canvas, axes[i].label, labelPos, const TextStyle(color: _AA.muted, fontSize: 10, fontWeight: FontWeight.w500));
     }
     valuePath.close();
 

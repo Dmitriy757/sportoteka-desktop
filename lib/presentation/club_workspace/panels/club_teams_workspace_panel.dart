@@ -105,7 +105,7 @@ class ClubTeamsWorkspacePanel extends StatelessWidget {
                                           style: const TextStyle(
                                             color: CmrColors.text,
                                             fontSize: 16,
-                                            fontWeight: FontWeight.w900,
+                                            fontWeight: FontWeight.w700,
                                           ),
                                         ),
                                         const SizedBox(height: 4),
@@ -134,7 +134,7 @@ class ClubTeamsWorkspacePanel extends StatelessWidget {
                                         style: TextStyle(
                                           color: CmrColors.green,
                                           fontSize: 10,
-                                          fontWeight: FontWeight.w900,
+                                          fontWeight: FontWeight.w700,
                                         ),
                                       ),
                                     ),
@@ -199,7 +199,7 @@ class _MiniBadge extends StatelessWidget {
                 style: const TextStyle(
                   color: CmrColors.text,
                   fontSize: 11,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),

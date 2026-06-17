@@ -302,8 +302,13 @@ enum _CmrRightEditorMode {
 
 class CmrPlayerProfileScreen extends StatefulWidget {
   final Map<String, dynamic> player;
+  final bool embeddedInWorkspace;
 
-  const CmrPlayerProfileScreen({super.key, required this.player});
+  const CmrPlayerProfileScreen({
+    super.key,
+    required this.player,
+    this.embeddedInWorkspace = false,
+  });
 
   @override
   State<CmrPlayerProfileScreen> createState() => _CmrPlayerProfileScreenState();
@@ -329,6 +334,21 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen>
   int _selectedTabIndex = 0;
   bool _mobileHeroCollapsed = false;
   bool _showInlinePlayerEditor = false;
+
+  // CMR desktop-window behavior for profile blocks.
+  // Blocks can be opened above the profile as draggable/minimizable/maximizable
+  // internal windows, like the tracker panels.
+  String? _playerFloatingPane;
+  String _playerFloatingTitle = 'Профиль игрока';
+  IconData _playerFloatingIcon = Icons.open_in_full_rounded;
+  bool _playerFloatingMinimized = false;
+  bool _playerFloatingMaximized = false;
+  Offset? _playerFloatingOffset;
+
+  // Главное окно профиля: управление только в верхнем левом углу.
+  bool _playerProfileRailExpanded = true;
+  bool _playerProfileWindowMinimized = false;
+  bool _playerProfileWindowMaximized = false;
 
   Color _actionAccent(IconData icon, String label) {
     final text = label.toLowerCase();
@@ -562,11 +582,11 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen>
   TextStyle _titleStyle({
     double? size,
     Color? color,
-    FontWeight weight = FontWeight.w900,
+    FontWeight weight = FontWeight.w700,
   }) {
     return TextStyle(
       fontFamily: _fontFamily,
-      fontSize: size ?? _design.titleFontSize,
+      fontSize: (size ?? _design.titleFontSize) * .90,
       fontWeight: weight,
       color: color ?? _textPrimary,
       height: 1.2,
@@ -580,7 +600,7 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen>
   }) {
     return TextStyle(
       fontFamily: _fontFamily,
-      fontSize: size ?? _design.bodyFontSize,
+      fontSize: (size ?? _design.bodyFontSize) * .90,
       fontWeight: weight,
       color: color ?? _textSecondary,
       height: 1.3,
@@ -596,10 +616,10 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen>
 
   TextStyle _cmrTitleText(
     BuildContext context, {
-    double mobile = 18.0,
-    double wide = 19.0,
+    double mobile = 16.2,
+    double wide = 17.0,
     Color color = const Color(0xFF101828),
-    FontWeight weight = FontWeight.w900,
+    FontWeight weight = FontWeight.w700,
   }) {
     return _titleStyle(
       size: _adaptiveFont(context, mobile: mobile, wide: wide),
@@ -610,8 +630,8 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen>
 
   TextStyle _cmrSubtitleText(
     BuildContext context, {
-    double mobile = 12.5,
-    double wide = 13.6,
+    double mobile = 11.2,
+    double wide = 12.0,
     Color color = const Color(0xFF667085),
     FontWeight weight = FontWeight.w700,
   }) {
@@ -624,8 +644,8 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen>
 
   TextStyle _cmrBodyText(
     BuildContext context, {
-    double mobile = 12.0,
-    double wide = 13.0,
+    double mobile = 10.8,
+    double wide = 11.6,
     Color color = const Color(0xFF667085),
     FontWeight weight = FontWeight.w700,
     double height = 1.3,
@@ -2481,7 +2501,7 @@ Future<void> _loadPlayerInfoForEvent(int eventId) async {
                       icon: saving
                           ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                           : const Icon(Icons.check_rounded),
-                      label: const Text('Сохранить оценку', style: TextStyle(fontWeight: FontWeight.w900)),
+                      label: const Text('Сохранить оценку', style: TextStyle(fontWeight: FontWeight.w700)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _AppColors.primaryGreen,
                         foregroundColor: Colors.white,
@@ -2640,7 +2660,7 @@ Future<void> _loadPlayerInfoForEvent(int eventId) async {
                     },
                     icon: const Icon(Icons.save_rounded, size: 18),
                     label: const Text("Сохранить",
-                        style: TextStyle(fontWeight: FontWeight.w900)),
+                        style: TextStyle(fontWeight: FontWeight.w700)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _primary,
                       foregroundColor: Colors.white,
@@ -2700,12 +2720,12 @@ Widget _buildPhotoPreviewTap({
               width: 26,
               height: 26,
               decoration: BoxDecoration(
-                color: const Color(0xFF101828).withOpacity(.78),
+                color: const Color(0xFFF4F6F8),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
                 Icons.open_in_full_rounded,
-                color: Colors.white,
+                color: Color(0xFF667085),
                 size: 12,
               ),
             ),
@@ -3413,7 +3433,7 @@ Widget _buildCircleNetworkImage({
               fontFamily: _fontFamily,
               fontSize: titleSize,
               height: 1.02,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               color: const Color(0xFF101828),
               letterSpacing: -0.45,
             ),
@@ -3632,10 +3652,10 @@ Widget _buildCircleNetworkImage({
           Row(children: [
             Icon(icon, size: 18, color: const Color(0xFF178A45)),
             const SizedBox(width: 8),
-            Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 12.3, height: 1.05, fontWeight: FontWeight.w700, color: const Color(0xFF6B778A)))),
+            Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 11.4, height: 1.05, fontWeight: FontWeight.w700, color: const Color(0xFF6B778A)))),
           ]),
           const SizedBox(height: 10),
-          Text(value.isEmpty ? '—' : value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: isPosition ? 12.9 : 15.8, height: 1.05, fontWeight: FontWeight.w900, color: const Color(0xFF101828), letterSpacing: -0.2)),
+          Text(value.isEmpty ? '—' : value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: isPosition ? 12.9 : 15.8, height: 1.05, fontWeight: FontWeight.w700, color: const Color(0xFF101828), letterSpacing: -0.2)),
         ],
       ),
     );
@@ -3687,7 +3707,7 @@ Widget _buildCircleNetworkImage({
                         color: accent,
                         fontSize: 9.5,
                         height: 1,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -3700,7 +3720,7 @@ Widget _buildCircleNetworkImage({
                         textAlign: TextAlign.left,
                         style: TextStyle(
                           fontFamily: _fontFamily,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                           color: const Color(0xFF101828),
                           fontSize: isLong ? 12.2 : 13.8,
                           height: 1.05,
@@ -3817,9 +3837,9 @@ Widget _buildCircleNetworkImage({
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontSize: 22,
+                              fontSize: 18.9,
                               height: 1.05,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w600,
                               color: Colors.white,
                               letterSpacing: -0.2,
                             ),
@@ -3955,7 +3975,7 @@ Widget _buildCircleNetworkImage({
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontFamily: _fontFamily,
-                fontSize: 11.2,
+                fontSize: 10.4,
                 height: 1.05,
                 fontWeight: FontWeight.w700,
                 color: Colors.white.withOpacity(0.95),
@@ -4002,7 +4022,7 @@ Widget _buildCircleNetworkImage({
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontFamily: _fontFamily,
-                    fontSize: 10.5,
+                    fontSize: 10.1,
                     height: 1.05,
                     fontWeight: FontWeight.w600,
                     color: const Color(0xFF667085),
@@ -4017,7 +4037,7 @@ Widget _buildCircleNetworkImage({
                     fontFamily: _fontFamily,
                     fontSize: label == 'Амплуа' ? 11.6 : 12.2,
                     height: 1.10,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: const Color(0xFF101828),
                     letterSpacing: -0.1,
                   ),
@@ -4061,7 +4081,7 @@ Widget _buildCircleNetworkImage({
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontFamily: _fontFamily,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: const Color(0xFF101828),
                     fontSize: label.length > 12 ? 11.0 : 12.0,
                     height: 1.05,
@@ -4137,7 +4157,7 @@ Widget _buildCircleNetworkImage({
                               tab.title,
                               style: TextStyle(
                                 fontFamily: _fontFamily,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w700,
                                 color: isActive ? Colors.white : const Color(0xFF101828),
                                 fontSize: isTablet ? 15 : 13.5,
                                 letterSpacing: -0.1,
@@ -4396,13 +4416,27 @@ Widget _buildCircleNetworkImage({
             children: [
               const Icon(Icons.filter_alt_rounded, size: 15, color: Color(0xFF475569)),
               const SizedBox(width: 6),
-              Text(count == 0 ? 'Все типы' : 'Все типы', style: _bodyStyle(size: 11.2, color: const Color(0xFF475569), weight: FontWeight.w900)),
+              Text(count == 0 ? 'Все типы' : 'Все типы', style: _bodyStyle(size: 11.2, color: const Color(0xFF475569), weight: FontWeight.w700)),
               const SizedBox(width: 3),
               const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Color(0xFF475569)),
             ],
           ),
         ),
       ],
+    );
+  }
+
+
+  Widget _calendarLikeCmrPanelSize(Widget child, {double maxWidth = 480}) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final available = constraints.maxWidth.isFinite ? constraints.maxWidth : maxWidth;
+        final width = math.min(maxWidth, available);
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: SizedBox(width: width, child: child),
+        );
+      },
     );
   }
 
@@ -4420,7 +4454,8 @@ Widget _buildCircleNetworkImage({
     final leading = (first.weekday + 6) % 7;
     final total = ((leading + daysInMonth + 6) ~/ 7) * 7;
 
-    return Container(
+    return _calendarLikeCmrPanelSize(
+      Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
       child: Column(
@@ -4459,7 +4494,7 @@ Widget _buildCircleNetworkImage({
           const SizedBox(height: 10),
           Row(
             children: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
-                .map((d) => Expanded(child: Center(child: Text(d, style: _bodyStyle(size: 10.5, color: const Color(0xFF667085), weight: FontWeight.w900)))))
+                .map((d) => Expanded(child: Center(child: Text(d, style: _bodyStyle(size: 10.5, color: const Color(0xFF667085), weight: FontWeight.w700)))))
                 .toList(),
           ),
           const SizedBox(height: 6),
@@ -4467,7 +4502,12 @@ Widget _buildCircleNetworkImage({
             itemCount: total,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 7, mainAxisSpacing: 6, crossAxisSpacing: 6),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              mainAxisSpacing: 6,
+              crossAxisSpacing: 6,
+              childAspectRatio: 1.28,
+            ),
             itemBuilder: (context, i) {
               final dayNum = i - leading + 1;
               if (dayNum < 1 || dayNum > daysInMonth) return const SizedBox.shrink();
@@ -4507,7 +4547,7 @@ final markerColors = dayMatches
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text('$dayNum', style: TextStyle(color: selected ? Colors.white : const Color(0xFF101828), fontSize: 12.2, fontWeight: FontWeight.w900)),
+                          Text('$dayNum', style: TextStyle(color: selected ? Colors.white : const Color(0xFF101828), fontSize: 11.3, fontWeight: FontWeight.w700)),
                           if (has) ...[
                             const SizedBox(width: 3),
                             Container(
@@ -4515,7 +4555,7 @@ final markerColors = dayMatches
                               height: 14,
                               padding: const EdgeInsets.symmetric(horizontal: 3),
                               decoration: BoxDecoration(color: selected ? Colors.white : accent, borderRadius: BorderRadius.circular(99)),
-                              child: Center(child: Text('$count', style: TextStyle(color: selected ? _AppColors.cmrGreen : Colors.white, fontSize: 8.2, fontWeight: FontWeight.w900))),
+                              child: Center(child: Text('$count', style: TextStyle(color: selected ? _AppColors.cmrGreen : Colors.white, fontSize: 8.2, fontWeight: FontWeight.w700))),
                             ),
                           ],
                         ],
@@ -4532,6 +4572,7 @@ final markerColors = dayMatches
           ),
         ],
       ),
+    ),
     );
   }
 
@@ -4565,7 +4606,7 @@ final markerColors = dayMatches
                 child: Column(
                   children: [
                     Text(date.isEmpty ? '—' : date.split('.').first, style: _titleStyle(size: 15.5, color: _textPrimary)),
-                    Text(date.isEmpty ? '' : _monthShortRu(date), style: _bodyStyle(size: 9.4, color: _textSecondary, weight: FontWeight.w900)),
+                    Text(date.isEmpty ? '' : _monthShortRu(date), style: _bodyStyle(size: 9.4, color: _textSecondary, weight: FontWeight.w700)),
                   ],
                 ),
               ),
@@ -4607,10 +4648,10 @@ final markerColors = dayMatches
                     constraints: const BoxConstraints(minWidth: 44),
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(color: _AppColors.softFor(resultColor), borderRadius: BorderRadius.circular(13)),
-                    child: Text(score, textAlign: TextAlign.center, style: _bodyStyle(size: 12.4, color: resultColor, weight: FontWeight.w900)),
+                    child: Text(score, textAlign: TextAlign.center, style: _bodyStyle(size: 12.4, color: resultColor, weight: FontWeight.w700)),
                   ),
                   const SizedBox(height: 4),
-                  Text('Оценка: ${ratingText.isEmpty ? '—' : ratingText}', style: _bodyStyle(size: 9.8, color: _ttdRatingColor(ratingText), weight: FontWeight.w900)),
+                  Text('Оценка: ${ratingText.isEmpty ? '—' : ratingText}', style: _bodyStyle(size: 9.8, color: _ttdRatingColor(ratingText), weight: FontWeight.w700)),
                 ],
               ),
               const SizedBox(width: 5),
@@ -4631,7 +4672,7 @@ final markerColors = dayMatches
         children: [
           Icon(icon, size: 11.5, color: color),
           const SizedBox(width: 4),
-          Text(label, style: _bodyStyle(size: 9.7, color: color, weight: FontWeight.w900)),
+          Text(label, style: _bodyStyle(size: 9.7, color: color, weight: FontWeight.w700)),
         ],
       ),
     );
@@ -4884,7 +4925,7 @@ final markerColors = dayMatches
       children: [
         Row(
           children: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
-              .map((d) => Expanded(child: Center(child: Text(d, style: _bodyStyle(size: 11, color: _AppColors.textSecondary, weight: FontWeight.w900)))))
+              .map((d) => Expanded(child: Center(child: Text(d, style: _bodyStyle(size: 11, color: _AppColors.textSecondary, weight: FontWeight.w700)))))
               .toList(),
         ),
         const SizedBox(height: 8),
@@ -4946,12 +4987,12 @@ final markerColors = dayMatches
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text('$showDay', style: _bodyStyle(size: 13.8, color: textColor, weight: FontWeight.w900)),
+                      Text('$showDay', style: _bodyStyle(size: 13.8, color: textColor, weight: FontWeight.w700)),
                       const SizedBox(height: 5),
                       if (has)
                         Container(width: 8, height: 8, decoration: BoxDecoration(color: selected ? Colors.white : meta.color, shape: BoxShape.circle))
                       else
-                        Text('—', style: _bodyStyle(size: 11, color: selected ? Colors.white : _AppColors.textTertiary, weight: FontWeight.w900)),
+                        Text('—', style: _bodyStyle(size: 11, color: selected ? Colors.white : _AppColors.textTertiary, weight: FontWeight.w700)),
                     ],
                   ),
                 ),
@@ -4993,19 +5034,19 @@ final markerColors = dayMatches
           Row(mainAxisSize: MainAxisSize.min, children: [
             const Icon(Icons.query_stats_rounded, color: _AppColors.cmrGreen, size: 18),
             const SizedBox(width: 8),
-            Text('Посещаемость за месяц: $rate%', style: _bodyStyle(size: 12.8, color: _AppColors.cmrGreen, weight: FontWeight.w900)),
+            Text('Посещаемость за месяц: $rate%', style: _bodyStyle(size: 12.8, color: _AppColors.cmrGreen, weight: FontWeight.w700)),
           ]),
-          Text('•', style: _bodyStyle(size: 13, color: _AppColors.textSecondary, weight: FontWeight.w900)),
-          Text('Пропусков: $missed', style: _bodyStyle(size: 12.3, color: _AppColors.textSecondary, weight: FontWeight.w800)),
-          Text('•', style: _bodyStyle(size: 13, color: _AppColors.textSecondary, weight: FontWeight.w900)),
-          Text('Опозданий: $late', style: _bodyStyle(size: 12.3, color: _AppColors.textSecondary, weight: FontWeight.w800)),
+          Text('•', style: _bodyStyle(size: 13, color: _AppColors.textSecondary, weight: FontWeight.w700)),
+          Text('Пропусков: $missed', style: _bodyStyle(size: 12.3, color: _AppColors.textSecondary, weight: FontWeight.w600)),
+          Text('•', style: _bodyStyle(size: 13, color: _AppColors.textSecondary, weight: FontWeight.w700)),
+          Text('Опозданий: $late', style: _bodyStyle(size: 12.3, color: _AppColors.textSecondary, weight: FontWeight.w600)),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
             decoration: BoxDecoration(color: Colors.white.withOpacity(.7), borderRadius: BorderRadius.circular(999)),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               const Icon(Icons.show_chart_rounded, color: _AppColors.cmrGreen, size: 15),
               const SizedBox(width: 6),
-              Text('Статистика месяца', style: _bodyStyle(size: 11.5, color: _AppColors.cmrGreen, weight: FontWeight.w900)),
+              Text('Статистика месяца', style: _bodyStyle(size: 11.5, color: _AppColors.cmrGreen, weight: FontWeight.w700)),
             ]),
           ),
         ],
@@ -5128,7 +5169,7 @@ final markerColors = dayMatches
             return SizedBox(
               width: itemWidth,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
                 decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
                 child: Row(
                   children: [
@@ -5144,9 +5185,9 @@ final markerColors = dayMatches
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(item.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 11, height: 1, color: const Color(0xFF667085), fontWeight: FontWeight.w700)),
+                          Text(item.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 10.6, height: 1, color: const Color(0xFF667085), fontWeight: FontWeight.w700)),
                           const SizedBox(height: 5),
-                          Text(_displayValue(item.value), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 15, height: 1.05, color: empty ? const Color(0xFF98A2B3) : const Color(0xFF101828), fontWeight: FontWeight.w800, letterSpacing: -0.15)),
+                          Text(_displayValue(item.value), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 13.5, height: 1.05, color: empty ? const Color(0xFF98A2B3) : const Color(0xFF101828), fontWeight: FontWeight.w600, letterSpacing: -0.15)),
                         ],
                       ),
                     ),
@@ -5191,9 +5232,9 @@ final markerColors = dayMatches
               Container(width: 44, height: 44, decoration: BoxDecoration(color: _AppColors.cmrSoft, borderRadius: BorderRadius.circular(16)), child: const Icon(Icons.tune_rounded, color: _AppColors.primaryGreen, size: 22)),
               const SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Основные характеристики', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 18, height: 1.05, fontWeight: FontWeight.w800, color: const Color(0xFF101828), letterSpacing: -0.25)),
+                Text('Основные характеристики', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 15.5, height: 1.05, fontWeight: FontWeight.w600, color: const Color(0xFF101828), letterSpacing: -0.25)),
                 const SizedBox(height: 4),
-                Text('Ключевые данные игрока без лишних вложенных рамок', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 11.5, height: 1.1, fontWeight: FontWeight.w600, color: const Color(0xFF667085))),
+                Text('Ключевые данные игрока без лишних вложенных рамок', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 10.7, height: 1.1, fontWeight: FontWeight.w600, color: const Color(0xFF667085))),
               ])),
             ],
           ),
@@ -5289,7 +5330,7 @@ final markerColors = dayMatches
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(item.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 11.2, color: const Color(0xFF667085), weight: FontWeight.w700)),
                     const SizedBox(height: 4),
-                    Text(_displayValue(item.value), maxLines: 2, overflow: TextOverflow.ellipsis, style: _titleStyle(size: 14.4, color: const Color(0xFF101828), weight: FontWeight.w800)),
+                    Text(_displayValue(item.value), maxLines: 2, overflow: TextOverflow.ellipsis, style: _titleStyle(size: 14.4, color: const Color(0xFF101828), weight: FontWeight.w600)),
                   ])),
                 ]),
               ),
@@ -5317,7 +5358,7 @@ final markerColors = dayMatches
         Row(children: [
           Container(width: 42, height: 42, decoration: BoxDecoration(color: _AppColors.softFor(accent), borderRadius: BorderRadius.circular(16)), child: Icon(icon, color: accent, size: 21)),
           const SizedBox(width: 12),
-          Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _titleStyle(size: 17, color: _AppColors.textPrimary, weight: FontWeight.w800))),
+          Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _titleStyle(size: 17, color: _AppColors.textPrimary, weight: FontWeight.w600))),
         ]),
         const SizedBox(height: 14),
         child,
@@ -5366,7 +5407,7 @@ final markerColors = dayMatches
                         fontFamily: _fontFamily,
                         fontSize: isTablet ? 21 : 18,
                         height: 1.1,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                         color: const Color(0xFF101828),
                         letterSpacing: -0.35,
                       ),
@@ -5427,9 +5468,9 @@ final markerColors = dayMatches
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Text('$percent%', style: TextStyle(fontFamily: _fontFamily, fontSize: _adaptiveFont(context, mobile: 16, wide: 16.2), height: 1, fontWeight: FontWeight.w900, color: const Color(0xFF178A45))),
+          Text('$percent%', style: TextStyle(fontFamily: _fontFamily, fontSize: _adaptiveFont(context, mobile: 16, wide: 16.2), height: 1, fontWeight: FontWeight.w700, color: const Color(0xFF178A45))),
           const SizedBox(height: 4),
-          Text('заполнено', style: TextStyle(fontFamily: _fontFamily, fontSize: 10.5, fontWeight: FontWeight.w800, color: const Color(0xFF667085))),
+          Text('заполнено', style: TextStyle(fontFamily: _fontFamily, fontSize: 10.1, fontWeight: FontWeight.w600, color: const Color(0xFF667085))),
         ],
       ),
     );
@@ -5456,9 +5497,9 @@ final markerColors = dayMatches
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 10.5, fontWeight: FontWeight.w800, color: const Color(0xFF94A3B8))),
+                Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 10.1, fontWeight: FontWeight.w600, color: const Color(0xFF94A3B8))),
                 const SizedBox(height: 2),
-                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 12.5, fontWeight: FontWeight.w900, color: const Color(0xFF101828))),
+                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 11.2, fontWeight: FontWeight.w700, color: const Color(0xFF101828))),
               ],
             ),
           ),
@@ -5544,9 +5585,8 @@ final markerColors = dayMatches
   Widget _buildWorkspaceCard({required String title, required String subtitle, required IconData icon, required Widget child}) {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(30),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -5568,9 +5608,9 @@ final markerColors = dayMatches
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 18, height: 1.05, fontWeight: FontWeight.w900, color: const Color(0xFF101828), letterSpacing: -0.25)),
+                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 15.5, height: 1.05, fontWeight: FontWeight.w700, color: const Color(0xFF101828), letterSpacing: -0.25)),
                     const SizedBox(height: 5),
-                    Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 12.5, height: 1.32, fontWeight: FontWeight.w700, color: const Color(0xFF667085))),
+                    Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 11.2, height: 1.32, fontWeight: FontWeight.w700, color: const Color(0xFF667085))),
                   ],
                 ),
               ),
@@ -5620,15 +5660,15 @@ final markerColors = dayMatches
                     ),
                     child: Text(
                       _actionHint(title),
-                      style: TextStyle(fontFamily: _fontFamily, fontSize: 9.5, fontWeight: FontWeight.w900, color: accent),
+                      style: TextStyle(fontFamily: _fontFamily, fontSize: 9.5, fontWeight: FontWeight.w700, color: accent),
                     ),
                   ),
                 ],
               ),
               const Spacer(),
-              Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 14.2, height: 1.08, fontWeight: FontWeight.w900, color: const Color(0xFF101828), letterSpacing: -0.15)),
+              Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 12.8, height: 1.08, fontWeight: FontWeight.w700, color: const Color(0xFF101828), letterSpacing: -0.15)),
               const SizedBox(height: 5),
-              Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 11.5, fontWeight: FontWeight.w800, color: const Color(0xFF667085))),
+              Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 10.7, fontWeight: FontWeight.w600, color: const Color(0xFF667085))),
             ],
           ),
         ),
@@ -5654,9 +5694,9 @@ final markerColors = dayMatches
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 14.2, fontWeight: FontWeight.w900, color: const Color(0xFF101828), letterSpacing: -0.1)),
+                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 12.8, fontWeight: FontWeight.w700, color: const Color(0xFF101828), letterSpacing: -0.1)),
                     const SizedBox(height: 3),
-                    Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 11.8, fontWeight: FontWeight.w700, color: const Color(0xFF667085))),
+                    Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF667085))),
                   ]),
                 ),
                 const SizedBox(width: 8),
@@ -5684,9 +5724,9 @@ final markerColors = dayMatches
             children: [
               Row(children: [Icon(icon, size: 20, color: const Color(0xFF178A45)), const Spacer(), const Icon(Icons.arrow_outward_rounded, size: 16, color: Color(0xFF94A3B8))]),
               const Spacer(),
-              Text(value, style: TextStyle(fontFamily: _fontFamily, fontSize: 24, height: 1, fontWeight: FontWeight.w900, color: const Color(0xFF101828), letterSpacing: -0.4)),
+              Text(value, style: TextStyle(fontFamily: _fontFamily, fontSize: 20.6, height: 1, fontWeight: FontWeight.w700, color: const Color(0xFF101828), letterSpacing: -0.4)),
               const SizedBox(height: 6),
-              Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 11.8, fontWeight: FontWeight.w800, color: const Color(0xFF667085))),
+              Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF667085))),
             ],
           ),
         ),
@@ -5789,7 +5829,7 @@ final markerColors = dayMatches
         Container(width: isMobile ? 42 : 48, height: isMobile ? 42 : 48, decoration: BoxDecoration(color: _AppColors.softFor(accent), borderRadius: BorderRadius.circular(isMobile ? 15 : 18)), child: Icon(icon, color: accent, size: isMobile ? 21 : 24)),
         const SizedBox(width: 12),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, maxLines: isMobile ? 2 : 1, overflow: TextOverflow.ellipsis, style: _cmrTitleText(context, mobile: 17.5, wide: 20, color: _AppColors.textPrimary, weight: FontWeight.w800)),
+          Text(title, maxLines: isMobile ? 2 : 1, overflow: TextOverflow.ellipsis, style: _cmrTitleText(context, mobile: 17.5, wide: 20, color: _AppColors.textPrimary, weight: FontWeight.w600)),
           const SizedBox(height: 5),
           Text(subtitle, maxLines: isMobile ? 3 : 2, overflow: TextOverflow.ellipsis, style: _cmrSubtitleText(context, mobile: 12.2, wide: 13.3, color: _AppColors.textSecondary, weight: FontWeight.w600)),
         ])),
@@ -5826,7 +5866,7 @@ final markerColors = dayMatches
                 ),
                 const SizedBox(width: 8),
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _cmrTitleText(context, mobile: 13.5, wide: 13.5, color: _AppColors.textPrimary, weight: FontWeight.w900)),
+                  Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _cmrTitleText(context, mobile: 13.5, wide: 13.5, color: _AppColors.textPrimary, weight: FontWeight.w700)),
                   const SizedBox(height: 2),
                   Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _cmrSubtitleText(context, mobile: 9.8, wide: 10.2, color: _AppColors.textSecondary, weight: FontWeight.w700)),
                 ])),
@@ -5845,9 +5885,9 @@ final markerColors = dayMatches
                     const Icon(Icons.arrow_upward_rounded, color: _AppColors.cmrGreen, size: 14),
                   ]),
                   const Spacer(),
-                  Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _cmrTitleText(context, mobile: 18, wide: 19.5, color: _AppColors.textPrimary, weight: FontWeight.w900)),
+                  Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _cmrTitleText(context, mobile: 18, wide: 19.5, color: _AppColors.textPrimary, weight: FontWeight.w700)),
                   const SizedBox(height: 4),
-                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _cmrSubtitleText(context, mobile: 10.4, wide: 11, color: _AppColors.textSecondary, weight: FontWeight.w800)),
+                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _cmrSubtitleText(context, mobile: 10.4, wide: 11, color: _AppColors.textSecondary, weight: FontWeight.w600)),
                 ],
               ),
       ),
@@ -5875,7 +5915,7 @@ final markerColors = dayMatches
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             Icon(icon, size: compact ? 18 : 20, color: foreground),
             const SizedBox(width: 8),
-            Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: foreground, fontSize: compact ? 12.5 : 13, fontWeight: FontWeight.w800))),
+            Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: foreground, fontSize: compact ? 12.5 : 13, fontWeight: FontWeight.w600))),
           ]),
         ),
       ),
@@ -5993,8 +6033,8 @@ final markerColors = dayMatches
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 42,
-            height: 42,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
               color: _AppColors.softFor(_AppColors.cmrGreen),
               borderRadius: BorderRadius.circular(15),
@@ -6010,7 +6050,7 @@ final markerColors = dayMatches
                   'Контроль формы',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: _cmrTitleText(context, mobile: 15.4, wide: 16.4, color: const Color(0xFF101828), weight: FontWeight.w900),
+                  style: _cmrTitleText(context, mobile: 15.4, wide: 16.4, color: const Color(0xFF101828), weight: FontWeight.w700),
                 ),
                 const SizedBox(height: 5),
                 Text(
@@ -6097,7 +6137,7 @@ final markerColors = dayMatches
                             title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: _cmrSubtitleText(context, mobile: 12.0, wide: 12.6, color: const Color(0xFF667085), weight: FontWeight.w800),
+                            style: _cmrSubtitleText(context, mobile: 12.0, wide: 12.6, color: const Color(0xFF667085), weight: FontWeight.w600),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -6109,7 +6149,7 @@ final markerColors = dayMatches
                       value,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: _cmrTitleText(context, mobile: 17.0, wide: 17.6, color: const Color(0xFF101828), weight: FontWeight.w900),
+                      style: _cmrTitleText(context, mobile: 17.0, wide: 17.6, color: const Color(0xFF101828), weight: FontWeight.w700),
                     ),
                   ],
                 ),
@@ -6144,7 +6184,7 @@ final markerColors = dayMatches
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: _bodyStyle(size: 11.2, color: accent, weight: FontWeight.w900),
+              style: _bodyStyle(size: 11.2, color: accent, weight: FontWeight.w700),
             ),
           ),
         ],
@@ -6295,7 +6335,7 @@ final markerColors = dayMatches
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
                   decoration: BoxDecoration(color: Colors.black.withOpacity(isImage ? 0.42 : 0.06), borderRadius: BorderRadius.circular(999)),
-                  child: Text(isVideo ? 'Видео' : isImage ? 'Фото' : 'Файл', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 11, fontWeight: FontWeight.w900, color: isImage ? Colors.white : const Color(0xFF178A45))),
+                  child: Text(isVideo ? 'Видео' : isImage ? 'Фото' : 'Файл', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 10.6, fontWeight: FontWeight.w700, color: isImage ? Colors.white : const Color(0xFF178A45))),
                 ),
               ),
             ],
@@ -6433,14 +6473,14 @@ final markerColors = dayMatches
                           type,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: _cmrSubtitleText(context, mobile: 12.0, wide: 12.6, color: const Color(0xFF667085), weight: FontWeight.w800),
+                          style: _cmrSubtitleText(context, mobile: 12.0, wide: 12.6, color: const Color(0xFF667085), weight: FontWeight.w600),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           title,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: _cmrTitleText(context, mobile: 17.0, wide: 17.4, color: const Color(0xFF101828), weight: FontWeight.w900),
+                          style: _cmrTitleText(context, mobile: 17.0, wide: 17.4, color: const Color(0xFF101828), weight: FontWeight.w700),
                         ),
                       ],
                     ),
@@ -6466,7 +6506,7 @@ final markerColors = dayMatches
                     value,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: _cmrBodyText(context, mobile: 13.2, wide: 13.4, color: const Color(0xFF344054), weight: FontWeight.w800),
+                    style: _cmrBodyText(context, mobile: 13.2, wide: 13.4, color: const Color(0xFF344054), weight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -6536,7 +6576,7 @@ final markerColors = dayMatches
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: _bodyStyle(size: 11.8, color: accent, weight: FontWeight.w900),
+            style: _bodyStyle(size: 11.8, color: accent, weight: FontWeight.w700),
           ),
         ],
       ),
@@ -6729,10 +6769,10 @@ final markerColors = dayMatches
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontFamily: _fontFamily,
-                fontSize: 11.6,
+                fontSize: 10.8,
                 height: 1.05,
                 color: accent,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
                 letterSpacing: -0.05,
               ),
             ),
@@ -6927,7 +6967,7 @@ final markerColors = dayMatches
               title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: _cmrTitleText(context, mobile: 13.6, wide: 15.0, color: const Color(0xFF101828), weight: FontWeight.w900),
+              style: _cmrTitleText(context, mobile: 13.6, wide: 15.0, color: const Color(0xFF101828), weight: FontWeight.w700),
             ),
           ),
           _buildTrainingMetaPill(Icons.event_note_outlined, '$count', _AppColors.cmrGreen),
@@ -7030,7 +7070,7 @@ final markerColors = dayMatches
                           title.isEmpty ? 'Тренировка' : title,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: _cmrTitleText(context, mobile: 14.6, wide: 15.6, color: _AppColors.textPrimary, weight: FontWeight.w900),
+                          style: _cmrTitleText(context, mobile: 14.6, wide: 15.6, color: _AppColors.textPrimary, weight: FontWeight.w700),
                         ),
                         const SizedBox(height: 5),
                         Text(
@@ -7039,7 +7079,7 @@ final markerColors = dayMatches
                               : [if (dateRaw.isNotEmpty) dateRaw, if (typeLabel.isNotEmpty) typeLabel].join(' • '),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: _cmrSubtitleText(context, mobile: 11.4, wide: 12.2, color: _AppColors.textSecondary, weight: FontWeight.w800),
+                          style: _cmrSubtitleText(context, mobile: 11.4, wide: 12.2, color: _AppColors.textSecondary, weight: FontWeight.w600),
                         ),
                       ],
                     ),
@@ -7460,9 +7500,9 @@ final markerColors = dayMatches
                     contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 9),
                     hintText: 'Поиск тренировки...',
                     prefixIcon: Icon(Icons.search_rounded, size: 17),
-                    hintStyle: TextStyle(fontSize: 12),
+                    hintStyle: TextStyle(fontSize: 11.2),
                   ),
-                  style: TextStyle(fontFamily: _fontFamily, fontSize: 12),
+                  style: TextStyle(fontFamily: _fontFamily, fontSize: 11.2),
                 ),
               ),
             ),
@@ -7564,7 +7604,7 @@ final markerColors = dayMatches
           borderRadius: BorderRadius.circular(18),
           onTap: () => _selectTrainingForDetails(e, loadInfo: true),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
             child: Row(
               children: [
                 Container(
@@ -7578,7 +7618,7 @@ final markerColors = dayMatches
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title.isEmpty ? 'Тренировка' : title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 13.2, color: const Color(0xFF101828), weight: FontWeight.w900)),
+                      Text(title.isEmpty ? 'Тренировка' : title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 13.2, color: const Color(0xFF101828), weight: FontWeight.w700)),
                       const SizedBox(height: 4),
                       Text([if (date.isNotEmpty) date, if (typeLabel.isNotEmpty) typeLabel].join(' • '), maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 11.2, color: const Color(0xFF667085), weight: FontWeight.w700)),
                     ],
@@ -7593,7 +7633,7 @@ final markerColors = dayMatches
                     children: [
                       Icon(meta.icon, size: 13, color: meta.color),
                       const SizedBox(width: 5),
-                      Text(meta.text, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 11, color: meta.color, weight: FontWeight.w900)),
+                      Text(meta.text, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 11, color: meta.color, weight: FontWeight.w700)),
                     ],
                   ),
                 ),
@@ -7642,9 +7682,9 @@ final markerColors = dayMatches
                     contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 9),
                     hintText: "Поиск тренировки...",
                     prefixIcon: Icon(Icons.search_rounded, size: 17),
-                    hintStyle: TextStyle(fontSize: 12),
+                    hintStyle: TextStyle(fontSize: 11.2),
                   ),
-                  style: TextStyle(fontFamily: _fontFamily, fontSize: 12),
+                  style: TextStyle(fontFamily: _fontFamily, fontSize: 11.2),
                 ),
               ),
             ),
@@ -7909,7 +7949,7 @@ final markerColors = dayMatches
           const SizedBox(height: 10),
           Row(
             children: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
-                .map((d) => Expanded(child: Center(child: Text(d, style: _bodyStyle(size: 10.5, color: const Color(0xFF667085), weight: FontWeight.w900)))))
+                .map((d) => Expanded(child: Center(child: Text(d, style: _bodyStyle(size: 10.5, color: const Color(0xFF667085), weight: FontWeight.w700)))))
                 .toList(),
           ),
           const SizedBox(height: 6),
@@ -7917,7 +7957,12 @@ final markerColors = dayMatches
             itemCount: total,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 7, mainAxisSpacing: 6, crossAxisSpacing: 6),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              mainAxisSpacing: 6,
+              crossAxisSpacing: 6,
+              childAspectRatio: 1.28,
+            ),
             itemBuilder: (context, i) {
               final dayNum = i - leading + 1;
               if (dayNum < 1 || dayNum > daysInMonth) return const SizedBox.shrink();
@@ -7992,8 +8037,8 @@ final markerColors = dayMatches
                         '$dayNum',
                         style: TextStyle(
                           fontFamily: _fontFamily,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w900,
+                          fontSize: 10.7,
+                          fontWeight: FontWeight.w700,
                           color: selected ? _primary : const Color(0xFF101828),
                         ),
                       ),
@@ -8055,7 +8100,7 @@ final markerColors = dayMatches
         style: TextStyle(
           fontFamily: _fontFamily,
           fontSize: 7.4,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w700,
           color: color,
           height: 1.0,
         ),
@@ -8069,7 +8114,7 @@ final markerColors = dayMatches
       children: [
         Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
         const SizedBox(width: 5),
-        Text(label, style: _bodyStyle(size: 10.5, color: const Color(0xFF667085), weight: FontWeight.w800)),
+        Text(label, style: _bodyStyle(size: 10.5, color: const Color(0xFF667085), weight: FontWeight.w600)),
       ],
     );
   }
@@ -8080,7 +8125,7 @@ final markerColors = dayMatches
       children: [
         _ratingTinyBadge(prefix, 5, prefix == 'Т' ? Colors.blue.shade700 : Colors.amber.shade800),
         const SizedBox(width: 5),
-        Text(label, style: _bodyStyle(size: 10.5, color: const Color(0xFF667085), weight: FontWeight.w800)),
+        Text(label, style: _bodyStyle(size: 10.5, color: const Color(0xFF667085), weight: FontWeight.w600)),
       ],
     );
   }
@@ -8115,7 +8160,7 @@ final markerColors = dayMatches
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('События за период', style: _cmrTitleText(context, mobile: 15.8, wide: 17, color: _AppColors.textPrimary, weight: FontWeight.w900)),
+                    Text('События за период', style: _cmrTitleText(context, mobile: 15.8, wide: 17, color: _AppColors.textPrimary, weight: FontWeight.w700)),
                     const SizedBox(height: 3),
                     Text('Нажмите на строку — подробный отчёт откроется справа', style: _cmrSubtitleText(context, mobile: 11.4, wide: 12.2, color: _AppColors.textSecondary, weight: FontWeight.w700)),
                   ],
@@ -8147,7 +8192,7 @@ final markerColors = dayMatches
                 },
                 icon: Icon(_attendanceShowAll ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded),
                 label: Text(_attendanceShowAll ? 'Свернуть' : 'Показать ещё'),
-                style: TextButton.styleFrom(foregroundColor: _AppColors.info, textStyle: const TextStyle(fontWeight: FontWeight.w900)),
+                style: TextButton.styleFrom(foregroundColor: _AppColors.info, textStyle: const TextStyle(fontWeight: FontWeight.w700)),
               ),
             ),
           ],
@@ -8215,7 +8260,7 @@ final markerColors = dayMatches
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           const Icon(Icons.filter_alt_rounded, color: _AppColors.textSecondary, size: 16),
           const SizedBox(width: 7),
-          Text(_attendanceFilterLabel(_attendanceTypeFilter), style: _bodyStyle(size: 11.5, color: _AppColors.textSecondary, weight: FontWeight.w900)),
+          Text(_attendanceFilterLabel(_attendanceTypeFilter), style: _bodyStyle(size: 11.5, color: _AppColors.textSecondary, weight: FontWeight.w700)),
           const SizedBox(width: 4),
           const Icon(Icons.keyboard_arrow_down_rounded, color: _AppColors.textSecondary, size: 16),
         ]),
@@ -8260,8 +8305,8 @@ final markerColors = dayMatches
                 width: 48,
                 child: Column(
                   children: [
-                    Text(d == null ? '—' : DateFormat('d', 'ru').format(d), style: _bodyStyle(size: 17, color: _AppColors.textPrimary, weight: FontWeight.w900)),
-                    Text(d == null ? '' : DateFormat('MMM', 'ru').format(d).replaceAll('.', '').toUpperCase(), style: _bodyStyle(size: 10.2, color: _AppColors.textSecondary, weight: FontWeight.w900)),
+                    Text(d == null ? '—' : DateFormat('d', 'ru').format(d), style: _bodyStyle(size: 17, color: _AppColors.textPrimary, weight: FontWeight.w700)),
+                    Text(d == null ? '' : DateFormat('MMM', 'ru').format(d).replaceAll('.', '').toUpperCase(), style: _bodyStyle(size: 10.2, color: _AppColors.textSecondary, weight: FontWeight.w700)),
                   ],
                 ),
               ),
@@ -8277,9 +8322,9 @@ final markerColors = dayMatches
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title.isEmpty ? typeLabel : title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _cmrTitleText(context, mobile: 13.4, wide: 14.2, color: _AppColors.textPrimary, weight: FontWeight.w900)),
+                    Text(title.isEmpty ? typeLabel : title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _cmrTitleText(context, mobile: 13.4, wide: 14.2, color: _AppColors.textPrimary, weight: FontWeight.w700)),
                     const SizedBox(height: 3),
-                    Text(stage, maxLines: 1, overflow: TextOverflow.ellipsis, style: _cmrSubtitleText(context, mobile: 11, wide: 11.7, color: _AppColors.textSecondary, weight: FontWeight.w800)),
+                    Text(stage, maxLines: 1, overflow: TextOverflow.ellipsis, style: _cmrSubtitleText(context, mobile: 11, wide: 11.7, color: _AppColors.textSecondary, weight: FontWeight.w600)),
                   ],
                 ),
               ),
@@ -8301,7 +8346,7 @@ final markerColors = dayMatches
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(icon, color: color, size: 14),
         const SizedBox(width: 6),
-        Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 11.3, color: color, weight: FontWeight.w900)),
+        Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 11.3, color: color, weight: FontWeight.w700)),
       ]),
     );
   }
@@ -8347,12 +8392,12 @@ final markerColors = dayMatches
             if (trainer.isNotEmpty) ...[
               const Icon(Icons.people_alt_rounded, color: _AppColors.textSecondary, size: 17),
               const SizedBox(width: 6),
-              Flexible(child: Text('Тренер: $trainer', maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 12, color: _AppColors.textSecondary, weight: FontWeight.w900))),
+              Flexible(child: Text('Тренер: $trainer', maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 12, color: _AppColors.textSecondary, weight: FontWeight.w700))),
             ],
           ],
         ),
         const SizedBox(height: 14),
-        Text('Статус посещения', style: _cmrTitleText(context, mobile: 14.8, wide: 15.8, color: titleStyleColor, weight: FontWeight.w900)),
+        Text('Статус посещения', style: _cmrTitleText(context, mobile: 14.8, wide: 15.8, color: titleStyleColor, weight: FontWeight.w700)),
         const SizedBox(height: 10),
         LayoutBuilder(builder: (context, c) {
           final twoCols = c.maxWidth >= 360;
@@ -8382,14 +8427,14 @@ final markerColors = dayMatches
             const Icon(Icons.flag_rounded, color: _AppColors.cmrGreen, size: 28),
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Рекомендация', style: _cmrTitleText(context, mobile: 14.2, wide: 15.2, color: _AppColors.textPrimary, weight: FontWeight.w900)),
+              Text('Рекомендация', style: _cmrTitleText(context, mobile: 14.2, wide: 15.2, color: _AppColors.textPrimary, weight: FontWeight.w700)),
               const SizedBox(height: 6),
               Text(recommendation, style: _cmrSubtitleText(context, mobile: 12, wide: 12.4, color: _AppColors.textSecondary, weight: FontWeight.w700)),
             ])),
           ]),
         ),
         const SizedBox(height: 12),
-        Text('Динамика посещаемости', style: _cmrTitleText(context, mobile: 14.8, wide: 15.8, color: _AppColors.textPrimary, weight: FontWeight.w900)),
+        Text('Динамика посещаемости', style: _cmrTitleText(context, mobile: 14.8, wide: 15.8, color: _AppColors.textPrimary, weight: FontWeight.w700)),
         const SizedBox(height: 10),
         Row(children: [
           Expanded(child: _attendanceDynamicsTile('${_attendancePresentStreak()}', 'посещений подряд', 'Лучшая серия', Icons.trending_up_rounded, _AppColors.cmrGreen)),
@@ -8410,9 +8455,9 @@ final markerColors = dayMatches
         Container(width: 30, height: 30, decoration: BoxDecoration(color: _AppColors.softFor(accent), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: accent, size: 16)),
         const SizedBox(width: 9),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 10.7, color: _AppColors.textSecondary, weight: FontWeight.w800)),
+          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 10.7, color: _AppColors.textSecondary, weight: FontWeight.w600)),
           const SizedBox(height: 3),
-          Text(value.isEmpty ? '—' : value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 12.3, color: accent == _AppColors.error ? _AppColors.error : _AppColors.textPrimary, weight: FontWeight.w900)),
+          Text(value.isEmpty ? '—' : value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 12.3, color: accent == _AppColors.error ? _AppColors.error : _AppColors.textPrimary, weight: FontWeight.w700)),
         ])),
       ]),
     );
@@ -8423,9 +8468,9 @@ final markerColors = dayMatches
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(value, style: _cmrTitleText(context, mobile: 22, wide: 24, color: _AppColors.textPrimary, weight: FontWeight.w900)),
+        Text(value, style: _cmrTitleText(context, mobile: 22, wide: 24, color: _AppColors.textPrimary, weight: FontWeight.w700)),
         const SizedBox(height: 2),
-        Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 11.2, color: _AppColors.textSecondary, weight: FontWeight.w900)),
+        Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 11.2, color: _AppColors.textSecondary, weight: FontWeight.w700)),
         const SizedBox(height: 6),
         Row(children: [
           Expanded(child: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 10.8, color: _AppColors.textSecondary, weight: FontWeight.w700))),
@@ -8504,7 +8549,7 @@ final markerColors = dayMatches
                       date.isEmpty ? 'Дата не указана' : date,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _cmrTitleText(context, mobile: 14.4, wide: 15.4, color: const Color(0xFF101828), weight: FontWeight.w900),
+                      style: _cmrTitleText(context, mobile: 14.4, wide: 15.4, color: const Color(0xFF101828), weight: FontWeight.w700),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -8581,7 +8626,7 @@ final markerColors = dayMatches
                       'Личные задания',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _cmrTitleText(context, mobile: 15.4, wide: 16.4, color: const Color(0xFF101828), weight: FontWeight.w900),
+                      style: _cmrTitleText(context, mobile: 15.4, wide: 16.4, color: const Color(0xFF101828), weight: FontWeight.w700),
                     ),
                     const SizedBox(height: 5),
                     Text(
@@ -8626,7 +8671,7 @@ final markerColors = dayMatches
                   prefixIcon: const Icon(Icons.search_rounded, size: 19),
                   hintStyle: _bodyStyle(size: 12, color: const Color(0xFF94A3B8), weight: FontWeight.w700),
                 ),
-                style: _bodyStyle(size: 12.4, color: const Color(0xFF101828), weight: FontWeight.w800),
+                style: _bodyStyle(size: 12.4, color: const Color(0xFF101828), weight: FontWeight.w600),
               ),
             ],
           ),
@@ -8691,7 +8736,7 @@ final markerColors = dayMatches
                       'История личных тренировок',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _cmrTitleText(context, mobile: 14.2, wide: 15.2, color: const Color(0xFF101828), weight: FontWeight.w900),
+                      style: _cmrTitleText(context, mobile: 14.2, wide: 15.2, color: const Color(0xFF101828), weight: FontWeight.w700),
                     ),
                   ),
                 ],
@@ -8766,9 +8811,9 @@ final markerColors = dayMatches
                             _calendarRangeText(),
                             style: TextStyle(
                                 fontFamily: _fontFamily,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w700,
                                 color: _textPrimary,
-                                fontSize: 12),
+                                fontSize: 11.2),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -8883,7 +8928,7 @@ final markerColors = dayMatches
                       title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: _cmrTitleText(context, mobile: 14.2, wide: 15.2, color: const Color(0xFF101828), weight: FontWeight.w900),
+                      style: _cmrTitleText(context, mobile: 14.2, wide: 15.2, color: const Color(0xFF101828), weight: FontWeight.w700),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -9130,7 +9175,7 @@ final markerColors = dayMatches
                                   mobile: compact ? 15.0 : 15.8,
                                   wide: 16.6,
                                   color: const Color(0xFF101828),
-                                  weight: FontWeight.w900,
+                                  weight: FontWeight.w700,
                                 ),
                               ),
                             ),
@@ -9156,7 +9201,7 @@ final markerColors = dayMatches
                             mobile: 11.4,
                             wide: 12.0,
                             color: const Color(0xFF667085),
-                            weight: FontWeight.w800,
+                            weight: FontWeight.w600,
                           ),
                         ),
                       ],
@@ -9261,7 +9306,7 @@ final markerColors = dayMatches
                 children: [
                   TextSpan(
                     text: '$title: ',
-                    style: _bodyStyle(size: 11.5, color: const Color(0xFF101828), weight: FontWeight.w900),
+                    style: _bodyStyle(size: 11.5, color: const Color(0xFF101828), weight: FontWeight.w700),
                   ),
                   TextSpan(text: text),
                 ],
@@ -9291,7 +9336,7 @@ final markerColors = dayMatches
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: _bodyStyle(size: 11.2, color: accent, weight: FontWeight.w900),
+              style: _bodyStyle(size: 11.2, color: accent, weight: FontWeight.w700),
             ),
           ),
         ],
@@ -9311,7 +9356,7 @@ final markerColors = dayMatches
       child: Text(
         score,
         textAlign: TextAlign.center,
-        style: _bodyStyle(size: compact ? 12.4 : 13.2, color: color, weight: FontWeight.w900),
+        style: _bodyStyle(size: compact ? 12.4 : 13.2, color: color, weight: FontWeight.w700),
       ),
     );
   }
@@ -9358,7 +9403,7 @@ final markerColors = dayMatches
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(opponent, maxLines: 2, overflow: TextOverflow.ellipsis, style: _cmrTitleText(context, mobile: 18.0, wide: 19.6, color: _AppColors.textPrimary, weight: FontWeight.w900)),
+                    Text(opponent, maxLines: 2, overflow: TextOverflow.ellipsis, style: _cmrTitleText(context, mobile: 18.0, wide: 19.6, color: _AppColors.textPrimary, weight: FontWeight.w700)),
                     const SizedBox(height: 4),
                     Text(
                       [
@@ -9372,7 +9417,7 @@ final markerColors = dayMatches
                             ].join(' • '),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: _cmrSubtitleText(context, mobile: 12.0, wide: 12.7, color: _AppColors.textSecondary, weight: FontWeight.w800),
+                      style: _cmrSubtitleText(context, mobile: 12.0, wide: 12.7, color: _AppColors.textSecondary, weight: FontWeight.w600),
                     ),
                   ],
                 ),
@@ -9446,11 +9491,11 @@ final markerColors = dayMatches
                       item['title'] as String,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _bodyStyle(size: 12.2, color: _AppColors.textPrimary, weight: FontWeight.w900),
+                      style: _bodyStyle(size: 12.2, color: _AppColors.textPrimary, weight: FontWeight.w700),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text(item['value'] as String, style: _bodyStyle(size: 11.2, color: color, weight: FontWeight.w900)),
+                  Text(item['value'] as String, style: _bodyStyle(size: 11.2, color: color, weight: FontWeight.w700)),
                 ],
               ),
             );
@@ -9670,8 +9715,8 @@ final markerColors = dayMatches
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontFamily: _fontFamily,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w900,
+                    fontSize: 11.7,
+                    fontWeight: FontWeight.w700,
                     color: _primary,
                   ),
                 ),
@@ -9761,11 +9806,11 @@ final markerColors = dayMatches
           SizedBox(width: wide ? 7 : 5),
           Text(
             '$title: ',
-            style: _bodyStyle(size: wide ? 12.2 : 10.8, color: const Color(0xFF475569), weight: FontWeight.w900),
+            style: _bodyStyle(size: wide ? 12.2 : 10.8, color: const Color(0xFF475569), weight: FontWeight.w700),
           ),
           Text(
             value,
-            style: _bodyStyle(size: wide ? 12.2 : 10.8, color: c, weight: FontWeight.w900),
+            style: _bodyStyle(size: wide ? 12.2 : 10.8, color: c, weight: FontWeight.w700),
           ),
         ],
       ),
@@ -9792,7 +9837,7 @@ final markerColors = dayMatches
                 children: [
                   TextSpan(
                     text: '$title: ',
-                    style: _bodyStyle(size: 11.5, color: const Color(0xFF101828), weight: FontWeight.w900),
+                    style: _bodyStyle(size: 11.5, color: const Color(0xFF101828), weight: FontWeight.w700),
                   ),
                   TextSpan(text: text),
                 ],
@@ -9814,11 +9859,11 @@ final markerColors = dayMatches
             decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
             child: Row(
               children: const [
-                Expanded(flex: 2, child: Text('Дата', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF667085)))),
-                Expanded(flex: 3, child: Text('Соперник', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF667085)))),
-                Expanded(flex: 2, child: Text('Счёт', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF667085)))),
-                Expanded(flex: 3, child: Text('Турнир', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF667085)))),
-                Expanded(flex: 2, child: Text('Видео/ТТД', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF667085)))),
+                Expanded(flex: 2, child: Text('Дата', style: TextStyle(fontSize: 10.6, fontWeight: FontWeight.w700, color: Color(0xFF667085)))),
+                Expanded(flex: 3, child: Text('Соперник', style: TextStyle(fontSize: 10.6, fontWeight: FontWeight.w700, color: Color(0xFF667085)))),
+                Expanded(flex: 2, child: Text('Счёт', textAlign: TextAlign.center, style: TextStyle(fontSize: 10.6, fontWeight: FontWeight.w700, color: Color(0xFF667085)))),
+                Expanded(flex: 3, child: Text('Турнир', style: TextStyle(fontSize: 10.6, fontWeight: FontWeight.w700, color: Color(0xFF667085)))),
+                Expanded(flex: 2, child: Text('Видео/ТТД', textAlign: TextAlign.center, style: TextStyle(fontSize: 10.6, fontWeight: FontWeight.w700, color: Color(0xFF667085)))),
               ],
             ),
           ),
@@ -9853,9 +9898,9 @@ final markerColors = dayMatches
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         child: Row(
           children: [
-            Expanded(flex: 2, child: Text(date.isEmpty ? '—' : date, style: _bodyStyle(size: 12.5, color: const Color(0xFF101828), weight: FontWeight.w800))),
-            Expanded(flex: 3, child: Text(opponent, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 12.8, color: const Color(0xFF101828), weight: FontWeight.w900))),
-            Expanded(flex: 2, child: Text(score, textAlign: TextAlign.center, style: _bodyStyle(size: 12.8, color: const Color(0xFF101828), weight: FontWeight.w900))),
+            Expanded(flex: 2, child: Text(date.isEmpty ? '—' : date, style: _bodyStyle(size: 12.5, color: const Color(0xFF101828), weight: FontWeight.w600))),
+            Expanded(flex: 3, child: Text(opponent, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 12.8, color: const Color(0xFF101828), weight: FontWeight.w700))),
+            Expanded(flex: 2, child: Text(score, textAlign: TextAlign.center, style: _bodyStyle(size: 12.8, color: const Color(0xFF101828), weight: FontWeight.w700))),
             Expanded(flex: 3, child: Text(tournament, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 12.2, color: const Color(0xFF667085), weight: FontWeight.w700))),
             Expanded(
               flex: 2,
@@ -9974,7 +10019,7 @@ final markerColors = dayMatches
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontFamily: _fontFamily,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   color: _primary,
                   fontSize: compact ? 11.5 : 12,
                 ),
@@ -10045,7 +10090,7 @@ final markerColors = dayMatches
               text: TextSpan(
                 style: _bodyStyle(size: compact ? 10.8 : 11.2, color: _textSecondary, weight: FontWeight.w700),
                 children: [
-                  TextSpan(text: '$title: ', style: _bodyStyle(size: compact ? 10.8 : 11.2, color: _textPrimary, weight: FontWeight.w900)),
+                  TextSpan(text: '$title: ', style: _bodyStyle(size: compact ? 10.8 : 11.2, color: _textPrimary, weight: FontWeight.w700)),
                   TextSpan(text: text),
                 ],
               ),
@@ -10108,7 +10153,7 @@ final markerColors = dayMatches
             children: [
               Icon(icon, size: compact ? 14 : (wide ? 18 : 15), color: fg),
               SizedBox(width: wide && !compact ? 7 : 5),
-              Text(label, style: _bodyStyle(size: compact ? 10.8 : (wide ? 12.6 : 11.2), color: fg, weight: FontWeight.w900)),
+              Text(label, style: _bodyStyle(size: compact ? 10.8 : (wide ? 12.6 : 11.2), color: fg, weight: FontWeight.w700)),
             ],
           ),
         ),
@@ -10205,7 +10250,7 @@ final markerColors = dayMatches
               label: Text(_shortMatchTitle(m), overflow: TextOverflow.ellipsis),
               labelStyle: TextStyle(
                 fontFamily: _fontFamily,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
                 fontSize: compact ? 10.5 : 11,
                 color: active ? Colors.white : _textPrimary,
               ),
@@ -10372,7 +10417,7 @@ final markerColors = dayMatches
               children: [
                 Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _titleStyle(size: compact ? 14 : 15, color: _textPrimary)),
                 const SizedBox(height: 1),
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: compact ? 9.8 : 10.5, color: _textSecondary, weight: FontWeight.w800)),
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: compact ? 9.8 : 10.5, color: _textSecondary, weight: FontWeight.w600)),
               ],
             ),
           ),
@@ -10414,7 +10459,7 @@ final markerColors = dayMatches
               ),
               const SizedBox(width: 8),
               Expanded(child: Text(title, style: _titleStyle(size: compact ? 12.5 : 13.2, color: _textPrimary))),
-              Text('${metricCards.length}', style: _bodyStyle(size: compact ? 10.5 : 11, color: _textSecondary, weight: FontWeight.w900)),
+              Text('${metricCards.length}', style: _bodyStyle(size: compact ? 10.5 : 11, color: _textSecondary, weight: FontWeight.w700)),
             ],
           ),
           SizedBox(height: compact ? 8 : 9),
@@ -10484,7 +10529,7 @@ final markerColors = dayMatches
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: compact ? 10.2 : 10.8, color: _textSecondary, weight: FontWeight.w800)),
+          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: compact ? 10.2 : 10.8, color: _textSecondary, weight: FontWeight.w600)),
           SizedBox(height: compact ? 5 : 6),
           Row(
             children: [
@@ -10493,7 +10538,7 @@ final markerColors = dayMatches
                 Container(
                   padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 7, vertical: 3),
                   decoration: BoxDecoration(color: _primary.withOpacity(0.09), borderRadius: BorderRadius.circular(999)),
-                  child: Text('${percent.toStringAsFixed(0)}%', style: _bodyStyle(size: compact ? 9.5 : 10, color: _primary, weight: FontWeight.w900)),
+                  child: Text('${percent.toStringAsFixed(0)}%', style: _bodyStyle(size: compact ? 9.5 : 10, color: _primary, weight: FontWeight.w700)),
                 ),
             ],
           ),
@@ -10899,7 +10944,7 @@ final markerColors = dayMatches
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(999),
                     ),
-                    child: Text('$rating/5', style: _bodyStyle(size: 11.5, color: const Color(0xFF101828), weight: FontWeight.w900)),
+                    child: Text('$rating/5', style: _bodyStyle(size: 11.5, color: const Color(0xFF101828), weight: FontWeight.w700)),
                   ),
                 ],
               ),
@@ -11039,7 +11084,7 @@ final markerColors = dayMatches
                           hintText: 'Например: Рост',
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                         ),
-                        style: _bodyStyle(size: isTablet ? 13 : 12.2, color: const Color(0xFF101828), weight: FontWeight.w800),
+                        style: _bodyStyle(size: isTablet ? 13 : 12.2, color: const Color(0xFF101828), weight: FontWeight.w600),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -11053,7 +11098,7 @@ final markerColors = dayMatches
                           hintText: '175 см',
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                         ),
-                        style: _bodyStyle(size: isTablet ? 13 : 12.2, color: const Color(0xFF101828), weight: FontWeight.w800),
+                        style: _bodyStyle(size: isTablet ? 13 : 12.2, color: const Color(0xFF101828), weight: FontWeight.w600),
                       ),
                     ),
                     const SizedBox(width: 6),
@@ -11150,7 +11195,7 @@ final markerColors = dayMatches
                               Expanded(
                                 child: Text(
                                   'Название и значение разделены на два поля — так карточки метрик будут выглядеть ровно и на телефоне, и на планшете.',
-                                  style: _bodyStyle(size: 11.6, color: const Color(0xFF14532D), weight: FontWeight.w800),
+                                  style: _bodyStyle(size: 11.6, color: const Color(0xFF14532D), weight: FontWeight.w600),
                                 ),
                               ),
                             ],
@@ -11167,7 +11212,7 @@ final markerColors = dayMatches
                                   setModalState(() {});
                                 },
                           icon: const Icon(Icons.add_rounded, size: 19),
-                          label: const Text('Добавить показатель', style: TextStyle(fontWeight: FontWeight.w900)),
+                          label: const Text('Добавить показатель', style: TextStyle(fontWeight: FontWeight.w700)),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: const Color(0xFF178A45),
                             padding: const EdgeInsets.symmetric(vertical: 13),
@@ -11185,7 +11230,7 @@ final markerColors = dayMatches
                                   padding: const EdgeInsets.symmetric(vertical: 14),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                 ),
-                                child: const Text('Отмена', style: TextStyle(fontWeight: FontWeight.w900)),
+                                child: const Text('Отмена', style: TextStyle(fontWeight: FontWeight.w700)),
                               ),
                             ),
                             const SizedBox(width: 10),
@@ -11195,7 +11240,7 @@ final markerColors = dayMatches
                                 icon: saving
                                     ? const SizedBox(width: 17, height: 17, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                                     : const Icon(Icons.save_outlined, size: 18),
-                                label: Text(saving ? 'Сохраняю...' : 'Сохранить', style: const TextStyle(fontWeight: FontWeight.w900)),
+                                label: Text(saving ? 'Сохраняю...' : 'Сохранить', style: const TextStyle(fontWeight: FontWeight.w700)),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF178A45),
                                   foregroundColor: Colors.white,
@@ -11281,7 +11326,7 @@ final markerColors = dayMatches
                     children: [
                       Icon(item['icon'] as IconData, size: 17, color: selected ? const Color(0xFF178A45) : const Color(0xFF667085)),
                       SizedBox(width: _isDesktopOrTablet(context) ? 12 : 7),
-                      Text(title, style: _bodyStyle(size: 12, color: selected ? const Color(0xFF101828) : const Color(0xFF667085), weight: FontWeight.w900)),
+                      Text(title, style: _bodyStyle(size: 12, color: selected ? const Color(0xFF101828) : const Color(0xFF667085), weight: FontWeight.w700)),
                     ],
                   ),
                 ),
@@ -11653,9 +11698,20 @@ final markerColors = dayMatches
     final leading = (first.weekday + 6) % 7;
     final total = ((leading + daysInMonth + 6) ~/ 7) * 7;
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
+    return _calendarLikeCmrPanelSize(
+      Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.028),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
       child: Column(
         children: [
           Row(
@@ -11672,10 +11728,13 @@ final markerColors = dayMatches
                     mainAxisAlignment: MainAxisAlignment.center,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(DateFormat('LLLL yyyy', 'ru').format(month), style: _titleStyle(size: 14.5, color: const Color(0xFF101828))),
+                      Text(
+                        DateFormat('LLLL yyyy', 'ru').format(month),
+                        style: _titleStyle(size: 13.2, color: const Color(0xFF101828)),
+                      ),
                       if (loading) ...[
-                        const SizedBox(width: 8),
-                        const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+                        const SizedBox(width: 7),
+                        const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
                       ],
                     ],
                   ),
@@ -11689,132 +11748,191 @@ final markerColors = dayMatches
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 7),
           Row(
             children: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
-                .map((d) => Expanded(child: Center(child: Text(d, style: _bodyStyle(size: 10.5, color: const Color(0xFF667085), weight: FontWeight.w900)))))
+                .map((d) => Expanded(
+                      child: Center(
+                        child: Text(
+                          d,
+                          style: _bodyStyle(size: 9.6, color: const Color(0xFF667085), weight: FontWeight.w700),
+                        ),
+                      ),
+                    ))
                 .toList(),
           ),
-          const SizedBox(height: 6),
-          GridView.builder(
-            itemCount: total,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 7, mainAxisSpacing: 6, crossAxisSpacing: 6),
-            itemBuilder: (context, i) {
-              final dayNum = i - leading + 1;
-              if (dayNum < 1 || dayNum > daysInMonth) return const SizedBox.shrink();
-              final day = DateTime(month.year, month.month, dayNum);
-              final selected = selectedDay != null && _sameDateOnly(day, selectedDay);
-              final today = _sameDateOnly(day, now);
-              final dayItems = items.where((item) {
-                final d = dateOf(item);
-                return d != null && _sameDateOnly(d, day);
-              }).toList();
-              final count = dayItems.length;
-              final has = count > 0;
-
-              int coachSum = 0;
-              int coachCnt = 0;
-              int playerSum = 0;
-              int playerCnt = 0;
-              String status = '';
-
-              final markerColors = <Color>[];
-              for (final item in dayItems) {
-                final st = _attendanceStatusOf(item);
-                if (status.isEmpty || _attendanceStatusPriority(st) > _attendanceStatusPriority(status)) {
-                  status = st;
-                }
-
-                final markerColor = markerColorOf?.call(item) ?? _calendarItemAccent(item);
-                markerColors.add(markerColor);
-
-                final coach = _firstRatingValue(item, _coachRatingKeys);
-                if (coach != null) {
-                  coachSum += _asInt(coach);
-                  coachCnt++;
-                }
-
-                final player = _firstRatingValue(item, _playerRatingKeys);
-                if (player != null) {
-                  playerSum += _asInt(player);
-                  playerCnt++;
-                }
-              }
-
-              final int coachAvg = coachCnt == 0
-                  ? 0
-                  : ((coachSum / coachCnt).round() < 1
-                      ? 1
-                      : ((coachSum / coachCnt).round() > 5 ? 5 : (coachSum / coachCnt).round()));
-              final int playerAvg = playerCnt == 0
-                  ? 0
-                  : ((playerSum / playerCnt).round() < 1
-                      ? 1
-                      : ((playerSum / playerCnt).round() > 5 ? 5 : (playerSum / playerCnt).round()));
-              final accent = markerColors.isNotEmpty ? markerColors.first : const Color(0xFFCBD5E1);
-
-              return InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () {
-                  onSelect(day);
-                  if (has) onDayWithItemsTap?.call(day, dayItems);
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? _AppColors.cmrGreen
-                        : has
-                            ? _AppColors.softFor(accent)
-                            : _AppColors.cmrSoftPanel,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text('$dayNum', style: TextStyle(color: selected ? Colors.white : const Color(0xFF101828), fontSize: 12.2, fontWeight: FontWeight.w900)),
-                          if (has) ...[
-                            const SizedBox(width: 3),
-                            Container(
-                              constraints: const BoxConstraints(minWidth: 14),
-                              height: 14,
-                              padding: const EdgeInsets.symmetric(horizontal: 3),
-                              decoration: BoxDecoration(color: selected ? Colors.white : accent, borderRadius: BorderRadius.circular(99)),
-                              child: Center(child: Text('$count', style: TextStyle(color: selected ? _AppColors.cmrGreen : Colors.white, fontSize: 8.2, fontWeight: FontWeight.w900))),
-                            ),
-                          ],
-                        ],
-                      ),
-                      if (has) ...[
-                        const SizedBox(height: 3),
-                        _buildCalendarSegmentMarker(markerColors, selected: selected),
-                        if (coachAvg > 0 || playerAvg > 0) ...[
-                          const SizedBox(height: 3),
-                          Wrap(
-                            alignment: WrapAlignment.center,
-                            spacing: 2,
-                            runSpacing: 2,
-                            children: [
-                              if (coachAvg > 0) _ratingTinyBadge('Т', coachAvg, selected ? Colors.white : _AppColors.cmrGreen),
-                              if (playerAvg > 0) _ratingTinyBadge('И', playerAvg, selected ? Colors.white : Colors.amber.shade800),
-                            ],
-                          ),
-                        ],
-                      ],
-                    ],
-                  ),
+          const SizedBox(height: 5),
+          LayoutBuilder(
+            builder: (context, gridBox) {
+              final cellAspect = gridBox.maxWidth >= 680 ? 2.45 : (gridBox.maxWidth >= 520 ? 2.15 : 1.28);
+              return GridView.builder(
+                itemCount: total,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 7,
+                  mainAxisSpacing: 5,
+                  crossAxisSpacing: 5,
+                  childAspectRatio: cellAspect,
                 ),
+                itemBuilder: (context, i) {
+                  final dayNum = i - leading + 1;
+                  if (dayNum < 1 || dayNum > daysInMonth) return const SizedBox.shrink();
+                  final day = DateTime(month.year, month.month, dayNum);
+                  final selected = selectedDay != null && _sameDateOnly(day, selectedDay);
+                  final today = _sameDateOnly(day, now);
+                  final dayItems = items.where((item) {
+                    final d = dateOf(item);
+                    return d != null && _sameDateOnly(d, day);
+                  }).toList();
+                  final count = dayItems.length;
+                  final has = count > 0;
+
+                  int coachSum = 0;
+                  int coachCnt = 0;
+                  int playerSum = 0;
+                  int playerCnt = 0;
+                  String status = '';
+
+                  final markerColors = <Color>[];
+                  for (final item in dayItems) {
+                    final st = _attendanceStatusOf(item);
+                    if (status.isEmpty || _attendanceStatusPriority(st) > _attendanceStatusPriority(status)) {
+                      status = st;
+                    }
+
+                    final markerColor = markerColorOf?.call(item) ?? _calendarItemAccent(item);
+                    markerColors.add(markerColor);
+
+                    final coach = _firstRatingValue(item, _coachRatingKeys);
+                    if (coach != null) {
+                      coachSum += _asInt(coach);
+                      coachCnt++;
+                    }
+
+                    final player = _firstRatingValue(item, _playerRatingKeys);
+                    if (player != null) {
+                      playerSum += _asInt(player);
+                      playerCnt++;
+                    }
+                  }
+
+                  final int coachAvg = coachCnt == 0
+                      ? 0
+                      : ((coachSum / coachCnt).round() < 1
+                          ? 1
+                          : ((coachSum / coachCnt).round() > 5 ? 5 : (coachSum / coachCnt).round()));
+                  final int playerAvg = playerCnt == 0
+                      ? 0
+                      : ((playerSum / playerCnt).round() < 1
+                          ? 1
+                          : ((playerSum / playerCnt).round() > 5 ? 5 : (playerSum / playerCnt).round()));
+                  final accent = markerColors.isNotEmpty ? markerColors.first : const Color(0xFFCBD5E1);
+
+                  return Material(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(10),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () {
+                        onSelect(day);
+                        if (has) onDayWithItemsTap?.call(day, dayItems);
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 160),
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? Colors.white
+                              : has
+                                  ? _AppColors.softFor(accent)
+                                  : _AppColors.cmrSoftPanel,
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: selected
+                              ? [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(.055),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 5),
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: Stack(
+                          children: [
+                            if (selected)
+                              Positioned(
+                                left: 0,
+                                top: 5,
+                                bottom: 5,
+                                child: Container(
+                                  width: 3,
+                                  decoration: BoxDecoration(
+                                    color: _AppColors.cmrGreen,
+                                    borderRadius: BorderRadius.circular(99),
+                                  ),
+                                ),
+                              ),
+                            Center(
+                              child: Text(
+                                '$dayNum',
+                                style: TextStyle(
+                                  color: selected || today ? _AppColors.cmrGreen : const Color(0xFF101828),
+                                  fontSize: 10.4,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1,
+                                ),
+                              ),
+                            ),
+                            if (has)
+                              Positioned(
+                                top: 2,
+                                right: 3,
+                                child: _buildCalendarSegmentMarker(markerColors, selected: selected),
+                              ),
+                            if (has && (coachAvg > 0 || playerAvg > 0))
+                              Positioned(
+                                left: 5,
+                                bottom: 2,
+                                child: Text(
+                                  [
+                                    if (coachAvg > 0) 'Т$coachAvg',
+                                    if (playerAvg > 0) 'И$playerAvg',
+                                  ].join(' '),
+                                  style: TextStyle(
+                                    color: selected ? _AppColors.cmrGreen : const Color(0xFF667085),
+                                    fontSize: 7.6,
+                                    fontWeight: FontWeight.w700,
+                                    height: 1,
+                                  ),
+                                ),
+                              ),
+                            if (has)
+                              Positioned(
+                                right: 4,
+                                bottom: 2,
+                                child: Text(
+                                  '$count',
+                                  style: TextStyle(
+                                    color: selected ? _AppColors.cmrGreen : const Color(0xFF667085),
+                                    fontSize: 8.2,
+                                    fontWeight: FontWeight.w700,
+                                    height: 1,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
               );
             },
           ),
         ],
       ),
+    ),
     );
   }
 
@@ -11884,7 +12002,7 @@ final markerColors = dayMatches
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 8,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     height: 1,
                     shadows: [
                       Shadow(color: Color(0x66000000), blurRadius: 4),
@@ -11926,7 +12044,7 @@ final markerColors = dayMatches
         children: [
           const Icon(Icons.filter_alt_rounded, color: Color(0xFF2563EB), size: 16),
           const SizedBox(width: 7),
-          Text('$label: ${DateFormat('dd.MM.yyyy').format(date)}', style: _bodyStyle(size: 11.5, color: const Color(0xFF1D4ED8), weight: FontWeight.w900)),
+          Text('$label: ${DateFormat('dd.MM.yyyy').format(date)}', style: _bodyStyle(size: 11.5, color: const Color(0xFF1D4ED8), weight: FontWeight.w700)),
           const SizedBox(width: 7),
           InkWell(borderRadius: BorderRadius.circular(99), onTap: onClear, child: const Icon(Icons.close_rounded, color: Color(0xFF1D4ED8), size: 16)),
         ],
@@ -12247,7 +12365,7 @@ final markerColors = dayMatches
                       : warningCount > 0
                           ? 'За ${DateFormat('dd.MM.yyyy').format(date)}: ${playerTestingResults.length} показателей, $warningCount требуют внимания.'
                           : 'За ${DateFormat('dd.MM.yyyy').format(date)}: ${playerTestingResults.length} показателей. Подробности без дублей находятся в правом блоке.',
-                  style: _bodyStyle(size: 12, color: warningCount > 0 ? _AppColors.error : const Color(0xFF667085), weight: FontWeight.w800),
+                  style: _bodyStyle(size: 12, color: warningCount > 0 ? _AppColors.error : const Color(0xFF667085), weight: FontWeight.w600),
                 ),
               ],
             ),
@@ -12336,7 +12454,7 @@ final markerColors = dayMatches
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_asStr(r['title']), maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 13.2, color: const Color(0xFF101828), weight: FontWeight.w900)),
+                    Text(_asStr(r['title']), maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 13.2, color: const Color(0xFF101828), weight: FontWeight.w700)),
                     const SizedBox(height: 4),
                     Text(category, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 11.2, color: const Color(0xFF667085), weight: FontWeight.w700)),
                   ],
@@ -12346,7 +12464,7 @@ final markerColors = dayMatches
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                 decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
-                child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 12.4, color: const Color(0xFF101828), weight: FontWeight.w900)),
+                child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 12.4, color: const Color(0xFF101828), weight: FontWeight.w700)),
               ),
             ],
           ),
@@ -12491,7 +12609,7 @@ final markerColors = dayMatches
           children: [
             Icon(icon, size: 16, color: const Color(0xFF178A45)),
             const SizedBox(width: 6),
-            Text(label, style: _bodyStyle(size: 11.5, color: const Color(0xFF334155), weight: FontWeight.w900)),
+            Text(label, style: _bodyStyle(size: 11.5, color: const Color(0xFF334155), weight: FontWeight.w700)),
           ],
         ),
       ),
@@ -12556,7 +12674,7 @@ final markerColors = dayMatches
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
-                      child: const Text('Отмена', style: TextStyle(fontWeight: FontWeight.w900)),
+                      child: const Text('Отмена', style: TextStyle(fontWeight: FontWeight.w700)),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -12564,7 +12682,7 @@ final markerColors = dayMatches
                     child: ElevatedButton.icon(
                       onPressed: onSave,
                       icon: const Icon(Icons.save_outlined, size: 18),
-                      label: const Text('Сохранить', style: TextStyle(fontWeight: FontWeight.w900)),
+                      label: const Text('Сохранить', style: TextStyle(fontWeight: FontWeight.w700)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF178A45),
                         foregroundColor: Colors.white,
@@ -12589,9 +12707,9 @@ final markerColors = dayMatches
       filled: true,
       fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: _AppColors.cmrBorder)),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: _AppColors.cmrBorder)),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF178A45), width: 1.4)),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
     );
   }
 
@@ -12629,9 +12747,9 @@ final markerColors = dayMatches
                 title,
                 style: TextStyle(
                   fontFamily: _fontFamily,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   color: _textPrimary,
-                  fontSize: 11,
+                  fontSize: 10.6,
                 ),
               ),
               const SizedBox(height: 4),
@@ -12641,7 +12759,7 @@ final markerColors = dayMatches
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontFamily: _fontFamily,
-                  fontSize: 11,
+                  fontSize: 10.6,
                   height: 1.3,
                   color: subtleWhenEmpty ? _textSecondary : _textPrimary,
                   fontWeight: FontWeight.w600,
@@ -12675,7 +12793,7 @@ final markerColors = dayMatches
               fontFamily: _fontFamily,
               fontSize: wide ? 12.4 : 10,
               color: const Color(0xFF475569),
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
             ),
           ),
           Text(
@@ -12686,7 +12804,7 @@ final markerColors = dayMatches
               fontFamily: _fontFamily,
               fontSize: wide ? 12.4 : 10,
               color: c,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -12752,9 +12870,9 @@ final markerColors = dayMatches
             "$count",
             style: TextStyle(
               fontFamily: _fontFamily,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               color: _primary,
-              fontSize: 12,
+              fontSize: 11.2,
             ),
           ),
         ),
@@ -12809,9 +12927,9 @@ final markerColors = dayMatches
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Expanded(flex: 42, child: Text(label, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: _AppColors.textSecondary, height: 1.2, fontWeight: FontWeight.w800))),
+        Expanded(flex: 42, child: Text(label, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.2, color: _AppColors.textSecondary, height: 1.2, fontWeight: FontWeight.w600))),
         const SizedBox(width: 10),
-        Expanded(flex: 58, child: Text(value, textAlign: TextAlign.right, style: const TextStyle(fontSize: 13, color: _AppColors.textPrimary, height: 1.28, fontWeight: FontWeight.w800))),
+        Expanded(flex: 58, child: Text(value, textAlign: TextAlign.right, style: const TextStyle(fontSize: 11.7, color: _AppColors.textPrimary, height: 1.28, fontWeight: FontWeight.w600))),
       ]),
     );
   }
@@ -13149,7 +13267,7 @@ final markerColors = dayMatches
                                   ),
                                   child: const Text(
                                     'Отмена',
-                                    style: TextStyle(fontWeight: FontWeight.w900),
+                                    style: TextStyle(fontWeight: FontWeight.w700),
                                   ),
                                 ),
                               ),
@@ -13175,7 +13293,7 @@ final markerColors = dayMatches
                                     elevation: 0,
                                     minimumSize: const Size.fromHeight(50),
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                    textStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                                    textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11.7),
                                   ),
                                 ),
                               ),
@@ -13231,8 +13349,8 @@ final markerColors = dayMatches
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: _AppColors.textPrimary,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w900,
+                    fontSize: 14.6,
+                    fontWeight: FontWeight.w700,
                     height: 1.05,
                   ),
                 ),
@@ -13243,7 +13361,7 @@ final markerColors = dayMatches
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: _AppColors.textSecondary,
-                    fontSize: 12,
+                    fontSize: 11.2,
                     fontWeight: FontWeight.w700,
                     height: 1.25,
                   ),
@@ -13292,8 +13410,8 @@ final markerColors = dayMatches
                 title,
                 style: const TextStyle(
                   color: _AppColors.textPrimary,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w900,
+                  fontSize: 12.6,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
@@ -13325,8 +13443,8 @@ final markerColors = dayMatches
           label,
           style: TextStyle(
             color: active ? Colors.white : _AppColors.textPrimary,
-            fontSize: 12,
-            fontWeight: FontWeight.w900,
+            fontSize: 11.2,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),
@@ -13346,13 +13464,13 @@ final markerColors = dayMatches
       maxLines: maxLines,
       style: const TextStyle(
         color: _AppColors.textPrimary,
-        fontSize: 14,
+        fontSize: 12.6,
         fontWeight: FontWeight.w700,
         height: 1.25,
       ),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: _AppColors.textTertiary, fontSize: 13, fontWeight: FontWeight.w600),
+        hintStyle: const TextStyle(color: _AppColors.textTertiary, fontSize: 11.7, fontWeight: FontWeight.w600),
         prefixIcon: Padding(
           padding: const EdgeInsets.only(left: 12, right: 8),
           child: Icon(icon, color: _AppColors.textSecondary, size: 19),
@@ -13363,15 +13481,15 @@ final markerColors = dayMatches
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: _AppColors.cmrBorder),
+          borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: _AppColors.cmrBorder),
+          borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: _AppColors.primaryGreen, width: 1.3),
+          borderSide: BorderSide.none,
         ),
       ),
     );
@@ -13408,12 +13526,12 @@ final markerColors = dayMatches
                 children: [
                   const Text(
                     'Дата записи',
-                    style: TextStyle(color: _AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w800),
+                    style: TextStyle(color: _AppColors.textSecondary, fontSize: 10.6, fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 3),
                   Text(
                     DateFormat('dd.MM.yyyy').format(date),
-                    style: const TextStyle(color: _AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w900),
+                    style: const TextStyle(color: _AppColors.textPrimary, fontSize: 12.6, fontWeight: FontWeight.w700),
                   ),
                 ],
               ),
@@ -13449,14 +13567,14 @@ final markerColors = dayMatches
               title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: _AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w900),
+              style: const TextStyle(color: _AppColors.textPrimary, fontSize: 11.7, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 2),
             Text(
               subtitle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: _AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w700),
+              style: const TextStyle(color: _AppColors.textSecondary, fontSize: 10.6, fontWeight: FontWeight.w700),
             ),
           ],
         ),
@@ -13483,7 +13601,7 @@ final markerColors = dayMatches
               fileName,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: _AppColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w800),
+              style: const TextStyle(color: _AppColors.textPrimary, fontSize: 11.2, fontWeight: FontWeight.w600),
             ),
           ),
           IconButton(
@@ -13638,8 +13756,32 @@ final markerColors = dayMatches
   }
 
   void _closePlayerProfileScreen() {
+    _exitPlayerProfileToHome();
+  }
+
+  void _exitPlayerProfileToHome() {
+    if (!mounted) return;
+
+    // В CMR-окне кнопка X означает не закрыть внутренний блок,
+    // а выйти из профиля к начальному экрану приложения.
+    try {
+      Get.offAllNamed('/home_screen');
+      return;
+    } catch (_) {
+      // Если в проекте используется другой route name — мягко возвращаемся
+      // к первому экрану текущего навигатора.
+    }
+
+    final rootNavigator = Navigator.of(context, rootNavigator: true);
+    if (rootNavigator.canPop()) {
+      rootNavigator.popUntil((route) => route.isFirst);
+      return;
+    }
+
     final navigator = Navigator.of(context);
-    if (navigator.canPop()) navigator.pop();
+    if (navigator.canPop()) {
+      navigator.popUntil((route) => route.isFirst);
+    }
   }
 
   Widget _buildCmrProfileExitButton({required bool compact}) {
@@ -13668,7 +13810,7 @@ final markerColors = dayMatches
                 ),
                 if (!compact) ...[
                   const SizedBox(width: 9),
-                  const Text('Закрыть профиль', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Color(0xFF101828), fontSize: 13, fontWeight: FontWeight.w800, height: 1)),
+                  const Text('Закрыть профиль', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Color(0xFF101828), fontSize: 11.7, fontWeight: FontWeight.w600, height: 1)),
                 ],
               ],
             ),
@@ -13679,105 +13821,39 @@ final markerColors = dayMatches
   }
 
   Widget _buildCmrShellSidebar({required bool compact}) {
-    final photo = _normalizeImage(widget.player["photo"]) ?? '';
+    // Меню профиля теперь повторяет визуальный принцип трекера:
+    // открытая рабочая панель слева, без кнопок свернуть/развернуть профиль внутри меню.
+    final expanded = !compact;
+    final railWidth = compact ? 54.0 : 156.0;
+    final photo = _normalizeImage(widget.player['photo']);
     final name = _cmrFullName();
-    final team = _playerClub().isEmpty
-        ? _firstNotEmpty([widget.player["team_name"], widget.player["teamName"]])
-        : _playerClub();
-    final position = _firstNotEmpty([
-      widget.player["position"],
-      widget.player["role"],
-      widget.player["amplua"],
+    final team = _firstNotEmpty([
+      widget.player['team_name'],
+      widget.player['teamName'],
+      widget.player['club'],
+      widget.player['club_name'],
     ]);
 
     return Container(
-      width: 72,
-      margin: const EdgeInsets.fromLTRB(8, 8, 0, 8),
-      padding: const EdgeInsets.fromLTRB(8, 12, 8, 12),
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: const Color(0xFF111418),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(.08)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(.12),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
+      width: railWidth,
+      color: Colors.transparent,
+      padding: EdgeInsets.fromLTRB(expanded ? 9 : 6, 12, expanded ? 8 : 6, 10),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Tooltip(
-            message: '$name${position.trim().isEmpty ? '' : '\n$position'}${team.trim().isEmpty ? '' : '\n$team'}',
-            waitDuration: const Duration(milliseconds: 250),
-            preferBelow: false,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () => _selectCmrTab(0),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
-                width: 50,
-                height: 50,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: _selectedTabIndex == 0 ? Colors.white : const Color(0xFF1A1F24),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withOpacity(.08)),
-                  boxShadow: _selectedTabIndex == 0
-                      ? [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(.08),
-                            blurRadius: 14,
-                            offset: const Offset(0, 6),
-                          ),
-                        ]
-                      : const [],
-                ),
-                child: Stack(
-                  alignment: Alignment.center,
-                  clipBehavior: Clip.none,
-                  children: [
-                    _buildPhotoPreviewTap(
-                      imageUrl: photo,
-                      child: _buildCircleNetworkImage(
-                        imageUrl: photo,
-                        size: 34,
-                        borderColor: Colors.transparent,
-                        borderWidth: 0,
-                        fallback: Icon(
-                          Icons.person_rounded,
-                          color: _selectedTabIndex == 0 ? const Color(0xFF111418) : Colors.white.withOpacity(.82),
-                          size: 20,
-                        ),
-                      ),
-                    ),
-                    if (_selectedTabIndex == 0)
-                      Positioned(
-                        right: -2,
-                        top: -2,
-                        child: Container(
-                          width: 7,
-                          height: 7,
-                          decoration: const BoxDecoration(
-                            color: _AppColors.cmrGreen,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
+          _buildPlayerSidebarLogoHeader(
+            compact: !expanded,
+            photo: photo,
+            name: name,
+            team: team,
           ),
-          const SizedBox(height: 9),
+          const SizedBox(height: 14),
           Expanded(
             child: ListView.separated(
-              padding: const EdgeInsets.symmetric(vertical: 10),
+              padding: EdgeInsets.zero,
               physics: const BouncingScrollPhysics(),
               itemCount: _categoryTabs.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 7),
+              separatorBuilder: (_, __) => const SizedBox(height: 6),
               itemBuilder: (_, index) {
                 final tab = _categoryTabs[index];
                 final active = tab.index == _selectedTabIndex;
@@ -13785,10 +13861,10 @@ final markerColors = dayMatches
                   tab: tab,
                   active: active,
                   accent: _AppColors.cmrGreen,
-                  compact: true,
+                  compact: !expanded,
                 );
                 return Tooltip(
-                  message: '${tab.title}\n${tab.subtitle}',
+                  message: expanded ? '' : tab.title,
                   waitDuration: const Duration(milliseconds: 250),
                   preferBelow: false,
                   child: tile,
@@ -13796,27 +13872,61 @@ final markerColors = dayMatches
               },
             ),
           ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildCmrSidebarIconButton(
-                icon: Icons.edit_rounded,
-                tooltip: 'Редактировать профиль',
-                onTap: _openPlayerEditorPanel,
-              ),
-              const SizedBox(height: 7),
-              _buildCmrSidebarIconButton(
-                icon: Icons.close_rounded,
-                tooltip: 'Закрыть профиль',
-                onTap: _closePlayerProfileScreen,
-                foreground: const Color(0xFFE5E7EB),
-              ),
-            ],
+          const SizedBox(height: 10),
+          _buildPlayerSidebarFooterAction(
+            icon: Icons.refresh_rounded,
+            label: 'Обновить',
+            compact: !expanded,
+            onTap: _refreshCmrProfile,
+          ),
+          const SizedBox(height: 6),
+          _buildPlayerSidebarFooterAction(
+            icon: Icons.edit_rounded,
+            label: 'Редактировать',
+            compact: !expanded,
+            onTap: _openPlayerEditorPanel,
           ),
         ],
       ),
     );
   }
+
+
+  Widget _buildPlayerSidebarWindowControls({required bool expanded}) {
+    return const SizedBox.shrink();
+  }
+
+
+  Widget _buildCmrSidebarMiniControl({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      waitDuration: const Duration(milliseconds: 250),
+      preferBelow: false,
+      child: Material(
+        color: const Color(0xFFF5F7FA),
+        borderRadius: BorderRadius.circular(13),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(13),
+          onTap: onTap,
+          child: Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(color: const Color(0xFFF0F2F4), width: 1),
+            ),
+            child: Icon(icon, size: 17, color: const Color(0xFF6B7280)),
+          ),
+        ),
+      ),
+    );
+  }
+
 
 
   Widget _buildPlayerSidebarHeader({
@@ -13826,7 +13936,126 @@ final markerColors = dayMatches
     required String team,
     required String position,
   }) {
-    return const SizedBox.shrink();
+    return _buildPlayerSidebarLogoHeader(compact: compact, photo: photo, name: name, team: team);
+  }
+
+  Widget _buildPlayerSidebarLogoHeader({
+    required bool compact,
+    required String? photo,
+    required String name,
+    required String team,
+  }) {
+    if (compact) {
+      return Center(child: _buildPlayerSidebarLogo(photo: photo, size: 38));
+    }
+
+    return Row(
+      children: [
+        _buildPlayerSidebarLogo(photo: photo, size: 38),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name.isEmpty ? 'Профиль игрока' : name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: _fontFamily,
+                  color: const Color(0xFF0B0F14),
+                  fontSize: 12.0,
+                  height: 1.05,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -.18,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                team.isEmpty ? 'Игрок' : team,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: _fontFamily,
+                  color: const Color(0xFF6B7280),
+                  fontSize: 9.6,
+                  height: 1.1,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -.05,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPlayerSidebarLogo({required String? photo, required double size}) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F5F8),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFF0F2F4), width: 1),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: (photo ?? '').trim().isEmpty
+          ? const Icon(Icons.person_rounded, color: Color(0xFF6B7280), size: 20)
+          : _buildCircleNetworkImage(
+              imageUrl: photo,
+              size: size,
+              borderColor: Colors.transparent,
+              borderWidth: 0,
+              fallback: const Icon(Icons.person_rounded, color: Color(0xFF6B7280), size: 20),
+            ),
+    );
+  }
+
+  Widget _buildPlayerSidebarFooterAction({
+    required IconData icon,
+    required String label,
+    required bool compact,
+    required VoidCallback onTap,
+  }) {
+    if (compact) {
+      return _buildCmrSidebarIconButton(icon: icon, tooltip: label, onTap: onTap);
+    }
+
+    return Material(
+      color: const Color(0xFFF6F7F9),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          height: 34,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Row(
+            children: [
+              Icon(icon, color: const Color(0xFF6B7280), size: 17),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: _fontFamily,
+                    color: const Color(0xFF344054),
+                    fontSize: 10.8,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -.12,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
 
@@ -13849,7 +14078,7 @@ final markerColors = dayMatches
               text,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: _AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600, height: 1.42),
+              style: const TextStyle(color: _AppColors.textSecondary, fontSize: 11.2, fontWeight: FontWeight.w600, height: 1.42),
             ),
           ),
         ],
@@ -13868,12 +14097,33 @@ final markerColors = dayMatches
     required Color accent,
     required bool compact,
   }) {
-    final bgColor = active ? Colors.white : Colors.transparent;
-    final iconColor = active ? const Color(0xFF111418) : const Color(0xFFE5E7EB);
-    final textColor = active ? const Color(0xFF111418) : const Color(0xFF9CA3AF);
+    final bgColor = active ? const Color(0xFFF3FBF7) : Colors.transparent;
+    final iconColor = active ? _AppColors.cmrGreen : const Color(0xFF6B7280);
+    final textColor = active ? const Color(0xFF0B0F14) : const Color(0xFF344054);
+
+    if (compact) {
+      return Material(
+        color: active ? const Color(0xFFF3FBF7) : const Color(0xFFF6F7F9),
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _handleCmrSidebarTabTap(tab),
+          child: Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: active ? Border.all(color: const Color(0xFFDCEFE5), width: 1) : null,
+            ),
+            child: Icon(tab.icon, color: iconColor, size: 18),
+          ),
+        ),
+      );
+    }
 
     return Material(
-      color: Colors.transparent,
+      color: bgColor,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -13881,69 +14131,37 @@ final markerColors = dayMatches
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           curve: Curves.easeOut,
+          height: 34,
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
-            color: bgColor,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: active ? Colors.white.withOpacity(.62) : Colors.transparent),
-            boxShadow: active
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(.08),
-                      blurRadius: 14,
-                      offset: const Offset(0, 6),
-                    ),
-                  ]
-                : const [],
+            border: active ? Border.all(color: const Color(0xFFDCEFE5), width: 1) : null,
           ),
-          child: Stack(
-            alignment: Alignment.center,
-            clipBehavior: Clip.none,
+          child: Row(
             children: [
-              SizedBox(
-                width: double.infinity,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: Center(child: Icon(tab.icon, color: iconColor, size: 21)),
-                    ),
-                    const SizedBox(height: 4),
-                    SizedBox(
-                      width: double.infinity,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 2),
-                        child: Text(
-                          tab.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: textColor,
-                            fontSize: 9.05,
-                            height: 1.0,
-                            fontWeight: active ? FontWeight.w900 : FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+              Icon(tab.icon, color: iconColor, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  tab.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: _fontFamily,
+                    color: textColor,
+                    fontSize: 10.8,
+                    height: 1,
+                    fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+                    letterSpacing: -.12,
+                  ),
                 ),
               ),
               if (active)
-                Positioned(
-                  right: 5,
-                  top: 5,
-                  child: Container(
-                    width: 5,
-                    height: 5,
-                    decoration: const BoxDecoration(color: _AppColors.cmrGreen, shape: BoxShape.circle),
-                  ),
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(color: _AppColors.cmrGreen, shape: BoxShape.circle),
                 ),
             ],
           ),
@@ -13953,12 +14171,13 @@ final markerColors = dayMatches
   }
 
 
+
   Widget _buildCmrSidebarButton({
     required IconData icon,
     required String label,
     required VoidCallback onTap,
-    Color background = const Color(0xFF111418),
-    Color foreground = Colors.white,
+    Color background = const Color(0xFFF4F6F8),
+    Color foreground = const Color(0xFF667085),
   }) {
     return Material(
       color: Colors.transparent,
@@ -13972,14 +14191,12 @@ final markerColors = dayMatches
           decoration: BoxDecoration(
             color: background,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: background == const Color(0xFF111418) ? Colors.white.withOpacity(.08) : const Color(0xFFE5E7EB),
-            ),
+            border: null,
           ),
           child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             Icon(icon, color: foreground, size: 18),
             const SizedBox(width: 8),
-            Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: foreground, fontWeight: FontWeight.w900, fontSize: 13.5, height: 1))),
+            Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: foreground, fontWeight: FontWeight.w700, fontSize: 12.2, height: 1))),
           ]),
         ),
       ),
@@ -13991,8 +14208,8 @@ final markerColors = dayMatches
     required IconData icon,
     required VoidCallback onTap,
     String tooltip = 'Действие',
-    Color background = Colors.transparent,
-    Color foreground = const Color(0xFFE5E7EB),
+    Color background = const Color(0xFFF5F7FA),
+    Color foreground = const Color(0xFF6B7280),
   }) {
     return Tooltip(
       message: tooltip,
@@ -14000,30 +14217,27 @@ final markerColors = dayMatches
       preferBelow: false,
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(13),
         child: InkWell(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(13),
           onTap: onTap,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
-            width: 54,
-            height: 50,
+            width: 34,
+            height: 34,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: background,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white.withOpacity(.08)),
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(color: const Color(0xFFF0F2F4), width: 1),
             ),
-            child: SizedBox(
-              width: 24,
-              height: 24,
-              child: Center(child: Icon(icon, color: foreground, size: 21)),
-            ),
+            child: Icon(icon, color: foreground, size: 18),
           ),
         ),
       ),
     );
   }
+
 
 
 
@@ -14043,16 +14257,12 @@ final markerColors = dayMatches
   }
 
   Widget _buildCmrWorkspaceContent({required _CategoryTab tab, required bool compact}) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final profileRightWidth = compact ? 600.0 : 720.0;
-
     if (tab.index == 0) {
       return _buildOverviewDashboardWorkspace(compact: compact);
     }
 
-    // На широких планшетах и ПК разделы работают как рабочее место:
-    // в центре — список/календарь/выбор, справа — подробная карточка выбранного элемента.
-    // На узких планшетах оставляем прежний компактный режим с навигационной подсказкой.
+    // Единая CMR-сетка: слева фиксированная рабочая колонка
+    // (список / календарь / выбор), справа — широкая область деталей.
     if (!_usesCmrRightDetailsPane(context) || _showInlinePlayerEditor) {
       final guideWidth = _cmrGuideCollapsed ? (compact ? 56.0 : 64.0) : (compact ? 300.0 : 340.0);
       return Row(
@@ -14060,21 +14270,28 @@ final markerColors = dayMatches
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SizedBox(width: guideWidth, child: _buildCmrCenterPane(tab)),
-          const SizedBox(width: 12),
+          const VerticalDivider(width: 1, thickness: 1, color: Color(0xFFE8EDF2)),
           Expanded(child: _buildCmrDetailsPane(tab)),
         ],
       );
     }
 
-    final detailsWidth = screenWidth >= 1500 ? 500.0 : (screenWidth >= 1280 ? 460.0 : 420.0);
-    return Row(
-      key: ValueKey('player-workspace-split-tab-${tab.index}'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(child: _buildCmrDetailsPane(tab)),
-        const SizedBox(width: 12),
-        SizedBox(width: detailsWidth, child: _buildCmrSelectionDetailsPane(tab)),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final totalWidth = constraints.maxWidth.isFinite ? constraints.maxWidth : MediaQuery.of(context).size.width;
+        final targetLeftWidth = compact ? 470.0 : 500.0;
+        final leftWidth = math.min(targetLeftWidth, math.max(420.0, totalWidth * .42));
+
+        return Row(
+          key: ValueKey('player-workspace-split-tab-${tab.index}'),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(width: leftWidth, child: _buildCmrDetailsPane(tab)),
+            const VerticalDivider(width: 1, thickness: 1, color: Color(0xFFE8EDF2)),
+            Expanded(child: _buildCmrSelectionDetailsPane(tab)),
+          ],
+        );
+      },
     );
   }
 
@@ -14266,24 +14483,10 @@ final markerColors = dayMatches
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _cmrTitleText(context, mobile: 17.2, wide: 19.2, color: _AppColors.textPrimary, weight: FontWeight.w900)),
+                          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _cmrTitleText(context, mobile: 17.2, wide: 19.2, color: _AppColors.textPrimary, weight: FontWeight.w700)),
                           const SizedBox(height: 3),
                           Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: _cmrSubtitleText(context, mobile: 11.5, wide: 12.4, color: _AppColors.textSecondary, weight: FontWeight.w700)),
                         ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Tooltip(
-                      message: 'Закрыть профиль',
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(16),
-                        onTap: _closePlayerProfileScreen,
-                        child: Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(color: const Color(0xFFF6F8FA), borderRadius: BorderRadius.circular(16)),
-                          child: const Icon(Icons.close_rounded, color: _AppColors.textSecondary, size: 22),
-                        ),
                       ),
                     ),
                   ],
@@ -14336,7 +14539,7 @@ final markerColors = dayMatches
               minimumSize: const Size.fromHeight(48),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             ),
-            child: const Text('Отмена', style: TextStyle(fontWeight: FontWeight.w900)),
+            child: const Text('Отмена', style: TextStyle(fontWeight: FontWeight.w700)),
           ),
         ),
         const SizedBox(width: 10),
@@ -14358,7 +14561,7 @@ final markerColors = dayMatches
               elevation: 0,
               minimumSize: const Size.fromHeight(48),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              textStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+              textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11.7),
             ),
           ),
         ),
@@ -14456,7 +14659,7 @@ final markerColors = dayMatches
                     controller: titleControllers[index],
                     enabled: !saving,
                     decoration: _inputDecoration('Показатель').copyWith(hintText: 'Например: Рост'),
-                    style: _bodyStyle(size: 12.8, color: _AppColors.textPrimary, weight: FontWeight.w800),
+                    style: _bodyStyle(size: 12.8, color: _AppColors.textPrimary, weight: FontWeight.w600),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -14465,7 +14668,7 @@ final markerColors = dayMatches
                     controller: valueControllers[index],
                     enabled: !saving,
                     decoration: _inputDecoration('Значение').copyWith(hintText: '175 см'),
-                    style: _bodyStyle(size: 12.8, color: _AppColors.textPrimary, weight: FontWeight.w800),
+                    style: _bodyStyle(size: 12.8, color: _AppColors.textPrimary, weight: FontWeight.w600),
                   ),
                 ),
                 const SizedBox(width: 4),
@@ -14581,7 +14784,7 @@ final markerColors = dayMatches
                     Row(children: const [
                       Icon(Icons.collections_outlined, color: _AppColors.cmrGreen, size: 20),
                       SizedBox(width: 8),
-                      Expanded(child: Text('Ссылка на материал', style: TextStyle(color: _AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w900))),
+                      Expanded(child: Text('Ссылка на материал', style: TextStyle(color: _AppColors.textPrimary, fontSize: 12.2, fontWeight: FontWeight.w700))),
                     ]),
                     const SizedBox(height: 12),
                     TextField(
@@ -14590,7 +14793,7 @@ final markerColors = dayMatches
                       minLines: 3,
                       maxLines: 6,
                       decoration: _inputDecoration('Ссылка на фото, видео или файл'),
-                      style: _bodyStyle(size: 13, color: _AppColors.textPrimary, weight: FontWeight.w800),
+                      style: _bodyStyle(size: 13, color: _AppColors.textPrimary, weight: FontWeight.w600),
                     ),
                   ],
                 ),
@@ -14875,7 +15078,7 @@ final markerColors = dayMatches
                     Row(children: const [
                       Icon(Icons.star_rounded, color: _AppColors.blue, size: 20),
                       SizedBox(width: 8),
-                      Expanded(child: Text('Оценка от 1 до 5', style: TextStyle(color: _AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w900))),
+                      Expanded(child: Text('Оценка от 1 до 5', style: TextStyle(color: _AppColors.textPrimary, fontSize: 12.2, fontWeight: FontWeight.w700))),
                     ]),
                     const SizedBox(height: 12),
                     _buildRatingPicker(
@@ -14962,7 +15165,7 @@ final markerColors = dayMatches
                     Row(children: const [
                       Icon(Icons.sticky_note_2_rounded, color: _AppColors.blue, size: 20),
                       SizedBox(width: 8),
-                      Expanded(child: Text('Комментарий к тренировке', style: TextStyle(color: _AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w900))),
+                      Expanded(child: Text('Комментарий к тренировке', style: TextStyle(color: _AppColors.textPrimary, fontSize: 12.2, fontWeight: FontWeight.w700))),
                     ]),
                     const SizedBox(height: 12),
                     TextField(
@@ -14971,7 +15174,7 @@ final markerColors = dayMatches
                       minLines: 6,
                       maxLines: 12,
                       decoration: _inputDecoration('Что улучшить, на что обратить внимание, домашнее задание…'),
-                      style: _bodyStyle(size: 13, color: _AppColors.textPrimary, weight: FontWeight.w800),
+                      style: _bodyStyle(size: 13, color: _AppColors.textPrimary, weight: FontWeight.w600),
                     ),
                   ],
                 ),
@@ -15016,7 +15219,7 @@ final markerColors = dayMatches
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(value, style: _cmrTitleText(context, mobile: 26, wide: 30, color: _AppColors.textPrimary, weight: FontWeight.w900)),
+                Text(value, style: _cmrTitleText(context, mobile: 26, wide: 30, color: _AppColors.textPrimary, weight: FontWeight.w700)),
                 const SizedBox(height: 12),
                 Wrap(spacing: 8, runSpacing: 8, children: [
                   _matchDetailPill(_metricGroupIcon(group), 'Группа', group, color: accent),
@@ -15061,7 +15264,7 @@ final markerColors = dayMatches
                 Row(children: const [
                   Icon(Icons.workspace_premium_rounded, color: _AppColors.orange, size: 20),
                   SizedBox(width: 8),
-                  Expanded(child: Text('Ключевые достижения', style: TextStyle(color: _AppColors.textPrimary, fontSize: 15.5, fontWeight: FontWeight.w900))),
+                  Expanded(child: Text('Ключевые достижения', style: TextStyle(color: _AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w700))),
                 ]),
                 const SizedBox(height: 10),
                 Text(
@@ -15235,8 +15438,8 @@ final markerColors = dayMatches
                     '$rating',
                     style: TextStyle(
                       fontFamily: _fontFamily,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
+                      fontSize: 12.6,
+                      fontWeight: FontWeight.w700,
                       color: active ? Colors.white : accent,
                     ),
                   ),
@@ -15279,7 +15482,7 @@ final markerColors = dayMatches
                   title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: _cmrSubtitleText(context, mobile: 11.2, wide: 11.6, color: _AppColors.textSecondary, weight: FontWeight.w900),
+                  style: _cmrSubtitleText(context, mobile: 11.2, wide: 11.6, color: _AppColors.textSecondary, weight: FontWeight.w700),
                 ),
               ),
             ],
@@ -15291,9 +15494,9 @@ final markerColors = dayMatches
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontFamily: _fontFamily,
-              fontSize: 24,
+              fontSize: 20.6,
               height: 0.95,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               color: accent,
               letterSpacing: -0.6,
             ),
@@ -15303,7 +15506,7 @@ final markerColors = dayMatches
             _trainingRatingHint(rating, coach: coach),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: _cmrSubtitleText(context, mobile: 10.7, wide: 11.2, color: _AppColors.textSecondary, weight: FontWeight.w800),
+            style: _cmrSubtitleText(context, mobile: 10.7, wide: 11.2, color: _AppColors.textSecondary, weight: FontWeight.w600),
           ),
         ],
       ),
@@ -15374,7 +15577,7 @@ final markerColors = dayMatches
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: _cmrSubtitleText(context, mobile: 11.6, wide: 12.0, color: empty ? _AppColors.textSecondary : accent, weight: FontWeight.w900),
+                  style: _cmrSubtitleText(context, mobile: 11.6, wide: 12.0, color: empty ? _AppColors.textSecondary : accent, weight: FontWeight.w700),
                 ),
                 const SizedBox(height: 5),
                 Text(
@@ -15419,14 +15622,14 @@ final markerColors = dayMatches
                       title.isEmpty ? 'Тренировка' : title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: _cmrTitleText(context, mobile: 17, wide: 18.2, color: _AppColors.textPrimary, weight: FontWeight.w900),
+                      style: _cmrTitleText(context, mobile: 17, wide: 18.2, color: _AppColors.textPrimary, weight: FontWeight.w700),
                     ),
                     const SizedBox(height: 5),
                     Text(
                       subtitle.isEmpty ? 'Дата и тип не указаны' : subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _cmrSubtitleText(context, mobile: 11.8, wide: 12.4, color: _AppColors.textSecondary, weight: FontWeight.w800),
+                      style: _cmrSubtitleText(context, mobile: 11.8, wide: 12.4, color: _AppColors.textSecondary, weight: FontWeight.w600),
                     ),
                   ],
                 ),
@@ -15944,9 +16147,9 @@ final markerColors = dayMatches
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(opponent, maxLines: 1, overflow: TextOverflow.ellipsis, style: _cmrTitleText(context, mobile: 17, wide: 18.2, color: _AppColors.textPrimary, weight: FontWeight.w900)),
+                    Text(opponent, maxLines: 1, overflow: TextOverflow.ellipsis, style: _cmrTitleText(context, mobile: 17, wide: 18.2, color: _AppColors.textPrimary, weight: FontWeight.w700)),
                     const SizedBox(height: 3),
-                    Text(tournament.isEmpty ? 'Матч' : tournament, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 11.3, color: _textSecondary, weight: FontWeight.w800)),
+                    Text(tournament.isEmpty ? 'Матч' : tournament, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 11.3, color: _textSecondary, weight: FontWeight.w600)),
                   ],
                 ),
               ),
@@ -15954,7 +16157,7 @@ final markerColors = dayMatches
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                 decoration: BoxDecoration(color: _AppColors.softFor(resultColor), borderRadius: BorderRadius.circular(15)),
-                child: Text(score, style: _bodyStyle(size: 14.2, color: resultColor, weight: FontWeight.w900)),
+                child: Text(score, style: _bodyStyle(size: 14.2, color: resultColor, weight: FontWeight.w700)),
               ),
             ],
           ),
@@ -15999,9 +16202,9 @@ final markerColors = dayMatches
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 10.2, color: _textSecondary, weight: FontWeight.w800)),
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 10.2, color: _textSecondary, weight: FontWeight.w600)),
                 const SizedBox(height: 2),
-                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 12.1, color: _textPrimary, weight: FontWeight.w900)),
+                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 12.1, color: _textPrimary, weight: FontWeight.w700)),
               ],
             ),
           ),
@@ -16100,7 +16303,7 @@ final markerColors = dayMatches
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 10.8, color: _textSecondary, weight: FontWeight.w900)),
+          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 10.8, color: _textSecondary, weight: FontWeight.w700)),
           const SizedBox(height: 6),
           Row(
             children: [
@@ -16109,7 +16312,7 @@ final markerColors = dayMatches
             ],
           ),
           const SizedBox(height: 3),
-          Text(caption, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 10.2, color: color, weight: FontWeight.w900)),
+          Text(caption, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 10.2, color: color, weight: FontWeight.w700)),
         ],
       ),
     );
@@ -16127,7 +16330,7 @@ final markerColors = dayMatches
           children: [
             const Icon(Icons.check_circle_rounded, color: _AppColors.cmrGreen, size: 18),
             const SizedBox(width: 9),
-            Expanded(child: Text('Критичных проблемных зон по выбранному матчу не найдено.', style: _bodyStyle(size: 11.4, color: _textPrimary, weight: FontWeight.w800))),
+            Expanded(child: Text('Критичных проблемных зон по выбранному матчу не найдено.', style: _bodyStyle(size: 11.4, color: _textPrimary, weight: FontWeight.w600))),
           ],
         ),
       );
@@ -16150,9 +16353,9 @@ final markerColors = dayMatches
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(_asStr(p['title']), style: _bodyStyle(size: 12.0, color: _AppColors.error, weight: FontWeight.w900)),
+                      Text(_asStr(p['title']), style: _bodyStyle(size: 12.0, color: _AppColors.error, weight: FontWeight.w700)),
                       const SizedBox(height: 2),
-                      Text(_asStr(p['text']), style: _bodyStyle(size: 10.7, color: _textSecondary, weight: FontWeight.w800)),
+                      Text(_asStr(p['text']), style: _bodyStyle(size: 10.7, color: _textSecondary, weight: FontWeight.w600)),
                     ],
                   ),
                 ),
@@ -16179,7 +16382,7 @@ final markerColors = dayMatches
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Рекомендация', style: _bodyStyle(size: 11.5, color: _textPrimary, weight: FontWeight.w900)),
+                Text('Рекомендация', style: _bodyStyle(size: 11.5, color: _textPrimary, weight: FontWeight.w700)),
                 const SizedBox(height: 3),
                 Text(text, style: _bodyStyle(size: 11.0, color: _textPrimary, weight: FontWeight.w700)),
               ],
@@ -16467,7 +16670,7 @@ final markerColors = dayMatches
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: _bodyStyle(size: 11.2, color: color, weight: FontWeight.w900),
+              style: _bodyStyle(size: 11.2, color: color, weight: FontWeight.w700),
             ),
           ),
         ],
@@ -16576,14 +16779,14 @@ final markerColors = dayMatches
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 13.1, color: const Color(0xFF101828), weight: FontWeight.w900)),
+                      Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 13.1, color: const Color(0xFF101828), weight: FontWeight.w700)),
                       const SizedBox(height: 3),
                       Text(category, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 11, color: const Color(0xFF667085), weight: FontWeight.w700)),
                     ],
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 13.2, color: const Color(0xFF101828), weight: FontWeight.w900)),
+                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 13.2, color: const Color(0xFF101828), weight: FontWeight.w700)),
                 const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
@@ -16595,7 +16798,7 @@ final markerColors = dayMatches
                         Icon(Icons.warning_amber_rounded, size: 14, color: accent),
                         const SizedBox(width: 4),
                       ],
-                      Text(level, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 10.4, color: accent, weight: FontWeight.w900)),
+                      Text(level, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 10.4, color: accent, weight: FontWeight.w700)),
                     ],
                   ),
                 ),
@@ -16751,9 +16954,9 @@ final markerColors = dayMatches
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: Color(0xFF101828),
-                          fontSize: 17,
+                          fontSize: 14.6,
                           height: 1.08,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -16763,7 +16966,7 @@ final markerColors = dayMatches
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Color(0xFF667085),
-                          fontSize: 12,
+                          fontSize: 11.2,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -16923,7 +17126,7 @@ final markerColors = dayMatches
                       name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textPrimary, fontSize: compact ? 20 : 24, height: 1.04, fontWeight: FontWeight.w900, letterSpacing: -.35),
+                      style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textPrimary, fontSize: compact ? 20 : 24, height: 1.04, fontWeight: FontWeight.w700, letterSpacing: -.35),
                     ),
                     const SizedBox(height: 13),
                     Wrap(
@@ -17083,7 +17286,7 @@ final markerColors = dayMatches
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
                 decoration: BoxDecoration(color: poorCount > 0 ? _AppColors.redSoft : _AppColors.cmrSoft, borderRadius: BorderRadius.circular(999)),
-                child: Text(poorCount > 0 ? 'Внимание' : 'Хорошо', style: TextStyle(fontFamily: _fontFamily, color: poorCount > 0 ? _AppColors.error : _AppColors.cmrGreen, fontSize: 10.5, fontWeight: FontWeight.w900)),
+                child: Text(poorCount > 0 ? 'Внимание' : 'Хорошо', style: TextStyle(fontFamily: _fontFamily, color: poorCount > 0 ? _AppColors.error : _AppColors.cmrGreen, fontSize: 10.1, fontWeight: FontWeight.w700)),
               ),
             ],
           ),
@@ -17205,7 +17408,7 @@ final markerColors = dayMatches
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
               decoration: BoxDecoration(color: const Color(0xFFF6F8FA), borderRadius: BorderRadius.circular(12)),
               child: Row(mainAxisSize: MainAxisSize.min, children: const [
-                Text('Последние 8 недель', style: TextStyle(color: _AppColors.textSecondary, fontSize: 10.5, fontWeight: FontWeight.w800)),
+                Text('Последние 8 недель', style: TextStyle(color: _AppColors.textSecondary, fontSize: 10.1, fontWeight: FontWeight.w600)),
                 SizedBox(width: 4),
                 Icon(Icons.keyboard_arrow_down_rounded, color: _AppColors.textSecondary, size: 16),
               ]),
@@ -17283,7 +17486,7 @@ final markerColors = dayMatches
           Expanded(child: Text('Рекомендация тренеру', style: _overviewSectionTitleStyle())),
         ]),
         const SizedBox(height: 14),
-        Text(_overviewCoachRecommendationText(), style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textSecondary, fontSize: 12.2, height: 1.45, fontWeight: FontWeight.w700)),
+        Text(_overviewCoachRecommendationText(), style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textSecondary, fontSize: 11.3, height: 1.45, fontWeight: FontWeight.w700)),
       ]),
     );
   }
@@ -17351,15 +17554,15 @@ final markerColors = dayMatches
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0xFFE5E7EB)),
+            border: null,
           ),
           child: Row(children: [
             _buildOverviewIconBox(icon, color == _AppColors.cmrGreen ? color : _AppColors.textPrimary, size: 44),
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: color, fontSize: 13.2, fontWeight: FontWeight.w900)),
+              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: color, fontSize: 11.9, fontWeight: FontWeight.w700)),
               const SizedBox(height: 4),
-              Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textSecondary, fontSize: 11.3, height: 1.2, fontWeight: FontWeight.w700)),
+              Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textSecondary, fontSize: 10.5, height: 1.2, fontWeight: FontWeight.w700)),
             ])),
             const Icon(Icons.chevron_right_rounded, color: _AppColors.textTertiary, size: 22),
           ]),
@@ -17380,15 +17583,15 @@ final markerColors = dayMatches
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE5E7EB)),
+            border: null,
           ),
           child: Row(children: [
             Container(width: 26, height: 26, decoration: BoxDecoration(color: color == _AppColors.error ? _AppColors.error : const Color(0xFF111418), shape: BoxShape.circle), child: Icon(icon, color: Colors.white, size: 15)),
             const SizedBox(width: 10),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: color, fontSize: 12.7, fontWeight: FontWeight.w900)),
+              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: color, fontSize: 11.4, fontWeight: FontWeight.w700)),
               const SizedBox(height: 3),
-              Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textSecondary, fontSize: 11.2, height: 1.2, fontWeight: FontWeight.w700)),
+              Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textSecondary, fontSize: 10.4, height: 1.2, fontWeight: FontWeight.w700)),
             ])),
             if (onTap != null) const Icon(Icons.chevron_right_rounded, color: _AppColors.textTertiary, size: 22),
           ]),
@@ -17415,12 +17618,12 @@ final markerColors = dayMatches
             Container(width: 34, height: 34, decoration: BoxDecoration(color: color, shape: BoxShape.circle), child: Icon(icon, color: Colors.white, size: 18)),
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textPrimary, fontSize: 13.2, fontWeight: FontWeight.w900, height: 1.1)),
+              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textPrimary, fontSize: 11.9, fontWeight: FontWeight.w700, height: 1.1)),
               const SizedBox(height: 4),
-              Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textSecondary, fontSize: 11.7, fontWeight: FontWeight.w700)),
+              Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textSecondary, fontSize: 10.9, fontWeight: FontWeight.w700)),
             ])),
             const SizedBox(width: 10),
-            Text(_overviewDateLabel(date), textAlign: TextAlign.right, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textSecondary, fontSize: 11.3, height: 1.18, fontWeight: FontWeight.w800)),
+            Text(_overviewDateLabel(date), textAlign: TextAlign.right, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textSecondary, fontSize: 10.5, height: 1.18, fontWeight: FontWeight.w600)),
           ]),
         ),
       ),
@@ -17431,7 +17634,7 @@ final markerColors = dayMatches
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _overviewLabelStyle()),
       const SizedBox(height: 5),
-      Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: valueColor ?? _AppColors.textPrimary, fontSize: 12.5, fontWeight: FontWeight.w900, height: 1.1)),
+      Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: valueColor ?? _AppColors.textPrimary, fontSize: 11.2, fontWeight: FontWeight.w700, height: 1.1)),
     ]);
   }
 
@@ -17448,7 +17651,7 @@ final markerColors = dayMatches
       crossAxisAlignment: CrossAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('$percent%', style: TextStyle(fontFamily: _fontFamily, color: _AppColors.cmrGreen, fontSize: 24, height: 1, fontWeight: FontWeight.w900)),
+        Text('$percent%', style: TextStyle(fontFamily: _fontFamily, color: _AppColors.cmrGreen, fontSize: 20.6, height: 1, fontWeight: FontWeight.w700)),
         const SizedBox(height: 7),
         Text('заполнено', style: _overviewLabelStyle()),
         const SizedBox(height: 12),
@@ -17469,9 +17672,9 @@ final markerColors = dayMatches
     return Row(children: [
       Icon(icon, color: color, size: 17),
       const SizedBox(width: 8),
-      Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textPrimary, fontSize: 11.5, fontWeight: FontWeight.w900)),
+      Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textPrimary, fontSize: 10.7, fontWeight: FontWeight.w700)),
       const SizedBox(width: 5),
-      Expanded(child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: color, fontSize: 11.5, fontWeight: FontWeight.w900))),
+      Expanded(child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: color, fontSize: 10.7, fontWeight: FontWeight.w700))),
     ]);
   }
 
@@ -17481,14 +17684,14 @@ final markerColors = dayMatches
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: null,
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(icon, color: color, size: 14),
         const SizedBox(width: 6),
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 190),
-          child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textSecondary, fontSize: 11.5, fontWeight: FontWeight.w900)),
+          child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textSecondary, fontSize: 10.7, fontWeight: FontWeight.w700)),
         ),
       ]),
     );
@@ -17529,7 +17732,7 @@ final markerColors = dayMatches
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
       decoration: BoxDecoration(color: active ? _AppColors.cmrSoft : Colors.white, borderRadius: BorderRadius.circular(12), ),
-      child: Text(label, style: TextStyle(fontFamily: _fontFamily, color: active ? _AppColors.cmrGreen : _AppColors.textSecondary, fontSize: 11.3, fontWeight: FontWeight.w900)),
+      child: Text(label, style: TextStyle(fontFamily: _fontFamily, color: active ? _AppColors.cmrGreen : _AppColors.textSecondary, fontSize: 10.5, fontWeight: FontWeight.w700)),
     );
   }
 
@@ -17538,14 +17741,14 @@ final markerColors = dayMatches
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(color: _AppColors.softFor(color), borderRadius: BorderRadius.circular(18)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title, style: TextStyle(fontFamily: _fontFamily, color: color, fontSize: 12.5, fontWeight: FontWeight.w900)),
+        Text(title, style: TextStyle(fontFamily: _fontFamily, color: color, fontSize: 11.2, fontWeight: FontWeight.w700)),
         const SizedBox(height: 9),
         ...rows.take(3).map((e) => Padding(
               padding: const EdgeInsets.only(bottom: 7),
               child: Row(children: [
                 Icon(Icons.check_circle_rounded, color: color, size: 14),
                 const SizedBox(width: 7),
-                Expanded(child: Text(e, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textPrimary, fontSize: 11.5, fontWeight: FontWeight.w800))),
+                Expanded(child: Text(e, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textPrimary, fontSize: 10.7, fontWeight: FontWeight.w600))),
               ]),
             )),
       ]),
@@ -17557,7 +17760,7 @@ final markerColors = dayMatches
       child: TextButton.icon(
         onPressed: onTap,
         icon: Icon(icon, size: 18, color: _AppColors.cmrGreen),
-        label: Text(label, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.cmrGreen, fontSize: 12.2, fontWeight: FontWeight.w900)),
+        label: Text(label, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.cmrGreen, fontSize: 11.3, fontWeight: FontWeight.w700)),
       ),
     );
   }
@@ -17567,7 +17770,7 @@ final markerColors = dayMatches
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(color: const Color(0xFFF8FAF9), borderRadius: BorderRadius.circular(18)),
-      child: Text(text, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textSecondary, fontSize: 12.3, height: 1.35, fontWeight: FontWeight.w700)),
+      child: Text(text, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textSecondary, fontSize: 11.4, height: 1.35, fontWeight: FontWeight.w700)),
     );
   }
 
@@ -17575,23 +17778,22 @@ final markerColors = dayMatches
     return Padding(
       padding: const EdgeInsets.only(bottom: 11),
       child: Row(children: [
-        Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textSecondary, fontSize: 11.8, fontWeight: FontWeight.w800))),
+        Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w600))),
         const SizedBox(width: 10),
-        Flexible(child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textPrimary, fontSize: 12.2, fontWeight: FontWeight.w900))),
+        Flexible(child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textPrimary, fontSize: 11.3, fontWeight: FontWeight.w700))),
       ]),
     );
   }
 
-  BoxDecoration _overviewCardDecoration({double radius = 24}) {
+  BoxDecoration _overviewCardDecoration({double radius = 22}) {
     return BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(radius),
-      border: Border.all(color: const Color(0xFFE5E7EB)),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withOpacity(.035),
-          blurRadius: 22,
-          offset: const Offset(0, 10),
+          color: Colors.black.withOpacity(.028),
+          blurRadius: 18,
+          offset: const Offset(0, 8),
         ),
       ],
     );
@@ -17599,15 +17801,15 @@ final markerColors = dayMatches
 
 
   TextStyle _overviewSectionTitleStyle({double size = 14.6}) {
-    return TextStyle(fontFamily: _fontFamily, color: _AppColors.textPrimary, fontSize: size, height: 1.1, fontWeight: FontWeight.w900, letterSpacing: -.1);
+    return TextStyle(fontFamily: _fontFamily, color: _AppColors.textPrimary, fontSize: size, height: 1.1, fontWeight: FontWeight.w700, letterSpacing: -.1);
   }
 
   TextStyle _overviewTitleStyle({required double size, required Color color}) {
-    return TextStyle(fontFamily: _fontFamily, color: color, fontSize: size, height: 1.05, fontWeight: FontWeight.w900, letterSpacing: -.25);
+    return TextStyle(fontFamily: _fontFamily, color: color, fontSize: size, height: 1.05, fontWeight: FontWeight.w700, letterSpacing: -.25);
   }
 
   TextStyle _overviewLabelStyle() {
-    return TextStyle(fontFamily: _fontFamily, color: _AppColors.textSecondary, fontSize: 10.8, height: 1.1, fontWeight: FontWeight.w800);
+    return TextStyle(fontFamily: _fontFamily, color: _AppColors.textSecondary, fontSize: 10.4, height: 1.1, fontWeight: FontWeight.w600);
   }
 
   String _overviewFormLabel() {
@@ -18046,7 +18248,7 @@ final markerColors = dayMatches
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AppColors.textPrimary, fontSize: 20, fontWeight: FontWeight.w900, height: 1.08)),
+                    Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AppColors.textPrimary, fontSize: 17.2, fontWeight: FontWeight.w700, height: 1.08)),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 7,
@@ -18084,7 +18286,7 @@ final markerColors = dayMatches
             child: Row(children: const [
               Icon(Icons.info_outline_rounded, color: _AppColors.cmrGreen, size: 20),
               SizedBox(width: 10),
-              Expanded(child: Text('Кнопка «Сообщение» сверху откроет личный чат с игроком.', style: TextStyle(color: _AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w600, height: 1.35))),
+              Expanded(child: Text('Кнопка «Сообщение» сверху откроет личный чат с игроком.', style: TextStyle(color: _AppColors.textSecondary, fontSize: 11.7, fontWeight: FontWeight.w600, height: 1.35))),
             ]),
           ),
         ])),
@@ -18114,7 +18316,7 @@ final markerColors = dayMatches
             children: [
               Icon(icon, size: 21, color: color),
               const SizedBox(height: 6),
-              Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontSize: 11.5, fontWeight: FontWeight.w800)),
+              Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontSize: 10.7, fontWeight: FontWeight.w600)),
             ],
           ),
         ),
@@ -18129,7 +18331,7 @@ final markerColors = dayMatches
         color: const Color(0xFFF8FAF9),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFF667085), fontSize: 11, fontWeight: FontWeight.w900)),
+      child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFF667085), fontSize: 10.6, fontWeight: FontWeight.w700)),
     );
   }
 
@@ -18219,8 +18421,8 @@ final markerColors = dayMatches
                       style: TextStyle(
                         fontFamily: _fontFamily,
                         color: const Color(0xFF101828),
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w900,
+                        fontSize: 12.2,
+                        fontWeight: FontWeight.w700,
                         letterSpacing: .2,
                       ),
                     ),
@@ -18268,7 +18470,7 @@ final markerColors = dayMatches
                           'Помощь: «${tab.title}»',
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontFamily: _fontFamily, color: const Color(0xFF101828), fontSize: _adaptiveFont(context, mobile: 18, wide: 19.2), fontWeight: FontWeight.w900, height: 1.1),
+                          style: TextStyle(fontFamily: _fontFamily, color: const Color(0xFF101828), fontSize: _adaptiveFont(context, mobile: 18, wide: 19.2), fontWeight: FontWeight.w700, height: 1.1),
                         ),
                         const SizedBox(height: 6),
                         Text(
@@ -18384,7 +18586,7 @@ final markerColors = dayMatches
             width: 30,
             height: 30,
             decoration: BoxDecoration(color: const Color(0xFFF1F5F9), shape: BoxShape.circle),
-            child: Center(child: Text('$number', style: TextStyle(color: accent, fontSize: 12, fontWeight: FontWeight.w900))),
+            child: Center(child: Text('$number', style: TextStyle(color: accent, fontSize: 11.2, fontWeight: FontWeight.w700))),
           ),
           const SizedBox(width: 11),
           Expanded(
@@ -18415,7 +18617,7 @@ final markerColors = dayMatches
           _buildCmrSectionBadge(tab: tab),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(tab.index == 0 ? 'Профиль игрока' : tab.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: compact ? 19 : 23, fontWeight: FontWeight.w900, color: _AppColors.textPrimary)),
+            Text(tab.index == 0 ? 'Профиль игрока' : tab.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: compact ? 19 : 23, fontWeight: FontWeight.w700, color: _AppColors.textPrimary)),
             const SizedBox(height: 3),
             Text(team.isEmpty ? tab.subtitle : '$team • ${tab.subtitle}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textSecondary, fontSize: compact ? 12 : 13.4, fontWeight: FontWeight.w700)),
           ])),
@@ -18477,7 +18679,7 @@ final markerColors = dayMatches
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             Icon(icon, size: 21, color: accent),
             const SizedBox(width: 7),
-            Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: accent, fontSize: 12.5, fontWeight: FontWeight.w800)),
+            Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: accent, fontSize: 11.2, fontWeight: FontWeight.w600)),
           ]),
         ),
       ),
@@ -18504,7 +18706,7 @@ final markerColors = dayMatches
         ]),
         const SizedBox(width: 14),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textPrimary, fontSize: compact ? 20 : 22, height: 1.08, fontWeight: FontWeight.w900)),
+          Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textPrimary, fontSize: compact ? 20 : 22, height: 1.08, fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
           Wrap(spacing: 7, runSpacing: 7, children: [
             _buildTrainerLikePill(position.isEmpty ? 'Амплуа не указано' : position, Icons.sports_soccer_rounded, _AppColors.cmrGreen),
@@ -18515,7 +18717,7 @@ final markerColors = dayMatches
         ])),
         if (!compact) ...[
           const SizedBox(width: 12),
-          Container(width: 104, padding: const EdgeInsets.symmetric(vertical: 12), decoration: BoxDecoration(color: Colors.white.withOpacity(.82), borderRadius: BorderRadius.circular(22)), child: Column(children: [Text('$readiness%', style: const TextStyle(color: _AppColors.textPrimary, fontSize: 22, fontWeight: FontWeight.w900)), const Text('заполнено', style: TextStyle(color: _AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w700))])),
+          Container(width: 104, padding: const EdgeInsets.symmetric(vertical: 12), decoration: BoxDecoration(color: Colors.white.withOpacity(.82), borderRadius: BorderRadius.circular(22)), child: Column(children: [Text('$readiness%', style: const TextStyle(color: _AppColors.textPrimary, fontSize: 18.9, fontWeight: FontWeight.w700)), const Text('заполнено', style: TextStyle(color: _AppColors.textSecondary, fontSize: 10.6, fontWeight: FontWeight.w700))])),
         ],
       ]),
     );
@@ -18550,9 +18752,9 @@ final markerColors = dayMatches
         ]),
         const SizedBox(width: 12),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-          Text(name, maxLines: collapsed ? 1 : 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textPrimary, fontSize: titleSize, height: 1.08, fontWeight: FontWeight.w900, letterSpacing: -.2)),
+          Text(name, maxLines: collapsed ? 1 : 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textPrimary, fontSize: titleSize, height: 1.08, fontWeight: FontWeight.w700, letterSpacing: -.2)),
           SizedBox(height: collapsed ? 3 : 6),
-          Text(meta.isEmpty ? 'Амплуа не указано' : meta, maxLines: collapsed ? 1 : 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AppColors.textSecondary, fontSize: 11.3, height: 1.25, fontWeight: FontWeight.w600)),
+          Text(meta.isEmpty ? 'Амплуа не указано' : meta, maxLines: collapsed ? 1 : 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AppColors.textSecondary, fontSize: 10.5, height: 1.25, fontWeight: FontWeight.w600)),
           if (!collapsed) ...[
             const SizedBox(height: 10),
             Row(children: [
@@ -18582,7 +18784,7 @@ final markerColors = dayMatches
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Icon(icon, size: 21, color: accent),
             const SizedBox(height: 6),
-            Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: accent, fontSize: 11.5, fontWeight: FontWeight.w800)),
+            Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: accent, fontSize: 10.7, fontWeight: FontWeight.w600)),
           ]),
         ),
       ),
@@ -18600,9 +18802,9 @@ final markerColors = dayMatches
         Container(width: 30, height: 30, decoration: BoxDecoration(color: _AppColors.softFor(accent), borderRadius: BorderRadius.circular(11)), child: Icon(tab.icon, size: 16, color: accent)),
         const SizedBox(width: 10),
         const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Раздел открыт ниже', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w900, height: 1.1)),
+          Text('Раздел открыт ниже', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _AppColors.textPrimary, fontSize: 11.7, fontWeight: FontWeight.w700, height: 1.1)),
           SizedBox(height: 2),
-          Text('Листайте экран, чтобы смотреть данные.', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _AppColors.textSecondary, fontSize: 10.8, fontWeight: FontWeight.w700)),
+          Text('Листайте экран, чтобы смотреть данные.', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _AppColors.textSecondary, fontSize: 10.4, fontWeight: FontWeight.w700)),
         ])),
       ]),
     );
@@ -18616,7 +18818,7 @@ final markerColors = dayMatches
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
+          border: null,
           boxShadow: [BoxShadow(color: Colors.black.withOpacity(.06), blurRadius: 22, offset: const Offset(0, 10))],
         ),
         child: ClipRRect(
@@ -18629,7 +18831,7 @@ final markerColors = dayMatches
             unselectedItemColor: _AppColors.textSecondary,
             selectedFontSize: 10.8,
             unselectedFontSize: 10.2,
-            selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w800),
+            selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
             unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
             elevation: 0,
             onTap: _handleCmrMobileBottomTap,
@@ -18759,9 +18961,9 @@ final markerColors = dayMatches
                               'Разделы',
                               style: TextStyle(
                                 color: _AppColors.textPrimary,
-                                fontSize: 16,
+                                fontSize: 13.8,
                                 height: 1.1,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
@@ -18775,8 +18977,8 @@ final markerColors = dayMatches
                               '${items.length}',
                               style: const TextStyle(
                                 color: _AppColors.primaryGreen,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w900,
+                                fontSize: 10.6,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
@@ -18857,9 +19059,9 @@ final markerColors = dayMatches
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: _AppColors.textPrimary,
-                    fontSize: 17,
+                    fontSize: 14.6,
                     height: 1.08,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -18869,7 +19071,7 @@ final markerColors = dayMatches
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: _AppColors.textSecondary,
-                    fontSize: 12,
+                    fontSize: 11.2,
                     height: 1.15,
                     fontWeight: FontWeight.w700,
                   ),
@@ -18925,9 +19127,9 @@ final markerColors = dayMatches
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: titleColor,
-                        fontSize: 15,
+                        fontSize: 13.5,
                         height: 1.05,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -18937,7 +19139,7 @@ final markerColors = dayMatches
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: _AppColors.textSecondary,
-                        fontSize: 12,
+                        fontSize: 11.2,
                         height: 1.18,
                         fontWeight: FontWeight.w700,
                       ),
@@ -19116,8 +19318,8 @@ final markerColors = dayMatches
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       color: Color(0xFF101828),
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w900,
+                                      fontSize: 18.9,
+                                      fontWeight: FontWeight.w700,
                                       height: 1.05,
                                     ),
                                   ),
@@ -19128,7 +19330,7 @@ final markerColors = dayMatches
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       color: Color(0xFF667085),
-                                      fontSize: 12.5,
+                                      fontSize: 11.2,
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
@@ -19234,14 +19436,14 @@ final markerColors = dayMatches
                                 tab.title,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(color: Color(0xFF101828), fontSize: 18, fontWeight: FontWeight.w900),
+                                style: const TextStyle(color: Color(0xFF101828), fontSize: 13.8, fontWeight: FontWeight.w700),
                               ),
                               const SizedBox(height: 3),
                               Text(
                                 tab.subtitle,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(color: Color(0xFF667085), fontSize: 12, fontWeight: FontWeight.w700),
+                                style: const TextStyle(color: Color(0xFF667085), fontSize: 11.2, fontWeight: FontWeight.w700),
                               ),
                             ],
                           ),
@@ -19286,56 +19488,456 @@ final markerColors = dayMatches
     return false;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    final isTablet = width >= 720;
-    final compact = width < 980;
+  _CategoryTab _currentCmrTab() {
+    return _categoryTabs.firstWhere(
+      (e) => e.index == _selectedTabIndex,
+      orElse: () => _categoryTabs.first,
+    );
+  }
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF4F6F5),
-      body: SafeArea(
-        top: true,
-        bottom: isTablet,
-        child: isTablet
-            ? Row(
+  Widget _buildPlayerProfileMinimizedWindow({required bool compact, required bool embedded}) {
+    final name = _cmrFullName().isEmpty ? 'Профиль игрока' : _cmrFullName();
+    return Material(
+      color: Colors.white,
+      child: SafeArea(
+        top: !embedded,
+        bottom: !embedded,
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: Padding(
+            padding: EdgeInsets.all(compact ? 10 : 14),
+            child: Container(
+              height: 58,
+              constraints: const BoxConstraints(maxWidth: 430),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: const Color(0xFFE8EDF2), width: 1),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(.08), blurRadius: 24, offset: const Offset(0, 12))],
+              ),
+              child: Row(
                 children: [
-                  _buildCmrShellSidebar(compact: compact),
-                  Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(12, 12, compact ? 12 : 14, 12),
-                      child: _buildCmrTabletWorkspace(compact: compact),
-                    ),
+                  _buildCmrWindowRoundControl(
+                    icon: Icons.keyboard_arrow_up_rounded,
+                    tooltip: 'Развернуть профиль',
+                    onTap: () => setState(() => _playerProfileWindowMinimized = false),
                   ),
-                ],
-              )
-            : Column(
-                children: [
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 220),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeOutCubic,
-                    child: _buildCmrMobileHero(
-                      key: ValueKey(_mobileHeroCollapsed),
-                      collapsed: _mobileHeroCollapsed,
-                    ),
-                  ),
+                  const SizedBox(width: 10),
+                  _buildSmallRoundIcon(Icons.person_rounded),
+                  const SizedBox(width: 10),
                   Expanded(
-                    child: NotificationListener<ScrollNotification>(
-                      onNotification: _onCmrMobileScroll,
-                      child: RefreshIndicator(
-                        color: const Color(0xFF178A45),
-                        onRefresh: _refreshCmrProfile,
-                        child: _buildGeneralTab(),
-                      ),
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontFamily: _fontFamily, color: const Color(0xFF101828), fontSize: 14, fontWeight: FontWeight.w800, height: 1),
                     ),
                   ),
                 ],
               ),
+            ),
+          ),
+        ),
       ),
-      bottomNavigationBar: isTablet ? null : _buildCmrMobileBottomMenu(),
     );
   }
+
+  Widget _buildCmrPcWindow({required bool compact, required bool embedded}) {
+    if (_playerProfileWindowMinimized) {
+      return _buildPlayerProfileMinimizedWindow(compact: compact, embedded: embedded);
+    }
+
+    final media = MediaQuery.of(context);
+    // Встроенный профиль оставляем как аккуратное CMR-окно с отступами и радиусом,
+    // по аналогии с Tracker/Teams, а не растягиваем в край без формы.
+    final fullWindow = _playerProfileWindowMaximized;
+    final windowPadding = fullWindow
+        ? EdgeInsets.zero
+        : EdgeInsets.fromLTRB(compact ? 10 : 14, compact ? 10 : 14, compact ? 10 : 14, compact ? 10 : 14);
+
+    return Material(
+      color: const Color(0xFFF6F7F9),
+      child: SafeArea(
+        top: !embedded && !fullWindow,
+        bottom: !embedded && !fullWindow,
+        child: Padding(
+          padding: windowPadding,
+          child: Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(fullWindow ? 16 : 24),
+              border: Border.all(color: const Color(0xFFE8EDF2), width: 1),
+              boxShadow: fullWindow
+                  ? const []
+                  : [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(.045),
+                        blurRadius: 30,
+                        offset: const Offset(0, 16),
+                      ),
+                    ],
+            ),
+            child: Stack(
+              children: [
+                Row(
+                  children: [
+                    _buildCmrShellSidebar(compact: compact),
+                    const VerticalDivider(width: 1, thickness: 1, color: Color(0xFFE8EDF2)),
+                    Expanded(
+                      child: MediaQuery(
+                        data: media.copyWith(textScaleFactor: compact ? 0.82 : 0.84),
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(compact ? 10 : 14, compact ? 10 : 14, compact ? 10 : 14, compact ? 10 : 14),
+                          child: _buildCmrTabletWorkspace(compact: compact),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCmrPcWindowHeader({required bool compact}) {
+    final photo = _normalizeImage(widget.player['photo']);
+    final name = _cmrFullName();
+    final tab = _currentCmrTab();
+    final team = _playerClub().isEmpty
+        ? _firstNotEmpty([widget.player['team_name'], widget.player['teamName']])
+        : _playerClub();
+    final position = _firstNotEmpty([widget.player['position'], widget.player['player_position'], widget.player['role']]);
+    final number = _firstNotEmpty([widget.player['jersey_number'], widget.player['number'], widget.player['player_number']]);
+    final age = _playerAge();
+    final meta = [
+      if (position.trim().isNotEmpty) position,
+      if (number.trim().isNotEmpty) '№ $number',
+      if (age.trim().isNotEmpty) '$age лет',
+      if (team.trim().isNotEmpty) team,
+    ].join(' · ');
+
+    return Container(
+      height: compact ? 62 : 68,
+      padding: EdgeInsets.fromLTRB(compact ? 12 : 14, 8, compact ? 12 : 14, 8),
+      decoration: const BoxDecoration(color: Colors.white),
+      child: Row(
+        children: [
+          _buildCmrWindowTrafficLights(),
+          SizedBox(width: compact ? 10 : 14),
+          _buildCmrWindowPlayerAvatar(photo: photo, size: compact ? 40 : 46),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        name.isEmpty ? 'Профиль игрока' : name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontFamily: _fontFamily,
+                          color: const Color(0xFF101828),
+                          fontSize: compact ? 14.0 : 15.0,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -.2,
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: const BoxDecoration(color: _AppColors.cmrGreen, shape: BoxShape.circle),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  meta.isEmpty ? tab.subtitle : '$meta · ${tab.title}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: _fontFamily,
+                    color: const Color(0xFF667085),
+                    fontSize: compact ? 9.5 : 10.2,
+                    fontWeight: FontWeight.w600,
+                    height: 1.15,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (!compact) ...[
+            const SizedBox(width: 10),
+            _buildCmrWindowAction(icon: Icons.chat_bubble_outline_rounded, label: 'Сообщение', onTap: _openPrivateChat),
+            const SizedBox(width: 8),
+            _buildCmrWindowAction(icon: Icons.edit_outlined, label: 'Редактировать', onTap: _openPlayerEditorPanel),
+            const SizedBox(width: 8),
+            _buildCmrWindowAction(icon: Icons.fitness_center_rounded, label: 'Тренировка', onTap: _assignTraining),
+          ],
+          const SizedBox(width: 8),
+          _buildCmrWindowIconButton(icon: _designLoading ? Icons.sync_rounded : Icons.refresh_rounded, onTap: _refreshCmrProfile, tooltip: 'Обновить'),
+          const SizedBox(width: 8),
+          _buildCmrWindowIconButton(icon: Icons.close_rounded, onTap: _closePlayerProfileScreen, tooltip: 'Закрыть'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCmrWindowTrafficLights() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildCmrWindowRoundControl(icon: Icons.close_rounded, tooltip: 'На главный экран', onTap: _closePlayerProfileScreen),
+        const SizedBox(width: 7),
+        _buildCmrWindowRoundControl(
+          icon: Icons.remove_rounded,
+          tooltip: 'Свернуть профиль',
+          onTap: () => setState(() => _playerProfileWindowMinimized = true),
+        ),
+        const SizedBox(width: 7),
+        _buildCmrWindowRoundControl(
+          icon: _playerProfileWindowMaximized ? Icons.close_fullscreen_rounded : Icons.open_in_full_rounded,
+          tooltip: _playerProfileWindowMaximized ? 'Вернуть размер' : 'Развернуть профиль',
+          onTap: () => setState(() => _playerProfileWindowMaximized = !_playerProfileWindowMaximized),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCmrWindowPlayerAvatar({required String? photo, required double size}) {
+    return _buildPhotoPreviewTap(
+      imageUrl: photo,
+      child: _buildCircleNetworkImage(
+        imageUrl: photo,
+        size: size,
+        borderColor: Colors.transparent,
+        borderWidth: 0,
+        fallback: const Icon(Icons.person_rounded, color: _AppColors.cmrGreen),
+      ),
+    );
+  }
+
+  Widget _buildCmrWindowIconButton({required IconData icon, required VoidCallback onTap, required String tooltip}) {
+    return _buildCmrWindowRoundControl(icon: icon, tooltip: tooltip, onTap: onTap, size: 40, iconSize: 19);
+  }
+
+  Widget _buildCmrWindowRoundControl({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+    double size = 34,
+    double iconSize = 17,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: const Color(0xFFF4F6F8),
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: onTap,
+          child: SizedBox(
+            width: size,
+            height: size,
+            child: Icon(icon, color: const Color(0xFF667085), size: iconSize),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCmrWindowAction({required IconData icon, required String label, required VoidCallback onTap}) {
+    return Material(
+      color: const Color(0xFFF6F8FA),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: const Color(0xFF344054), size: 17),
+              const SizedBox(width: 7),
+              Text(
+                label,
+                style: TextStyle(
+                  fontFamily: _fontFamily,
+                  color: const Color(0xFF344054),
+                  fontSize: 10.4,
+                  fontWeight: FontWeight.w600,
+                  height: 1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+
+  void _openPlayerFloatingCurrentTab() {
+    final tab = _currentCmrTab();
+    _openPlayerFloatingPane(
+      pane: 'workspace',
+      title: tab.title,
+      icon: tab.icon,
+    );
+  }
+
+  void _openPlayerFloatingDetails() {
+    final tab = _currentCmrTab();
+    _openPlayerFloatingPane(
+      pane: 'details',
+      title: '${tab.title}: детали',
+      icon: tab.icon,
+    );
+  }
+
+  void _openPlayerFloatingPane({required String pane, required String title, required IconData icon}) {
+    if (!mounted) return;
+    setState(() {
+      _playerFloatingPane = pane;
+      _playerFloatingTitle = title;
+      _playerFloatingIcon = icon;
+      _playerFloatingMinimized = false;
+      _playerFloatingMaximized = false;
+      _playerFloatingOffset = null;
+    });
+  }
+
+  void _closePlayerFloatingPane() {
+    if (!mounted) return;
+    setState(() {
+      _playerFloatingPane = null;
+      _playerFloatingMinimized = false;
+      _playerFloatingMaximized = false;
+      _playerFloatingOffset = null;
+    });
+  }
+
+  Widget _buildPlayerFloatingContent() {
+    final tab = _currentCmrTab();
+    if (_playerFloatingPane == 'details') {
+      return _buildCmrSelectionDetailsPane(tab);
+    }
+    return _buildCmrWorkspaceContent(tab: tab, compact: false);
+  }
+
+  Widget _buildPlayerWindowExpandDockButton({required bool compact}) {
+    return const SizedBox.shrink();
+  }
+
+
+  Widget _buildPlayerFloatingWindowLayer({required bool compact}) {
+    return const SizedBox.shrink();
+  }
+
+
+  Widget _buildSmallRoundIcon(IconData icon, {bool active = false}) {
+    return Container(
+      width: 34,
+      height: 34,
+      decoration: BoxDecoration(
+        color: active ? const Color(0xFFF2F7F4) : const Color(0xFFF4F6F8),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Icon(icon, size: 17, color: active ? _AppColors.cmrGreen : const Color(0xFF667085)),
+    );
+  }
+
+  Widget _buildCmrPcTopTabs({required bool compact}) {
+    return Container(
+      height: compact ? 42 : 46,
+      padding: EdgeInsets.fromLTRB(compact ? 10 : 14, 4, compact ? 10 : 14, 6),
+      color: Colors.white,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        itemCount: _categoryTabs.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 7),
+        itemBuilder: (context, index) {
+          final tab = _categoryTabs[index];
+          final active = tab.index == _selectedTabIndex;
+          return _CmrPcTopTabButton(
+            tab: tab,
+            active: active,
+            compact: compact,
+            fontFamily: _fontFamily,
+            onTap: () => _selectCmrTab(tab.index),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildCmrEmbeddedTopTabs({required bool compact}) {
+    return _buildCmrPcTopTabs(compact: compact);
+  }
+
+  Widget _buildEmbeddedWorkspaceBody({required bool compact}) {
+    return _buildCmrPcWindow(compact: compact, embedded: true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final isTablet = width >= 720;
+    final compact = width < 1080;
+
+    if (isTablet) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        body: _buildCmrPcWindow(compact: compact, embedded: widget.embeddedInWorkspace),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        top: true,
+        bottom: false,
+        child: Column(
+          children: [
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeOutCubic,
+              child: _buildCmrMobileHero(
+                key: ValueKey(_mobileHeroCollapsed),
+                collapsed: _mobileHeroCollapsed,
+              ),
+            ),
+            Expanded(
+              child: NotificationListener<ScrollNotification>(
+                onNotification: _onCmrMobileScroll,
+                child: RefreshIndicator(
+                  color: const Color(0xFF178A45),
+                  onRefresh: _refreshCmrProfile,
+                  child: _buildGeneralTab(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: _buildCmrMobileBottomMenu(),
+    );
+  }
+
 
 
 }
@@ -19468,7 +20070,7 @@ class _OverviewTrendPainter extends CustomPainter {
     );
     canvas.drawRRect(badgeRect, Paint()..color = color);
     final tp = TextPainter(
-      text: TextSpan(text: safeValues.last.toStringAsFixed(1).replaceAll('.', ','), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900)),
+      text: TextSpan(text: safeValues.last.toStringAsFixed(1).replaceAll('.', ','), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
       textAlign: TextAlign.center,
       textDirection: ui.TextDirection.ltr,
     )..layout(maxWidth: 34);
@@ -19524,9 +20126,9 @@ class _CmrEmbeddedPanel extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.w900)),
+                        Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AppColors.textPrimary, fontSize: 13.8, fontWeight: FontWeight.w700)),
                         const SizedBox(height: 3),
-                        Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w700)),
+                        Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AppColors.textSecondary, fontSize: 11.2, fontWeight: FontWeight.w700)),
                       ],
                     ),
                   ),
@@ -19615,7 +20217,7 @@ class _CmrPlayerInlineEditorState extends State<_CmrPlayerInlineEditor> {
   InputDecoration _dec(String hint, IconData icon) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(color: _AppColors.textTertiary, fontSize: 13, fontWeight: FontWeight.w600),
+      hintStyle: const TextStyle(color: _AppColors.textTertiary, fontSize: 11.7, fontWeight: FontWeight.w600),
       prefixIcon: Padding(
         padding: const EdgeInsets.only(left: 12, right: 8),
         child: Icon(icon, color: _AppColors.textSecondary, size: 19),
@@ -19626,7 +20228,7 @@ class _CmrPlayerInlineEditorState extends State<_CmrPlayerInlineEditor> {
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: _AppColors.cmrGreen, width: 1.3)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
     );
   }
 
@@ -19634,7 +20236,7 @@ class _CmrPlayerInlineEditorState extends State<_CmrPlayerInlineEditor> {
     return TextField(
       controller: c,
       maxLines: maxLines,
-      style: const TextStyle(color: _AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w700),
+      style: const TextStyle(color: _AppColors.textPrimary, fontSize: 12.6, fontWeight: FontWeight.w700),
       decoration: _dec(hint, icon),
     );
   }
@@ -19686,7 +20288,7 @@ class _CmrPlayerInlineEditorState extends State<_CmrPlayerInlineEditor> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Основные данные', style: TextStyle(color: _AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w900)),
+              const Text('Основные данные', style: TextStyle(color: _AppColors.textPrimary, fontSize: 13.8, fontWeight: FontWeight.w700)),
               const SizedBox(height: 12),
               LayoutBuilder(builder: (context, c) {
                 final two = c.maxWidth >= 560;
@@ -19717,7 +20319,7 @@ class _CmrPlayerInlineEditorState extends State<_CmrPlayerInlineEditor> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Спортивная карточка', style: TextStyle(color: _AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w900)),
+              const Text('Спортивная карточка', style: TextStyle(color: _AppColors.textPrimary, fontSize: 13.8, fontWeight: FontWeight.w700)),
               const SizedBox(height: 12),
               _field(sportDataC, 'Метрики: рост, вес, голы, скорость…', Icons.query_stats_rounded, maxLines: 5),
               const SizedBox(height: 10),
@@ -19739,7 +20341,7 @@ class _CmrPlayerInlineEditorState extends State<_CmrPlayerInlineEditor> {
               foregroundColor: Colors.white,
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-              textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900),
+              textStyle: const TextStyle(fontSize: 12.6, fontWeight: FontWeight.w700),
             ),
           ),
         ),
@@ -19786,8 +20388,8 @@ class _TabletSectionActionButton extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w900,
+                  fontSize: 11.7,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
@@ -19833,8 +20435,8 @@ class _TabletFloatingSectionAction extends StatelessWidget {
                 label,
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w900,
+                  fontSize: 12.2,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
@@ -19890,12 +20492,122 @@ class _MobileSectionFab extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w900,
+                  fontSize: 11.7,
+                  fontWeight: FontWeight.w700,
                   height: 1,
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+class _CmrWindowDot extends StatelessWidget {
+  final Color color;
+
+  const _CmrWindowDot({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 11,
+      height: 11,
+      decoration: BoxDecoration(
+        color: const Color(0xFFE9EEF3),
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+}
+
+class _CmrPcTopTabButton extends StatefulWidget {
+  final _CategoryTab tab;
+  final bool active;
+  final bool compact;
+  final String? fontFamily;
+  final VoidCallback onTap;
+
+  const _CmrPcTopTabButton({
+    required this.tab,
+    required this.active,
+    required this.compact,
+    required this.fontFamily,
+    required this.onTap,
+  });
+
+  @override
+  State<_CmrPcTopTabButton> createState() => _CmrPcTopTabButtonState();
+}
+
+class _CmrPcTopTabButtonState extends State<_CmrPcTopTabButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = widget.active;
+    final bg = active
+        ? const Color(0xFFF2F7F4)
+        : (_hovered ? const Color(0xFFF6F8FA) : Colors.transparent);
+    final fg = active ? _AppColors.cmrGreen : const Color(0xFF475467);
+    final iconColor = active ? _AppColors.cmrGreen : const Color(0xFF98A2B3);
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
+            height: widget.compact ? 30 : 32,
+            constraints: BoxConstraints(minWidth: widget.compact ? 36 : 68),
+            padding: EdgeInsets.symmetric(horizontal: widget.compact ? 8 : 10),
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  width: active ? 6 : 4,
+                  height: active ? 6 : 4,
+                  decoration: BoxDecoration(
+                    color: active ? _AppColors.cmrGreen : const Color(0xFFCBD5E1),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                if (!widget.compact) ...[
+                  const SizedBox(width: 7),
+                  Text(
+                    widget.tab.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: widget.fontFamily,
+                      color: fg,
+                      fontSize: 9.8,
+                      fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+                      height: 1,
+                      letterSpacing: -.08,
+                    ),
+                  ),
+                ] else ...[
+                  const SizedBox(width: 6),
+                  Icon(widget.tab.icon, color: iconColor, size: 16),
+                ],
+              ],
+            ),
           ),
         ),
       ),
@@ -19976,8 +20688,8 @@ class _SmallCardEditButton extends StatelessWidget {
                 label,
                 style: const TextStyle(
                   color: Color(0xFF101828),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
+                  fontSize: 10.6,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
@@ -20067,8 +20779,8 @@ class _ExportBadge extends StatelessWidget {
         label,
         style: const TextStyle(
           color: Color(0xFF178A45),
-          fontSize: 11.5,
-          fontWeight: FontWeight.w900,
+          fontSize: 10.7,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );

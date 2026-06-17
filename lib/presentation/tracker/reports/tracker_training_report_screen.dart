@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'tracker_export_viewer.dart';
 
 import 'tracker_training_report_api.dart';
 import 'tracker_training_report_models.dart';
@@ -13,12 +13,14 @@ class TrackerTrainingReportScreen extends StatefulWidget {
     required this.teamId,
     required this.teamName,
     this.api,
+    this.embedded = false,
   });
 
   final int sessionId;
   final int teamId;
   final String teamName;
   final TrackerTrainingReportApi? api;
+  final bool embedded;
 
   @override
   State<TrackerTrainingReportScreen> createState() => _TrackerTrainingReportScreenState();
@@ -28,6 +30,8 @@ class _TrackerTrainingReportScreenState extends State<TrackerTrainingReportScree
   late final TrackerTrainingReportApi _api;
   late Future<TrackerTrainingReport> _future;
   int _tab = 0;
+  Uri? _exportPreviewUri;
+  String _exportPreviewTitle = 'Экспорт';
 
   @override
   void initState() {
@@ -42,31 +46,35 @@ class _TrackerTrainingReportScreenState extends State<TrackerTrainingReportScree
     });
   }
 
-  Future<void> _openExport(Uri uri) async {
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось открыть экспорт: $uri')));
-    }
+  void _openExport(Uri uri, {required String title}) {
+    setState(() {
+      _exportPreviewUri = uri;
+      _exportPreviewTitle = title;
+    });
+  }
+
+  void _closeExportPreview() {
+    setState(() => _exportPreviewUri = null);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _R.bg,
-      body: SafeArea(
-        child: FutureBuilder<TrackerTrainingReport>(
-          future: _future,
-          builder: (context, snapshot) {
-            final report = snapshot.data ?? TrackerTrainingReport.empty(sessionId: widget.sessionId, teamName: widget.teamName);
-            return Column(
+    final content = FutureBuilder<TrackerTrainingReport>(
+      future: _future,
+      builder: (context, snapshot) {
+        final report = snapshot.data ?? TrackerTrainingReport.empty(sessionId: widget.sessionId, teamName: widget.teamName);
+        return Stack(
+          children: [
+            Column(
               children: [
                 _Header(
                   report: report,
                   loading: snapshot.connectionState == ConnectionState.waiting,
+                  showBack: !widget.embedded,
                   onBack: () => Navigator.of(context).maybePop(),
                   onRefresh: _reload,
-                  onPdf: () => _openExport(_api.pdfExportUri(sessionId: widget.sessionId, teamId: widget.teamId)),
-                  onExcel: () => _openExport(_api.csvExportUri(sessionId: widget.sessionId, teamId: widget.teamId)),
+                  onPdf: () => _openExport(_api.pdfExportUri(sessionId: widget.sessionId, teamId: widget.teamId), title: 'PDF отчёт'),
+                  onExcel: () => _openExport(_api.csvExportUri(sessionId: widget.sessionId, teamId: widget.teamId), title: 'Excel / CSV отчёт'),
                 ),
                 _Tabs(
                   selected: _tab,
@@ -77,10 +85,32 @@ class _TrackerTrainingReportScreenState extends State<TrackerTrainingReportScree
                 else
                   Expanded(child: _buildTab(report)),
               ],
-            );
-          },
-        ),
-      ),
+            ),
+            if (_exportPreviewUri != null)
+              Positioned.fill(
+                child: _ExportPreviewWindow(
+                  title: _exportPreviewTitle,
+                  uri: _exportPreviewUri!,
+                  onClose: _closeExportPreview,
+                ),
+              ),
+          ],
+        );
+      },
+    );
+
+    final scaled = MediaQuery(
+      data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(.88)),
+      child: content,
+    );
+
+    if (widget.embedded) {
+      return ColoredBox(color: _R.bg, child: scaled);
+    }
+
+    return Scaffold(
+      backgroundColor: _R.bg,
+      body: SafeArea(child: scaled),
     );
   }
 
@@ -102,6 +132,91 @@ class _TrackerTrainingReportScreenState extends State<TrackerTrainingReportScree
   }
 }
 
+
+class _ExportPreviewWindow extends StatelessWidget {
+  const _ExportPreviewWindow({required this.title, required this.uri, required this.onClose});
+
+  final String title;
+  final Uri uri;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.black.withOpacity(.06),
+      alignment: Alignment.center,
+      padding: const EdgeInsets.all(18),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 980, maxHeight: 720),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: _R.border),
+          boxShadow: const [BoxShadow(color: Color(0x16000000), blurRadius: 30, offset: Offset(0, 18))],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            Container(
+              height: 46,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: const BoxDecoration(color: Colors.white, border: Border(bottom: BorderSide(color: _R.border))),
+              child: Row(
+                children: [
+                  _RoundIconButton(icon: Icons.close_rounded, onTap: onClose),
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(color: _R.soft, borderRadius: BorderRadius.circular(10), border: Border.all(color: _R.border)),
+                    child: const Icon(Icons.picture_as_pdf_rounded, color: _R.graphite, size: 17),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _R.text, fontSize: 12, fontWeight: FontWeight.w800)),
+                        Text(uri.toString(), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _R.muted, fontSize: 9.5, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(child: TrackerExportViewer(uri: uri)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RoundIconButton extends StatelessWidget {
+  const _RoundIconButton({required this.icon, required this.onTap});
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _R.soft,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: SizedBox(
+          width: 34,
+          height: 34,
+          child: Icon(icon, size: 17, color: _R.graphite),
+        ),
+      ),
+    );
+  }
+}
+
 class _Header extends StatelessWidget {
   const _Header({
     required this.report,
@@ -110,10 +225,12 @@ class _Header extends StatelessWidget {
     required this.onRefresh,
     required this.onPdf,
     required this.onExcel,
+    this.showBack = true,
   });
 
   final TrackerTrainingReport report;
   final bool loading;
+  final bool showBack;
   final VoidCallback onBack;
   final VoidCallback onRefresh;
   final VoidCallback onPdf;
@@ -122,37 +239,38 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 72,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: _R.border)),
-        boxShadow: [BoxShadow(color: Color(0x12000000), blurRadius: 14, offset: Offset(0, 6))],
       ),
       child: Row(
         children: [
-          IconButton(onPressed: onBack, icon: const Icon(Icons.arrow_back_rounded, color: _R.text)),
-          const SizedBox(width: 8),
+          if (showBack) ...[
+            _RoundIconButton(icon: Icons.arrow_back_rounded, onTap: onBack),
+            const SizedBox(width: 8),
+          ],
           Container(
-            width: 44,
-            height: 44,
+            width: 34,
+            height: 34,
             alignment: Alignment.center,
-            decoration: BoxDecoration(color: _R.lightGreen, borderRadius: BorderRadius.circular(10), border: Border.all(color: _R.border)),
-            child: const Text('S', style: TextStyle(color: _R.darkGreen, fontWeight: FontWeight.w900, fontSize: 20)),
+            decoration: BoxDecoration(color: _R.softGreen, borderRadius: BorderRadius.circular(10), border: Border.all(color: _R.greenLine)),
+            child: const Text('S', style: TextStyle(color: _R.greenDark, fontWeight: FontWeight.w900, fontSize: 16)),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('SPORTOTEKA TRACKER PRO', style: TextStyle(color: _R.darkGreen, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: .3)),
-                const SizedBox(height: 3),
+                const Text('SPORTOTEKA TRACKER PRO', style: TextStyle(color: _R.text, fontSize: 12.5, fontWeight: FontWeight.w800, letterSpacing: .1)),
+                const SizedBox(height: 2),
                 Text(
                   'Отчёт по тренировке · ${report.dateLabel.isEmpty ? 'дата не указана' : report.dateLabel} · ${report.teamName} · ${report.durationLabel}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _R.muted, fontSize: 11.5, fontWeight: FontWeight.w800),
+                  style: const TextStyle(color: _R.muted, fontSize: 10, fontWeight: FontWeight.w700),
                 ),
               ],
             ),
@@ -160,7 +278,7 @@ class _Header extends StatelessWidget {
           if (loading)
             const Padding(
               padding: EdgeInsets.only(right: 12),
-              child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: _R.darkGreen, strokeWidth: 2)),
+              child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: _R.green, strokeWidth: 2)),
             ),
           _HeaderButton(icon: Icons.refresh_rounded, label: 'Обновить', onTap: onRefresh),
           const SizedBox(width: 8),
@@ -182,19 +300,19 @@ class _HeaderButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: _R.lightGreen,
-      borderRadius: BorderRadius.circular(10),
+      color: _R.soft,
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         child: Container(
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(border: Border.all(color: _R.border), borderRadius: BorderRadius.circular(10)),
+          height: 32,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(border: Border.all(color: _R.border), borderRadius: BorderRadius.circular(12)),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon, color: _R.darkGreen, size: 18),
-            const SizedBox(width: 7),
-            Text(label, style: const TextStyle(color: _R.darkGreen, fontWeight: FontWeight.w900, fontSize: 12)),
+            Icon(icon, color: _R.graphite, size: 15),
+            const SizedBox(width: 6),
+            Text(label, style: const TextStyle(color: _R.graphite, fontWeight: FontWeight.w800, fontSize: 10.5)),
           ]),
         ),
       ),
@@ -212,9 +330,9 @@ class _Tabs extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 52,
+      height: 42,
       color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: items.length,
@@ -225,14 +343,14 @@ class _Tabs extends StatelessWidget {
             onTap: () => onSelect(i),
             borderRadius: BorderRadius.circular(9),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: active ? _R.lightGreen : _R.panel,
-                borderRadius: BorderRadius.circular(9),
-                border: Border.all(color: active ? _R.green : _R.border),
+                color: active ? _R.softGreen : _R.soft,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: active ? _R.greenLine : _R.border),
               ),
-              child: Text(items[i], style: TextStyle(color: active ? _R.darkGreen : _R.text, fontWeight: FontWeight.w900, fontSize: 12)),
+              child: Text(items[i], style: TextStyle(color: active ? _R.greenDark : _R.graphite, fontWeight: FontWeight.w800, fontSize: 10.5)),
             ),
           );
         },
@@ -253,41 +371,36 @@ class _SummaryTab extends StatelessWidget {
         _SectionTitle('ОБЩАЯ СВОДКА ПО ТРЕНИРОВКЕ'),
         LayoutBuilder(builder: (context, c) {
           final wide = c.maxWidth >= 1000;
-          return Flex(
-            direction: wide ? Axis.horizontal : Axis.vertical,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                flex: wide ? 5 : 0,
-                child: Column(children: [
-                  _Card(
-                    title: 'ОБЩАЯ ИНФОРМАЦИЯ',
-                    child: _SummaryGrid(report: report),
-                  ),
-                  const SizedBox(height: 12),
-                  _Card(
-                    title: 'ПЕРИОДЫ / УПРАЖНЕНИЯ',
-                    child: _PeriodsTable(periods: report.periods),
-                  ),
-                ]),
-              ),
-              SizedBox(width: wide ? 12 : 0, height: wide ? 0 : 12),
-              Expanded(
-                flex: wide ? 7 : 0,
-                child: Column(children: [
-                  _Card(
-                    title: 'ДИНАМИКА МИКРОЦИКЛА',
-                    child: SizedBox(height: 300, child: _MicrocycleChart(points: report.microcycle)),
-                  ),
-                  const SizedBox(height: 12),
-                  _Card(
-                    title: '% ОТ СРЕДНИХ ЗНАЧЕНИЙ МАТЧА',
-                    child: SizedBox(height: 300, child: _PercentBarChart(values: md)),
-                  ),
-                ]),
-              ),
-            ],
-          );
+          final left = Column(children: [
+            _Card(
+              title: 'ОБЩАЯ ИНФОРМАЦИЯ',
+              child: _SummaryGrid(report: report),
+            ),
+            const SizedBox(height: 10),
+            _Card(
+              title: 'ПЕРИОДЫ / УПРАЖНЕНИЯ',
+              child: _PeriodsTable(periods: report.periods),
+            ),
+          ]);
+          final right = Column(children: [
+            _Card(
+              title: 'ДИНАМИКА МИКРОЦИКЛА',
+              child: SizedBox(height: 240, child: _MicrocycleChart(points: report.microcycle)),
+            ),
+            const SizedBox(height: 10),
+            _Card(
+              title: '% ОТ СРЕДНИХ ЗНАЧЕНИЙ МАТЧА',
+              child: SizedBox(height: 240, child: _PercentBarChart(values: md)),
+            ),
+          ]);
+          if (!wide) {
+            return Column(children: [left, const SizedBox(height: 10), right]);
+          }
+          return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(flex: 5, child: left),
+            const SizedBox(width: 10),
+            Expanded(flex: 7, child: right),
+          ]);
         }),
       ],
     );
@@ -313,7 +426,7 @@ class _SummaryGrid extends StatelessWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: tiles.length,
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 210, mainAxisExtent: 86, crossAxisSpacing: 8, mainAxisSpacing: 8),
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 190, mainAxisExtent: 72, crossAxisSpacing: 8, mainAxisSpacing: 8),
       itemBuilder: (_, i) => _MetricTile(metric: tiles[i]),
     );
   }
@@ -393,7 +506,7 @@ class _ScrollPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(8),
       children: children,
     );
   }
@@ -407,16 +520,16 @@ class _Card extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(6), border: Border.all(color: _R.border)),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: _R.border)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Container(
-          height: 38,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          height: 30,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
           alignment: Alignment.centerLeft,
-          decoration: const BoxDecoration(color: Color(0xFFF1F5F2), border: Border(bottom: BorderSide(color: _R.border))),
-          child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _R.darkGreen, fontWeight: FontWeight.w900, fontSize: 15)),
+          decoration: const BoxDecoration(color: _R.soft, border: Border(bottom: BorderSide(color: _R.border))),
+          child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _R.text, fontWeight: FontWeight.w800, fontSize: 11.5)),
         ),
-        Padding(padding: const EdgeInsets.all(10), child: child),
+        Padding(padding: const EdgeInsets.all(8), child: child),
       ]),
     );
   }
@@ -430,7 +543,7 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Center(child: Text(text, style: const TextStyle(color: _R.darkGreen, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: .4))),
+      child: Center(child: Text(text, style: const TextStyle(color: _R.text, fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: .1))),
     );
   }
 }
@@ -450,12 +563,12 @@ class _MetricTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(color: const Color(0xFFF8FAF8), border: Border.all(color: _R.border), borderRadius: BorderRadius.circular(5)),
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(8),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text(metric.title.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _R.muted, fontSize: 9, fontWeight: FontWeight.w900)),
-        const SizedBox(height: 8),
-        Text(metric.value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _R.text, fontSize: 24, fontWeight: FontWeight.w900)),
-        Text(metric.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _R.muted, fontSize: 10, fontWeight: FontWeight.w700)),
+        Text(metric.title.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _R.muted, fontSize: 8.5, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 5),
+        Text(metric.value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _R.text, fontSize: 18, fontWeight: FontWeight.w800)),
+        Text(metric.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _R.muted, fontSize: 9, fontWeight: FontWeight.w700)),
       ]),
     );
   }
@@ -883,8 +996,8 @@ TableRow _tableRow(List<String> values, {bool header = false}) {
 
 Widget _cell(String text, {bool bold = false, TextAlign align = TextAlign.center}) {
   return Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 9),
-    child: Text(text, textAlign: align, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: _R.text, fontSize: 11, fontWeight: bold ? FontWeight.w900 : FontWeight.w700)),
+    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 7),
+    child: Text(text, textAlign: align, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: _R.text, fontSize: 9.5, fontWeight: bold ? FontWeight.w800 : FontWeight.w600)),
   );
 }
 
@@ -906,7 +1019,7 @@ class _EmptyBlock extends StatelessWidget {
   const _EmptyBlock(this.text);
   final String text;
   @override
-  Widget build(BuildContext context) => Container(height: 120, alignment: Alignment.center, child: Text(text, textAlign: TextAlign.center, style: const TextStyle(color: _R.muted, fontWeight: FontWeight.w800)));
+  Widget build(BuildContext context) => Container(height: 92, alignment: Alignment.center, child: Text(text, textAlign: TextAlign.center, style: const TextStyle(color: _R.muted, fontSize: 10.5, fontWeight: FontWeight.w700)));
 }
 
 class _ErrorView extends StatelessWidget {
@@ -933,14 +1046,19 @@ class _ErrorView extends StatelessWidget {
 }
 
 class _R {
-  static const bg = Color(0xFFF4F6F3);
-  static const panel = Color(0xFFF8FAF8);
-  static const border = Color(0xFFD9E2DC);
+  static const bg = Color(0xFFF6F7F9);
+  static const panel = Color(0xFFFFFFFF);
+  static const soft = Color(0xFFF6F7F9);
+  static const border = Color(0xFFE5E7EB);
   static const text = Color(0xFF111827);
+  static const graphite = Color(0xFF374151);
   static const muted = Color(0xFF667085);
   static const darkGreen = Color(0xFF0B4F2D);
-  static const green = Color(0xFF22C55E);
-  static const lightGreen = Color(0xFFE8F7E8);
+  static const greenDark = Color(0xFF067A46);
+  static const green = Color(0xFF00A750);
+  static const greenLine = Color(0xFFCBEEDD);
+  static const softGreen = Color(0xFFEAF8F0);
+  static const lightGreen = Color(0xFFEAF8F0);
   static const lime = Color(0xFFA3E635);
   static const red = Color(0xFFEF4444);
 }

@@ -71,16 +71,16 @@ class _CalendarWeekViewState extends State<CalendarWeekView> {
       children: [
         // ✅ верхний селектор: горизонтальный скролл (ничего не сжимается)
         Container(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
+            color: const Color(0xFFF6F7F9),
+            borderRadius: BorderRadius.circular(14),
           ),
           child: LayoutBuilder(
             builder: (context, c) {
               // Минимальная ширина карточки дня
               final minItemW = (c.maxWidth / 7).clamp(56.0, 72.0);
-              const gap = 8.0;
+              const gap = 6.0;
 
               return SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
@@ -106,20 +106,30 @@ class _CalendarWeekViewState extends State<CalendarWeekView> {
                             Container(
                               width: minItemW,
                               padding: const EdgeInsets.symmetric(
-                                vertical: 10,
-                                horizontal: 8,
+                                vertical: 8,
+                                horizontal: 7,
                               ),
                               decoration: BoxDecoration(
                                 color: isSel
-                                    ? primary.withOpacity(0.12)
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(14),
+                                    ? Colors.white
+                                    : const Color(0xFFFAFBFC),
+                                borderRadius: BorderRadius.circular(13),
                                 border: Border.all(
                                   color: isSel
-                                      ? primary.withOpacity(0.95)
-                                      : const Color(0xFFE5E7EB),
-                                  width: isSel ? 1.6 : 1.0,
+                                      ? primary.withOpacity(0.28)
+                                      : Colors.transparent,
+                                  width: 1.0,
                                 ),
+                                boxShadow: isSel
+                                    ? [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.035),
+                                          blurRadius: 18,
+                                          spreadRadius: -12,
+                                          offset: const Offset(0, 10),
+                                        ),
+                                      ]
+                                    : null,
                               ),
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
@@ -127,8 +137,8 @@ class _CalendarWeekViewState extends State<CalendarWeekView> {
                                   Text(
                                     dayNames[i],
                                     style: const TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w900,
+                                      fontSize: 10.2,
+                                      fontWeight: FontWeight.w700,
                                       color: Color(0xFF6B7280),
                                     ),
                                   ),
@@ -136,8 +146,8 @@ class _CalendarWeekViewState extends State<CalendarWeekView> {
                                   Text(
                                     "${d.day}",
                                     style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w900,
+                                      fontSize: 13.2,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
                                   const SizedBox(height: 6),
@@ -178,10 +188,10 @@ class _CalendarWeekViewState extends State<CalendarWeekView> {
             key: _daySectionKeys[dateOnly(d)],
             padding: const EdgeInsets.only(bottom: 10),
             child: Container(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
+                color: const Color(0xFFFAFBFC),
+                borderRadius: BorderRadius.circular(14),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -190,12 +200,17 @@ class _CalendarWeekViewState extends State<CalendarWeekView> {
                     children: [
                       Text(
                         "${dayNames[d.weekday - 1]} • ${d.day}.${d.month.toString().padLeft(2, '0')}",
-                        style: const TextStyle(fontWeight: FontWeight.w900),
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.2, letterSpacing: -0.12),
                       ),
                       const Spacer(),
                       TextButton(
                         onPressed: () => widget.onDayLongPress(d),
-                        child: const Text("Управление"),
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFF067A46),
+                          textStyle: const TextStyle(fontSize: 10.8, fontWeight: FontWeight.w700),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        child: const Text("Добавить"),
                       ),
                     ],
                   ),
@@ -362,11 +377,18 @@ class _WeekEventTile extends StatelessWidget {
       onLongPress: onLongPress,
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(10),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         decoration: BoxDecoration(
-          color: c.withOpacity(0.10),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: c.withOpacity(0.30)),
+          color: Color.alphaBlend(c.withOpacity(0.045), Colors.white),
+          borderRadius: BorderRadius.circular(13),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.025),
+              blurRadius: 14,
+              spreadRadius: -12,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Row(
           children: [
@@ -383,21 +405,23 @@ class _WeekEventTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(e.title, style: const TextStyle(fontWeight: FontWeight.w900)),
+                  Text(e.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.4, letterSpacing: -0.12)),
                   const SizedBox(height: 2),
                   Text(
                     "${eventTypeLabel(e.type)} • $when",
-                    style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                    style: const TextStyle(fontSize: 10.8, fontWeight: FontWeight.w600, color: Color(0xFF6B7280)),
                   ),
                   if (e.location.trim().isNotEmpty) ...[
                     const SizedBox(height: 2),
-                    Text("📍 ${e.location}", style: const TextStyle(fontSize: 12)),
+                    Text("📍 ${e.location}", maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10.8, fontWeight: FontWeight.w600)),
                   ],
                   if (e.notes.trim().isNotEmpty) ...[
                     const SizedBox(height: 2),
                     Text(
                       e.notes,
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF374151)),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 10.8, fontWeight: FontWeight.w500, color: Color(0xFF374151)),
                     ),
                   ],
                 ],

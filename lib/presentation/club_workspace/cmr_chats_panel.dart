@@ -1,4 +1,5 @@
 // lib/presentation/club_workspace/cmr_chats_panel.dart
+// Windows 11 / Fluent refresh based on CmrClubTeamsPanel typography and glass cards.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -584,7 +585,7 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
   Widget build(BuildContext context) {
     if (widget.userId <= 0) {
       return Container(
-        color: _CmrChatColors.bg,
+        decoration: _CmrChatDecor.workspaceBg(),
         child: const _CmrChatEmpty(
           icon: Icons.forum_rounded,
           title: 'Чаты недоступны',
@@ -596,10 +597,10 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
     final items = _visibleItems();
 
     return Container(
-      color: _CmrChatColors.bg,
+      decoration: _CmrChatDecor.workspaceBg(),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final mobile = constraints.maxWidth < 720;
+          final mobile = constraints.maxWidth < 640;
           final compact = constraints.maxWidth < 980;
           final listWidth = math.min(480.0, constraints.maxWidth * .45);
 
@@ -841,11 +842,23 @@ class _ChatsToolbar extends StatelessWidget {
           width: mobile ? 34 : 36,
           height: mobile ? 34 : 36,
           decoration: BoxDecoration(
-            color: _CmrChatColors.panel,
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [_CmrChatColors.graphite, _CmrChatColors.graphiteSoft],
+            ),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: _CmrChatColors.green.withOpacity(.42), width: 1),
+            border: Border.all(color: Colors.white.withOpacity(.24), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: _CmrChatColors.green.withOpacity(.18),
+                blurRadius: 16,
+                spreadRadius: -8,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
-          child: const Icon(Icons.forum_rounded, color: _CmrChatColors.green, size: 18),
+          child: const Icon(Icons.forum_rounded, color: _CmrChatColors.green, size: 16),
         ),
         SizedBox(width: mobile ? 9 : 10),
         Expanded(
@@ -869,14 +882,14 @@ class _ChatsToolbar extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: _CmrChatColors.graphite,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: _CmrChatColors.green.withOpacity(.5), width: 1),
+                        border: Border.all(color: _CmrChatColors.graphite.withOpacity(.14), width: 1),
                       ),
                       child: Text(
                         unreadTotal > 99 ? '99+' : unreadTotal.toString(),
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
+                          fontSize: 9.85,
+                          fontWeight: FontWeight.w500,
                           height: 1,
                         ),
                       ),
@@ -926,7 +939,7 @@ class _ChatSearch extends StatelessWidget {
       padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 12),
       child: Row(
         children: [
-          const Icon(Icons.search_rounded, color: _CmrChatColors.muted, size: 21),
+          const Icon(Icons.search_rounded, color: _CmrChatColors.muted, size: 18),
           const SizedBox(width: 8),
           Expanded(
             child: TextField(
@@ -945,7 +958,7 @@ class _ChatSearch extends StatelessWidget {
               onTap: controller.clear,
               child: const Padding(
                 padding: EdgeInsets.all(4),
-                child: Icon(Icons.close_rounded, color: _CmrChatColors.muted, size: 18),
+                child: Icon(Icons.close_rounded, color: _CmrChatColors.muted, size: 16),
               ),
             ),
         ],
@@ -1028,6 +1041,8 @@ class _ChatModePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accent = _chatAccent(icon.codePoint);
+    final accentSoft = _chatAccentSoft(icon.codePoint);
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(10),
@@ -1038,12 +1053,29 @@ class _ChatModePill extends StatelessWidget {
           duration: const Duration(milliseconds: 160),
           padding: EdgeInsets.symmetric(horizontal: dense ? 9 : 11, vertical: dense ? 7 : 8),
           decoration: BoxDecoration(
-            color: active ? _CmrChatColors.graphite : _CmrChatColors.soft,
+            gradient: active
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [accent, _CmrChatColors.blue],
+                  )
+                : LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Colors.white, accentSoft.withOpacity(.72)],
+                  ),
             borderRadius: BorderRadius.circular(9),
-            border: Border.all(
-              color: active ? _CmrChatColors.green.withOpacity(.42) : _CmrChatColors.line,
-              width: active ? 1.2 : 1,
-            ),
+            border: Border.all(color: Colors.white.withOpacity(active ? .42 : .80), width: 1),
+            boxShadow: active
+                ? [
+                    BoxShadow(
+                      color: accent.withOpacity(.18),
+                      blurRadius: 18,
+                      spreadRadius: -9,
+                      offset: const Offset(0, 9),
+                    ),
+                  ]
+                : null,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -1052,14 +1084,11 @@ class _ChatModePill extends StatelessWidget {
                 width: dense ? 18 : 20,
                 height: dense ? 18 : 20,
                 decoration: BoxDecoration(
-                  color: active ? Colors.white.withOpacity(.08) : Colors.white,
+                  color: active ? Colors.white.withOpacity(.18) : Colors.white.withOpacity(.85),
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: active ? _CmrChatColors.green.withOpacity(.5) : _CmrChatColors.line,
-                    width: 1,
-                  ),
+                  border: Border.all(color: Colors.white.withOpacity(active ? .26 : .70), width: 1),
                 ),
-                child: Icon(icon, color: active ? _CmrChatColors.green : _CmrChatColors.muted, size: dense ? 14 : 15),
+                child: Icon(icon, color: active ? Colors.white : accent, size: dense ? 13 : 14),
               ),
               const SizedBox(width: 7),
               Text(label, style: _CmrChatText.tab(active: active)),
@@ -1068,8 +1097,8 @@ class _ChatModePill extends StatelessWidget {
                 count.toString(),
                 style: TextStyle(
                   color: active ? Colors.white.withOpacity(.72) : _CmrChatColors.muted2,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
+                  fontSize: 9.85,
+                  fontWeight: FontWeight.w500,
                   height: 1,
                 ),
               ),
@@ -1078,7 +1107,7 @@ class _ChatModePill extends StatelessWidget {
                 Container(
                   width: 5,
                   height: 5,
-                  decoration: const BoxDecoration(color: _CmrChatColors.green, shape: BoxShape.circle),
+                  decoration: BoxDecoration(color: Colors.white.withOpacity(.92), shape: BoxShape.circle),
                 ),
               ],
             ],
@@ -1110,9 +1139,13 @@ class _EmbeddedChatHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: const BoxDecoration(
-        color: _CmrChatColors.panel,
-        border: Border(bottom: BorderSide(color: _CmrChatColors.line, width: 1)),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Colors.white, _CmrChatColors.blueSoft.withOpacity(.62), _CmrChatColors.greenSoft.withOpacity(.58)],
+        ),
+        border: Border(bottom: BorderSide(color: Colors.white.withOpacity(.75), width: 1)),
       ),
       child: Row(
         children: [
@@ -1143,7 +1176,7 @@ class _EmbeddedChatHeader extends StatelessWidget {
             decoration: BoxDecoration(
               color: _CmrChatColors.greenSoft,
               borderRadius: BorderRadius.circular(9),
-              border: Border.all(color: _CmrChatColors.greenBorder, width: 1),
+              border: Border.all(color: _CmrChatColors.line, width: 1),
             ),
             child: Text(isGroup ? 'Группа' : 'Диалог', style: _CmrChatText.pill(color: _CmrChatColors.greenDark)),
           ),
@@ -1186,6 +1219,8 @@ class _ChatRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final active = selected;
     final meta = canOpen ? subtitle : 'Нажмите, чтобы вступить в группу';
+    final accent = _chatAccent(title.hashCode + (isGroup ? 7 : 0));
+    final accentSoft = _chatAccentSoft(title.hashCode + (isGroup ? 7 : 0));
 
     return Material(
       color: Colors.transparent,
@@ -1197,18 +1232,29 @@ class _ChatRow extends StatelessWidget {
           duration: const Duration(milliseconds: 170),
           padding: EdgeInsets.symmetric(horizontal: mobile ? 9 : 10, vertical: mobile ? 8 : 9),
           decoration: BoxDecoration(
-            color: _CmrChatColors.panel,
-            borderRadius: BorderRadius.circular(11),
-            border: Border.all(
-              color: active ? _CmrChatColors.green.withOpacity(.42) : _CmrChatColors.line,
-              width: active ? 1.2 : 1,
-            ),
+            color: active ? null : Colors.white.withOpacity(.76),
+            gradient: active
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Colors.white, accentSoft.withOpacity(.98), _CmrChatColors.blueSoft.withOpacity(.68)],
+                  )
+                : null,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withOpacity(active ? .92 : .66), width: 1),
             boxShadow: active
                 ? [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
-                      blurRadius: 14,
-                      offset: const Offset(0, 8),
+                      color: accent.withOpacity(.16),
+                      blurRadius: 22,
+                      spreadRadius: -10,
+                      offset: const Offset(0, 12),
+                    ),
+                    BoxShadow(
+                      color: Colors.black.withOpacity(.028),
+                      blurRadius: 13,
+                      spreadRadius: -9,
+                      offset: const Offset(0, 6),
                     ),
                   ]
                 : null,
@@ -1220,7 +1266,14 @@ class _ChatRow extends StatelessWidget {
                 width: 3,
                 height: mobile ? 42 : 46,
                 decoration: BoxDecoration(
-                  color: active ? _CmrChatColors.green : Colors.transparent,
+                  gradient: active
+                      ? LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [accent, _CmrChatColors.blue],
+                        )
+                      : null,
+                  color: active ? null : Colors.transparent,
                   borderRadius: BorderRadius.circular(99),
                 ),
               ),
@@ -1283,7 +1336,7 @@ class _ChatRow extends StatelessWidget {
                                 ? _CmrChatColors.text2
                                 : _CmrChatColors.muted
                             : _CmrChatColors.blue,
-                        fontWeight: unread > 0 ? FontWeight.w900 : FontWeight.w700,
+                        fontWeight: unread > 0 ? FontWeight.w500 : FontWeight.w500,
                       ),
                     ),
                     if (isGroup && !mobile) ...[
@@ -1326,7 +1379,7 @@ class _ChatStatusBadge extends StatelessWidget {
         color: hasUnread || active ? _CmrChatColors.graphite : _CmrChatColors.panel,
         borderRadius: BorderRadius.circular(6),
         border: Border.all(
-          color: active || hasUnread ? _CmrChatColors.green.withOpacity(.58) : _CmrChatColors.line,
+          color: active || hasUnread ? _CmrChatColors.graphite.withOpacity(.18) : _CmrChatColors.line,
           width: 1,
         ),
       ),
@@ -1338,8 +1391,8 @@ class _ChatStatusBadge extends StatelessWidget {
               overflow: TextOverflow.clip,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 9,
-                fontWeight: FontWeight.w900,
+                fontSize: 8.85,
+                fontWeight: FontWeight.w500,
                 height: 1,
               ),
             )
@@ -1406,9 +1459,9 @@ class _UserRow extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: _CmrChatColors.greenSoft,
                   borderRadius: BorderRadius.circular(9),
-                  border: Border.all(color: _CmrChatColors.greenBorder),
+                  border: Border.all(color: _CmrChatColors.line),
                 ),
-                child: const Icon(Icons.arrow_forward_rounded, size: 18, color: _CmrChatColors.greenDark),
+                child: const Icon(Icons.arrow_forward_rounded, size: 16, color: _CmrChatColors.greenDark),
               ),
             ],
           ),
@@ -1454,9 +1507,13 @@ class _Avatar extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: _CmrChatColors.greenSoft,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_CmrChatColors.greenSoft, _CmrChatColors.blueSoft.withOpacity(.82)],
+        ),
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: _CmrChatColors.greenBorder, width: 1),
+        border: Border.all(color: Colors.white.withOpacity(.82), width: 1),
       ),
       child: Center(
         child: initials.isNotEmpty
@@ -1480,14 +1537,14 @@ class _TinyBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: blue ? const Color(0xFFEFF6FF) : Colors.white,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: blue ? const Color(0xFFD8EAFE) : _CmrChatColors.greenBorder),
+        border: Border.all(color: blue ? const Color(0xFFD8EAFE) : _CmrChatColors.line),
       ),
       child: Text(
         text,
         style: TextStyle(
           color: blue ? const Color(0xFF1D4ED8) : _CmrChatColors.muted,
-          fontSize: 10,
-          fontWeight: FontWeight.w900,
+          fontSize: 9.85,
+          fontWeight: FontWeight.w500,
         ),
       ),
     );
@@ -1504,7 +1561,7 @@ class _HeaderButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: _CmrChatColors.green,
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
@@ -1512,11 +1569,22 @@ class _HeaderButton extends StatelessWidget {
         child: Container(
           height: 38,
           padding: const EdgeInsets.symmetric(horizontal: 13),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [_CmrChatColors.green, _CmrChatColors.blue],
+            ),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(color: _CmrChatColors.green.withOpacity(.18), blurRadius: 18, spreadRadius: -10, offset: const Offset(0, 9)),
+            ],
+          ),
           child: Row(
             children: [
-              Icon(icon, size: 18, color: Colors.white),
+              Icon(icon, size: 16, color: Colors.white),
               const SizedBox(width: 7),
-              Text(text, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12)),
+              Text(text, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 11.55)),
             ],
           ),
         ),
@@ -1548,16 +1616,15 @@ class _CircleAction extends StatelessWidget {
         width: 38,
         height: 38,
         decoration: BoxDecoration(
-          color: emphasized ? _CmrChatColors.green : _CmrChatColors.soft,
+          gradient: emphasized
+              ? const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [_CmrChatColors.green, _CmrChatColors.blue])
+              : LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Colors.white, _CmrChatColors.blueSoft.withOpacity(.72)]),
           borderRadius: radius,
-          border: Border.all(
-            color: emphasized ? _CmrChatColors.greenDark.withOpacity(.22) : _CmrChatColors.line,
-            width: 1,
-          ),
+          border: Border.all(color: Colors.white.withOpacity(emphasized ? .38 : .76), width: 1),
           boxShadow: emphasized
               ? [
                   BoxShadow(
-                    color: _CmrChatColors.green.withOpacity(.18),
+                    color: _CmrChatColors.graphite.withOpacity(.08),
                     blurRadius: 14,
                     offset: const Offset(0, 7),
                   ),
@@ -1599,14 +1666,14 @@ class _InlineError extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.info_outline_rounded, color: _CmrChatColors.orange, size: 18),
+          const Icon(Icons.info_outline_rounded, color: _CmrChatColors.orange, size: 16),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               text,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: _CmrChatText.muted(11).copyWith(color: const Color(0xFF9A3412), fontWeight: FontWeight.w800),
+              style: _CmrChatText.muted(11).copyWith(color: const Color(0xFF9A3412), fontWeight: FontWeight.w500),
             ),
           ),
           TextButton(onPressed: onRefresh, child: Text('Повторить', style: _CmrChatText.action(color: _CmrChatColors.orange))),
@@ -1647,9 +1714,9 @@ class _CmrChatEmpty extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: _CmrChatColors.panel,
                   borderRadius: BorderRadius.circular(13),
-                  border: Border.all(color: _CmrChatColors.green.withOpacity(.42), width: 1),
+                  border: Border.all(color: _CmrChatColors.graphite.withOpacity(.12), width: 1),
                 ),
-                child: Icon(icon, color: _CmrChatColors.green, size: 28),
+                child: Icon(icon, color: _CmrChatColors.green, size: 25),
               ),
               const SizedBox(height: 14),
               Text(title, textAlign: TextAlign.center, style: _CmrChatText.title(16)),
@@ -1685,20 +1752,29 @@ class _ChatListSkeleton extends StatelessWidget {
 }
 
 class _CmrChatText {
-  static const String font = 'Roboto';
+  // Windows 11 / Fluent typography.
+  static const String _family = 'Segoe UI';
+  static const List<String> _fallback = <String>[
+    'SF Pro Display',
+    'SF Pro Text',
+    'Inter',
+    'Roboto',
+    'Arial',
+  ];
 
-  static double _compact(double size) => size <= 10 ? size : size - 1.25;
+  static double _compact(double size) => size <= 10 ? size : size - .75;
 
   static TextStyle _base({
     required double size,
     required FontWeight weight,
     required Color color,
     double height = 1.18,
-    double letterSpacing = -0.12,
+    double letterSpacing = -0.08,
     List<FontFeature>? features,
   }) {
     return TextStyle(
-      fontFamily: font,
+      fontFamily: _family,
+      fontFamilyFallback: _fallback,
       color: color,
       fontSize: _compact(size),
       fontWeight: weight,
@@ -1710,63 +1786,66 @@ class _CmrChatText {
 
   static TextStyle title(double size) => _base(
         size: size,
-        weight: FontWeight.w900,
+        weight: FontWeight.w700,
         color: _CmrChatColors.text,
-        height: 1.12,
-        letterSpacing: -0.25,
+        height: 1.08,
+        letterSpacing: -0.38,
       );
 
   static TextStyle value(double size) => _base(
         size: size,
-        weight: FontWeight.w800,
+        weight: FontWeight.w700,
         color: _CmrChatColors.text2,
-        height: 1.22,
+        height: 1.08,
+        letterSpacing: -0.25,
         features: const [FontFeature.tabularFigures()],
       );
 
   static TextStyle muted(double size) => _base(
         size: size,
-        weight: FontWeight.w700,
+        weight: FontWeight.w500,
         color: _CmrChatColors.muted,
         height: 1.34,
         letterSpacing: -0.05,
       );
 
   static TextStyle caption() => _base(
-        size: 12,
-        weight: FontWeight.w800,
+        size: 10.6,
+        weight: FontWeight.w600,
         color: _CmrChatColors.muted2,
         height: 1.12,
         letterSpacing: .08,
       );
 
   static TextStyle pill({Color? color}) => _base(
-        size: 12,
-        weight: FontWeight.w800,
+        size: 11.8,
+        weight: FontWeight.w600,
         color: color ?? _CmrChatColors.text2,
         height: 1,
       );
 
   static TextStyle tab({bool active = false}) => _base(
-        size: 13,
-        weight: FontWeight.w900,
+        size: 11.8,
+        weight: FontWeight.w700,
         color: active ? Colors.white : _CmrChatColors.text2,
         height: 1,
+        letterSpacing: -0.04,
       );
 
   static TextStyle action({Color color = _CmrChatColors.text}) => _base(
-        size: 13,
-        weight: FontWeight.w900,
+        size: 11.8,
+        weight: FontWeight.w700,
         color: color,
         height: 1.1,
       );
 }
 
 class _CmrChatColors {
-  static const Color bg = Color(0xFFF5F6F7);
+  static const Color bg = Color(0xFFFFFFFF);
   static const Color panel = Colors.white;
-  static const Color soft = Color(0xFFF8F9FA);
-  static const Color soft2 = Color(0xFFF1F3F5);
+  static const Color glass = Color(0xF7FFFFFF);
+  static const Color soft = Color(0xFFFAFBFC);
+  static const Color soft2 = Color(0xFFF6F7F9);
 
   static const Color text = Color(0xFF0B0F14);
   static const Color text2 = Color(0xFF182230);
@@ -1784,56 +1863,114 @@ class _CmrChatColors {
 
   static const Color blue = Color(0xFF2563EB);
   static const Color blueSoft = Color(0xFFF4F7FF);
+  static const Color cyan = Color(0xFF06B6D4);
+  static const Color cyanSoft = Color(0xFFEFFBFF);
+  static const Color violet = Color(0xFF7C3AED);
+  static const Color violetSoft = Color(0xFFF5F0FF);
+  static const Color pink = Color(0xFFEC4899);
+  static const Color pinkSoft = Color(0xFFFFF1F8);
   static const Color orange = Color(0xFFEA580C);
   static const Color orangeSoft = Color(0xFFFFF7ED);
-  static const Color line = Color(0xFFE5E7EB);
+  static const Color amber = Color(0xFFF59E0B);
+  static const Color amberSoft = Color(0xFFFFFBEB);
+  static const Color line = Color(0xFFEFF1F4);
+}
+
+
+Color _chatAccent(int index) {
+  const colors = <Color>[
+    _CmrChatColors.green,
+    _CmrChatColors.blue,
+    _CmrChatColors.cyan,
+    _CmrChatColors.violet,
+    _CmrChatColors.pink,
+    _CmrChatColors.amber,
+  ];
+  return colors[index.abs() % colors.length];
+}
+
+Color _chatAccentSoft(int index) {
+  const colors = <Color>[
+    _CmrChatColors.greenSoft,
+    _CmrChatColors.blueSoft,
+    _CmrChatColors.cyanSoft,
+    _CmrChatColors.violetSoft,
+    _CmrChatColors.pinkSoft,
+    _CmrChatColors.amberSoft,
+  ];
+  return colors[index.abs() % colors.length];
 }
 
 class _CmrChatDecor {
-  static double _hardRadius(double radius, {double max = 14}) => math.min(radius, max);
+  static BoxDecoration workspaceBg() => const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFFFFFFFF),
+            Color(0xFFF6FFF9),
+            Color(0xFFF4F7FF),
+            Color(0xFFFFF7FB),
+          ],
+          stops: [0.0, .38, .72, 1.0],
+        ),
+      );
 
-  static BoxDecoration panel({double radius = 14, bool elevated = false}) => BoxDecoration(
-        color: _CmrChatColors.panel,
-        borderRadius: BorderRadius.circular(_hardRadius(radius, max: 14)),
-        border: Border.all(color: _CmrChatColors.line, width: 1),
+  static BoxDecoration panel({double radius = 22, bool elevated = false}) => BoxDecoration(
+        color: _CmrChatColors.glass,
+        borderRadius: BorderRadius.circular(radius),
         boxShadow: elevated
             ? [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.035),
-                  blurRadius: 18,
-                  offset: const Offset(0, 10),
+                  color: _CmrChatColors.blue.withOpacity(0.055),
+                  blurRadius: 32,
+                  spreadRadius: -16,
+                  offset: const Offset(0, 18),
+                ),
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.026),
+                  blurRadius: 10,
+                  spreadRadius: -7,
+                  offset: const Offset(0, 4),
                 ),
               ]
             : null,
       );
 
-  static BoxDecoration softCard({double radius = 10, bool active = false}) => BoxDecoration(
+  static BoxDecoration softCard({double radius = 16, bool active = false}) => BoxDecoration(
         color: active ? _CmrChatColors.panel : _CmrChatColors.soft,
-        borderRadius: BorderRadius.circular(_hardRadius(radius, max: 12)),
-        border: Border.all(
-          color: active ? _CmrChatColors.green.withOpacity(.42) : _CmrChatColors.line,
-          width: active ? 1.2 : 1,
-        ),
+        borderRadius: BorderRadius.circular(radius),
         boxShadow: active
             ? [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 14,
-                  offset: const Offset(0, 8),
+                  color: _CmrChatColors.green.withOpacity(.085),
+                  blurRadius: 24,
+                  spreadRadius: -12,
+                  offset: const Offset(0, 14),
+                ),
+                BoxShadow(
+                  color: Colors.black.withOpacity(.03),
+                  blurRadius: 12,
+                  spreadRadius: -8,
+                  offset: const Offset(0, 4),
                 ),
               ]
             : null,
       );
 
-  static BoxDecoration greenCard({double radius = 10}) => BoxDecoration(
-        color: _CmrChatColors.panel,
-        borderRadius: BorderRadius.circular(_hardRadius(radius, max: 12)),
-        border: Border.all(color: _CmrChatColors.green.withOpacity(.38), width: 1.2),
+  static BoxDecoration greenCard({double radius = 16}) => BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_CmrChatColors.green, _CmrChatColors.blue],
+        ),
+        borderRadius: BorderRadius.circular(radius),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.035),
-            blurRadius: 14,
-            offset: const Offset(0, 8),
+            color: _CmrChatColors.green.withOpacity(.20),
+            blurRadius: 26,
+            spreadRadius: -13,
+            offset: const Offset(0, 14),
           ),
         ],
       );

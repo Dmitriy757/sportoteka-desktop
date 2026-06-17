@@ -15,12 +15,12 @@ import 'package:http/http.dart' as http;
 
 class _CmrTestColors {
   static const Color panel = Colors.white;
-  static const Color soft = Color(0xFFF8F9FA);
-  static const Color soft2 = Color(0xFFF1F3F5);
+  static const Color soft = Colors.white;
+  static const Color soft2 = Colors.white;
   static const Color text = Color(0xFF0B0F14);
   static const Color muted = Color(0xFF475467);
   static const Color muted2 = Color(0xFF667085);
-  static const Color line = Color(0xFFE5E7EB);
+  static const Color line = Color(0x00000000);
   static const Color graphite = Color(0xFF111827);
   static const Color graphite2 = Color(0xFF1F2937);
 
@@ -28,7 +28,7 @@ class _CmrTestColors {
   static const Color green = Color(0xFF00A750);
   static const Color greenDark = Color(0xFF067A46);
   static const Color greenSoft = Color(0xFFF3FBF7);
-  static const Color greenBorder = Color(0xFFD7F0E2);
+  static const Color greenBorder = Color(0x00000000);
 
   static const Color red = Color(0xFFD92D20);
   static const Color redSoft = Color(0xFFFFF1F1);
@@ -44,7 +44,7 @@ class _CmrTestText {
     return TextStyle(
       color: _CmrTestColors.text,
       fontSize: size,
-      fontWeight: FontWeight.w800,
+      fontWeight: FontWeight.w600,
       height: 1.12,
     );
   }
@@ -53,7 +53,7 @@ class _CmrTestText {
     return const TextStyle(
       color: _CmrTestColors.text,
       fontSize: 16,
-      fontWeight: FontWeight.w800,
+      fontWeight: FontWeight.w600,
       height: 1.18,
     );
   }
@@ -97,7 +97,7 @@ class _CmrTestText {
     return const TextStyle(
       color: _CmrTestColors.text,
       fontSize: 13,
-      fontWeight: FontWeight.w800,
+      fontWeight: FontWeight.w600,
     );
   }
 
@@ -105,7 +105,7 @@ class _CmrTestText {
     return const TextStyle(
       color: _CmrTestColors.text,
       fontSize: 13,
-      fontWeight: FontWeight.w900,
+      fontWeight: FontWeight.w700,
     );
   }
 
@@ -113,7 +113,7 @@ class _CmrTestText {
     return const TextStyle(
       color: _CmrTestColors.text,
       fontSize: 13,
-      fontWeight: FontWeight.w900,
+      fontWeight: FontWeight.w700,
     );
   }
 
@@ -121,7 +121,7 @@ class _CmrTestText {
     return const TextStyle(
       color: _CmrTestColors.red,
       fontSize: 13,
-      fontWeight: FontWeight.w800,
+      fontWeight: FontWeight.w600,
     );
   }
 }
@@ -135,10 +135,9 @@ class _CmrTestDecor {
     return BoxDecoration(
       color: _CmrTestColors.panel,
       borderRadius: BorderRadius.circular(_radius(radius)),
-      border: Border.all(color: _CmrTestColors.line, width: 1),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withOpacity(.035),
+          color: Colors.black.withOpacity(.028),
           blurRadius: 18,
           offset: const Offset(0, 10),
         ),
@@ -148,12 +147,8 @@ class _CmrTestDecor {
 
   static BoxDecoration softCard({double radius = 16, bool active = false}) {
     return BoxDecoration(
-      color: active ? _CmrTestColors.panel : _CmrTestColors.soft,
+      color: _CmrTestColors.panel,
       borderRadius: BorderRadius.circular(_radius(radius)),
-      border: Border.all(
-        color: active ? _CmrTestColors.green.withOpacity(.38) : _CmrTestColors.line,
-        width: active ? 1.2 : 1,
-      ),
       boxShadow: active
           ? [
               BoxShadow(
@@ -860,12 +855,12 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
-    final isMobile = media.size.width < 760;
+    final isMobile = media.size.width < 680;
 
     return MediaQuery(
       data: media.copyWith(textScaler: TextScaler.noScaling),
       child: Container(
-        color: _CmrTestColors.soft,
+        color: _CmrTestColors.panel,
         child: Column(
           children: [
             _header(isMobile),
@@ -963,8 +958,6 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Выберите раздел подготовки', style: _CmrTestText.caption().copyWith(fontWeight: FontWeight.w900)),
-          const SizedBox(height: 8),
           _categorySegment(compact: true),
           const SizedBox(height: 8),
           _stageChip(compact: true),
@@ -987,7 +980,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = constraints.maxWidth.isFinite ? constraints.maxWidth : MediaQuery.of(context).size.width;
-        final isTightDesktopHeader = !compact && availableWidth < 760;
+        final isTightDesktopHeader = !compact && availableWidth < 680;
         final isVeryTightHeader = !compact && availableWidth < 620;
 
         return SingleChildScrollView(
@@ -1026,43 +1019,47 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
   }
 
   Widget _stageChip({required bool compact}) {
-    return Tooltip(
-      message: 'Этап подготовки автоматически привязан к выбранной команде',
-      child: Container(
-        height: 42,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: _CmrTestColors.panel,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _CmrTestColors.greenBorder, width: 1),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.lock_rounded, size: 15, color: _CmrTestColors.green),
-            const SizedBox(width: 6),
-            Text(
-              compact ? stage : 'Этап $stage',
-              style: _CmrTestText.action().copyWith(fontSize: compact ? 12 : 13),
+    return Container(
+      height: compact ? 40 : 42,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: _CmrTestColors.greenSoft,
+        borderRadius: BorderRadius.circular(compact ? 14 : 15),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.026),
+            blurRadius: 14,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(
+              color: _CmrTestColors.green,
+              borderRadius: BorderRadius.circular(99),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 7),
+          const Icon(Icons.lock_rounded, size: 15, color: _CmrTestColors.green),
+          const SizedBox(width: 6),
+          Text(
+            compact ? stage : 'Этап $stage',
+            style: _CmrTestText.action().copyWith(fontSize: compact ? 12 : 13),
+          ),
+        ],
       ),
     );
   }
 
   Widget _desktopBody() {
-    return Row(
-      children: [
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          width: _infoPanelCollapsed ? 58 : 292,
-          child: _side(),
-        ),
-        const SizedBox(width: 8),
-        Expanded(child: _tableArea()),
-      ],
+    return Container(
+      color: _CmrTestColors.panel,
+      child: _tableArea(),
     );
   }
 
@@ -1371,7 +1368,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     return CircleAvatar(
       radius: 17,
       backgroundColor: _CmrTestColors.greenSoft,
-      child: Text(initials, style: const TextStyle(color: _CmrTestColors.green, fontWeight: FontWeight.w900, fontSize: 11)),
+      child: Text(initials, style: const TextStyle(color: _CmrTestColors.green, fontWeight: FontWeight.w700, fontSize: 11)),
     );
   }
 
@@ -1471,7 +1468,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
       color: Colors.white,
       child: Column(
         children: [
-          LayoutBuilder(builder: (context, c) => _dateCalendarBar(compact: c.maxWidth < 720)),
+          LayoutBuilder(builder: (context, c) => _dateCalendarBar(compact: c.maxWidth < 640)),
           const SizedBox(height: 2),
           _tableToolbar(),
           if (_hasFocusedPlayer) _focusedPlayerBanner(compact: false),
@@ -1642,7 +1639,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                                     child: Text(
                                       '$day',
                                       style: _CmrTestText.value(13).copyWith(
-                                        fontWeight: FontWeight.w900,
+                                        fontWeight: FontWeight.w700,
                                         color: selected ? Colors.white : _CmrTestColors.text,
                                       ),
                                     ),
@@ -1747,7 +1744,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
             style: TextButton.styleFrom(
               foregroundColor: _CmrTestColors.graphite,
               visualDensity: VisualDensity.compact,
-              textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+              textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
             ),
             child: const Text('Показать всех'),
           ),
@@ -1760,7 +1757,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     final visible = _visiblePlayers.length;
     return LayoutBuilder(
       builder: (context, c) {
-        final compact = c.maxWidth < 720;
+        final compact = c.maxWidth < 640;
 
         return Container(
           color: Colors.white,
@@ -1878,7 +1875,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
       return const Center(child: Text('По выбранному поиску или амплуа игроков не найдено'));
     }
 
-    final isMobile = MediaQuery.sizeOf(context).width < 760;
+    final isMobile = MediaQuery.sizeOf(context).width < 680;
     if (isMobile) return _mobileTestingCards(tablePlayers);
 
     return Container(
@@ -1893,7 +1890,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
               dataRowMinHeight: 58,
               dataRowMaxHeight: 64,
               columnSpacing: 14,
-              headingTextStyle: _CmrTestText.caption().copyWith(fontWeight: FontWeight.w900),
+              headingTextStyle: _CmrTestText.caption().copyWith(fontWeight: FontWeight.w700),
               dataTextStyle: _CmrTestText.value(11.5),
               columns: [
                 const DataColumn(
@@ -2005,7 +2002,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                     ),
                     child: const Text(
                       'Найден',
-                      style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w900),
+                      style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w700),
                     ),
                   ),
                   const SizedBox(width: 6),
@@ -2157,7 +2154,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                           ),
                           child: const Text(
                             'Найден',
-                            style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900),
+                            style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
                           ),
                         ),
                       ],
@@ -2188,9 +2185,8 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
         width: 126,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
-          color: r.label.isEmpty ? _CmrTestColors.panel : r.color.withOpacity(.07),
+          color: _CmrTestColors.panel,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: r.label.isEmpty ? _CmrTestColors.line : r.color.withOpacity(.18), width: 1),
         ),
         child: TextField(
           controller: c,
@@ -2203,7 +2199,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
             hintText: '—',
             border: InputBorder.none,
             helperText: r.label.isEmpty ? null : r.label,
-            helperStyle: TextStyle(fontSize: 9, color: _darken(r.color), fontWeight: FontWeight.w800),
+            helperStyle: TextStyle(fontSize: 9, color: _darken(r.color), fontWeight: FontWeight.w600),
           ),
         ),
       );
@@ -2212,23 +2208,18 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
 
   Widget _ratingCell(_Rating r) {
     final hasRating = r.label.isNotEmpty;
-    return Container(
+    return SizedBox(
       width: 126,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: hasRating ? r.color.withOpacity(.07) : _CmrTestColors.soft,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: hasRating ? r.color.withOpacity(.18) : _CmrTestColors.line, width: 1),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        hasRating ? r.label : '—',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        textAlign: TextAlign.center,
-        style: hasRating
-            ? TextStyle(color: _darken(r.color), fontWeight: FontWeight.w800, fontSize: 11)
-            : _CmrTestText.caption(),
+      child: Center(
+        child: Text(
+          hasRating ? r.label : '—',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: hasRating
+              ? TextStyle(color: _darken(r.color), fontWeight: FontWeight.w700, fontSize: 11)
+              : _CmrTestText.caption(),
+        ),
       ),
     );
   }
@@ -2244,21 +2235,12 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     return SizedBox(
       width: 116,
       child: Center(
-        child: Container(
-          constraints: const BoxConstraints(minWidth: 90, maxWidth: 116),
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
-          decoration: BoxDecoration(
-            color: r.color.withOpacity(.08),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: r.color.withOpacity(.20), width: 1),
-          ),
-          child: Text(
-            r.label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: TextStyle(color: _darken(r.color), fontWeight: FontWeight.w800, fontSize: 11),
-          ),
+        child: Text(
+          r.label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: TextStyle(color: _darken(r.color), fontWeight: FontWeight.w700, fontSize: 11),
         ),
       ),
     );
@@ -2632,7 +2614,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                 children: [
                   Container(width: 10, height: 10, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(99))),
                   const SizedBox(width: 8),
-                  SizedBox(width: 154, child: FittedBox(alignment: Alignment.centerLeft, fit: BoxFit.scaleDown, child: Text(_asStr(n['label']), maxLines: 1, softWrap: false, style: _CmrTestText.caption().copyWith(fontWeight: FontWeight.w900, color: _darken(color))))),
+                  SizedBox(width: 154, child: FittedBox(alignment: Alignment.centerLeft, fit: BoxFit.scaleDown, child: Text(_asStr(n['label']), maxLines: 1, softWrap: false, style: _CmrTestText.caption().copyWith(fontWeight: FontWeight.w700, color: _darken(color))))),
                   Expanded(child: Text(range, textAlign: TextAlign.right, style: _CmrTestText.caption())),
                 ],
               ),
@@ -2921,69 +2903,102 @@ class _CategoryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleFontSize = compact ? 10.8 : (isVeryTight ? 10.2 : isTightDesktop ? 10.8 : 11.4);
-    final iconBox = compact ? 28.0 : (isTightDesktop ? 22.0 : 24.0);
-    final iconSize = compact ? 15.5 : (isTightDesktop ? 13.5 : 14.5);
-    final horizontalPadding = compact ? 9.0 : (isTightDesktop ? 7.0 : 9.0);
-    final verticalPadding = compact ? 8.0 : 7.0;
+    final titleFontSize = compact ? 11.2 : (isVeryTight ? 10.4 : isTightDesktop ? 10.9 : 11.6);
+    final iconBox = compact ? 30.0 : (isTightDesktop ? 23.0 : 25.0);
+    final iconSize = compact ? 16.0 : (isTightDesktop ? 13.5 : 14.5);
+    final horizontalPadding = compact ? 11.0 : (isTightDesktop ? 9.0 : 11.0);
+    final verticalPadding = compact ? 10.0 : 8.0;
+    final radius = BorderRadius.circular(compact ? 17 : 15);
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(compact ? 16 : 14),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
-        width: compact ? 158 : null,
-        constraints: compact ? const BoxConstraints(minHeight: 60) : const BoxConstraints(minHeight: 34),
-        padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: verticalPadding),
-        decoration: BoxDecoration(
-          color: active ? _CmrTestColors.panel : _CmrTestColors.soft,
-          borderRadius: BorderRadius.circular(compact ? 16 : 14),
-          border: Border.all(color: active ? _CmrTestColors.green.withOpacity(.38) : _CmrTestColors.line, width: active ? 1.2 : 1),
-        ),
-        child: Row(
-          mainAxisSize: compact ? MainAxisSize.max : MainAxisSize.min,
-          children: [
-            Container(
-              width: iconBox,
-              height: iconBox,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(compact ? 10 : 9),
-              ),
-              child: Icon(icon, size: iconSize, color: _CmrTestColors.green),
-            ),
-            SizedBox(width: compact ? 7 : 6),
-            Flexible(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    maxLines: compact ? 2 : 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: _CmrTestText.value(titleFontSize).copyWith(
-                      fontWeight: FontWeight.w900,
-                      color: _CmrTestColors.text,
+    return Material(
+      color: Colors.transparent,
+      borderRadius: radius,
+      child: InkWell(
+        borderRadius: radius,
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          width: compact ? 158 : null,
+          constraints: compact ? const BoxConstraints(minHeight: 58) : const BoxConstraints(minHeight: 38),
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: active ? _CmrTestColors.greenSoft : _CmrTestColors.panel,
+            borderRadius: radius,
+            boxShadow: active
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(.035),
+                      blurRadius: 16,
+                      offset: const Offset(0, 9),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Stack(
+            children: [
+              if (active)
+                Positioned(
+                  left: 0,
+                  top: compact ? 10 : 8,
+                  bottom: compact ? 10 : 8,
+                  child: Container(
+                    width: 3.5,
+                    decoration: BoxDecoration(
+                      color: _CmrTestColors.green,
+                      borderRadius: BorderRadius.circular(99),
                     ),
                   ),
-                  if (compact) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      hint,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: _CmrTestText.caption().copyWith(
-                        color: active ? _CmrTestColors.text : _CmrTestColors.muted,
-                        fontSize: 9.4,
+                ),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: verticalPadding),
+                child: Row(
+                  mainAxisSize: compact ? MainAxisSize.max : MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: iconBox,
+                      height: iconBox,
+                      decoration: BoxDecoration(
+                        color: active ? Colors.white : _CmrTestColors.panel,
+                        borderRadius: BorderRadius.circular(compact ? 10 : 9),
+                      ),
+                      child: Icon(icon, size: iconSize, color: active ? _CmrTestColors.green : _CmrTestColors.muted),
+                    ),
+                    SizedBox(width: compact ? 7 : 6),
+                    Flexible(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (active) ...[
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration: BoxDecoration(
+                                color: _CmrTestColors.green,
+                                borderRadius: BorderRadius.circular(99),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                          Flexible(
+                            child: Text(
+                              title,
+                              maxLines: compact ? 2 : 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _CmrTestText.value(titleFontSize).copyWith(
+                                fontWeight: active ? FontWeight.w800 : FontWeight.w700,
+                                color: _CmrTestColors.text,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -3016,15 +3031,14 @@ class _PositionChip extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
           decoration: BoxDecoration(
-            color: active ? _CmrTestColors.panel : _CmrTestColors.soft,
+            color: active ? _CmrTestColors.greenSoft : _CmrTestColors.panel,
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: active ? _CmrTestColors.green.withOpacity(.38) : _CmrTestColors.line, width: active ? 1.2 : 1),
           ),
           child: Text(
             '$label · $count',
             style: _CmrTestText.caption().copyWith(
               color: _CmrTestColors.text,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               fontSize: 11,
             ),
           ),
@@ -3349,7 +3363,7 @@ class _TestSchemePainter extends CustomPainter {
 
   void _label(Canvas canvas, String text, Offset o, {Color color = const Color(0xFF101828), double size = 11, bool bold = false}) {
     final tp = TextPainter(
-      text: TextSpan(text: text, style: TextStyle(color: color, fontSize: size, fontWeight: bold ? FontWeight.w900 : FontWeight.w700)),
+      text: TextSpan(text: text, style: TextStyle(color: color, fontSize: size, fontWeight: bold ? FontWeight.w700 : FontWeight.w700)),
       textDirection: TextDirection.ltr,
       maxLines: 2,
     )..layout(maxWidth: 150);

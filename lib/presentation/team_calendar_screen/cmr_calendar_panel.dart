@@ -1,3 +1,5 @@
+// lib/presentation/team_calendar_screen/cmr_calendar_panel.dart
+// Windows 11 / Fluent unified window refresh for CMR Calendar.
 import 'dart:math' as math;
 import 'dart:ui' show FontFeature;
 
@@ -289,28 +291,59 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
     if (!canEdit) return;
     final createdBy = await PrefUtils.getUserId() ?? 0;
     if (!mounted) return;
+
+    final base = DateTime(day.year, day.month, day.day, 18, 0);
     setState(() {
       selectedDay = day;
       _editorCreatedBy = createdBy;
       _createDateForPanel = day;
       _editingEventForPanel = null;
       _selectedEventForPanel = null;
-      _workPanel = _CalendarWorkPanel.editor;
+      _workPanel = _CalendarWorkPanel.calendar;
     });
+
+    final event = await showEventEditorWindow(
+      context,
+      primary: _C.green,
+      teamId: widget.teamId,
+      clubId: widget.clubId,
+      createdBy: createdBy,
+      initialDateTime: base,
+      onEventAdded: _handleAddMoreFromEditor,
+    );
+
+    if (event != null) {
+      await _handleEditorSubmit(event);
+    }
   }
 
   Future<void> _openEdit(TeamEvent event) async {
     if (!canEdit) return;
     final createdBy = await PrefUtils.getUserId() ?? 0;
     if (!mounted) return;
+
     setState(() {
       selectedDay = event.startAt;
       _editorCreatedBy = createdBy;
       _createDateForPanel = event.startAt;
       _editingEventForPanel = event;
       _selectedEventForPanel = event;
-      _workPanel = _CalendarWorkPanel.editor;
+      _workPanel = _CalendarWorkPanel.details;
     });
+
+    final updated = await showEventEditorWindow(
+      context,
+      primary: eventTypeColor(event.type),
+      teamId: event.teamId,
+      clubId: event.clubId,
+      createdBy: createdBy,
+      initialDateTime: event.startAt,
+      initial: event,
+    );
+
+    if (updated != null) {
+      await _handleEditorSubmit(updated);
+    }
   }
 
   void _openDetails(TeamEvent event) {
@@ -351,17 +384,13 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
 
     if (!mounted) return;
 
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => TrainingRatingSheet(
-        apiBase: apiBase,
-        teamId: event.teamId,
-        eventId: event.id,
-        coachId: coachId,
-        title: event.title,
-      ),
+    await showTrainingRatingWindow(
+      context,
+      apiBase: apiBase,
+      teamId: event.teamId,
+      eventId: event.id,
+      coachId: coachId,
+      title: event.title,
     );
 
     if (mounted) {
@@ -493,13 +522,14 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
     return DefaultTextStyle.merge(
       style: const TextStyle(
         fontFamily: _C.font,
+        fontFamilyFallback: _C.fallback,
         color: _C.text,
         height: 1.18,
         letterSpacing: -0.08,
       ),
       child: LayoutBuilder(
         builder: (context, c) {
-          final isPhone = c.maxWidth < 720;
+          final isPhone = c.maxWidth < 640;
           if (isPhone) {
             return _buildMobileLayout(selectedList, weekStart, c);
           }
@@ -520,11 +550,10 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
   }
 
   double _calendarColumnWidth(BoxConstraints constraints) {
-    // Геометрия как у панелей тренеров и игроков:
-    // левая рабочая колонка фиксируется до 480 px и занимает около 45% ширины,
-    // а правый информационный блок получает всё оставшееся пространство.
+    // Геометрия как в CMR Team Matches: слева стабильная календарная колонка,
+    // на узких десктопных окнах не сжимается ниже комфортного размера.
     final width = constraints.maxWidth.isFinite ? constraints.maxWidth : 1180.0;
-    return math.min(480.0, width * .45);
+    return math.min(480.0, math.max(320.0, width * .42));
   }
 
   Widget _buildTabletKpiWorkspace({
@@ -534,7 +563,6 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
     required BoxConstraints constraints,
   }) {
     final height = constraints.maxHeight.isFinite ? constraints.maxHeight : 780.0;
-    const gap = 12.0;
     final showWorkPane = _workPanel == _CalendarWorkPanel.editor ||
         (_workPanel == _CalendarWorkPanel.details && selectedForDetails != null);
     final calendarWidth = _calendarColumnWidth(constraints);
@@ -543,18 +571,36 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
       width: double.infinity,
       height: height,
       child: Container(
-        color: _C.bg,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(width: calendarWidth, child: _buildStrictCalendarWindow(weekStart, selectedList)),
-            const SizedBox(width: gap),
-            Expanded(
-              child: showWorkPane
-                  ? _buildCalendarDetailsPane(selectedForDetails, selectedList, compact: true)
-                  : _buildCalendarRightOverviewPanel(selectedList),
+        decoration: const BoxDecoration(color: _C.soft),
+        padding: const EdgeInsets.all(10),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: Container(
+            decoration: _C.workspaceDecoration,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  width: calendarWidth,
+                  child: _buildStrictCalendarWindow(weekStart, selectedList),
+                ),
+                Container(width: 1, color: _C.border.withOpacity(.78)),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    child: KeyedSubtree(
+                      key: ValueKey<String>('calendar-pane-${_workPanel.name}-${selectedForDetails?.id ?? 0}'),
+                      child: showWorkPane
+                          ? _buildCalendarDetailsPane(selectedForDetails, selectedList, compact: true)
+                          : _buildCalendarRightOverviewPanel(selectedList),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -568,12 +614,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
 
     return Container(
       height: 58,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _C.border),
-        boxShadow: _C.softShadow,
-      ),
+      decoration: _C.panelDecoration(radius: 22),
       padding: const EdgeInsets.fromLTRB(10, 7, 8, 7),
       child: Row(
         children: [
@@ -583,11 +624,11 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
             decoration: BoxDecoration(
               color: _C.surface,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: _C.border),
+              border: Border.all(color: Colors.transparent),
             ),
             child: Stack(
               children: const [
-                Center(child: Icon(Icons.calendar_month_rounded, color: _C.text, size: 19)),
+                Center(child: Icon(Icons.calendar_month_rounded, color: _C.text, size: 17)),
                 Positioned(left: 0, top: 9, bottom: 9, child: _BrandAccentLine(height: 16)),
               ],
             ),
@@ -603,14 +644,14 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                   widget.teamName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _C.text, fontSize: 14.6, fontWeight: FontWeight.w900, height: 1),
+                  style: const TextStyle(color: _C.text, fontSize: 13.65, fontWeight: FontWeight.w700, height: 1),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   widget.clubName.trim().isEmpty ? 'Команда' : widget.clubName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _C.muted, fontSize: 10.2, fontWeight: FontWeight.w800, height: 1),
+                  style: const TextStyle(color: _C.muted, fontSize: 10.05, fontWeight: FontWeight.w600, height: 1),
                 ),
               ],
             ),
@@ -641,8 +682,6 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
           _ProfileRoundButton(icon: Icons.today_rounded, onTap: _today),
           const SizedBox(width: 5),
           _ProfileRoundButton(icon: refreshing ? Icons.sync_rounded : Icons.refresh_rounded, onTap: () => _fetch()),
-          const SizedBox(width: 5),
-          _ProfileRoundButton(icon: Icons.open_in_full_rounded, onTap: _openFullCalendar),
           if (canEdit) ...[
             const SizedBox(width: 5),
             _ProfileRoundButton(icon: Icons.add_rounded, onTap: () => _openCreate(selectedDay)),
@@ -742,7 +781,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                   label: 'Тренировки',
                   value: '$trainingCount',
                   hint: 'в периоде',
-                  color: _C.text,
+                  color: _C.cyan,
                 ),
               ),
               const SizedBox(width: 8),
@@ -752,7 +791,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                   label: 'Матчи',
                   value: '$matchCount',
                   hint: 'в периоде',
-                  color: _C.text,
+                  color: _C.blue,
                 ),
               ),
             ],
@@ -801,7 +840,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                   selectedTitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _C.muted, fontSize: 11.2, fontWeight: FontWeight.w800),
+                  style: const TextStyle(color: _C.muted, fontSize: 10.75, fontWeight: FontWeight.w600),
                 ),
               ],
             ),
@@ -847,7 +886,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
       decoration: BoxDecoration(
         color: _C.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _C.border),
+        border: Border.all(color: Colors.transparent),
       ),
       child: LayoutBuilder(
         builder: (context, c) {
@@ -859,21 +898,21 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.query_stats_rounded, color: _C.greenDark, size: 16),
+                  const Icon(Icons.query_stats_rounded, color: _C.greenDark, size: 15),
                   const SizedBox(width: 7),
                   Expanded(
                     child: Text(
                       'Структура периода',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _C.title.copyWith(fontSize: 13.2, fontWeight: FontWeight.w900),
+                      style: _C.title.copyWith(fontSize: 12.55, fontWeight: FontWeight.w700),
                     ),
                   ),
                   Text(
                     mode == CmrCalendarMode.month ? _monthTitle(cursor) : _weekTitle(cursor),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: _C.muted, fontSize: 10.4, fontWeight: FontWeight.w800),
+                    style: const TextStyle(color: _C.muted, fontSize: 10.25, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -909,11 +948,11 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
 
     final items = [
       _CalendarKpiData(label: 'Период', value: '${events.length}', icon: Icons.dashboard_customize_rounded, color: _C.green, hint: mode == CmrCalendarMode.month ? _monthTitle(cursor) : _weekTitle(cursor)),
-      _CalendarKpiData(label: 'День', value: '${selectedList.length}', icon: Icons.today_rounded, color: _C.text, hint: _dateTitle(selectedDay)),
-      _CalendarKpiData(label: 'Тренировки', value: '$trainingCount', icon: Icons.fitness_center_rounded, color: _C.text, hint: 'поле + зал'),
-      _CalendarKpiData(label: 'Матчи', value: '$matchCount', icon: Icons.sports_soccer_rounded, color: _C.text, hint: 'игры'),
+      _CalendarKpiData(label: 'День', value: '${selectedList.length}', icon: Icons.today_rounded, color: _C.cyan, hint: _dateTitle(selectedDay)),
+      _CalendarKpiData(label: 'Тренировки', value: '$trainingCount', icon: Icons.fitness_center_rounded, color: _C.green, hint: 'поле + зал'),
+      _CalendarKpiData(label: 'Матчи', value: '$matchCount', icon: Icons.sports_soccer_rounded, color: _C.blue, hint: 'игры'),
       _CalendarKpiData(label: 'Теория', value: '$theoryCount', icon: Icons.psychology_alt_outlined, color: const Color(0xFFB7791F), hint: dayOffCount > 0 ? 'выходных: $dayOffCount' : 'разбор'),
-      _CalendarKpiData(label: 'Следующее', value: next == null ? '—' : hhmm(next.startAt), icon: Icons.play_arrow_rounded, color: _C.text, hint: next == null ? 'нет' : next.title),
+      _CalendarKpiData(label: 'Следующее', value: next == null ? '—' : hhmm(next.startAt), icon: Icons.play_arrow_rounded, color: next == null ? _C.slate : eventTypeColor(next.type), hint: next == null ? 'нет' : next.title),
     ];
 
     return SizedBox(
@@ -962,8 +1001,6 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
           _ProfileRoundButton(icon: Icons.today_rounded, onTap: _today),
           const SizedBox(width: 6),
           _ProfileRoundButton(icon: refreshing ? Icons.sync_rounded : Icons.refresh_rounded, onTap: () => _fetch()),
-          const SizedBox(width: 6),
-          _ProfileRoundButton(icon: Icons.open_in_full_rounded, onTap: _openFullCalendar),
         ],
       ),
       child: Column(
@@ -982,11 +1019,15 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
           const SizedBox(height: 8),
           Expanded(
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(14),
               child: Container(
                 width: double.infinity,
-                color: _C.soft2,
-                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(.70),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white.withOpacity(.72), width: 1),
+                ),
+                padding: const EdgeInsets.all(8),
                 child: LayoutBuilder(
                   builder: (context, calendarBox) {
                     return mode == CmrCalendarMode.month
@@ -1118,7 +1159,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                   'События за ${_dateTitle(selectedDay)}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: _C.title.copyWith(fontSize: 18, fontWeight: FontWeight.w900),
+                  style: _C.title.copyWith(fontSize: 16.75, fontWeight: FontWeight.w700),
                 ),
               ),
               if (canEdit) _ProfileActionButton(icon: Icons.add_rounded, text: 'Событие', onTap: () => _openCreate(selectedDay)),
@@ -1144,7 +1185,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _C.border),
+        border: Border.all(color: Colors.transparent),
         boxShadow: _C.panelShadow,
       ),
       child: Column(
@@ -1159,7 +1200,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                     onTap: _pickMonth,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
-                      child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.title.copyWith(fontSize: 16, fontWeight: FontWeight.w900)),
+                      child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.title.copyWith(fontSize: 15.05, fontWeight: FontWeight.w700)),
                     ),
                   ),
                 ),
@@ -1217,7 +1258,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                   child: Center(
                     child: Text(
                       d,
-                      style: const TextStyle(color: _C.muted, fontSize: 11, fontWeight: FontWeight.w900, height: 1.15),
+                      style: const TextStyle(color: _C.muted, fontSize: 10.55, fontWeight: FontWeight.w700, height: 1.15),
                     ),
                   ),
                 ),
@@ -1267,6 +1308,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
 
                 final list = eventsByDay[dateOnly(day)] ?? const <TeamEvent>[];
                 final has = list.isNotEmpty;
+                final eventAccent = has ? eventTypeColor(list.first.type) : _C.slate;
                 final now = DateTime.now();
                 final today = dateOnly(day) == dateOnly(now);
                 final selected = dateOnly(day) == dateOnly(selectedDay);
@@ -1286,19 +1328,21 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                       duration: const Duration(milliseconds: 160),
                       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
                       decoration: BoxDecoration(
+                        gradient: null,
                         color: selected
-                            ? _C.ink
+                            ? Colors.white.withOpacity(.96)
                             : has
-                                ? _C.greenSoft2
+                                ? _C.softTint(eventAccent, opacity: .045)
                                 : _C.soft,
                         borderRadius: BorderRadius.circular(10),
+                        boxShadow: selected ? _C.microShadow : null,
                         border: selected
-                            ? Border.all(color: _C.ink)
+                            ? Border.all(color: _C.green.withOpacity(.28), width: 1.05)
                             : today
-                                ? Border.all(color: _C.green.withOpacity(.42))
+                                ? Border.all(color: _C.greenBorder)
                                 : has
-                                    ? Border.all(color: _C.greenBorder)
-                                    : Border.all(color: _C.border),
+                                    ? Border.all(color: eventAccent.withOpacity(.12))
+                                    : Border.all(color: Colors.transparent),
                       ),
                       child: Stack(
                         children: [
@@ -1307,12 +1351,12 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                               '${day.day}',
                               style: TextStyle(
                                 color: selected
-                                    ? Colors.white
+                                    ? _C.greenDark
                                     : inMonth
                                         ? (today ? _C.greenDark : _C.text)
                                         : _C.muted.withOpacity(.64),
                                 fontSize: maxHeight == null ? 13 : 12.5,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
@@ -1447,17 +1491,17 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
           Container(
             width: 42,
             height: 42,
-            decoration: BoxDecoration(color: _C.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: _C.border)),
-            child: const Icon(Icons.calendar_month_rounded, color: _C.text, size: 22),
+            decoration: BoxDecoration(color: _C.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.transparent)),
+            child: const Icon(Icons.calendar_month_rounded, color: _C.text, size: 19),
           ),
           const SizedBox(width: 6),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_monthTitle(cursor), maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.title.copyWith(fontSize: 16.5, fontWeight: FontWeight.w900)),
+                Text(_monthTitle(cursor), maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.title.copyWith(fontSize: 15.25, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 3),
-                Text('${_dateTitle(selectedDay)} · ${selectedList.length} ${_pluralEvent(selectedList.length)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 11.5, fontWeight: FontWeight.w800)),
+                Text('${_dateTitle(selectedDay)} · ${selectedList.length} ${_pluralEvent(selectedList.length)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 11.05, fontWeight: FontWeight.w600)),
               ],
             ),
           ),
@@ -1469,9 +1513,9 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
 
   Widget _buildModeSelector() {
     return Container(
-      height: 38,
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(14), border: Border.all(color: _C.border)),
+      height: 34,
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(999), border: Border.all(color: Colors.transparent)),
       child: Row(
         children: [
           Expanded(
@@ -1517,13 +1561,13 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
       final c = eventTypeColor(t);
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(14), border: Border.all(color: _C.border)),
+        decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.transparent)),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(width: 7, height: 7, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(2))),
             const SizedBox(width: 6),
-            Text(eventTypeLabel(t), style: const TextStyle(fontSize: 11.2, fontWeight: FontWeight.w900, color: _C.text, height: 1)),
+            Text(eventTypeLabel(t), style: const TextStyle(fontSize: 10.75, fontWeight: FontWeight.w700, color: _C.text, height: 1)),
           ],
         ),
       );
@@ -1545,58 +1589,86 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
 }
 
 class _C {
-  // Премиальная CMR-палитра: база — графит/белый, зелёный — только как фирменный микро-акцент.
-  static const String font = 'Roboto';
+  // Windows 11 / Fluent Premium для календаря:
+  // белая база, мягкий glass, графитовый текст и спокойные спортивные акценты.
+  static const String font = 'Segoe UI';
+  static const List<String> fallback = <String>[
+    'SF Pro Display',
+    'SF Pro Text',
+    'Inter',
+    'Roboto',
+    'Arial',
+  ];
 
-  static const Color ink = Color(0xFF101214);
-  static const Color ink2 = Color(0xFF181B1F);
-  static const Color inkSoft = Color(0xFF22262B);
+  static const Color ink = Color(0xFF0B0F14);
+  static const Color ink2 = Color(0xFF111827);
+  static const Color inkSoft = Color(0xFF1F2937);
 
-  static const Color bg = Color(0xFFF4F5F6);
-  static const Color workspace = Color(0xFFF4F5F6);
-  static const Color panel = Colors.white;
+  static const Color bg = Color(0xFFF8FAFC);
+  static const Color workspace = Color(0xFFFFFFFF);
+  static const Color panel = Color(0xF8FFFFFF);
   static const Color card = Colors.white;
-  static const Color surface = Color(0xFFF8F9FA);
-  static const Color soft = Color(0xFFF1F2F4);
-  static const Color soft2 = Color(0xFFFAFAFB);
-  static const Color border = Color(0xFFE5E7EB);
-  static const Color borderStrong = Color(0xFFD8DEE6);
+  static const Color surface = Color(0xFFFAFBFC);
+  static const Color soft = Color(0xFFF6F7F9);
+  static const Color soft2 = Color(0xFFF5F7FB);
+  static const Color glass = Color(0xF8FFFFFF);
+  static const Color border = Color(0xFFF0F2F4);
+  static const Color borderStrong = Color(0xFFE5E7EB);
 
-  static const Color text = Color(0xFF111827);
+  static const Color text = Color(0xFF0B0F14);
   static const Color text2 = Color(0xFF111827);
-  static const Color muted = Color(0xFF475467);
+  static const Color muted = Color(0xFF374151);
   static const Color muted2 = Color(0xFF6B7280);
 
-  static const Color green = Color(0xFF00A750);
-  static const Color greenDark = Color(0xFF047A3F);
-  static const Color darkGreen = Color(0xFF047A3F);
-  static const Color accentSoft = Color(0xFFF3FBF6);
-  static const Color greenSoft = Color(0xFFF3FBF6);
-  static const Color greenSoft2 = Color(0xFFFAFFFC);
+  static const Color green = Color(0xFF0E9F5B);
+  static const Color greenDark = Color(0xFF067A46);
+  static const Color darkGreen = Color(0xFF067A46);
+  static const Color accentSoft = Color(0xFFF3FBF7);
+  static const Color greenSoft = Color(0xFFF3FBF7);
+  static const Color greenSoft2 = Color(0xFFF8FEFA);
   static const Color accentBorder = Color(0xFFDCEFE5);
   static const Color greenBorder = Color(0xFFDCEFE5);
 
-  static const Color blue = Color(0xFF344054);
-  static const Color blueSoft = Color(0xFFF2F4F7);
-  static const Color amber = Color(0xFFB7791F);
-  static const Color amberSoft = Color(0xFFFFF7E6);
+  static const Color blue = Color(0xFF2563EB);
+  static const Color blueSoft = Color(0xFFF5F8FF);
+  static const Color cyan = Color(0xFF0891B2);
+  static const Color cyanSoft = Color(0xFFF0FDFF);
+  static const Color slate = Color(0xFF475569);
+  static const Color slateSoft = Color(0xFFF8FAFC);
+  static const Color amber = Color(0xFFD97706);
+  static const Color amberSoft = Color(0xFFFFFBEB);
   static const Color red = Color(0xFFD92D20);
-  static const Color redSoft = Color(0xFFFFF1F1);
+  static const Color redSoft = Color(0xFFFEF2F2);
+  static const Color winBlue = Color(0xFF2563EB);
+  static const Color winCyan = Color(0xFF0891B2);
+  static const Color winMint = Color(0xFF0F766E);
+  static const Color winPurple = Color(0xFF475569);
 
-  static double _compact(double size) => size <= 10 ? size : size - 1.2;
+  static Color softTint(Color color, {double opacity = .085}) => Color.alphaBlend(color.withOpacity(opacity), Colors.white);
+
+  static Color accentByIndex(int index) {
+    const colors = <Color>[green, blue, cyan, slate, amber];
+    return colors[index.abs() % colors.length];
+  }
+
+  static Color accentSoftByIndex(int index) {
+    const colors = <Color>[greenSoft, blueSoft, cyanSoft, slateSoft, amberSoft];
+    return colors[index.abs() % colors.length];
+  }
 
   static TextStyle _base({
     required double size,
     required FontWeight weight,
     required Color color,
     double height = 1.18,
-    double letterSpacing = -0.12,
+    double letterSpacing = -0.10,
     List<FontFeature>? features,
   }) {
     return TextStyle(
       fontFamily: font,
+      fontFamilyFallback: fallback,
       color: color,
-      fontSize: _compact(size),
+      fontSize: size,
       fontWeight: weight,
       height: height,
       letterSpacing: letterSpacing,
@@ -1604,49 +1676,113 @@ class _C {
     );
   }
 
-  static List<BoxShadow> get softShadow => const [
-        BoxShadow(color: Color(0x070F172A), blurRadius: 16, offset: Offset(0, 6)),
+  static List<BoxShadow> get softShadow => [
+        BoxShadow(
+          color: Colors.black.withOpacity(.045),
+          blurRadius: 34,
+          spreadRadius: -14,
+          offset: const Offset(0, 20),
+        ),
+        BoxShadow(
+          color: Colors.black.withOpacity(.025),
+          blurRadius: 10,
+          spreadRadius: -7,
+          offset: const Offset(0, 4),
+        ),
       ];
 
-  static List<BoxShadow> get microShadow => const [
-        BoxShadow(color: Color(0x050F172A), blurRadius: 10, offset: Offset(0, 3)),
+  static List<BoxShadow> get microShadow => [
+        BoxShadow(
+          color: Colors.black.withOpacity(.040),
+          blurRadius: 20,
+          spreadRadius: -12,
+          offset: const Offset(0, 12),
+        ),
       ];
 
-  static List<BoxShadow> get panelShadow => const [
-        BoxShadow(color: Color(0x080F172A), blurRadius: 18, offset: Offset(0, 8)),
-      ];
+  static List<BoxShadow> get panelShadow => softShadow;
+
+  static BoxDecoration get workspaceDecoration => BoxDecoration(
+        color: glass,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(.86), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.055),
+            blurRadius: 38,
+            spreadRadius: -18,
+            offset: const Offset(0, 22),
+          ),
+          BoxShadow(
+            color: blue.withOpacity(.035),
+            blurRadius: 24,
+            spreadRadius: -18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      );
 
   static BoxDecoration get cardDecoration => BoxDecoration(
-        color: panel,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: border),
+        color: glass,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(.86), width: 1),
         boxShadow: softShadow,
       );
 
-  static BoxDecoration panelDecoration({double radius = 14}) => BoxDecoration(
-        color: panel,
+  static BoxDecoration panelDecoration({double radius = 22}) => BoxDecoration(
+        color: Colors.white.withOpacity(.62),
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: border),
-        boxShadow: softShadow,
+        border: Border.all(color: Colors.white.withOpacity(.70), width: 1),
       );
 
-  static BoxDecoration softCard({double radius = 10}) => BoxDecoration(
-        color: surface,
+  static BoxDecoration seamlessPaneDecoration({double radius = 22}) => BoxDecoration(
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: border),
+      );
+
+  static BoxDecoration fluentSurface({double radius = 16, bool active = false, Color? accent, bool elevated = true}) => BoxDecoration(
+        color: active ? Colors.white.withOpacity(.96) : Colors.white.withOpacity(.82),
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(
+          color: active && accent != null ? Color.alphaBlend(accent.withOpacity(.18), Colors.white) : Colors.white.withOpacity(.78),
+          width: 1,
+        ),
+        boxShadow: elevated
+            ? [
+                BoxShadow(
+                  color: Colors.black.withOpacity(active ? .040 : .025),
+                  blurRadius: active ? 20 : 14,
+                  spreadRadius: -12,
+                  offset: Offset(0, active ? 12 : 8),
+                ),
+              ]
+            : null,
+      );
+
+  static BoxDecoration softCard({double radius = 18, Color? tint}) => BoxDecoration(
+        color: tint ?? Colors.white.withOpacity(.76),
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: Colors.white.withOpacity(.70), width: 1),
+      );
+
+  static BoxDecoration accentCard({required Color color, double radius = 18}) => BoxDecoration(
+        color: Color.alphaBlend(color.withOpacity(.060), Colors.white),
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: color.withOpacity(.16), width: 1),
+        boxShadow: microShadow,
       );
 
   static TextStyle get title => _base(
-        size: 18,
-        weight: FontWeight.w900,
+        size: 17.2,
+        weight: FontWeight.w700,
         color: text,
-        height: 1.12,
-        letterSpacing: -0.25,
+        height: 1.10,
+        letterSpacing: -0.34,
       );
 
   static TextStyle section() => _base(
-        size: 15.5,
-        weight: FontWeight.w900,
+        size: 13.4,
+        weight: FontWeight.w700,
         color: text,
         height: 1.12,
         letterSpacing: -0.22,
@@ -1654,13 +1790,14 @@ class _C {
 
   static TextStyle value(double size) => _base(
         size: size,
-        weight: FontWeight.w800,
+        weight: FontWeight.w700,
         color: text,
-        height: 1.22,
+        height: 1.08,
+        letterSpacing: -0.25,
         features: const [FontFeature.tabularFigures()],
       );
 
-  static TextStyle mutedStyle(double size, {FontWeight weight = FontWeight.w800}) => _base(
+  static TextStyle mutedStyle(double size, {FontWeight weight = FontWeight.w500}) => _base(
         size: size,
         weight: weight,
         color: muted,
@@ -1669,32 +1806,32 @@ class _C {
       );
 
   static TextStyle caption() => _base(
-        size: 12,
-        weight: FontWeight.w800,
+        size: 10.6,
+        weight: FontWeight.w600,
         color: muted2,
-        height: 1.12,
+        height: 1.10,
         letterSpacing: .08,
       );
 
   static TextStyle tab({bool active = false}) => _base(
-        size: 13,
-        weight: FontWeight.w900,
-        color: active ? Colors.white : text,
+        size: 11.8,
+        weight: FontWeight.w700,
+        color: active ? greenDark : text,
         height: 1,
       );
 
   static TextStyle tabSelected() => tab(active: true);
 
   static TextStyle action() => _base(
-        size: 13,
-        weight: FontWeight.w900,
-        color: green,
-        height: 1,
+        size: 11.8,
+        weight: FontWeight.w700,
+        color: text,
+        height: 1.05,
       );
 
   static TextStyle danger() => _base(
-        size: 13,
-        weight: FontWeight.w900,
+        size: 11.8,
+        weight: FontWeight.w700,
         color: red,
         height: 1,
       );
@@ -1802,19 +1939,19 @@ class _CalendarHeaderSide extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
-        Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: alignEnd ? TextAlign.right : TextAlign.left, style: const TextStyle(color: _C.text, fontSize: 15.0, fontWeight: FontWeight.w900, height: 1.0)),
+        Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: alignEnd ? TextAlign.right : TextAlign.left, style: const TextStyle(color: _C.text, fontSize: 14.05, fontWeight: FontWeight.w700, height: 1.0)),
         const SizedBox(height: 5),
-        Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: alignEnd ? TextAlign.right : TextAlign.left, style: const TextStyle(color: _C.muted, fontSize: 10.4, fontWeight: FontWeight.w800, height: 1.0)),
+        Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: alignEnd ? TextAlign.right : TextAlign.left, style: const TextStyle(color: _C.muted, fontSize: 10.25, fontWeight: FontWeight.w600, height: 1.0)),
         const SizedBox(height: 6),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-          decoration: BoxDecoration(color: Color.alphaBlend(accent.withOpacity(.08), Colors.white), borderRadius: BorderRadius.circular(6), border: Border.all(color: accent.withOpacity(.18))),
+          decoration: BoxDecoration(color: Color.alphaBlend(accent.withOpacity(.08), Colors.white), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.transparent)),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(metric, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: accent, fontSize: 11.6, fontWeight: FontWeight.w900, height: 1)),
+              Text(metric, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: accent, fontSize: 11.15, fontWeight: FontWeight.w700, height: 1)),
               const SizedBox(width: 6),
-              Text(metricLabel, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 9.4, fontWeight: FontWeight.w800, height: 1)),
+              Text(metricLabel, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 9.25, fontWeight: FontWeight.w600, height: 1)),
             ],
           ),
         ),
@@ -1824,8 +1961,8 @@ class _CalendarHeaderSide extends StatelessWidget {
     final badge = Container(
       width: 42,
       height: 42,
-      decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: _C.border, width: 1.2)),
-      child: Icon(icon, color: accent == _C.green ? _C.greenDark : accent, size: 21),
+      decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: Colors.transparent)),
+      child: Icon(icon, color: accent == _C.green ? _C.greenDark : accent, size: 18),
     );
 
     return Row(
@@ -1848,15 +1985,15 @@ class _CalendarHeaderCenter extends StatelessWidget {
     return Container(
       height: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
-      decoration: BoxDecoration(color: _C.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: _C.border)),
+      decoration: BoxDecoration(color: _C.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.transparent)),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(color: _C.text, fontSize: 17.2, fontWeight: FontWeight.w900, height: 1.05)),
+          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(color: _C.text, fontSize: 15.95, fontWeight: FontWeight.w700, height: 1.05)),
           const SizedBox(height: 5),
-          Text(status, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.greenDark, fontSize: 9.8, fontWeight: FontWeight.w900, letterSpacing: .25, height: 1)),
+          Text(status, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.greenDark, fontSize: 9.65, fontWeight: FontWeight.w700, letterSpacing: .25, height: 1)),
           const SizedBox(height: 5),
-          Text('$subtitle · $count', maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(color: _C.muted, fontSize: 9.8, fontWeight: FontWeight.w800, height: 1.1)),
+          Text('$subtitle · $count', maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(color: _C.muted, fontSize: 9.65, fontWeight: FontWeight.w600, height: 1.1)),
         ],
       ),
     );
@@ -1870,56 +2007,36 @@ class _CalendarTopLine extends StatelessWidget {
   final IconData icon;
   final Color color;
 
-  const _CalendarTopLine({
-    required this.label,
-    required this.value,
-    required this.subvalue,
-    required this.icon,
-    required this.color,
-  });
+  const _CalendarTopLine({required this.label, required this.value, required this.subvalue, required this.icon, required this.color});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: double.infinity,
+      height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: _C.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _C.border),
-      ),
+      decoration: BoxDecoration(color: Color.alphaBlend(color.withOpacity(.045), Colors.white), borderRadius: BorderRadius.circular(12), boxShadow: _C.microShadow),
       child: Row(
         children: [
-          Container(
-            width: 24,
-            height: 24,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: _C.border),
-            ),
-            child: Icon(icon, color: color == _C.green ? _C.greenDark : color, size: 14),
-          ),
+          Container(width: 4, height: 22, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(99))),
+          const SizedBox(width: 7),
+          Container(width: 27, height: 27, decoration: BoxDecoration(color: color.withOpacity(.08), borderRadius: BorderRadius.circular(8)), child: Icon(icon, color: color, size: 13)),
           const SizedBox(width: 7),
           Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 8.8, fontWeight: FontWeight.w900, height: 1)),
-                const SizedBox(height: 3),
-                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 11.7, fontWeight: FontWeight.w900, height: 1)),
-                const SizedBox(height: 2),
-                Text(subvalue, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 8.8, fontWeight: FontWeight.w800, height: 1)),
-              ],
-            ),
+            child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.caption().copyWith(fontSize: 9.05)),
+              const SizedBox(height: 3),
+              Row(children: [
+                Flexible(child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.action().copyWith(fontSize: 10.75))),
+                const SizedBox(width: 5),
+                Flexible(child: Text(subvalue, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.caption().copyWith(fontSize: 9.05))),
+              ]),
+            ]),
           ),
         ],
       ),
     );
   }
 }
-
 
 class _CalendarRightHeader extends StatelessWidget {
   final String title;
@@ -1948,9 +2065,9 @@ class _CalendarRightHeader extends StatelessWidget {
             decoration: BoxDecoration(
               color: _C.surface,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: _C.border),
+              border: Border.all(color: Colors.transparent),
             ),
-            child: Icon(icon, color: _C.text, size: 18),
+            child: Icon(icon, color: _C.text, size: 16),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -1958,7 +2075,7 @@ class _CalendarRightHeader extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.title.copyWith(fontSize: 16.2)),
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.title.copyWith(fontSize: 14.95)),
                 const SizedBox(height: 3),
                 Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.mutedStyle(11.4)),
               ],
@@ -1981,38 +2098,39 @@ class _CalendarSideKpi extends StatelessWidget {
   final String hint;
   final Color color;
 
-  const _CalendarSideKpi({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.hint,
-    required this.color,
-  });
+  const _CalendarSideKpi({required this.icon, required this.label, required this.value, required this.hint, required this.color});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 68,
-      padding: const EdgeInsets.all(9),
+      height: 62,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
       decoration: BoxDecoration(
-        color: _C.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _C.border),
+        color: Color.alphaBlend(color.withOpacity(.045), Colors.white),
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: _C.microShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, color: color, size: 16),
+              Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(color: Color.alphaBlend(color.withOpacity(.08), Colors.white), borderRadius: BorderRadius.circular(8)),
+                child: Icon(icon, color: color, size: 11.5),
+              ),
               const Spacer(),
-              Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.value(17.2).copyWith(color: _C.text, fontWeight: FontWeight.w900)),
+              Flexible(
+                child: Text(value, maxLines: 1, textAlign: TextAlign.right, overflow: TextOverflow.ellipsis, style: _C.value(14.8)),
+              ),
             ],
           ),
           const Spacer(),
-          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.mutedStyle(10.5, weight: FontWeight.w900).copyWith(color: _C.text)),
-          const SizedBox(height: 2),
-          Text(hint, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.mutedStyle(9.3)),
+          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.caption().copyWith(color: _C.text, fontSize: 9.25)),
+          const SizedBox(height: 1),
+          Text(hint, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.caption().copyWith(fontSize: 8.35)),
         ],
       ),
     );
@@ -2033,36 +2151,26 @@ class _CalendarNextEventStrip extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _C.border),
-        boxShadow: _C.microShadow,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(color: Color.alphaBlend(color.withOpacity(.045), Colors.white), borderRadius: BorderRadius.circular(16), boxShadow: _C.microShadow),
       child: Row(
         children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: Color.alphaBlend(color.withOpacity(.12), Colors.white),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(Icons.event_available_rounded, color: color, size: 18),
-          ),
+          Container(width: 4, height: 38, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(99))),
           const SizedBox(width: 9),
+          Container(width: 34, height: 34, decoration: BoxDecoration(color: Color.alphaBlend(color.withOpacity(.08), Colors.white), borderRadius: BorderRadius.circular(11)), child: Icon(Icons.event_available_rounded, color: color, size: 16)),
+          const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Ближайшее', maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.mutedStyle(10.2, weight: FontWeight.w900).copyWith(color: _C.greenDark)),
-                const SizedBox(height: 3),
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.title.copyWith(fontSize: 13.3)),
-                const SizedBox(height: 3),
-                Text('$date · $time', maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.mutedStyle(10.8)),
-              ],
-            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.title.copyWith(fontSize: 13.8)),
+              const SizedBox(height: 3),
+              Text('$date · $time', maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.mutedStyle(10.8)),
+            ]),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: _C.fluentSurface(radius: 999, active: true, accent: color, elevated: false),
+            child: Text(eventTypeLabel(event.type), maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.action().copyWith(color: color, fontSize: 10.5)),
           ),
         ],
       ),
@@ -2078,23 +2186,38 @@ class _CalendarInfoCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 38,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: _C.border), boxShadow: _C.microShadow),
+      height: 42,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(item.color.withOpacity(.045), Colors.white),
+        borderRadius: BorderRadius.circular(13),
+        boxShadow: _C.microShadow,
+      ),
       child: Row(
         children: [
-          Icon(item.icon, color: item.color, size: 15),
-          const SizedBox(width: 6),
-          Text(item.value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 13.4, fontWeight: FontWeight.w900, height: 1)),
-          const SizedBox(width: 6),
+          Container(
+            width: 4,
+            height: 22,
+            decoration: BoxDecoration(color: item.color, borderRadius: BorderRadius.circular(99)),
+          ),
+          const SizedBox(width: 7),
+          Container(
+            width: 25,
+            height: 25,
+            decoration: BoxDecoration(color: item.color.withOpacity(.075), borderRadius: BorderRadius.circular(8)),
+            child: Icon(item.icon, color: item.color, size: 13),
+          ),
+          const SizedBox(width: 7),
+          Text(item.value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.value(13.8)),
+          const SizedBox(width: 7),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 9.5, fontWeight: FontWeight.w900, height: 1)),
+                Text(item.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.caption().copyWith(color: _C.text, fontSize: 9.35)),
                 const SizedBox(height: 2),
-                Text(item.hint, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 8.8, fontWeight: FontWeight.w800, height: 1)),
+                Text(item.hint, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.caption().copyWith(fontSize: 8.8)),
               ],
             ),
           ),
@@ -2114,14 +2237,22 @@ class _CalendarKpiTile extends StatelessWidget {
     return Container(
       height: 56,
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: _C.border), boxShadow: _C.microShadow),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(.80),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(.72), width: 1),
+      ),
       child: Row(
         children: [
           Container(
             width: 28,
             height: 28,
-            decoration: BoxDecoration(color: Color.alphaBlend(item.color.withOpacity(.10), Colors.white), borderRadius: BorderRadius.circular(6), border: Border.all(color: item.color.withOpacity(.18))),
-            child: Icon(item.icon, color: item.color, size: 16),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(.88),
+              borderRadius: BorderRadius.circular(7),
+              border: Border.all(color: item.color.withOpacity(.16), width: 1),
+            ),
+            child: Icon(item.icon, color: item.color, size: 15),
           ),
           const SizedBox(width: 6),
           Expanded(
@@ -2129,13 +2260,13 @@ class _CalendarKpiTile extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 9.6, fontWeight: FontWeight.w900, height: 1)),
+                Text(item.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 9.45, fontWeight: FontWeight.w700, height: 1)),
                 const SizedBox(height: 2),
                 Row(
                   children: [
-                    Text(item.value, maxLines: 1, style: const TextStyle(color: _C.text, fontSize: 15.5, fontWeight: FontWeight.w900, height: 1)),
+                    Text(item.value, maxLines: 1, style: const TextStyle(color: _C.text, fontSize: 14.55, fontWeight: FontWeight.w700, height: 1)),
                     const SizedBox(width: 6),
-                    Expanded(child: Text(item.hint, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 9.1, fontWeight: FontWeight.w800, height: 1))),
+                    Expanded(child: Text(item.hint, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 8.95, fontWeight: FontWeight.w600, height: 1))),
                   ],
                 ),
               ],
@@ -2159,51 +2290,40 @@ class _StrictWorkspaceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final header = Container(
-      constraints: BoxConstraints(minHeight: dense ? 34 : 38),
-      padding: EdgeInsets.symmetric(horizontal: dense ? 8 : 10, vertical: dense ? 5 : 6),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: _C.border, width: 1)),
-      ),
-      child: Row(
-        children: [
-          _BrandAccentLine(height: dense ? 16 : 20),
-          const SizedBox(width: 8),
-          Icon(icon, color: _C.text, size: dense ? 15 : 17),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.title.copyWith(fontSize: dense ? 12.8 : 14.2, fontWeight: FontWeight.w900)),
-                const SizedBox(height: 2),
-                Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _C.muted, fontSize: dense ? 9.4 : 10.0, fontWeight: FontWeight.w800, height: 1)),
-              ],
-            ),
-          ),
-          if (trailing != null) ...[const SizedBox(width: 6), trailing!],
-        ],
-      ),
+    final accent = _C.accentByIndex(icon.codePoint);
+    final outerPadding = dense ? 10.0 : 12.0;
+    final iconSize = dense ? 36.0 : 40.0;
+
+    final header = Row(
+      children: [
+        Container(width: iconSize, height: iconSize, decoration: _C.fluentSurface(radius: dense ? 13 : 14, accent: accent, elevated: false), child: Icon(icon, color: accent, size: dense ? 17 : 19)),
+        SizedBox(width: dense ? 8 : 10),
+        Expanded(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.title.copyWith(fontSize: dense ? 14.0 : 16.0)),
+            const SizedBox(height: 4),
+            Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.mutedStyle(dense ? 10.4 : 11.3)),
+          ]),
+        ),
+        if (trailing != null) ...[SizedBox(width: dense ? 6 : 8), trailing!],
+      ],
     );
 
     return Container(
-      decoration: _C.panelDecoration(),
-      clipBehavior: Clip.antiAlias,
+      decoration: _C.seamlessPaneDecoration(),
+      padding: EdgeInsets.all(outerPadding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           header,
-          if (dense)
-            Padding(padding: const EdgeInsets.all(10), child: child)
-          else
-            Expanded(child: Padding(padding: const EdgeInsets.all(12), child: child)),
+          SizedBox(height: dense ? 10 : 12),
+          if (dense) child else Expanded(child: child),
         ],
       ),
     );
   }
 }
+
 
 class _CalendarTypeData {
   final TeamEventType type;
@@ -2217,27 +2337,56 @@ class _CalendarTypeTile extends StatelessWidget {
   final String value;
   final Color color;
 
-  const _CalendarTypeTile({required this.label, required this.value, required this.color});
+  const _CalendarTypeTile({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 31,
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(7), border: Border.all(color: _C.border), boxShadow: _C.microShadow),
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: _C.softTint(color, opacity: .075),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(.10)),
+      ),
       child: Row(
         children: [
-          Container(width: 4, height: double.infinity, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(5))),
-          const SizedBox(width: 6),
+          Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              color: _C.softTint(color, opacity: .12),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontSize: 11.2,
+                fontWeight: FontWeight.w800,
+                height: 1,
+              ),
+            ),
+          ),
+          const SizedBox(width: 7),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 13.2, fontWeight: FontWeight.w900, height: 1)),
-                const SizedBox(height: 2),
-                Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 9.0, fontWeight: FontWeight.w800, height: 1)),
-              ],
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _C.text,
+                fontSize: 10.4,
+                fontWeight: FontWeight.w700,
+                height: 1.05,
+              ),
             ),
           ),
         ],
@@ -2260,8 +2409,12 @@ class _ProfileCalendarArrow extends StatelessWidget {
       child: Container(
         width: 34,
         height: 34,
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: _C.border)),
-        child: Icon(icon, color: _C.text, size: 20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: _C.microShadow,
+        ),
+        child: Icon(icon, color: _C.inkSoft, size: 18),
       ),
     );
   }
@@ -2275,14 +2428,21 @@ class _ProfileRoundButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: onTap,
-      child: Container(
-        width: 42,
-        height: 42,
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: _C.border)),
-        child: Icon(icon, color: _C.text, size: 21),
+    final emphasized = icon == Icons.add_rounded;
+    final radius = BorderRadius.circular(13);
+    final accent = emphasized ? _C.green : _C.slate;
+    return Material(
+      color: Colors.transparent,
+      borderRadius: radius,
+      child: InkWell(
+        borderRadius: radius,
+        onTap: onTap,
+        child: Container(
+          width: 38,
+          height: 38,
+          decoration: _C.fluentSurface(radius: 13, accent: emphasized ? _C.green : _C.blue, active: emphasized, elevated: false),
+          child: Icon(icon, color: accent, size: 18),
+        ),
       ),
     );
   }
@@ -2297,21 +2457,21 @@ class _ProfileActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return Material(
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(999),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(color: _C.ink, borderRadius: BorderRadius.circular(999), border: Border.all(color: _C.ink)),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(width: 6, height: 6, decoration: BoxDecoration(color: _C.green, borderRadius: BorderRadius.circular(99))),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Container(
+          height: 34,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: _C.fluentSurface(radius: 999, active: true, accent: _C.green, elevated: false),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 14, color: _C.green),
             const SizedBox(width: 7),
-            Icon(icon, size: 16, color: Colors.white),
-            const SizedBox(width: 6),
-            Text(text, style: const TextStyle(color: Colors.white, fontSize: 12.2, fontWeight: FontWeight.w900)),
-          ],
+            Text(text, style: _C.action().copyWith(color: _C.greenDark, fontSize: 11.2)),
+          ]),
         ),
       ),
     );
@@ -2327,29 +2487,18 @@ class _ModeButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        decoration: BoxDecoration(
-          color: active ? _C.ink : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: active ? _C.microShadow : null,
-          border: active ? Border.all(color: _C.ink) : null,
-        ),
-        child: Stack(
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          height: 32,
+          decoration: _C.fluentSurface(radius: 999, active: active, accent: _C.green, elevated: false),
           alignment: Alignment.center,
-          children: [
-            if (active)
-              const Positioned(top: 4, child: _BrandAccentLine(width: 22, height: 3, radius: 99)),
-            Text(
-              text,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: active ? Colors.white : _C.text, fontSize: 11.8, fontWeight: FontWeight.w900, height: 1),
-            ),
-          ],
+          child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.action().copyWith(color: active ? _C.greenDark : _C.text.withOpacity(.78), fontSize: 11.2)),
         ),
       ),
     );
@@ -2373,7 +2522,7 @@ class _SegmentedEventBadge extends StatelessWidget {
         painter: _SegmentedEventBadgePainter(colors: colors, borderColor: Colors.white),
         child: events.length > 1
             ? Center(
-                child: Text(events.length > 9 ? '9+' : '${events.length}', style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900, height: 1, shadows: [Shadow(color: Color(0x66000000), blurRadius: 4)])),
+                child: Text(events.length > 9 ? '9+' : '${events.length}', style: const TextStyle(color: Colors.white, fontSize: 8.4, fontWeight: FontWeight.w700, height: 1, shadows: [Shadow(color: Color(0x66000000), blurRadius: 4)])),
               )
             : const SizedBox.shrink(),
       ),
@@ -2451,7 +2600,12 @@ class _CmrEventTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(7),
         onTap: onDetails,
         child: Container(
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: _C.border), boxShadow: _C.microShadow),
+          decoration: BoxDecoration(
+            color: _C.softTint(c, opacity: .040),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withOpacity(.62)),
+            boxShadow: _C.microShadow,
+          ),
           padding: const EdgeInsets.all(8),
           child: Row(
             children: [
@@ -2463,25 +2617,25 @@ class _CmrEventTile extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Expanded(child: Text(event.title.trim().isEmpty ? 'Событие календаря' : event.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 13.5, fontWeight: FontWeight.w900))),
+                        Expanded(child: Text(event.title.trim().isEmpty ? 'Событие календаря' : event.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 12.85, fontWeight: FontWeight.w700))),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                          decoration: BoxDecoration(color: Color.alphaBlend(c.withOpacity(.10), Colors.white), borderRadius: BorderRadius.circular(5), border: Border.all(color: c.withOpacity(.16))),
-                          child: Text(eventTypeLabel(event.type), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c, fontSize: 9.1, fontWeight: FontWeight.w900, height: 1)),
+                          decoration: BoxDecoration(color: Color.alphaBlend(c.withOpacity(.10), Colors.white), borderRadius: BorderRadius.circular(5), border: Border.all(color: Colors.transparent)),
+                          child: Text(eventTypeLabel(event.type), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c, fontSize: 8.95, fontWeight: FontWeight.w700, height: 1)),
                         ),
                       ],
                     ),
                     const SizedBox(height: 5),
                     Row(
                       children: [
-                        Icon(Icons.schedule_rounded, color: c, size: 15),
+                        Icon(Icons.schedule_rounded, color: c, size: 14),
                         const SizedBox(width: 5),
-                        Text(_timeText, style: const TextStyle(color: _C.text, fontSize: 12, fontWeight: FontWeight.w800)),
+                        Text(_timeText, style: const TextStyle(color: _C.text, fontSize: 11.55, fontWeight: FontWeight.w600)),
                         if (location.isNotEmpty) ...[
                           const SizedBox(width: 6),
-                          const Icon(Icons.location_on_outlined, color: _C.muted, size: 14),
+                          const Icon(Icons.location_on_outlined, color: _C.muted, size: 13),
                           const SizedBox(width: 4),
-                          Expanded(child: Text(location, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 11.5, fontWeight: FontWeight.w700))),
+                          Expanded(child: Text(location, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 11.05, fontWeight: FontWeight.w700))),
                         ],
                       ],
                     ),
@@ -2533,16 +2687,16 @@ class _CalendarRatingChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: Color.alphaBlend(color.withOpacity(.08), Colors.white),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(.16)),
+        border: Border.all(color: Colors.transparent),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, color: color, size: 12),
           const SizedBox(width: 4),
-          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 9.4, fontWeight: FontWeight.w800, height: 1)),
+          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 9.25, fontWeight: FontWeight.w600, height: 1)),
           const SizedBox(width: 4),
-          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontSize: 10.2, fontWeight: FontWeight.w900, height: 1)),
+          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontSize: 10.05, fontWeight: FontWeight.w700, height: 1)),
         ],
       ),
     );
@@ -2565,8 +2719,8 @@ class _MiniIconButton extends StatelessWidget {
       child: Container(
         width: 26,
         height: 26,
-        decoration: BoxDecoration(color: Color.alphaBlend(c.withOpacity(.08), Colors.white), borderRadius: BorderRadius.circular(5), border: Border.all(color: c.withOpacity(.14))),
-        child: Icon(icon, color: c, size: 14),
+        decoration: BoxDecoration(color: Color.alphaBlend(c.withOpacity(.08), Colors.white), borderRadius: BorderRadius.circular(5), border: Border.all(color: Colors.transparent)),
+        child: Icon(icon, color: c, size: 13),
       ),
     );
   }
@@ -2722,21 +2876,31 @@ class _InlineEventEditorPanel extends StatelessWidget {
       child: Column(
         children: [
           Container(
-  constraints: const BoxConstraints(minHeight: 40),
-            padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
-            decoration: const BoxDecoration(color: Colors.white),
+            constraints: const BoxConstraints(minHeight: 54),
+            padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+            decoration: const BoxDecoration(color: Colors.transparent),
             child: Row(
               children: [
-                Icon(icon, color: accent, size: 17),
-                const SizedBox(width: 6),
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(.88),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: accent.withOpacity(.16), width: 1),
+                    boxShadow: _C.microShadow,
+                  ),
+                  child: Icon(icon, color: accent, size: 15),
+                ),
+                const SizedBox(width: 9),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 14.2, fontWeight: FontWeight.w900)),
-                      const SizedBox(height: 2),
-                      Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 10.0, fontWeight: FontWeight.w800)),
+                      Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 13.45, fontWeight: FontWeight.w700, height: 1.05)),
+                      const SizedBox(height: 3),
+                      Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 10.05, fontWeight: FontWeight.w600, height: 1.05)),
                     ],
                   ),
                 ),
@@ -2746,10 +2910,10 @@ class _InlineEventEditorPanel extends StatelessWidget {
           ),
           Expanded(
             child: Container(
-              color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+              decoration: const BoxDecoration(color: Colors.transparent),
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(14),
                 child: Navigator(
                   pages: [MaterialPage<void>(key: ValueKey('calendar-event-editor-$title-$subtitle'), child: child)],
                   onPopPage: (route, result) {
@@ -2783,18 +2947,22 @@ class _DetailMetric extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: _C.border), boxShadow: _C.microShadow),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(.80),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(.72), width: 1),
+      ),
       child: Row(
         children: [
-          Container(width: 30, height: 30, decoration: BoxDecoration(color: Color.alphaBlend(accent.withOpacity(.10), Colors.white), borderRadius: BorderRadius.circular(6)), child: Icon(icon, color: accent, size: 16)),
+          Container(width: 30, height: 30, decoration: BoxDecoration(color: Color.alphaBlend(accent.withOpacity(.10), Colors.white), borderRadius: BorderRadius.circular(6)), child: Icon(icon, color: accent, size: 15)),
           const SizedBox(width: 6),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 10.5, fontWeight: FontWeight.w800)),
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 10.35, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 3),
-                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 12.5, fontWeight: FontWeight.w900)),
+                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 11.85, fontWeight: FontWeight.w700)),
               ],
             ),
           ),
@@ -2816,19 +2984,19 @@ class _InfoBox extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(11),
-      decoration: BoxDecoration(color: _C.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: _C.border)),
+      decoration: BoxDecoration(color: _C.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.transparent)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, color: _C.greenDark, size: 17),
+              Icon(icon, color: _C.greenDark, size: 15),
               const SizedBox(width: 7),
-              Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 12.5, fontWeight: FontWeight.w900))),
+              Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 11.85, fontWeight: FontWeight.w700))),
             ],
           ),
           const SizedBox(height: 5),
-          Text(text, style: const TextStyle(color: _C.muted, fontSize: 12, fontWeight: FontWeight.w700, height: 1.35)),
+          Text(text, style: const TextStyle(color: _C.muted, fontSize: 11.55, fontWeight: FontWeight.w700, height: 1.35)),
         ],
       ),
     );
@@ -2838,19 +3006,28 @@ class _InfoBox extends StatelessWidget {
 class _HeroStat extends StatelessWidget {
   final String value;
   final String title;
+  final Color accent;
 
-  const _HeroStat({required this.value, required this.title});
+  const _HeroStat({
+    required this.value,
+    required this.title,
+    this.accent = _C.blue,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: _C.border), boxShadow: _C.microShadow),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(.80),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(.72), width: 1),
+      ),
       child: Column(
         children: [
-          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 18, fontWeight: FontWeight.w900)),
+          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 16.75, fontWeight: FontWeight.w700)),
           const SizedBox(height: 2),
-          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 10.5, fontWeight: FontWeight.w800)),
+          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 10.35, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -2867,26 +3044,27 @@ class _SheetActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = danger ? _C.red : _C.ink;
+    final color = danger ? _C.red : _C.greenDark;
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: Container(
-          height: 38,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(6)),
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 11),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(.92),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.withOpacity(.18), width: 1),
+            boxShadow: _C.microShadow,
+          ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (!danger) ...[
-                Container(width: 5, height: 5, decoration: BoxDecoration(color: _C.green, borderRadius: BorderRadius.circular(99))),
-                const SizedBox(width: 7),
-              ],
-              Icon(icon, color: Colors.white, size: 15),
-              const SizedBox(width: 6),
-              Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900))),
+              Icon(icon, color: color, size: 14),
+              const SizedBox(width: 7),
+              Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontSize: 11.5, fontWeight: FontWeight.w700))),
             ],
           ),
         ),
@@ -2905,8 +3083,8 @@ class _MutedHint extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(11),
-      decoration: BoxDecoration(color: _C.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: _C.border)),
-      child: Text(text, style: const TextStyle(color: _C.muted, fontSize: 12, fontWeight: FontWeight.w800)),
+      decoration: BoxDecoration(color: _C.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.transparent)),
+      child: Text(text, style: const TextStyle(color: _C.muted, fontSize: 11.55, fontWeight: FontWeight.w600)),
     );
   }
 }
@@ -2947,9 +3125,9 @@ class _CmrEmptyState extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: _C.greenDark, size: 54),
+              Icon(icon, color: _C.greenDark, size: 48),
               const SizedBox(height: 14),
-              Text(title, textAlign: TextAlign.center, style: _C.title.copyWith(fontSize: 22)),
+              Text(title, textAlign: TextAlign.center, style: _C.title.copyWith(fontSize: 20.4)),
               const SizedBox(height: 8),
               Text(text, textAlign: TextAlign.center, style: const TextStyle(color: _C.muted, height: 1.45, fontWeight: FontWeight.w600)),
               if (actionText != null && onAction != null) ...[
@@ -2958,7 +3136,7 @@ class _CmrEmptyState extends StatelessWidget {
                   onPressed: onAction,
                   icon: const Icon(Icons.refresh_rounded),
                   label: Text(actionText!),
-                  style: ElevatedButton.styleFrom(backgroundColor: _C.ink, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: _C.greenDark, elevation: 0, side: BorderSide(color: _C.green.withOpacity(.18)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                 ),
               ],
             ],

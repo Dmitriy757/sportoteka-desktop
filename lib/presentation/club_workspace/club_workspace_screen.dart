@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -24,6 +25,7 @@ import 'package:sportoteka/presentation/training_graphics/training_graphics_scre
 import 'package:sportoteka/presentation/video_lessons/video_lessons_screen.dart';
 import 'package:sportoteka/routes/app_routes.dart';
 import 'package:sportoteka/presentation/player_profile_screen/cmr_player_profile_screen.dart';
+import 'package:sportoteka/presentation/my_profile_screen/my_profile_screen.dart';
 import 'package:sportoteka/presentation/plans/cmr_plans_panel.dart';
 import 'package:sportoteka/presentation/team_calendar_screen/cmr_calendar_panel.dart';
 import 'package:sportoteka/presentation/team_video_analysis/cmr_video_analysis_panel.dart';
@@ -36,7 +38,7 @@ import 'package:sportoteka/presentation/club_workspace/cmr_club_roster_panel.dar
 import 'package:sportoteka/presentation/club_workspace/cmr_chats_panel.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_game_zone_panel.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_club_overview_panel.dart';
-import 'package:sportoteka/presentation/tracker/sportoteka_tracker_pro_screen.dart';
+import 'package:sportoteka/presentation/tracker/screens/tracker_match_workspace_screen.dart';
 
 enum ClubSection {
   coachDashboard,
@@ -69,6 +71,105 @@ enum ClubSection {
   medical,
   parents,
   settings,
+}
+
+enum _WorkspaceDockSize { compact, normal, large }
+
+enum _WorkspaceWallpaperStyle { sportoteka, clean, club, pitch, graphite }
+
+class _WorkspaceWindowState {
+  final String id;
+  final ClubSection section;
+  final String? entityKey;
+  final String? titleOverride;
+  final String? subtitleOverride;
+  final IconData? iconOverride;
+  final Map<String, dynamic>? playerPayload;
+  Offset position;
+  Size size;
+  bool minimized;
+  bool maximized;
+  int zIndex;
+
+  _WorkspaceWindowState({
+    required this.id,
+    required this.section,
+    required this.position,
+    required this.size,
+    required this.zIndex,
+    this.entityKey,
+    this.titleOverride,
+    this.subtitleOverride,
+    this.iconOverride,
+    this.playerPayload,
+    this.minimized = false,
+    this.maximized = false,
+  });
+}
+
+
+String _sportotekaWebImageProxy(String url) {
+  final clean = url.trim();
+  if (clean.isEmpty || clean.startsWith('data:image/')) return clean;
+
+  // Только Flutter Web отправляем через прокси. Мобильные iOS/Android остаются как были.
+  if (!kIsWeb || clean.contains('/api/image_proxy.php')) return clean;
+
+  return 'https://sportotekaapp.ru/api/image_proxy.php?url=${Uri.encodeComponent(clean)}';
+}
+
+String _normalizeSportotekaMediaUrl(dynamic value) {
+  var raw = '${value ?? ''}'.trim();
+  if (raw.isEmpty || raw == 'null') return '';
+
+  final lower = raw.toLowerCase();
+  if (lower.contains('setstate') ||
+      lower.contains('markneedsbuild') ||
+      lower.contains('exception') ||
+      lower.contains('<html') ||
+      lower.contains('<br')) {
+    return '';
+  }
+
+  raw = raw.replaceAll('\\', '/').replaceAll('\\/', '/').trim();
+  raw = raw.replaceAll(' ', '%20');
+
+  if (raw.startsWith('data:image/')) return raw;
+
+  if (raw.startsWith('http://sportotekaapp.ru/') ||
+      raw.startsWith('http://www.sportotekaapp.ru/') ||
+      raw.startsWith('http://sportoteka.by/') ||
+      raw.startsWith('http://www.sportoteka.by/')) {
+    raw = raw.replaceFirst('http://', 'https://');
+  }
+
+  if (raw.startsWith('https://') || raw.startsWith('http://')) {
+    return _sportotekaWebImageProxy(raw);
+  }
+
+  while (raw.startsWith('../')) {
+    raw = raw.substring(3);
+  }
+  while (raw.startsWith('./')) {
+    raw = raw.substring(2);
+  }
+  while (raw.startsWith('/')) {
+    raw = raw.substring(1);
+  }
+  if (raw.startsWith('api/')) {
+    raw = raw.substring(4);
+  }
+
+  if (raw.isEmpty) return '';
+  return _sportotekaWebImageProxy('https://sportotekaapp.ru/$raw');
+}
+
+String _firstSportotekaMediaUrl(Map<String, dynamic> map, List<String> keys) {
+  for (final key in keys) {
+    final normalized = _normalizeSportotekaMediaUrl(map[key]);
+    if (normalized.isNotEmpty) return normalized;
+  }
+  return '';
 }
 
 class ClubWorkspaceScreen extends StatefulWidget {
@@ -123,6 +224,38 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   Map<String, dynamic>? selectedPlayer;
 
   ClubSection selectedSection = ClubSection.teams;
+
+  bool _showDesktopIcons = true;
+  _WorkspaceDockSize _workspaceDockSize = _WorkspaceDockSize.normal;
+  _WorkspaceWallpaperStyle _workspaceWallpaperStyle = _WorkspaceWallpaperStyle.sportoteka;
+  final List<_WorkspaceWindowState> _openWorkspaceWindows = <_WorkspaceWindowState>[];
+  int _workspaceWindowZCounter = 0;
+
+  final Set<ClubSection> _desktopIconSections = <ClubSection>{
+    ClubSection.teams,
+    ClubSection.roster,
+    ClubSection.trainers,
+    ClubSection.matches,
+    ClubSection.calendar,
+    ClubSection.plans,
+    ClubSection.testing,
+    ClubSection.tracker,
+    ClubSection.chat,
+  };
+
+  final Set<ClubSection> _dockSections = <ClubSection>{
+    ClubSection.teams,
+    ClubSection.roster,
+    ClubSection.trainers,
+    ClubSection.matches,
+    ClubSection.calendar,
+    ClubSection.plans,
+    ClubSection.testing,
+    ClubSection.tracker,
+    ClubSection.chat,
+  };
+
+  final Map<ClubSection, Offset> _desktopIconPositions = <ClubSection, Offset>{};
 
   late final AnimationController _introController;
   bool _introStarted = true;
@@ -786,6 +919,58 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     return mp;
   }
 
+  String _playerWindowIdentity(Map<String, dynamic>? player) {
+    if (player == null) return '';
+
+    const idKeys = [
+      'id',
+      'player_id',
+      'playerId',
+      'user_id',
+      'userId',
+      'member_id',
+      'memberId',
+    ];
+
+    for (final key in idKeys) {
+      final value = '${player[key] ?? ''}'.trim();
+      if (value.isNotEmpty && value != 'null' && value != '0') {
+        return '$key:$value';
+      }
+    }
+
+    final first = '${player['first_name'] ?? player['firstname'] ?? ''}'.trim();
+    final last = '${player['last_name'] ?? player['lastname'] ?? ''}'.trim();
+    final full = '${player['fullName'] ?? player['full_name'] ?? player['name'] ?? ''}'.trim();
+    final birth = '${player['birth_date'] ?? player['birthDate'] ?? player['birthday'] ?? ''}'.trim();
+
+    final fallback = [first, last, full, birth]
+        .where((value) => value.isNotEmpty && value != 'null')
+        .join('|');
+
+    return fallback.isEmpty ? 'player:${DateTime.now().microsecondsSinceEpoch}' : 'fallback:$fallback';
+  }
+
+  String _playerWindowTitle(Map<String, dynamic> player) {
+    final first = '${player['first_name'] ?? player['firstname'] ?? ''}'.trim();
+    final last = '${player['last_name'] ?? player['lastname'] ?? ''}'.trim();
+    final full = '${player['fullName'] ?? player['full_name'] ?? player['name'] ?? ''}'.trim();
+    final name = [last, first]
+        .where((value) => value.isNotEmpty && value != 'null')
+        .join(' ');
+    final result = name.trim().isNotEmpty ? name.trim() : full.trim();
+    return result.isEmpty || result == 'null' ? 'Профиль игрока' : result;
+  }
+
+  _WorkspaceWindowState? _playerProfileWorkspaceWindow(String entityKey) {
+    for (final window in _openWorkspaceWindows) {
+      if (window.section == ClubSection.playerProfile && window.entityKey == entityKey) {
+        return window;
+      }
+    }
+    return null;
+  }
+
   void _openPlayer(Map<String, dynamic> player) {
     final mp = _playerArgs(player);
 
@@ -796,13 +981,53 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   }
 
   void _openPlayerProfile(Map<String, dynamic> player) {
+    _openPlayerProfileWindow(player);
+  }
+
+  void _openPlayerProfileWindow(Map<String, dynamic> player) {
     final mp = _playerArgs(player);
 
     setState(() {
       selectedPlayer = mp;
     });
 
-    Get.to(() => CmrPlayerProfileScreen(player: mp));
+    final width = MediaQuery.maybeOf(context)?.size.width ?? 0;
+    final desktopLike = width >= 900;
+
+    if (!desktopLike) {
+      Get.to(() => CmrPlayerProfileScreen(player: mp));
+      return;
+    }
+
+    final entityKey = 'player:${_playerWindowIdentity(mp)}';
+    final existing = _playerProfileWorkspaceWindow(entityKey);
+
+    setState(() {
+      selectedSection = ClubSection.roster;
+      panelLoading = false;
+
+      if (existing != null) {
+        existing.minimized = false;
+        existing.zIndex = ++_workspaceWindowZCounter;
+        return;
+      }
+
+      final offset = (_openWorkspaceWindows.length % 6) * 32.0;
+      _openWorkspaceWindows.add(
+        _WorkspaceWindowState(
+          id: 'window_player_${DateTime.now().microsecondsSinceEpoch}',
+          section: ClubSection.playerProfile,
+          entityKey: entityKey,
+          titleOverride: _playerWindowTitle(mp),
+          subtitleOverride: selectedTeamName,
+          iconOverride: Icons.person_rounded,
+          playerPayload: mp,
+          position: Offset(96 + offset, 58 + offset),
+          size: const Size(1180, 720),
+          zIndex: ++_workspaceWindowZCounter,
+        ),
+      );
+    });
   }
 
 
@@ -850,7 +1075,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                       'Редактирование клуба',
                       style: TextStyle(
                         fontSize: 20,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                         color: _C.text,
                       ),
                     ),
@@ -895,7 +1120,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                                 children: [
                                   Text('Логотип клуба',
                                       style: TextStyle(
-                                          fontWeight: FontWeight.w900,
+                                          fontWeight: FontWeight.w700,
                                           color: _C.text)),
                                   SizedBox(height: 3),
                                   Text('Нажмите, чтобы заменить изображение',
@@ -1083,7 +1308,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                       fontSize: 16,
-                                      fontWeight: FontWeight.w900,
+                                      fontWeight: FontWeight.w700,
                                       color: _C.text)),
                               SizedBox(height: 3),
                               Text('Название, категория и логотип команды',
@@ -1139,7 +1364,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                                 children: [
                                   Text('Логотип команды',
                                       style: TextStyle(
-                                          fontWeight: FontWeight.w900,
+                                          fontWeight: FontWeight.w700,
                                           color: _C.text)),
                                   SizedBox(height: 3),
                                   Text('Нажмите, чтобы заменить изображение',
@@ -1288,7 +1513,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
 
     switch (section) {
       case ClubSection.tracker:
-        _openFullTracker();
+        _selectWorkspaceSection(ClubSection.tracker);
         break;
       case ClubSection.challengeCreate:
         Get.to(() => const CreateChallengeScreen(), arguments: args);
@@ -1354,8 +1579,55 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         );
         return FadeTransition(
           opacity: curved,
-          child: Transform.scale(
-            scale: .975 + (.025 * curved.value),
+          child: Transform.translate(
+            offset: Offset(0, 26 * (1 - curved.value)),
+            child: Transform.scale(
+              alignment: Alignment.bottomCenter,
+              scale: .965 + (.035 * curved.value),
+              child: child,
+            ),
+          ),
+        );
+      },
+    );
+
+    if (section == null || !mounted) return;
+
+    if (section == ClubSection.challengeCreate || section == ClubSection.quizCreate) {
+      _openGameModule(section);
+      return;
+    }
+
+    _selectWorkspaceSection(section);
+  }
+
+  Future<void> _openDesktopCommandMenu() async {
+    final section = await showGeneralDialog<ClubSection>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Поиск модуля',
+      barrierColor: Colors.black.withOpacity(.22),
+      transitionDuration: const Duration(milliseconds: 180),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return _DesktopCommandMenuOverlay(
+          clubName: clubName,
+          clubLogo: clubLogo,
+          selectedTeamName: selectedTeamName,
+          selectedSection: selectedSection,
+          hasActiveSubscription: hasActiveSubscription,
+          items: _fullMenuItems,
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: Transform.translate(
+            offset: Offset(0, 18 * (1 - curved.value)),
             child: child,
           ),
         );
@@ -1364,17 +1636,12 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
 
     if (section == null || !mounted) return;
 
-    if (section == ClubSection.tracker) {
-      _openFullTracker();
-      return;
-    }
-
     if (section == ClubSection.challengeCreate || section == ClubSection.quizCreate) {
       _openGameModule(section);
       return;
     }
 
-    setState(() => selectedSection = section);
+    _selectWorkspaceSection(section);
   }
 
   List<_FullMenuItem> get _fullMenuItems => const [
@@ -1455,53 +1722,12 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
           selectedTeamId,
     );
 
-    final activeTeamName = _asString(selectedTeam?['name']) ??
-        _asString(selectedTeam?['team_name']) ??
-        _asString(selectedTeam?['teamName']) ??
-        _asString(selectedTeam?['title']) ??
-        selectedTeamName;
-
     if (activeTeamId <= 0) {
       Get.snackbar('Команда', 'Сначала выберите команду');
       return;
     }
 
-    final teamPlayers = players.where((player) {
-      final playerTeamId = _asInt(
-        player['team_id'] ??
-            player['teamId'] ??
-            player['teamID'] ??
-            selectedTeamId,
-      );
-
-      return playerTeamId <= 0 || playerTeamId == activeTeamId;
-    }).toList();
-
-    Get.to(
-      () => SportotekaTrackerProScreen(
-        key: ValueKey('tracker_${clubId}_$activeTeamId'),
-        clubId: clubId,
-        clubName: clubName,
-        teamId: activeTeamId,
-        teamName: activeTeamName,
-        userId: currentUserId,
-        initialPlayers: teamPlayers,
-      ),
-      arguments: {
-        'club_id': clubId,
-        'clubId': clubId,
-        'club_name': clubName,
-        'clubName': clubName,
-        'team_id': activeTeamId,
-        'teamId': activeTeamId,
-        'team_name': activeTeamName,
-        'teamName': activeTeamName,
-        'user_id': currentUserId,
-        'userId': currentUserId,
-      },
-      transition: Transition.rightToLeft,
-      duration: const Duration(milliseconds: 220),
-    );
+    _selectWorkspaceSection(ClubSection.tracker);
   }
 
   void _openFullTeamDescription() {
@@ -1639,14 +1865,16 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         text == 'активна';
   }
 
-  bool _isTablet(BuildContext context) {
+  bool _useProfessionalWorkspace(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    return math.min(size.width, size.height) >= 600;
+    final shortestSide = math.min(size.width, size.height);
+    // На планшетах и ПК открываем рабочий CMR-shell, а не мобильную версию.
+    // Телефоны в landscape остаются в mobile-режиме, чтобы не было тесной рейки.
+    return shortestSide >= 600 || (size.width >= 700 && shortestSide >= 500);
   }
 
-  bool _isLandscape(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    return size.width > size.height;
+  bool _isDesktopWide(BuildContext context) {
+    return MediaQuery.of(context).size.width >= 1180;
   }
 
   double _getResponsiveFontSize(BuildContext context, double baseSize) {
@@ -1679,20 +1907,31 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     }
   }
 
-  void _goHomeFromWorkspace() {
-    final navigator = Navigator.of(context);
-    if (navigator.canPop()) {
-      navigator.popUntil((route) => route.isFirst);
-    } else {
-      Get.back();
-    }
+  Future<void> _goHomeFromWorkspace() async {
+    // Главная страница приложения теперь — MyProfileScreen.
+    // Нельзя делать popUntil(route.isFirst): первым route после логина/обновления
+    // часто остаётся устаревший HomeScreen, из-за этого Workspace возвращал не туда.
+    final profileUserId = await PrefUtils.getUserId();
+    if (!mounted) return;
+
+    Get.offAll(
+      () => MyProfileScreen(
+        userId: (profileUserId != null && profileUserId > 0) ? profileUserId : null,
+      ),
+    );
   }
 
   void _selectWorkspaceSection(ClubSection section) {
-    if (section == ClubSection.tracker) {
-      _openFullTracker();
+    if (_useProfessionalWorkspace(context)) {
+      _openModuleWindow(section);
       return;
     }
+
+    _activateInlineSection(section);
+  }
+
+  void _activateInlineSection(ClubSection section) {
+    if (!_canOpenWorkspaceSection(section)) return;
 
     if (selectedSection == section) return;
 
@@ -1707,10 +1946,197 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     });
   }
 
+  bool _canOpenWorkspaceSection(ClubSection section) {
+    if (section == ClubSection.tracker && !_hasTeam) {
+      Get.snackbar('Команда', 'Сначала выберите команду');
+      return false;
+    }
+    return true;
+  }
+
+  List<_FullMenuItem> get _workspaceDesktopModules => _fullMenuItems
+      .where((item) => item.section != ClubSection.settings)
+      .toList(growable: false);
+
+  List<_FullMenuItem> get _workspaceDesktopIcons => _workspaceDesktopModules
+      .where((item) => _desktopIconSections.contains(item.section))
+      .toList(growable: false);
+
+  List<_FullMenuItem> get _workspaceDockItems => _workspaceDesktopModules
+      .where((item) => _dockSections.contains(item.section))
+      .toList(growable: false);
+
+  _FullMenuItem _workspaceItemFor(ClubSection section) {
+    for (final item in _fullMenuItems) {
+      if (item.section == section) return item;
+    }
+    return _FullMenuItem(section, Icons.widgets_rounded, _titleFor(section), _subtitleFor(section));
+  }
+
+  _WorkspaceWindowState? _workspaceWindowFor(
+    ClubSection section, {
+    String? entityKey,
+  }) {
+    for (final window in _openWorkspaceWindows) {
+      if (window.section != section) continue;
+      if (entityKey == null && window.entityKey != null) continue;
+      if (entityKey != null && window.entityKey != entityKey) continue;
+      return window;
+    }
+    return null;
+  }
+
+  void _openModuleWindow(ClubSection section) {
+    if (section == ClubSection.settings) {
+      _openWorkspaceSettings();
+      return;
+    }
+
+    if (!_canOpenWorkspaceSection(section)) return;
+
+    final existing = _workspaceWindowFor(section);
+    setState(() {
+      selectedSection = section;
+      panelLoading = false;
+
+      if (existing != null) {
+        existing.minimized = false;
+        existing.zIndex = ++_workspaceWindowZCounter;
+        return;
+      }
+
+      final offset = (_openWorkspaceWindows.length % 6) * 34.0;
+      _openWorkspaceWindows.add(
+        _WorkspaceWindowState(
+          id: 'window_${section.name}_${DateTime.now().microsecondsSinceEpoch}',
+          section: section,
+          position: Offset(72 + offset, 52 + offset),
+          size: const Size(1040, 680),
+          zIndex: ++_workspaceWindowZCounter,
+        ),
+      );
+    });
+  }
+
+  void _bringWorkspaceWindowToFront(_WorkspaceWindowState window) {
+    setState(() {
+      selectedSection = window.section;
+      window.zIndex = ++_workspaceWindowZCounter;
+    });
+  }
+
+  void _closeWorkspaceWindow(_WorkspaceWindowState window) {
+    setState(() {
+      _openWorkspaceWindows.removeWhere((item) => item.id == window.id);
+      if (_openWorkspaceWindows.isNotEmpty) {
+        final sorted = [..._openWorkspaceWindows]..sort((a, b) => b.zIndex.compareTo(a.zIndex));
+        selectedSection = sorted.first.section;
+      }
+    });
+  }
+
+  void _minimizeWorkspaceWindow(_WorkspaceWindowState window) {
+    setState(() {
+      window.minimized = true;
+    });
+  }
+
+  void _toggleMaximizeWorkspaceWindow(_WorkspaceWindowState window) {
+    setState(() {
+      selectedSection = window.section;
+      window.maximized = !window.maximized;
+      window.minimized = false;
+      window.zIndex = ++_workspaceWindowZCounter;
+    });
+  }
+
+  void _moveWorkspaceWindow(_WorkspaceWindowState window, Offset delta, Size desktopSize) {
+    setState(() {
+      window.maximized = false;
+      final maxX = math.max(8.0, desktopSize.width - window.size.width - 8);
+      final maxY = math.max(8.0, desktopSize.height - window.size.height - 100);
+      window.position = Offset(
+        (window.position.dx + delta.dx).clamp(8.0, maxX).toDouble(),
+        (window.position.dy + delta.dy).clamp(8.0, maxY).toDouble(),
+      );
+    });
+  }
+
+  void _resizeWorkspaceWindow(_WorkspaceWindowState window, Offset delta, Size desktopSize) {
+    setState(() {
+      window.maximized = false;
+      final maxWidth = math.max(520.0, desktopSize.width - window.position.dx - 12);
+      final maxHeight = math.max(420.0, desktopSize.height - window.position.dy - 102);
+      window.size = Size(
+        (window.size.width + delta.dx).clamp(520.0, maxWidth).toDouble(),
+        (window.size.height + delta.dy).clamp(420.0, maxHeight).toDouble(),
+      );
+    });
+  }
+
+  void _setDesktopIconPosition(ClubSection section, Offset position, Size desktopSize) {
+    setState(() {
+      _desktopIconPositions[section] = Offset(
+        position.dx.clamp(12.0, math.max(12.0, desktopSize.width - 112)).toDouble(),
+        position.dy.clamp(12.0, math.max(12.0, desktopSize.height - 190)).toDouble(),
+      );
+    });
+  }
+
+  void _openWorkspaceSettings() {
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withOpacity(.18),
+      builder: (dialogContext) {
+        return _MacWorkspaceSettingsDialog(
+          modules: _workspaceDesktopModules,
+          dockSections: Set<ClubSection>.of(_dockSections),
+          desktopSections: Set<ClubSection>.of(_desktopIconSections),
+          showDesktopIcons: _showDesktopIcons,
+          dockSize: _workspaceDockSize,
+          wallpaperStyle: _workspaceWallpaperStyle,
+          onShowDesktopIconsChanged: (value) {
+            if (!mounted) return;
+            setState(() => _showDesktopIcons = value);
+          },
+          onDockSizeChanged: (value) {
+            if (!mounted) return;
+            setState(() => _workspaceDockSize = value);
+          },
+          onWallpaperChanged: (value) {
+            if (!mounted) return;
+            setState(() => _workspaceWallpaperStyle = value);
+          },
+          onDockSectionsChanged: (value) {
+            if (!mounted) return;
+            setState(() {
+              _dockSections
+                ..clear()
+                ..addAll(value);
+            });
+          },
+          onDesktopSectionsChanged: (value) {
+            if (!mounted) return;
+            setState(() {
+              _desktopIconSections
+                ..clear()
+                ..addAll(value);
+            });
+          },
+        );
+      },
+    );
+  }
+
   ThemeData _workspaceTheme(BuildContext context) {
     final base = Theme.of(context);
+    final professional = _useProfessionalWorkspace(context);
     return base.copyWith(
       scaffoldBackgroundColor: _C.bg,
+      visualDensity: professional ? VisualDensity.compact : VisualDensity.standard,
+      materialTapTargetSize: professional
+          ? MaterialTapTargetSize.shrinkWrap
+          : MaterialTapTargetSize.padded,
       colorScheme: base.colorScheme.copyWith(
         primary: _C.primaryGreen,
         secondary: _C.blue,
@@ -1731,15 +2157,10 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
 
   @override
   Widget build(BuildContext context) {
-    final tablet = _isTablet(context);
-    final landscape = _isLandscape(context);
-
     final Widget child;
     if (loading) {
       child = const _WorkspaceLoadingScreen();
-    } else if (tablet && !landscape) {
-      child = _RotateTabletHint(clubName: clubName, clubLogo: clubLogo);
-    } else if (tablet && landscape) {
+    } else if (_useProfessionalWorkspace(context)) {
       child = _buildWorkspace();
     } else {
       child = _buildMobileVersion();
@@ -1811,7 +2232,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     _mobileGestureHintShown = true;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _isTablet(context)) return;
+      if (!mounted || _useProfessionalWorkspace(context)) return;
       _showMobileGestureHint();
     });
   }
@@ -1840,7 +2261,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         trainerAssignedMode ? 'Панель тренера' : 'Кабинет клуба',
         style: TextStyle(
           fontSize: fontSize,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w700,
         ),
       ),
       backgroundColor: Colors.white,
@@ -1956,7 +2377,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
             clubName,
             style: TextStyle(
               fontSize: fontSize * 1.4,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               color: _C.text,
               height: 1.1,
             ),
@@ -2039,7 +2460,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                   items.isEmpty ? 'Профиль клуба заполнен' : 'Что желательно заполнить',
                   style: TextStyle(
                     fontSize: fontSize * 1.02,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     color: _C.text,
                   ),
                 ),
@@ -2080,7 +2501,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                   style: TextStyle(
                     color: items.isEmpty ? _C.primaryGreen : _C.text,
                     fontSize: fontSize * 0.72,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               );
@@ -2155,7 +2576,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
           value,
           style: TextStyle(
             fontSize: fontSize * 1.2,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
             color: _C.text,
           ),
         ),
@@ -2188,7 +2609,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                 'Активная команда',
                 style: TextStyle(
                   fontSize: fontSize * 1.1,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   color: _C.text,
                 ),
               ),
@@ -2210,7 +2631,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                     selectedTeamName,
                     style: TextStyle(
                       fontSize: fontSize,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                       color: _C.text,
                     ),
                     overflow: TextOverflow.ellipsis,
@@ -2288,7 +2709,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: fontSize * 0.78,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -2360,7 +2781,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
             'Быстрые действия',
             style: TextStyle(
               fontSize: fontSize * 1.1,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               color: _C.text,
             ),
           ),
@@ -2416,7 +2837,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
               label,
               style: TextStyle(
                 fontSize: fontSize * 0.61,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 color: _C.text,
               ),
               textAlign: TextAlign.center,
@@ -2442,7 +2863,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
             'Ближайшие события',
             style: TextStyle(
               fontSize: fontSize * 1.1,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               color: _C.text,
             ),
           ),
@@ -2518,7 +2939,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                   'Команды клуба',
                   style: TextStyle(
                     fontSize: fontSize * 1.2,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     color: _C.text,
                   ),
                 ),
@@ -2613,7 +3034,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                           title: Text(
                             name,
                             style: TextStyle(
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w600,
                               fontSize: fontSize,
                               color: isActive
                                   ? _C.primaryGreen
@@ -2685,7 +3106,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                       'Состав команды',
                       style: TextStyle(
                         fontSize: fontSize * 1.1,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                         color: _C.text,
                       ),
                     ),
@@ -2826,7 +3247,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                           title: Text(
                             name,
                             style: TextStyle(
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w600,
                               fontSize: fontSize * 0.95,
                               color: isActive
                                   ? _C.blue
@@ -2980,52 +3401,108 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   }
 
   Widget _buildMobileBottomNav() {
+    final bottom = MediaQuery.of(context).padding.bottom;
+    final width = MediaQuery.of(context).size.width;
+    final horizontal = width < 380 ? 14.0 : 22.0;
+    final activeIndex = _mobileBottomMenuIndex();
+
+    Widget dockIcon({
+      required int index,
+      required IconData icon,
+      required VoidCallback onTap,
+      int badge = 0,
+    }) {
+      final active = activeIndex == index;
+      return Expanded(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Center(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 170),
+              curve: Curves.easeOutCubic,
+              width: active ? 44 : 34,
+              height: 36,
+              decoration: BoxDecoration(
+                color: active ? const Color(0xFFF0F2F5) : Colors.transparent,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
+                children: [
+                  Icon(
+                    icon,
+                    size: active ? 22 : 21,
+                    color: active ? const Color(0xFF111827) : const Color(0xFF344054),
+                  ),
+                  if (badge > 0)
+                    Positioned(
+                      top: 1,
+                      right: active ? 6 : 0,
+                      child: Container(
+                        constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF0050),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: Colors.white, width: 1.6),
+                        ),
+                        child: Center(
+                          child: Text(
+                            badge > 99 ? '99+' : '$badge',
+                            style: const TextStyle(
+                              fontSize: 8.5,
+                              height: 1,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return SafeArea(
       top: false,
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(22),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(22),
-          child: BottomNavigationBar(
-            currentIndex: _mobileBottomMenuIndex(),
-            type: BottomNavigationBarType.fixed,
-            backgroundColor: Colors.white,
-            selectedItemColor: _C.primaryGreen,
-            unselectedItemColor: _C.muted,
-            selectedFontSize: 10.5,
-            unselectedFontSize: 10.2,
-            selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w900),
-            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700),
-            elevation: 0,
-            onTap: _handleMobileBottomTap,
-            items: const [
-              BottomNavigationBarItem(
-                icon: Icon(Icons.account_tree_rounded),
-                label: 'Команды',
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, math.max(8.0, bottom + 4)),
+        child: Container(
+          height: 56,
+          padding: const EdgeInsets.symmetric(horizontal: 7),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(.96),
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(color: const Color(0xFFE3E8EF), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(.12),
+                blurRadius: 24,
+                spreadRadius: -10,
+                offset: const Offset(0, 12),
               ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.groups_2_rounded),
-                label: 'Состав',
+              BoxShadow(
+                color: Colors.black.withOpacity(.04),
+                blurRadius: 8,
+                spreadRadius: -5,
+                offset: const Offset(0, 3),
               ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.calendar_month_rounded),
-                label: 'Календарь',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.more_horiz_rounded),
-                label: 'Ещё',
-              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              dockIcon(index: 0, icon: Icons.home_rounded, onTap: () => _activateInlineSection(ClubSection.teams)),
+              dockIcon(index: 1, icon: Icons.groups_2_outlined, onTap: () => _activateInlineSection(ClubSection.roster)),
+              dockIcon(index: 2, icon: Icons.sports_soccer_outlined, onTap: () => _activateInlineSection(ClubSection.matches)),
+              dockIcon(index: 3, icon: Icons.calendar_month_outlined, onTap: () => _activateInlineSection(ClubSection.calendar)),
+              dockIcon(index: 4, icon: Icons.near_me_outlined, badge: 1, onTap: () => _activateInlineSection(ClubSection.chat)),
+              dockIcon(index: 5, icon: Icons.more_horiz_rounded, onTap: _openMobileMoreMenu),
             ],
           ),
         ),
@@ -3035,7 +3512,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
 
   int _mobileBottomMenuIndex() {
     if (selectedSection == ClubSection.teams ||
-        selectedSection == ClubSection.teamDashboard) {
+        selectedSection == ClubSection.teamDashboard ||
+        selectedSection == ClubSection.overview) {
       return 0;
     }
 
@@ -3044,23 +3522,40 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       return 1;
     }
 
-    if (selectedSection == ClubSection.calendar) return 2;
+    if (selectedSection == ClubSection.matches ||
+        selectedSection == ClubSection.videoAnalysis) {
+      return 2;
+    }
 
-    return 3;
+    if (selectedSection == ClubSection.calendar ||
+        selectedSection == ClubSection.attendance ||
+        selectedSection == ClubSection.testing) {
+      return 3;
+    }
+
+    if (selectedSection == ClubSection.chat) return 4;
+
+    return 5;
   }
 
   void _handleMobileBottomTap(int index) {
     switch (index) {
       case 0:
-        setState(() => selectedSection = ClubSection.teams);
+        _activateInlineSection(ClubSection.teams);
         return;
       case 1:
-        setState(() => selectedSection = ClubSection.roster);
+        _activateInlineSection(ClubSection.roster);
         return;
       case 2:
-        setState(() => selectedSection = ClubSection.calendar);
+        _activateInlineSection(ClubSection.matches);
         return;
       case 3:
+        _activateInlineSection(ClubSection.calendar);
+        return;
+      case 4:
+        _activateInlineSection(ClubSection.chat);
+        return;
+      case 5:
         _openMobileMoreMenu();
         return;
     }
@@ -3133,7 +3628,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                   style: TextStyle(
                     fontSize: fontSize,
                     height: 1.0,
-                    fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
+                    fontWeight: isActive ? FontWeight.w600 : FontWeight.w600,
                     color: isActive ? _C.primaryGreen : _C.muted,
                   ),
                 ),
@@ -3206,7 +3701,7 @@ Widget _buildNavItem({
                   style: TextStyle(
                     fontSize: fontSize,
                     height: 1.0,
-                    fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
+                    fontWeight: isActive ? FontWeight.w600 : FontWeight.w600,
                     color: isActive ? _C.primaryGreen : _C.muted,
                   ),
                 ),
@@ -3238,74 +3733,210 @@ Widget _buildNavItem({
     return Scaffold(
       backgroundColor: _C.bg,
       body: SafeArea(
-        child: AnimatedBuilder(
-          animation: _introController,
-          builder: (context, _) {
-            final appValue = CurvedAnimation(
-              parent: _introController,
-              curve: const Interval(.64, 1, curve: Curves.easeOutCubic),
-            ).value;
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final wide = _isDesktopWide(context);
+            final sidePadding = wide ? 14.0 : 10.0;
+            final contentPadding = EdgeInsets.fromLTRB(
+              sidePadding,
+              wide ? 12 : 8,
+              sidePadding,
+              wide ? 98 : 92,
+            );
+            final desktopSize = Size(constraints.maxWidth, constraints.maxHeight);
 
-            return Stack(
-              children: [
-                Opacity(
-                  opacity: appValue,
-                  child: Transform.scale(
-                    scale: .965 + (.035 * appValue),
-                    child: Transform.translate(
-                      offset: Offset(0, 26 * (1 - appValue)),
-                      child: Row(
-                        children: [
-                          _Sidebar(
-                            clubName: clubName,
-                            clubLogo: clubLogo,
-                            clubDescription: clubDescription,
-                            selectedTeamName: selectedTeamName,
-                            selectedTeamId: selectedTeamId,
-                            teams: teams,
-                            teamsCount: teams.length,
-                            playersCount: players.length,
-                            trainersCount: trainers.length,
-                            selectedSection: selectedSection,
-                            onSelect: _selectWorkspaceSection,
-                            onTeamSelected: (team) => _selectTeam(team),
-                            hasActiveSubscription: hasActiveSubscription,
-                            onOpenFullMenu: _openFullModulesMenu,
-                            onGoHome: _goHomeFromWorkspace,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Stack(
-                              children: [
-                                AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 180),
-                                  child: Padding(
-                                    key: ValueKey(selectedSection.name),
-                                    padding: const EdgeInsets.fromLTRB(0, 8, 10, 10),
-                                    child: _buildContent(),
-                                  ),
-                                ),
-                                if (panelLoading || refreshing)
-                                  const Positioned.fill(
-                                    child: _WorkspacePanelLoadingOverlay(),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ],
+            return AnimatedBuilder(
+              animation: _introController,
+              builder: (context, _) {
+                final appValue = CurvedAnimation(
+                  parent: _introController,
+                  curve: const Interval(.64, 1, curve: Curves.easeOutCubic),
+                ).value;
+
+                return Stack(
+                  children: [
+                    Opacity(
+                      opacity: appValue,
+                      child: Transform.scale(
+                        scale: .982 + (.018 * appValue),
+                        child: Transform.translate(
+                          offset: Offset(0, 14 * (1 - appValue)),
+                          child: wide
+                              ? _buildDesktopWindowWorkspace(desktopSize)
+                              : _buildInlineWorkspace(contentPadding, wide),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-                if (!_introFinished)
-                  Positioned.fill(
-                      child: _ClubIntroSplash(
-                          animation: _introController)),
-              ],
+                    if (!_introFinished)
+                      Positioned.fill(
+                        child: _ClubIntroSplash(animation: _introController),
+                      ),
+                  ],
+                );
+              },
             );
           },
         ),
       ),
+    );
+  }
+
+  Widget _buildInlineWorkspace(EdgeInsets contentPadding, bool wide) {
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 180),
+            child: Padding(
+              key: ValueKey(selectedSection.name),
+              padding: contentPadding,
+              child: _buildContent(),
+            ),
+          ),
+        ),
+        if (panelLoading || refreshing)
+          const Positioned.fill(
+            bottom: 84,
+            child: _WorkspacePanelLoadingOverlay(),
+          ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: wide ? 14 : 10,
+          child: _DesktopWorkspaceTaskbar(
+            clubName: clubName,
+            clubLogo: clubLogo,
+            selectedTeamName: selectedTeamName,
+            selectedSection: selectedSection,
+            hasActiveSubscription: hasActiveSubscription,
+            onStart: _openFullModulesMenu,
+            onSearch: _openDesktopCommandMenu,
+            onSelect: _activateInlineSection,
+            onHome: _goHomeFromWorkspace,
+            onRefresh: () => _loadAll(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDesktopWindowWorkspace(Size desktopSize) {
+    final visibleWindows = _openWorkspaceWindows
+        .where((window) => !window.minimized)
+        .toList(growable: false)
+      ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(
+          child: _WorkspaceWallpaper(
+            style: _workspaceWallpaperStyle,
+            clubName: clubName,
+            clubLogo: clubLogo,
+          ),
+        ),
+        if (_showDesktopIcons)
+          Positioned.fill(
+            child: _WorkspaceDesktopIconsLayer(
+              desktopSize: desktopSize,
+              items: _workspaceDesktopIcons,
+              iconPositions: _desktopIconPositions,
+              onOpen: _openModuleWindow,
+              onMoved: _setDesktopIconPosition,
+            ),
+          ),
+        for (final window in visibleWindows)
+          _buildPositionedWorkspaceWindow(window, desktopSize),
+        if (panelLoading || refreshing)
+          const Positioned.fill(
+            bottom: 84,
+            child: _WorkspacePanelLoadingOverlay(),
+          ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 14,
+          child: _WorkspaceDock(
+            clubName: clubName,
+            clubLogo: clubLogo,
+            selectedTeamName: selectedTeamName,
+            dockSize: _workspaceDockSize,
+            pinnedItems: _workspaceDockItems,
+            openWindows: _openWorkspaceWindows,
+            activeSection: selectedSection,
+            onOpenStart: _openFullModulesMenu,
+            onOpenSearch: _openDesktopCommandMenu,
+            onOpenSettings: _openWorkspaceSettings,
+            onOpenHome: _goHomeFromWorkspace,
+            onRefresh: () => _loadAll(),
+            onOpenSection: _openModuleWindow,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWorkspaceWindowContent(_WorkspaceWindowState window) {
+    if (window.section == ClubSection.playerProfile && window.playerPayload != null) {
+      return CmrPlayerProfileScreen(
+        player: window.playerPayload!,
+        embeddedInWorkspace: true,
+      );
+    }
+
+    return _buildSectionContent(window.section);
+  }
+
+  Widget _buildPositionedWorkspaceWindow(
+    _WorkspaceWindowState window,
+    Size desktopSize,
+  ) {
+    final active = selectedSection == window.section;
+    final minWidth = math.min(520.0, math.max(360.0, desktopSize.width - 24));
+    final minHeight = math.min(420.0, math.max(300.0, desktopSize.height - 112));
+    final safeWidth = window.size.width.clamp(minWidth, math.max(minWidth, desktopSize.width - 24)).toDouble();
+    final safeHeight = window.size.height.clamp(minHeight, math.max(minHeight, desktopSize.height - 106)).toDouble();
+    final maxLeft = math.max(8.0, desktopSize.width - safeWidth - 8);
+    final maxTop = math.max(8.0, desktopSize.height - safeHeight - 96);
+    final left = window.position.dx.clamp(8.0, maxLeft).toDouble();
+    final top = window.position.dy.clamp(8.0, maxTop).toDouble();
+    final item = _workspaceItemFor(window.section);
+    final windowTitle = window.titleOverride ?? item.title;
+    final windowSubtitle = window.subtitleOverride ?? selectedTeamName;
+    final windowIcon = window.iconOverride ?? item.icon;
+
+    final windowWidget = _WorkspaceFloatingWindow(
+      title: windowTitle,
+      subtitle: windowSubtitle,
+      icon: windowIcon,
+      active: active,
+      maximized: window.maximized,
+      onTap: () => _bringWorkspaceWindowToFront(window),
+      onClose: () => _closeWorkspaceWindow(window),
+      onMinimize: () => _minimizeWorkspaceWindow(window),
+      onMaximize: () => _toggleMaximizeWorkspaceWindow(window),
+      onDragUpdate: (delta) => _moveWorkspaceWindow(window, delta, desktopSize),
+      onResizeUpdate: (delta) => _resizeWorkspaceWindow(window, delta, desktopSize),
+      child: _buildWorkspaceWindowContent(window),
+    );
+
+    if (window.maximized) {
+      return Positioned(
+        left: 12,
+        top: 12,
+        right: 12,
+        bottom: 92,
+        child: windowWidget,
+      );
+    }
+
+    return Positioned(
+      left: left,
+      top: top,
+      width: safeWidth,
+      height: safeHeight,
+      child: windowWidget,
     );
   }
 
@@ -3439,8 +4070,10 @@ Widget _buildNavItem({
     }
   }
 
-  Widget _buildContent() {
-    switch (selectedSection) {
+  Widget _buildContent() => _buildSectionContent(selectedSection);
+
+  Widget _buildSectionContent(ClubSection section) {
+    switch (section) {
       case ClubSection.coachDashboard:
         return _TeamModulePanel(
           hasTeam: _hasTeam,
@@ -3497,7 +4130,8 @@ Widget _buildNavItem({
           teams: teams,
           selectedTeamId: selectedTeamId,
           selectedTeamName: selectedTeamName,
-          onOpenTeam: (team) => _selectTeam(team),
+          onSelectTeam: (team) => _selectTeam(team, openTeam: false),
+          onOpenTeam: (team) => _selectTeam(team, openTeam: true),
           onCreateTeam: _openCreateTeam,
           onRefresh: () => _loadAll(),
           onOpenRoster: () => setState(() => selectedSection = ClubSection.roster),
@@ -3535,6 +4169,7 @@ Widget _buildNavItem({
                 ? null
                 : () => _loadPlayersForTeam(selectedTeamId!),
             onOpenPlayer: _openPlayer,
+            onOpenFullPlayer: _openPlayerProfileWindow,
             onOpenFullRoster: _openFullRosterScreen,
             onAddPlayer: () {
               if (selectedTeamId == null || selectedTeamId! <= 0) {
@@ -3558,7 +4193,6 @@ Widget _buildNavItem({
                 }
               });
             },
-            onDeletePlayer: _deletePlayerFromRoster,
           ),
         );
       case ClubSection.trainers:
@@ -3597,7 +4231,7 @@ Widget _buildNavItem({
                     mp['team_name'] = selectedTeamName;
                     mp['teamName'] = selectedTeamName;
 
-                    Get.to(() => CmrPlayerProfileScreen(player: mp));
+                    _openPlayerProfileWindow(mp);
                   },
           ),
         );
@@ -3651,21 +4285,44 @@ Widget _buildNavItem({
           ],
         );
       case ClubSection.tracker:
-        return _TeamModulePanel(
-          hasTeam: _hasTeam,
-          title: 'Трекер команды',
-          subtitle:
-              'GPS-трекинг, live-движение, тепловые карты и управление датчиками открываются отдельной рабочей страницей.',
-          icon: Icons.sensors_rounded,
-          primaryText: 'Открыть центр трекинга',
-          onPrimary: _openFullTracker,
-          quickActions: [
-            _ModuleQuickAction(
-              'Матчи',
-              Icons.sports_soccer_rounded,
-              () => setState(() => selectedSection = ClubSection.matches),
-            ),
-          ],
+        if (!_hasTeam || selectedTeamId == null || selectedTeamId! <= 0) {
+          return const _NeedTeam();
+        }
+
+        final activeTeamId = _asInt(
+          selectedTeam?['id'] ??
+              selectedTeam?['team_id'] ??
+              selectedTeam?['teamId'] ??
+              selectedTeam?['teamID'] ??
+              selectedTeamId,
+        );
+
+        final activeTeamName = _asString(selectedTeam?['name']) ??
+            _asString(selectedTeam?['team_name']) ??
+            _asString(selectedTeam?['teamName']) ??
+            _asString(selectedTeam?['title']) ??
+            selectedTeamName;
+
+        final teamPlayers = players.where((player) {
+          final playerTeamId = _asInt(
+            player['team_id'] ??
+                player['teamId'] ??
+                player['teamID'] ??
+                selectedTeamId,
+          );
+
+          return playerTeamId <= 0 || playerTeamId == activeTeamId;
+        }).toList();
+
+        return TrackerMatchWorkspaceScreen(
+          key: ValueKey('tracker_program_${clubId}_$activeTeamId'),
+          clubId: clubId,
+          clubName: clubName,
+          teamId: activeTeamId,
+          teamName: activeTeamName,
+          userId: currentUserId,
+          initialPlayers: teamPlayers,
+          embeddedInClubWorkspace: true,
         );
       case ClubSection.videoAnalysis:
         return _TeamGuard(
@@ -3822,7 +4479,7 @@ class _SmallActionChip extends StatelessWidget {
               label,
               style: const TextStyle(
                 fontSize: 11,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
                 color: _C.text,
               ),
             ),
@@ -3965,7 +4622,7 @@ class _C {
 class _WorkspaceText {
   static const TextStyle title = TextStyle(
     fontSize: 20,
-    fontWeight: FontWeight.w900,
+    fontWeight: FontWeight.w600,
     letterSpacing: -0.6,
     height: 1.08,
     color: _C.text,
@@ -3973,21 +4630,21 @@ class _WorkspaceText {
 
   static const TextStyle section = TextStyle(
     fontSize: 14,
-    fontWeight: FontWeight.w900,
+    fontWeight: FontWeight.w600,
     letterSpacing: -0.2,
     color: _C.text,
   );
 
   static const TextStyle rowTitle = TextStyle(
     fontSize: 13.6,
-    fontWeight: FontWeight.w800,
+    fontWeight: FontWeight.w500,
     color: _C.text,
     height: 1.15,
   );
 
   static const TextStyle caption = TextStyle(
     fontSize: 11.4,
-    fontWeight: FontWeight.w600,
+    fontWeight: FontWeight.w500,
     color: _C.muted,
     height: 1.25,
   );
@@ -4064,7 +4721,7 @@ class _WorkspaceLoadingScreenState extends State<_WorkspaceLoadingScreen>
                     style: TextStyle(
                       color: _C.text,
                       fontSize: 17,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                       letterSpacing: -.2,
                     ),
                   ),
@@ -4075,7 +4732,7 @@ class _WorkspaceLoadingScreenState extends State<_WorkspaceLoadingScreen>
                     style: TextStyle(
                       color: _C.muted,
                       fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                       height: 1.35,
                     ),
                   ),
@@ -4120,7 +4777,7 @@ class _WorkspaceProgressBar extends StatelessWidget {
                 style: TextStyle(
                   color: _C.muted,
                   fontSize: 12,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -4129,7 +4786,7 @@ class _WorkspaceProgressBar extends StatelessWidget {
               style: TextStyle(
                 color: _C.text,
                 fontSize: largePercent ? 16 : 13,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w600,
                 letterSpacing: -.2,
               ),
             ),
@@ -4214,7 +4871,7 @@ class _WorkspacePanelLoadingOverlay extends StatelessWidget {
                   style: TextStyle(
                     color: _C.text,
                     fontSize: 13,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -4351,6 +5008,837 @@ const List<_NavGroup> _clubWorkspaceNavGroups = [
     ),
   ]),
 ];
+
+class _DesktopWorkspaceTaskbar extends StatelessWidget {
+  final String clubName;
+  final String? clubLogo;
+  final String selectedTeamName;
+  final ClubSection selectedSection;
+  final bool hasActiveSubscription;
+  final VoidCallback onStart;
+  final VoidCallback onSearch;
+  final ValueChanged<ClubSection> onSelect;
+  final VoidCallback onHome;
+  final VoidCallback onRefresh;
+
+  const _DesktopWorkspaceTaskbar({
+    required this.clubName,
+    required this.clubLogo,
+    required this.selectedTeamName,
+    required this.selectedSection,
+    required this.hasActiveSubscription,
+    required this.onStart,
+    required this.onSearch,
+    required this.onSelect,
+    required this.onHome,
+    required this.onRefresh,
+  });
+
+  static const List<_NavItem> _taskbarItems = [
+    _NavItem(ClubSection.teams, Icons.account_tree_rounded, 'Команды', subtitle: 'Команды клуба'),
+    _NavItem(ClubSection.roster, Icons.groups_2_rounded, 'Состав', subtitle: 'Игроки команды'),
+    _NavItem(ClubSection.trainers, Icons.badge_rounded, 'Тренеры', subtitle: 'Тренеры клуба'),
+    _NavItem(ClubSection.matches, Icons.sports_soccer_rounded, 'Матчи', subtitle: 'Матчи и отчёты'),
+    _NavItem(ClubSection.calendar, Icons.calendar_month_rounded, 'Календарь', subtitle: 'Расписание'),
+    _NavItem(ClubSection.plans, Icons.folder_copy_rounded, 'Планы', subtitle: 'Планы-конспекты', pro: true),
+    _NavItem(ClubSection.testing, Icons.science_rounded, 'Тесты', subtitle: 'Тестирование', pro: true),
+    _NavItem(ClubSection.tracker, Icons.sensors_rounded, 'Трекер', subtitle: 'GPS-трекинг', pro: true),
+    _NavItem(ClubSection.chat, Icons.forum_rounded, 'Чаты', subtitle: 'Командное общение'),
+    _NavItem(ClubSection.manager, Icons.psychology_alt_rounded, 'Тактика', subtitle: 'Менеджер команды', pro: true),
+  ];
+
+  bool _isActive(ClubSection section) {
+    if (selectedSection == section) return true;
+    if (section == ClubSection.teams && selectedSection == ClubSection.teamDashboard) return true;
+    if (section == ClubSection.roster && selectedSection == ClubSection.playerProfile) return true;
+    if (section == ClubSection.trainers && selectedSection == ClubSection.teamTrainers) return true;
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final compact = width < 1120;
+    final veryCompact = width < 900;
+    final maxWidth = math.min(1040.0, math.max(360.0, width - 32));
+
+    return IgnorePointer(
+      ignoring: false,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: Container(
+            height: veryCompact ? 58 : 62,
+            margin: const EdgeInsets.symmetric(horizontal: 8),
+            padding: EdgeInsets.symmetric(horizontal: compact ? 7 : 10, vertical: 7),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(.97),
+              borderRadius: BorderRadius.circular(21),
+              border: Border.all(color: Colors.white.withOpacity(.82)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(.11),
+                  blurRadius: 28,
+                  offset: const Offset(0, 14),
+                ),
+                BoxShadow(
+                  color: Colors.white.withOpacity(.72),
+                  blurRadius: 10,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _TaskbarSystemButton(
+                  icon: Icons.grid_view_rounded,
+                  tooltip: 'Все модули',
+                  onTap: onStart,
+                ),
+                const SizedBox(width: 8),
+                _TaskbarSearchButton(
+                  compact: veryCompact,
+                  onTap: onSearch,
+                ),
+                if (!veryCompact) ...[
+                  const SizedBox(width: 8),
+                  _TaskbarDivider(height: 30),
+                  const SizedBox(width: 7),
+                ],
+                Flexible(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    child: Row(
+                      children: [
+                        for (final item in _taskbarItems) ...[
+                          _TaskbarAppButton(
+                            item: item,
+                            active: _isActive(item.section),
+                            proLocked: item.pro && !hasActiveSubscription,
+                            showLabel: false,
+                            onTap: () => onSelect(item.section),
+                          ),
+                          const SizedBox(width: 4),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                if (!compact) ...[
+                  const SizedBox(width: 8),
+                  _TaskbarDivider(height: 30),
+                  const SizedBox(width: 8),
+                  _TaskbarTeamPill(
+                    clubName: clubName,
+                    clubLogo: clubLogo,
+                    selectedTeamName: selectedTeamName,
+                    onTap: () => onSelect(ClubSection.teams),
+                  ),
+                ],
+                const SizedBox(width: 8),
+                _TaskbarSystemButton(
+                  icon: Icons.refresh_rounded,
+                  tooltip: 'Обновить',
+                  onTap: onRefresh,
+                ),
+                const SizedBox(width: 6),
+                _TaskbarSystemButton(
+                  icon: Icons.home_rounded,
+                  tooltip: 'На главную',
+                  onTap: onHome,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TaskbarDivider extends StatelessWidget {
+  final double height;
+  const _TaskbarDivider({required this.height});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: height,
+      color: _C.borderSoft,
+    );
+  }
+}
+
+class _TaskbarSearchButton extends StatelessWidget {
+  final bool compact;
+  final VoidCallback onTap;
+
+  const _TaskbarSearchButton({required this.compact, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Поиск по модулям',
+      waitDuration: const Duration(milliseconds: 240),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            height: 44,
+            width: compact ? 44 : 132,
+            padding: EdgeInsets.symmetric(horizontal: compact ? 0 : 12),
+            decoration: BoxDecoration(
+              color: _C.railPanel,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _C.borderSoft),
+            ),
+            child: Row(
+              mainAxisAlignment: compact ? MainAxisAlignment.center : MainAxisAlignment.start,
+              children: [
+                const Icon(Icons.search_rounded, color: _C.railText, size: 21),
+                if (!compact) ...[
+                  const SizedBox(width: 9),
+                  const Expanded(
+                    child: Text(
+                      'Поиск',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _C.railMuted,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TaskbarSystemButton extends StatefulWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  const _TaskbarSystemButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  State<_TaskbarSystemButton> createState() => _TaskbarSystemButtonState();
+}
+
+class _TaskbarSystemButtonState extends State<_TaskbarSystemButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Tooltip(
+        message: widget.tooltip,
+        waitDuration: const Duration(milliseconds: 240),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            onTap: widget.onTap,
+            borderRadius: BorderRadius.circular(16),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: _hovered ? _C.railHover : _C.railPanel,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: _C.borderSoft),
+              ),
+              child: Icon(widget.icon, color: _C.railText, size: 21),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TaskbarAppButton extends StatefulWidget {
+  final _NavItem item;
+  final bool active;
+  final bool proLocked;
+  final bool showLabel;
+  final VoidCallback onTap;
+
+  const _TaskbarAppButton({
+    required this.item,
+    required this.active,
+    required this.proLocked,
+    required this.showLabel,
+    required this.onTap,
+  });
+
+  @override
+  State<_TaskbarAppButton> createState() => _TaskbarAppButtonState();
+}
+
+class _TaskbarAppButtonState extends State<_TaskbarAppButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = _C.railText;
+    final bg = widget.active
+        ? _C.railText
+        : _hovered
+            ? _C.railHover
+            : Colors.transparent;
+    final iconColor = widget.active ? Colors.white : _C.railText;
+    final textColor = widget.active ? Colors.white : _C.railMuted;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Tooltip(
+        message: '${widget.item.label} — ${widget.item.subtitle}',
+        waitDuration: const Duration(milliseconds: 240),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            onTap: widget.onTap,
+            borderRadius: BorderRadius.circular(16),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              curve: Curves.easeOut,
+              width: widget.showLabel ? 58 : 42,
+              height: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: widget.active
+                    ? [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(.11),
+                          blurRadius: 16,
+                          offset: const Offset(0, 7),
+                        ),
+                      ]
+                    : const [],
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                clipBehavior: Clip.none,
+                children: [
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(widget.item.icon, color: iconColor, size: widget.showLabel ? 20 : 22),
+                      if (widget.showLabel) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          widget.item.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: textColor,
+                            fontSize: 9.2,
+                            height: 1,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  if (widget.active)
+                    Positioned(
+                      bottom: -3,
+                      child: Container(
+                        width: 20,
+                        height: 3,
+                        decoration: BoxDecoration(
+                          color: _C.railText,
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                      ),
+                    ),
+                  if (widget.proLocked)
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: Container(
+                        width: 14,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: _C.orangeSoft,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 1.5),
+                        ),
+                        child: const Icon(
+                          Icons.lock_rounded,
+                          color: _C.orange,
+                          size: 9,
+                        ),
+                      ),
+                    ),
+                  if (_hovered && !widget.active)
+                    Positioned(
+                      bottom: -3,
+                      child: Container(
+                        width: 16,
+                        height: 2,
+                        decoration: BoxDecoration(
+                          color: accent.withOpacity(.55),
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TaskbarTeamPill extends StatelessWidget {
+  final String clubName;
+  final String? clubLogo;
+  final String selectedTeamName;
+  final VoidCallback onTap;
+
+  const _TaskbarTeamPill({
+    required this.clubName,
+    required this.clubLogo,
+    required this.selectedTeamName,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final safeTeam = selectedTeamName.trim().isEmpty ? 'Команда не выбрана' : selectedTeamName.trim();
+
+    return Tooltip(
+      message: 'Активная команда: $safeTeam',
+      waitDuration: const Duration(milliseconds: 240),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            height: 44,
+            constraints: const BoxConstraints(maxWidth: 190),
+            padding: const EdgeInsets.only(left: 8, right: 11),
+            decoration: BoxDecoration(
+              color: _C.railPanel,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _C.borderSoft),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _LogoBox(url: clubLogo, size: 28, bgColor: Colors.white),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        clubName.trim().isEmpty ? 'Клуб' : clubName.trim(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: _C.railMuted,
+                          fontSize: 9.8,
+                          height: 1,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        safeTeam,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: _C.railText,
+                          fontSize: 10.8,
+                          height: 1,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DesktopCommandMenuOverlay extends StatefulWidget {
+  final String clubName;
+  final String? clubLogo;
+  final String selectedTeamName;
+  final ClubSection selectedSection;
+  final bool hasActiveSubscription;
+  final List<_FullMenuItem> items;
+
+  const _DesktopCommandMenuOverlay({
+    required this.clubName,
+    required this.clubLogo,
+    required this.selectedTeamName,
+    required this.selectedSection,
+    required this.hasActiveSubscription,
+    required this.items,
+  });
+
+  @override
+  State<_DesktopCommandMenuOverlay> createState() => _DesktopCommandMenuOverlayState();
+}
+
+class _DesktopCommandMenuOverlayState extends State<_DesktopCommandMenuOverlay> {
+  final TextEditingController _controller = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  bool _isActive(ClubSection section) {
+    if (widget.selectedSection == section) return true;
+    if (section == ClubSection.teams && widget.selectedSection == ClubSection.teamDashboard) return true;
+    if (section == ClubSection.roster && widget.selectedSection == ClubSection.playerProfile) return true;
+    if (section == ClubSection.trainers && widget.selectedSection == ClubSection.teamTrainers) return true;
+    return false;
+  }
+
+  List<_FullMenuItem> get _filteredItems {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return widget.items;
+    return widget.items.where((item) {
+      final haystack = '${item.title} ${item.subtitle}'.toLowerCase();
+      return haystack.contains(q);
+    }).toList(growable: false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final compact = width < 720;
+    final items = _filteredItems;
+
+    return Material(
+      color: Colors.transparent,
+      child: SafeArea(
+        child: Center(
+          child: Container(
+            width: math.min(760.0, width - 24),
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * .78),
+            padding: EdgeInsets.all(compact ? 12 : 14),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(.98),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: Colors.white.withOpacity(.86)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(.16),
+                  blurRadius: 42,
+                  offset: const Offset(0, 20),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    _LogoBox(url: widget.clubLogo, size: 42, bgColor: _C.railPanel),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.clubName.trim().isEmpty ? 'Кабинет клуба' : widget.clubName.trim(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: _C.text,
+                              fontSize: 16,
+                              height: 1,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            widget.selectedTeamName.trim().isEmpty ? 'Команда не выбрана' : widget.selectedTeamName.trim(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: _C.muted,
+                              fontSize: 12,
+                              height: 1,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close_rounded, color: _C.railText),
+                      tooltip: 'Закрыть',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _controller,
+                  focusNode: _focusNode,
+                  onChanged: (value) => setState(() => _query = value),
+                  textInputAction: TextInputAction.search,
+                  decoration: InputDecoration(
+                    hintText: 'Найти модуль: матчи, календарь, тестирование…',
+                    prefixIcon: const Icon(Icons.search_rounded, color: _C.railMuted),
+                    suffixIcon: _query.isEmpty
+                        ? null
+                        : IconButton(
+                            onPressed: () {
+                              _controller.clear();
+                              setState(() => _query = '');
+                            },
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                    filled: true,
+                    fillColor: _C.railPanel,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(18),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  style: const TextStyle(
+                    color: _C.text,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Flexible(
+                  child: items.isEmpty
+                      ? const _CommandMenuEmptyState()
+                      : ListView.separated(
+                          shrinkWrap: true,
+                          physics: const BouncingScrollPhysics(),
+                          itemCount: items.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 8),
+                          itemBuilder: (context, index) {
+                            final item = items[index];
+                            return _CommandMenuTile(
+                              item: item,
+                              active: _isActive(item.section),
+                              proLocked: item.pro && !widget.hasActiveSubscription,
+                              onTap: () => Navigator.of(context).pop(item.section),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CommandMenuTile extends StatelessWidget {
+  final _FullMenuItem item;
+  final bool active;
+  final bool proLocked;
+  final VoidCallback onTap;
+
+  const _CommandMenuTile({
+    required this.item,
+    required this.active,
+    required this.proLocked,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = _C.accentForSection(item.section);
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.all(11),
+          decoration: BoxDecoration(
+            color: active ? _C.softFor(accent) : _C.railPanel,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: active ? accent.withOpacity(.22) : _C.borderSoft),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: active ? accent : Colors.white,
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Icon(item.icon, color: active ? Colors.white : accent, size: 21),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            item.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: _C.text,
+                              fontSize: 13.5,
+                              height: 1,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        if (proLocked)
+                          Container(
+                            margin: const EdgeInsets.only(left: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: _C.orangeSoft,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: const Text(
+                              'PRO',
+                              style: TextStyle(
+                                color: _C.orange,
+                                fontSize: 9.5,
+                                height: 1,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      item.subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _C.muted,
+                        fontSize: 12,
+                        height: 1,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                active ? Icons.check_circle_rounded : Icons.north_east_rounded,
+                color: active ? accent : _C.lightMuted,
+                size: 19,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CommandMenuEmptyState extends StatelessWidget {
+  const _CommandMenuEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 28),
+      decoration: BoxDecoration(
+        color: _C.railPanel,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: const Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.search_off_rounded, color: _C.lightMuted, size: 30),
+          SizedBox(height: 8),
+          Text(
+            'Ничего не найдено',
+            style: TextStyle(
+              color: _C.text,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          SizedBox(height: 5),
+          Text(
+            'Попробуйте другое название модуля',
+            style: TextStyle(
+              color: _C.muted,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 
 class _Sidebar extends StatelessWidget {
   final String clubName;
@@ -4567,7 +6055,7 @@ class _Sidebar extends StatelessWidget {
                                 style: TextStyle(
                                   color: _C.text,
                                   fontSize: 16,
-                                  fontWeight: FontWeight.w900,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                               const SizedBox(height: 3),
@@ -4638,19 +6126,22 @@ class _Sidebar extends StatelessWidget {
         : _teamName(activeTeam);
     final teamLogo = activeTeam == null ? null : _teamLogo(activeTeam);
     final navItems = _flatNavItems;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final railWidth = screenWidth >= 1280 ? 88.0 : 78.0;
+    final railRadius = screenWidth >= 1280 ? 18.0 : 15.0;
 
     return Container(
-      width: 74,
-      margin: const EdgeInsets.fromLTRB(6, 6, 0, 6),
+      width: railWidth,
+      margin: EdgeInsets.fromLTRB(screenWidth >= 1280 ? 10 : 6, 6, 0, 6),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: _C.rail,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(railRadius),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.055),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
+            color: Colors.black.withOpacity(.045),
+            blurRadius: 18,
+            offset: const Offset(0, 7),
           ),
         ],
       ),
@@ -4666,15 +6157,15 @@ class _Sidebar extends StatelessWidget {
               onTap: () => onSelect(ClubSection.teams),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 160),
-                width: 56,
-                height: 52,
+                width: screenWidth >= 1280 ? 62 : 56,
+                height: screenWidth >= 1280 ? 56 : 52,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: _C.railPanel,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Transform.scale(
-                  scale: .78,
+                  scale: screenWidth >= 1280 ? .82 : .78,
                   child: _LogoBox(
                     url: clubLogo,
                     size: 34,
@@ -4696,7 +6187,7 @@ class _Sidebar extends StatelessWidget {
           const SizedBox(height: 6),
           Expanded(
             child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              padding: EdgeInsets.symmetric(horizontal: screenWidth >= 1280 ? 10 : 8, vertical: 8),
               physics: const BouncingScrollPhysics(),
               itemCount: navItems.length,
               separatorBuilder: (_, __) => const SizedBox(height: 6),
@@ -4716,7 +6207,7 @@ class _Sidebar extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
+            padding: EdgeInsets.symmetric(horizontal: screenWidth >= 1280 ? 10 : 8),
             child: Column(
               children: [
                 _ClubRailUtilityButton(
@@ -4775,7 +6266,7 @@ class _WorkspaceMiniPill extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontSize: 11,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 color: _C.muted,
               ),
             ),
@@ -4846,7 +6337,7 @@ class _SidebarClubAvatar extends StatelessWidget {
                               firstLetter,
                               style: const TextStyle(
                                 color: _C.primaryGreen,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w600,
                                 fontSize: 17,
                               ),
                             ),
@@ -4857,7 +6348,7 @@ class _SidebarClubAvatar extends StatelessWidget {
                             firstLetter,
                             style: const TextStyle(
                               color: _C.primaryGreen,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w600,
                               fontSize: 17,
                             ),
                           ),
@@ -4877,7 +6368,7 @@ class _SidebarClubAvatar extends StatelessWidget {
                           color: _C.text,
                           fontSize: 13.2,
                           height: 1.08,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -4888,7 +6379,7 @@ class _SidebarClubAvatar extends StatelessWidget {
                         style: TextStyle(
                           color: _C.muted,
                           fontSize: 10.8,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
@@ -4919,7 +6410,7 @@ class _SidebarSectionTitle extends StatelessWidget {
         style: const TextStyle(
           color: _C.lightMuted,
           fontSize: 10.5,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w600,
           letterSpacing: .7,
           height: 1.1,
         ),
@@ -5009,7 +6500,7 @@ class _CompactSidebarActionButtonState extends State<_CompactSidebarActionButton
                       style: TextStyle(
                         color: _C.graphite,
                         fontSize: 11.8,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                         height: 1,
                       ),
                     ),
@@ -5118,7 +6609,7 @@ class _ClubRailUtilityButtonState extends State<_ClubRailUtilityButton> {
                         color: textColor,
                         fontSize: 9.1,
                         height: 1.0,
-                        fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                        fontWeight: selected ? FontWeight.w600 : FontWeight.w600,
                       ),
                     ),
                   ),
@@ -5133,7 +6624,7 @@ class _ClubRailUtilityButtonState extends State<_ClubRailUtilityButton> {
                     child: Container(
                       width: 3,
                       decoration: BoxDecoration(
-                        color: _C.menuGreen,
+                        color: _C.railText,
                         borderRadius: BorderRadius.circular(999),
                       ),
                     ),
@@ -5241,7 +6732,7 @@ class _ClubSideRailButtonState extends State<_ClubSideRailButton> {
                               color: textColor,
                               fontSize: 9.05,
                               height: 1.0,
-                              fontWeight: widget.active ? FontWeight.w900 : FontWeight.w700,
+                              fontWeight: widget.active ? FontWeight.w600 : FontWeight.w600,
                             ),
                           ),
                         ),
@@ -5257,7 +6748,7 @@ class _ClubSideRailButtonState extends State<_ClubSideRailButton> {
                     child: Container(
                       width: 3,
                       decoration: BoxDecoration(
-                        color: _C.menuGreen,
+                        color: _C.railText,
                         borderRadius: BorderRadius.circular(999),
                       ),
                     ),
@@ -5314,7 +6805,7 @@ class _ClubSideRailActionButtonState extends State<_ClubSideRailActionButton> {
   @override
   Widget build(BuildContext context) {
     const showLabel = true;
-    final effectiveAccent = widget.active ? _C.primaryGreen : widget.accent;
+    final effectiveAccent = widget.active ? _C.railText : widget.accent;
     final bgColor = widget.active
         ? effectiveAccent.withOpacity(.08)
         : _hovered
@@ -5323,7 +6814,7 @@ class _ClubSideRailActionButtonState extends State<_ClubSideRailActionButton> {
     final borderColor = widget.active
         ? effectiveAccent.withOpacity(.16)
         : _hovered
-            ? _C.primaryGreen.withOpacity(.10)
+            ? _C.railText.withOpacity(.10)
             : Colors.transparent;
     final iconBgColor = widget.active
         ? effectiveAccent.withOpacity(.12)
@@ -5374,7 +6865,7 @@ class _ClubSideRailActionButtonState extends State<_ClubSideRailActionButton> {
                             border: Border.all(
                               color: widget.active
                                   ? effectiveAccent.withOpacity(.14)
-                                  : _C.primaryGreen.withOpacity(.08),
+                                  : _C.borderSoft,
                             ),
                             boxShadow: widget.active || _hovered
                                 ? [
@@ -5399,7 +6890,7 @@ class _ClubSideRailActionButtonState extends State<_ClubSideRailActionButton> {
                                 style: TextStyle(
                                   fontSize: 12.4,
                                   height: 1.05,
-                                  fontWeight: widget.active ? FontWeight.w900 : FontWeight.w800,
+                                  fontWeight: widget.active ? FontWeight.w600 : FontWeight.w600,
                                   color: labelColor,
                                 ),
                               ),
@@ -5539,7 +7030,7 @@ class _SidebarTeamPickerButton extends StatelessWidget {
                                 style: TextStyle(
                                   color: _C.text,
                                   fontSize: 16,
-                                  fontWeight: FontWeight.w900,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                               const SizedBox(height: 3),
@@ -5649,7 +7140,7 @@ class _SidebarTeamPickerButton extends StatelessWidget {
                           color: _C.text,
                           fontSize: 12.0,
                           height: 1.05,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -5660,7 +7151,7 @@ class _SidebarTeamPickerButton extends StatelessWidget {
                         style: const TextStyle(
                           color: _C.muted,
                           fontSize: 10.2,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
@@ -5724,7 +7215,7 @@ class _SidebarHomeButton extends StatelessWidget {
                   style: TextStyle(
                     color: _C.text,
                     fontSize: 12.0,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -5776,7 +7267,7 @@ class _SidebarFullMenuButton extends StatelessWidget {
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 12.0,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -5818,111 +7309,188 @@ class _FullModulesMenuOverlay extends StatelessWidget {
 
   bool _sectionIsActive(ClubSection itemSection) {
     if (itemSection == selectedSection) return true;
-
-    if (itemSection == ClubSection.roster &&
-        selectedSection == ClubSection.playerProfile) {
-      return true;
-    }
-
-    if (itemSection == ClubSection.trainers &&
-        selectedSection == ClubSection.teamTrainers) {
-      return true;
-    }
-
+    if (itemSection == ClubSection.teams && selectedSection == ClubSection.teamDashboard) return true;
+    if (itemSection == ClubSection.roster && selectedSection == ClubSection.playerProfile) return true;
+    if (itemSection == ClubSection.trainers && selectedSection == ClubSection.teamTrainers) return true;
     return false;
   }
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    final crossAxisCount = width >= 1280 ? 5 : width >= 980 ? 4 : width >= 720 ? 3 : 2;
+    final media = MediaQuery.of(context);
+    final width = media.size.width;
+    final height = media.size.height;
     final compact = width < 720;
+    final columns = compact ? 4 : width >= 1180 ? 7 : 6;
+    final menuWidth = math.min(compact ? width - 22 : 760.0, width - 32);
+    final maxHeight = math.max(320.0, math.min(height - 118, compact ? 560.0 : 600.0));
+    final safeTeam = selectedTeamName.trim().isEmpty ? 'Команда не выбрана' : selectedTeamName.trim();
 
-    return Scaffold(
-      backgroundColor: _C.bg,
-      body: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(compact ? 12 : 18, compact ? 10 : 16, compact ? 12 : 18, 16),
-          child: Column(
-            children: [
-              Container(
-                padding: EdgeInsets.all(compact ? 12 : 14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(compact ? 24 : 30),
-                  border: Border.all(color: _C.border),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(.045),
-                      blurRadius: 24,
-                      offset: const Offset(0, 12),
-                    ),
-                  ],
-                ),
-                child: Row(
+    return Material(
+      color: Colors.transparent,
+      child: SafeArea(
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(12, 12, 12, compact ? 78 : 88),
+            child: Container(
+              width: menuWidth,
+              constraints: BoxConstraints(maxHeight: maxHeight),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(.985),
+                borderRadius: BorderRadius.circular(compact ? 24 : 30),
+                border: Border.all(color: Colors.white.withOpacity(.88)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(.18),
+                    blurRadius: 46,
+                    offset: const Offset(0, 22),
+                  ),
+                  BoxShadow(
+                    color: Colors.white.withOpacity(.72),
+                    blurRadius: 10,
+                    offset: const Offset(0, -2),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(compact ? 24 : 30),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    _LogoBox(url: clubLogo, size: compact ? 44 : 54, bgColor: _C.soft2),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(compact ? 14 : 18, compact ? 13 : 16, compact ? 10 : 14, 10),
+                      child: Row(
                         children: [
-                          Text(
-                            clubName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: _C.text,
-                              fontSize: compact ? 16 : 19,
-                              fontWeight: FontWeight.w900,
-                              height: 1.05,
+                          _LogoBox(url: clubLogo, size: compact ? 38 : 44, bgColor: _C.railPanel),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  clubName.trim().isEmpty ? 'Панель клуба' : clubName.trim(),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: _C.text,
+                                    fontSize: 15.5,
+                                    height: 1,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 5),
+                                Text(
+                                  safeTeam,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: _C.muted,
+                                    fontSize: 11.5,
+                                    height: 1,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            selectedTeamName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: _C.muted,
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w800,
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: _C.railPanel,
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(color: _C.borderSoft),
                             ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.apps_rounded, color: _C.railText, size: compact ? 16 : 17),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${items.length} разделов',
+                                  style: const TextStyle(
+                                    color: _C.railMuted,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          IconButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            icon: const Icon(Icons.close_rounded, color: _C.railText),
+                            tooltip: 'Закрыть',
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    _SmallIconButton(
-                      icon: Icons.close_rounded,
-                      onTap: () => Navigator.of(context).pop(),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: compact ? 14 : 18),
+                      child: Container(
+                        height: 1,
+                        color: _C.borderSoft,
+                      ),
+                    ),
+                    Flexible(
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(compact ? 12 : 16, 14, compact ? 12 : 16, compact ? 12 : 16),
+                        child: GridView.builder(
+                          shrinkWrap: true,
+                          physics: const BouncingScrollPhysics(),
+                          itemCount: items.length,
+                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: columns,
+                            mainAxisSpacing: compact ? 8 : 10,
+                            crossAxisSpacing: compact ? 6 : 8,
+                            childAspectRatio: compact ? .88 : .92,
+                          ),
+                          itemBuilder: (context, index) {
+                            final item = items[index];
+                            return _FullModuleTile(
+                              item: item,
+                              active: _sectionIsActive(item.section),
+                              proLocked: item.pro && !hasActiveSubscription,
+                              onTap: () => Navigator.of(context).pop(item.section),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(compact ? 14 : 18, 0, compact ? 14 : 18, compact ? 12 : 14),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                        decoration: BoxDecoration(
+                          color: _C.railPanel,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: _C.borderSoft),
+                        ),
+                        child: Row(
+                          children: const [
+                            Icon(Icons.search_rounded, color: _C.railMuted, size: 18),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Для быстрого поиска нажмите кнопку «Поиск» рядом с меню',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: _C.railMuted,
+                                  fontSize: 11.2,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 14),
-              Expanded(
-                child: GridView.builder(
-                  itemCount: items.length,
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: crossAxisCount,
-                    mainAxisSpacing: compact ? 9 : 12,
-                    crossAxisSpacing: compact ? 9 : 12,
-                    childAspectRatio: compact ? 1.34 : 1.18,
-                  ),
-                  itemBuilder: (context, index) {
-                    final item = items[index];
-                    final active = _sectionIsActive(item.section);
-                    return _FullModuleTile(
-                      item: item,
-                      active: active,
-                      proLocked: item.pro && !hasActiveSubscription,
-                      onTap: () => Navigator.of(context).pop(item.section),
-                    );
-                  },
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -5930,7 +7498,7 @@ class _FullModulesMenuOverlay extends StatelessWidget {
   }
 }
 
-class _FullModuleTile extends StatelessWidget {
+class _FullModuleTile extends StatefulWidget {
   final _FullMenuItem item;
   final bool active;
   final bool proLocked;
@@ -5944,97 +7512,124 @@ class _FullModuleTile extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final accent = _C.accentForSection(item.section);
+  State<_FullModuleTile> createState() => _FullModuleTileState();
+}
 
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 170),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: active ? _C.softFor(accent) : Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: active ? accent.withOpacity(.24) : _C.border),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(active ? .055 : .035),
-                blurRadius: active ? 18 : 12,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 160),
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: active ? accent.withOpacity(.12) : _C.soft2,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: active ? accent.withOpacity(.14) : _C.primaryGreen.withOpacity(.08)),
-                      boxShadow: active
-                          ? [
-                              BoxShadow(
-                                color: accent.withOpacity(.10),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              ),
-                            ]
-                          : const [],
-                    ),
-                    child: Icon(item.icon, color: active ? accent : _C.muted, size: 21),
-                  ),
-                  const Spacer(),
-                  if (active)
-                    Icon(Icons.check_circle_rounded, color: accent, size: 18)
-                  else
-                    const Icon(Icons.chevron_right_rounded, color: _C.muted, size: 18),
-                ],
-              ),
-              const Spacer(),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      item.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: _C.text,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w900,
-                        height: 1.05,
-                      ),
-                    ),
-                  ),
-                  if (item.pro) ...[
-                    const SizedBox(width: 6),
-                    _ProCornerBadge(active: !proLocked),
-                  ],
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                item.subtitle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: _C.muted,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                  height: 1.18,
+class _FullModuleTileState extends State<_FullModuleTile> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = _C.railText;
+    final bg = widget.active
+        ? _C.softFor(accent)
+        : _hovered
+            ? _C.railHover
+            : Colors.transparent;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Tooltip(
+        message: '${widget.item.title} — ${widget.item.subtitle}',
+        waitDuration: const Duration(milliseconds: 240),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: widget.onTap,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              curve: Curves.easeOut,
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: widget.active ? accent.withOpacity(.20) : Colors.transparent,
                 ),
               ),
-            ],
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 160),
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: widget.active ? accent.withOpacity(.13) : Colors.white,
+                          borderRadius: BorderRadius.circular(17),
+                          border: Border.all(
+                            color: widget.active ? accent.withOpacity(.20) : _C.borderSoft,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(widget.active ? .075 : .045),
+                              blurRadius: widget.active ? 16 : 10,
+                              offset: const Offset(0, 7),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          widget.item.icon,
+                          color: widget.active ? accent : _C.railText,
+                          size: 24,
+                        ),
+                      ),
+                      if (widget.item.pro)
+                        Positioned(
+                          right: -4,
+                          top: -4,
+                          child: Container(
+                            width: 17,
+                            height: 17,
+                            decoration: BoxDecoration(
+                              color: widget.proLocked ? _C.orangeSoft : _C.softFor(_C.primaryGreen),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 1.6),
+                            ),
+                            child: Icon(
+                              widget.proLocked ? Icons.lock_rounded : Icons.workspace_premium_rounded,
+                              color: widget.proLocked ? _C.orange : _C.primaryGreen,
+                              size: 10,
+                            ),
+                          ),
+                        ),
+                      if (widget.active)
+                        Positioned(
+                          left: 15,
+                          right: 15,
+                          bottom: -6,
+                          child: Container(
+                            height: 3,
+                            decoration: BoxDecoration(
+                              color: accent,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 9),
+                  Text(
+                    widget.item.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: widget.active ? _C.text : _C.railText,
+                      fontSize: 11.2,
+                      height: 1.08,
+                      fontWeight: widget.active ? FontWeight.w600 : FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -6067,7 +7662,7 @@ class _MiniCountPill extends StatelessWidget {
               style: const TextStyle(
                 color: _C.text,
                 fontSize: 10.8,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w600,
               ),
             ),
             TextSpan(
@@ -6075,7 +7670,7 @@ class _MiniCountPill extends StatelessWidget {
               style: const TextStyle(
                 color: _C.muted,
                 fontSize: 9.4,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -6149,7 +7744,7 @@ class _MobileGestureHintSheet extends StatelessWidget {
                           style: TextStyle(
                             color: _C.text,
                             fontSize: 16,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w600,
                             height: 1.05,
                           ),
                         ),
@@ -6159,7 +7754,7 @@ class _MobileGestureHintSheet extends StatelessWidget {
                           style: TextStyle(
                             color: _C.muted,
                             fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w600,
                             height: 1.35,
                           ),
                         ),
@@ -6193,7 +7788,7 @@ class _MobileGestureHintSheet extends StatelessWidget {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(18),
                     ),
-                    textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                    textStyle: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                   child: const Text('Понятно'),
                 ),
@@ -6248,7 +7843,7 @@ class _GestureTipRow extends StatelessWidget {
                   style: const TextStyle(
                     color: _C.text,
                     fontSize: 13.5,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -6257,7 +7852,7 @@ class _GestureTipRow extends StatelessWidget {
                   style: const TextStyle(
                     color: _C.muted,
                     fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     height: 1.25,
                   ),
                 ),
@@ -6397,7 +7992,7 @@ class _TopBar extends StatelessWidget {
                   style: const TextStyle(
                       fontSize: 16,
                       height: 1.05,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                       color: _C.text)),
               const SizedBox(height: 3),
               Text(subtitle,
@@ -6407,7 +8002,7 @@ class _TopBar extends StatelessWidget {
                       color: _C.muted,
                       height: 1.15,
                       fontSize: 10.8,
-                      fontWeight: FontWeight.w700)),
+                      fontWeight: FontWeight.w600)),
             ])),
         const SizedBox(width: 12),
         _TeamChooser(
@@ -6474,7 +8069,7 @@ class _TopToolButton extends StatelessWidget {
             style: const TextStyle(
               color: _C.text,
               fontSize: 11,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ]),
@@ -6610,7 +8205,7 @@ class _TeamChooser extends StatelessWidget {
                                 style: TextStyle(
                                   color: _C.text,
                                   fontSize: 16,
-                                  fontWeight: FontWeight.w900,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                               SizedBox(height: 3),
@@ -6708,7 +8303,7 @@ class _TeamChooser extends StatelessWidget {
                     style: TextStyle(
                       color: _C.muted,
                       fontSize: 11.5,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -6720,7 +8315,7 @@ class _TeamChooser extends StatelessWidget {
                       color: _C.text,
                       fontSize: 16,
                       height: 1.05,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -6752,7 +8347,7 @@ class _TeamChooser extends StatelessWidget {
                     style: TextStyle(
                       color: _C.primaryGreen,
                       fontSize: 12,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   SizedBox(width: 6),
@@ -6812,7 +8407,7 @@ class _TeamPickerTile extends StatelessWidget {
                       style: const TextStyle(
                         color: _C.text,
                         fontSize: 14,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -6869,7 +8464,7 @@ class _OverviewControlCenter extends StatelessWidget {
       decoration: _cardDecoration(radius: 30),
       child: LayoutBuilder(
         builder: (context, c) {
-          final compact = c.maxWidth < 760;
+          final compact = c.maxWidth < 680;
           final actions = [
             _OverviewActionButton(
               icon: Icons.edit_note_rounded,
@@ -6961,7 +8556,7 @@ class _OverviewControlTitle extends StatelessWidget {
                 style: TextStyle(
                   color: _C.text,
                   fontSize: 15,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               SizedBox(height: 3),
@@ -6972,7 +8567,7 @@ class _OverviewControlTitle extends StatelessWidget {
                 style: TextStyle(
                   color: _C.muted,
                   fontSize: 12,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -7064,7 +8659,7 @@ class _OverviewActionButton extends StatelessWidget {
                     style: TextStyle(
                       color: fg,
                       fontSize: 13,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -7075,7 +8670,7 @@ class _OverviewActionButton extends StatelessWidget {
                     style: TextStyle(
                       color: sub,
                       fontSize: 11,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -7265,7 +8860,7 @@ class _OverviewPanel extends StatelessWidget {
                     color: _C.text,
                     fontSize: wide ? 25 : 21,
                     height: 1.05,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -7276,7 +8871,7 @@ class _OverviewPanel extends StatelessWidget {
                   style: const TextStyle(
                     color: _C.muted,
                     fontSize: 13,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -7382,7 +8977,7 @@ class _OverviewPanel extends StatelessWidget {
                       color: _C.primaryGreen,
                       fontSize: 22,
                       height: 1,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -7393,7 +8988,7 @@ class _OverviewPanel extends StatelessWidget {
                     style: const TextStyle(
                       color: _C.text,
                       fontSize: 12,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -7424,7 +9019,7 @@ class _OverviewPanel extends StatelessWidget {
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: _C.bg,
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(21),
             ),
             child: Row(
               children: [
@@ -7445,7 +9040,7 @@ class _OverviewPanel extends StatelessWidget {
                         style: const TextStyle(
                           color: _C.text,
                           fontSize: 15,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -7456,7 +9051,7 @@ class _OverviewPanel extends StatelessWidget {
                         style: const TextStyle(
                           color: _C.muted,
                           fontSize: 12,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
@@ -7522,7 +9117,7 @@ class _OverviewPanel extends StatelessWidget {
                     _teamName(team),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w900),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -7643,7 +9238,7 @@ class _OverviewPanel extends StatelessWidget {
                 style: const TextStyle(
                   color: _C.text,
                   fontSize: 13,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -7695,7 +9290,7 @@ class _OverviewPanel extends StatelessWidget {
                 style: const TextStyle(
                   color: _C.text,
                   fontSize: 12,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -7732,7 +9327,7 @@ class _OverviewPanel extends StatelessWidget {
             style: const TextStyle(
               color: _C.text,
               fontSize: 16,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
@@ -7747,7 +9342,7 @@ class _OverviewPanel extends StatelessWidget {
                 style: const TextStyle(
                   color: _C.primaryGreen,
                   fontSize: 12,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -7789,7 +9384,7 @@ class _OverviewPanel extends StatelessWidget {
                   style: const TextStyle(
                     color: _C.text,
                     fontSize: 12.5,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 if (date.isNotEmpty) ...[
@@ -7801,7 +9396,7 @@ class _OverviewPanel extends StatelessWidget {
                     style: const TextStyle(
                       color: _C.muted,
                       fontSize: 11,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -7826,7 +9421,7 @@ class _OverviewPanel extends StatelessWidget {
         style: const TextStyle(
           color: _C.muted,
           fontSize: 12,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -7849,7 +9444,7 @@ class _OverviewPanel extends StatelessWidget {
             style: const TextStyle(
               color: _C.primaryGreen,
               fontSize: 11,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -7981,7 +9576,7 @@ class _OverviewWorkHero extends StatelessWidget {
                             style: TextStyle(
                               color: _C.primaryGreen,
                               fontSize: 11,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
@@ -7994,7 +9589,7 @@ class _OverviewWorkHero extends StatelessWidget {
                             style: const TextStyle(
                               color: _C.muted,
                               fontSize: 12,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
@@ -8009,7 +9604,7 @@ class _OverviewWorkHero extends StatelessWidget {
                         color: _C.text,
                         fontSize: compact ? 22 : 27,
                         height: 1.02,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -8091,7 +9686,7 @@ class _OverviewProgressBadge extends StatelessWidget {
               color: _C.primaryGreen,
               fontSize: 21,
               height: 1,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 4),
@@ -8100,7 +9695,7 @@ class _OverviewProgressBadge extends StatelessWidget {
             style: TextStyle(
               color: _C.muted,
               fontSize: 11,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -8222,7 +9817,7 @@ class _OverviewStatCard extends StatelessWidget {
                       color: _C.text,
                       fontSize: 22,
                       height: 1,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -8233,7 +9828,7 @@ class _OverviewStatCard extends StatelessWidget {
                     style: const TextStyle(
                       color: _C.text,
                       fontSize: 12,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -8244,7 +9839,7 @@ class _OverviewStatCard extends StatelessWidget {
                     style: const TextStyle(
                       color: _C.muted,
                       fontSize: 11,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -8332,7 +9927,7 @@ class _OverviewQuickActionsGrid extends StatelessWidget {
                   style: TextStyle(
                     color: _C.text,
                     fontSize: 17,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -8429,7 +10024,7 @@ class _OverviewModuleCard extends StatelessWidget {
                     style: const TextStyle(
                       color: _C.text,
                       fontSize: 13,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -8441,7 +10036,7 @@ class _OverviewModuleCard extends StatelessWidget {
                       color: _C.muted,
                       fontSize: 11,
                       height: 1.2,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -8534,7 +10129,7 @@ class _OverviewReadinessCard extends StatelessWidget {
                       style: TextStyle(
                         color: _C.text,
                         fontSize: 16,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -8543,7 +10138,7 @@ class _OverviewReadinessCard extends StatelessWidget {
                       style: const TextStyle(
                         color: _C.muted,
                         fontSize: 12,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
@@ -8582,7 +10177,7 @@ class _OverviewReadinessCard extends StatelessWidget {
                         style: TextStyle(
                           color: item.done ? _C.text : _C.muted,
                           fontSize: 12,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
@@ -8679,7 +10274,7 @@ class _OverviewAdvicePanel extends StatelessWidget {
                   style: TextStyle(
                     color: _C.text,
                     fontSize: 16,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -8749,7 +10344,7 @@ class _OverviewTipCard extends StatelessWidget {
                     style: const TextStyle(
                       color: _C.text,
                       fontSize: 12,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -8761,7 +10356,7 @@ class _OverviewTipCard extends StatelessWidget {
                       color: _C.muted,
                       fontSize: 11,
                       height: 1.25,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -8910,7 +10505,7 @@ class _OverviewLiveFeedCard extends StatelessWidget {
                         color: _C.text,
                         fontSize: 17,
                         height: 1.05,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     SizedBox(height: 4),
@@ -8922,7 +10517,7 @@ class _OverviewLiveFeedCard extends StatelessWidget {
                         color: _C.muted,
                         fontSize: 12,
                         height: 1.18,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
@@ -8968,7 +10563,7 @@ class _OverviewLiveFeedCard extends StatelessWidget {
                     style: const TextStyle(
                       color: _C.text,
                       fontSize: 12,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -9063,7 +10658,7 @@ class _OverviewFeedTile extends StatelessWidget {
                             color: _C.text,
                             fontSize: 13,
                             height: 1.12,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -9082,7 +10677,7 @@ class _OverviewFeedTile extends StatelessWidget {
                           style: TextStyle(
                             color: active ? _C.primaryGreen : _C.muted,
                             fontSize: 10,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -9097,7 +10692,7 @@ class _OverviewFeedTile extends StatelessWidget {
                       color: _C.muted,
                       fontSize: 11,
                       height: 1.2,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -9158,7 +10753,7 @@ class _OverviewActivityCard extends StatelessWidget {
             style: TextStyle(
               color: _C.text,
               fontSize: 16,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 12),
@@ -9205,7 +10800,7 @@ class _OverviewActivityRow extends StatelessWidget {
             style: const TextStyle(
               color: _C.text,
               fontSize: 12,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
@@ -9217,7 +10812,7 @@ class _OverviewActivityRow extends StatelessWidget {
           style: const TextStyle(
             color: _C.muted,
             fontSize: 12,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ],
@@ -9279,7 +10874,7 @@ class _CompletionInfoCard extends StatelessWidget {
                   complete ? 'Профиль клуба заполнен' : 'Что желательно заполнить',
                   style: const TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                     color: _C.text,
                   ),
                 ),
@@ -9317,7 +10912,7 @@ class _CompletionInfoCard extends StatelessWidget {
                   style: TextStyle(
                     color: complete ? _C.primaryGreen : _C.text,
                     fontSize: 12,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               );
@@ -9401,7 +10996,7 @@ class _TeamsHeader extends StatelessWidget {
               Text('Команды клуба',
                   style: TextStyle(
                       fontSize: 20,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                       color: _C.text)),
               SizedBox(height: 4),
               Text(
@@ -9482,7 +11077,7 @@ class _TeamCard extends StatelessWidget {
                       style: TextStyle(
                           color: active ? _C.blue : _C.black,
                           fontSize: 11,
-                          fontWeight: FontWeight.w900)),
+                          fontWeight: FontWeight.w600)),
                 ),
               ]),
               const Spacer(),
@@ -9492,7 +11087,7 @@ class _TeamCard extends StatelessWidget {
                   style: TextStyle(
                       fontSize: 19,
                       height: 1.1,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                       color: active ? _C.blue : _C.text)),
               const SizedBox(height: 7),
               Text(subtitle,
@@ -9501,7 +11096,7 @@ class _TeamCard extends StatelessWidget {
                   style: const TextStyle(
                       color: _C.muted,
                       fontSize: 13,
-                      fontWeight: FontWeight.w700)),
+                      fontWeight: FontWeight.w600)),
             ]),
       ),
     );
@@ -9518,6 +11113,7 @@ class _RosterPanel extends StatelessWidget {
   final Map<String, dynamic>? selectedPlayer;
   final Future<void> Function()? onRefresh;
   final ValueChanged<Map<String, dynamic>> onOpenPlayer;
+  final ValueChanged<Map<String, dynamic>> onOpenFullPlayer;
   final VoidCallback onOpenFullRoster;
   final VoidCallback onAddPlayer;
 
@@ -9530,6 +11126,7 @@ class _RosterPanel extends StatelessWidget {
     required this.selectedPlayer,
     required this.onRefresh,
     required this.onOpenPlayer,
+    required this.onOpenFullPlayer,
     required this.onOpenFullRoster,
     required this.onAddPlayer,
   });
@@ -9613,7 +11210,7 @@ class _RosterPanel extends StatelessWidget {
                             color: _C.text,
                             fontSize: 16,
                             height: 1.05,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -9624,7 +11221,7 @@ class _RosterPanel extends StatelessWidget {
                           style: const TextStyle(
                             color: _C.muted,
                             fontSize: 12,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
@@ -9704,13 +11301,7 @@ class _RosterPanel extends StatelessWidget {
           onBack: null,
           onOpenFull: selectedPlayer == null
               ? null
-              : () {
-                  final mp = Map<String, dynamic>.from(selectedPlayer!);
-                  mp['team_id'] ??= mp['teamId'];
-                  mp['teamId'] ??= mp['team_id'];
-
-                  Get.to(() => CmrPlayerProfileScreen(player: mp));
-                },
+              : () => onOpenFullPlayer(selectedPlayer!),
         );
 
         if (compact) {
@@ -9817,7 +11408,7 @@ class _RosterAdviceCard extends StatelessWidget {
                   style: const TextStyle(
                     color: _C.text,
                     fontSize: 13,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -9860,13 +11451,7 @@ class _PlayerTile extends StatelessWidget {
     return fallback;
   }
 
-  String _photoUrl(String raw) {
-    final value = raw.trim();
-    if (value.isEmpty) return '';
-    if (value.startsWith('http://') || value.startsWith('https://')) return value;
-    final cleaned = value.startsWith('/') ? value.substring(1) : value;
-    return 'https://sportotekaapp.ru/$cleaned';
-  }
+  String _photoUrl(String raw) => _normalizeSportotekaMediaUrl(raw);
 
   @override
   Widget build(BuildContext context) {
@@ -9876,7 +11461,7 @@ class _PlayerTile extends StatelessWidget {
         ? _field(const ['fullName', 'full_name', 'name'], 'Игрок')
         : ('$first $last').trim();
     final position = _field(const ['position', 'role'], 'Амплуа');
-    final rawPhoto = _field(const ['photo', 'avatar', 'image', 'photo_url', 'avatar_url']);
+    final rawPhoto = _field(const ['photo_url', 'avatar_url', 'photo', 'avatar', 'image']);
     final photo = _photoUrl(rawPhoto);
     final number = _field(
       const ['number', 'player_number', 'shirt_number'],
@@ -9942,7 +11527,7 @@ class _PlayerTile extends StatelessWidget {
                           style: TextStyle(
                             color: active ? Colors.white : _C.muted,
                             fontSize: number.length > 2 ? 8 : 9.5,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -9963,7 +11548,7 @@ class _PlayerTile extends StatelessWidget {
                         color: _C.text,
                         fontSize: 14.5,
                         height: 1.05,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 7),
@@ -10039,7 +11624,7 @@ class _RosterInfoPill extends StatelessWidget {
         style: TextStyle(
           color: color,
           fontSize: 11,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -10136,7 +11721,7 @@ class _PlayerPanel extends StatelessWidget {
                           color: _C.text,
                           fontSize: 25,
                           height: 1.06,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -10324,7 +11909,7 @@ class _RosterFullProfileButton extends StatelessWidget {
                   color: Colors.white,
                   fontSize: 14,
                   letterSpacing: -0.1,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               SizedBox(width: 7),
@@ -10392,7 +11977,7 @@ class _RosterMetricCard extends StatelessWidget {
                   style: const TextStyle(
                     color: _C.muted,
                     fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -10406,7 +11991,7 @@ class _RosterMetricCard extends StatelessWidget {
             style: const TextStyle(
               color: _C.text,
               fontSize: 14,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -10570,7 +12155,7 @@ class _MobileMoreBottomSheet extends StatelessWidget {
                     color: _C.text,
                     fontSize: 16,
                     height: 1.1,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -10585,7 +12170,7 @@ class _MobileMoreBottomSheet extends StatelessWidget {
                   style: const TextStyle(
                     color: _C.primaryGreen,
                     fontSize: 11,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -10698,7 +12283,7 @@ class _MobileMoreHeaderCard extends StatelessWidget {
                     color: _C.text,
                     fontSize: 17,
                     height: 1.08,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -10710,7 +12295,7 @@ class _MobileMoreHeaderCard extends StatelessWidget {
                     color: _C.muted,
                     fontSize: 12,
                     height: 1.15,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -10794,7 +12379,7 @@ class _MobileMoreTile extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: _WorkspaceText.rowTitle.copyWith(
                                   fontSize: 12.8,
-                                  fontWeight: active ? FontWeight.w900 : FontWeight.w800,
+                                  fontWeight: active ? FontWeight.w600 : FontWeight.w600,
                                   color: titleColor,
                                   height: 1.05,
                                 ),
@@ -10813,7 +12398,7 @@ class _MobileMoreTile extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: _WorkspaceText.caption.copyWith(
                             fontSize: 10.0,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w600,
                             color: active ? _C.muted : _C.lightMuted,
                             height: 1.05,
                           ),
@@ -10924,15 +12509,15 @@ class _TrainersModuleContentState extends State<_TrainersModuleContent> {
   String _trainerEmail(Map<String, dynamic> trainer) => _s(trainer['email']);
 
   String _trainerPhoto(Map<String, dynamic> trainer) {
-    final raw = _s(trainer['photo'] ??
-        trainer['avatar'] ??
-        trainer['image'] ??
-        trainer['photo_url'] ??
-        trainer['avatar_url']);
-    if (raw.isEmpty) return '';
-    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
-    final cleaned = raw.startsWith('/') ? raw.substring(1) : raw;
-    return 'https://sportotekaapp.ru/$cleaned';
+    return _firstSportotekaMediaUrl(trainer, const [
+      'photo_url',
+      'avatar_url',
+      'photo',
+      'avatar',
+      'image',
+      'logo',
+      'logo_url',
+    ]);
   }
 
   bool _hasActiveTeam() {
@@ -11000,7 +12585,7 @@ class _TrainersModuleContentState extends State<_TrainersModuleContent> {
                             color: _C.text,
                             fontSize: 16,
                             height: 1.05,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -11011,7 +12596,7 @@ class _TrainersModuleContentState extends State<_TrainersModuleContent> {
                           style: const TextStyle(
                             color: _C.muted,
                             fontSize: 12,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
@@ -11190,7 +12775,7 @@ class _TrainerWorkTile extends StatelessWidget {
                           style: TextStyle(
                             color: active ? Colors.white : _C.muted,
                             fontSize: 9.5,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -11211,7 +12796,7 @@ class _TrainerWorkTile extends StatelessWidget {
                         color: _C.text,
                         fontSize: 14.5,
                         height: 1.05,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 7),
@@ -11324,7 +12909,7 @@ class _TrainerPanelCard extends StatelessWidget {
                         color: _C.text,
                         fontSize: 22,
                         height: 1.05,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 9),
@@ -11470,7 +13055,7 @@ class _TrainerPanelButton extends StatelessWidget {
                 style: TextStyle(
                   color: filled ? Colors.white : _C.text,
                   fontSize: 12.5,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -11503,7 +13088,7 @@ class _TrainerEmptyInline extends StatelessWidget {
         const Text(
           'Тренеры пока не добавлены',
           textAlign: TextAlign.center,
-          style: TextStyle(color: _C.text, fontSize: 16, fontWeight: FontWeight.w900),
+          style: TextStyle(color: _C.text, fontSize: 16, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 6),
         const Text(
@@ -11544,7 +13129,7 @@ class _TrainerTopStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
-    final isMobile = width < 760;
+    final isMobile = width < 680;
     final teamText = hasActiveTeam ? selectedTeamName : 'Команда не выбрана';
 
     return Container(
@@ -11650,13 +13235,13 @@ class _TrainerSmallStat extends StatelessWidget {
               style: const TextStyle(
                   color: _C.primaryGreen,
                   fontSize: 15,
-                  fontWeight: FontWeight.w900)),
+                  fontWeight: FontWeight.w600)),
           const SizedBox(width: 5),
           Text(label,
               style: const TextStyle(
                   color: _C.muted,
                   fontSize: 11,
-                  fontWeight: FontWeight.w800)),
+                  fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -11685,7 +13270,7 @@ class _TrainerTeamLine extends StatelessWidget {
             style: const TextStyle(
               color: _C.text,
               fontSize: 12.5,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
@@ -11724,7 +13309,7 @@ class _TrainerEditButton extends StatelessWidget {
             SizedBox(width: 7),
             Text(
               'Редактировать',
-              style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900),
+              style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
             ),
           ],
         ),
@@ -11832,7 +13417,7 @@ class _TrainerCompactRow extends StatelessWidget {
                       color: _C.text,
                       fontSize: isMobile ? 13.2 : 14.2,
                       height: 1.05,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 5),
@@ -11930,7 +13515,7 @@ class _TrainerDetailWorkCard extends StatelessWidget {
                         color: _C.text,
                         fontSize: compact ? 17 : 19,
                         height: 1.05,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 7),
@@ -11973,6 +13558,40 @@ class _TrainerDetailWorkCard extends StatelessWidget {
   }
 }
 
+
+class _SafeNetworkMedia extends StatelessWidget {
+  final String url;
+  final BoxFit fit;
+  final Widget fallback;
+
+  const _SafeNetworkMedia({
+    required this.url,
+    required this.fit,
+    required this.fallback,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final safeUrl = _normalizeSportotekaMediaUrl(url);
+    final uri = Uri.tryParse(safeUrl);
+    final isValid = safeUrl.startsWith('data:image/') ||
+        (safeUrl.isNotEmpty &&
+            uri != null &&
+            (uri.scheme == 'https' || uri.scheme == 'http') &&
+            uri.host.isNotEmpty);
+
+    if (!isValid) return fallback;
+
+    return Image.network(
+      safeUrl,
+      fit: fit,
+      gaplessPlayback: true,
+      filterQuality: FilterQuality.medium,
+      errorBuilder: (_, __, ___) => fallback,
+    );
+  }
+}
+
 class _TrainerAvatar extends StatelessWidget {
   final String photo;
   final String name;
@@ -11980,7 +13599,7 @@ class _TrainerAvatar extends StatelessWidget {
   const _TrainerAvatar({required this.photo, required this.name, required this.size});
 
   String get _initials {
-    final parts = name.trim().split(RegExp(r'\\s+')).where((e) => e.isNotEmpty).toList();
+    final parts = name.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
     if (parts.isEmpty) return 'Т';
     if (parts.length == 1) return parts.first.characters.first.toUpperCase();
     return '${parts.first.characters.first}${parts.last.characters.first}'.toUpperCase();
@@ -11988,7 +13607,7 @@ class _TrainerAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasPhoto = photo.trim().isNotEmpty;
+    final normalizedUrl = _normalizeSportotekaMediaUrl(photo);
     return Container(
       width: size,
       height: size,
@@ -12005,13 +13624,11 @@ class _TrainerAvatar extends StatelessWidget {
           ),
         ],
       ),
-      child: hasPhoto
-          ? Image.network(
-              photo,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _InitialsBadge(initials: _initials),
-            )
-          : _InitialsBadge(initials: _initials),
+      child: _SafeNetworkMedia(
+        url: normalizedUrl,
+        fit: BoxFit.cover,
+        fallback: _InitialsBadge(initials: _initials),
+      ),
     );
   }
 }
@@ -12028,7 +13645,7 @@ class _InitialsBadge extends StatelessWidget {
         style: const TextStyle(
           color: _C.primaryGreen,
           fontSize: 17,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -12057,7 +13674,7 @@ class _TrainerMicroChip extends StatelessWidget {
           color: color,
           fontSize: 10.5,
           height: 1.05,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -12224,7 +13841,7 @@ class _TrainerContactTile extends StatelessWidget {
             width: 72,
             child: Text(
               title,
-              style: const TextStyle(color: _C.muted, fontSize: 11.5, fontWeight: FontWeight.w800),
+              style: const TextStyle(color: _C.muted, fontSize: 11.5, fontWeight: FontWeight.w600),
             ),
           ),
           Expanded(
@@ -12232,7 +13849,7 @@ class _TrainerContactTile extends StatelessWidget {
               value,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: _C.text, fontSize: 12.5, fontWeight: FontWeight.w900),
+              style: const TextStyle(color: _C.text, fontSize: 12.5, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -12259,7 +13876,7 @@ class _TrainerEmptyWorkarea extends StatelessWidget {
           const Text(
             'Тренеры пока не добавлены',
             textAlign: TextAlign.center,
-            style: TextStyle(color: _C.text, fontSize: 16, fontWeight: FontWeight.w900),
+            style: TextStyle(color: _C.text, fontSize: 16, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 6),
           const Text(
@@ -12335,7 +13952,7 @@ class _TrainerMobileSummaryCard extends StatelessWidget {
                     color: _C.text,
                     fontSize: 16,
                     height: 1.05,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -12350,7 +13967,7 @@ class _TrainerMobileSummaryCard extends StatelessWidget {
             style: const TextStyle(
               color: _C.muted,
               fontSize: 12.5,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 12),
@@ -12373,7 +13990,7 @@ class _TrainerMobileSummaryCard extends StatelessWidget {
                   color: _C.text,
                   fontSize: 28,
                   height: 1,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(width: 10),
@@ -12387,7 +14004,7 @@ class _TrainerMobileSummaryCard extends StatelessWidget {
                     style: TextStyle(
                       color: _C.muted,
                       fontSize: 11.5,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -12413,7 +14030,7 @@ class _TrainerMobileSummaryCard extends StatelessWidget {
               style: const TextStyle(
                 color: _C.text,
                 fontSize: 12,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -12452,7 +14069,7 @@ class _MobileTrainerNumber extends StatelessWidget {
                 color: _C.text,
                 fontSize: 16,
                 height: 1,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 4),
@@ -12463,7 +14080,7 @@ class _MobileTrainerNumber extends StatelessWidget {
               style: const TextStyle(
                 color: _C.muted,
                 fontSize: 10.5,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -12543,7 +14160,7 @@ class _TrainerHeroPanel extends StatelessWidget {
                               color: Colors.white,
                               fontSize: 20,
                               height: 1.05,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
@@ -12579,7 +14196,7 @@ class _TrainerHeroPanel extends StatelessWidget {
                   color: Colors.white,
                   fontSize: isMobile ? 34 : 42,
                   height: 1,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(width: 10),
@@ -12591,7 +14208,7 @@ class _TrainerHeroPanel extends StatelessWidget {
                     style: TextStyle(
                       color: Colors.white.withOpacity(.68),
                       fontSize: 12,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -12664,7 +14281,7 @@ class _TrainerStatusPanel extends StatelessWidget {
                   style: TextStyle(
                     color: _C.text,
                     fontSize: 15.5,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -12689,7 +14306,7 @@ class _TrainerStatusPanel extends StatelessWidget {
                 color: _C.muted,
                 fontSize: 12.5,
                 height: 1.35,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
               ),
             ),
         ],
@@ -12732,7 +14349,7 @@ class _TrainerListPreview extends StatelessWidget {
             style: TextStyle(
               color: _C.text,
               fontSize: 15.5,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 12),
@@ -12774,7 +14391,7 @@ class _TrainerListPreview extends StatelessWidget {
                           style: const TextStyle(
                             color: _C.text,
                             fontSize: 13,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         const SizedBox(height: 3),
@@ -12785,7 +14402,7 @@ class _TrainerListPreview extends StatelessWidget {
                           style: const TextStyle(
                             color: _C.muted,
                             fontSize: 11.5,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
@@ -12821,7 +14438,7 @@ class _TrainerDarkChip extends StatelessWidget {
         style: const TextStyle(
           color: Colors.white,
           fontSize: 11.5,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -12852,7 +14469,7 @@ class _TrainerChecklistRow extends StatelessWidget {
               style: TextStyle(
                 color: done ? _C.text : _C.muted,
                 fontSize: 12.5,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -12881,7 +14498,7 @@ class _TrainerPercentBadge extends StatelessWidget {
         style: const TextStyle(
           color: _C.primaryGreen,
           fontSize: 12,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -12930,7 +14547,7 @@ class _TrainerMiniMetric extends StatelessWidget {
                   style: const TextStyle(
                     color: _C.muted,
                     fontSize: 11,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -12941,7 +14558,7 @@ class _TrainerMiniMetric extends StatelessWidget {
                   style: const TextStyle(
                     color: _C.text,
                     fontSize: 16,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -12972,7 +14589,7 @@ class _TrainerHintChip extends StatelessWidget {
         style: const TextStyle(
           color: _C.text,
           fontSize: 12,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -13016,7 +14633,7 @@ class _TrainerActionButton extends StatelessWidget {
                 style: const TextStyle(
                   color: _C.text,
                   fontSize: 12.5,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -13063,7 +14680,7 @@ class _ProCornerBadge extends StatelessWidget {
             style: TextStyle(
               color: Colors.white,
               fontSize: 7.5,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
               height: 1,
               letterSpacing: .15,
             ),
@@ -13113,7 +14730,7 @@ class _ProStatusPill extends StatelessWidget {
             style: TextStyle(
               color: Colors.white,
               fontSize: 9.5,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
               letterSpacing: .2,
             ),
           ),
@@ -13191,7 +14808,7 @@ class _TeamModulePanel extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: titleSize,
                                   height: 1.05,
-                                  fontWeight: FontWeight.w900,
+                                  fontWeight: FontWeight.w600,
                                   color: _C.text,
                                 ),
                               ),
@@ -13240,7 +14857,7 @@ class _TeamModulePanel extends StatelessWidget {
                             style: TextStyle(
                               fontSize: titleSize,
                               height: 1.05,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w600,
                               color: _C.text,
                             ),
                           ),
@@ -13362,7 +14979,7 @@ class _SolidPlaceholder extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                       fontSize: 24,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                       color: _C.text)),
               const SizedBox(height: 8),
               Text(subtitle,
@@ -13410,7 +15027,7 @@ class _SolidCard extends StatelessWidget {
                   child: Text(title,
                       style: const TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w600,
                           color: _C.text))),
               if (helpText != null) ...[
                 const SizedBox(width: 8),
@@ -13491,7 +15108,7 @@ class _ClubHeroCard extends StatelessWidget {
                     color: _C.text,
                     fontSize: compact ? 18 : 21,
                     height: 1.06,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -13538,7 +15155,7 @@ class _HeroStat extends StatelessWidget {
             style: TextStyle(
                 color: color,
                 fontSize: 22,
-                fontWeight: FontWeight.w900)),
+                fontWeight: FontWeight.w600)),
         const SizedBox(height: 1),
         Text(title,
             style: const TextStyle(
@@ -13581,7 +15198,7 @@ class _MetricCard extends StatelessWidget {
                 style: const TextStyle(
                   color: _C.muted,
                   fontSize: 11,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -13592,7 +15209,7 @@ class _MetricCard extends StatelessWidget {
                 value,
                 style: TextStyle(
                   fontSize: 21,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                   color: _C.accentForIcon(icon),
                 ),
               ),
@@ -13642,7 +15259,7 @@ class _ModuleCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: mobile ? 12.2 : 14.2,
                       height: 1.08,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                       color: _C.text,
                     ),
                   ),
@@ -13702,7 +15319,7 @@ class _ActionPill extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: accent,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                   fontSize: 11.8,
                 ),
               ),
@@ -13760,7 +15377,7 @@ class _GreenButton extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: Colors.white,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                   fontSize: large ? 12.2 : 11.2,
                 ),
               ),
@@ -13796,7 +15413,7 @@ class _WhiteButton extends StatelessWidget {
           Text(text,
               style: const TextStyle(
                   color: _C.black,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                   fontSize: 13)),
         ]),
       ),
@@ -13884,7 +15501,7 @@ class _MiniStat extends StatelessWidget {
                       style: const TextStyle(
                           color: _C.muted,
                           fontSize: 12,
-                          fontWeight: FontWeight.w700)))
+                          fontWeight: FontWeight.w600)))
             ]),
             const SizedBox(height: 5),
             Text(value,
@@ -13892,7 +15509,7 @@ class _MiniStat extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _C.text,
-                    fontWeight: FontWeight.w900)),
+                    fontWeight: FontWeight.w600)),
           ]),
     );
   }
@@ -13916,7 +15533,7 @@ class _DarkChip extends StatelessWidget {
           style: const TextStyle(
               color: Colors.white,
               fontSize: 12,
-              fontWeight: FontWeight.w800)),
+              fontWeight: FontWeight.w600)),
     );
   }
 }
@@ -13937,7 +15554,7 @@ class _LightChip extends StatelessWidget {
       child: Text(text,
           style: const TextStyle(
               color: _C.black,
-              fontWeight: FontWeight.w800)),
+              fontWeight: FontWeight.w600)),
     );
   }
 }
@@ -13975,14 +15592,14 @@ class _EventRow extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                     color: _C.text))),
         const SizedBox(width: 10),
         Text(date,
             style: const TextStyle(
                 color: _C.muted,
                 fontSize: 12,
-                fontWeight: FontWeight.w700)),
+                fontWeight: FontWeight.w600)),
       ]),
     );
   }
@@ -14046,7 +15663,7 @@ class _LargeActionButton extends StatelessWidget {
                 Text(title,
                     style: const TextStyle(
                         fontSize: 17,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                         color: _C.text)),
                 const SizedBox(height: 4),
                 Text(subtitle,
@@ -14065,34 +15682,31 @@ class _LogoBox extends StatelessWidget {
   final String? url;
   final double size;
   final Color? bgColor;
-  const _LogoBox(
-      {required this.url, required this.size, this.bgColor});
+  const _LogoBox({required this.url, required this.size, this.bgColor});
 
   @override
   Widget build(BuildContext context) {
-    final hasUrl = url != null &&
-        url!.trim().isNotEmpty &&
-        url != 'null';
+    final normalizedUrl = _normalizeSportotekaMediaUrl(url);
+    final fallback = Icon(
+      Icons.shield_rounded,
+      color: _C.primaryGreen,
+      size: size * .48,
+    );
+
     return Container(
       width: size,
       height: size,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-          color: bgColor ?? _C.soft,
-          borderRadius:
-              BorderRadius.circular(size * .34),
-          border: Border.all(
-              color: Colors.black.withOpacity(.045))),
-      child: hasUrl
-          ? Image.network(url!,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Icon(
-                  Icons.shield_rounded,
-                  color: _C.primaryGreen,
-                  size: size * .48))
-          : Icon(Icons.shield_rounded,
-              color: _C.primaryGreen,
-              size: size * .48),
+        color: bgColor ?? _C.soft,
+        borderRadius: BorderRadius.circular(size * .34),
+        border: Border.all(color: Colors.black.withOpacity(.045)),
+      ),
+      child: _SafeNetworkMedia(
+        url: normalizedUrl,
+        fit: BoxFit.cover,
+        fallback: fallback,
+      ),
     );
   }
 }
@@ -14124,7 +15738,7 @@ class _RotateTabletHint extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                         fontSize: 24,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                         color: _C.text)),
                 const SizedBox(height: 8),
                 const Text(
@@ -14163,7 +15777,7 @@ class _ProfileLine extends StatelessWidget {
       Text('$title:',
           style: const TextStyle(
               color: _C.muted,
-              fontWeight: FontWeight.w700)),
+              fontWeight: FontWeight.w600)),
       const SizedBox(width: 8),
       Expanded(
           child: Text(value,
@@ -14171,7 +15785,7 @@ class _ProfileLine extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: _C.text,
-                  fontWeight: FontWeight.w900))),
+                  fontWeight: FontWeight.w600))),
     ]);
   }
 }
@@ -14240,7 +15854,7 @@ class _HelpCircle extends StatelessWidget {
                             color: _C.text,
                             fontSize: 16,
                             height: 1.08,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -14281,7 +15895,7 @@ class _HelpCircle extends StatelessWidget {
                                 style: const TextStyle(
                                   color: _C.primaryGreen,
                                   fontSize: 11,
-                                  fontWeight: FontWeight.w900,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
@@ -14293,7 +15907,7 @@ class _HelpCircle extends StatelessWidget {
                                   color: _C.text,
                                   fontSize: 13,
                                   height: 1.35,
-                                  fontWeight: FontWeight.w700,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
@@ -14441,7 +16055,7 @@ class _ClubChatPanel extends StatelessWidget {
                         style: TextStyle(
                           color: _C.text,
                           fontSize: 16,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       SizedBox(height: 3),
@@ -14452,7 +16066,7 @@ class _ClubChatPanel extends StatelessWidget {
                         style: TextStyle(
                           color: _C.muted,
                           fontSize: 12,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
@@ -14587,7 +16201,7 @@ class _ClubIntroSplash extends StatelessWidget {
                               fontSize: 42,
                               height: 1,
                               letterSpacing: 4.2,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
@@ -14599,7 +16213,7 @@ class _ClubIntroSplash extends StatelessWidget {
                         style: TextStyle(
                           color: _C.text,
                           fontSize: 16,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w600,
                           letterSpacing: -.1,
                         ),
                       ),
@@ -14618,5 +16232,1362 @@ class _ClubIntroSplash extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+
+class _WorkspaceWallpaper extends StatelessWidget {
+  final _WorkspaceWallpaperStyle style;
+  final String clubName;
+  final String? clubLogo;
+
+  const _WorkspaceWallpaper({
+    required this.style,
+    required this.clubName,
+    required this.clubLogo,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final gradient = _gradientForStyle(style);
+    final showPitch = style == _WorkspaceWallpaperStyle.pitch;
+    final showLogo = style == _WorkspaceWallpaperStyle.club && (clubLogo ?? '').trim().isNotEmpty;
+
+    return Container(
+      decoration: BoxDecoration(gradient: gradient),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: CustomPaint(
+              painter: _WorkspaceWallpaperPatternPainter(
+                dark: style == _WorkspaceWallpaperStyle.graphite,
+                pitch: showPitch,
+              ),
+            ),
+          ),
+          if (showLogo)
+            Positioned(
+              right: 60,
+              top: 42,
+              child: Opacity(
+                opacity: .10,
+                child: _LogoBox(url: clubLogo, size: 220, bgColor: Colors.white),
+              ),
+            ),
+          Positioned(
+            left: 28,
+            bottom: 116,
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: style == _WorkspaceWallpaperStyle.graphite ? .10 : .13,
+                child: Text(
+                  clubName.trim().isEmpty ? 'SPORTOTEKA' : clubName.trim().toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: style == _WorkspaceWallpaperStyle.graphite ? Colors.white : _C.text,
+                    fontSize: 46,
+                    height: 1,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -2.2,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  LinearGradient _gradientForStyle(_WorkspaceWallpaperStyle style) {
+    switch (style) {
+      case _WorkspaceWallpaperStyle.clean:
+        return const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFF8FAFC), Color(0xFFEFF3F6), Color(0xFFFFFFFF)],
+        );
+      case _WorkspaceWallpaperStyle.club:
+        return const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFF7FBF8), Color(0xFFE8F7EF), Color(0xFFFFFFFF)],
+        );
+      case _WorkspaceWallpaperStyle.pitch:
+        return const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFEAF8F0), Color(0xFFDDF2E6), Color(0xFFF8FAFC)],
+        );
+      case _WorkspaceWallpaperStyle.graphite:
+        return const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF111315), Color(0xFF20242A), Color(0xFF0F1512)],
+        );
+      case _WorkspaceWallpaperStyle.sportoteka:
+        return const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFF7FBF8), Color(0xFFEAF8F0), Color(0xFFF5F7FA)],
+        );
+    }
+  }
+}
+
+class _WorkspaceWallpaperPatternPainter extends CustomPainter {
+  final bool dark;
+  final bool pitch;
+
+  const _WorkspaceWallpaperPatternPainter({required this.dark, required this.pitch});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final gridPaint = Paint()
+      ..color = (dark ? Colors.white : _C.primaryGreen).withOpacity(dark ? .035 : .04)
+      ..strokeWidth = 1;
+
+    for (double x = 0; x < size.width; x += 56) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+    }
+    for (double y = 0; y < size.height; y += 56) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
+    final glowPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          (dark ? _C.primaryGreen : _C.primaryGreen).withOpacity(dark ? .22 : .12),
+          Colors.transparent,
+        ],
+      ).createShader(Rect.fromCircle(center: Offset(size.width * .78, size.height * .20), radius: 360));
+    canvas.drawCircle(Offset(size.width * .78, size.height * .20), 360, glowPaint);
+
+    if (!pitch) return;
+
+    final fieldPaint = Paint()
+      ..color = _C.primaryGreen.withOpacity(.12)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    final rect = Rect.fromLTWH(size.width * .58, size.height * .18, size.width * .30, size.height * .50);
+    canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(18)), fieldPaint);
+    canvas.drawLine(Offset(rect.left, rect.center.dy), Offset(rect.right, rect.center.dy), fieldPaint);
+    canvas.drawCircle(rect.center, math.min(rect.width, rect.height) * .12, fieldPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _WorkspaceWallpaperPatternPainter oldDelegate) {
+    return oldDelegate.dark != dark || oldDelegate.pitch != pitch;
+  }
+}
+
+class _WorkspaceDesktopIconsLayer extends StatelessWidget {
+  final Size desktopSize;
+  final List<_FullMenuItem> items;
+  final Map<ClubSection, Offset> iconPositions;
+  final ValueChanged<ClubSection> onOpen;
+  final void Function(ClubSection section, Offset position, Size desktopSize) onMoved;
+
+  const _WorkspaceDesktopIconsLayer({
+    required this.desktopSize,
+    required this.items,
+    required this.iconPositions,
+    required this.onOpen,
+    required this.onMoved,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        for (int index = 0; index < items.length; index++)
+          _buildIcon(items[index], index),
+      ],
+    );
+  }
+
+  Widget _buildIcon(_FullMenuItem item, int index) {
+    final defaultPosition = Offset(
+      28 + (index ~/ 6) * 112.0,
+      26 + (index % 6) * 106.0,
+    );
+    final position = iconPositions[item.section] ?? defaultPosition;
+
+    return Positioned(
+      left: position.dx,
+      top: position.dy,
+      child: _WorkspaceDesktopIcon(
+        item: item,
+        onTap: () => onOpen(item.section),
+        onDragUpdate: (delta) => onMoved(item.section, position + delta, desktopSize),
+      ),
+    );
+  }
+}
+
+class _WorkspaceDesktopIcon extends StatefulWidget {
+  final _FullMenuItem item;
+  final VoidCallback onTap;
+  final ValueChanged<Offset> onDragUpdate;
+
+  const _WorkspaceDesktopIcon({
+    required this.item,
+    required this.onTap,
+    required this.onDragUpdate,
+  });
+
+  @override
+  State<_WorkspaceDesktopIcon> createState() => _WorkspaceDesktopIconState();
+}
+
+class _WorkspaceDesktopIconState extends State<_WorkspaceDesktopIcon> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        onPanUpdate: (details) => widget.onDragUpdate(details.delta),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: 92,
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+          decoration: BoxDecoration(
+            color: _hovered ? Colors.white.withOpacity(.74) : Colors.white.withOpacity(.42),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: Colors.white.withOpacity(_hovered ? .80 : .42)),
+            boxShadow: _hovered
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(.08),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ]
+                : const [],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(.96),
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(.08),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Icon(widget.item.icon, color: _C.railText, size: 27),
+              ),
+              const SizedBox(height: 7),
+              Text(
+                widget.item.title,
+                maxLines: 2,
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _C.text,
+                  fontSize: 11.5,
+                  height: 1.05,
+                  fontWeight: FontWeight.w600,
+                  shadows: [
+                    Shadow(color: Colors.white, blurRadius: 8),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WorkspaceFloatingWindow extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final bool active;
+  final bool maximized;
+  final VoidCallback onTap;
+  final VoidCallback onClose;
+  final VoidCallback onMinimize;
+  final VoidCallback onMaximize;
+  final ValueChanged<Offset> onDragUpdate;
+  final ValueChanged<Offset> onResizeUpdate;
+  final Widget child;
+
+  const _WorkspaceFloatingWindow({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.active,
+    required this.maximized,
+    required this.onTap,
+    required this.onClose,
+    required this.onMinimize,
+    required this.onMaximize,
+    required this.onDragUpdate,
+    required this.onResizeUpdate,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOutCubic,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(maximized ? 22 : 24),
+          border: Border.all(color: active ? _C.border.withOpacity(.85) : Colors.white.withOpacity(.86)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(active ? .14 : .09),
+              blurRadius: active ? 42 : 28,
+              offset: Offset(0, active ? 22 : 14),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(maximized ? 22 : 24),
+          child: Column(
+            children: [
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onPanUpdate: maximized ? null : (details) => onDragUpdate(details.delta),
+                onDoubleTap: onMaximize,
+                child: _WorkspaceWindowTitleBar(
+                  title: title,
+                  subtitle: subtitle,
+                  icon: icon,
+                  active: active,
+                  maximized: maximized,
+                  onClose: onClose,
+                  onMinimize: onMinimize,
+                  onMaximize: onMaximize,
+                ),
+              ),
+              Expanded(
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: ColoredBox(
+                        color: _C.bg,
+                        child: ClipRect(child: child),
+                      ),
+                    ),
+                    if (!maximized)
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onPanUpdate: (details) => onResizeUpdate(details.delta),
+                          child: SizedBox(
+                            width: 28,
+                            height: 28,
+                            child: Align(
+                              alignment: Alignment.bottomRight,
+                              child: Padding(
+                                padding: const EdgeInsets.all(6),
+                                child: Icon(Icons.open_in_full_rounded, size: 13, color: _C.lightMuted.withOpacity(.80)),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WorkspaceWindowTitleBar extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final bool active;
+  final bool maximized;
+  final VoidCallback onClose;
+  final VoidCallback onMinimize;
+  final VoidCallback onMaximize;
+
+  const _WorkspaceWindowTitleBar({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.active,
+    required this.maximized,
+    required this.onClose,
+    required this.onMinimize,
+    required this.onMaximize,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 54,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: active ? Colors.white : const Color(0xFFF8F9FA),
+        border: const Border(bottom: BorderSide(color: _C.borderSoft)),
+      ),
+      child: Row(
+        children: [
+          Row(
+            children: [
+              _MacWindowDot(icon: Icons.close_rounded, color: const Color(0xFFE9ECEF), iconColor: const Color(0xFF6B7280), onTap: onClose, tooltip: 'Закрыть'),
+              const SizedBox(width: 7),
+              _MacWindowDot(icon: Icons.remove_rounded, color: const Color(0xFFF1F3F5), iconColor: const Color(0xFF6B7280), onTap: onMinimize, tooltip: 'Свернуть'),
+              const SizedBox(width: 7),
+              _MacWindowDot(icon: maximized ? Icons.fullscreen_exit_rounded : Icons.open_in_full_rounded, color: const Color(0xFFF1F3F5), iconColor: const Color(0xFF667085), onTap: onMaximize, tooltip: maximized ? 'Вернуть размер' : 'Развернуть'),
+            ],
+          ),
+          const SizedBox(width: 14),
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: _C.railPanel,
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(color: _C.borderSoft),
+            ),
+            child: Icon(icon, color: _C.railText, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _C.text,
+                    fontSize: 13.5,
+                    height: 1,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle.trim().isEmpty ? 'Sportoteka Workspace' : subtitle.trim(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _C.muted,
+                    fontSize: 11.5,
+                    height: 1,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MacWindowDot extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final Color iconColor;
+  final VoidCallback onTap;
+  final String tooltip;
+
+  const _MacWindowDot({
+    required this.icon,
+    required this.color,
+    required this.iconColor,
+    required this.onTap,
+    required this.tooltip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 17,
+          height: 17,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: color,
+            border: Border.all(color: _C.borderSoft),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(.035),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Icon(icon, color: iconColor, size: 10),
+        ),
+      ),
+    );
+  }
+}
+
+class _WorkspaceDock extends StatelessWidget {
+  final String clubName;
+  final String? clubLogo;
+  final String selectedTeamName;
+  final _WorkspaceDockSize dockSize;
+  final List<_FullMenuItem> pinnedItems;
+  final List<_WorkspaceWindowState> openWindows;
+  final ClubSection activeSection;
+  final VoidCallback onOpenStart;
+  final VoidCallback onOpenSearch;
+  final VoidCallback onOpenSettings;
+  final VoidCallback onOpenHome;
+  final VoidCallback onRefresh;
+  final ValueChanged<ClubSection> onOpenSection;
+
+  const _WorkspaceDock({
+    required this.clubName,
+    required this.clubLogo,
+    required this.selectedTeamName,
+    required this.dockSize,
+    required this.pinnedItems,
+    required this.openWindows,
+    required this.activeSection,
+    required this.onOpenStart,
+    required this.onOpenSearch,
+    required this.onOpenSettings,
+    required this.onOpenHome,
+    required this.onRefresh,
+    required this.onOpenSection,
+  });
+
+  double get _buttonSize {
+    switch (dockSize) {
+      case _WorkspaceDockSize.compact:
+        return 36;
+      case _WorkspaceDockSize.large:
+        return 46;
+      case _WorkspaceDockSize.normal:
+        return 40;
+    }
+  }
+
+  double get _dockHeight {
+    switch (dockSize) {
+      case _WorkspaceDockSize.compact:
+        return 52;
+      case _WorkspaceDockSize.large:
+        return 62;
+      case _WorkspaceDockSize.normal:
+        return 56;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final maxWidth = math.min(width - 28, 1040.0);
+    final runningSections = openWindows.map((window) => window.section).toSet();
+    final visibleItems = <_FullMenuItem>[
+      ...pinnedItems,
+      for (final window in openWindows)
+        if (!pinnedItems.any((item) => item.section == window.section))
+          _FullMenuItem(window.section, Icons.widgets_rounded, window.section.name, 'Запущено'),
+    ];
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: Container(
+          height: _dockHeight,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(.96),
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(color: const Color(0xFFE3E8EF), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(.12),
+                blurRadius: 24,
+                spreadRadius: -10,
+                offset: const Offset(0, 12),
+              ),
+              BoxShadow(
+                color: Colors.black.withOpacity(.04),
+                blurRadius: 8,
+                spreadRadius: -5,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _WorkspaceDockButton(
+                icon: Icons.grid_view_rounded,
+                tooltip: 'Все модули',
+                size: _buttonSize,
+                active: false,
+                running: false,
+                onTap: onOpenStart,
+              ),
+              const SizedBox(width: 7),
+              _WorkspaceDockButton(
+                icon: Icons.search_rounded,
+                tooltip: 'Поиск',
+                size: _buttonSize,
+                active: false,
+                running: false,
+                onTap: onOpenSearch,
+              ),
+              const SizedBox(width: 8),
+              _WorkspaceDockDivider(height: _buttonSize - 12),
+              const SizedBox(width: 8),
+              Flexible(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  child: Row(
+                    children: [
+                      for (final item in visibleItems) ...[
+                        _WorkspaceDockButton(
+                          icon: item.icon,
+                          tooltip: item.title,
+                          size: _buttonSize,
+                          active: activeSection == item.section,
+                          running: runningSections.contains(item.section),
+                          minimized: openWindows.any((w) => w.section == item.section && w.minimized),
+                          onTap: () => onOpenSection(item.section),
+                        ),
+                        const SizedBox(width: 5),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              _WorkspaceDockDivider(height: _buttonSize - 12),
+              const SizedBox(width: 8),
+              _WorkspaceDockButton(
+                icon: Icons.tune_rounded,
+                tooltip: 'Настройки рабочего стола',
+                size: _buttonSize,
+                active: false,
+                running: false,
+                onTap: onOpenSettings,
+              ),
+              const SizedBox(width: 5),
+              _WorkspaceDockButton(
+                icon: Icons.refresh_rounded,
+                tooltip: 'Обновить',
+                size: _buttonSize,
+                active: false,
+                running: false,
+                onTap: onRefresh,
+              ),
+              const SizedBox(width: 5),
+              _WorkspaceDockButton(
+                icon: Icons.home_rounded,
+                tooltip: 'На главную',
+                size: _buttonSize,
+                active: false,
+                running: false,
+                onTap: onOpenHome,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WorkspaceDockDivider extends StatelessWidget {
+  final double height;
+  const _WorkspaceDockDivider({required this.height});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(width: 1, height: height, color: _C.border.withOpacity(.75));
+  }
+}
+
+class _WorkspaceDockButton extends StatefulWidget {
+  final IconData icon;
+  final String tooltip;
+  final double size;
+  final bool active;
+  final bool running;
+  final bool minimized;
+  final VoidCallback onTap;
+
+  const _WorkspaceDockButton({
+    required this.icon,
+    required this.tooltip,
+    required this.size,
+    required this.active,
+    required this.running,
+    required this.onTap,
+    this.minimized = false,
+  });
+
+  @override
+  State<_WorkspaceDockButton> createState() => _WorkspaceDockButtonState();
+}
+
+class _WorkspaceDockButtonState extends State<_WorkspaceDockButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = widget.active
+        ? const Color(0xFFF0F2F5)
+        : _hovered
+            ? const Color(0xFFF7F8FA)
+            : Colors.transparent;
+    final iconColor = widget.active ? const Color(0xFF111827) : const Color(0xFF344054);
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Tooltip(
+        message: widget.tooltip,
+        child: InkWell(
+          onTap: widget.onTap,
+          borderRadius: BorderRadius.circular(17),
+          child: SizedBox(
+            width: widget.active ? widget.size + 6 : widget.size,
+            height: widget.size + 5,
+            child: Stack(
+              alignment: Alignment.topCenter,
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  width: widget.active ? widget.size + 6 : widget.size,
+                  height: widget.size,
+                  decoration: BoxDecoration(
+                    color: bg,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: widget.active ? const Color(0xFFE3E8EF) : Colors.transparent),
+                  ),
+                  child: Icon(widget.icon, color: iconColor, size: widget.size >= 44 ? 23 : 21),
+                ),
+                if (widget.running)
+                  Positioned(
+                    bottom: 0,
+                    child: Container(
+                      width: widget.minimized ? 12 : 6,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: widget.minimized ? _C.lightMuted : const Color(0xFF111827),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MacWorkspaceSettingsDialog extends StatefulWidget {
+  final List<_FullMenuItem> modules;
+  final Set<ClubSection> dockSections;
+  final Set<ClubSection> desktopSections;
+  final bool showDesktopIcons;
+  final _WorkspaceDockSize dockSize;
+  final _WorkspaceWallpaperStyle wallpaperStyle;
+  final ValueChanged<bool> onShowDesktopIconsChanged;
+  final ValueChanged<_WorkspaceDockSize> onDockSizeChanged;
+  final ValueChanged<_WorkspaceWallpaperStyle> onWallpaperChanged;
+  final ValueChanged<Set<ClubSection>> onDockSectionsChanged;
+  final ValueChanged<Set<ClubSection>> onDesktopSectionsChanged;
+
+  const _MacWorkspaceSettingsDialog({
+    required this.modules,
+    required this.dockSections,
+    required this.desktopSections,
+    required this.showDesktopIcons,
+    required this.dockSize,
+    required this.wallpaperStyle,
+    required this.onShowDesktopIconsChanged,
+    required this.onDockSizeChanged,
+    required this.onWallpaperChanged,
+    required this.onDockSectionsChanged,
+    required this.onDesktopSectionsChanged,
+  });
+
+  @override
+  State<_MacWorkspaceSettingsDialog> createState() => _MacWorkspaceSettingsDialogState();
+}
+
+class _MacWorkspaceSettingsDialogState extends State<_MacWorkspaceSettingsDialog> {
+  int _tab = 0;
+  late bool _showIcons;
+  late _WorkspaceDockSize _dockSize;
+  late _WorkspaceWallpaperStyle _wallpaper;
+  late Set<ClubSection> _dockSections;
+  late Set<ClubSection> _desktopSections;
+
+  @override
+  void initState() {
+    super.initState();
+    _showIcons = widget.showDesktopIcons;
+    _dockSize = widget.dockSize;
+    _wallpaper = widget.wallpaperStyle;
+    _dockSections = Set<ClubSection>.of(widget.dockSections);
+    _desktopSections = Set<ClubSection>.of(widget.desktopSections);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final dialogWidth = math.min(920.0, size.width - 32);
+    final dialogHeight = math.min(640.0, size.height - 52);
+
+    return Dialog(
+      elevation: 0,
+      insetPadding: const EdgeInsets.all(16),
+      backgroundColor: Colors.transparent,
+      child: Container(
+        width: dialogWidth,
+        height: dialogHeight,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF5F6F8),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: Colors.white.withOpacity(.82)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(.20),
+              blurRadius: 50,
+              offset: const Offset(0, 24),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 250,
+                child: _buildSidebar(context),
+              ),
+              Expanded(
+                child: Container(
+                  color: Colors.white.withOpacity(.72),
+                  padding: const EdgeInsets.fromLTRB(22, 18, 22, 22),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _titleForTab(),
+                              style: const TextStyle(
+                                color: _C.text,
+                                fontSize: 24,
+                                height: 1,
+                                letterSpacing: -0.8,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            icon: const Icon(Icons.close_rounded, color: _C.railText),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      Expanded(child: _buildTabContent()),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSidebar(BuildContext context) {
+    final tabs = const [
+      _SettingsTabData(Icons.desktop_mac_rounded, 'Основные'),
+      _SettingsTabData(Icons.wallpaper_rounded, 'Обои'),
+      _SettingsTabData(Icons.dock_rounded, 'Dock'),
+      _SettingsTabData(Icons.widgets_rounded, 'Модули'),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEDEFF2).withOpacity(.92),
+        border: const Border(right: BorderSide(color: _C.borderSoft)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _MacWindowDot(icon: Icons.close_rounded, color: const Color(0xFFE9ECEF), iconColor: const Color(0xFF6B7280), onTap: () => Navigator.of(context).pop(), tooltip: 'Закрыть'),
+              const SizedBox(width: 7),
+              _MacWindowDot(icon: Icons.remove_rounded, color: const Color(0xFFF1F3F5), iconColor: const Color(0xFF6B7280), onTap: () {}, tooltip: 'Свернуть'),
+              const SizedBox(width: 7),
+              _MacWindowDot(icon: Icons.open_in_full_rounded, color: const Color(0xFFF1F3F5), iconColor: const Color(0xFF667085), onTap: () {}, tooltip: 'Развернуть'),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Container(
+            height: 38,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(.75),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _C.borderSoft),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.search_rounded, color: _C.railMuted, size: 18),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Поиск',
+                    style: TextStyle(color: _C.railMuted, fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          for (int i = 0; i < tabs.length; i++)
+            _SettingsSidebarTile(
+              icon: tabs[i].icon,
+              title: tabs[i].title,
+              active: _tab == i,
+              onTap: () => setState(() => _tab = i),
+            ),
+          const Spacer(),
+          const Text(
+            'Sportoteka Workspace',
+            style: TextStyle(color: _C.railMuted, fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _titleForTab() {
+    switch (_tab) {
+      case 1:
+        return 'Обои';
+      case 2:
+        return 'Dock';
+      case 3:
+        return 'Модули';
+      case 0:
+      default:
+        return 'Основные';
+    }
+  }
+
+  Widget _buildTabContent() {
+    switch (_tab) {
+      case 1:
+        return _buildWallpaperTab();
+      case 2:
+        return _buildDockTab();
+      case 3:
+        return _buildModulesTab();
+      case 0:
+      default:
+        return _buildGeneralTab();
+    }
+  }
+
+  Widget _buildGeneralTab() {
+    return ListView(
+      children: [
+        _MacSettingsCard(
+          title: 'Рабочий стол',
+          subtitle: 'Чистое пространство клуба: обои, иконки, окна модулей и нижний Dock.',
+          child: SwitchListTile.adaptive(
+            value: _showIcons,
+            onChanged: (value) {
+              setState(() => _showIcons = value);
+              widget.onShowDesktopIconsChanged(value);
+            },
+            activeColor: _C.primaryGreen,
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Показывать иконки на рабочем столе', style: TextStyle(fontWeight: FontWeight.w600)),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _MacSettingsCard(
+          title: 'Стиль',
+          subtitle: 'Цвета оставлены строгими: белый, графит, мягкий серый и фирменный зелёный акцент.',
+          child: const Row(
+            children: [
+              _AccentPreviewDot(color: Colors.white, border: _C.border),
+              SizedBox(width: 8),
+              _AccentPreviewDot(color: _C.primaryGreen),
+              SizedBox(width: 8),
+              _AccentPreviewDot(color: _C.graphite),
+              SizedBox(width: 8),
+              _AccentPreviewDot(color: _C.railPanel, border: _C.border),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWallpaperTab() {
+    final wallpapers = const [
+      _WallpaperOption(_WorkspaceWallpaperStyle.sportoteka, 'Sportoteka', 'Светлый зелёный градиент'),
+      _WallpaperOption(_WorkspaceWallpaperStyle.clean, 'Чистый', 'Белый и серый'),
+      _WallpaperOption(_WorkspaceWallpaperStyle.club, 'Клубный', 'Лёгкий фон с логотипом'),
+      _WallpaperOption(_WorkspaceWallpaperStyle.pitch, 'Поле', 'Едва заметная разметка'),
+      _WallpaperOption(_WorkspaceWallpaperStyle.graphite, 'Графит', 'Тёмный строгий фон'),
+    ];
+
+    return GridView.count(
+      crossAxisCount: 2,
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      childAspectRatio: 2.45,
+      children: [
+        for (final option in wallpapers)
+          _WallpaperPickerTile(
+            option: option,
+            selected: _wallpaper == option.style,
+            onTap: () {
+              setState(() => _wallpaper = option.style);
+              widget.onWallpaperChanged(option.style);
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _buildDockTab() {
+    return ListView(
+      children: [
+        _MacSettingsCard(
+          title: 'Размер Dock',
+          subtitle: 'Можно сделать нижнюю панель компактнее или крупнее для ПК-монитора.',
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _SettingsSegment(
+                title: 'Компактный',
+                selected: _dockSize == _WorkspaceDockSize.compact,
+                onTap: () => _setDockSize(_WorkspaceDockSize.compact),
+              ),
+              _SettingsSegment(
+                title: 'Обычный',
+                selected: _dockSize == _WorkspaceDockSize.normal,
+                onTap: () => _setDockSize(_WorkspaceDockSize.normal),
+              ),
+              _SettingsSegment(
+                title: 'Большой',
+                selected: _dockSize == _WorkspaceDockSize.large,
+                onTap: () => _setDockSize(_WorkspaceDockSize.large),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        _MacSettingsCard(
+          title: 'Иконки в Dock',
+          subtitle: 'Выберите модули, которые всегда видны снизу.',
+          child: _buildModuleChecklist(target: _dockSections, dock: true),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildModulesTab() {
+    return ListView(
+      children: [
+        _MacSettingsCard(
+          title: 'Иконки рабочего стола',
+          subtitle: 'Выберите модули, которые отображаются на фоне и открываются как окна.',
+          child: _buildModuleChecklist(target: _desktopSections, dock: false),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildModuleChecklist({required Set<ClubSection> target, required bool dock}) {
+    return Column(
+      children: [
+        for (final module in widget.modules)
+          CheckboxListTile(
+            value: target.contains(module.section),
+            activeColor: _C.primaryGreen,
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            secondary: Icon(module.icon, color: _C.primaryGreen),
+            title: Text(module.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: Text(module.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+            onChanged: (checked) {
+              setState(() {
+                if (checked == true) {
+                  target.add(module.section);
+                } else {
+                  target.remove(module.section);
+                }
+              });
+              if (dock) {
+                widget.onDockSectionsChanged(Set<ClubSection>.of(target));
+              } else {
+                widget.onDesktopSectionsChanged(Set<ClubSection>.of(target));
+              }
+            },
+          ),
+      ],
+    );
+  }
+
+  void _setDockSize(_WorkspaceDockSize value) {
+    setState(() => _dockSize = value);
+    widget.onDockSizeChanged(value);
+  }
+}
+
+class _SettingsTabData {
+  final IconData icon;
+  final String title;
+  const _SettingsTabData(this.icon, this.title);
+}
+
+class _SettingsSidebarTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _SettingsSidebarTile({required this.icon, required this.title, required this.active, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: active ? Colors.white.withOpacity(.92) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: active ? _C.primaryGreen : _C.railText, size: 18),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: active ? _C.text : _C.railText,
+                    fontSize: 13,
+                    fontWeight: active ? FontWeight.w600 : FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MacSettingsCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final Widget child;
+
+  const _MacSettingsCard({required this.title, required this.subtitle, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _C.borderSoft),
+        boxShadow: const [_C.shadow],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(color: _C.text, fontSize: 15, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 5),
+          Text(subtitle, style: const TextStyle(color: _C.muted, fontSize: 12.5, height: 1.35, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsSegment extends StatelessWidget {
+  final String title;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _SettingsSegment({required this.title, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? _C.primaryGreen : _C.railPanel,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: selected ? _C.primaryGreen : _C.borderSoft),
+        ),
+        child: Text(
+          title,
+          style: TextStyle(
+            color: selected ? Colors.white : _C.railText,
+            fontSize: 12.5,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AccentPreviewDot extends StatelessWidget {
+  final Color color;
+  final Color? border;
+  const _AccentPreviewDot({required this.color, this.border});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 28,
+      height: 28,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color,
+        border: Border.all(color: border ?? color),
+      ),
+    );
+  }
+}
+
+class _WallpaperOption {
+  final _WorkspaceWallpaperStyle style;
+  final String title;
+  final String subtitle;
+  const _WallpaperOption(this.style, this.title, this.subtitle);
+}
+
+class _WallpaperPickerTile extends StatelessWidget {
+  final _WallpaperOption option;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _WallpaperPickerTile({required this.option, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: selected ? _C.primaryGreen.withOpacity(.55) : _C.borderSoft, width: selected ? 1.5 : 1),
+          boxShadow: const [_C.shadow],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 74,
+              height: 52,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                gradient: _previewGradient(option.style),
+                border: Border.all(color: _C.borderSoft),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(option.title, style: const TextStyle(color: _C.text, fontSize: 13.5, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 5),
+                  Text(option.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 12, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+            if (selected) const Icon(Icons.check_circle_rounded, color: _C.primaryGreen, size: 21),
+          ],
+        ),
+      ),
+    );
+  }
+
+  LinearGradient _previewGradient(_WorkspaceWallpaperStyle style) {
+    switch (style) {
+      case _WorkspaceWallpaperStyle.clean:
+        return const LinearGradient(colors: [Color(0xFFFFFFFF), Color(0xFFEFF3F6)]);
+      case _WorkspaceWallpaperStyle.club:
+        return const LinearGradient(colors: [Color(0xFFE8F7EF), Color(0xFFFFFFFF)]);
+      case _WorkspaceWallpaperStyle.pitch:
+        return const LinearGradient(colors: [Color(0xFFDDF2E6), Color(0xFFF8FAFC)]);
+      case _WorkspaceWallpaperStyle.graphite:
+        return const LinearGradient(colors: [Color(0xFF111315), Color(0xFF252A31)]);
+      case _WorkspaceWallpaperStyle.sportoteka:
+        return const LinearGradient(colors: [Color(0xFFF7FBF8), Color(0xFFEAF8F0)]);
+    }
   }
 }

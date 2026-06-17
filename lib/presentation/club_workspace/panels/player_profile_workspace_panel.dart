@@ -83,7 +83,7 @@ class PlayerProfileWorkspacePanel extends StatelessWidget {
                         style: const TextStyle(
                           color: CmrColors.text,
                           fontSize: 28,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                           height: 1.05,
                         ),
                       ),
@@ -133,7 +133,7 @@ class PlayerProfileWorkspacePanel extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Спортивные данные', style: TextStyle(color: CmrColors.text, fontSize: 17, fontWeight: FontWeight.w900)),
+                      const Text('Спортивные данные', style: TextStyle(color: CmrColors.text, fontSize: 17, fontWeight: FontWeight.w700)),
                       const SizedBox(height: 10),
                       Text(
                         sportData.isEmpty ? 'Метрики пока не заполнены. Откройте полный профиль, чтобы добавить показатели игрока.' : sportData,
@@ -149,7 +149,7 @@ class PlayerProfileWorkspacePanel extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: const [
-                      Text('Быстрые действия', style: TextStyle(color: CmrColors.text, fontSize: 17, fontWeight: FontWeight.w900)),
+                      Text('Быстрые действия', style: TextStyle(color: CmrColors.text, fontSize: 17, fontWeight: FontWeight.w700)),
                       SizedBox(height: 10),
                       Text(
                         'Назначить тренировку, открыть медкарту, посмотреть достижения и дневник можно через полный профиль или следующие CMR-панели.',
@@ -181,7 +181,7 @@ class _InfoPill extends StatelessWidget {
       decoration: BoxDecoration(color: color.withOpacity(0.10), borderRadius: BorderRadius.circular(999)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        children: [Icon(icon, size: 15, color: color), const SizedBox(width: 6), Text(label, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w900))],
+        children: [Icon(icon, size: 15, color: color), const SizedBox(width: 6), Text(label, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700))],
       ),
     );
   }
@@ -213,9 +213,9 @@ class _MetricCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: CmrColors.muted, fontSize: 11, fontWeight: FontWeight.w800)),
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: CmrColors.muted, fontSize: 11, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 5),
-                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: CmrColors.text, fontSize: 15, fontWeight: FontWeight.w900)),
+                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: CmrColors.text, fontSize: 15, fontWeight: FontWeight.w700)),
               ],
             ),
           ),

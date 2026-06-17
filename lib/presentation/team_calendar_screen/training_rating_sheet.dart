@@ -1,8 +1,46 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:sportoteka/core/utils/confirm_dialogs.dart';
+
+/// Открывает оценки как независимое CMR-окно поверх всего приложения.
+/// Это не bottom sheet и не переход на отдельный экран: окно можно двигать,
+/// свернуть, развернуть и закрыть, как внутреннее desktop-окно.
+Future<void> showTrainingRatingWindow(
+  BuildContext context, {
+  required String apiBase,
+  required int teamId,
+  required int eventId,
+  required int coachId,
+  required String title,
+}) {
+  final overlay = Overlay.of(context, rootOverlay: true);
+  final completer = Completer<void>();
+  late OverlayEntry entry;
+
+  void closeWindow() {
+    if (entry.mounted) entry.remove();
+    if (!completer.isCompleted) completer.complete();
+  }
+
+  entry = OverlayEntry(
+    builder: (_) => TrainingRatingSheet(
+      apiBase: apiBase,
+      teamId: teamId,
+      eventId: eventId,
+      coachId: coachId,
+      title: title,
+      onClose: closeWindow,
+    ),
+  );
+
+  overlay.insert(entry);
+  return completer.future;
+}
 
 class TrainingRatingSheet extends StatefulWidget {
   final String apiBase;
@@ -10,6 +48,7 @@ class TrainingRatingSheet extends StatefulWidget {
   final int eventId;
   final int coachId;
   final String title;
+  final VoidCallback? onClose;
 
   const TrainingRatingSheet({
     super.key,
@@ -18,6 +57,7 @@ class TrainingRatingSheet extends StatefulWidget {
     required this.eventId,
     required this.coachId,
     required this.title,
+    this.onClose,
   });
 
   @override
@@ -29,15 +69,27 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
   bool saving = false;
   String? error;
 
+  bool _windowMaximized = false;
+  bool _windowMinimized = false;
+  Offset? _windowOffset;
+
   List<_Player> players = [];
   final Map<int, int> ratingByPlayerId = {};
 
-  Color get primary => Theme.of(context).colorScheme.primary;
+  Color get primary => _WinColors.green;
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  void _close() {
+    if (widget.onClose != null) {
+      widget.onClose!();
+    } else {
+      Navigator.maybePop(context);
+    }
   }
 
   Future<void> _load() async {
@@ -63,46 +115,43 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
     if (mounted) setState(() => loading = false);
   }
 
-  // ✅ твой эндпоинт игроков команды
   Future<List<_Player>> _fetchPlayers(int teamId) async {
-    final url = Uri.parse("${widget.apiBase}/get_players_by_team.php?team_id=$teamId");
+    final url = Uri.parse('${widget.apiBase}/get_players_by_team.php?team_id=$teamId');
     final r = await http.get(url);
-    if (r.statusCode != 200) throw "players http ${r.statusCode}";
+    if (r.statusCode != 200) throw 'players http ${r.statusCode}';
 
     final data = jsonDecode(r.body);
-
-    // ожидаем: { success: true, players: [...] } или { players: [...] }
-    final list = (data is Map ? (data["players"] ?? data["data"] ?? []) : []) as List;
+    final list = (data is Map ? (data['players'] ?? data['data'] ?? []) : []) as List;
 
     return list.map((x) {
       final m = (x as Map).map((k, v) => MapEntry(k.toString(), v));
       return _Player(
-        id: _asInt(m["id"] ?? m["player_id"]),
-        firstName: (m["first_name"] ?? m["name"] ?? "").toString(),
-        lastName: (m["last_name"] ?? m["surname"] ?? "").toString(),
-        position: (m["position"] ?? "").toString(),
-        photo: (m["photo_url"] ?? m["photo"] ?? "").toString(),
+        id: _asInt(m['id'] ?? m['player_id']),
+        firstName: (m['first_name'] ?? m['name'] ?? '').toString(),
+        lastName: (m['last_name'] ?? m['surname'] ?? '').toString(),
+        position: (m['position'] ?? '').toString(),
+        photo: (m['photo_url'] ?? m['photo'] ?? '').toString(),
       );
     }).where((p) => p.id > 0).toList();
   }
 
   Future<Map<int, int>> _fetchRatings(int eventId) async {
-    final url = Uri.parse("${widget.apiBase}/get_training_ratings.php?event_id=$eventId");
+    final url = Uri.parse('${widget.apiBase}/get_training_ratings.php?event_id=$eventId');
     final r = await http.get(url);
-    if (r.statusCode != 200) throw "ratings http ${r.statusCode}";
+    if (r.statusCode != 200) throw 'ratings http ${r.statusCode}';
 
     final data = jsonDecode(r.body);
-    if (data is Map && data["success"] == false) {
-      throw (data["message"] ?? "ratings error").toString();
+    if (data is Map && data['success'] == false) {
+      throw (data['message'] ?? 'ratings error').toString();
     }
 
-    final list = (data is Map ? (data["ratings"] ?? []) : []) as List;
+    final list = (data is Map ? (data['ratings'] ?? []) : []) as List;
     final out = <int, int>{};
 
     for (final x in list) {
       final m = (x as Map).map((k, v) => MapEntry(k.toString(), v));
-      final pid = _asInt(m["player_id"]);
-      final rt = _asInt(m["rating"]).clamp(0, 5);
+      final pid = _asInt(m['player_id']);
+      final rt = _asInt(m['rating']).clamp(0, 5);
       if (pid > 0) out[pid] = rt;
     }
 
@@ -115,33 +164,33 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
 
     try {
       final payload = {
-        "team_id": widget.teamId,
-        "event_id": widget.eventId,
-        "coach_id": widget.coachId,
-        "ratings": players.map((p) => {
-          "player_id": p.id,
-          "rating": (ratingByPlayerId[p.id] ?? 0).clamp(0, 5),
+        'team_id': widget.teamId,
+        'event_id': widget.eventId,
+        'coach_id': widget.coachId,
+        'ratings': players.map((p) => {
+          'player_id': p.id,
+          'rating': (ratingByPlayerId[p.id] ?? 0).clamp(0, 5),
         }).toList(),
       };
 
-      final url = Uri.parse("${widget.apiBase}/save_training_ratings.php");
+      final url = Uri.parse('${widget.apiBase}/save_training_ratings.php');
       final r = await http.post(
         url,
-        headers: {"Content-Type": "application/json"},
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode(payload),
       );
 
-      if (r.statusCode != 200) throw "save http ${r.statusCode}";
+      if (r.statusCode != 200) throw 'save http ${r.statusCode}';
 
       final data = jsonDecode(r.body);
-      if (data is Map && data["success"] != true) {
-        throw (data["message"] ?? "save error").toString();
+      if (data is Map && data['success'] != true) {
+        throw (data['message'] ?? 'save error').toString();
       }
 
-      Get.snackbar("Оценка", "Сохранено", snackPosition: SnackPosition.BOTTOM);
-      if (mounted) Navigator.pop(context);
+      Get.snackbar('Оценка', 'Сохранено', snackPosition: SnackPosition.BOTTOM);
+      if (mounted) _close();
     } catch (e) {
-      Get.snackbar("Ошибка", e.toString(), snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar('Ошибка', e.toString(), snackPosition: SnackPosition.BOTTOM);
     }
 
     if (mounted) setState(() => saving = false);
@@ -149,123 +198,454 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final pad = MediaQuery.of(context).viewInsets.bottom;
+    final media = MediaQuery.of(context);
+    final size = media.size;
+    final bottomInset = media.viewInsets.bottom;
 
-    return Container(
-      padding: EdgeInsets.fromLTRB(14, 14, 14, 14 + pad),
-      decoration: const BoxDecoration(
-        color: Color(0xFFF3F5F8),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+    if (_windowMinimized) {
+      return Material(
+        color: Colors.transparent,
+        child: Stack(
           children: [
-            Container(width: 44, height: 5, decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(99))),
-            const SizedBox(height: 12),
-
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    "Оценка • ${widget.title}",
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
-                  ),
-                ),
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Закрыть")),
-              ],
-            ),
-            const SizedBox(height: 10),
-
-            if (loading)
-              const Padding(
-                padding: EdgeInsets.all(18),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (error != null)
-              _ErrorView(text: error!, onRetry: _load)
-            else ...[
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 520),
-                child: ListView.builder(
-                  itemCount: players.length,
-                  itemBuilder: (_, i) {
-                    final p = players[i];
-                    final r = ratingByPlayerId[p.id] ?? 0;
-
-                    return _PlayerRow(
-                      primary: primary,
-                      p: p,
-                      rating: r,
-                      onChanged: (v) => setState(() => ratingByPlayerId[p.id] = v),
-                    );
-                  },
-                ),
+            Positioned(
+              left: 18,
+              bottom: 18 + bottomInset,
+              child: _CmrMinimizedPill(
+                icon: Icons.star_rate_rounded,
+                title: 'Оценки тренировки',
+                onRestore: () => setState(() => _windowMinimized = false),
+                onClose: _close,
               ),
+            ),
+          ],
+        ),
+      );
+    }
 
-              const SizedBox(height: 10),
+    final isCompact = size.width < 760;
+    final windowWidth = _windowMaximized
+        ? math.max(320.0, size.width - 28)
+        : math.min(isCompact ? size.width - 22 : 760.0, size.width - 28);
+    final windowHeight = _windowMaximized
+        ? math.max(420.0, size.height - 28 - bottomInset)
+        : math.min(isCompact ? size.height - 32 - bottomInset : 620.0, size.height - 36 - bottomInset);
 
-              Row(
+    final defaultOffset = Offset(
+      math.max(10, (size.width - windowWidth) / 2),
+      math.max(10, (size.height - bottomInset - windowHeight) / 2),
+    );
+
+    final currentOffset = _windowMaximized
+        ? const Offset(14, 14)
+        : _clampOffset(_windowOffset ?? defaultOffset, Size(windowWidth, windowHeight), Size(size.width, size.height - bottomInset));
+
+    return Material(
+      color: Colors.transparent,
+      child: Stack(
+        children: [
+          Positioned(
+            left: currentOffset.dx,
+            top: currentOffset.dy,
+            width: windowWidth,
+            height: windowHeight,
+            child: _CmrWindowFrame(
+              icon: Icons.star_rate_rounded,
+              title: 'Оценки тренировки',
+              subtitle: widget.title,
+              maximized: _windowMaximized,
+              onClose: _close,
+              onMinimize: () => setState(() => _windowMinimized = true),
+              onToggleMaximize: () => setState(() {
+                if (_windowMaximized) {
+                  _windowMaximized = false;
+                } else {
+                  _windowOffset = currentOffset;
+                  _windowMaximized = true;
+                }
+              }),
+              onDrag: (delta) {
+                if (_windowMaximized) return;
+                setState(() {
+                  _windowOffset = _clampOffset(
+                    (_windowOffset ?? defaultOffset) + delta,
+                    Size(windowWidth, windowHeight),
+                    Size(size.width, size.height - bottomInset),
+                  );
+                });
+              },
+              child: Column(
                 children: [
-                  Expanded(
-                    child: OutlinedButton(
-  onPressed: saving
-      ? null
-      : () async {
-          final ok = await showResetConfirmDialog(
-            context,
-            title: "Сбросить оценки?",
-            description:
-                "Все оценки игроков за эту тренировку будут обнулены.\nОтменить будет невозможно.",
-          );
-
-          if (!ok) return;
-
-          setState(() {
-            for (final p in players) {
-              ratingByPlayerId[p.id] = 0;
-            }
-          });
-
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Оценки сброшены")),
-            );
-          }
-        },
-  child: const Text("Сбросить"),
-),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: saving ? null : _save,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primary,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      child: saving
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                            )
-                          : const Text("Сохранить"),
+                  Expanded(child: _buildRatingsBody()),
+                  _CmrBottomBar(
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _GhostButton(
+                            text: saving ? 'Сброс...' : 'Сбросить',
+                            icon: Icons.restart_alt_rounded,
+                            onTap: saving ? null : _resetRatings,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _PrimaryButton(
+                            text: 'Сохранить оценки',
+                            saving: saving,
+                            onTap: saving ? null : _save,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
-            ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-            const SizedBox(height: 6),
+  Offset _clampOffset(Offset offset, Size windowSize, Size bounds) {
+    final maxX = math.max(8.0, bounds.width - windowSize.width - 8);
+    final maxY = math.max(8.0, bounds.height - windowSize.height - 8);
+    return Offset(
+      offset.dx.clamp(8.0, maxX),
+      offset.dy.clamp(8.0, maxY),
+    );
+  }
+
+  Future<void> _resetRatings() async {
+    final ok = await showResetConfirmDialog(
+      context,
+      title: 'Сбросить оценки?',
+      description: 'Все оценки игроков за эту тренировку будут обнулены.\nОтменить будет невозможно.',
+    );
+
+    if (!ok || !mounted) return;
+
+    setState(() {
+      for (final p in players) {
+        ratingByPlayerId[p.id] = 0;
+      }
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Оценки сброшены')),
+    );
+  }
+
+  Widget _buildRatingsBody() {
+    if (loading) {
+      return const Center(child: CircularProgressIndicator(color: _WinColors.green, strokeWidth: 2.4));
+    }
+
+    if (error != null) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: _ErrorView(text: error!, onRetry: _load),
+      );
+    }
+
+    if (players.isEmpty) {
+      return Center(
+        child: Text('В команде пока нет игроков для оценки', style: _WinText.muted(12.2)),
+      );
+    }
+
+    return Column(
+      children: [
+        _RatingsSummaryBar(
+          playersCount: players.length,
+          ratedCount: ratingByPlayerId.values.where((v) => v > 0).length,
+          avg: _averageRating(),
+        ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            itemCount: players.length,
+            itemBuilder: (_, i) {
+              final p = players[i];
+              final r = ratingByPlayerId[p.id] ?? 0;
+
+              return _PlayerRow(
+                primary: primary,
+                p: p,
+                rating: r,
+                onChanged: (v) => setState(() => ratingByPlayerId[p.id] = v),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  double _averageRating() {
+    final values = ratingByPlayerId.values.where((v) => v > 0).toList();
+    if (values.isEmpty) return 0;
+    return values.reduce((a, b) => a + b) / values.length;
+  }
+}
+
+class _CmrWindowFrame extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool maximized;
+  final VoidCallback onClose;
+  final VoidCallback onMinimize;
+  final VoidCallback onToggleMaximize;
+  final ValueChanged<Offset> onDrag;
+  final Widget child;
+
+  const _CmrWindowFrame({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.maximized,
+    required this.onClose,
+    required this.onMinimize,
+    required this.onToggleMaximize,
+    required this.onDrag,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = maximized ? 20.0 : 26.0;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(radius),
+          border: Border.all(color: const Color(0xFFE5EAEF), width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(.10),
+              blurRadius: 38,
+              spreadRadius: -20,
+              offset: const Offset(0, 22),
+            ),
           ],
         ),
+        child: Column(
+          children: [
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onPanUpdate: (d) => onDrag(d.delta),
+              child: Container(
+                height: 50,
+                padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  border: Border(bottom: BorderSide(color: Color(0xFFE9EDF2), width: 1)),
+                ),
+                child: Row(
+                  children: [
+                    _RoundWindowButton(icon: Icons.close_rounded, onTap: onClose),
+                    const SizedBox(width: 7),
+                    _RoundWindowButton(icon: Icons.remove_rounded, onTap: onMinimize),
+                    const SizedBox(width: 7),
+                    _RoundWindowButton(
+                      icon: maximized ? Icons.close_fullscreen_rounded : Icons.open_in_full_rounded,
+                      onTap: onToggleMaximize,
+                    ),
+                    const SizedBox(width: 12),
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: _WinColors.tint(_WinColors.green, opacity: .10),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: _WinColors.green.withOpacity(.22)),
+                      ),
+                      child: Icon(icon, color: _WinColors.green, size: 13),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _WinText.title(12.6)),
+                          const SizedBox(height: 2),
+                          Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _WinText.muted(10.0)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox.shrink(),
+                  ],
+                ),
+              ),
+            ),
+            Expanded(child: child),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RatingsSummaryBar extends StatelessWidget {
+  final int playersCount;
+  final int ratedCount;
+  final double avg;
+
+  const _RatingsSummaryBar({
+    required this.playersCount,
+    required this.ratedCount,
+    required this.avg,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 58,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFE9EDF2), width: 1)),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: _MiniStat(icon: Icons.groups_rounded, label: 'Игроки', value: '$playersCount')),
+          const SizedBox(width: 8),
+          Expanded(child: _MiniStat(icon: Icons.check_circle_rounded, label: 'Оценено', value: '$ratedCount')),
+          const SizedBox(width: 8),
+          Expanded(child: _MiniStat(icon: Icons.star_rate_rounded, label: 'Средняя', value: avg <= 0 ? '—' : avg.toStringAsFixed(1))),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniStat extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _MiniStat({required this.icon, required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: _WinColors.tint(_WinColors.green, opacity: .060),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE6EAEE)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              color: _WinColors.tint(_WinColors.green, opacity: .12),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(icon, color: _WinColors.green, size: 13),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _WinText.title(13.0)),
+                Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _WinText.muted(9.6)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CmrBottomBar extends StatelessWidget {
+  final Widget child;
+  const _CmrBottomBar({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Color(0xFFE9EDF2), width: 1)),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _RoundWindowButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  const _RoundWindowButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF3F5F7),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Icon(icon, color: _WinColors.slate, size: 14),
+      ),
+    );
+  }
+}
+
+class _CmrMinimizedPill extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final VoidCallback onRestore;
+  final VoidCallback onClose;
+
+  const _CmrMinimizedPill({
+    required this.icon,
+    required this.title,
+    required this.onRestore,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 300,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE6EAEE)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(.10), blurRadius: 24, spreadRadius: -14, offset: const Offset(0, 14))],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: _WinColors.tint(_WinColors.green, opacity: .10),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: _WinColors.green, size: 13),
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _WinText.title(13.0))),
+          _RoundWindowButton(icon: Icons.open_in_full_rounded, onTap: onRestore),
+          const SizedBox(width: 6),
+          _RoundWindowButton(icon: Icons.close_rounded, onTap: onClose),
+        ],
       ),
     );
   }
@@ -286,39 +666,65 @@ class _PlayerRow extends StatelessWidget {
 
   String fio() {
     final a = [p.firstName.trim(), p.lastName.trim()].where((x) => x.isNotEmpty).toList();
-    return a.isEmpty ? "Игрок #${p.id}" : a.join(" ");
+    return a.isEmpty ? 'Игрок #${p.id}' : a.join(' ');
   }
 
   @override
   Widget build(BuildContext context) {
+    final initials = fio().substring(0, 1).toUpperCase();
+    final rated = rating > 0;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      margin: const EdgeInsets.only(bottom: 7),
+      decoration: BoxDecoration(
+        color: rated ? _WinColors.tint(primary, opacity: .055) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: rated ? primary.withOpacity(.25) : const Color(0xFFE6EAEE)),
+      ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 20,
-            backgroundColor: primary.withOpacity(0.12),
-            backgroundImage: p.photo.trim().isNotEmpty ? NetworkImage(p.photo) : null,
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            width: 4,
+            height: 56,
+            decoration: BoxDecoration(
+              color: rated ? primary : Colors.transparent,
+              borderRadius: const BorderRadius.horizontal(left: Radius.circular(18)),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: p.photo.trim().isEmpty ? _WinColors.tint(primary, opacity: .12) : const Color(0xFFF3F5F7),
+              shape: BoxShape.circle,
+              image: p.photo.trim().isNotEmpty ? DecorationImage(image: NetworkImage(p.photo), fit: BoxFit.cover) : null,
+            ),
             child: p.photo.trim().isEmpty
-                ? Text(fio().substring(0, 1).toUpperCase(), style: TextStyle(color: primary, fontWeight: FontWeight.w900))
+                ? Center(child: Text(initials, style: _WinText.base(12.0, FontWeight.w700, primary, height: 1)))
                 : null,
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(fio(), style: const TextStyle(fontWeight: FontWeight.w900)),
-                if (p.position.trim().isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(p.position, style: const TextStyle(color: Color(0xFF6B7280), fontWeight: FontWeight.w700, fontSize: 12)),
-                ],
+                Text(fio(), maxLines: 1, overflow: TextOverflow.ellipsis, style: _WinText.title(11.8)),
+                const SizedBox(height: 2),
+                Text(
+                  p.position.trim().isEmpty ? 'позиция не указана' : p.position,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _WinText.muted(10.0),
+                ),
               ],
             ),
           ),
+          const SizedBox(width: 8),
           _Stars(activeColor: primary, value: rating, onChanged: onChanged),
+          const SizedBox(width: 12),
         ],
       ),
     );
@@ -327,7 +733,7 @@ class _PlayerRow extends StatelessWidget {
 
 class _Stars extends StatelessWidget {
   final Color activeColor;
-  final int value; // 0..5
+  final int value;
   final ValueChanged<int> onChanged;
 
   const _Stars({
@@ -344,17 +750,78 @@ class _Stars extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         onTap: () => onChanged(i),
         child: Padding(
-          padding: const EdgeInsets.all(4),
+          padding: const EdgeInsets.all(1),
           child: Icon(
             filled ? Icons.star_rounded : Icons.star_outline_rounded,
             color: filled ? activeColor : const Color(0xFF9CA3AF),
-            size: 26,
+            size: 18,
           ),
         ),
       );
     }
 
     return Row(mainAxisSize: MainAxisSize.min, children: [for (int i = 1; i <= 5; i++) star(i)]);
+  }
+}
+
+class _PrimaryButton extends StatelessWidget {
+  final String text;
+  final bool saving;
+  final VoidCallback? onTap;
+
+  const _PrimaryButton({required this.text, required this.saving, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(13),
+      onTap: onTap,
+      child: Container(
+        height: 36,
+        decoration: BoxDecoration(
+          color: _WinColors.tint(_WinColors.green, opacity: .10),
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(color: _WinColors.green.withOpacity(.22)),
+        ),
+        child: Center(
+          child: saving
+              ? const SizedBox(width: 17, height: 17, child: CircularProgressIndicator(strokeWidth: 2, color: _WinColors.green))
+              : Text(text, style: _WinText.base(11.4, FontWeight.w700, _WinColors.green, height: 1)),
+        ),
+      ),
+    );
+  }
+}
+
+class _GhostButton extends StatelessWidget {
+  final String text;
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  const _GhostButton({required this.text, required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(13),
+      onTap: onTap,
+      child: Container(
+        height: 36,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF5F7F9),
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(color: const Color(0xFFE6EAEE)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: _WinColors.slate, size: 15),
+            const SizedBox(width: 7),
+            Text(text, style: _WinText.base(11.2, FontWeight.w700, _WinColors.slate, height: 1)),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -367,16 +834,52 @@ class _ErrorView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(
+        color: _WinColors.tint(_WinColors.red, opacity: .055),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _WinColors.red.withOpacity(.12)),
+      ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(text, style: const TextStyle(color: Color(0xFFB91C1C), fontWeight: FontWeight.w800)),
+          Text(text, style: _WinText.base(11.2, FontWeight.w700, _WinColors.red)),
           const SizedBox(height: 10),
-          ElevatedButton(onPressed: onRetry, child: const Text("Повторить")),
+          _GhostButton(text: 'Повторить', icon: Icons.refresh_rounded, onTap: onRetry),
         ],
       ),
     );
   }
+}
+
+class _WinColors {
+  static const Color text = Color(0xFF111827);
+  static const Color muted = Color(0xFF374151);
+  static const Color muted2 = Color(0xFF6B7280);
+  static const Color green = Color(0xFF0E9F5B);
+  static const Color slate = Color(0xFF64748B);
+  static const Color red = Color(0xFFD92D20);
+
+  static Color tint(Color color, {double opacity = .075}) => Color.alphaBlend(color.withOpacity(opacity), Colors.white);
+}
+
+class _WinText {
+  static const String font = 'Segoe UI';
+  static const List<String> fallback = <String>['SF Pro Display', 'SF Pro Text', 'Inter', 'Roboto', 'Arial'];
+
+  static TextStyle base(double size, FontWeight weight, Color color, {double height = 1.18}) {
+    return TextStyle(
+      fontFamily: font,
+      fontFamilyFallback: fallback,
+      color: color,
+      fontSize: size,
+      fontWeight: weight,
+      height: height,
+      letterSpacing: -0.12,
+    );
+  }
+
+  static TextStyle title(double size) => base(size, FontWeight.w700, _WinColors.text, height: 1.10);
+  static TextStyle muted(double size) => base(size, FontWeight.w700, _WinColors.muted2, height: 1.22);
 }
 
 class _Player {
@@ -395,4 +898,4 @@ class _Player {
   });
 }
 
-int _asInt(dynamic v) => v is int ? v : int.tryParse((v ?? "").toString()) ?? 0;
+int _asInt(dynamic v) => v is int ? v : int.tryParse((v ?? '').toString()) ?? 0;

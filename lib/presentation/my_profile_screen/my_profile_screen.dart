@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -13,11 +14,24 @@ import 'package:image_picker/image_picker.dart';
 
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/community_screen/news_detail_screen.dart';
+import 'package:sportoteka/presentation/community_screen/sport_community_screen.dart';
 import 'package:sportoteka/widgets/player_skills_fifa_stub.dart';
 import 'package:sportoteka/presentation/reels_screen/upload_reel_screen.dart';
 import 'package:sportoteka/presentation/reels_screen/user_reels_screen.dart';
+import 'package:sportoteka/presentation/reels_screen/reels_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/chat_room_screen.dart';
+import 'package:sportoteka/presentation/chat_screen/chat_screen.dart';
+import 'package:sportoteka/presentation/club_workspace/club_workspace_screen.dart';
+import 'package:sportoteka/presentation/booking_screen/booking_screen.dart';
+import 'package:sportoteka/presentation/catalog/events_list_screen.dart';
+import 'package:sportoteka/presentation/catalog/team_list_screen.dart';
+import 'package:sportoteka/presentation/service_screens/generic_service_screen.dart';
+import 'package:sportoteka/presentation/subscription/subscription_screen.dart';
+import 'package:sportoteka/presentation/tracking/tracking_mode_screen.dart';
+import 'package:sportoteka/presentation/video_lessons/video_lessons_hub_screen.dart';
+import 'package:sportoteka/presentation/player_screen/player_dashboard_screen.dart';
 import 'package:sportoteka/presentation/my_profile_screen/profile_reel_widget.dart';
+import 'package:sportoteka/routes/app_routes.dart';
 
 // =============================
 // ЦВЕТОВАЯ ПАЛИТРА (ОСТАВЛЯЕМ)
@@ -517,27 +531,27 @@ class ProfileDesign {
       primaryColorValue: 0xFF00A750,
       secondaryColorValue: 0xFF008C40,
       accentColorValue: 0xFF7ED321,
-      backgroundColorValue: 0xFFF8F9FA,
-      surfaceColorValue: 0xFFE8F5E9,
+      backgroundColorValue: 0xFFFFFFFF,
+      surfaceColorValue: 0xFFF7F8FA,
       cardColorValue: 0xFFFFFFFF,
-      textPrimaryColorValue: 0xFF1A1A1A,
-      textSecondaryColorValue: 0xFF666666,
-      textTertiaryColorValue: 0xFF999999,
+      textPrimaryColorValue: 0xFF111827,
+      textSecondaryColorValue: 0xFF667085,
+      textTertiaryColorValue: 0xFF98A2B3,
       fontFamily: 'default',
-      titleFontSize: 22,
-      headingFontSize: 18,
-      bodyFontSize: 14,
-      smallFontSize: 12,
-      titleWeight: FontWeight.w900,
+      titleFontSize: 17,
+      headingFontSize: 13.5,
+      bodyFontSize: 12,
+      smallFontSize: 10.5,
+      titleWeight: FontWeight.w800,
       headingWeight: FontWeight.w700,
       bodyWeight: FontWeight.w500,
-      avatarSize: 96,
-      avatarBorderWidth: 2,
-      cardRadius: 16,
-      buttonRadius: 14,
-      spacing: 12,
-      contentPadding: 16,
-      avatarBorderColorValue: 0xFF00A750,
+      avatarSize: 82,
+      avatarBorderWidth: 1.5,
+      cardRadius: 18,
+      buttonRadius: 12,
+      spacing: 8,
+      contentPadding: 14,
+      avatarBorderColorValue: 0xFFE5E7EB,
       avatarGlowEnabled: false,
       avatarGlowRadius: 20,
       avatarGlowOpacity: 0.3,
@@ -547,33 +561,51 @@ class ProfileDesign {
       headerGradientBeginY: 0,
       headerGradientEndX: 1,
       headerGradientEndY: 1,
-      cardShadowEnabled: true,
+      cardShadowEnabled: false,
       cardShadowBlurRadius: 8,
       cardShadowSpreadRadius: 0,
       cardShadowOffsetX: 0,
       cardShadowOffsetY: 4,
       cardShadowColorValue: 0xFF000000,
-      cardShadowOpacity: 0.05,
-      avatarShadowEnabled: true,
+      cardShadowOpacity: 0.035,
+      avatarShadowEnabled: false,
       avatarShadowBlurRadius: 8,
       avatarShadowSpreadRadius: 0,
       avatarShadowOffsetX: 0,
       avatarShadowOffsetY: 4,
       avatarShadowColorValue: 0xFF000000,
-      avatarShadowOpacity: 0.1,
+      avatarShadowOpacity: 0.08,
       blocks: ProfileBlock.defaultBlocks(),
       sectionVisibility: {
-        'posts': true, 'reels': true, 'feed': true, 'skills': true, 'team': true,
-        'bio': true, 'location': true, 'ai': true, 'header': true, 'stats': true,
-        'actions': true, 'switcher': true, 'content': true,
+        'posts': true,
+        'reels': true,
+        'feed': true,
+        'skills': true,
+        'team': true,
+        'bio': true,
+        'location': true,
+        'ai': true,
+        'header': true,
+        'stats': true,
+        'actions': true,
+        'switcher': true,
+        'content': true,
       },
       sectionOrder: {
-        'header': 0, 'stats': 1, 'actions': 2, 'team': 3, 'ai': 4,
-        'skills': 5, 'bio': 6, 'location': 7, 'switcher': 8, 'content': 9,
+        'header': 0,
+        'stats': 1,
+        'actions': 2,
+        'team': 3,
+        'ai': 4,
+        'skills': 5,
+        'bio': 6,
+        'location': 7,
+        'switcher': 8,
+        'content': 9,
       },
       statsCompactMode: false,
       statsShowLabels: true,
-      statsShowIcons: true,
+      statsShowIcons: false,
       enableHoverEffects: false,
       enablePulseEffects: false,
     );
@@ -682,6 +714,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
   static const String _getOrCreatePrivateChatUrl = '$_apiBase/get_or_create_private_chat.php';
   static const String _deletePostUrl = '$_apiBase/delete_post.php';
   static const String _deleteReelUrl = '$_apiBase/delete_reel.php';
+  static const String _deleteAccountUrl = '$_apiBase/delete_account.php';
   static const String _saveDesignUrl = '$_apiBase/save_profile_design.php';
   static const String _loadDesignUrl = '$_apiBase/get_profile_design.php';
 
@@ -709,6 +742,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
   String? playerTeamName;
   String? playerClubName;
   String? playerTeamLogoUrl;
+  int? playerTeamId;
   List<dynamic> userPosts = [];
   bool isLoadingPosts = false;
   List<Map<String, dynamic>> userReels = [];
@@ -717,9 +751,18 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
   bool isLoadingFeed = false;
   bool isLoadingProfile = true;
   _ProfileFeedMode _mode = _ProfileFeedMode.posts;
+
+  // Мобильные окна поверх профиля. Так нижний Instagram-dock не исчезает
+  // при открытии ленты, Reels, чата, сервисов и рабочей зоны.
+  Widget? _mobileWindowChild;
+  String _mobileWindowTitle = '';
+  IconData _mobileWindowIcon = Icons.apps_rounded;
+  String _mobileDockKey = 'profile';
+
   File? _newPostImage;
   final TextEditingController _newPostText = TextEditingController();
   bool _posting = false;
+  bool _uploadingProfilePhoto = false;
   bool isFollowing = false;
   bool isOwnProfile = true;
   int followersCount = 0;
@@ -735,7 +778,526 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
   bool _skillsExpanded = false;
 
   // ========== ВАЖНО: ГЕТТЕР ISPLAYER ==========
-  bool get isPlayer => role.trim().toLowerCase() == 'player';
+  bool get isPlayer {
+    final r = role.trim().toLowerCase();
+    return r == 'player' || r == 'игрок' || r.contains('player') || r.contains('игрок');
+  }
+  bool get isClubRole {
+    final r = role.trim().toLowerCase();
+    return r == 'club' || r == 'клуб' || r.contains('club');
+  }
+  bool get isCoachRole {
+    final r = role.trim().toLowerCase();
+    return r == 'coach' || r == 'trainer' || r == 'тренер' || r.contains('coach') || r.contains('trainer');
+  }
+
+  String get _roleLabel {
+    if (isClubRole) return 'клуб';
+    if (isCoachRole) return 'тренер';
+    if (isPlayer) return 'игрок';
+    final r = role.trim();
+    return r.isEmpty ? 'пользователь' : r;
+  }
+
+  String get _enteredAsText {
+    final team = (playerTeamName ?? '').trim();
+    final club = (playerClubName ?? '').trim();
+    if (isClubRole) return 'Вы вошли как клуб';
+    if (isCoachRole) return team.isNotEmpty ? 'Вы вошли как тренер команды' : 'Вы вошли как тренер';
+    if (isPlayer) return team.isNotEmpty ? 'Вы вошли как игрок команды' : 'Вы вошли как игрок';
+    return 'Вы вошли как $_roleLabel';
+  }
+
+  String get _activeWorkspaceName {
+    final team = (playerTeamName ?? '').trim();
+    final club = (playerClubName ?? '').trim();
+    if (isClubRole && fullName.trim().isNotEmpty) return fullName;
+    if (club.isNotEmpty && team.isNotEmpty) return '$club • $team';
+    if (club.isNotEmpty) return club;
+    if (team.isNotEmpty) return team;
+    return fullName;
+  }
+
+  String get _primaryZoneTitle {
+    if (isPlayer) return 'Мой кабинет';
+    if (isCoachRole) return 'Кабинет тренера';
+    if (isClubRole) return 'Кабинет клуба';
+    return 'Мой кабинет';
+  }
+
+  String get _primaryZoneSubtitle {
+    if (isPlayer) return 'личный прогресс, тренировки и матчи';
+    if (isCoachRole) return 'команда, состав, календарь и матчи';
+    if (isClubRole) return 'команды, тренеры, состав и аналитика';
+    return 'профиль, лента, чат и сервисы';
+  }
+
+  IconData get _primaryZoneIcon {
+    if (isPlayer) return Icons.dashboard_customize_outlined;
+    if (isCoachRole) return Icons.sports_soccer_outlined;
+    if (isClubRole) return Icons.apartment_outlined;
+    return Icons.person_outline_rounded;
+  }
+
+  bool get _isDesktopProfileLayout {
+    final width = MediaQuery.maybeOf(context)?.size.width ?? 0;
+    return width >= 720;
+  }
+
+  void _openCmrWindow({
+    required String title,
+    required IconData icon,
+    required Widget child,
+    double maxWidth = 1180,
+    double maxHeight = 780,
+  }) {
+    if (!_isDesktopProfileLayout) {
+      if (!mounted) return;
+      setState(() {
+        _mobileWindowTitle = title;
+        _mobileWindowIcon = icon;
+        _mobileWindowChild = child;
+        _mobileDockKey = _dockKeyForWindow(title);
+      });
+      return;
+    }
+
+    final size = MediaQuery.of(context).size;
+    final windowWidth = min(size.width - 44, maxWidth).toDouble();
+    final windowHeight = min(size.height - 44, maxHeight).toDouble();
+
+    showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Закрыть',
+      barrierColor: Colors.black.withOpacity(.16),
+      transitionDuration: const Duration(milliseconds: 180),
+      pageBuilder: (dialogContext, _, __) {
+        return Center(
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: windowWidth,
+              height: windowHeight,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(.14),
+                    blurRadius: 44,
+                    spreadRadius: -18,
+                    offset: const Offset(0, 24),
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withOpacity(.05),
+                    blurRadius: 12,
+                    spreadRadius: -6,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  _buildCmrWindowTitleBar(title: title, icon: icon, onClose: () => Navigator.of(dialogContext).pop()),
+                  Expanded(
+                    child: Container(
+                      color: Colors.white,
+                      child: child,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (_, animation, __, child) {
+        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: .975, end: 1).animate(curved),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
+  String _dockKeyForWindow(String title) {
+    final t = title.toLowerCase();
+    if (t.contains('reels') || t.contains('эфир')) return 'reels';
+    if (t.contains('чат') || t.contains('сообщ')) return 'chat';
+    if (t.contains('dashboard') || t.contains('панель') || t.contains('workspace')) return 'account';
+    if (t.contains('поиск')) return 'search';
+    if (t.contains('меню') || t.contains('ещё') || t.contains('еще')) return 'more';
+    if (t.contains('сервис')) return 'more';
+    if (t.contains('лента') || t.contains('новост')) return 'profile';
+    return 'more';
+  }
+
+  void _closeMobileWindow({String dockKey = 'profile'}) {
+    if (!mounted) return;
+    setState(() {
+      _mobileWindowChild = null;
+      _mobileWindowTitle = '';
+      _mobileWindowIcon = Icons.apps_rounded;
+      _mobileDockKey = dockKey;
+    });
+  }
+
+  Widget _buildCmrWindowTitleBar({required String title, required IconData icon, required VoidCallback onClose}) {
+    return Container(
+      height: 50,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFEFF2F5), width: 1)),
+      ),
+      child: Row(
+        children: [
+          Row(
+            children: [
+              _buildMacDot(const Color(0xFFFF5F57), onClose),
+              const SizedBox(width: 7),
+              _buildMacDot(const Color(0xFFFFBD2E), onClose),
+              const SizedBox(width: 7),
+              _buildMacDot(const Color(0xFF28C840), () {}),
+            ],
+          ),
+          const SizedBox(width: 14),
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF4F6F8),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(icon, size: 16, color: const Color(0xFF344054)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12.6, fontWeight: FontWeight.w900, color: Color(0xFF111827)),
+            ),
+          ),
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: onClose,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7F8FA),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.close_rounded, size: 15, color: Color(0xFF344054)),
+                  SizedBox(width: 5),
+                  Text('Закрыть', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900, color: Color(0xFF344054))),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMacDot(Color color, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(99),
+      child: Container(width: 11, height: 11, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+    );
+  }
+
+  Future<void> _openPrimaryArea() async {
+    if (isPlayer) {
+      final myId = await PrefUtils.getUserId() ?? widget.userId ?? 0;
+      if (!mounted) return;
+      _openCmrWindow(
+        title: 'Мой Dashboard',
+        icon: Icons.space_dashboard_rounded,
+        maxWidth: 1220,
+        maxHeight: 820,
+        child: PlayerDashboardScreen(
+          teamId: playerTeamId ?? 0,
+          teamName: (playerTeamName ?? '').trim().isNotEmpty ? (playerTeamName ?? '').trim() : 'Мой Dashboard',
+          userId: myId,
+          teamLogo: playerTeamLogoUrl,
+        ),
+      );
+      return;
+    }
+
+    _openProPanel();
+  }
+
+  Future<void> _openMainChat() async {
+    final myId = await PrefUtils.getUserId() ?? 0;
+    if (!mounted) return;
+    _openCmrWindow(
+      title: 'Чат',
+      icon: Icons.forum_rounded,
+      maxWidth: 1080,
+      maxHeight: 760,
+      child: ChatScreen(userId: myId),
+    );
+  }
+
+  void _openProPanel() {
+    // Панель клуба/тренера — это отдельный рабочий стол Workspace.
+    // На мобильной и ПК-версии открываем полноценный экран, а не CMR-окно поверх профиля.
+    // Так профильное меню исчезает, а внутри ClubWorkspace работает собственная навигация.
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        fullscreenDialog: false,
+        builder: (_) => const ClubWorkspaceScreen(),
+      ),
+    );
+  }
+
+  void _openAllReels() => _openGlobalReels();
+
+  void _openGrounds() {
+    _openVenuesWindow();
+  }
+
+  void _openHomeMode(int modeIndex) {
+    switch (modeIndex.clamp(0, 3).toInt()) {
+      case 0:
+        _openTeamsWindow();
+        break;
+      case 1:
+        _openCommunityFeedHome();
+        break;
+      case 2:
+        _openServicesWindow();
+        break;
+      case 3:
+        _openTipsWindow();
+        break;
+    }
+  }
+
+  void _openHomeFunctions() => _openTeamsWindow();
+  void _openCommunityFeedHome() {
+    _openCmrWindow(
+      title: 'Соцлента и новости',
+      icon: Icons.newspaper_rounded,
+      maxWidth: 1120,
+      maxHeight: 820,
+      child: SportCommunityScreen(sportName: 'Футбол'),
+    );
+  }
+  void _openHomeServices() => _openServicesWindow();
+  void _openHomeTips() => _openTipsWindow();
+
+  void _openGlobalReels() {
+    _openCmrWindow(
+      title: 'Reels сообщества',
+      icon: Icons.play_circle_fill_rounded,
+      maxWidth: 720,
+      maxHeight: 820,
+      child: const ReelsScreen(),
+    );
+  }
+
+  void _openMobileSearchWindow() {
+    _openCmrWindow(
+      title: 'Поиск',
+      icon: Icons.search_rounded,
+      maxWidth: 760,
+      maxHeight: 760,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              height: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF6F7F9),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE9EEF3)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.search_rounded, size: 20, color: Color(0xFF667085)),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      decoration: InputDecoration(
+                        isDense: true,
+                        border: InputBorder.none,
+                        hintText: 'Поиск по Спортотеке',
+                        hintStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF98A2B3)),
+                      ),
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF111827)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text('Быстрый переход', style: _flagshipTitle(13.5)),
+            const SizedBox(height: 10),
+            _buildSettingsRow(
+              icon: Icons.newspaper_rounded,
+              title: 'Соцлента и новости',
+              subtitle: 'общие новости сообщества',
+              onTap: _openCommunityFeedHome,
+            ),
+            _buildSettingsRow(
+              icon: Icons.groups_rounded,
+              title: 'Команды / CMR',
+              subtitle: 'команды, составы и рабочий режим',
+              onTap: _openTeamsWindow,
+            ),
+            _buildSettingsRow(
+              icon: Icons.play_circle_fill_rounded,
+              title: 'Reels сообщества',
+              subtitle: 'короткие спортивные видео',
+              onTap: _openGlobalReels,
+            ),
+            _buildSettingsRow(
+              icon: _primaryZoneIcon,
+              title: _primaryZoneTitle,
+              subtitle: _primaryZoneSubtitle,
+              strong: true,
+              onTap: _openPrimaryArea,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openTeamsWindow() {
+    _openCmrWindow(
+      title: 'Команды / CMR',
+      icon: Icons.groups_rounded,
+      maxWidth: 1180,
+      maxHeight: 800,
+      child: TeamListScreen(
+        initialSport: 'Футбол',
+        embedded: true,
+        onClose: () => Navigator.of(context).maybePop(),
+      ),
+    );
+  }
+
+  void _openScheduleWindow() {
+    _openCmrWindow(
+      title: 'Расписание',
+      icon: Icons.calendar_month_rounded,
+      maxWidth: 1120,
+      maxHeight: 780,
+      child: GenericServiceScreen(title: 'Расписание', sport: 'Футбол'),
+    );
+  }
+
+  void _openEventsWindow() {
+    _openCmrWindow(
+      title: 'Мероприятия',
+      icon: Icons.event_rounded,
+      maxWidth: 1120,
+      maxHeight: 800,
+      child: EventsListScreen(
+        initialSport: 'Футбол',
+        embedded: true,
+        onClose: () => Navigator.of(context).maybePop(),
+      ),
+    );
+  }
+
+  void _openVideoLessonsWindow() {
+    _openCmrWindow(
+      title: 'Видеоуроки',
+      icon: Icons.school_rounded,
+      maxWidth: 1120,
+      maxHeight: 800,
+      child: const VideoLessonsHubScreen(),
+    );
+  }
+
+  void _openTipsWindow() {
+    _openCmrWindow(
+      title: 'Советы',
+      icon: Icons.tips_and_updates_rounded,
+      maxWidth: 980,
+      maxHeight: 760,
+      child: GenericServiceScreen(title: 'Советы', sport: 'Футбол'),
+    );
+  }
+
+  void _openServicesWindow() {
+    _openCmrWindow(
+      title: 'Сервисы',
+      icon: Icons.apps_rounded,
+      maxWidth: 980,
+      maxHeight: 760,
+      child: GenericServiceScreen(title: 'Сервисы', sport: 'Футбол'),
+    );
+  }
+
+  void _openTrackingWindow() {
+    _openCmrWindow(
+      title: 'Трекинг',
+      icon: Icons.monitor_heart_rounded,
+      maxWidth: 1240,
+      maxHeight: 820,
+      child: const TrackingModeScreen(),
+    );
+  }
+
+  Future<void> _openVenuesWindow() async {
+    final userId = await PrefUtils.getUserId();
+    if (!mounted || userId == null) return;
+    _openCmrWindow(
+      title: 'Площадки',
+      icon: Icons.stadium_rounded,
+      maxWidth: 1120,
+      maxHeight: 800,
+      child: BookingScreen(userId: userId),
+    );
+  }
+
+  void _openTicketsWindow() {
+    _openCmrWindow(
+      title: 'Билеты',
+      icon: Icons.confirmation_number_rounded,
+      maxWidth: 980,
+      maxHeight: 760,
+      child: GenericServiceScreen(title: 'Билеты', sport: 'Футбол'),
+    );
+  }
+
+  void _openSubscriptionWindow() {
+    _openCmrWindow(
+      title: 'PRO подписка',
+      icon: Icons.workspace_premium_rounded,
+      maxWidth: 980,
+      maxHeight: 760,
+      child: const SubscriptionScreen(),
+    );
+  }
+
+  void _openGlobalHomeSection(String title, int modeIndex) {
+    _openHomeMode(modeIndex);
+  }
+
+  void _switchToFeed() {
+    setState(() => _mode = _ProfileFeedMode.feed);
+  }
 
   @override
 void initState() {
@@ -1000,8 +1562,7 @@ void initState() {
         _fetchAuthorFeedPosts(),
         _checkIfFollowing(),
         _loadFollowersData(),
-        // ===== НОВЫЙ КОД =====
-        _loadProfileDesign(),
+        // Дизайн профиля больше не загружаем с сервера: белый социальный профиль по умолчанию.
       ]);
     } catch (_) {
       // ignore
@@ -1070,6 +1631,7 @@ void initState() {
       String? resolvedTeamName;
       String? resolvedClubName;
       String? resolvedTeamLogo;
+      int? resolvedTeamId;
 
       final player = (root['player'] is Map) ? (root['player'] as Map).cast<String, dynamic>() : null;
       final playerTeam = (root['player_team'] is Map) ? (root['player_team'] as Map).cast<String, dynamic>() : null;
@@ -1088,6 +1650,8 @@ void initState() {
       }
 
       if (playerTeam != null) {
+        resolvedTeamId = _asInt(playerTeam['id'] ?? playerTeam['team_id']);
+
         resolvedTeamName = (playerTeam['name'] ?? playerTeam['team_name'] ?? '').toString().trim();
         if (resolvedTeamName.isEmpty) resolvedTeamName = null;
 
@@ -1114,6 +1678,7 @@ void initState() {
         playerTeamName = resolvedTeamName;
         playerClubName = resolvedClubName;
         playerTeamLogoUrl = resolvedTeamLogo;
+        playerTeamId = (resolvedTeamId != null && resolvedTeamId! > 0) ? resolvedTeamId : null;
       });
 
       if (viewedUserId == currentUserId) {
@@ -1400,47 +1965,53 @@ void initState() {
     if (mounted) setState(() => isLoadingFeed = true);
 
     try {
-      final currentUserId = await PrefUtils.getUserId() ?? 0;
-      final authorId = widget.userId ?? currentUserId;
+      final userId = widget.userId ?? await PrefUtils.getUserId();
+      if (userId == null || userId <= 0) return;
 
-      if (authorId <= 0) return;
+      final response = await http.post(
+        Uri.parse('$_apiBase/get_posts_by_user.php'),
+        body: jsonEncode({'user_id': userId, 'visibility': 'profile', 'post_type': 'post'}),
+        headers: {'Content-Type': 'application/json'},
+      );
 
-      final uri = Uri.parse('$_apiBase/get_posts.php?user_id=$currentUserId');
-      final res = await http.get(uri);
-      if (res.statusCode != 200) return;
+      if (response.statusCode != 200) return;
+      final decoded = jsonDecode(response.body);
+      final List<dynamic> data = decoded is Map
+          ? ((decoded['posts'] ?? decoded['data'] ?? decoded['items'] ?? []) as List? ?? [])
+          : (decoded is List ? decoded : const []);
 
-      final decoded = json.decode(res.body);
+      final authorName = ('$firstName $lastName').trim().isNotEmpty ? ('$firstName $lastName').trim() : 'Профиль';
+      final authorAvatar = _fixUrl(photo ?? '');
 
-      final List<dynamic> data = decoded is List
-          ? decoded
-          : (decoded is Map && decoded['posts'] is List) ? (decoded['posts'] as List) : [];
-
-      final filtered = data.where((raw) => _safeInt(raw['user_id']) == authorId).toList();
-
-      final list = filtered.map<Map<String, dynamic>>((raw) {
-        final firstName = _safeStr(raw['first_name']);
-        final lastName = _safeStr(raw['last_name']);
-        final fullName = ('$firstName $lastName').trim();
-
-        final image = _fixUrl(_safeStr(raw['image']));
-        final avatar = _fixUrl(_safeStr(raw['photo'] ?? raw['photo_url'] ?? raw['avatar']));
-
-        final rawBody = _safeStr(raw['body']);
-        final plainBody = _looksLikeHtml(rawBody) ? _htmlToPlain(rawBody) : rawBody;
+      final list = data.map<Map<String, dynamic>>((rawAny) {
+        final raw = Map<String, dynamic>.from(rawAny as Map);
+        final body = _safeStr(raw['body'] ?? raw['text'] ?? raw['caption']);
+        final plainBody = _looksLikeHtml(body) ? _htmlToPlain(body) : body;
+        final image = _fixUrl(_safeStr(raw['image'] ?? raw['image_url'] ?? raw['photo']));
+        final createdAt = DateTime.tryParse(_safeStr(raw['created_at'] ?? raw['date'])) ?? DateTime.now();
+        final category = _safeStr(raw['category']).trim();
+        final title = _safeStr(raw['title']).trim();
 
         return <String, dynamic>{
           'id': _safeInt(raw['id']),
-          'title': _safeStr(raw['title']),
+          'title': title.isNotEmpty ? title : (category.isNotEmpty ? category : 'Публикация профиля'),
           'text': plainBody,
           'imageUrl': image,
-          'date': DateTime.tryParse(_safeStr(raw['created_at'])) ?? DateTime.now(),
-          'authorName': fullName.isNotEmpty ? fullName : (_safeStr(raw['author_name']).isNotEmpty ? _safeStr(raw['author_name']) : 'Пользователь'),
-          'user_id': _safeInt(raw['user_id']),
-          'authorAvatar': avatar,
-          'likes': _safeInt(raw['likes_count']),
-          'comments': _safeInt(raw['comments_count']),
+          'date': createdAt,
+          'category': category.isNotEmpty ? category : 'Профиль',
+          'authorName': authorName,
+          'user_id': userId,
+          'authorAvatar': authorAvatar,
+          'likes': _safeInt(raw['likes_count'] ?? raw['likes']),
+          'comments': _safeInt(raw['comments_count'] ?? raw['comments']),
         };
+      }).where((post) {
+        final text = _safeStr(post['text']).trim();
+        final image = _safeStr(post['imageUrl']).trim();
+        return text.isNotEmpty || image.isNotEmpty;
       }).toList();
+
+      list.sort((a, b) => (b['date'] as DateTime).compareTo(a['date'] as DateTime));
 
       if (!mounted) return;
       setState(() => feedPosts = list);
@@ -1633,45 +2204,154 @@ void initState() {
     await _fetchUserReels();
   }
 
+  String get _profileMediaEditTitle => isClubRole ? 'Изменить логотип / аватарку' : 'Изменить аватарку';
+
+  String get _profileMediaEditSubtitle => isClubRole
+      ? 'Обновить логотип клуба в профиле'
+      : 'Обновить фото профиля';
+
   Future<void> _uploadProfilePhoto(File imageFile) async {
+    if (_uploadingProfilePhoto) return;
+
     final userId = await PrefUtils.getUserId();
-    if (userId == null || userId <= 0) return;
+    if (userId == null || userId <= 0) {
+      Get.snackbar('Профиль', 'Не удалось определить пользователя', snackPosition: SnackPosition.BOTTOM);
+      return;
+    }
+
+    if (mounted) setState(() => _uploadingProfilePhoto = true);
 
     final uri = Uri.parse('$_apiBase/upload_user_photo.php');
 
     try {
       final request = http.MultipartRequest('POST', uri)
         ..fields['user_id'] = userId.toString()
+        ..fields['profile_media_type'] = isClubRole ? 'club_logo' : 'avatar'
         ..files.add(await http.MultipartFile.fromPath('photo', imageFile.path));
 
       final response = await request.send();
-      if (response.statusCode != 200) return;
-
       final body = await response.stream.bytesToString();
-      final data = jsonDecode(body);
 
-      if (data is Map && data['status'] == 'success') {
-        final serverPhotoUrl = (data['photo_url'] ?? '').toString().trim();
-        final fileName = (data['file_name'] ?? '').toString().trim();
-
-        final newUrl = serverPhotoUrl.isNotEmpty ? _normalizePhotoUrl(serverPhotoUrl) : _normalizePhotoUrl(fileName);
-
-        if (mounted) setState(() => photo = newUrl);
-
-        if (fileName.isNotEmpty) {
-          await PrefUtils.setUserPhoto(fileName);
-        }
-
-        await loadUserData();
+      if (response.statusCode != 200) {
+        Get.snackbar('Профиль', 'Сервер вернул ошибку ${response.statusCode}', snackPosition: SnackPosition.BOTTOM);
+        return;
       }
-    } catch (_) {}
+
+      dynamic decoded;
+      try {
+        decoded = jsonDecode(body);
+      } catch (_) {
+        Get.snackbar('Профиль', 'Сервер вернул некорректный ответ', snackPosition: SnackPosition.BOTTOM);
+        return;
+      }
+
+      final data = decoded is Map ? decoded.cast<String, dynamic>() : <String, dynamic>{};
+      final success = data['status'] == 'success' || data['success'] == true;
+
+      if (!success) {
+        final message = (data['message'] ?? data['error'] ?? 'Не удалось обновить изображение').toString();
+        Get.snackbar('Профиль', message, snackPosition: SnackPosition.BOTTOM);
+        return;
+      }
+
+      final serverPhotoUrl = (data['photo_url'] ?? data['photoUrl'] ?? data['url'] ?? '').toString().trim();
+      final fileName = (data['file_name'] ?? data['filename'] ?? data['photo'] ?? '').toString().trim();
+      final newUrl = _normalizePhotoUrl(serverPhotoUrl) ?? _normalizePhotoUrl(fileName);
+
+      if (newUrl != null && mounted) {
+        setState(() => photo = newUrl);
+      }
+
+      if (fileName.isNotEmpty) {
+        await PrefUtils.setUserPhoto(fileName);
+      } else if (serverPhotoUrl.isNotEmpty) {
+        await PrefUtils.setUserPhoto(serverPhotoUrl);
+      }
+
+      await loadUserData();
+      await _fetchAuthorFeedPosts();
+
+      Get.snackbar(
+        'Профиль',
+        isClubRole ? 'Логотип обновлён' : 'Аватарка обновлена',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } catch (e) {
+      Get.snackbar('Профиль', 'Ошибка загрузки изображения', snackPosition: SnackPosition.BOTTOM);
+    } finally {
+      if (mounted) setState(() => _uploadingProfilePhoto = false);
+    }
   }
 
-  Future<void> _pickAndUploadPhoto() async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (picked != null) {
-      await _uploadProfilePhoto(File(picked.path));
+  Future<void> _pickAndUploadPhoto({ImageSource source = ImageSource.gallery}) async {
+    if (!isOwnProfile || _uploadingProfilePhoto) return;
+
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: source,
+        imageQuality: 88,
+        maxWidth: 1600,
+      );
+      if (picked != null) {
+        await _uploadProfilePhoto(File(picked.path));
+      }
+    } catch (_) {
+      Get.snackbar('Профиль', 'Не удалось выбрать изображение', snackPosition: SnackPosition.BOTTOM);
     }
+  }
+
+  void _openProfileMediaPickerSheet() {
+    if (!isOwnProfile) return;
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 42,
+                    height: 4,
+                    decoration: BoxDecoration(color: const Color(0xFFE5E7EB), borderRadius: BorderRadius.circular(999)),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(_profileMediaEditTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF111827))),
+                const SizedBox(height: 4),
+                Text(_profileMediaEditSubtitle, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF667085))),
+                const SizedBox(height: 14),
+                _buildSettingsRow(
+                  icon: Icons.photo_library_outlined,
+                  title: 'Выбрать из галереи',
+                  subtitle: 'Загрузить изображение из файлов или фото',
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickAndUploadPhoto(source: ImageSource.gallery);
+                  },
+                ),
+                _buildSettingsRow(
+                  icon: Icons.photo_camera_outlined,
+                  title: 'Сделать фото',
+                  subtitle: 'Открыть камеру устройства',
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickAndUploadPhoto(source: ImageSource.camera);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _fetchFollowersList() async {
@@ -2088,172 +2768,1095 @@ void initState() {
   );
 
   // =============================
-  // BUILD МЕТОД (ОБНОВЛЕННЫЙ)
+  // BUILD МЕТОД — CMR / CLUB WORKSPACE FLAGSHIP
   // =============================
   @override
   Widget build(BuildContext context) {
-    final hasAvatar = (photo ?? '').trim().isNotEmpty;
+    final width = MediaQuery.of(context).size.width;
+    final isDesktop = width >= 1040;
+    final isVisitor = !isOwnProfile;
+
+    final showMobileDock = isOwnProfile && !isDesktop;
 
     return Scaffold(
-      backgroundColor: design.backgroundColor,
-      appBar: AppBar(
-        backgroundColor: design.cardColor,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        centerTitle: false,
-        title: Row(
-          children: [
-            if (widget.userId != null)
-              IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: Icon(Icons.arrow_back, color: design.textPrimaryColor),
-              ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                fullName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: _titleStyle,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          if (isOwnProfile) ...[
-            IconButton(
-              icon: Icon(
-                Icons.palette_rounded,
-                color: design.primaryColor,
-              ),
-              onPressed: _openDesignEditor,
-              tooltip: 'Настроить дизайн',
-            ),
-            PopupMenuButton<String>(
-              icon: Icon(Icons.add, color: design.textPrimaryColor),
-              onSelected: (v) {
-                if (v == 'post') _openCreatePostModal();
-                if (v == 'reel') _openUploadReels();
-              },
-              itemBuilder: (context) => const [
-                PopupMenuItem(value: 'post', child: Text("Новый пост")),
-                PopupMenuItem(value: 'reel', child: Text("Новый Reels")),
-              ],
-            ),
-          ],
-        ],
-      ),
+      backgroundColor: const Color(0xFFF6F7F9),
+      appBar: isDesktop || _mobileWindowChild != null ? null : _buildFlagshipMobileAppBar(isVisitor),
       body: isLoadingProfile
-          ? Center(child: CircularProgressIndicator(color: design.primaryColor))
-          : RefreshIndicator(
-              onRefresh: _loadInitialData,
-              color: design.primaryColor,
-              child: CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: EdgeInsets.all(design.contentPadding),
-                      child: _buildProfileContent(),
+          ? _buildFlagshipLoading()
+          : isDesktop
+              ? RefreshIndicator(
+                  onRefresh: _loadInitialData,
+                  color: const Color(0xFF00A750),
+                  child: _buildFlagshipDesktopProfile(),
+                )
+              : Stack(
+                  children: [
+                    Positioned.fill(
+                      child: RefreshIndicator(
+                        onRefresh: _loadInitialData,
+                        color: const Color(0xFF00A750),
+                        child: CustomScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          slivers: [
+                            SliverToBoxAdapter(child: _buildFlagshipMobileProfile()),
+                            if (isVisitor) const SliverToBoxAdapter(child: SizedBox(height: 20)),
+                            const SliverToBoxAdapter(child: SizedBox(height: 118)),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
+                    if (_mobileWindowChild != null)
+                      Positioned.fill(child: _buildMobilePersistentWindow()),
+                    if (showMobileDock)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: _buildSocialBottomBar(),
+                      ),
+                  ],
+                ),
     );
   }
-
   // =============================
   // НОВЫЕ МЕТОДЫ ПОСТРОЕНИЯ UI
   // =============================
+
+  PreferredSizeWidget _buildFlagshipMobileAppBar(bool isVisitor) {
+    return AppBar(
+      backgroundColor: Colors.white,
+      elevation: 0,
+      surfaceTintColor: Colors.white,
+      automaticallyImplyLeading: false,
+      centerTitle: false,
+      titleSpacing: 0,
+      title: Row(
+        children: [
+          if (widget.userId != null)
+            IconButton(
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF111827), size: 18),
+              tooltip: 'Назад',
+            )
+          else
+            const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  fullName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _flagshipTitle(15.5),
+                ),
+                if (isOwnProfile)
+                  Text(
+                    _enteredAsText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _flagshipText(10.2, color: const Color(0xFF667085), weight: FontWeight.w700),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        if (isOwnProfile) ...[
+          IconButton(
+            icon: const Icon(Icons.add_box_outlined, color: Color(0xFF111827), size: 22),
+            tooltip: 'Создать',
+            onPressed: _openCreateMenuSheet,
+          ),
+          IconButton(
+            icon: const Icon(Icons.grid_view_rounded, color: Color(0xFF111827), size: 23),
+            tooltip: 'Меню и настройки',
+            onPressed: _openProfileSettingsSheet,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildFlagshipLoading() {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        decoration: _flagshipPanel(radius: 22),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(color: Color(0xFF00A750), strokeWidth: 2.4),
+            ),
+            const SizedBox(width: 12),
+            Text('Загружаем профиль', style: _flagshipText(12.5, weight: FontWeight.w800)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  TextStyle _flagshipTitle(double size, {Color color = const Color(0xFF0B0F14), FontWeight weight = FontWeight.w800}) {
+    return TextStyle(
+      color: color,
+      fontFamily: 'Segoe UI',
+      fontFamilyFallback: const ['SF Pro Display', 'SF Pro Text', 'Inter', 'Roboto', 'Arial'],
+      fontSize: size,
+      fontWeight: weight,
+      letterSpacing: -0.38,
+      height: 1.05,
+    );
+  }
+
+  TextStyle _flagshipText(
+    double size, {
+    Color color = const Color(0xFF374151),
+    FontWeight weight = FontWeight.w600,
+    double height = 1.15,
+  }) {
+    return TextStyle(
+      color: color,
+      fontFamily: 'Segoe UI',
+      fontFamilyFallback: const ['SF Pro Display', 'SF Pro Text', 'Inter', 'Roboto', 'Arial'],
+      fontSize: size,
+      fontWeight: weight,
+      letterSpacing: -0.08,
+      height: height,
+    );
+  }
+
+  BoxDecoration _flagshipPanel({double radius = 24, bool elevated = true, Color color = Colors.white}) {
+    return BoxDecoration(
+      color: color,
+      borderRadius: BorderRadius.circular(radius),
+      boxShadow: elevated
+          ? [
+              BoxShadow(
+                color: Colors.black.withOpacity(.050),
+                blurRadius: 34,
+                spreadRadius: -16,
+                offset: const Offset(0, 20),
+              ),
+              BoxShadow(
+                color: Colors.black.withOpacity(.022),
+                blurRadius: 10,
+                spreadRadius: -7,
+                offset: const Offset(0, 4),
+              ),
+            ]
+          : null,
+    );
+  }
+
+  BoxDecoration _flagshipSoft({double radius = 18, bool active = false}) {
+    return BoxDecoration(
+      color: active ? Colors.white : const Color(0xFFFAFBFC),
+      borderRadius: BorderRadius.circular(radius),
+      boxShadow: active
+          ? [
+              BoxShadow(
+                color: Colors.black.withOpacity(.045),
+                blurRadius: 22,
+                spreadRadius: -13,
+                offset: const Offset(0, 13),
+              ),
+            ]
+          : null,
+    );
+  }
+
+  List<_ProfileFlagshipAction> get _flagshipWorkspaceActions => [
+        _ProfileFlagshipAction(
+          _primaryZoneTitle,
+          _primaryZoneSubtitle,
+          _primaryZoneIcon,
+          _openPrimaryArea,
+          group: 'Рабочая зона',
+          primary: true,
+        ),
+
+        // Личные публикации остаются внутри профиля, а общие разделы открываются окнами поверх профиля.
+        _ProfileFlagshipAction('Соцлента и новости', 'общие новости сообщества', Icons.newspaper_rounded, _openCommunityFeedHome, group: 'Основное'),
+        _ProfileFlagshipAction('Команды / CMR', 'команды и рабочий режим', Icons.groups_rounded, _openTeamsWindow, group: 'Основное'),
+        _ProfileFlagshipAction('Расписание', 'календарь занятий и матчей', Icons.calendar_month_rounded, _openScheduleWindow, group: 'Основное'),
+        _ProfileFlagshipAction('Мероприятия', 'сборы и активности', Icons.event_rounded, _openEventsWindow, group: 'Основное'),
+
+        _ProfileFlagshipAction('Видеоуроки', 'папки и обучение', Icons.school_rounded, _openVideoLessonsWindow, group: 'Медиа'),
+        _ProfileFlagshipAction('Reels / Эфир', 'общие видео сообщества', Icons.live_tv_rounded, _openGlobalReels, group: 'Медиа'),
+        _ProfileFlagshipAction('Советы', 'подсказки и инструкции', Icons.tips_and_updates_rounded, _openTipsWindow, group: 'Медиа'),
+
+        _ProfileFlagshipAction('Сервисы', 'дополнительные инструменты', Icons.apps_rounded, _openServicesWindow, group: 'Сервисы'),
+        _ProfileFlagshipAction('Трекинг', 'датчики и live-сессии', Icons.monitor_heart_rounded, _openTrackingWindow, group: 'Сервисы'),
+        _ProfileFlagshipAction('Площадки', 'бронирование объектов', Icons.stadium_rounded, _openVenuesWindow, group: 'Сервисы'),
+        _ProfileFlagshipAction('Билеты', 'матчи и посещение', Icons.confirmation_number_rounded, _openTicketsWindow, group: 'Сервисы'),
+
+        _ProfileFlagshipAction('Посты профиля', 'сетка публикаций', Icons.grid_on_rounded, () => setState(() => _mode = _ProfileFeedMode.posts), group: 'Аккаунт'),
+        _ProfileFlagshipAction('Лента профиля', 'публикации пользователя', Icons.article_outlined, () => setState(() => _mode = _ProfileFeedMode.feed), group: 'Аккаунт'),
+        _ProfileFlagshipAction('Чат', 'сообщения и группы', Icons.forum_rounded, _openMainChat, group: 'Аккаунт'),
+        if (isOwnProfile)
+          _ProfileFlagshipAction(isClubRole ? 'Логотип / аватар' : 'Аватарка', _profileMediaEditSubtitle, Icons.add_a_photo_outlined, _openProfileMediaPickerSheet, group: 'Аккаунт'),
+        _ProfileFlagshipAction('Настройки', 'профиль и доступ', Icons.settings_outlined, _openProfileSettingsSheet, group: 'Аккаунт'),
+        _ProfileFlagshipAction('PRO подписка', 'расширенные возможности', Icons.workspace_premium_rounded, _openSubscriptionWindow, group: 'Аккаунт', pro: true),
+        if (isOwnProfile)
+          _ProfileFlagshipAction('Выйти из профиля', 'завершить текущую сессию', Icons.logout_rounded, _logoutFromProfile, group: 'Аккаунт'),
+        if (isOwnProfile)
+          _ProfileFlagshipAction('Удалить профиль', 'безвозвратное удаление аккаунта', Icons.delete_forever_rounded, _deleteOwnProfileWithConfirmation, group: 'Аккаунт', danger: true),
+      ];
+
+  Widget _buildFlagshipDesktopProfile() {
+    return SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1240),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(width: 228, child: _buildFlagshipDesktopMenu()),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: CustomScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    slivers: [
+                      SliverToBoxAdapter(child: _buildFlagshipDesktopHeader()),
+                      const SliverToBoxAdapter(child: SizedBox(height: 10)),
+                      SliverToBoxAdapter(child: _buildFlagshipProfileWorkspaceRow()),
+                      const SliverToBoxAdapter(child: SizedBox(height: 10)),
+                      SliverToBoxAdapter(child: _buildFlagshipContentWindow()),
+                      const SliverToBoxAdapter(child: SizedBox(height: 18)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+
+  Widget _buildFlagshipDesktopHeader() {
+    return Container(
+      height: 54,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: _flagshipPanel(radius: 20),
+      child: Row(
+        children: [
+          _buildWindowDots(),
+          const SizedBox(width: 12),
+          Container(width: 1, height: 22, color: const Color(0xFFEFF2F5)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Социальная страница Sportoteka', style: _flagshipTitle(13.6)),
+                const SizedBox(height: 3),
+                Text(
+                  '${_enteredAsText} • ${_activeWorkspaceName.isEmpty ? 'Sportoteka' : _activeWorkspaceName}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _flagshipText(10.5, color: const Color(0xFF6B7280), weight: FontWeight.w700),
+                ),
+              ],
+            ),
+          ),
+          if (isOwnProfile) ...[
+            _buildTinyAction(Icons.add_a_photo_outlined, isClubRole ? 'Логотип' : 'Аватар', _openProfileMediaPickerSheet),
+            const SizedBox(width: 8),
+          ],
+          _buildTinyAction(Icons.add_rounded, 'Создать', _openCreateMenuSheet),
+          const SizedBox(width: 8),
+          _buildTinyAction(Icons.tune_rounded, 'Настройки', _openProfileSettingsSheet),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWindowDots() {
+    Widget dot(Color color) => Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle));
+    return Row(
+      children: [
+        dot(const Color(0xFFFF5F57)),
+        const SizedBox(width: 7),
+        dot(const Color(0xFFFFBD2E)),
+        const SizedBox(width: 7),
+        dot(const Color(0xFF28C840)),
+      ],
+    );
+  }
+
+  Widget _buildTinyAction(IconData icon, String label, VoidCallback onTap) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Container(
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: _flagshipSoft(radius: 14),
+        child: Row(
+          children: [
+            Icon(icon, size: 16, color: const Color(0xFF111827)),
+            const SizedBox(width: 6),
+            Text(label, style: _flagshipText(10.5, color: const Color(0xFF111827), weight: FontWeight.w800)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFlagshipDesktopMenu() {
+    final groups = <String, List<_ProfileFlagshipAction>>{};
+    for (final action in _flagshipWorkspaceActions) {
+      groups.putIfAbsent(action.group, () => []).add(action);
+    }
+
+    return Container(
+      decoration: _flagshipPanel(radius: 22),
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildFlagshipAccountMini(),
+          const SizedBox(height: 10),
+          _buildWorkspaceLaunchButton(dense: true),
+          const SizedBox(height: 10),
+          Expanded(
+            child: ListView(
+              physics: const BouncingScrollPhysics(),
+              children: [
+                ...groups.entries.expand((entry) {
+                  return [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 10, 8, 6),
+                      child: Text(entry.key.toUpperCase(), style: _flagshipText(8.2, color: const Color(0xFF98A2B3), weight: FontWeight.w900)),
+                    ),
+                    ...entry.value.map(_buildDesktopMenuAction),
+                  ];
+                }),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+  Widget _buildDesktopMenuAction(_ProfileFlagshipAction action) {
+    final active = action.primary;
+    final danger = action.danger;
+    final iconBg = danger
+        ? const Color(0xFFFFE4E6)
+        : (active ? const Color(0xFF00A750) : const Color(0xFFF1F3F5));
+    final iconColor = danger
+        ? const Color(0xFFE11D48)
+        : (active ? Colors.white : const Color(0xFF111827));
+    final titleColor = danger ? const Color(0xFFE11D48) : const Color(0xFF111827);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(17),
+        onTap: action.onTap,
+        child: Container(
+          height: 46,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: _flagshipSoft(radius: 17, active: active),
+          child: Row(
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(action.icon, color: iconColor, size: 16),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            action.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _flagshipText(11.2, color: titleColor, weight: FontWeight.w800),
+                          ),
+                        ),
+                        if (action.pro) ...[
+                          const SizedBox(width: 5),
+                          Text('PRO', style: _flagshipText(7.5, color: const Color(0xFF00A750), weight: FontWeight.w900)),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(action.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipText(9.2, color: const Color(0xFF8A94A6))),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFlagshipAccountMini() {
+    final hasAvatar = photo != null && photo!.trim().isNotEmpty;
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: _flagshipSoft(radius: 20),
+      child: Row(
+        children: [
+          _buildFlagshipAvatar(size: 42, hasAvatar: hasAvatar),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(fullName, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipTitle(12.4)),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: const BoxDecoration(color: Color(0xFF00A750), shape: BoxShape.circle),
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        _roleLabel.toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _flagshipText(9.5, color: const Color(0xFF6B7280), weight: FontWeight.w900),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFlagshipProfileWorkspaceRow() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 860;
+        if (!wide) {
+          return Column(
+            children: [
+              _buildFlagshipProfileCard(),
+              if (isOwnProfile) ...[
+                const SizedBox(height: 10),
+                _buildFlagshipWorkspaceSummary(),
+              ],
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(flex: 12, child: _buildFlagshipProfileCard()),
+            if (isOwnProfile) ...[
+              const SizedBox(width: 10),
+              Expanded(flex: 6, child: _buildFlagshipWorkspaceSummary()),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+
+  Widget _buildFlagshipProfileCard() {
+    final hasAvatar = photo != null && photo!.trim().isNotEmpty;
+    final infoLine = [
+      if ((playerClubName ?? '').trim().isNotEmpty) (playerClubName ?? '').trim(),
+      if ((playerTeamName ?? '').trim().isNotEmpty) (playerTeamName ?? '').trim(),
+      if ((location ?? '').trim().isNotEmpty) (location ?? '').trim(),
+    ].join(' • ');
+
+    return Container(
+      decoration: _flagshipPanel(radius: 26),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildFlagshipAvatar(size: 78, hasAvatar: hasAvatar),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(fullName, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipTitle(18.0, weight: FontWeight.w800)),
+                        ),
+                        _buildRoleCapsule(),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _activeWorkspaceName.isEmpty ? 'Sportoteka' : _activeWorkspaceName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _flagshipText(11.5, color: const Color(0xFF667085), weight: FontWeight.w800),
+                    ),
+                    if ((bio ?? '').trim().isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        (bio ?? '').trim(),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: _flagshipText(11.5, color: const Color(0xFF1F2937), weight: FontWeight.w600, height: 1.28),
+                      ),
+                    ],
+                    if (infoLine.isNotEmpty) ...[
+                      const SizedBox(height: 9),
+                      Row(
+                        children: [
+                          const Icon(Icons.location_on_outlined, size: 14, color: Color(0xFF8A94A6)),
+                          const SizedBox(width: 5),
+                          Expanded(
+                            child: Text(infoLine, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipText(10.8, color: const Color(0xFF6B7280), weight: FontWeight.w700)),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 15),
+          Row(
+            children: [
+              Expanded(child: _buildFlagshipStat(userPosts.length, 'Посты', Icons.grid_on_rounded)),
+              const SizedBox(width: 8),
+              Expanded(child: _buildFlagshipStat(userReels.length, 'Reels', Icons.play_circle_fill_rounded)),
+              const SizedBox(width: 8),
+              Expanded(child: GestureDetector(onTap: () => _openUsersModal(showFollowers: true), child: _buildFlagshipStat(followersCount, 'Подписчики', Icons.people_rounded))),
+              const SizedBox(width: 8),
+              Expanded(child: GestureDetector(onTap: () => _openUsersModal(showFollowers: false), child: _buildFlagshipStat(followingsCount, 'Подписки', Icons.person_add_alt_rounded))),
+            ],
+          ),
+          const SizedBox(height: 13),
+          Row(
+            children: [
+              Expanded(
+                child: _buildFlagshipSmallButton(
+                  label: isOwnProfile ? 'Редактировать' : (isFollowing ? 'Вы подписаны' : 'Подписаться'),
+                  icon: isOwnProfile ? Icons.edit_note_rounded : Icons.person_add_alt_1_rounded,
+                  onTap: isOwnProfile ? _openProfileSettingsSheet : _toggleFollow,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildFlagshipSmallButton(
+                  label: isOwnProfile ? 'Создать' : 'Написать',
+                  icon: isOwnProfile ? Icons.add_rounded : Icons.chat_bubble_outline_rounded,
+                  onTap: isOwnProfile ? _openCreateMenuSheet : _openPrivateChat,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFlagshipAvatar({required double size, required bool hasAvatar}) {
+    return GestureDetector(
+      onTap: isOwnProfile ? _openProfileMediaPickerSheet : null,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFFF3F4F6),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(.055),
+                  blurRadius: 20,
+                  spreadRadius: -10,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: ClipOval(
+              child: hasAvatar
+                  ? Image.network(
+                      photo!,
+                      width: size,
+                      height: size,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Icon(Icons.person_rounded, size: size * .44, color: const Color(0xFF00A750)),
+                    )
+                  : Icon(Icons.person_rounded, size: size * .44, color: const Color(0xFF00A750)),
+            ),
+          ),
+          if (isOwnProfile)
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: Container(
+                width: size < 60 ? 18 : 26,
+                height: size < 60 ? 18 : 26,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00A750),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(.12),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: _uploadingProfilePhoto
+                    ? Padding(
+                        padding: EdgeInsets.all(size < 60 ? 4 : 6),
+                        child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : Icon(Icons.photo_camera_rounded, size: size < 60 ? 10 : 15, color: Colors.white),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRoleCapsule() {
+    final icon = isClubRole ? Icons.apartment_rounded : isCoachRole ? Icons.sports_soccer_rounded : Icons.person_rounded;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3FBF7),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: const Color(0xFF067A46)),
+          const SizedBox(width: 5),
+          Text(_roleLabel.toUpperCase(), style: _flagshipText(9, color: const Color(0xFF067A46), weight: FontWeight.w900)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFlagshipStat(int value, String label, IconData icon) {
+    return Container(
+      height: 50,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: _flagshipSoft(radius: 15),
+      child: Row(
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+            child: Icon(icon, size: 15, color: const Color(0xFF111827)),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(value.toString(), style: _flagshipTitle(14.2)),
+                const SizedBox(height: 2),
+                Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipText(9.5, color: const Color(0xFF8A94A6), weight: FontWeight.w700)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFlagshipSmallButton({required String label, required IconData icon, required VoidCallback onTap}) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(15),
+      onTap: onTap,
+      child: Container(
+        height: 38,
+        decoration: _flagshipSoft(radius: 15, active: true),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 16, color: const Color(0xFF111827)),
+            const SizedBox(width: 7),
+            Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipText(11, color: const Color(0xFF111827), weight: FontWeight.w800))),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFlagshipWorkspaceSummary() {
+    final name = _activeWorkspaceName.isEmpty ? 'Sportoteka' : _activeWorkspaceName;
+    return Container(
+      decoration: _flagshipPanel(radius: 22),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F5F7),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(_primaryZoneIcon, color: const Color(0xFF344054), size: 18),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(_primaryZoneTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipTitle(13.4, weight: FontWeight.w800)),
+                    const SizedBox(height: 2),
+                    Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipText(9.8, color: const Color(0xFF667085), weight: FontWeight.w700)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _buildAccessStripe(
+            icon: Icons.verified_user_outlined,
+            title: _enteredAsText,
+            value: _roleLabel.toUpperCase(),
+            onTap: _openProfileSettingsSheet,
+          ),
+          _buildAccessStripe(
+            icon: _primaryZoneIcon,
+            title: _primaryZoneSubtitle,
+            value: 'Открыть',
+            strong: true,
+            onTap: _openPrimaryArea,
+          ),
+          _buildAccessStripe(
+            icon: Icons.add_a_photo_outlined,
+            title: _profileMediaEditTitle,
+            value: 'Загрузить',
+            onTap: _openProfileMediaPickerSheet,
+          ),
+          _buildAccessStripe(
+            icon: Icons.settings_outlined,
+            title: 'Настройки профиля',
+            value: 'Изменить',
+            onTap: _openProfileSettingsSheet,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAccessStripe({
+    required IconData icon,
+    required String title,
+    required String value,
+    required VoidCallback onTap,
+    bool strong = false,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Container(
+        height: 38,
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 9),
+        decoration: BoxDecoration(
+          color: strong ? const Color(0xFFF5FBF7) : const Color(0xFFFAFBFC),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 3,
+              height: 18,
+              decoration: BoxDecoration(
+                color: strong ? const Color(0xFF178A45) : const Color(0xFFE5E7EB),
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(icon, size: 15, color: strong ? const Color(0xFF178A45) : const Color(0xFF667085)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipText(10.2, color: const Color(0xFF344054), weight: FontWeight.w800)),
+            ),
+            const SizedBox(width: 8),
+            Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipText(9.4, color: strong ? const Color(0xFF178A45) : const Color(0xFF98A2B3), weight: FontWeight.w900)),
+          ],
+        ),
+      ),
+    );
+  }
+
+
+  Widget _buildWorkspaceLaunchButton({bool dense = false}) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: _openPrimaryArea,
+      child: Container(
+        height: dense ? 44 : 50,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(color: const Color(0xFFEAF7EF), borderRadius: BorderRadius.circular(10)),
+              child: Icon(_primaryZoneIcon, size: 15, color: const Color(0xFF178A45)),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(_primaryZoneTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipText(10.8, color: const Color(0xFF111827), weight: FontWeight.w900)),
+                  Text(_primaryZoneSubtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipText(8.8, color: const Color(0xFF667085), weight: FontWeight.w700)),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Color(0xFF98A2B3)),
+          ],
+        ),
+      ),
+    );
+  }
+
+
+  Widget _buildFlagshipRightDesk() {
+    return CustomScrollView(
+      physics: const BouncingScrollPhysics(),
+      slivers: [
+        SliverToBoxAdapter(child: _buildFlagshipSettingsPanel()),
+        const SliverToBoxAdapter(child: SizedBox(height: 20)),
+      ],
+    );
+  }
+
+
+
+
+
+
+  Widget _buildFlagshipSettingsPanel() {
+    return Container(
+      decoration: _flagshipPanel(radius: 22),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Настройки', style: _flagshipTitle(13.6)),
+          const SizedBox(height: 8),
+          _buildSettingsLine(Icons.verified_user_outlined, 'Роль аккаунта', _roleLabel.toUpperCase(), _openProfileSettingsSheet),
+          _buildSettingsLine(Icons.image_outlined, 'Фото и профиль', 'Редактировать', _pickAndUploadPhoto),
+          _buildSettingsLine(Icons.notifications_none_rounded, 'Уведомления', 'Открыть', _openProfileSettingsSheet),
+          _buildSettingsLine(Icons.security_rounded, isPlayer ? 'Личный доступ' : 'Права клуба', isPlayer ? 'Dashboard' : 'Панель', _openPrimaryArea),
+        ],
+      ),
+    );
+  }
+
+
+  Widget _buildSettingsLine(IconData icon, String title, String value, VoidCallback onTap) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Container(
+        height: 44,
+        margin: const EdgeInsets.only(bottom: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: _flagshipSoft(radius: 16),
+        child: Row(
+          children: [
+            Icon(icon, size: 16, color: const Color(0xFF111827)),
+            const SizedBox(width: 9),
+            Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipText(10.8, color: const Color(0xFF111827), weight: FontWeight.w800))),
+            const SizedBox(width: 8),
+            Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipText(9.6, color: const Color(0xFF8A94A6), weight: FontWeight.w800)),
+          ],
+        ),
+      ),
+    );
+  }
+
+
+  String get _profileContentTitle {
+    switch (_mode) {
+      case _ProfileFeedMode.reels:
+        return 'Мои Reels';
+      case _ProfileFeedMode.feed:
+        return 'Лента профиля';
+      case _ProfileFeedMode.posts:
+        return 'Публикации профиля';
+    }
+  }
+
+  Widget _buildFlagshipContentWindow() {
+    return Container(
+      decoration: _flagshipPanel(radius: 26),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+            child: Row(
+              children: [
+                Expanded(child: Text(_profileContentTitle, style: _flagshipTitle(14.2))),
+                _buildTinyAction(Icons.add_photo_alternate_outlined, 'Пост', _openCreateMenuSheet),
+              ],
+            ),
+          ),
+          _buildModeSwitcher(),
+          const SizedBox(height: 2),
+          _buildContentGrid(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFlagshipMobileProfile() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (isOwnProfile) _buildLoggedInClubStrip(),
+        Padding(padding: const EdgeInsets.fromLTRB(12, 10, 12, 0), child: _buildFlagshipProfileCard()),
+        if (isOwnProfile) Padding(padding: const EdgeInsets.fromLTRB(12, 10, 12, 0), child: _buildFlagshipWorkspaceSummary()),
+        Padding(padding: const EdgeInsets.fromLTRB(12, 10, 12, 0), child: _buildFlagshipContentWindow()),
+        const SizedBox(height: 84),
+      ],
+    );
+  }
+
+
   Widget _buildProfileContent() {
     final sortedBlocks = design.blocks
         .where((b) => b.enabled)
+        .where((b) => b.id != 'team')
         .toList()
       ..sort((a, b) => a.order.compareTo(b.order));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (design.sectionVisibility['header'] != false)
-          _buildHeaderSection(),
-        SizedBox(height: design.spacing),
-        if (design.sectionVisibility['stats'] != false)
-          _buildStatsSection(),
-        SizedBox(height: design.spacing),
+        if (isOwnProfile) _buildLoggedInClubStrip(),
+        if (design.sectionVisibility['header'] != false) _buildHeaderSection(),
         if (design.sectionVisibility['actions'] != false && !isOwnProfile)
-          _buildActionsSection(),
-        SizedBox(height: design.spacing),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
+            child: _buildActionsSection(),
+          ),
         ...sortedBlocks.map((block) {
           return Padding(
-            padding: EdgeInsets.only(bottom: design.spacing),
+            padding: EdgeInsets.fromLTRB(14, 0, 14, design.spacing),
             child: _buildBlock(block),
           );
         }).toList(),
         if (design.sectionVisibility['switcher'] != false)
-          _buildModeSwitcher(),
-        SizedBox(height: design.spacing),
-        if (design.sectionVisibility['content'] != false)
-          _buildContentGrid(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(0, 2, 0, 0),
+            child: _buildModeSwitcher(),
+          ),
+        if (design.sectionVisibility['content'] != false) _buildContentGrid(),
+        const SizedBox(height: 84),
       ],
     );
   }
 
-  Widget _buildHeaderSection() {
-    final hasAvatar = (photo ?? '').trim().isNotEmpty;
+  Widget _buildLoggedInClubStrip() {
+    final isWorkspaceRole = isClubRole || isCoachRole;
 
     return Container(
-      padding: EdgeInsets.all(design.contentPadding),
-      decoration: BoxDecoration(
-        gradient: design.headerGradientEnabled ? LinearGradient(
-          begin: Alignment(design.headerGradientBeginX, design.headerGradientBeginY),
-          end: Alignment(design.headerGradientEndX, design.headerGradientEndY),
-          colors: design.headerGradientColors.map((c) => Color(c)).toList(),
-        ) : null,
-        color: design.headerGradientEnabled ? null : design.cardColor,
-        borderRadius: BorderRadius.circular(design.cardRadius),
-        boxShadow: design.cardShadowEnabled ? [BoxShadow(
-          color: Color(design.cardShadowColorValue).withOpacity(design.cardShadowOpacity),
-          blurRadius: design.cardShadowBlurRadius,
-          spreadRadius: design.cardShadowSpreadRadius,
-          offset: Offset(design.cardShadowOffsetX, design.cardShadowOffsetY),
-        )] : null,
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 7, 14, 8),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFEFF2F5), width: 1)),
       ),
       child: Row(
         children: [
-          _buildAvatar(hasAvatar),
-          SizedBox(width: design.spacing),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(fullName, style: _titleStyle, maxLines: 2, overflow: TextOverflow.ellipsis),
-                if (isPlayer) ...[
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: design.primaryColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text('Игрок', style: _smallStyle.copyWith(color: design.primaryColor, fontWeight: FontWeight.w700)),
-                  ),
-                ],
-              ],
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: isWorkspaceRole ? const Color(0xFFECFDF3) : const Color(0xFFF7F8FA),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isClubRole ? Icons.apartment_rounded : isCoachRole ? Icons.sports_soccer_rounded : Icons.person_outline_rounded,
+              size: 16,
+              color: isWorkspaceRole ? const Color(0xFF00A750) : const Color(0xFF667085),
             ),
           ),
-          if (age != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: design.accentColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
+          const SizedBox(width: 9),
+          Expanded(
+            child: RichText(
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              text: TextSpan(
+                style: const TextStyle(fontSize: 11.2, height: 1.1, color: Color(0xFF667085), fontWeight: FontWeight.w600),
                 children: [
-                  Icon(Icons.cake_outlined, size: 14, color: design.accentColor),
-                  const SizedBox(width: 4),
-                  Text('$age лет', style: _smallStyle.copyWith(color: design.accentColor, fontWeight: FontWeight.w700)),
+                  TextSpan(text: 'Аккаунт: ', style: TextStyle(color: Colors.black.withOpacity(.38))),
+                  TextSpan(text: _roleLabel.toUpperCase(), style: const TextStyle(color: Color(0xFF111827), fontWeight: FontWeight.w900)),
+                  const TextSpan(text: '  •  '),
+                  TextSpan(text: _activeWorkspaceName.isEmpty ? 'Спортотека' : _activeWorkspaceName),
                 ],
+              ),
+            ),
+          ),
+          if (isWorkspaceRole)
+            GestureDetector(
+              onTap: _openProPanel,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF111827),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Text(
+                  'Кабинет',
+                  style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w900),
+                ),
               ),
             ),
         ],
@@ -2261,9 +3864,1106 @@ void initState() {
     );
   }
 
+
+
+
+
+  Widget _buildMobilePersistentWindow() {
+    final bottom = MediaQuery.of(context).padding.bottom;
+
+    // Мобильные разделы открываются на полный экран, но нижнее Instagram/CMR-меню
+    // остаётся постоянной навигацией. Верхнюю панель с закрыть/свернуть/развернуть
+    // убираем: назад в профиль, Reels, чат и меню доступны через нижний dock.
+    return Container(
+      color: Colors.white,
+      child: Padding(
+        padding: EdgeInsets.only(bottom: 70 + bottom),
+        child: Material(
+          color: Colors.white,
+          child: SafeArea(
+            top: false,
+            bottom: false,
+            child: Container(
+              width: double.infinity,
+              height: double.infinity,
+              color: Colors.white,
+              child: _mobileWindowChild ?? const SizedBox.shrink(),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileWindowTitleBar({required String title, required IconData icon, required VoidCallback onClose}) {
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFEFF2F5), width: 1)),
+      ),
+      child: Row(
+        children: [
+          _buildMacDot(const Color(0xFFFF5F57), onClose),
+          const SizedBox(width: 6),
+          _buildMacDot(const Color(0xFFFFBD2E), onClose),
+          const SizedBox(width: 6),
+          _buildMacDot(const Color(0xFF28C840), () {}),
+          const SizedBox(width: 10),
+          Container(
+            width: 25,
+            height: 25,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF4F6F8),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(icon, size: 15, color: const Color(0xFF344054)),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              title.isEmpty ? 'Окно' : title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900, color: Color(0xFF111827)),
+            ),
+          ),
+          InkWell(
+            onTap: onClose,
+            borderRadius: BorderRadius.circular(999),
+            child: Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(999)),
+              child: const Icon(Icons.close_rounded, size: 16, color: Color(0xFF111827)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSocialBottomBar() {
+    final bottom = MediaQuery.of(context).padding.bottom;
+    final width = MediaQuery.of(context).size.width;
+    final side = width < 380 ? 18.0 : 28.0;
+
+    Widget dockIcon({
+      required String keyName,
+      required IconData icon,
+      required VoidCallback onTap,
+      int badge = 0,
+    }) {
+      final active = _mobileDockKey == keyName;
+      return Expanded(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Center(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 170),
+              curve: Curves.easeOutCubic,
+              width: active ? 48 : 38,
+              height: 40,
+              decoration: BoxDecoration(
+                color: active ? const Color(0xFFF0F2F5) : Colors.transparent,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
+                children: [
+                  Icon(
+                    icon,
+                    size: active ? 23 : 22,
+                    color: active ? const Color(0xFF111827) : const Color(0xFF344054),
+                  ),
+                  if (badge > 0)
+                    Positioned(
+                      top: 2,
+                      right: active ? 7 : 2,
+                      child: Container(
+                        constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF0050),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: Colors.white, width: 1.7),
+                        ),
+                        child: Center(
+                          child: Text(
+                            badge > 99 ? '99+' : '$badge',
+                            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.white, height: 1),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(side, 0, side, max(8.0, bottom + 4)),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(30),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: Container(
+              height: 58,
+              padding: const EdgeInsets.symmetric(horizontal: 7),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(.94),
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(color: const Color(0xFFE3E8EF), width: 1),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(.12),
+                    blurRadius: 24,
+                    spreadRadius: -10,
+                    offset: const Offset(0, 12),
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withOpacity(.04),
+                    blurRadius: 8,
+                    spreadRadius: -5,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  dockIcon(
+                    keyName: 'profile',
+                    icon: Icons.home_rounded,
+                    onTap: () {
+                      _closeMobileWindow(dockKey: 'profile');
+                      if (mounted) setState(() => _mode = _ProfileFeedMode.posts);
+                    },
+                  ),
+                  dockIcon(keyName: 'reels', icon: Icons.play_circle_outline_rounded, onTap: _openGlobalReels),
+                  dockIcon(keyName: 'chat', icon: Icons.near_me_outlined, badge: 1, onTap: _openMainChat),
+                  dockIcon(keyName: 'search', icon: Icons.search_rounded, onTap: _openMobileSearchWindow),
+                  dockIcon(keyName: 'account', icon: Icons.account_circle_outlined, onTap: _openPrimaryArea),
+                  dockIcon(keyName: 'more', icon: Icons.more_horiz_rounded, onTap: _openProfileHomeMoreSheet),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+
+
+  void _openProfileHomeMoreSheet() {
+    final actions = <_ProfileFlagshipAction>[
+      _ProfileFlagshipAction(_primaryZoneTitle, _primaryZoneSubtitle, _primaryZoneIcon, _openPrimaryArea, group: 'Рабочая зона', primary: true),
+      _ProfileFlagshipAction('Чат', 'сообщения и группы', Icons.forum_rounded, _openMainChat, group: 'Аккаунт'),
+      _ProfileFlagshipAction('Команды / CMR', 'команды, составы и рабочий режим', Icons.groups_rounded, _openTeamsWindow, group: 'Основное'),
+      _ProfileFlagshipAction('Расписание', 'календарь занятий и матчей', Icons.calendar_month_rounded, _openScheduleWindow, group: 'Основное'),
+      _ProfileFlagshipAction('Мероприятия', 'события, сборы и активности', Icons.event_rounded, _openEventsWindow, group: 'Основное'),
+      _ProfileFlagshipAction('Видеоуроки', 'папки, обучение и материалы', Icons.school_rounded, _openVideoLessonsWindow, group: 'Медиа'),
+      _ProfileFlagshipAction('Советы', 'подсказки и инструкции', Icons.tips_and_updates_rounded, _openTipsWindow, group: 'Медиа'),
+      _ProfileFlagshipAction('Сервисы', 'дополнительные инструменты', Icons.apps_rounded, _openServicesWindow, group: 'Сервисы'),
+      _ProfileFlagshipAction('Трекинг', 'датчики и тренировочный режим', Icons.monitor_heart_rounded, _openTrackingWindow, group: 'Сервисы'),
+      _ProfileFlagshipAction('Площадки', 'бронирование и объекты', Icons.stadium_rounded, _openVenuesWindow, group: 'Сервисы'),
+      _ProfileFlagshipAction('Билеты', 'заявки и посещение матчей', Icons.confirmation_number_rounded, _openTicketsWindow, group: 'Сервисы'),
+      _ProfileFlagshipAction('PRO подписка', 'расширенные возможности', Icons.workspace_premium_rounded, _openSubscriptionWindow, group: 'Аккаунт', pro: true),
+      if (isOwnProfile)
+        _ProfileFlagshipAction(isClubRole ? 'Логотип / аватар' : 'Аватарка', _profileMediaEditSubtitle, Icons.add_a_photo_outlined, _openProfileMediaPickerSheet, group: 'Аккаунт'),
+      _ProfileFlagshipAction('Настройки', 'профиль и доступ', Icons.settings_outlined, _openProfileSettingsSheet, group: 'Аккаунт'),
+      if (isOwnProfile)
+        _ProfileFlagshipAction('Выйти из профиля', 'завершить текущую сессию', Icons.logout_rounded, _logoutFromProfile, group: 'Аккаунт'),
+      if (isOwnProfile)
+        _ProfileFlagshipAction('Удалить профиль', 'подтверждение кодовым словом', Icons.delete_forever_rounded, _deleteOwnProfileWithConfirmation, group: 'Аккаунт', danger: true),
+    ];
+
+    if (!_isDesktopProfileLayout) {
+      _openCmrWindow(
+        title: 'Ещё',
+        icon: Icons.more_horiz_rounded,
+        maxWidth: 520,
+        maxHeight: 760,
+        child: _buildProfileHomeMoreWindowContent(actions),
+      );
+      return;
+    }
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) {
+        final bottom = MediaQuery.of(context).padding.bottom;
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(14, 10, 14, 14 + bottom),
+            child: SizedBox(
+              height: min(MediaQuery.of(context).size.height * .74, 620).toDouble(),
+              child: _buildProfileHomeMoreWindowContent(
+                actions,
+                onActionTap: (action) {
+                  Navigator.pop(context);
+                  action.onTap();
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+
+  Widget _buildProfileHomeMoreWindowContent(
+    List<_ProfileFlagshipAction> actions, {
+    void Function(_ProfileFlagshipAction action)? onActionTap,
+  }) {
+    final grouped = <String, List<_ProfileFlagshipAction>>{};
+    for (final action in actions) {
+      grouped.putIfAbsent(action.group, () => <_ProfileFlagshipAction>[]).add(action);
+    }
+
+    Widget compactTile(_ProfileFlagshipAction action) {
+      final danger = action.danger;
+      final tileBg = action.primary
+          ? const Color(0xFF111827)
+          : (danger ? const Color(0xFFFFF1F2) : const Color(0xFFF8FAFC));
+      final tileBorder = action.primary
+          ? const Color(0xFF111827)
+          : (danger ? const Color(0xFFFFCCD5) : const Color(0xFFE9EEF3));
+      final iconColor = action.primary
+          ? Colors.white
+          : (danger ? const Color(0xFFE11D48) : const Color(0xFF344054));
+      final titleColor = action.primary
+          ? Colors.white
+          : (danger ? const Color(0xFFE11D48) : const Color(0xFF111827));
+      return InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          if (onActionTap != null) {
+            onActionTap(action);
+          } else {
+            action.onTap();
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          decoration: BoxDecoration(
+            color: tileBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: tileBorder),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: action.primary ? Colors.white.withOpacity(.14) : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: action.primary ? null : Border.all(color: const Color(0xFFE9EEF3)),
+                ),
+                child: Icon(action.icon, size: 18, color: iconColor),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            action.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                              color: titleColor,
+                            ),
+                          ),
+                        ),
+                        if (action.pro)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                            decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(999)),
+                            child: const Text('PRO', style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.w900, color: Color(0xFFEA580C))),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      action.subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: action.primary ? Colors.white.withOpacity(.68) : const Color(0xFF667085),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, size: 18, color: action.primary ? Colors.white.withOpacity(.72) : const Color(0xFF98A2B3)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    Widget section(String title, List<_ProfileFlagshipAction> items) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 7),
+              child: Text(
+                title.toUpperCase(),
+                style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w900, color: Color(0xFF98A2B3), letterSpacing: .6),
+              ),
+            ),
+            ...items.map((a) => Padding(padding: const EdgeInsets.only(bottom: 8), child: compactTile(a))),
+          ],
+        ),
+      );
+    }
+
+    final orderedGroups = ['Рабочая зона', 'Основное', 'Медиа', 'Сервисы', 'Аккаунт'];
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFE9EEF3)),
+            ),
+            child: Row(
+              children: [
+                _buildSmallAvatarForSheet(),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(fullName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Color(0xFF111827))),
+                      const SizedBox(height: 2),
+                      Text(_enteredAsText, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF667085))),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                  decoration: BoxDecoration(color: const Color(0xFFECFDF3), borderRadius: BorderRadius.circular(999)),
+                  child: Text(_roleLabel.toUpperCase(), style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Color(0xFF00A750))),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                children: [
+                  for (final group in orderedGroups)
+                    if ((grouped[group] ?? const <_ProfileFlagshipAction>[]).isNotEmpty)
+                      section(group, grouped[group]!),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+  Future<void> _logoutFromProfile() async {
+    await _clearLocalProfileSession();
+    if (!mounted) return;
+    Get.offAllNamed(AppRoutes.loginScreen);
+  }
+
+ Future<void> _clearLocalProfileSession() async {
+  try {
+    await PrefUtils.setIsSignIn(false);
+  } catch (_) {}
+
+  try {
+    await PrefUtils.setUserId(0);
+  } catch (_) {}
+
+  try {
+    await PrefUtils.setUserFirstName('');
+  } catch (_) {}
+
+  try {
+    await PrefUtils.setUserLastName('');
+  } catch (_) {}
+
+  try {
+    await PrefUtils.setUserEmail('');
+  } catch (_) {}
+
+  try {
+    await PrefUtils.setRole('');
+  } catch (_) {}
+
+  try {
+    await PrefUtils.setUserPhoto('');
+  } catch (_) {}
+}
+  Future<void> _deleteOwnProfileWithConfirmation() async {
+    final userId = await PrefUtils.getUserId();
+    if (userId == null || userId <= 0) {
+      Get.snackbar('Профиль', 'Не найден user_id для удаления профиля', snackPosition: SnackPosition.BOTTOM);
+      return;
+    }
+
+    final confirmed = await _showDeleteProfileCodeBanner();
+    if (confirmed != true) return;
+
+    try {
+      final resp = await http.post(
+        Uri.parse(_deleteAccountUrl),
+        body: {
+          'user_id': userId.toString(),
+        },
+      );
+
+      if (resp.statusCode != 200) {
+        Get.snackbar('Удаление профиля', 'Сервер вернул ошибку: ${resp.statusCode}', snackPosition: SnackPosition.BOTTOM);
+        return;
+      }
+
+      dynamic data;
+      try {
+        data = jsonDecode(resp.body);
+      } catch (_) {
+        data = null;
+      }
+
+      final success = data is Map &&
+          (data['success'] == true ||
+              data['status'] == 'success' ||
+              data['status'] == 'deleted');
+
+      if (!success) {
+        final message = data is Map
+            ? (data['error'] ?? data['message'] ?? 'Не удалось удалить профиль').toString()
+            : 'Не удалось удалить профиль';
+        Get.snackbar('Удаление профиля', message, snackPosition: SnackPosition.BOTTOM);
+        return;
+      }
+
+      await _clearLocalProfileSession();
+      if (!mounted) return;
+      Get.offAllNamed(AppRoutes.loginScreen);
+    } catch (e) {
+      Get.snackbar('Ошибка сети', e.toString(), snackPosition: SnackPosition.BOTTOM);
+    }
+  }
+
+  Future<bool?> _showDeleteProfileCodeBanner() async {
+    const codeWord = 'УДАЛИТЬ';
+    final controller = TextEditingController();
+    bool canDelete = false;
+
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        final bottom = MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom;
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            void onTextChanged(String value) {
+              final next = value.trim().toUpperCase() == codeWord;
+              if (next != canDelete) {
+                setSheetState(() => canDelete = next);
+              }
+            }
+
+            return Padding(
+              padding: EdgeInsets.fromLTRB(14, 0, 14, 14 + bottom),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(.16),
+                      blurRadius: 34,
+                      spreadRadius: -14,
+                      offset: const Offset(0, 18),
+                    ),
+                  ],
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(18, 18, 18, 17),
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFFFFE4E6), Color(0xFFFFF7ED)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(.9),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: const Icon(Icons.warning_amber_rounded, color: Color(0xFFE11D48), size: 25),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Удалить профиль?',
+                                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF111827)),
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  'Это действие удалит аккаунт и завершит текущую сессию. Отменить удаление после подтверждения нельзя.',
+                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, height: 1.25, color: Color(0xFF667085)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          RichText(
+                            text: const TextSpan(
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF667085), height: 1.25),
+                              children: [
+                                TextSpan(text: 'Для подтверждения введите кодовое слово: '),
+                                TextSpan(text: codeWord, style: TextStyle(color: Color(0xFFE11D48), fontWeight: FontWeight.w900)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: controller,
+                            onChanged: onTextChanged,
+                            textCapitalization: TextCapitalization.characters,
+                            decoration: InputDecoration(
+                              hintText: codeWord,
+                              filled: true,
+                              fillColor: const Color(0xFFF8FAFC),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: canDelete ? const Color(0xFFE11D48) : const Color(0xFF00A750), width: 1.4)),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFF111827),
+                                    side: const BorderSide(color: Color(0xFFE5E7EB)),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                    padding: const EdgeInsets.symmetric(vertical: 13),
+                                  ),
+                                  onPressed: () => Navigator.pop(context, false),
+                                  child: const Text('Отмена', style: TextStyle(fontWeight: FontWeight.w900)),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    elevation: 0,
+                                    backgroundColor: canDelete ? const Color(0xFFE11D48) : const Color(0xFFE5E7EB),
+                                    foregroundColor: canDelete ? Colors.white : const Color(0xFF98A2B3),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                    padding: const EdgeInsets.symmetric(vertical: 13),
+                                  ),
+                                  onPressed: canDelete ? () => Navigator.pop(context, true) : null,
+                                  child: const Text('Удалить профиль', style: TextStyle(fontWeight: FontWeight.w900)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    controller.dispose();
+    return result;
+  }
+
+
+  void _openCreateMenuSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(width: 42, height: 4, decoration: BoxDecoration(color: const Color(0xFFE5E7EB), borderRadius: BorderRadius.circular(999))),
+                const SizedBox(height: 16),
+                _buildSettingsRow(
+                  icon: Icons.add_photo_alternate_outlined,
+                  title: 'Новый пост',
+                  subtitle: 'Фото, текст и публикация в профиль',
+                  onTap: () { Navigator.pop(context); _openCreatePostModal(); },
+                ),
+                _buildSettingsRow(
+                  icon: Icons.movie_creation_outlined,
+                  title: 'Новый Reels',
+                  subtitle: 'Короткое спортивное видео',
+                  onTap: () { Navigator.pop(context); _openUploadReels(); },
+                ),
+                _buildSettingsRow(
+                  icon: _primaryZoneIcon,
+                  title: _primaryZoneTitle,
+                  subtitle: _primaryZoneSubtitle,
+                  strong: true,
+                  onTap: () { Navigator.pop(context); _openPrimaryArea(); },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _openProfileSettingsSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(child: Container(width: 42, height: 4, decoration: BoxDecoration(color: const Color(0xFFE5E7EB), borderRadius: BorderRadius.circular(999)))),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    _buildSmallAvatarForSheet(),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(fullName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF111827))),
+                          const SizedBox(height: 2),
+                          Text(_enteredAsText, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF667085))),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                      decoration: BoxDecoration(color: const Color(0xFFECFDF3), borderRadius: BorderRadius.circular(999)),
+                      child: Text(_roleLabel.toUpperCase(), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF00A750))),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _buildSettingsRow(
+                  icon: _primaryZoneIcon,
+                  title: _primaryZoneTitle,
+                  subtitle: _primaryZoneSubtitle,
+                  strong: true,
+                  onTap: () { Navigator.pop(context); _openPrimaryArea(); },
+                ),
+                _buildSettingsRow(
+                  icon: Icons.camera_alt_outlined,
+                  title: _profileMediaEditTitle,
+                  subtitle: _profileMediaEditSubtitle,
+                  onTap: () { Navigator.pop(context); _openProfileMediaPickerSheet(); },
+                ),
+                _buildSettingsRow(
+                  icon: Icons.notifications_none_rounded,
+                  title: 'Уведомления',
+                  subtitle: 'Матчи, тренировки, чаты и события клуба',
+                  onTap: () {
+                    Navigator.pop(context);
+                    Get.snackbar('Скоро', 'Здесь можно открыть экран уведомлений', snackPosition: SnackPosition.BOTTOM);
+                  },
+                ),
+                _buildSettingsRow(
+                  icon: Icons.privacy_tip_outlined,
+                  title: 'Приватность и доступ',
+                  subtitle: 'Кто видит профиль, медиа и данные команды',
+                  onTap: () {
+                    Navigator.pop(context);
+                    Get.snackbar('Скоро', 'Раздел приватности можно подключить отдельным экраном', snackPosition: SnackPosition.BOTTOM);
+                  },
+                ),
+                if (isOwnProfile) ...[
+                  const SizedBox(height: 4),
+                  _buildSettingsRow(
+                    icon: Icons.logout_rounded,
+                    title: 'Выйти из профиля',
+                    subtitle: 'Завершить текущую сессию и открыть вход',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _logoutFromProfile();
+                    },
+                  ),
+                  _buildSettingsRow(
+                    icon: Icons.delete_forever_rounded,
+                    title: 'Удалить профиль',
+                    subtitle: 'Удаление аккаунта через кодовое слово УДАЛИТЬ',
+                    danger: true,
+                    onTap: () {
+                      Navigator.pop(context);
+                      _deleteOwnProfileWithConfirmation();
+                    },
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSmallAvatarForSheet() {
+    final hasAvatar = (photo ?? '').trim().isNotEmpty;
+    final avatar = Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(color: const Color(0xFFF7F8FA), shape: BoxShape.circle, border: Border.all(color: const Color(0xFFE5E7EB))),
+          child: ClipOval(
+            child: hasAvatar
+                ? Image.network(photo!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded, color: Color(0xFF667085), size: 20))
+                : const Icon(Icons.person_rounded, color: Color(0xFF667085), size: 20),
+          ),
+        ),
+        if (isOwnProfile)
+          Positioned(
+            right: -2,
+            bottom: -2,
+            child: Container(
+              width: 18,
+              height: 18,
+              decoration: BoxDecoration(
+                color: const Color(0xFF00A750),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+              ),
+              child: _uploadingProfilePhoto
+                  ? const Padding(
+                      padding: EdgeInsets.all(3),
+                      child: CircularProgressIndicator(strokeWidth: 1.6, color: Colors.white),
+                    )
+                  : const Icon(Icons.photo_camera_rounded, color: Colors.white, size: 10),
+            ),
+          ),
+      ],
+    );
+
+    if (!isOwnProfile) return avatar;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: _openProfileMediaPickerSheet,
+      child: avatar,
+    );
+  }
+
+  Widget _buildSettingsRow({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    bool strong = false,
+    bool danger = false,
+  }) {
+    final bgColor = strong ? const Color(0xFF111827) : (danger ? const Color(0xFFFFF1F2) : const Color(0xFFF8F9FA));
+    final borderColor = strong ? const Color(0xFF111827) : (danger ? const Color(0xFFFFCCD5) : const Color(0xFFEFF2F5));
+    final iconColor = strong ? Colors.white : (danger ? const Color(0xFFE11D48) : const Color(0xFF111827));
+    final titleColor = strong ? Colors.white : (danger ? const Color(0xFFE11D48) : const Color(0xFF111827));
+    final subtitleColor = strong ? Colors.white.withOpacity(.68) : (danger ? const Color(0xFFBE123C) : const Color(0xFF667085));
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: borderColor),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: strong ? Colors.white.withOpacity(.12) : Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: strong ? Colors.white.withOpacity(.12) : const Color(0xFFE5E7EB)),
+                ),
+                child: Icon(icon, color: iconColor, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: titleColor, fontSize: 13, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 3),
+                    Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: subtitleColor, fontSize: 11, fontWeight: FontWeight.w600, height: 1.15)),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: strong ? Colors.white.withOpacity(.88) : const Color(0xFF98A2B3), size: 21),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+
+
+  Widget _buildHeaderSection() {
+    final hasAvatar = (photo ?? '').trim().isNotEmpty;
+    final infoLine = [
+      if ((playerClubName ?? '').trim().isNotEmpty) (playerClubName ?? '').trim(),
+      if ((playerTeamName ?? '').trim().isNotEmpty) (playerTeamName ?? '').trim(),
+      if ((location ?? '').trim().isNotEmpty) (location ?? '').trim(),
+    ].join(' • ');
+
+    return Container(
+      width: double.infinity,
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _buildAvatar(hasAvatar),
+              const SizedBox(width: 18),
+              Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildInstagramStat(userPosts.length, 'посты'),
+                    _buildInstagramStat(userReels.length, 'reels'),
+                    GestureDetector(
+                      onTap: () => _openUsersModal(showFollowers: true),
+                      child: _buildInstagramStat(followersCount, 'подписчики'),
+                    ),
+                    GestureDetector(
+                      onTap: () => _openUsersModal(showFollowers: false),
+                      child: _buildInstagramStat(followingsCount, 'подписки'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 11),
+          Text(
+            fullName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 13.2, fontWeight: FontWeight.w900, color: Color(0xFF111827), height: 1.1),
+          ),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              _buildProfileBadge(_roleLabel, isClubRole || isCoachRole ? const Color(0xFF00A750) : const Color(0xFF111827)),
+              if (age != null) _buildProfileBadge('$age лет', const Color(0xFF667085)),
+              if ((playerTeamName ?? '').trim().isNotEmpty) _buildProfileBadge((playerTeamName ?? '').trim(), const Color(0xFF2563EB)),
+            ],
+          ),
+          if ((bio ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: 7),
+            Text(
+              (bio ?? '').trim(),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11.7, fontWeight: FontWeight.w500, color: Color(0xFF1F2937), height: 1.25),
+            ),
+          ],
+          if (infoLine.isNotEmpty) ...[
+            const SizedBox(height: 7),
+            Row(
+              children: [
+                const Icon(Icons.location_on_outlined, size: 14, color: Color(0xFF8A94A6)),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    infoLine,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 11.2, fontWeight: FontWeight.w700, color: Color(0xFF667085)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 11),
+          Row(
+            children: [
+              Expanded(
+                child: _buildSlimProfileButton(
+                  label: isOwnProfile ? 'Редактировать профиль' : (isFollowing ? 'Вы подписаны' : 'Подписаться'),
+                  icon: isOwnProfile ? Icons.edit_note_rounded : Icons.person_add_alt_1_rounded,
+                  onTap: isOwnProfile ? _openProfileSettingsSheet : _toggleFollow,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildSlimProfileButton(
+                  label: isOwnProfile ? _primaryZoneTitle : 'Написать',
+                  icon: isOwnProfile ? _primaryZoneIcon : Icons.chat_bubble_outline_rounded,
+                  onTap: isOwnProfile ? _openPrimaryArea : _openPrivateChat,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInstagramStat(int value, String label) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          value.toString(),
+          style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w900, color: Color(0xFF111827), height: 1.05),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 10.2, fontWeight: FontWeight.w600, color: Color(0xFF667085), height: 1),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProfileBadge(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(.08),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(fontSize: 10.2, fontWeight: FontWeight.w900, color: color, height: 1),
+      ),
+    );
+  }
+
+  Widget _buildSlimProfileButton({required String label, required IconData icon, required VoidCallback onTap}) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(11),
+      onTap: onTap,
+      child: Container(
+        height: 34,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF7F8FA),
+          borderRadius: BorderRadius.circular(11),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 16, color: const Color(0xFF111827)),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF111827)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildAvatar(bool hasAvatar) {
     return GestureDetector(
-      onTap: isOwnProfile ? _pickAndUploadPhoto : null,
+      onTap: isOwnProfile ? _openProfileMediaPickerSheet : null,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -2321,7 +5021,12 @@ void initState() {
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 2),
                 ),
-                child: const Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white),
+                child: _uploadingProfilePhoto
+                    ? const Padding(
+                        padding: EdgeInsets.all(7),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white),
               ),
             ),
         ],
@@ -2677,17 +5382,12 @@ void initState() {
 
   Widget _buildModeSwitcher() {
     return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: design.cardColor,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: design.textTertiaryColor.withOpacity(0.2)),
-        boxShadow: design.cardShadowEnabled ? [BoxShadow(
-          color: Color(design.cardShadowColorValue).withOpacity(design.cardShadowOpacity),
-          blurRadius: design.cardShadowBlurRadius,
-          spreadRadius: design.cardShadowSpreadRadius,
-          offset: Offset(design.cardShadowOffsetX, design.cardShadowOffsetY),
-        )] : null,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          top: BorderSide(color: Color(0xFFEFF2F5), width: 1),
+          bottom: BorderSide(color: Color(0xFFEFF2F5), width: 1),
+        ),
       ),
       child: Row(
         children: [
@@ -2698,16 +5398,16 @@ void initState() {
             onTap: () => setState(() => _mode = _ProfileFeedMode.posts),
           ),
           _buildModeButton(
-            active: _mode == _ProfileFeedMode.reels,
-            icon: Icons.play_circle_fill_rounded,
-            label: "Reels",
-            onTap: () => setState(() => _mode = _ProfileFeedMode.reels),
-          ),
-          _buildModeButton(
             active: _mode == _ProfileFeedMode.feed,
-            icon: Icons.public,
+            icon: Icons.article_outlined,
             label: "Лента",
             onTap: () => setState(() => _mode = _ProfileFeedMode.feed),
+          ),
+          _buildModeButton(
+            active: _mode == _ProfileFeedMode.reels,
+            icon: Icons.play_circle_outline_rounded,
+            label: "Мои Reels",
+            onTap: () => setState(() => _mode = _ProfileFeedMode.reels),
           ),
         ],
       ),
@@ -2718,16 +5418,26 @@ void initState() {
     return Expanded(
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
         child: Container(
-          padding: EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(color: active ? design.primaryColor : Colors.transparent, borderRadius: BorderRadius.circular(999)),
+          height: 44,
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: active ? const Color(0xFF111827) : Colors.transparent, width: 1.6),
+            ),
+          ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 18, color: active ? Colors.white : design.textSecondaryColor),
-              const SizedBox(width: 8),
-              Text(label, style: TextStyle(fontWeight: FontWeight.w900, color: active ? Colors.white : design.textSecondaryColor, fontSize: design.smallFontSize)),
+              Icon(icon, size: 17, color: active ? const Color(0xFF111827) : const Color(0xFF98A2B3)),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  color: active ? const Color(0xFF111827) : const Color(0xFF98A2B3),
+                  fontSize: 10.8,
+                ),
+              ),
             ],
           ),
         ),
@@ -2736,13 +5446,22 @@ void initState() {
   }
 
   Widget _buildContentGrid() {
-    if (_mode == _ProfileFeedMode.posts) {
-      return _buildPostsGrid();
-    } else if (_mode == _ProfileFeedMode.reels) {
+    if (_mode == _ProfileFeedMode.reels) {
       return _buildReelsGrid();
-    } else {
+    }
+    if (_mode == _ProfileFeedMode.feed) {
       return _buildFeedGrid();
     }
+
+    // Профиль хранит личные публикации пользователя: сетка и лента — это разные виды одного контента.
+    return _buildPostsGrid();
+  }
+
+  int _profileGridCrossAxisCount() {
+    final width = MediaQuery.maybeOf(context)?.size.width ?? 0;
+    // На ПК/планшете профильная сетка должна быть плотнее: 4 карточки в ряд.
+    // На мобильной версии оставляем классические 3 колонки, ближе к Instagram.
+    return width >= 720 ? 4 : 3;
   }
 
   Widget _buildPostsGrid() {
@@ -2757,8 +5476,8 @@ void initState() {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: _profileGridCrossAxisCount(),
         crossAxisSpacing: 2,
         mainAxisSpacing: 2,
         childAspectRatio: 1,
@@ -2842,8 +5561,8 @@ void initState() {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: _profileGridCrossAxisCount(),
         crossAxisSpacing: 2,
         mainAxisSpacing: 2,
         childAspectRatio: 9 / 16,
@@ -2929,75 +5648,222 @@ void initState() {
 
   Widget _buildFeedGrid() {
     if (isLoadingFeed) {
-      return Center(child: CircularProgressIndicator(color: design.primaryColor));
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 28),
+        child: Center(child: CircularProgressIndicator(color: design.primaryColor)),
+      );
     }
 
     if (feedPosts.isEmpty) {
-      return _buildEmptyState(icon: Icons.public, message: 'В ленте пока нет постов');
+      return _buildEmptyState(icon: Icons.public_rounded, message: 'В ленте профиля пока нет публикаций');
     }
 
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 2,
-        mainAxisSpacing: 2,
-        childAspectRatio: 1,
-      ),
-      itemCount: feedPosts.length,
-      itemBuilder: (context, index) {
-        final post = feedPosts[index];
-        final img = _safeStr(post['imageUrl']).trim();
-        final hasImage = img.isNotEmpty;
-
-        return GestureDetector(
-          onTap: () => _openFeedPostDetail(post),
-          child: Container(
-            color: design.surfaceColor,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (hasImage)
-                  Image.network(img, fit: BoxFit.cover)
-                else
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 680),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 16, 14, 8),
+              child: Row(
+                children: [
                   Container(
-                    color: design.surfaceColor,
-                    child: Center(child: Icon(Icons.public, size: 40, color: design.textTertiaryColor)),
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3F7F5),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.public_rounded, size: 17, color: Color(0xFF667085)),
                   ),
-                Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                      colors: [Colors.black.withOpacity(0.30), Colors.transparent],
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Лента профиля',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Color(0xFF101828)),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Публикации, которые добавил этот пользователь',
+                          style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: Color(0xFF98A2B3)),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(color: Colors.black.withOpacity(0.50), borderRadius: BorderRadius.circular(6)),
-                    child: Icon(hasImage ? Icons.photo : Icons.public, size: 16, color: Colors.white),
+                  TextButton(
+                    onPressed: () => setState(() => _mode = _ProfileFeedMode.posts),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF101828),
+                      textStyle: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800),
+                    ),
+                    child: const Text('Сетка'),
+                  ),
+                ],
+              ),
+            ),
+            ...feedPosts.map((post) => _buildCommunityNewsCard(post)).toList(),
+            const SizedBox(height: 18),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCommunityNewsCard(Map<String, dynamic> post) {
+    final img = _safeStr(post['imageUrl']).trim();
+    final avatar = _safeStr(post['authorAvatar']).trim();
+    final hasImage = img.isNotEmpty;
+    final category = _safeStr(post['category']).trim();
+    final title = _safeStr(post['title']).trim();
+    final text = _safeStr(post['text']).trim();
+    final author = _safeStr(post['authorName']).trim().isNotEmpty ? _safeStr(post['authorName']).trim() : 'Сообщество';
+    final date = post['date'] is DateTime ? post['date'] as DateTime : DateTime.now();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () => _openFeedPostDetail(post),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: const Border(bottom: BorderSide(color: Color(0xFFEFF2F5), width: 1)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 16,
+                        backgroundColor: const Color(0xFFF3F7F5),
+                        backgroundImage: avatar.isNotEmpty ? NetworkImage(avatar) : null,
+                        child: avatar.isEmpty
+                            ? const Icon(Icons.groups_2_outlined, size: 16, color: Color(0xFF667085))
+                            : null,
+                      ),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              author,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900, color: Color(0xFF101828)),
+                            ),
+                            const SizedBox(height: 1),
+                            Text(
+                              '${category.isNotEmpty ? '$category • ' : ''}${_formatFeedDate(date)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF98A2B3)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.more_horiz_rounded, size: 18, color: Color(0xFF98A2B3)),
+                    ],
                   ),
                 ),
-                if (isOwnProfile)
-                  Positioned(
-                    top: 8,
-                    left: 8,
-                    child: _buildDeleteMenuButton(onTap: () {
-                      final postId = _safeInt(post['id']);
-                      _openItemActionsSheet(title: "Пост в ленте", onDelete: () => _deletePostById(postId));
-                    }),
+                if (hasImage)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(0),
+                    child: AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: Image.network(
+                        img,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: const Color(0xFFF3F7F5),
+                          alignment: Alignment.center,
+                          child: const Icon(Icons.image_not_supported_outlined, color: Color(0xFF98A2B3)),
+                        ),
+                      ),
+                    ),
                   ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (title.isNotEmpty)
+                        Text(
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12.5, height: 1.25, fontWeight: FontWeight.w900, color: Color(0xFF101828)),
+                        ),
+                      if (text.isNotEmpty) ...[
+                        const SizedBox(height: 5),
+                        Text(
+                          text,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11, height: 1.35, fontWeight: FontWeight.w500, color: Color(0xFF475467)),
+                        ),
+                      ],
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          _buildCommunityNewsMeta(Icons.favorite_border_rounded, '${_safeInt(post['likes'])}'),
+                          const SizedBox(width: 12),
+                          _buildCommunityNewsMeta(Icons.chat_bubble_outline_rounded, '${_safeInt(post['comments'])}'),
+                          const Spacer(),
+                          const Text(
+                            'Открыть',
+                            style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900, color: Color(0xFF101828)),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.arrow_forward_ios_rounded, size: 10, color: Color(0xFF101828)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
+  }
+
+  Widget _buildCommunityNewsMeta(IconData icon, String value) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 15, color: const Color(0xFF98A2B3)),
+        const SizedBox(width: 4),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF667085)),
+        ),
+      ],
+    );
+  }
+
+  String _formatFeedDate(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+    if (diff.inMinutes < 1) return 'только что';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} мин назад';
+    if (diff.inHours < 24) return '${diff.inHours} ч назад';
+    if (diff.inDays < 7) return '${diff.inDays} дн назад';
+    final d = date.day.toString().padLeft(2, '0');
+    final m = date.month.toString().padLeft(2, '0');
+    return '$d.$m.${date.year}';
   }
 
   Widget _buildDeleteMenuButton({required VoidCallback onTap}) {
@@ -3043,6 +5909,37 @@ void initState() {
 // =============================
 // ВСПОМОГАТЕЛЬНЫЕ КЛАССЫ (ОСТАВЛЯЕМ)
 // =============================
+
+class _ProfileFlagshipAction {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final VoidCallback onTap;
+  final String group;
+  final bool pro;
+  final bool primary;
+  final bool danger;
+
+  const _ProfileFlagshipAction(
+    this.title,
+    this.subtitle,
+    this.icon,
+    this.onTap, {
+    required this.group,
+    this.pro = false,
+    this.primary = false,
+    this.danger = false,
+  });
+}
+
+class _ProfileShortcut {
+  final String title;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _ProfileShortcut(this.title, this.icon, this.onTap);
+}
+
 class _UserShort {
   final int? id;
   final String fullName;

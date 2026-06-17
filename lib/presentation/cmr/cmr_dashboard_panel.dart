@@ -24,14 +24,14 @@ class _CmrDashText {
   static TextStyle title(double size) => TextStyle(
         color: _CmrDashColors.text,
         fontSize: size,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
         height: 1.12,
       );
 
   static TextStyle section() => const TextStyle(
         color: _CmrDashColors.text,
         fontSize: 15,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
         height: 1.18,
       );
 
@@ -668,7 +668,7 @@ class _ActionButton extends StatelessWidget {
           text,
           style: TextStyle(
             fontSize: 11,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
             color: onTap == null ? const Color(0xFF94A3B8) : color,
           ),
         ),
@@ -928,7 +928,7 @@ class _DashboardRow extends StatelessWidget {
                     style: const TextStyle(
                       color: _CmrDashColors.green,
                       fontSize: 11,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,

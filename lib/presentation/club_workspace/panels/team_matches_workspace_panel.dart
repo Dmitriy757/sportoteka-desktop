@@ -90,7 +90,7 @@ class _TeamMatchesWorkspacePanelState extends State<TeamMatchesWorkspacePanel> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text('Добавить матч', style: TextStyle(color: CmrColors.text, fontSize: 20, fontWeight: FontWeight.w900)),
+                  const Text('Добавить матч', style: TextStyle(color: CmrColors.text, fontSize: 20, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 14),
                   TextField(controller: opponentCtrl, decoration: const InputDecoration(labelText: 'Соперник', border: OutlineInputBorder())),
                   const SizedBox(height: 10),
@@ -110,7 +110,7 @@ class _TeamMatchesWorkspacePanelState extends State<TeamMatchesWorkspacePanel> {
                     child: Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(border: Border.all(color: CmrColors.border), borderRadius: BorderRadius.circular(14)),
-                      child: Row(children: [const Icon(Icons.calendar_month_rounded, color: CmrColors.blue), const SizedBox(width: 10), Text('${date.year}-${_two(date.month)}-${_two(date.day)}', style: const TextStyle(fontWeight: FontWeight.w900))]),
+                      child: Row(children: [const Icon(Icons.calendar_month_rounded, color: CmrColors.blue), const SizedBox(width: 10), Text('${date.year}-${_two(date.month)}-${_two(date.day)}', style: const TextStyle(fontWeight: FontWeight.w700))]),
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -220,7 +220,7 @@ class _TeamMatchesWorkspacePanelState extends State<TeamMatchesWorkspacePanel> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text('${widget.teamName} — $opponent', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: CmrColors.text, fontSize: 16, fontWeight: FontWeight.w900)),
+                                      Text('${widget.teamName} — $opponent', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: CmrColors.text, fontSize: 16, fontWeight: FontWeight.w700)),
                                       const SizedBox(height: 7),
                                       Wrap(spacing: 8, runSpacing: 6, children: [
                                         _Badge(icon: Icons.calendar_today_rounded, text: date),
@@ -232,7 +232,7 @@ class _TeamMatchesWorkspacePanelState extends State<TeamMatchesWorkspacePanel> {
                                 ),
                                 if (score.isNotEmpty) ...[
                                   const SizedBox(width: 12),
-                                  Text(score, style: const TextStyle(color: CmrColors.text, fontSize: 22, fontWeight: FontWeight.w900)),
+                                  Text(score, style: const TextStyle(color: CmrColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
                                 ],
                               ],
                             ),
@@ -283,7 +283,7 @@ class _Badge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(color: CmrColors.bg, borderRadius: BorderRadius.circular(999), border: Border.all(color: CmrColors.border)),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 13, color: CmrColors.muted), const SizedBox(width: 5), Text(text, style: const TextStyle(color: CmrColors.text, fontSize: 11, fontWeight: FontWeight.w800))]),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 13, color: CmrColors.muted), const SizedBox(width: 5), Text(text, style: const TextStyle(color: CmrColors.text, fontSize: 11, fontWeight: FontWeight.w600))]),
     );
   }
 }
