@@ -10,7 +10,7 @@ on:
 jobs:
   build-windows:
     name: Build Windows release
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     steps:
       - name: Checkout project
@@ -29,10 +29,21 @@ jobs:
       - name: Enable Windows desktop
         run: flutter config --enable-windows-desktop
 
+      - name: Clean old Windows build cache
+        shell: pwsh
+        run: |
+          flutter clean
+          if (Test-Path build\windows) {
+            Remove-Item build\windows -Recurse -Force
+          }
+
       - name: Get dependencies
         run: flutter pub get
 
       - name: Build Windows release
+        env:
+          CMAKE_GENERATOR: "Visual Studio 17 2022"
+          CMAKE_GENERATOR_PLATFORM: "x64"
         run: flutter build windows --release
 
       - name: Zip Windows release
