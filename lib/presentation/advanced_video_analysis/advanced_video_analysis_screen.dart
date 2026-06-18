@@ -313,11 +313,25 @@ class _AdvancedVideoAnalysisScreenState extends State<AdvancedVideoAnalysisScree
   bool _pausedByAnalysisBuffer = false;
   bool _pauseRequestedByBuffer = false;
   bool _resumeRequestedByBuffer = false;
+
+  String _prepareVideoUrl(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) return '';
+
+    final normalized = value.startsWith('http://') ||
+            value.startsWith('https://') ||
+            value.startsWith('file://') ||
+            value.startsWith('content://')
+        ? value
+        : 'https://sportotekaapp.ru${value.startsWith('/') ? value : '/$value'}';
+
+    return Uri.tryParse(normalized)?.toString() ?? normalized;
+  }
   
   @override
   void initState() {
     super.initState();
-    _videoUrl = widget.params['videoUrl'] ?? '';
+    _videoUrl = _prepareVideoUrl(widget.params['videoUrl'] ?? '');
     widget.externalPlaybackController?._attach(this);
     print('📹 Video URL: $_videoUrl');
     _initWebView();
@@ -332,6 +346,7 @@ class _AdvancedVideoAnalysisScreenState extends State<AdvancedVideoAnalysisScree
   }
   
   void _initWebView() {
+    final safeVideoUrl = const HtmlEscape().convert(_videoUrl);
     // ВСЕ HTML И JAVASCRIPT КОД ВНУТРИ ТРОЙНЫХ КАВЫЧЕК
     final String html = r'''
 <!DOCTYPE html>
@@ -479,8 +494,8 @@ class _AdvancedVideoAnalysisScreenState extends State<AdvancedVideoAnalysisScree
 </head>
 <body>
   <div id="video-container">
-    <video id="video-player" playsinline preload="auto">
-      <source src="''' + _videoUrl + '''" type="video/mp4">
+    <video id="video-player" playsinline webkit-playsinline preload="metadata" controlsList="nodownload">
+      <source src="''' + safeVideoUrl + '''" type="video/mp4">
       <p class="error-message">❌ Видео не может быть загружено</p>
     </video>
     
@@ -628,7 +643,33 @@ class _AdvancedVideoAnalysisScreenState extends State<AdvancedVideoAnalysisScree
 
     video.addEventListener('canplay', function() {
       emitVideoState('canplay');
-      if (window.__sportotekaPendingHostPlay) video.play().catch(function(){});
+      if (window.__sportotekaPendingHostPlay) video.play().catch(function(err){
+        emitVideoState('play_error_canplay');
+        console.log('Sportoteka video play blocked/canplay', err);
+      });
+    });
+
+    video.addEventListener('error', function() {
+      const mediaError = video.error;
+      const code = mediaError ? mediaError.code : 0;
+      const message = mediaError ? (mediaError.message || '') : '';
+      try {
+        if (window.SportotekaVideoBridge) {
+          SportotekaVideoBridge.postMessage(JSON.stringify({
+            type: 'video_state',
+            reason: 'error',
+            time_ms: (video.currentTime || 0) * 1000,
+            duration_ms: (video.duration || 0) * 1000,
+            paused: video.paused,
+            ended: video.ended,
+            seeking: video.seeking,
+            playback_rate: video.playbackRate || 1,
+            error_code: code,
+            error_message: message
+          }));
+        }
+      } catch(e) {}
+      console.log('Sportoteka video error', code, message);
     });
     
     video.addEventListener('timeupdate', function() {
@@ -645,7 +686,12 @@ class _AdvancedVideoAnalysisScreenState extends State<AdvancedVideoAnalysisScree
     
     window.sportotekaHostPlay = function() {
       window.__sportotekaPendingHostPlay = true;
-      if (video) video.play().then(function(){ window.__sportotekaPendingHostPlay = false; }).catch(function(){});
+      if (video) video.play().then(function(){
+        window.__sportotekaPendingHostPlay = false;
+      }).catch(function(err){
+        emitVideoState('play_blocked');
+        console.log('Sportoteka host play blocked', err);
+      });
     };
     window.sportotekaHostPause = function() {
       window.__sportotekaPendingHostPlay = false;
@@ -715,13 +761,24 @@ class _AdvancedVideoAnalysisScreenState extends State<AdvancedVideoAnalysisScree
 '''.replaceAll('__SPORTOTEKA_CONTROLS_DISPLAY__', (widget.hideControls || widget.embedded) ? 'none' : 'flex').replaceAll('__SPORTOTEKA_HOST_CONTROLLED__', (widget.hideControls || widget.embedded) ? 'true' : 'false');
 
     _webController = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..addJavaScriptChannel(
-        'SportotekaVideoBridge',
-        onMessageReceived: _handleVideoBridgeMessage,
-      )
-      ..loadHtmlString(html);
+  ..setJavaScriptMode(JavaScriptMode.unrestricted)
+  ..addJavaScriptChannel(
+    'SportotekaVideoBridge',
+    onMessageReceived: _handleVideoBridgeMessage,
+  )
+  ..loadHtmlString(html, baseUrl: 'https://sportotekaapp.ru');
+
+unawaited(_allowAndroidInlineVideoPlayback());
   }
+  
+  Future<void> _allowAndroidInlineVideoPlayback() async {
+  try {
+    final dynamic platformController = _webController.platform;
+    await platformController.setMediaPlaybackRequiresUserGesture(false);
+  } catch (_) {
+    // Для iOS/macOS/Web или старой реализации WebView этот метод недоступен — это нормально.
+  }
+}
   
   void _connectWebSocket({bool forceRestart = false}) {
     if (!widget.connectAi) {
@@ -862,6 +919,24 @@ class _AdvancedVideoAnalysisScreenState extends State<AdvancedVideoAnalysisScree
       _isSeeking = nextSeeking;
       if (nextPlaybackRate > 0) {
         _currentPlaybackRate = nextPlaybackRate;
+      }
+
+      if (reason == 'error') {
+        final code = map['error_code']?.toString() ?? '';
+        final message = map['error_message']?.toString() ?? '';
+        setState(() {
+          _isLoading = false;
+          _connectionStatus = '❌ Видео не открылось на Android/WebView${code.isEmpty ? '' : ' код $code'}${message.isEmpty ? '' : ': $message'}';
+        });
+        widget.externalPlaybackController?.notifyListeners();
+        return;
+      }
+
+      if (reason == 'play_blocked' || reason == 'play_error_canplay') {
+        setState(() {
+          _isLoading = false;
+          _connectionStatus = '▶ Нажмите Play ещё раз. Android заблокировал первый старт видео.';
+        });
       }
 
       if (reason == 'canplay' || reason == 'loadedmetadata') {

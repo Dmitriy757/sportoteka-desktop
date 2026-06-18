@@ -1865,16 +1865,49 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         text == 'активна';
   }
 
+  bool _isDesktopPlatform() {
+    final platform = defaultTargetPlatform;
+
+    if (kIsWeb) {
+      return platform == TargetPlatform.macOS ||
+          platform == TargetPlatform.windows ||
+          platform == TargetPlatform.linux;
+    }
+
+    return Platform.isMacOS || Platform.isWindows || Platform.isLinux;
+  }
+
+  bool _isTabletPlatform() {
+    final platform = defaultTargetPlatform;
+    return platform == TargetPlatform.android ||
+        platform == TargetPlatform.iOS ||
+        platform == TargetPlatform.fuchsia;
+  }
+
   bool _useProfessionalWorkspace(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final shortestSide = math.min(size.width, size.height);
-    // На планшетах и ПК открываем рабочий CMR-shell, а не мобильную версию.
-    // Телефоны в landscape остаются в mobile-режиме, чтобы не было тесной рейки.
+
+    // Планшеты остаются в CMR-shell, но не получают ПК-режим с рабочим столом и окнами.
+    if (_isTabletPlatform()) {
+      return shortestSide >= 600 || (size.width >= 700 && shortestSide >= 500);
+    }
+
+    // Настоящий ПК/macOS/Windows/Linux.
+    if (_isDesktopPlatform()) {
+      return size.width >= 900;
+    }
+
+    // Остальные случаи: телефон в landscape не превращаем в ПК.
     return shortestSide >= 600 || (size.width >= 700 && shortestSide >= 500);
   }
 
   bool _isDesktopWide(BuildContext context) {
-    return MediaQuery.of(context).size.width >= 1180;
+    if (!_isDesktopPlatform()) return false;
+
+    final size = MediaQuery.of(context).size;
+    final shortestSide = math.min(size.width, size.height);
+    return size.width >= 1180 && shortestSide >= 650;
   }
 
   double _getResponsiveFontSize(BuildContext context, double baseSize) {
@@ -1922,7 +1955,9 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   }
 
   void _selectWorkspaceSection(ClubSection section) {
-    if (_useProfessionalWorkspace(context)) {
+    // Только настоящий ПК открывает модули отдельными окнами.
+    // На Android/iPad планшетах разделы переключаются внутри планшетного shell.
+    if (_isDesktopWide(context)) {
       _openModuleWindow(section);
       return;
     }
@@ -3469,10 +3504,17 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       );
     }
 
+    // В Workspace панель должна быть чуть выше края, иначе выглядит прилипшей к низу.
+    // Держим её ниже, чем старый вариант, но выше текущего слишком низкого положения.
+    final bottomInset = bottom > 0
+        ? math.max(12.0, math.min(16.0, bottom * .45))
+        : 10.0;
+
     return SafeArea(
       top: false,
+      bottom: false,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, math.max(8.0, bottom + 4)),
+        padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, bottomInset),
         child: Container(
           height: 56,
           padding: const EdgeInsets.symmetric(horizontal: 7),

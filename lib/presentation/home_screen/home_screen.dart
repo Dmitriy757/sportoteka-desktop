@@ -3956,12 +3956,16 @@ Future<void> _loadRoleWorkspaceData() async {
 
   Widget _buildMobileBottomMenu(BuildContext context) {
     // ВАЖНО: это меню должно повторять геометрию ClubWorkspace.
-    // Не задаём height/padding вручную — BottomNavigationBar сам держит
-    // правильную высоту и вертикальные отступы, как в club_workspace_screen.dart.
+    // SafeArea не включаем снизу, чтобы не было двойного отступа и меню
+    // стояло ниже, ближе к Instagram-навигации.
+    final bottom = MediaQuery.of(context).padding.bottom;
+    final bottomInset = bottom > 0 ? min(8.0, bottom * .22) : 4.0;
+
     return SafeArea(
       top: false,
+      bottom: false,
       child: Container(
-        margin: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+        margin: EdgeInsets.fromLTRB(12, 0, 12, bottomInset),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(22),
