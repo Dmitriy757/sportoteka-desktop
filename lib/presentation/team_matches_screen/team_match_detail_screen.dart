@@ -666,8 +666,15 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
     if (raw == null) return null;
     final s = raw.trim();
     if (s.isEmpty || s.toLowerCase() == 'null') return null;
-    if (s.startsWith("http://") || s.startsWith("https://")) return s;
-    return "https://sportotekaapp.ru${s.startsWith('/') ? s : '/$s'}";
+
+    final normalized = s.startsWith("http://") ||
+            s.startsWith("https://") ||
+            s.startsWith("file://") ||
+            s.startsWith("content://")
+        ? s
+        : "https://sportotekaapp.ru${s.startsWith('/') ? s : '/$s'}";
+
+    return Uri.tryParse(normalized)?.toString() ?? normalized;
   }
 
   bool _looksLikeOnlyId(String value) {
@@ -12039,7 +12046,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     final existing = _analysisVideoControllers[key];
     if (existing != null) return existing;
 
-    final controller = VideoPlayerController.network(url);
+    final controller = VideoPlayerController.networkUrl(Uri.parse(url));
     _analysisVideoControllers[key] = controller;
     _analysisVideoInitErrors.remove(key);
     _analysisVideoInitFutures[key] = controller.initialize().then((_) async {

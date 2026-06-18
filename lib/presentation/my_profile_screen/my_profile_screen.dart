@@ -2781,6 +2781,7 @@ void initState() {
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7F9),
       appBar: isDesktop || _mobileWindowChild != null ? null : _buildFlagshipMobileAppBar(isVisitor),
+      bottomNavigationBar: showMobileDock ? _buildSocialBottomBar() : null,
       body: isLoadingProfile
           ? _buildFlagshipLoading()
           : isDesktop
@@ -2800,20 +2801,13 @@ void initState() {
                           slivers: [
                             SliverToBoxAdapter(child: _buildFlagshipMobileProfile()),
                             if (isVisitor) const SliverToBoxAdapter(child: SizedBox(height: 20)),
-                            const SliverToBoxAdapter(child: SizedBox(height: 118)),
+                            const SliverToBoxAdapter(child: SizedBox(height: 18)),
                           ],
                         ),
                       ),
                     ),
                     if (_mobileWindowChild != null)
                       Positioned.fill(child: _buildMobilePersistentWindow()),
-                    if (showMobileDock)
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: _buildSocialBottomBar(),
-                      ),
                   ],
                 ),
     );
@@ -3869,7 +3863,6 @@ void initState() {
 
 
   Widget _buildMobilePersistentWindow() {
-    final bottom = MediaQuery.of(context).padding.bottom;
 
     // Мобильные разделы открываются на полный экран, но нижнее Instagram/CMR-меню
     // остаётся постоянной навигацией. Верхнюю панель с закрыть/свернуть/развернуть
@@ -3877,7 +3870,7 @@ void initState() {
     return Container(
       color: Colors.white,
       child: Padding(
-        padding: EdgeInsets.only(bottom: 70 + bottom),
+        padding: EdgeInsets.zero,
         child: Material(
           color: Colors.white,
           child: SafeArea(
@@ -3947,7 +3940,8 @@ void initState() {
   Widget _buildSocialBottomBar() {
     final bottom = MediaQuery.of(context).padding.bottom;
     final width = MediaQuery.of(context).size.width;
-    final side = width < 380 ? 18.0 : 28.0;
+    final side = width < 380 ? 14.0 : 22.0;
+    final bottomInset = bottom > 0 ? min(14.0, bottom * .40) : 6.0;
 
     Widget dockIcon({
       required String keyName,
@@ -3964,8 +3958,8 @@ void initState() {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 170),
               curve: Curves.easeOutCubic,
-              width: active ? 48 : 38,
-              height: 40,
+              width: active ? 44 : 34,
+              height: 36,
               decoration: BoxDecoration(
                 color: active ? const Color(0xFFF0F2F5) : Colors.transparent,
                 borderRadius: BorderRadius.circular(999),
@@ -3976,25 +3970,25 @@ void initState() {
                 children: [
                   Icon(
                     icon,
-                    size: active ? 23 : 22,
+                    size: active ? 22 : 21,
                     color: active ? const Color(0xFF111827) : const Color(0xFF344054),
                   ),
                   if (badge > 0)
                     Positioned(
-                      top: 2,
-                      right: active ? 7 : 2,
+                      top: 1,
+                      right: active ? 6 : 0,
                       child: Container(
-                        constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
+                        constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
                         padding: const EdgeInsets.symmetric(horizontal: 4),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFF0050),
                           borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: Colors.white, width: 1.7),
+                          border: Border.all(color: Colors.white, width: 1.6),
                         ),
                         child: Center(
                           child: Text(
                             badge > 99 ? '99+' : '$badge',
-                            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.white, height: 1),
+                            style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.w900, color: Colors.white, height: 1),
                           ),
                         ),
                       ),
@@ -4009,14 +4003,15 @@ void initState() {
 
     return SafeArea(
       top: false,
+      bottom: false,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(side, 0, side, max(8.0, bottom + 4)),
+        padding: EdgeInsets.fromLTRB(side, 0, side, bottomInset),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(30),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
             child: Container(
-              height: 58,
+              height: 56,
               padding: const EdgeInsets.symmetric(horizontal: 7),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(.94),
