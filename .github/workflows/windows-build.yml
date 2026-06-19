@@ -56,3 +56,16 @@ jobs:
         with:
           name: sportoteka-windows-release-zip
           path: sportoteka-windows-release.zip
+                - name: Install Inno Setup
+        run: choco install innosetup -y
+
+      - name: Build Windows Installer
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer\sportoteka_installer.iss"
+
+      - name: Upload Windows Installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: SportotekaSetup
+          path: installer/output/SportotekaSetup.exe
