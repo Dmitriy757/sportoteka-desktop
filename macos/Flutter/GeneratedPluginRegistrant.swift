@@ -15,7 +15,7 @@ import file_picker
 import file_selector_macos
 import firebase_core
 import firebase_messaging
-import flutter_blue_plus_darwin
+import flutter_blue_plus
 import flutter_local_notifications
 import geolocator_apple
 import iris_method_channel

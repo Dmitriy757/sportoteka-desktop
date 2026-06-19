@@ -2,8 +2,11 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:sportoteka/presentation/advanced_video_analysis/widgets/analysis_overlay_widget.dart';
 import 'package:sportoteka/presentation/advanced_video_analysis/services/websocket_service.dart';
@@ -19,14 +22,22 @@ class AdvancedVideoAnalysisPlaybackController extends ChangeNotifier {
 
   _AdvancedVideoAnalysisScreenState? get _state => _states.isEmpty ? null : _states.last;
 
-  bool get attached => _state != null;
-  bool get isPlaying => !(_state?._isVideoPaused ?? true);
+  bool get attached => _states.isNotEmpty;
+  bool get isPlaying => _states.any((state) => !state._isVideoPaused);
   Duration get position => Duration(milliseconds: (_state?._currentVideoTimeMs ?? 0).round());
   Duration get duration => Duration(milliseconds: (_state?._videoDurationMs ?? 0).round());
   double get speed => _state?._currentPlaybackRate ?? (_pendingSpeed ?? 1.0);
   bool get isReady => _state?._videoStateReady ?? false;
 
   void _attach(_AdvancedVideoAnalysisScreenState state) {
+    // Один общий центр управления: если пользователь открыл расширенный просмотр,
+    // старый встроенный preview сразу ставим на паузу, чтобы не было двух живых видео.
+    for (final oldState in List<_AdvancedVideoAnalysisScreenState>.from(_states)) {
+      if (oldState != state) {
+        unawaited(oldState._hostPause());
+      }
+    }
+
     _states.remove(state);
     _states.add(state);
     notifyListeners();
@@ -38,6 +49,21 @@ class AdvancedVideoAnalysisPlaybackController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> _pauseStatesExcept(_AdvancedVideoAnalysisScreenState activeState) async {
+    final others = List<_AdvancedVideoAnalysisScreenState>.from(_states)
+        .where((state) => state != activeState)
+        .toList();
+    for (final state in others) {
+      await state._hostPause();
+    }
+  }
+
+  Future<void> _pauseAllStates() async {
+    for (final state in List<_AdvancedVideoAnalysisScreenState>.from(_states)) {
+      await state._hostPause();
+    }
+  }
+
   Future<void> _flushPendingCommands() async {
     final state = _state;
     if (state == null) return;
@@ -47,14 +73,16 @@ class AdvancedVideoAnalysisPlaybackController extends ChangeNotifier {
     final pendingPause = _pendingPause;
     _pendingSeek = null;
 
-    if (pendingSpeed != null) await state._hostSetSpeed(pendingSpeed);
-    if (pendingSeek != null) await state._hostSeekTo(pendingSeek);
+    if (pendingSpeed != null) await setSpeed(pendingSpeed);
+    if (pendingSeek != null) await seekTo(pendingSeek);
     if (pendingPause) {
-      await state._hostPause();
+      await pause();
       _pendingPause = false;
       _pendingPlay = false;
     } else if (pendingPlay) {
+      await _pauseStatesExcept(state);
       await state._hostPlay();
+      notifyListeners();
     }
   }
 
@@ -66,52 +94,63 @@ class AdvancedVideoAnalysisPlaybackController extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    await _pauseStatesExcept(state);
     await state._hostPlay();
+    notifyListeners();
   }
 
   Future<void> pause() async {
     _pendingPause = true;
     _pendingPlay = false;
-    final state = _state;
-    if (state == null) {
+    if (_states.isEmpty) {
       notifyListeners();
       return;
     }
-    await state._hostPause();
+    await _pauseAllStates();
+    notifyListeners();
   }
 
   Future<void> toggle() => isPlaying ? pause() : play();
 
   Future<void> seekToFraction(double value) async {
-    final state = _state;
-    if (state == null) return;
-    await state._hostSeekToFraction(value);
+    final states = List<_AdvancedVideoAnalysisScreenState>.from(_states);
+    if (states.isEmpty) return;
+    for (final state in states) {
+      await state._hostSeekToFraction(value);
+    }
+    notifyListeners();
   }
 
   Future<void> seekTo(Duration position) async {
     _pendingSeek = position;
-    final state = _state;
-    if (state == null) {
+    final states = List<_AdvancedVideoAnalysisScreenState>.from(_states);
+    if (states.isEmpty) {
       notifyListeners();
       return;
     }
-    await state._hostSeekTo(position);
+    for (final state in states) {
+      await state._hostSeekTo(position);
+    }
+    notifyListeners();
   }
 
   Future<void> seekRelative(int seconds) async {
     final state = _state;
     if (state == null) return;
-    await state._hostSeekRelative(seconds);
+    await seekTo(position + Duration(seconds: seconds));
   }
 
   Future<void> setSpeed(double speed) async {
     _pendingSpeed = speed;
-    final state = _state;
-    if (state == null) {
+    final states = List<_AdvancedVideoAnalysisScreenState>.from(_states);
+    if (states.isEmpty) {
       notifyListeners();
       return;
     }
-    await state._hostSetSpeed(speed);
+    for (final state in states) {
+      await state._hostSetSpeed(speed);
+    }
+    notifyListeners();
   }
 }
 
@@ -259,6 +298,21 @@ Future<T?> showAdvancedVideoAnalysisWindow<T>(
 
 class _AdvancedVideoAnalysisScreenState extends State<AdvancedVideoAnalysisScreen> {
   late WebViewController _webController;
+  VideoPlayerController? _nativeVideoController;
+  Future<void>? _nativeVideoInitFuture;
+  DateTime _lastNativeNotifyAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  bool get _useNativeWindowsVideo => !kIsWeb && Platform.isWindows;
+
+  String get _htmlVideoMimeType {
+    final path = Uri.tryParse(_videoUrl)?.path.toLowerCase() ?? _videoUrl.toLowerCase();
+    if (path.endsWith('.webm')) return 'video/webm';
+    if (path.endsWith('.mov')) return 'video/quicktime';
+    if (path.endsWith('.m4v')) return 'video/x-m4v';
+    if (path.endsWith('.avi')) return 'video/x-msvideo';
+    return 'video/mp4';
+  }
+
   final WebSocketService _wsService = WebSocketService();
   bool _isLoading = true;
   bool _isVideoReady = false;
@@ -334,7 +388,11 @@ class _AdvancedVideoAnalysisScreenState extends State<AdvancedVideoAnalysisScree
     _videoUrl = _prepareVideoUrl(widget.params['videoUrl'] ?? '');
     widget.externalPlaybackController?._attach(this);
     print('📹 Video URL: $_videoUrl');
-    _initWebView();
+    if (_useNativeWindowsVideo) {
+      _initNativeVideoPlayer();
+    } else {
+      _initWebView();
+    }
     _startOverlaySyncTimer();
     if (widget.connectAi) {
       _connectWebSocket();
@@ -345,8 +403,229 @@ class _AdvancedVideoAnalysisScreenState extends State<AdvancedVideoAnalysisScree
     
   }
   
+
+  Future<void> _initNativeVideoPlayer() async {
+    final oldController = _nativeVideoController;
+    if (oldController != null) {
+      oldController.removeListener(_handleNativeVideoState);
+      await oldController.dispose();
+    }
+
+    _nativeVideoController = null;
+    _nativeVideoInitFuture = null;
+    _videoStateReady = false;
+    _isVideoPaused = true;
+    _currentVideoTimeMs = 0;
+    _videoDurationMs = 0;
+    widget.externalPlaybackController?.notifyListeners();
+
+    if (_videoUrl.trim().isEmpty) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _connectionStatus = '❌ Нет ссылки на видео';
+        });
+      }
+      return;
+    }
+
+    final controller = VideoPlayerController.networkUrl(Uri.parse(_videoUrl));
+    _nativeVideoController = controller;
+    controller.addListener(_handleNativeVideoState);
+
+    _nativeVideoInitFuture = controller.initialize().then((_) async {
+      await controller.setLooping(false);
+      await controller.setVolume(1);
+      await controller.setPlaybackSpeed(_currentPlaybackRate.clamp(0.25, 2.5).toDouble());
+      // На Windows первый кадр иногда не рисуется до первого seek/play — из-за этого
+      // preview выглядит как чёрный экран. Маленький seek заставляет декодер показать кадр.
+      if (controller.value.duration.inMilliseconds > 20) {
+        await controller.seekTo(const Duration(milliseconds: 1));
+      }
+
+      _videoStateReady = true;
+      _isVideoReady = true;
+      _isVideoPaused = !controller.value.isPlaying;
+      _currentVideoTimeMs = controller.value.position.inMilliseconds.toDouble();
+      _videoDurationMs = controller.value.duration.inMilliseconds.toDouble();
+
+      if (_userWantsPlayback) {
+        await controller.play();
+      }
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _connectionStatus = widget.connectAi ? 'Видео готово, ожидаю AI-кадры' : 'Видео';
+        });
+      }
+      widget.externalPlaybackController?.notifyListeners();
+    }).catchError((Object error, StackTrace stackTrace) {
+      debugPrint('❌ Windows video init failed: $error');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _connectionStatus = '❌ Windows не смог открыть видео: $error';
+        });
+      }
+      widget.externalPlaybackController?.notifyListeners();
+    });
+
+    if (mounted) setState(() {});
+  }
+
+  void _handleNativeVideoState() {
+    final controller = _nativeVideoController;
+    if (controller == null) return;
+
+    final value = controller.value;
+    _videoStateReady = value.isInitialized;
+    _isVideoReady = value.isInitialized;
+    _currentVideoTimeMs = value.position.inMilliseconds.toDouble();
+    if (value.duration.inMilliseconds > 0) {
+      _videoDurationMs = value.duration.inMilliseconds.toDouble();
+    }
+    _isVideoPaused = !value.isPlaying;
+    _isSeeking = value.isBuffering;
+    _currentPlaybackRate = value.playbackSpeed;
+
+    final now = DateTime.now();
+    if (now.difference(_lastNativeNotifyAt).inMilliseconds > 90) {
+      _lastNativeNotifyAt = now;
+      widget.externalPlaybackController?.notifyListeners();
+      if (mounted) setState(() {});
+    }
+  }
+
+  Widget _buildNativeWindowsVideoLayer() {
+    final controller = _nativeVideoController;
+
+    return FutureBuilder<void>(
+      future: _nativeVideoInitFuture,
+      builder: (context, snapshot) {
+        final ready = controller != null && controller.value.isInitialized;
+        if (!ready) {
+          final hasError = snapshot.hasError || _connectionStatus.startsWith('❌');
+          return Container(
+            color: Colors.black,
+            alignment: Alignment.center,
+            padding: const EdgeInsets.all(18),
+            child: Text(
+              hasError ? _cleanStatus(_connectionStatus) : 'Подготовка видео для Windows...',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          );
+        }
+
+        final video = Center(
+          child: AspectRatio(
+            aspectRatio: controller.value.aspectRatio <= 0 ? 16 / 9 : controller.value.aspectRatio,
+            child: VideoPlayer(controller),
+          ),
+        );
+
+        if (widget.hideControls || widget.embedded) {
+          return Container(color: Colors.black, child: video);
+        }
+
+        final duration = controller.value.duration;
+        final position = controller.value.position;
+        final progress = duration.inMilliseconds > 0
+            ? (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0).toDouble()
+            : 0.0;
+
+        return Container(
+          color: Colors.black,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              video,
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: 14,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(.93),
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(.22),
+                        blurRadius: 24,
+                        offset: const Offset(0, 12),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        tooltip: controller.value.isPlaying ? 'Пауза' : 'Play',
+                        icon: Icon(
+                          controller.value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                          color: Colors.black,
+                          size: 21,
+                        ),
+                        onPressed: () => controller.value.isPlaying ? _hostPause() : _hostPlay(),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+                      ),
+                      IconButton(
+                        tooltip: 'Назад 10с',
+                        icon: const Icon(Icons.replay_10_rounded, color: Colors.black, size: 20),
+                        onPressed: () => _hostSeekRelative(-10),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+                      ),
+                      Expanded(
+                        child: Slider(
+                          value: progress,
+                          min: 0,
+                          max: 1,
+                          onChanged: _hostSeekToFraction,
+                        ),
+                      ),
+                      Text(
+                        '${_formatDuration(position)} / ${_formatDuration(duration)}',
+                        style: const TextStyle(
+                          color: Color(0xFF374151),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Вперёд 10с',
+                        icon: const Icon(Icons.forward_10_rounded, color: Colors.black, size: 20),
+                        onPressed: () => _hostSeekRelative(10),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  String _formatDuration(Duration duration) {
+    final totalSeconds = duration.inSeconds.clamp(0, 24 * 60 * 60);
+    final minutes = (totalSeconds ~/ 60).toString().padLeft(2, '0');
+    final seconds = (totalSeconds % 60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+
   void _initWebView() {
     final safeVideoUrl = const HtmlEscape().convert(_videoUrl);
+    final safeVideoMimeType = const HtmlEscape().convert(_htmlVideoMimeType);
     // ВСЕ HTML И JAVASCRIPT КОД ВНУТРИ ТРОЙНЫХ КАВЫЧЕК
     final String html = r'''
 <!DOCTYPE html>
@@ -396,6 +675,12 @@ class _AdvancedVideoAnalysisScreenState extends State<AdvancedVideoAnalysisScree
       border: 1px solid rgba(255,255,255,0.65);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Arial, sans-serif;
     }
+    body.host-controlled .controls {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
     .controls button {
       background: #F6F7F9;
       border: 1px solid rgba(17,24,39,0.06);
@@ -413,6 +698,11 @@ class _AdvancedVideoAnalysisScreenState extends State<AdvancedVideoAnalysisScree
     .controls button:hover {
       background: #FFFFFF;
       transform: translateY(-1px);
+    }
+    .controls button.is-playing {
+      background: #111827;
+      color: #FFFFFF;
+      box-shadow: 0 12px 28px rgba(17,24,39,0.28);
     }
     .controls input[type="range"] {
       width: 150px;
@@ -492,10 +782,10 @@ class _AdvancedVideoAnalysisScreenState extends State<AdvancedVideoAnalysisScree
     }
   </style>
 </head>
-<body>
+<body class="__SPORTOTEKA_BODY_CLASS__">
   <div id="video-container">
-    <video id="video-player" playsinline webkit-playsinline preload="metadata" controlsList="nodownload">
-      <source src="''' + safeVideoUrl + '''" type="video/mp4">
+    <video id="video-player" playsinline webkit-playsinline preload="auto" controlsList="nodownload" crossorigin="anonymous">
+      <source src="''' + safeVideoUrl + '''" type="''' + safeVideoMimeType + '''">
       <p class="error-message">❌ Видео не может быть загружено</p>
     </video>
     
@@ -521,12 +811,20 @@ class _AdvancedVideoAnalysisScreenState extends State<AdvancedVideoAnalysisScree
     const speedBtn = document.getElementById('speedBtn');
     const volumeBtn = document.getElementById('volumeBtn');
     const fullscreenBtn = document.getElementById('fullscreenBtn');
+    const controls = document.getElementById('controls');
     
     let isDragging = false;
     let currentSpeed = 1;
     let isMuted = false;
     let lastStateEmit = 0;
     const HOST_CONTROLLED = __SPORTOTEKA_HOST_CONTROLLED__;
+    if (HOST_CONTROLLED && controls) {
+      controls.style.display = 'none';
+      controls.style.visibility = 'hidden';
+      controls.style.opacity = '0';
+      controls.style.pointerEvents = 'none';
+      controls.setAttribute('aria-hidden', 'true');
+    }
 
     function emitVideoState(reason) {
       const now = performance.now();
@@ -564,14 +862,23 @@ class _AdvancedVideoAnalysisScreenState extends State<AdvancedVideoAnalysisScree
         timeDisplay.textContent = formatTime(video.currentTime) + ' / ' + formatTime(video.duration);
       }
     }
+
+    function setPlayButtonState(isPlaying) {
+      playBtn.textContent = isPlaying ? '⏸' : '▶';
+      playBtn.classList.toggle('is-playing', !!isPlaying);
+      playBtn.title = isPlaying ? 'Пауза' : 'Play';
+    }
     
     function toggleLocalPlayback() {
       if (video.paused) {
-        video.play();
-        playBtn.textContent = '⏸';
+        video.play().catch(function(err){
+          emitVideoState('play_blocked_local');
+          console.log('Sportoteka local play blocked', err);
+        });
+        setPlayButtonState(true);
       } else {
         video.pause();
-        playBtn.textContent = '▶';
+        setPlayButtonState(false);
       }
     }
 
@@ -618,12 +925,12 @@ class _AdvancedVideoAnalysisScreenState extends State<AdvancedVideoAnalysisScree
     }
     
     video.addEventListener('play', function() {
-      playBtn.textContent = '⏸';
+      setPlayButtonState(true);
       emitVideoState('play');
     });
     
     video.addEventListener('pause', function() {
-      playBtn.textContent = '▶';
+      setPlayButtonState(false);
       emitVideoState('pause');
     });
 
@@ -637,6 +944,13 @@ class _AdvancedVideoAnalysisScreenState extends State<AdvancedVideoAnalysisScree
     
     video.addEventListener('loadedmetadata', function() {
       timeDisplay.textContent = '00:00 / ' + formatTime(video.duration);
+      // На части WebView первый кадр не появляется, пока не было микросмещения.
+      // Делаем его только в самом начале, чтобы убрать чёрный preview без автозапуска.
+      if (!window.__sportotekaFirstFramePrimed && video.duration && video.currentTime === 0) {
+        window.__sportotekaFirstFramePrimed = true;
+        try { video.currentTime = Math.min(0.001, Math.max(0, video.duration - 0.001)); } catch(e) {}
+      }
+      setPlayButtonState(!video.paused);
       emitVideoState('loadedmetadata');
       if (window.__sportotekaPendingHostPlay) video.play().catch(function(){});
     });
@@ -686,15 +1000,18 @@ class _AdvancedVideoAnalysisScreenState extends State<AdvancedVideoAnalysisScree
     
     window.sportotekaHostPlay = function() {
       window.__sportotekaPendingHostPlay = true;
+      setPlayButtonState(true);
       if (video) video.play().then(function(){
         window.__sportotekaPendingHostPlay = false;
       }).catch(function(err){
+        setPlayButtonState(false);
         emitVideoState('play_blocked');
         console.log('Sportoteka host play blocked', err);
       });
     };
     window.sportotekaHostPause = function() {
       window.__sportotekaPendingHostPlay = false;
+      setPlayButtonState(false);
       if (video) video.pause();
     };
     window.sportotekaHostSeekFraction = function(value) {
@@ -725,8 +1042,21 @@ class _AdvancedVideoAnalysisScreenState extends State<AdvancedVideoAnalysisScree
       emitVideoState('host_speed');
     };
     window.sportotekaHostSetControlsVisible = function(visible) {
-      const controls = document.getElementById('controls');
-      if (controls) controls.style.display = visible ? 'flex' : 'none';
+      if (HOST_CONTROLLED) {
+        if (controls) {
+          controls.style.display = 'none';
+          controls.style.visibility = 'hidden';
+          controls.style.opacity = '0';
+          controls.style.pointerEvents = 'none';
+        }
+        return;
+      }
+      if (controls) {
+        controls.style.visibility = 'visible';
+        controls.style.opacity = '1';
+        controls.style.pointerEvents = 'auto';
+        controls.style.display = visible ? 'flex' : 'none';
+      }
     };
 
     document.addEventListener('keydown', function(e) {
@@ -758,7 +1088,10 @@ class _AdvancedVideoAnalysisScreenState extends State<AdvancedVideoAnalysisScree
   </script>
 </body>
 </html>
-'''.replaceAll('__SPORTOTEKA_CONTROLS_DISPLAY__', (widget.hideControls || widget.embedded) ? 'none' : 'flex').replaceAll('__SPORTOTEKA_HOST_CONTROLLED__', (widget.hideControls || widget.embedded) ? 'true' : 'false');
+'''
+        .replaceAll('__SPORTOTEKA_BODY_CLASS__', (widget.hideControls || widget.embedded) ? 'host-controlled' : 'interactive-controls')
+        .replaceAll('__SPORTOTEKA_CONTROLS_DISPLAY__', (widget.hideControls || widget.embedded) ? 'none' : 'flex')
+        .replaceAll('__SPORTOTEKA_HOST_CONTROLLED__', (widget.hideControls || widget.embedded) ? 'true' : 'false');
 
     _webController = WebViewController()
   ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -1032,6 +1365,14 @@ unawaited(_allowAndroidInlineVideoPlayback());
       })();
     ''';
 
+    if (_useNativeWindowsVideo) {
+      final controller = _nativeVideoController;
+      if (controller != null && controller.value.isInitialized) {
+        unawaited(controller.setPlaybackSpeed(desiredRate));
+      }
+      return;
+    }
+
     unawaited(
       _webController.runJavaScript(js).catchError((Object e) {
         debugPrint('⚠️ Cannot set AI sync playbackRate: $e');
@@ -1077,16 +1418,23 @@ unawaited(_allowAndroidInlineVideoPlayback());
 
     debugPrint('⏸ AI buffer pause: video=${_currentVideoTimeMs.toStringAsFixed(0)}ms ahead=${aheadMs.toStringAsFixed(0)}ms bufferEnd=${_bufferEndMs.toStringAsFixed(0)}ms');
 
-    unawaited(
-      _webController.runJavaScript('''
-        (function(){
-          const v = document.getElementById('video-player');
-          if (v && !v.paused) v.pause();
-        })();
-      ''').catchError((Object e) {
-        debugPrint('⚠️ Cannot pause video for AI buffer: $e');
-      }),
-    );
+    if (_useNativeWindowsVideo) {
+      final controller = _nativeVideoController;
+      if (controller != null && controller.value.isInitialized && controller.value.isPlaying) {
+        unawaited(controller.pause());
+      }
+    } else {
+      unawaited(
+        _webController.runJavaScript('''
+          (function(){
+            const v = document.getElementById('video-player');
+            if (v && !v.paused) v.pause();
+          })();
+        ''').catchError((Object e) {
+          debugPrint('⚠️ Cannot pause video for AI buffer: $e');
+        }),
+      );
+    }
 
     setState(() {
       _connectionStatus = '⏳ Буферизация AI: видео ждёт кадры анализа';
@@ -1114,16 +1462,23 @@ unawaited(_allowAndroidInlineVideoPlayback());
 
     debugPrint('▶️ AI buffer resume: video=${_currentVideoTimeMs.toStringAsFixed(0)}ms ahead=${aheadMs.toStringAsFixed(0)}ms');
 
-    unawaited(
-      _webController.runJavaScript('''
-        (function(){
-          const v = document.getElementById('video-player');
-          if (v && v.paused) v.play().catch(function(){});
-        })();
-      ''').catchError((Object e) {
-        debugPrint('⚠️ Cannot resume video after AI buffer: $e');
-      }),
-    );
+    if (_useNativeWindowsVideo) {
+      final controller = _nativeVideoController;
+      if (controller != null && controller.value.isInitialized && !controller.value.isPlaying) {
+        unawaited(controller.play());
+      }
+    } else {
+      unawaited(
+        _webController.runJavaScript('''
+          (function(){
+            const v = document.getElementById('video-player');
+            if (v && v.paused) v.play().catch(function(){});
+          })();
+        ''').catchError((Object e) {
+          debugPrint('⚠️ Cannot resume video after AI buffer: $e');
+        }),
+      );
+    }
   }
 
   double get _bufferEndMs => _analysisBuffer.isEmpty ? 0.0 : _resultTimeMs(_analysisBuffer.last);
@@ -1733,7 +2088,11 @@ unawaited(_allowAndroidInlineVideoPlayback());
       clipBehavior: Clip.antiAlias,
       child: Stack(
         children: [
-          Positioned.fill(child: WebViewWidget(controller: _webController)),
+          Positioned.fill(
+            child: _useNativeWindowsVideo
+                ? _buildNativeWindowsVideoLayer()
+                : WebViewWidget(controller: _webController),
+          ),
           if (widget.showAiOverlay && _players.isNotEmpty)
             Positioned.fill(
               child: AnalysisOverlayWidget(
@@ -1803,6 +2162,23 @@ unawaited(_allowAndroidInlineVideoPlayback());
 
   Future<void> _hostPlay() async {
     _userWantsPlayback = true;
+    _isVideoPaused = false;
+    widget.externalPlaybackController?.notifyListeners();
+    if (mounted) setState(() {});
+
+    if (_useNativeWindowsVideo) {
+      final controller = _nativeVideoController;
+      if (controller == null || !controller.value.isInitialized) {
+        _isVideoPaused = true;
+        widget.externalPlaybackController?.notifyListeners();
+        if (mounted) setState(() {});
+        return;
+      }
+      await controller.play();
+      _handleNativeVideoState();
+      return;
+    }
+
     try {
       await _webController.runJavaScript("""
       (function(){
@@ -1820,6 +2196,19 @@ unawaited(_allowAndroidInlineVideoPlayback());
 
   Future<void> _hostPause() async {
     _userWantsPlayback = false;
+    _isVideoPaused = true;
+    widget.externalPlaybackController?.notifyListeners();
+    if (mounted) setState(() {});
+
+    if (_useNativeWindowsVideo) {
+      final controller = _nativeVideoController;
+      if (controller != null && controller.value.isInitialized) {
+        await controller.pause();
+      }
+      _handleNativeVideoState();
+      return;
+    }
+
     try {
       await _webController.runJavaScript("""
       (function(){
@@ -1833,6 +2222,17 @@ unawaited(_allowAndroidInlineVideoPlayback());
 
   Future<void> _hostSeekToFraction(double value) async {
     final safe = value.clamp(0.0, 1.0).toDouble();
+
+    if (_useNativeWindowsVideo) {
+      final controller = _nativeVideoController;
+      if (controller == null || !controller.value.isInitialized) return;
+      final duration = controller.value.duration;
+      if (duration.inMilliseconds <= 0) return;
+      await controller.seekTo(Duration(milliseconds: (duration.inMilliseconds * safe).round()));
+      _handleNativeVideoState();
+      return;
+    }
+
     await _webController.runJavaScript("""
       (function(){
         if (window.sportotekaHostSeekFraction) window.sportotekaHostSeekFraction($safe);
@@ -1842,6 +2242,17 @@ unawaited(_allowAndroidInlineVideoPlayback());
 
   Future<void> _hostSeekTo(Duration position) async {
     final ms = position.inMilliseconds.clamp(0, 24 * 60 * 60 * 1000);
+
+    if (_useNativeWindowsVideo) {
+      final controller = _nativeVideoController;
+      if (controller == null || !controller.value.isInitialized) return;
+      final duration = controller.value.duration;
+      final safeMs = duration.inMilliseconds > 0 ? ms.clamp(0, duration.inMilliseconds) : ms;
+      await controller.seekTo(Duration(milliseconds: safeMs));
+      _handleNativeVideoState();
+      return;
+    }
+
     await _webController.runJavaScript("""
       (function(){
         if (window.sportotekaHostSeekToMs) window.sportotekaHostSeekToMs($ms);
@@ -1850,6 +2261,19 @@ unawaited(_allowAndroidInlineVideoPlayback());
   }
 
   Future<void> _hostSeekRelative(int seconds) async {
+    if (_useNativeWindowsVideo) {
+      final controller = _nativeVideoController;
+      if (controller == null || !controller.value.isInitialized) return;
+      final duration = controller.value.duration;
+      final target = controller.value.position + Duration(seconds: seconds);
+      final safe = target < Duration.zero
+          ? Duration.zero
+          : (duration.inMilliseconds > 0 && target > duration ? duration : target);
+      await controller.seekTo(safe);
+      _handleNativeVideoState();
+      return;
+    }
+
     await _webController.runJavaScript("""
       (function(){
         if (window.sportotekaHostSeekRelative) window.sportotekaHostSeekRelative($seconds);
@@ -1859,6 +2283,17 @@ unawaited(_allowAndroidInlineVideoPlayback());
 
   Future<void> _hostSetSpeed(double speed) async {
     final safe = speed.clamp(0.25, 2.5).toDouble();
+    _currentPlaybackRate = safe;
+
+    if (_useNativeWindowsVideo) {
+      final controller = _nativeVideoController;
+      if (controller != null && controller.value.isInitialized) {
+        await controller.setPlaybackSpeed(safe);
+      }
+      _handleNativeVideoState();
+      return;
+    }
+
     await _webController.runJavaScript("""
       (function(){
         if (window.sportotekaHostSetSpeed) window.sportotekaHostSetSpeed($safe);
@@ -1880,7 +2315,11 @@ unawaited(_allowAndroidInlineVideoPlayback());
       _lastAppliedSyncPlaybackRate = 1.0;
       _isLoading = true;
     });
-    _initWebView();
+    if (_useNativeWindowsVideo) {
+      _initNativeVideoPlayer();
+    } else {
+      _initWebView();
+    }
     _connectWebSocket(forceRestart: true);
   }
 
@@ -1948,6 +2387,11 @@ unawaited(_allowAndroidInlineVideoPlayback());
     _statusSub?.cancel();
     _analysisSub?.cancel();
     _wsService.dispose();
+    final nativeController = _nativeVideoController;
+    if (nativeController != null) {
+      nativeController.removeListener(_handleNativeVideoState);
+      nativeController.dispose();
+    }
     super.dispose();
   }
 }
