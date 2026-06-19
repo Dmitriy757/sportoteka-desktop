@@ -56,8 +56,11 @@ jobs:
         with:
           name: sportoteka-windows-release-zip
           path: sportoteka-windows-release.zip
-                - name: Install Inno Setup
-        run: choco install innosetup -y
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
 
       - name: Build Windows Installer
         shell: pwsh
