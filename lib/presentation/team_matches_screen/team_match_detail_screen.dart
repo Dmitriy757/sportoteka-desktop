@@ -7,6 +7,7 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart' hide FormData, MultipartFile, Response;
@@ -51,9 +52,10 @@ class TeamMatchDetailScreen extends StatefulWidget {
   State<TeamMatchDetailScreen> createState() => _TeamMatchDetailScreenState();
 }
 
-/// Открывает детальный разбор матча как плавающее CMR-окно поверх текущего
-/// экрана. Это не route-переход: список матчей остаётся на месте, а окно можно
-/// двигать, свернуть, развернуть и закрыть.
+/// Открывает детальный разбор матча как CMR-панель поверх текущего
+/// экрана. На ПК это плавающее окно, а на планшете — рабочая область
+/// ровно в размере inline ClubWorkspace: 10 px по бокам, 8 px сверху
+/// и 92 px снизу под меню. Кнопка разворота раскрывает панель на весь экран.
 void showTeamMatchDetailCmrWindow(
   BuildContext context, {
   int? matchId,
@@ -78,6 +80,17 @@ void showTeamMatchDetailCmrWindow(
   bool maximized = false;
   bool closed = false;
 
+  bool isTabletWorkspaceSize(Size screen) {
+    final shortestSide = min(screen.width, screen.height);
+    final platform = defaultTargetPlatform;
+    final touchTabletPlatform = platform == TargetPlatform.android ||
+        platform == TargetPlatform.iOS ||
+        platform == TargetPlatform.fuchsia;
+
+    return touchTabletPlatform &&
+        (shortestSide >= 600 || (screen.width >= 700 && shortestSide >= 500));
+  }
+
   void closeWindow() {
     if (closed) return;
     closed = true;
@@ -89,32 +102,57 @@ void showTeamMatchDetailCmrWindow(
     builder: (overlayContext) {
       final media = MediaQuery.of(overlayContext);
       final screen = media.size;
+      final tabletWorkspace = isTabletWorkspaceSize(screen);
 
-      final double width = maximized
-          ? screen.width - 28
-          : min(1280.0, max(820.0, screen.width * .84));
-      final double height = maximized
-          ? screen.height - media.padding.top - media.padding.bottom - 28
-          : min(840.0, max(560.0, screen.height * .84));
+      // Эти значения повторяют _buildInlineWorkspace() из ClubWorkspace:
+      // EdgeInsets.fromLTRB(10, 8, 10, 92). Так панель матча открывается
+      // точно в той же зоне, где на планшете живёт workspace, а нижнее меню
+      // остаётся на месте.
+      const double workspaceSidePadding = 10.0;
+      const double workspaceTopPadding = 8.0;
+      const double workspaceBottomMenuSpace = 92.0;
 
-      final double left = maximized
-          ? 14.0
-          : position.dx
-              .clamp(14.0, max(14.0, screen.width - width - 14.0))
-              .toDouble();
-      final double top = maximized
-          ? media.padding.top + 14.0
-          : position.dy
-              .clamp(
-                media.padding.top + 14.0,
-                max(media.padding.top + 14.0, screen.height - height - 14.0),
-              )
-              .toDouble();
+      final double width = tabletWorkspace
+          ? (maximized ? screen.width : screen.width - workspaceSidePadding * 2)
+          : maximized
+              ? screen.width - 28
+              : min(1280.0, max(820.0, screen.width * .84));
+
+      final double height = tabletWorkspace
+          ? maximized
+              ? screen.height - media.padding.top - media.padding.bottom
+              : screen.height -
+                  media.padding.top -
+                  media.padding.bottom -
+                  workspaceTopPadding -
+                  workspaceBottomMenuSpace
+          : maximized
+              ? screen.height - media.padding.top - media.padding.bottom - 28
+              : min(840.0, max(560.0, screen.height * .84));
+
+      final double left = tabletWorkspace
+          ? (maximized ? 0.0 : workspaceSidePadding)
+          : maximized
+              ? 14.0
+              : position.dx
+                  .clamp(14.0, max(14.0, screen.width - width - 14.0))
+                  .toDouble();
+
+      final double top = tabletWorkspace
+          ? media.padding.top + (maximized ? 0.0 : workspaceTopPadding)
+          : maximized
+              ? media.padding.top + 14.0
+              : position.dy
+                  .clamp(
+                    media.padding.top + 14.0,
+                    max(media.padding.top + 14.0, screen.height - height - 14.0),
+                  )
+                  .toDouble();
 
       if (minimized) {
         return Positioned(
           left: 18,
-          bottom: media.padding.bottom + 18,
+          bottom: media.padding.bottom + (tabletWorkspace ? workspaceBottomMenuSpace + 10 : 18),
           child: Material(
             color: Colors.transparent,
             child: InkWell(
@@ -175,21 +213,23 @@ void showTeamMatchDetailCmrWindow(
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: const Color(0xFFE3EAE7)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(.16),
-                  blurRadius: 44,
-                  offset: const Offset(0, 22),
-                ),
-              ],
+              borderRadius: BorderRadius.circular(maximized ? 0 : (tabletWorkspace ? 22 : 28)),
+              border: maximized ? null : Border.all(color: const Color(0xFFE3EAE7)),
+              boxShadow: maximized
+                  ? null
+                  : [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(tabletWorkspace ? .10 : .16),
+                        blurRadius: tabletWorkspace ? 28 : 44,
+                        offset: Offset(0, tabletWorkspace ? 12 : 22),
+                      ),
+                    ],
             ),
             child: Column(
               children: [
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onPanUpdate: maximized
+                  onPanUpdate: maximized || tabletWorkspace
                       ? null
                       : (details) {
                           position += details.delta;
@@ -285,7 +325,6 @@ void showTeamMatchDetailCmrWindow(
 
   overlay.insert(entry);
 }
-
 
 class _TeamMatchUiText {
   static const String family = 'Segoe UI';
@@ -6657,7 +6696,10 @@ Future<void> _openMatchVideoAnalysis(Map<String, dynamic> video) async {
     context,
     analysisParams,
     externalPlaybackController: _embeddedAiPlayback,
-    hideControls: true,
+    // В полном окне Advanced Video оставляем controls: пользователь должен
+    // иметь возможность остановить/запустить видео прямо там. В маленькой
+    // карточке обзора controls всё равно скрыты.
+    hideControls: false,
   );
 }
 
@@ -11177,11 +11219,17 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                   const SizedBox(width: 7),
                 ],
                 _analysisPanelTools(
-                  onExpand: () => _openAnalysisPanelFullscreen(
-                    title: title,
-                    subtitle: subtitle,
-                    child: child,
-                  ),
+                  onExpand: () {
+                    if (title.toLowerCase().contains('видеоаналитика')) {
+                      _openActiveMatchVideoFullscreen();
+                      return;
+                    }
+                    _openAnalysisPanelFullscreen(
+                      title: title,
+                      subtitle: subtitle,
+                      child: child,
+                    );
+                  },
                 ),
               ],
             ),
@@ -12257,7 +12305,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       context,
       params,
       externalPlaybackController: _embeddedAiPlayback,
-      hideControls: true,
+      hideControls: false,
     );
   }
 
@@ -12875,7 +12923,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                   context,
                   params,
                   externalPlaybackController: _embeddedAiPlayback,
-                  hideControls: true,
+                  hideControls: false,
                 ),
                 borderRadius: BorderRadius.circular(999),
                 child: Container(
@@ -13190,6 +13238,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                       icon: playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
                       large: true,
                       filled: true,
+                      active: playing,
                       // Play разрешён сразу: если видео/AI ещё грузятся, они стартуют после canplay.
                       onTap: _toggleBottomMatchVideo,
                     ),
@@ -13291,7 +13340,13 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
               children: [
                 _aiPlayerIconButton(icon: Icons.fast_rewind_rounded, onTap: disabled ? null : () { _aiReviewPlayback.seekRelative(-10); }),
                 const SizedBox(width: 12),
-                _aiPlayerIconButton(icon: _aiReviewPlayback.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, large: true, filled: true, onTap: disabled ? null : () { _aiReviewPlayback.togglePlayPause(); }),
+                _aiPlayerIconButton(
+                  icon: _aiReviewPlayback.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                  large: true,
+                  filled: true,
+                  active: _aiReviewPlayback.isPlaying,
+                  onTap: disabled ? null : () { _aiReviewPlayback.togglePlayPause(); },
+                ),
                 const SizedBox(width: 12),
                 _aiPlayerIconButton(icon: Icons.fast_forward_rounded, onTap: disabled ? null : () { _aiReviewPlayback.seekRelative(10); }),
                 const SizedBox(width: 14),
@@ -13353,25 +13408,119 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     required VoidCallback? onTap,
     bool large = false,
     bool filled = false,
+    bool active = false,
   }) {
     final disabled = onTap == null;
+
+    // Главная Play/Pause в нижнем баннере должна читаться с первого взгляда:
+    // белая PLAY = видео на паузе, зелёная PAUSE = видео уже играет.
+    if (large && filled) {
+      final label = active ? 'PAUSE' : 'PLAY';
+      final backgroundColor = disabled
+          ? Colors.white.withOpacity(.06)
+          : active
+              ? _mcGreen
+              : Colors.white;
+      final foregroundColor = disabled
+          ? _mcOnDarkSub.withOpacity(.42)
+          : active
+              ? Colors.white
+              : _mcControl;
+
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          width: active ? 108 : 100,
+          height: 42,
+          padding: const EdgeInsets.symmetric(horizontal: 13),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            color: backgroundColor,
+            border: Border.all(
+              width: active ? 1.5 : 1,
+              color: disabled
+                  ? Colors.white.withOpacity(.07)
+                  : active
+                      ? Colors.white.withOpacity(.34)
+                      : Colors.white.withOpacity(.18),
+            ),
+            boxShadow: disabled
+                ? const []
+                : [
+                    BoxShadow(
+                      color: active
+                          ? _mcGreen.withOpacity(.44)
+                          : Colors.white.withOpacity(.16),
+                      blurRadius: active ? 24 : 16,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: foregroundColor, size: 22),
+              const SizedBox(width: 7),
+              Text(
+                label,
+                style: TextStyle(
+                  color: foregroundColor,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: .65,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     final size = large ? 40.0 : 32.0;
+    final backgroundColor = disabled
+        ? Colors.white.withOpacity(.05)
+        : active
+            ? _mcGreen
+            : (filled ? Colors.white : Colors.white.withOpacity(.06));
+    final iconColor = disabled
+        ? _mcOnDarkSub.withOpacity(.38)
+        : active
+            ? Colors.white
+            : (filled ? _mcControl : _mcOnDark);
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(999),
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOutCubic,
         width: size,
         height: size,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: filled ? Colors.white : Colors.white.withOpacity(.06),
+          color: backgroundColor,
+          border: Border.all(
+            color: active ? Colors.white.withOpacity(.28) : Colors.white.withOpacity(.08),
+          ),
+          boxShadow: active
+              ? [
+                  BoxShadow(
+                    color: _mcGreen.withOpacity(.36),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ]
+              : const [],
         ),
         child: Icon(
           icon,
-          color: disabled
-              ? _mcOnDarkSub.withOpacity(.38)
-              : (filled ? _mcControl : _mcOnDark),
+          color: iconColor,
           size: large ? 25 : 20,
         ),
       ),

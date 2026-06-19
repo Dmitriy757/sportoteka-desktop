@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
@@ -498,6 +499,39 @@ class _TeamMatchesScreenState extends State<TeamMatchesScreen> {
     return months[m - 1];
   }
 
+  bool _shouldOpenMatchFullscreen(BuildContext context) {
+    // На iOS/Android планшет должен вести себя как мобильная версия:
+    // открываем детали матча на весь экран, а не как desktop-окно.
+    final isDesktopPlatform = defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux;
+
+    if (!isDesktopPlatform) return true;
+
+    // На реальном ПК оконный режим оставляем только для нормальной ширины.
+    // Если desktop-окно сильно узкое, также открываем fullscreen.
+    final width = MediaQuery.of(context).size.width;
+    return width < 900;
+  }
+
+  Future<void> _openMatchDetail(Map<String, dynamic> match, int matchId) async {
+    final fullscreen = _shouldOpenMatchFullscreen(context);
+
+    await Get.to(
+      () => const TeamMatchDetailScreen(),
+      fullscreenDialog: fullscreen,
+      transition: fullscreen ? Transition.cupertino : Transition.fadeIn,
+      arguments: {
+        "match": match,
+        "match_id": matchId,
+        "team_id": teamId,
+        "force_fullscreen": fullscreen,
+        "force_mobile_layout": fullscreen,
+        "open_as_window": !fullscreen,
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final list = _filteredMatches();
@@ -605,16 +639,7 @@ class _TeamMatchesScreenState extends State<TeamMatchesScreen> {
                             upcoming: upcoming,
                             canDelete: canManageMatches && id > 0,
                             onDelete: () => _deleteMatch(id),
-                            onTap: () {
-                              Get.to(
-                                () => const TeamMatchDetailScreen(),
-                                arguments: {
-                                  "match": m,
-                                  "match_id": id,
-                                  "team_id": teamId,
-                                },
-                              );
-                            },
+                            onTap: () => _openMatchDetail(m, id),
                           ),
                         );
                       }
