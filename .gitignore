@@ -52,3 +52,8 @@ unity_builds/
 android/unityLibrary/src/main/jniLibs/
 android/unityLibrary/build/
 android/unityLibrary/.gradle/
+
+# Unity generated binaries
+unity_builds/
+android/unityLibrary/src/main/jniLibs/
+android/unityLibrary/build/
