@@ -1,29 +1,33 @@
 // lib/presentation/club_workspace/cmr_club_teams_panel.dart
-// Typography updated: Windows 11 / Fluent-style Segoe UI hierarchy with platform fallbacks.
+// Typography uses the centralized Sportoteka AppTypography / Inter system.
 import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:ui' show FontFeature;
+import 'dart:ui' show FontFeature, ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import 'package:sportoteka/core/theme/app_typography.dart';
+
 import '../testing/cmr_testing_panel.dart';
 
 class _CmrColors {
-  static const Color bg = Color(0xFFFFFFFF);
+  static const Color bg = Colors.white;
   static const Color panel = Colors.white;
-  static const Color soft = Color(0xFFFAFBFC);
-  static const Color soft2 = Color(0xFFF6F7F9);
+  static const Color soft = Color(0xFFF7F8F7);
+  static const Color soft2 = Color(0xFFF2F4F2);
   static const Color text = Color(0xFF0B0F14);
   static const Color muted = Color(0xFF374151);
-  static const Color subtle = Color(0xFF6B7280);
-  static const Color divider = Color(0xFFF0F2F4);
+  static const Color secondary = Color(0xFF5F6670);
+  static const Color subtle = Color(0xFF8A9099);
+  static const Color divider = Color(0xFFE9ECEA);
   static const Color graphite = Color(0xFF111827);
   static const Color graphite2 = Color(0xFF1F2937);
   static const Color green = Color(0xFF00A750);
-  static const Color greenSoft = Color(0xFFF3FBF7);
+  static const Color greenSoft = Color(0xFFF3FAF6);
   static const Color greenSoft2 = Color(0xFFF8FEFA);
   static const Color greenDark = Color(0xFF067A46);
+  static const Color greenBorder = Color(0xFFD7F0E2);
   static const Color orange = Color(0xFFEA580C);
   static const Color orangeSoft = Color(0xFFFFF7ED);
   static const Color red = Color(0xFFDC2626);
@@ -41,226 +45,208 @@ class _CmrColors {
   static const Color amber = Color(0xFFF59E0B);
   static const Color amberSoft = Color(0xFFFFFBEB);
   static const Color mint = Color(0xFF10B981);
-  static const Color glass = Color(0xF7FFFFFF);
+  static const Color glass = Color(0xFFFFFFFF);
+  static const Color glassStrong = Color(0xFFFFFFFF);
+  static const Color glassGreen = Color(0xFFF3FAF6);
 }
 
-Color _winAccent(int index) {
-  const colors = <Color>[
-    _CmrColors.green,
-    _CmrColors.blue,
-    _CmrColors.cyan,
-    _CmrColors.violet,
-    _CmrColors.pink,
-    _CmrColors.amber,
-  ];
-  return colors[index.abs() % colors.length];
-}
+Color _winAccent(int index) => _CmrColors.green;
 
-Color _winAccentSoft(int index) {
-  const colors = <Color>[
-    _CmrColors.greenSoft,
-    _CmrColors.blueSoft,
-    _CmrColors.cyanSoft,
-    _CmrColors.violetSoft,
-    _CmrColors.pinkSoft,
-    _CmrColors.amberSoft,
-  ];
-  return colors[index.abs() % colors.length];
-}
+Color _winAccentSoft(int index) => _CmrColors.greenSoft;
+
 
 class _CmrText {
-  // Windows 11 / Fluent typography.
-  // На Windows берётся Segoe UI, на macOS/iOS — системный SF, на web/Android — Inter/Roboto.
-  static const String _family = 'Segoe UI';
-  static const List<String> _fallback = <String>[
-    'SF Pro Display',
-    'SF Pro Text',
-    'Inter',
-    'Roboto',
-    'Arial',
-  ];
-
-  static TextStyle title(double size) => TextStyle(
+  static TextStyle title(double size) => AppTypography.custom(
+        size: size,
+        weight: FontWeight.w600,
         color: _CmrColors.text,
-        fontFamily: _family,
-        fontFamilyFallback: _fallback,
-        fontSize: size,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -0.42,
-        height: 1.08,
+        height: 1.18,
+        letterSpacing: 0,
       );
 
-  static TextStyle section() => const TextStyle(
+  static TextStyle section() => AppTypography.custom(
+        size: 12.2,
+        weight: FontWeight.w600,
         color: _CmrColors.text,
-        fontFamily: _family,
-        fontFamilyFallback: _fallback,
-        fontSize: 13.4,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -0.22,
-        height: 1.12,
+        height: 1.18,
+        letterSpacing: 0,
       );
 
-  static TextStyle value(double size) => TextStyle(
+  static TextStyle value(double size) => AppTypography.custom(
+        size: size,
+        weight: FontWeight.w600,
         color: _CmrColors.text,
-        fontFamily: _family,
-        fontFamilyFallback: _fallback,
-        fontSize: size,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -0.28,
-        fontFeatures: const [FontFeature.tabularFigures()],
-        height: 1.08,
+        height: 1.16,
+        letterSpacing: 0,
+        features: const <FontFeature>[
+          FontFeature.tabularFigures(),
+        ],
       );
 
-  static TextStyle muted(double size) => TextStyle(
-        color: _CmrColors.muted,
-        fontFamily: _family,
-        fontFamilyFallback: _fallback,
-        fontSize: size,
-        fontWeight: FontWeight.w500,
-        letterSpacing: -0.06,
-        height: 1.34,
+  static TextStyle muted(double size) => AppTypography.custom(
+        size: size,
+        weight: FontWeight.w400,
+        color: _CmrColors.secondary,
+        height: 1.32,
+        letterSpacing: 0,
       );
 
-  static TextStyle subtle(double size) => TextStyle(
+  static TextStyle subtle(double size) => AppTypography.custom(
+        size: size,
+        weight: FontWeight.w400,
+        color: _CmrColors.secondary,
+        height: 1.30,
+        letterSpacing: 0,
+      );
+
+  static TextStyle caption() => AppTypography.custom(
+        size: 10.8,
+        weight: FontWeight.w500,
         color: _CmrColors.subtle,
-        fontFamily: _family,
-        fontFamilyFallback: _fallback,
-        fontSize: size,
-        fontWeight: FontWeight.w500,
-        letterSpacing: -0.04,
-        height: 1.28,
+        height: 1.18,
+        letterSpacing: 0,
       );
 
-  static TextStyle caption() => const TextStyle(
-        color: _CmrColors.subtle,
-        fontFamily: _family,
-        fontFamilyFallback: _fallback,
-        fontSize: 10.6,
-        fontWeight: FontWeight.w600,
-        letterSpacing: 0.08,
-        height: 1.08,
-      );
-
-  static TextStyle action() => const TextStyle(
+  static TextStyle action() => AppTypography.custom(
+        size: 12,
+        weight: FontWeight.w600,
         color: _CmrColors.text,
-        fontFamily: _family,
-        fontFamilyFallback: _fallback,
-        fontSize: 11.8,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -0.08,
-        height: 1.08,
+        height: 1.16,
+        letterSpacing: 0,
       );
 
-  static TextStyle whiteAction({double size = 11.8}) => TextStyle(
+  static TextStyle whiteAction({double size = 11.4}) =>
+      AppTypography.custom(
+        size: size,
+        weight: FontWeight.w600,
         color: Colors.white,
-        fontFamily: _family,
-        fontFamilyFallback: _fallback,
-        fontSize: size,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -0.08,
-        height: 1.08,
+        height: 1.16,
+        letterSpacing: 0,
       );
 
-  static TextStyle chip({double size = 10.8, Color? color}) => TextStyle(
+  static TextStyle chip({
+    double size = 11.2,
+    Color? color,
+  }) =>
+      AppTypography.custom(
+        size: size,
+        weight: FontWeight.w500,
         color: color ?? _CmrColors.text,
-        fontFamily: _family,
-        fontFamilyFallback: _fallback,
-        fontSize: size,
-        fontWeight: FontWeight.w600,
-        letterSpacing: -0.02,
-        height: 1.08,
+        height: 1.16,
+        letterSpacing: 0,
       );
 
-  static TextStyle microCaps({Color? color}) => TextStyle(
+  static TextStyle microCaps({Color? color}) =>
+      AppTypography.custom(
+        size: 9.4,
+        weight: FontWeight.w600,
         color: color ?? _CmrColors.subtle,
-        fontFamily: _family,
-        fontFamilyFallback: _fallback,
-        fontSize: 8.7,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 0.32,
-        height: 1,
+        height: 1.12,
+        letterSpacing: 0.18,
       );
 }
+
+class _LiquidGlass extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final BorderRadius borderRadius;
+  final double blur;
+  final Color tint;
+  final bool elevated;
+
+  const _LiquidGlass({
+    required this.child,
+    this.padding = EdgeInsets.zero,
+    this.borderRadius = const BorderRadius.all(Radius.circular(16)),
+    this.blur = 0,
+    this.tint = _CmrColors.panel,
+    this.elevated = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: padding,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: tint,
+        borderRadius: borderRadius,
+        boxShadow: elevated ? _CmrDecor.windowShadow : null,
+      ),
+      child: child,
+    );
+  }
+}
+
+
 class _CmrDecor {
-  static BoxDecoration panel({double radius = 22, bool elevated = true}) => BoxDecoration(
+  // Строгая геометрия CMR:
+  // рабочие панели — 0 px; интерактивные элементы — 8 px;
+  // крупные мобильные элементы — 10 px; окно — 14 px;
+  // диалоги — 16 px; bottom sheet — 18 px.
+  static const double mobilePagePadding = 6.0;
+  static const double mobileWindowRadius = 18.0;
+  static const double tabletWindowRadius = 18.0;
+  static const double mobileCardRadius = 18.0;
+  static const double tabletCardRadius = 16.0;
+  static const double mobileInnerRadius = 12.0;
+  static const double tabletInnerRadius = 12.0;
+  static const double interactiveRadius = 9.0;
+  static const double dialogRadius = 16.0;
+  static const double sheetRadius = 18.0;
+
+  static List<BoxShadow> get windowShadow => [
+        BoxShadow(
+          color: Colors.black.withOpacity(.035),
+          blurRadius: 28,
+          spreadRadius: -18,
+          offset: const Offset(0, 16),
+        ),
+      ];
+  static List<BoxShadow> get cardShadow => [
+        BoxShadow(
+          color: Colors.black.withOpacity(.015),
+          blurRadius: 16,
+          spreadRadius: -11,
+          offset: const Offset(0, 9),
+        ),
+      ];
+
+  static BoxDecoration panel({double radius = tabletCardRadius, bool elevated = true}) => BoxDecoration(
         color: _CmrColors.panel,
         borderRadius: BorderRadius.circular(radius),
-        boxShadow: elevated
-            ? [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.045),
-                  blurRadius: 34,
-                  spreadRadius: -14,
-                  offset: const Offset(0, 20),
-                ),
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.025),
-                  blurRadius: 10,
-                  spreadRadius: -7,
-                  offset: const Offset(0, 4),
-                ),
-              ]
-            : null,
+        border: Border.all(color: _CmrColors.divider.withOpacity(.55), width: .7),
+        boxShadow: elevated ? cardShadow : null,
       );
 
-  static BoxDecoration softCard({double radius = 18, bool active = false}) => BoxDecoration(
-        color: active ? _CmrColors.panel : _CmrColors.soft,
+  static BoxDecoration softCard({
+    double radius = mobileInnerRadius,
+    bool active = false,
+  }) =>
+      BoxDecoration(
+        color: active ? _CmrColors.greenSoft : _CmrColors.panel,
         borderRadius: BorderRadius.circular(radius),
-        boxShadow: active
-            ? [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.045),
-                  blurRadius: 24,
-                  spreadRadius: -12,
-                  offset: const Offset(0, 14),
-                ),
-              ]
-            : null,
+        border: Border.all(
+          color: active ? _CmrColors.greenBorder : _CmrColors.divider.withOpacity(.55),
+          width: .7,
+        ),
       );
 
   static BoxDecoration workspaceBg() => const BoxDecoration(
-        color: Color(0xFFF6F7F9),
+        color: _CmrColors.bg,
       );
 
-  static BoxDecoration glassCard({double radius = 22, Color? tint}) => BoxDecoration(
-        color: tint ?? _CmrColors.glass,
+  static BoxDecoration glassCard({double radius = tabletCardRadius, Color? tint}) => BoxDecoration(
+        color: tint ?? _CmrColors.panel,
         borderRadius: BorderRadius.circular(radius),
-        boxShadow: [
-          BoxShadow(
-            color: _CmrColors.blue.withOpacity(.055),
-            blurRadius: 30,
-            spreadRadius: -18,
-            offset: const Offset(0, 18),
-          ),
-          BoxShadow(
-            color: _CmrColors.green.withOpacity(.045),
-            blurRadius: 22,
-            spreadRadius: -18,
-            offset: const Offset(-8, 12),
-          ),
-        ],
+        boxShadow: null,
       );
 
-  // Единое окно Windows 11: общий светлый контейнер вместо двух отдельных
-  // карточек с рамками вокруг списка и деталей.
-  static BoxDecoration unifiedWindow({double radius = 24}) => BoxDecoration(
-        color: _CmrColors.glass,
+  static BoxDecoration unifiedWindow({double radius = tabletWindowRadius}) => BoxDecoration(
+        color: _CmrColors.panel,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: Colors.white.withOpacity(.86), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(.055),
-            blurRadius: 38,
-            spreadRadius: -18,
-            offset: const Offset(0, 22),
-          ),
-          BoxShadow(
-            color: _CmrColors.blue.withOpacity(.035),
-            blurRadius: 24,
-            spreadRadius: -18,
-            offset: const Offset(0, 10),
-          ),
-        ],
+        border: Border.all(color: Colors.transparent, width: 0),
+        boxShadow: windowShadow,
       );
 
   static BoxDecoration seamlessPane({double radius = 0}) => BoxDecoration(
@@ -268,39 +254,22 @@ class _CmrDecor {
         borderRadius: BorderRadius.circular(radius),
       );
 
-  // Fluent / Windows 11 surface: без чёрной заливки и без цветного градиента.
-  // Светлое стекло, мягкая тень, цвет остаётся только в тонком активном акценте.
   static BoxDecoration fluentSurface({
-    double radius = 16,
-    Color accent = _CmrColors.blue,
+    double radius = mobileInnerRadius,
+    Color accent = _CmrColors.green,
     bool active = false,
     bool compact = false,
   }) {
     return BoxDecoration(
-      color: active ? Colors.white.withOpacity(.96) : Colors.white.withOpacity(.82),
+      color: active ? _CmrColors.greenSoft : _CmrColors.panel,
       borderRadius: BorderRadius.circular(radius),
       border: Border.all(
-        color: active ? accent.withOpacity(.20) : Colors.white.withOpacity(.78),
-        width: active ? 1.05 : 1,
+        color: active ? _CmrColors.greenBorder : _CmrColors.divider.withOpacity(.65),
+        width: .8,
       ),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(active ? .070 : .040),
-          blurRadius: compact ? 14 : 22,
-          spreadRadius: compact ? -9 : -12,
-          offset: Offset(0, compact ? 7 : 12),
-        ),
-        BoxShadow(
-          color: accent.withOpacity(active ? .055 : .025),
-          blurRadius: compact ? 10 : 16,
-          spreadRadius: compact ? -9 : -11,
-          offset: const Offset(0, 4),
-        ),
-      ],
     );
   }
 }
-
 
 class CmrClubTeamsPanel extends StatefulWidget {
   final int clubId;
@@ -454,6 +423,17 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
     return visible[_selectedIndex.clamp(0, visible.length - 1)];
   }
 
+  Map<String, dynamic>? get _selectedTeamAny {
+    if (widget.teams.isEmpty) return null;
+    final selectedId = _activeTeamId;
+    if (selectedId != null && selectedId > 0) {
+      for (final team in widget.teams) {
+        if (_teamId(team) == selectedId) return team;
+      }
+    }
+    return widget.teams[_selectedIndex.clamp(0, widget.teams.length - 1)];
+  }
+
   void _syncSelectedIndex() {
     final selectedId = widget.selectedTeamId;
     if (selectedId == null || selectedId <= 0) {
@@ -488,6 +468,49 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
 
   void _openTeamOverview(Map<String, dynamic> team) {
     widget.onOpenTeam(team);
+  }
+
+  Future<void> _openTeamPickerDialog({required bool mobile}) async {
+    FocusScope.of(context).unfocus();
+    final selected = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(.18),
+      builder: (sheetContext) {
+        final media = MediaQuery.of(sheetContext);
+        final maxHeight = mobile
+            ? media.size.height * .92
+            : math.min(720.0, media.size.height * .82);
+        final maxWidth = mobile ? media.size.width : math.min(820.0, media.size.width - 56);
+
+        return Align(
+          alignment: mobile ? Alignment.bottomCenter : Alignment.center,
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: mobile ? 0 : 20,
+              right: mobile ? 0 : 20,
+              bottom: mobile ? media.viewInsets.bottom : 0,
+            ),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxWidth, maxHeight: maxHeight),
+              child: _TeamsPickerSheet(
+                clubName: widget.clubName,
+                teams: widget.teams,
+                selectedTeamId: _activeTeamId,
+                mobile: mobile,
+                onCreateTeam: widget.onCreateTeam,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    if (selected != null && mounted) {
+      _selectTeam(selected);
+    }
   }
 
   Future<void> _loadTeamCounts() async {
@@ -648,7 +671,7 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
             height: safeHeight,
             child: Container(
               decoration: _CmrDecor.workspaceBg(),
-              padding: const EdgeInsets.all(10),
+              padding: EdgeInsets.all(width < 640 ? _CmrDecor.mobilePagePadding : 10),
               child: _EmptyTeams(onCreateTeam: widget.onCreateTeam),
             ),
           );
@@ -657,7 +680,8 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
         final visibleTeams = _visibleTeams;
         final mobile = width < 640;
         final compact = width < 880;
-        final selected = _selectedTeam;
+        final pickerMode = width < 1024;
+        final selected = pickerMode ? _selectedTeamAny : _selectedTeam;
         final displaySelectedTeamName = selected == null ? widget.selectedTeamName : _teamName(selected);
         final listWidth = mobile ? width : math.min(480.0, math.max(320.0, width * .42));
 
@@ -716,26 +740,67 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
 
         final details = detailsForSelected();
 
-        if (mobile) {
-          final listHeight = math.min(360.0, math.max(230.0, safeHeight * .42));
+        if (pickerMode) {
           return SizedBox(
             width: double.infinity,
             height: safeHeight,
             child: Container(
-              decoration: _CmrDecor.workspaceBg(),
-              padding: const EdgeInsets.all(8),
+              width: double.infinity,
+              color: const Color(0xFFF6F7F6),
+              padding: EdgeInsets.all(mobile ? 6 : 8),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(22),
-                child: Container(
-                  decoration: _CmrDecor.unifiedWindow(radius: 22),
-                  child: Column(
-                    children: [
-                      SizedBox(height: listHeight, child: list),
-                      Container(height: 1, color: _CmrColors.divider.withOpacity(.70)),
-                      Expanded(child: details),
-                    ],
-                  ),
-                ),
+                borderRadius: BorderRadius.circular(mobile ? 18 : 18),
+                child: mobile
+                    ? _LiquidGlass(
+                        borderRadius: BorderRadius.circular(18),
+                        blur: 24,
+                        tint: Colors.white,
+                        child: Column(
+                          children: [
+                      _TeamSelectorHeader(
+                        clubName: widget.clubName,
+                        teamsCount: widget.teams.length,
+                        visibleCount: visibleTeams.length,
+                        selectedTeam: selected,
+                        playersCount: selected == null ? null : _playersCountByTeam[_teamId(selected)],
+                        trainersCount: selected == null ? null : _trainersCountByTeam[_teamId(selected)],
+                        countsLoading: _countsLoading,
+                        mobile: mobile,
+                        onOpenPicker: () => _openTeamPickerDialog(mobile: mobile),
+                        onCreateTeam: widget.onCreateTeam,
+                        onRefresh: widget.onRefresh,
+                      ),
+                      const SizedBox(height: 0),
+                            Expanded(child: details),
+                          ],
+                        ),
+                      )
+                    : Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(18),
+                          boxShadow: _CmrDecor.windowShadow,
+                        ),
+                        child: Column(
+                          children: [
+                            _TeamSelectorHeader(
+                              clubName: widget.clubName,
+                              teamsCount: widget.teams.length,
+                              visibleCount: visibleTeams.length,
+                              selectedTeam: selected,
+                              playersCount: selected == null ? null : _playersCountByTeam[_teamId(selected)],
+                              trainersCount: selected == null ? null : _trainersCountByTeam[_teamId(selected)],
+                              countsLoading: _countsLoading,
+                              mobile: mobile,
+                              onOpenPicker: () => _openTeamPickerDialog(mobile: mobile),
+                              onCreateTeam: widget.onCreateTeam,
+                              onRefresh: widget.onRefresh,
+                            ),
+                            const SizedBox(height: 0),
+                            Expanded(child: details),
+                          ],
+                        ),
+                      ),
               ),
             ),
           );
@@ -745,17 +810,22 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
           width: double.infinity,
           height: safeHeight,
           child: Container(
-            decoration: _CmrDecor.workspaceBg(),
-            padding: const EdgeInsets.all(10),
+            width: double.infinity,
+            color: const Color(0xFFF6F7F6),
+            padding: EdgeInsets.all(compact ? 8 : 10),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(compact ? 18 : 20),
               child: Container(
-                decoration: _CmrDecor.unifiedWindow(radius: 24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(compact ? 18 : 20),
+                  boxShadow: _CmrDecor.windowShadow,
+                ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     SizedBox(width: listWidth, child: list),
-                    Container(width: 1, color: _CmrColors.divider.withOpacity(.70)),
+                    Container(width: 1, color: _CmrColors.divider),
                     Expanded(child: details),
                   ],
                 ),
@@ -792,7 +862,7 @@ class _MobileTeamsHeader extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
-      decoration: _CmrDecor.panel(radius: 18),
+      decoration: _CmrDecor.unifiedWindow(radius: _CmrDecor.mobileInnerRadius),
       child: Row(
         children: [
           const _IconBadge(icon: Icons.account_tree_rounded, size: 38, iconSize: 19),
@@ -841,8 +911,8 @@ class _TinyStatus extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: _CmrColors.panel,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
+        
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -881,23 +951,420 @@ class _MobileIconAction extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
         child: Container(
           width: 38,
           height: 38,
           decoration: _CmrDecor.fluentSurface(
-            radius: 12,
+            radius: _CmrDecor.mobileInnerRadius,
             accent: filled ? _CmrColors.green : _CmrColors.blue,
             active: filled,
             compact: true,
           ),
           child: Icon(
             icon,
-            color: filled ? _CmrColors.greenDark : _CmrColors.muted,
+            color: filled ? Colors.white : _CmrColors.muted,
             size: 18,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+class _TeamSelectorHeader extends StatelessWidget {
+  final String clubName;
+  final int teamsCount;
+  final int visibleCount;
+  final Map<String, dynamic>? selectedTeam;
+  final int? playersCount;
+  final int? trainersCount;
+  final bool countsLoading;
+  final bool mobile;
+  final VoidCallback onOpenPicker;
+  final VoidCallback onCreateTeam;
+  final Future<void> Function()? onRefresh;
+
+  const _TeamSelectorHeader({
+    required this.clubName,
+    required this.teamsCount,
+    required this.visibleCount,
+    required this.selectedTeam,
+    required this.playersCount,
+    required this.trainersCount,
+    required this.countsLoading,
+    required this.mobile,
+    required this.onOpenPicker,
+    required this.onCreateTeam,
+    required this.onRefresh,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final team = selectedTeam;
+    final name = team == null ? 'Выберите команду' : _teamName(team);
+    final subtitle = team == null
+        ? '$clubName · $teamsCount команд'
+        : '$clubName · ${_teamSubtitle(team).isEmpty ? 'Команда клуба' : _teamSubtitle(team)}';
+    final logo = team == null ? '' : _teamLogo(team);
+    final players = playersCount ?? (team == null ? 0 : _teamPlayersCount(team));
+    final trainers = trainersCount ?? (team == null ? 0 : _teamTrainersCount(team));
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(mobile ? 10 : 12, mobile ? 8 : 10, mobile ? 8 : 10, mobile ? 8 : 10),
+      color: Colors.transparent,
+      child: Row(
+        children: [
+          Expanded(
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
+              child: InkWell(
+                onTap: onOpenPicker,
+                borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
+                child: Container(
+                  constraints: BoxConstraints(minHeight: mobile ? 58 : 62),
+                  padding: EdgeInsets.symmetric(horizontal: mobile ? 8 : 10, vertical: mobile ? 7 : 8),
+                  decoration: BoxDecoration(
+                    color: mobile
+                        ? _CmrColors.greenSoft2
+                        : Colors.transparent,
+                    border: Border(
+                      bottom: BorderSide(
+                        color: team == null
+                            ? _CmrColors.divider
+                            : _CmrColors.green,
+                        width: team == null ? .8 : 2,
+                      ),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      team == null
+                          ? const _IconBadge(icon: Icons.groups_2_rounded, size: 38, iconSize: 19)
+                          : _TeamLogo(url: logo, name: name, size: mobile ? 38 : 42, active: true),
+                      SizedBox(width: mobile ? 9 : 10),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.title(mobile ? 14.6 : 14.6)),
+                            const SizedBox(height: 3),
+                            Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.subtle(mobile ? 11.2 : 10.8)),
+                          ],
+                        ),
+                      ),
+                      if (!mobile && team != null) ...[
+                        const SizedBox(width: 8),
+                        _TeamInlineMetric(label: 'Игроки', value: countsLoading && players == 0 ? '...' : (players == 0 ? '—' : '$players')),
+                        const SizedBox(width: 6),
+                        _TeamInlineMetric(label: 'Тренеры', value: countsLoading && trainers == 0 ? '...' : (trainers == 0 ? '—' : '$trainers')),
+                      ],
+                      const SizedBox(width: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 8,
+                        ),
+                        child: Text(
+                          mobile ? 'Выбор' : 'Выбрать команду',
+                          style: _CmrText.action().copyWith(
+                            color: _CmrColors.greenDark,
+                            fontSize: mobile ? 11.8 : 11.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(width: mobile ? 6 : 8),
+          if (onRefresh != null) ...[
+            _TeamsIconButton(
+              icon: Icons.refresh_rounded,
+              tooltip: 'Обновить',
+              onTap: () { onRefresh?.call(); },
+              compact: true,
+            ),
+            SizedBox(width: mobile ? 6 : 8),
+          ],
+          _TeamsIconButton(
+            icon: Icons.add_rounded,
+            tooltip: 'Добавить команду',
+            onTap: onCreateTeam,
+            emphasized: true,
+            compact: true,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TeamsPickerSheet extends StatefulWidget {
+  final String clubName;
+  final List<Map<String, dynamic>> teams;
+  final int? selectedTeamId;
+  final bool mobile;
+  final VoidCallback onCreateTeam;
+
+  const _TeamsPickerSheet({
+    required this.clubName,
+    required this.teams,
+    required this.selectedTeamId,
+    required this.mobile,
+    required this.onCreateTeam,
+  });
+
+  @override
+  State<_TeamsPickerSheet> createState() => _TeamsPickerSheetState();
+}
+
+class _TeamsPickerSheetState extends State<_TeamsPickerSheet> {
+  late final TextEditingController _searchC;
+  _TeamsFilter _filter = _TeamsFilter.all;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchC = TextEditingController()..addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _searchC.dispose();
+    super.dispose();
+  }
+
+  List<Map<String, dynamic>> get _visibleTeams {
+    final q = _searchC.text.trim().toLowerCase();
+    return widget.teams.where((team) {
+      final haystack = [
+        _teamName(team),
+        _teamSubtitle(team),
+        _s(team['sport']),
+        _s(team['category']),
+        _s(team['age_group']),
+        _s(team['description']),
+      ].join(' ').toLowerCase();
+      if (q.isNotEmpty && !haystack.contains(q)) return false;
+      switch (_filter) {
+        case _TeamsFilter.all:
+          return true;
+        case _TeamsFilter.active:
+          return _teamId(team) == widget.selectedTeamId;
+        case _TeamsFilter.football:
+          final raw = '${_teamSubtitle(team)} ${_s(team['sport'])} ${_s(team['category'])}'.toLowerCase();
+          return raw.contains('фут') || raw.contains('football') || raw.contains('soccer');
+        case _TeamsFilter.emptyLogo:
+          return _teamLogo(team).isEmpty;
+      }
+    }).toList(growable: false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mobile = widget.mobile;
+    final visible = _visibleTeams;
+    return Material(
+      color: Colors.transparent,
+      child: ClipRRect(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(mobile ? _CmrDecor.sheetRadius : _CmrDecor.tabletWindowRadius),
+          bottom: Radius.circular(mobile ? 0 : _CmrDecor.tabletWindowRadius),
+        ),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: mobile ? 28 : 20, sigmaY: mobile ? 28 : 20),
+          child: Container(
+          decoration: BoxDecoration(
+            color: mobile ? _CmrColors.glassStrong : _CmrColors.panel,
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular(mobile ? _CmrDecor.sheetRadius : _CmrDecor.tabletWindowRadius),
+              bottom: Radius.circular(mobile ? 0 : _CmrDecor.tabletWindowRadius),
+            ),
+            border: Border.all(color: _CmrColors.divider, width: .7),
+          ),
+          child: Column(
+            children: [
+              if (mobile)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8, bottom: 2),
+                  child: Container(
+                    width: 38,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: _CmrColors.divider,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+              _pickerHeader(visible.length),
+              Container(height: 1, color: _CmrColors.divider.withOpacity(.78)),
+              Padding(
+                padding: EdgeInsets.fromLTRB(mobile ? 12 : 14, 10, mobile ? 12 : 14, 8),
+                child: _SearchField(controller: _searchC, mobile: mobile),
+              ),
+              SizedBox(
+                height: mobile ? 46 : 46,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: mobile ? 12 : 14, vertical: 5),
+                  child: _TeamsFilterBar(value: _filter, onChanged: (value) => setState(() => _filter = value), mobile: mobile),
+                ),
+              ),
+              const SizedBox(height: 0),
+              Expanded(
+                child: visible.isEmpty
+                    ? _MiniEmpty(text: 'Команды не найдены')
+                    : LayoutBuilder(
+                        builder: (context, c) {
+                          final useGrid = !mobile && c.maxWidth >= 620;
+                          if (!useGrid) {
+                            return ListView.builder(
+                              padding: EdgeInsets.only(top: mobile ? 4 : 6, bottom: 12),
+                              itemCount: visible.length,
+                              itemBuilder: (_, index) {
+                                final team = visible[index];
+                                return _TeamTile(
+                                  team: team,
+                                  active: _teamId(team) == widget.selectedTeamId,
+                                  onTap: () => Navigator.of(context).pop(team),
+                                  mobile: mobile,
+                                );
+                              },
+                            );
+                          }
+                          return GridView.builder(
+                            padding: const EdgeInsets.all(12),
+                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: c.maxWidth >= 760 ? 3 : 2,
+                              crossAxisSpacing: 10,
+                              mainAxisSpacing: 10,
+                              childAspectRatio: c.maxWidth >= 760 ? 2.65 : 2.35,
+                            ),
+                            itemCount: visible.length,
+                            itemBuilder: (_, index) {
+                              final team = visible[index];
+                              return _TeamPickerGridCard(
+                                team: team,
+                                active: _teamId(team) == widget.selectedTeamId,
+                                onTap: () => Navigator.of(context).pop(team),
+                              );
+                            },
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _pickerHeader(int visibleCount) {
+    final mobile = widget.mobile;
+    return Container(
+      height: mobile ? 58 : 60,
+      padding: EdgeInsets.symmetric(horizontal: mobile ? 12 : 14),
+      child: Row(
+        children: [
+          Container(
+            width: mobile ? 36 : 38,
+            height: mobile ? 36 : 38,
+            decoration: BoxDecoration(color: _CmrColors.greenSoft, borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius)),
+            child: const Icon(Icons.groups_2_rounded, color: _CmrColors.green, size: 19),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Выбор команды', maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.title(mobile ? 15.2 : 16.0)),
+                const SizedBox(height: 3),
+                Text('${widget.clubName} · ${widget.teams.length} команд${visibleCount == widget.teams.length ? '' : ' · найдено $visibleCount'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.subtle(mobile ? 11.2 : 10.8)),
+              ],
+            ),
+          ),
+          _TeamsIconButton(
+            icon: Icons.add_rounded,
+            tooltip: 'Добавить команду',
+            emphasized: true,
+            compact: true,
+            onTap: () {
+              Navigator.of(context).pop();
+              widget.onCreateTeam();
+            },
+          ),
+          const SizedBox(width: 8),
+          _TeamsIconButton(
+            icon: Icons.close_rounded,
+            tooltip: 'Закрыть',
+            compact: true,
+            onTap: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TeamPickerGridCard extends StatelessWidget {
+  final Map<String, dynamic> team;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _TeamPickerGridCard({required this.team, required this.active, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final name = _teamName(team);
+    final subtitle = _teamSubtitle(team).isEmpty ? 'Команда клуба' : _teamSubtitle(team);
+    final logo = _teamLogo(team);
+    final players = _teamPlayersCount(team);
+    final trainers = _teamTrainersCount(team);
+    return Material(
+      color: active ? _CmrColors.greenSoft : _CmrColors.panel,
+      borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
+            border: Border.all(color: active ? _CmrColors.green.withOpacity(.28) : _CmrColors.divider, width: .7),
+          ),
+          child: Row(
+            children: [
+              _TeamLogo(url: logo, name: name, size: 40, active: active),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.title(12.8)),
+                    const SizedBox(height: 4),
+                    Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.subtle(10.4)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              _TeamCountStack(players: players, trainers: trainers, compact: true),
+              if (active) ...[
+                const SizedBox(width: 6),
+                const Icon(Icons.check_circle_rounded, color: _CmrColors.green, size: 18),
+              ],
+            ],
           ),
         ),
       ),
@@ -926,7 +1393,7 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.all(compact ? 12 : 14),
-      decoration: _CmrDecor.panel(),
+      decoration: const BoxDecoration(color: Colors.white),
       child: compact
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -981,6 +1448,7 @@ class _Header extends StatelessWidget {
   }
 }
 
+
 class _TeamsList extends StatelessWidget {
   final String clubName;
   final int teamsCount;
@@ -1018,43 +1486,53 @@ class _TeamsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final outerPadding = mobile ? 8.0 : (compact ? 10.0 : 12.0);
-    final gap = mobile ? 8.0 : 10.0;
-
     return Container(
       width: double.infinity,
       decoration: _CmrDecor.seamlessPane(),
-      padding: EdgeInsets.all(outerPadding),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _TeamsListHeader(
-            clubName: clubName,
-            teamsCount: teamsCount,
-            visibleCount: visibleCount,
-            selectedTeamName: selectedTeamName,
-            onCreateTeam: onCreateTeam,
-            onRefresh: onRefresh,
-            compact: compact,
-            mobile: mobile,
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 12, vertical: 10),
+            decoration: const BoxDecoration(color: Colors.transparent),
+            child: _TeamsListHeader(
+              clubName: clubName,
+              teamsCount: teamsCount,
+              visibleCount: visibleCount,
+              selectedTeamName: selectedTeamName,
+              onCreateTeam: onCreateTeam,
+              onRefresh: onRefresh,
+              compact: compact,
+              mobile: mobile,
+            ),
           ),
-          SizedBox(height: gap),
-          _SearchField(controller: searchC, mobile: mobile),
-          const SizedBox(height: 10),
-          _TeamsFilterBar(value: filter, onChanged: onFilterChanged, mobile: mobile),
-          SizedBox(height: gap),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 12, vertical: 8),
+            decoration: const BoxDecoration(color: Colors.transparent),
+            child: _SearchField(controller: searchC, mobile: mobile),
+          ),
+          Container(
+            height: mobile ? 44 : 46,
+            padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 12, vertical: 5),
+            decoration: const BoxDecoration(color: Colors.transparent),
+            child: _TeamsFilterBar(value: filter, onChanged: onFilterChanged, mobile: mobile),
+          ),
           Expanded(
             child: teams.isEmpty
                 ? const _MiniEmpty(text: 'Команды не найдены')
                 : RefreshIndicator(
                     color: _CmrColors.green,
                     onRefresh: onRefresh ?? () async {},
-                    child: ListView.separated(
+                    child: ListView.builder(
                       controller: scroll,
-                      padding: EdgeInsets.only(bottom: mobile ? 20 : 8),
+                      padding: EdgeInsets.only(
+                        top: 0,
+                        bottom: mobile
+                            ? 104 + MediaQuery.paddingOf(context).bottom
+                            : 12,
+                      ),
                       physics: const AlwaysScrollableScrollPhysics(),
                       itemCount: teams.length,
-                      separatorBuilder: (_, __) => SizedBox(height: mobile ? 6 : 7),
                       itemBuilder: (_, index) {
                         final team = teams[index];
                         return _TeamTile(
@@ -1096,59 +1574,33 @@ class _TeamsListHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final iconSize = mobile ? 38.0 : 42.0;
-    final titleSize = mobile ? 15.5 : 16.5;
-    final active = selectedTeamName.trim().isEmpty ? 'не выбрана' : selectedTeamName.trim();
-    final subtitle = '$clubName · $teamsCount команд${visibleCount == teamsCount ? '' : ' · найдено $visibleCount'}';
-
     return Row(
       children: [
-        _IconBadge(
-          icon: Icons.account_tree_rounded,
-          size: iconSize,
-          iconSize: mobile ? 21 : 23,
-        ),
-        SizedBox(width: mobile ? 8 : 10),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Text('Команды', maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.title(mobile ? 16.0 : 16.5)),
+              const SizedBox(height: 3),
               Text(
-                'Команды клуба',
+                clubName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: _CmrText.title(titleSize),
+                style: _CmrText.muted(mobile ? 11.8 : 11.5),
               ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                maxLines: mobile ? 2 : 1,
-                overflow: TextOverflow.ellipsis,
-                style: _CmrText.subtle(mobile ? 11 : 11.5),
-              ),
-              if (!mobile) ...[
-                const SizedBox(height: 4),
-                Text(
-                  'Активная: $active',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _CmrText.subtle(11),
-                ),
-              ],
             ],
           ),
         ),
-        const SizedBox(width: 8),
         if (onRefresh != null && !mobile) ...[
-          _IconAction(icon: Icons.refresh_rounded, onTap: () { onRefresh?.call(); }),
-          const SizedBox(width: 8),
+          _TeamsIconButton(icon: Icons.refresh_rounded, tooltip: 'Обновить', onTap: () => onRefresh?.call(), compact: true),
+          const SizedBox(width: 7),
         ],
         _TeamsIconButton(
           icon: Icons.add_rounded,
           tooltip: 'Добавить команду',
           onTap: onCreateTeam,
           emphasized: true,
-          compact: mobile,
+          compact: true,
         ),
       ],
     );
@@ -1176,7 +1628,7 @@ class _TeamsFilterBar extends StatelessWidget {
     };
 
     return SizedBox(
-      height: mobile ? 32 : 34,
+      height: mobile ? 34 : 36,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: items.length,
@@ -1195,6 +1647,7 @@ class _TeamsFilterBar extends StatelessWidget {
   }
 }
 
+
 class _TeamsIconButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
@@ -1212,28 +1665,29 @@ class _TeamsIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(compact ? 12 : 13);
     return Tooltip(
       message: tooltip,
       child: Material(
         color: Colors.transparent,
-        borderRadius: radius,
+        borderRadius: BorderRadius.circular(10),
         child: InkWell(
           onTap: onTap,
-          borderRadius: radius,
+          borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
           child: Container(
-            width: compact ? 36 : 38,
-            height: compact ? 36 : 38,
-            decoration: _CmrDecor.fluentSurface(
-              radius: compact ? 12 : 13,
-              accent: emphasized ? _CmrColors.green : _CmrColors.blue,
-              active: emphasized,
-              compact: true,
+            width: compact ? 34 : 36,
+            height: compact ? 34 : 36,
+            decoration: BoxDecoration(
+              color: emphasized ? _CmrColors.greenSoft : _CmrColors.panel,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: emphasized ? _CmrColors.greenBorder : _CmrColors.divider.withOpacity(.65),
+                width: .8,
+              ),
             ),
             child: Icon(
               icon,
-              color: emphasized ? _CmrColors.greenDark : _CmrColors.blue,
-              size: compact ? 18 : 18,
+              color: emphasized ? _CmrColors.green : _CmrColors.text,
+              size: compact ? 15 : 16,
             ),
           ),
         ),
@@ -1261,98 +1715,80 @@ class _TeamTile extends StatelessWidget {
     final name = _teamName(team);
     final subtitle = _teamSubtitle(team).isEmpty ? 'Команда клуба' : _teamSubtitle(team);
     final logo = _teamLogo(team);
-    final sport = _s(team['sport']).isEmpty ? 'Футбол' : _s(team['sport']);
     final players = _teamPlayersCount(team);
     final trainers = _teamTrainersCount(team);
-    final meta = [sport, subtitle].where((e) => e.trim().isNotEmpty).join('  •  ');
-    final accent = _winAccent(_teamId(team));
-    final accentSoft = _winAccentSoft(_teamId(team));
+    final meta = [
+      subtitle,
+      if (players > 0) '$players игроков',
+      if (trainers > 0) '$trainers тренеров',
+    ].join('  ·  ');
 
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(11),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(11),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 170),
-          padding: EdgeInsets.symmetric(horizontal: mobile ? 9 : 10, vertical: mobile ? 8 : 9),
+          duration: const Duration(milliseconds: 160),
+          constraints: BoxConstraints(minHeight: mobile ? 76 : 72),
+          padding: EdgeInsets.fromLTRB(
+            mobile ? 10 : 12,
+            9,
+            mobile ? 10 : 12,
+            9,
+          ),
           decoration: BoxDecoration(
-            color: active ? Colors.white.withOpacity(.96) : Colors.white.withOpacity(.76),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.white.withOpacity(active ? .92 : .65)),
-            boxShadow: active
-                ? [
-                    BoxShadow(
-                      color: accent.withOpacity(.16),
-                      blurRadius: 22,
-                      spreadRadius: -10,
-                      offset: const Offset(0, 12),
-                    ),
-                    BoxShadow(
-                      color: Colors.black.withOpacity(.035),
-                      blurRadius: 14,
-                      spreadRadius: -10,
-                      offset: const Offset(0, 7),
-                    ),
-                  ]
-                : null,
+            color: active ? _CmrColors.greenSoft2 : Colors.white,
+            border: const Border(
+              bottom: BorderSide(color: _CmrColors.divider, width: .65),
+            ),
           ),
           child: Row(
             children: [
               AnimatedContainer(
-                duration: const Duration(milliseconds: 170),
+                duration: const Duration(milliseconds: 160),
                 width: 3,
-                height: mobile ? 42 : 46,
+                height: mobile ? 48 : 46,
                 decoration: BoxDecoration(
-                  color: active ? accent : Colors.transparent,
+                  color: active ? _CmrColors.green : Colors.transparent,
                   borderRadius: BorderRadius.circular(99),
                 ),
               ),
-              SizedBox(width: active ? 8 : 6),
-              _TeamLogo(url: logo, name: name, size: mobile ? 40 : 44, active: active),
-              SizedBox(width: mobile ? 9 : 10),
+              const SizedBox(width: 9),
+              _TeamLogo(
+                url: logo,
+                name: name,
+                size: mobile ? 50 : 48,
+                active: active,
+              ),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: _CmrText.title(mobile ? 13.4 : 14.2),
-                          ),
-                        ),
-                        if (active) ...[
-                          const SizedBox(width: 6),
-                          const _ActiveDot(),
-                        ],
-                      ],
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _CmrText.title(mobile ? 15.0 : 14.2),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 5),
                     Text(
                       meta.isEmpty ? 'Данные команды не заполнены' : meta,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _CmrText.muted(mobile ? 10.8 : 11.2),
+                      style: _CmrText.muted(mobile ? 11.6 : 10.8),
                     ),
+                    if (active) ...[
+                      const SizedBox(height: 5),
+                      Text(
+                        'АКТИВНАЯ КОМАНДА',
+                        style: _CmrText.microCaps(color: _CmrColors.greenDark),
+                      ),
+                    ],
                   ],
                 ),
               ),
-              if (!mobile) ...[
-                const SizedBox(width: 8),
-                _TeamInlineMetric(label: 'Игроки', value: players == 0 ? '—' : '$players'),
-                const SizedBox(width: 6),
-                _TeamInlineMetric(label: 'Тренеры', value: trainers == 0 ? '—' : '$trainers'),
-                const SizedBox(width: 8),
-                _ChevronBadge(active: active),
-              ] else ...[
-                const SizedBox(width: 8),
-                _TeamCountStack(players: players, trainers: trainers, compact: true),
-              ],
             ],
           ),
         ),
@@ -1387,14 +1823,14 @@ class _TeamInlineMetric extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
         color: _CmrColors.soft,
-        borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
+        
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.caption().copyWith(fontSize: 9.3)),
+          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.caption().copyWith(fontSize: 10.8)),
           const SizedBox(height: 2),
           Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.value(12.3)),
         ],
@@ -1487,7 +1923,7 @@ class _TeamTileText extends StatelessWidget {
             sport.toUpperCase(),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: _CmrText.caption().copyWith(color: _CmrColors.text, letterSpacing: .4),
+            style: _CmrText.caption().copyWith(color: _CmrColors.text, letterSpacing: .2),
           ),
         ],
       ],
@@ -1505,7 +1941,7 @@ class _TeamStateChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
         color: _CmrColors.panel,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
         border: Border.all(color: active ? _CmrColors.green.withOpacity(.20) : _CmrColors.divider.withOpacity(0.0)),
       ),
       child: Row(
@@ -1520,7 +1956,7 @@ class _TeamStateChip extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 6),
-          Text(active ? 'Выбрана' : 'Команда', style: _CmrText.action().copyWith(fontSize: 10.5)),
+          Text(active ? 'Выбрана' : 'Команда', style: _CmrText.action().copyWith(fontSize: 11.2)),
         ],
       ),
     );
@@ -1538,8 +1974,8 @@ class _TeamMiniStat extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
       decoration: BoxDecoration(
         color: _CmrColors.panel,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
+        
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1565,8 +2001,8 @@ class _TeamCountStack extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
       decoration: BoxDecoration(
         color: _CmrColors.panel,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
+        
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1651,7 +2087,7 @@ class _TeamDetails extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 640;
-        final radius = compact ? 18.0 : 20.0;
+        final radius = 0.0;
         final contentPadding = compact ? 10.0 : 12.0;
 
         return Container(
@@ -1661,7 +2097,12 @@ class _TeamDetails extends StatelessWidget {
             borderRadius: BorderRadius.circular(radius),
             child: SingleChildScrollView(
               physics: const ClampingScrollPhysics(),
-              padding: EdgeInsets.all(contentPadding),
+              padding: EdgeInsets.fromLTRB(
+                contentPadding,
+                contentPadding,
+                contentPadding,
+                compact ? 112 : contentPadding,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -1674,7 +2115,7 @@ class _TeamDetails extends StatelessWidget {
                     active: active,
                     compact: compact,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   _safeKpiGrid(
                     context,
                     compact: compact,
@@ -1706,9 +2147,8 @@ class _TeamDetails extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  _safeActions(compact: compact),
-                  const SizedBox(height: 12),
                   _safeNotice(
+                    compact: compact,
                     title: 'Сводка выбранной команды',
                     text: 'Здесь показывается обзор команды: состав, календарь, тренировки, планы, новости и контроль проблем по тестированию.',
                   ),
@@ -1726,7 +2166,7 @@ class _TeamDetails extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   _safeFeedSection(
-                    icon: Icons.calendar_month_rounded,
+                    compact: compact,
                     title: 'Календарь и события',
                     emptyTitle: 'Событий пока нет',
                     items: safeEvents,
@@ -1734,7 +2174,7 @@ class _TeamDetails extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   _safeFeedSection(
-                    icon: Icons.fitness_center_rounded,
+                    compact: compact,
                     title: 'Тренировки',
                     emptyTitle: 'Тренировок пока нет',
                     items: safeTrainings,
@@ -1742,7 +2182,7 @@ class _TeamDetails extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   _safeFeedSection(
-                    icon: Icons.assignment_turned_in_rounded,
+                    compact: compact,
                     title: 'Планы и задания',
                     emptyTitle: 'Планов пока нет',
                     items: safePlans,
@@ -1750,16 +2190,21 @@ class _TeamDetails extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   _safeFeedSection(
-                    icon: Icons.campaign_rounded,
+                    compact: compact,
                     title: 'Лента и новости',
                     emptyTitle: 'Лента пока пустая',
                     items: safeNews,
                     onTap: onOpenChats,
                   ),
                   const SizedBox(height: 12),
-                  _safePlayersBlock(players: safePlayers, fallbackCount: resolvedPlayersCount),
+                  _safePlayersBlock(
+                    players: safePlayers,
+                    fallbackCount: resolvedPlayersCount,
+                    compact: compact,
+                  ),
                   const SizedBox(height: 12),
                   _safePassport(
+                    compact: compact,
                     name: name,
                     clubName: clubName,
                     sport: sport,
@@ -1784,40 +2229,48 @@ class _TeamDetails extends StatelessWidget {
     required bool active,
     required bool compact,
   }) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(compact ? 12 : 14),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(.96),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white.withOpacity(.86)),
-        boxShadow: [
-          BoxShadow(
-            color: (active ? _CmrColors.green : _CmrColors.blue).withOpacity(.12),
-            blurRadius: 28,
-            spreadRadius: -14,
-            offset: const Offset(0, 16),
-          ),
-        ],
-      ),
-      child: Wrap(
-        spacing: 12,
-        runSpacing: 10,
-        crossAxisAlignment: WrapCrossAlignment.center,
+    final meta = [
+      if (sport.trim().isNotEmpty) sport.trim(),
+      if (subtitle.trim().isNotEmpty) subtitle.trim(),
+      clubName.trim(),
+    ].where((e) => e.isNotEmpty).join('  ·  ');
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 2, 2, 8),
+      child: Row(
         children: [
-          _TeamLogo(url: logo, name: name, size: compact ? 54 : 62, active: active),
-          ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: compact ? 360 : 520),
+          _TeamLogo(
+            url: logo,
+            name: name,
+            size: compact ? 72 : 86,
+            active: active,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(active ? 'АКТИВНАЯ КОМАНДА' : 'КОМАНДА КЛУБА', style: _CmrText.caption().copyWith(color: _CmrColors.graphite2)),
-                const SizedBox(height: 6),
-                Text(name, maxLines: compact ? 2 : 1, overflow: TextOverflow.ellipsis, style: _CmrText.title(compact ? 20 : 24)),
-                const SizedBox(height: 6),
-                Text('$clubName · ${sport.trim().isEmpty ? 'Вид спорта не указан' : sport} · ${subtitle.trim().isEmpty ? 'Группа не указана' : subtitle}',
-                    maxLines: 2, overflow: TextOverflow.ellipsis, style: _CmrText.muted(11.5)),
+                if (active)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Text(
+                      'АКТИВНАЯ КОМАНДА',
+                      style: _CmrText.microCaps(color: _CmrColors.greenDark),
+                    ),
+                  ),
+                Text(
+                  name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: _CmrText.title(compact ? 22.0 : 25),
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  meta,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: _CmrText.muted(compact ? 12.0 : 12),
+                ),
               ],
             ),
           ),
@@ -1827,133 +2280,75 @@ class _TeamDetails extends StatelessWidget {
   }
 
   Widget _safeKpiGrid(BuildContext context, {required bool compact, required List<_TeamKpiData> items}) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth.isFinite ? constraints.maxWidth : 520.0;
-        final gap = compact ? 8.0 : 10.0;
-        final columns = width >= 760 ? 4 : (width >= 430 ? 2 : 1);
-        final itemWidth = math.max(140.0, (width - gap * (columns - 1)) / columns);
-        return Wrap(
-          spacing: gap,
-          runSpacing: gap,
-          children: items.asMap().entries.map((entry) {
-            final index = entry.key;
-            final item = entry.value;
-            final accent = _winAccent(index);
-            final accentSoft = _winAccentSoft(index);
-            return SizedBox(
-              width: itemWidth,
-              child: Container(
-                padding: EdgeInsets.all(compact ? 10 : 12),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(.94),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: Colors.white.withOpacity(.86)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: accent.withOpacity(.10),
-                      blurRadius: 18,
-                      spreadRadius: -11,
-                      offset: const Offset(0, 9),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 30,
-                      height: 30,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(.82),
-                        borderRadius: BorderRadius.circular(11),
-                      ),
-                      child: Icon(item.icon, color: accent, size: 17),
-                    ),
-                    const SizedBox(height: 9),
-                    Text(item.value.trim().isEmpty ? '—' : item.value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.value(compact ? 16 : 18)),
-                    const SizedBox(height: 2),
-                    Text(item.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.caption()),
-                    const SizedBox(height: 3),
-                    Text(item.hint, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.subtle(10.5)),
-                  ],
-                ),
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          top: BorderSide(color: _CmrColors.divider, width: .7),
+          bottom: BorderSide(color: _CmrColors.divider, width: .7),
+        ),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < items.length; i++) ...[
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(items[i].value.trim().isEmpty ? '—' : items[i].value, style: _CmrText.title(compact ? 15.8 : 15.5), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 4),
+                  Text(items[i].label, style: _CmrText.caption(), maxLines: 1, overflow: TextOverflow.ellipsis),
+                ],
               ),
-            );
-          }).toList(),
-        );
-      },
+            ),
+            if (i != items.length - 1) Container(width: 1, height: 30, color: _CmrColors.divider),
+          ],
+        ],
+      ),
     );
   }
 
-  Widget _safeActions({required bool compact}) {
-    final actions = <_SafeActionData>[
-      _SafeActionData(Icons.open_in_new_rounded, 'Открыть обзор', onOpenTeam),
-      _SafeActionData(Icons.groups_2_rounded, 'Состав', onOpenRoster),
-      _SafeActionData(Icons.badge_rounded, 'Тренеры', onOpenTrainers),
-      _SafeActionData(Icons.calendar_month_rounded, 'Календарь', onOpenCalendar),
-      _SafeActionData(Icons.assignment_rounded, 'Планы', onOpenPlans),
-      _SafeActionData(Icons.fitness_center_rounded, 'Тренировки', onOpenTrainings),
-      _SafeActionData(Icons.fact_check_rounded, 'Тестирование', onOpenTesting),
-      _SafeActionData(Icons.chat_bubble_outline_rounded, 'Чат', onOpenChats),
-    ];
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: actions.asMap().entries.map((entry) {
-        final index = entry.key;
-        final action = entry.value;
-        final accent = _winAccent(index);
-        final accentSoft = _winAccentSoft(index);
-        return InkWell(
-          onTap: action.onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 12, vertical: 10),
+
+  Widget _safeNotice({
+    required bool compact,
+    required String title,
+    required String text,
+  }) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 14 : 12,
+        vertical: compact ? 13 : 12,
+      ),
+      color: _CmrColors.greenSoft2,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 3,
+            height: compact ? 42 : 36,
             decoration: BoxDecoration(
-              color: action.onTap == null ? _CmrColors.soft : Colors.white.withOpacity(.94),
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(color: Colors.white.withOpacity(.82)),
-              boxShadow: action.onTap == null
-                  ? null
-                  : [
-                      BoxShadow(
-                        color: accent.withOpacity(.09),
-                        blurRadius: 15,
-                        spreadRadius: -9,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
+              color: _CmrColors.green,
+              borderRadius: BorderRadius.circular(99),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(action.icon, color: action.onTap == null ? _CmrColors.subtle : accent, size: 16),
-                const SizedBox(width: 7),
-                Text(action.title, style: _CmrText.action()),
+                Text(
+                  title,
+                  style: _CmrText.title(compact ? 15.5 : 13.2),
+                ),
+                SizedBox(height: compact ? 6 : 5),
+                Text(
+                  text,
+                  style: _CmrText.muted(compact ? 13.0 : 11.5),
+                ),
               ],
             ),
           ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _safeNotice({required String title, required String text}) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: _CmrColors.greenSoft2,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _CmrColors.green.withOpacity(.18)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: _CmrText.section()),
-          const SizedBox(height: 5),
-          Text(text, style: _CmrText.muted(11.5)),
         ],
       ),
     );
@@ -1965,7 +2360,7 @@ class _TeamDetails extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: hasTests ? _CmrColors.orangeSoft : _CmrColors.greenSoft2,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
         border: Border.all(color: hasTests ? _CmrColors.orange.withOpacity(.22) : _CmrColors.green.withOpacity(.18)),
       ),
       child: Column(
@@ -1989,114 +2384,209 @@ class _TeamDetails extends StatelessWidget {
   }
 
   Widget _safeFeedSection({
-    required IconData icon,
+    required bool compact,
     required String title,
     required String emptyTitle,
     required List<Map<String, dynamic>> items,
     required VoidCallback? onTap,
   }) {
-    final accent = _winAccent(icon.codePoint);
-    final accentSoft = _winAccentSoft(icon.codePoint);
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(.94),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withOpacity(.78)),
-        boxShadow: [
-          BoxShadow(
-            color: accent.withOpacity(.075),
-            blurRadius: 18,
-            spreadRadius: -12,
-            offset: const Offset(0, 9),
+      padding: EdgeInsets.fromLTRB(
+        compact ? 14 : 12,
+        compact ? 15 : 12,
+        compact ? 14 : 12,
+        compact ? 15 : 12,
+      ),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(
+            color: _CmrColors.divider,
+            width: .7,
           ),
-        ],
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          Row(
             children: [
               Container(
-                width: 26,
-                height: 26,
+                width: 3,
+                height: compact ? 24 : 21,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(.82),
-                  borderRadius: BorderRadius.circular(10),
+                  color: _CmrColors.green,
+                  borderRadius: BorderRadius.circular(99),
                 ),
-                child: Icon(icon, color: accent, size: 15),
               ),
-              Text(title, style: _CmrText.section()),
-              if (onTap != null) _safeTextButton('Открыть', onTap),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Text(
+                  title,
+                  style: _CmrText.title(compact ? 15.5 : 13.2),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (onTap != null)
+                InkWell(
+                  onTap: onTap,
+                  borderRadius: BorderRadius.circular(
+                    _CmrDecor.interactiveRadius,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 5,
+                    ),
+                    child: Text(
+                      'Открыть',
+                      style: _CmrText.action().copyWith(
+                        color: _CmrColors.greenDark,
+                        fontSize: compact ? 12.2 : 11.2,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
-          const SizedBox(height: 9),
+          SizedBox(height: compact ? 13 : 9),
           if (items.isEmpty)
-            Text(emptyTitle, style: _CmrText.subtle(11.2))
+            Text(
+              emptyTitle,
+              style: _CmrText.muted(compact ? 13.0 : 11.2),
+            )
           else
-            ...items.map((item) => _safeFeedTile(item, onTap)),
+            ...items.map(
+              (item) => _safeFeedTile(
+                item,
+                onTap,
+                compact: compact,
+              ),
+            ),
         ],
       ),
     );
   }
 
-  Widget _safeFeedTile(Map<String, dynamic> item, VoidCallback? onTap) {
+  Widget _safeFeedTile(
+    Map<String, dynamic> item,
+    VoidCallback? onTap, {
+    required bool compact,
+  }) {
     final title = _itemTitle(item);
     final meta = _teamDateText(item);
-    final subtitle = _s(item['description'] ?? item['body'] ?? item['text'] ?? item['comment'] ?? item['place'] ?? item['location']);
+    final subtitle = _s(
+      item['description'] ??
+          item['body'] ??
+          item['text'] ??
+          item['comment'] ??
+          item['place'] ??
+          item['location'],
+    );
+
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(13),
       child: Container(
         margin: const EdgeInsets.only(bottom: 7),
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 2 : 10,
+          vertical: 10,
+        ),
+        decoration: const BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(13),
-          border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
+          border: Border(
+            bottom: BorderSide(
+              color: _CmrColors.divider,
+              width: .55,
+            ),
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.value(11.8)),
-            const SizedBox(height: 3),
-            Text(subtitle.isEmpty ? meta : '$meta · $subtitle', maxLines: 2, overflow: TextOverflow.ellipsis, style: _CmrText.subtle(10)),
+            Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _CmrText.value(compact ? 14.0 : 11.8),
+            ),
+            SizedBox(height: compact ? 5 : 3),
+            Text(
+              subtitle.isEmpty ? meta : '$meta · $subtitle',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: _CmrText.muted(compact ? 12.2 : 10.0),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _safePlayersBlock({required List<Map<String, dynamic>> players, required int fallbackCount}) {
+  Widget _safePlayersBlock({
+    required List<Map<String, dynamic>> players,
+    required int fallbackCount,
+    required bool compact,
+  }) {
     final count = players.isNotEmpty ? players.length : fallbackCount;
+
     return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: _CmrColors.panel,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
-      ),
+      padding: EdgeInsets.all(compact ? 14 : 12),
+      color: _CmrColors.panel,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Игроки команды', style: _CmrText.section()),
-          const SizedBox(height: 4),
-          Text(count == 0 ? 'Состав пока не заполнен' : '$count игроков в рабочей группе', style: _CmrText.muted(11.5)),
+          Row(
+            children: [
+              Container(
+                width: 3,
+                height: compact ? 24 : 21,
+                decoration: BoxDecoration(
+                  color: _CmrColors.green,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Text(
+                  'Игроки команды',
+                  style: _CmrText.title(compact ? 15.5 : 13.2),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: compact ? 8 : 4),
+          Text(
+            count == 0
+                ? 'Состав пока не заполнен'
+                : '$count игроков в рабочей группе',
+            style: _CmrText.muted(compact ? 13.0 : 11.5),
+          ),
           if (players.isNotEmpty) ...[
             const SizedBox(height: 10),
             Wrap(
               spacing: 7,
               runSpacing: 7,
-              children: players.map((player) => _TeamSmallAvatar(url: _playerPhoto(player), name: _playerName(player), size: 38)).toList(),
+              children: players
+                  .map(
+                    (player) => _TeamSmallAvatar(
+                      url: _playerPhoto(player),
+                      name: _playerName(player),
+                      size: 38,
+                    ),
+                  )
+                  .toList(),
             ),
           ],
           if (onOpenRoster != null) ...[
-            const SizedBox(height: 10),
-            _safeSmallButton('Открыть состав', onOpenRoster),
+            SizedBox(height: compact ? 12 : 10),
+            _safeSmallButton(
+              'Открыть состав',
+              onOpenRoster,
+              compact: compact,
+            ),
           ],
         ],
       ),
@@ -2104,6 +2594,7 @@ class _TeamDetails extends StatelessWidget {
   }
 
   Widget _safePassport({
+    required bool compact,
     required String name,
     required String clubName,
     required String sport,
@@ -2111,42 +2602,90 @@ class _TeamDetails extends StatelessWidget {
     required String description,
   }) {
     return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: _CmrColors.panel,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
-      ),
+      padding: EdgeInsets.all(compact ? 14 : 12),
+      color: _CmrColors.panel,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Паспорт команды', style: _CmrText.section()),
-          const SizedBox(height: 8),
-          Text('Команда: $name', style: _CmrText.muted(11.5)),
-          Text('Клуб: $clubName', style: _CmrText.muted(11.5)),
-          Text('Вид спорта: ${sport.trim().isEmpty ? 'не указан' : sport}', style: _CmrText.muted(11.5)),
-          Text('Группа: ${subtitle.trim().isEmpty ? 'не указана' : subtitle}', style: _CmrText.muted(11.5)),
-          const SizedBox(height: 8),
-          Text(description.isEmpty ? 'Описание пока не заполнено.' : description, style: _CmrText.muted(11.5)),
-          const SizedBox(height: 10),
-          _safeSmallButton('Редактировать', onOpenTeam),
+          Row(
+            children: [
+              Container(
+                width: 3,
+                height: compact ? 24 : 21,
+                decoration: BoxDecoration(
+                  color: _CmrColors.green,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Text(
+                  'Паспорт команды',
+                  style: _CmrText.title(compact ? 15.5 : 13.2),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: compact ? 12 : 8),
+          Text(
+            'Команда: $name',
+            style: _CmrText.muted(compact ? 13.0 : 11.5),
+          ),
+          Text(
+            'Клуб: $clubName',
+            style: _CmrText.muted(compact ? 13.0 : 11.5),
+          ),
+          Text(
+            'Вид спорта: ${sport.trim().isEmpty ? 'не указан' : sport}',
+            style: _CmrText.muted(compact ? 13.0 : 11.5),
+          ),
+          Text(
+            'Группа: ${subtitle.trim().isEmpty ? 'не указана' : subtitle}',
+            style: _CmrText.muted(compact ? 13.0 : 11.5),
+          ),
+          SizedBox(height: compact ? 10 : 8),
+          Text(
+            description.isEmpty
+                ? 'Описание пока не заполнено.'
+                : description,
+            style: _CmrText.muted(compact ? 13.0 : 11.5),
+          ),
+          SizedBox(height: compact ? 12 : 10),
+          _safeSmallButton(
+            'Редактировать',
+            onOpenTeam,
+            compact: compact,
+          ),
         ],
       ),
     );
   }
 
-  Widget _safeSmallButton(String text, VoidCallback? onTap) {
+  Widget _safeSmallButton(
+    String text,
+    VoidCallback? onTap, {
+    bool compact = false,
+  }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
+      borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 15 : 11,
+          vertical: compact ? 10 : 7,
+        ),
         decoration: BoxDecoration(
           color: _CmrColors.soft,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
+          borderRadius: BorderRadius.circular(
+            _CmrDecor.interactiveRadius,
+          ),
         ),
-        child: Text(text, style: _CmrText.action().copyWith(fontSize: 10.5)),
+        child: Text(
+          text,
+          style: _CmrText.action().copyWith(
+            fontSize: compact ? 12.5 : 11.2,
+          ),
+        ),
       ),
     );
   }
@@ -2154,10 +2693,10 @@ class _TeamDetails extends StatelessWidget {
   Widget _safeTextButton(String text, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
+      borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-        child: Text(text, style: _CmrText.action().copyWith(fontSize: 10.5)),
+        child: Text(text, style: _CmrText.action().copyWith(fontSize: 11.2)),
       ),
     );
   }
@@ -2212,7 +2751,7 @@ class _TeamPremiumHero extends StatelessWidget {
               height: compact ? 120 : 160,
               decoration: BoxDecoration(
                 color: _CmrColors.greenSoft,
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
               ),
             ),
           ),
@@ -2224,7 +2763,7 @@ class _TeamPremiumHero extends StatelessWidget {
               height: compact ? 100 : 138,
               decoration: BoxDecoration(
                 color: _CmrColors.soft,
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
               ),
             ),
           ),
@@ -2270,7 +2809,7 @@ class _TeamPremiumHero extends StatelessWidget {
                             height: 20,
                             decoration: BoxDecoration(
                               color: _CmrColors.green,
-                              borderRadius: BorderRadius.circular(999),
+                              borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -2281,8 +2820,8 @@ class _TeamPremiumHero extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: _CmrText.caption().copyWith(
                                 color: _CmrColors.text,
-                                fontSize: 10.8,
-                                letterSpacing: .75,
+                                fontSize: 11.2,
+                                letterSpacing: .35,
                               ),
                             ),
                           ),
@@ -2330,14 +2869,14 @@ class _TeamHeroButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: _CmrDecor.fluentSurface(
-            radius: 14,
+            radius: _CmrDecor.mobileInnerRadius,
             accent: _CmrColors.green,
             active: true,
           ),
@@ -2371,7 +2910,7 @@ class _TeamLightPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
         color: active ? _CmrColors.greenSoft2 : _CmrColors.panel,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
         border: Border.all(color: active ? _CmrColors.green.withOpacity(.20) : _CmrColors.divider.withOpacity(0.0)),
       ),
       child: Row(
@@ -2463,8 +3002,8 @@ class _TeamKpiCard extends StatelessWidget {
       padding: EdgeInsets.all(compact ? 10 : 12),
       decoration: BoxDecoration(
         color: _CmrColors.panel,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
+        
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(.025),
@@ -2481,7 +3020,7 @@ class _TeamKpiCard extends StatelessWidget {
             height: 34,
             decoration: BoxDecoration(
               color: _CmrColors.greenSoft,
-              borderRadius: BorderRadius.circular(13),
+              borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
               border: Border.all(color: _CmrColors.green.withOpacity(.14)),
             ),
             child: Icon(data.icon, color: _CmrColors.graphite2, size: 18),
@@ -2517,8 +3056,8 @@ class _TeamOverviewNotice extends StatelessWidget {
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
         color: _CmrColors.greenSoft2,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _CmrColors.green.withOpacity(.18)),
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
+        
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2528,8 +3067,8 @@ class _TeamOverviewNotice extends StatelessWidget {
             height: 34,
             decoration: BoxDecoration(
               color: _CmrColors.panel,
-              borderRadius: BorderRadius.circular(13),
-              border: Border.all(color: _CmrColors.green.withOpacity(.18)),
+              borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
+              
             ),
             child: const Icon(Icons.space_dashboard_rounded, color: _CmrColors.graphite2, size: 18),
           ),
@@ -2598,8 +3137,8 @@ class _TeamPassportBlock extends StatelessWidget {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: _CmrColors.soft,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
+              borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
+              
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2621,40 +3160,48 @@ class _TeamPassportBlock extends StatelessWidget {
   }
 }
 
+
 class _TeamInfoRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
 
-  const _TeamInfoRow({required this.icon, required this.label, required this.value});
+  const _TeamInfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
 
   @override
   Widget build(BuildContext context) {
     final text = value.trim().isEmpty ? 'Не указано' : value.trim();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+    return Container(
+      constraints: const BoxConstraints(minHeight: 42),
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      decoration: const BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: _CmrColors.divider, width: .55),
+        ),
+      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(
-              color: _CmrColors.soft,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
+          SizedBox(
+            width: 112,
+            child: Text(
+              label,
+              style: _CmrText.caption(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            child: Icon(icon, color: _CmrColors.graphite2, size: 15),
           ),
-          const SizedBox(width: 9),
+          const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: _CmrText.caption(), maxLines: 1, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 2),
-                Text(text, style: _CmrText.value(12.5), maxLines: 2, overflow: TextOverflow.ellipsis),
-              ],
+            child: Text(
+              text,
+              textAlign: TextAlign.right,
+              style: _CmrText.value(11.8),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -2737,21 +3284,21 @@ class _TeamWorkAction extends StatelessWidget {
     final enabled = onTap != null;
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
         child: Container(
           padding: const EdgeInsets.all(11),
           decoration: primary
               ? _CmrDecor.fluentSurface(
-                  radius: 16,
+                  radius: _CmrDecor.mobileInnerRadius,
                   accent: _CmrColors.green,
                   active: true,
                 )
               : BoxDecoration(
                   color: _CmrColors.panel,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
                   border: Border.all(color: _CmrColors.divider.withOpacity(.55)),
                 ),
           child: Row(
@@ -2761,7 +3308,7 @@ class _TeamWorkAction extends StatelessWidget {
                 height: 36,
                 decoration: BoxDecoration(
                   color: primary ? _CmrColors.greenSoft2 : _CmrColors.greenSoft,
-                  borderRadius: BorderRadius.circular(13),
+                  borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
                   border: Border.all(color: primary ? _CmrColors.green.withOpacity(.20) : _CmrColors.green.withOpacity(.14)),
                 ),
                 child: Icon(icon, color: primary ? _CmrColors.greenDark : _CmrColors.graphite2, size: 18),
@@ -3167,7 +3714,7 @@ class _TeamRecentTestingBlockState extends State<_TeamRecentTestingBlock> {
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: bg,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
             border: Border.all(color: border),
           ),
           child: Column(
@@ -3180,7 +3727,7 @@ class _TeamRecentTestingBlockState extends State<_TeamRecentTestingBlock> {
                     height: 36,
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(13),
+                      borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
                       border: Border.all(color: iconColor.withOpacity(.16)),
                     ),
                     child: Icon(hasProblems ? Icons.priority_high_rounded : Icons.verified_rounded, color: iconColor, size: 18),
@@ -3275,14 +3822,14 @@ class _RecentTestingProblemTile extends StatelessWidget {
       padding: const EdgeInsets.only(top: 8),
       child: Material(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(15),
+          borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
           child: Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(15),
+              borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
               border: Border.all(color: badgeColor.withOpacity(.24)),
             ),
             child: Row(
@@ -3303,7 +3850,7 @@ class _RecentTestingProblemTile extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                             decoration: BoxDecoration(
                               color: badgeColor.withOpacity(.10),
-                              borderRadius: BorderRadius.circular(999),
+                              borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
                               border: Border.all(color: badgeColor.withOpacity(.18)),
                             ),
                             child: Text(
@@ -3878,16 +4425,16 @@ class _TeamSnapshotMetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
       child: InkWell(
         onTap: data.onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
         child: Container(
           constraints: const BoxConstraints(minHeight: 72),
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             color: data.danger ? _CmrColors.orangeSoft : _CmrColors.soft,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
             border: Border.all(color: data.danger ? _CmrColors.orange.withOpacity(.22) : _CmrColors.divider),
           ),
           child: Column(
@@ -3931,7 +4478,7 @@ class _TeamTestingWarningsBlock extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: hasWarnings ? _CmrColors.orangeSoft : _CmrColors.greenSoft2,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
         border: Border.all(color: hasWarnings ? _CmrColors.orange.withOpacity(.22) : _CmrColors.green.withOpacity(.18)),
       ),
       child: Column(
@@ -3944,7 +4491,7 @@ class _TeamTestingWarningsBlock extends StatelessWidget {
                 height: 34,
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(13),
+                  borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
                   border: Border.all(color: hasWarnings ? _CmrColors.orange.withOpacity(.18) : _CmrColors.green.withOpacity(.18)),
                 ),
                 child: Icon(
@@ -4000,14 +4547,14 @@ class _TeamWarningTile extends StatelessWidget {
       padding: const EdgeInsets.only(top: 8),
       child: Material(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(15),
+          borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
           child: Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(15),
+              borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
               border: Border.all(color: critical ? _CmrColors.orange.withOpacity(.22) : _CmrColors.divider),
             ),
             child: Row(
@@ -4057,8 +4604,8 @@ class _TeamCompactFeedBlock extends StatelessWidget {
       padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
         color: _CmrColors.soft,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
+        
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -4071,10 +4618,10 @@ class _TeamCompactFeedBlock extends StatelessWidget {
               if (onTap != null)
                 InkWell(
                   onTap: onTap,
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-                    child: Text('Открыть', style: _CmrText.action().copyWith(fontSize: 10.5)),
+                    child: Text('Открыть', style: _CmrText.action().copyWith(fontSize: 11.2)),
                   ),
                 ),
             ],
@@ -4105,15 +4652,15 @@ class _TeamFeedTile extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 7),
       child: Material(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
           child: Container(
             padding: const EdgeInsets.all(9),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
+              borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
+              
             ),
             child: Row(
               children: [
@@ -4122,7 +4669,7 @@ class _TeamFeedTile extends StatelessWidget {
                   height: 38,
                   decoration: BoxDecoration(
                     color: _CmrColors.green,
-                    borderRadius: BorderRadius.circular(999),
+                    borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
                   ),
                 ),
                 const SizedBox(width: 9),
@@ -4168,8 +4715,8 @@ class _TeamPlayersPreviewBlock extends StatelessWidget {
       padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
         color: _CmrColors.panel,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
+        
       ),
       child: Row(
         children: [
@@ -4225,7 +4772,7 @@ class _TeamSmallAvatar extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         color: _CmrColors.greenSoft,
-        borderRadius: BorderRadius.circular(size * .38),
+        borderRadius: BorderRadius.circular(size * .24),
         border: Border.all(color: _CmrColors.green.withOpacity(.16)),
       ),
       clipBehavior: Clip.antiAlias,
@@ -4248,10 +4795,10 @@ class _TeamSmallRoundButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(999),
+      borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
           decoration: _CmrDecor.fluentSurface(
@@ -4278,8 +4825,8 @@ class _TeamInlineEmptyState extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
+        
       ),
       child: Text(text, style: _CmrText.subtle(10.5), textAlign: TextAlign.center),
     );
@@ -4523,7 +5070,7 @@ class _TeamCompletionChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
         color: done ? _CmrColors.greenSoft2 : _CmrColors.soft,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
         border: Border.all(color: done ? _CmrColors.green.withOpacity(.25) : _CmrColors.divider),
       ),
       child: Row(
@@ -4531,7 +5078,7 @@ class _TeamCompletionChip extends StatelessWidget {
         children: [
           Icon(done ? Icons.check_rounded : Icons.add_rounded, color: done ? _CmrColors.graphite2 : _CmrColors.muted, size: 14),
           const SizedBox(width: 6),
-          Text(title, style: _CmrText.action().copyWith(fontSize: 10.5)),
+          Text(title, style: _CmrText.action().copyWith(fontSize: 11.2)),
         ],
       ),
     );
@@ -4549,15 +5096,15 @@ class _TeamMiniButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: _CmrColors.panel,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
+            borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
+            
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -4572,6 +5119,7 @@ class _TeamMiniButton extends StatelessWidget {
     );
   }
 }
+
 
 class _TeamPremiumBlock extends StatelessWidget {
   final IconData icon;
@@ -4591,96 +5139,57 @@ class _TeamPremiumBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: _CmrColors.panel,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(.022),
-            blurRadius: 14,
-            offset: const Offset(0, 7),
-          ),
-        ],
+        border: Border(
+          bottom: BorderSide(color: _CmrColors.divider, width: .7),
+        ),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: _CmrColors.soft,
-                  borderRadius: BorderRadius.circular(13),
-                  border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
-                ),
-                child: Icon(icon, color: _CmrColors.graphite2, size: 17),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(title, style: _CmrText.section(), maxLines: 1, overflow: TextOverflow.ellipsis),
-              ),
-              if (actionText != null && onAction != null)
-                InkWell(
-                  onTap: onAction,
-                  borderRadius: BorderRadius.circular(999),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: _CmrColors.soft,
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
-                    ),
-                    child: Text(actionText ?? '', style: _CmrText.action().copyWith(fontSize: 10.5)),
+          Container(
+            constraints: const BoxConstraints(minHeight: 40),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: _CmrText.section(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-            ],
+                if (actionText != null && onAction != null)
+                  InkWell(
+                    onTap: onAction,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 8,
+                      ),
+                      child: Text(
+                        actionText ?? '',
+                        style: _CmrText.action().copyWith(
+                          color: _CmrColors.greenDark,
+                          fontSize: 11.2,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
-          const SizedBox(height: 12),
-          child,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            child: child,
+          ),
         ],
       ),
     );
   }
 }
-
-String _teamSport(Map<String, dynamic> team) {
-  final value = _s(team['sport'] ?? team['sport_name'] ?? team['sportName'] ?? team['category']);
-  return value.isEmpty ? 'Футбол' : value;
-}
-
-String _teamLongDescription(Map<String, dynamic> team) {
-  return _s(team['description'] ?? team['about'] ?? team['team_description'] ?? team['teamDescription'] ?? team['info']);
-}
-
-String _teamSeason(Map<String, dynamic> team) {
-  final value = _s(team['season'] ?? team['season_title'] ?? team['seasonTitle'] ?? team['year'] ?? team['period']);
-  return value.isEmpty ? 'Не указан' : value;
-}
-
-String _teamCity(Map<String, dynamic> team) {
-  final value = _s(team['city'] ?? team['location'] ?? team['region'] ?? team['stadium'] ?? team['base']);
-  return value.isEmpty ? 'Не указана' : value;
-}
-
-String _teamCoach(Map<String, dynamic> team) {
-  final value = _s(team['head_coach'] ?? team['headCoach'] ?? team['coach'] ?? team['trainer_name'] ?? team['trainerName']);
-  return value.isEmpty ? 'Не назначен' : value;
-}
-
-String _teamStatus(Map<String, dynamic> team) {
-  final explicit = _s(team['status'] ?? team['team_status'] ?? team['state']);
-  if (explicit.isNotEmpty) return explicit;
-  final activeRaw = _s(team['is_active'] ?? team['active'] ?? team['enabled']).toLowerCase();
-  if (activeRaw == '1' || activeRaw == 'true' || activeRaw == 'yes') return 'Активна';
-  if (activeRaw == '0' || activeRaw == 'false' || activeRaw == 'no') return 'Неактивна';
-  return 'Рабочая';
-}
-
-
 
 class _EmptyTeams extends StatelessWidget {
   final VoidCallback onCreateTeam;
@@ -4690,7 +5199,7 @@ class _EmptyTeams extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      decoration: _CmrDecor.panel(),
+      decoration: const BoxDecoration(color: Colors.white),
       padding: const EdgeInsets.all(20),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -4716,7 +5225,7 @@ class _NoFilteredTeams extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      decoration: _CmrDecor.panel(),
+      decoration: const BoxDecoration(color: Colors.white),
       padding: const EdgeInsets.all(18),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -4734,6 +5243,7 @@ class _NoFilteredTeams extends StatelessWidget {
   }
 }
 
+
 class _SearchField extends StatelessWidget {
   final TextEditingController controller;
   final bool mobile;
@@ -4743,49 +5253,52 @@ class _SearchField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: mobile ? 40 : 42,
+      height: 42,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(.86),
-        borderRadius: BorderRadius.circular(mobile ? 16 : 18),
-        boxShadow: [
-          BoxShadow(
-            color: _CmrColors.blue.withOpacity(.06),
-            blurRadius: 18,
-            spreadRadius: -11,
-            offset: const Offset(0, 10),
-          ),
-        ],
+        color: _CmrColors.soft,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _CmrColors.divider.withOpacity(.70),
+          width: .7,
+        ),
       ),
       padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 12),
       child: Row(
         children: [
-          const Icon(Icons.search_rounded, color: _CmrColors.muted, size: 18),
-          const SizedBox(width: 8),
           Expanded(
             child: TextField(
               controller: controller,
               decoration: const InputDecoration(
-                hintText: 'Поиск по команде, спорту или возрасту',
+                hintText: 'Поиск команды',
                 border: InputBorder.none,
                 isDense: true,
               ),
-              style: _CmrText.value(mobile ? 12.2 : 12.8),
+              style: _CmrText.value(mobile ? 13.2 : 12.8),
             ),
           ),
           if (controller.text.trim().isNotEmpty)
             InkWell(
               borderRadius: BorderRadius.circular(99),
               onTap: controller.clear,
-              child: const Padding(
-                padding: EdgeInsets.all(4),
-                child: Icon(Icons.close_rounded, color: _CmrColors.muted, size: 18),
-              ),
+              child: Padding(
+  padding: const EdgeInsets.all(5),
+  child: Text(
+    '×',
+    style: AppTypography.custom(
+      size: 19,
+      weight: FontWeight.w400,
+      color: _CmrColors.subtle,
+      height: 1,
+    ),
+  ),
+),
             ),
         ],
       ),
     );
   }
 }
+
 
 class _FilterChip extends StatelessWidget {
   final String label;
@@ -4804,32 +5317,52 @@ class _FilterChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(999),
+      borderRadius: BorderRadius.circular(9),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(9),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          constraints: BoxConstraints(minHeight: dense ? 34 : 36),
           padding: EdgeInsets.symmetric(
-            horizontal: dense ? 10 : 12,
-            vertical: dense ? 6 : 7,
+            horizontal: dense ? 9 : 11,
+            vertical: dense ? 7 : 8,
           ),
-          decoration: selected
-              ? _CmrDecor.fluentSurface(
-                  radius: 999,
-                  accent: _CmrColors.green,
-                  active: true,
-                  compact: true,
-                )
-              : BoxDecoration(
-                  color: Colors.white.withOpacity(.70),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: Colors.white.withOpacity(.86)),
-                ),
+          decoration: BoxDecoration(
+            color: selected ? _CmrColors.greenSoft : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+            border: Border.all(
+              color: selected ? _CmrColors.greenBorder : Colors.transparent,
+              width: .8,
+            ),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: _CmrColors.green.withOpacity(.055),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
+          ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _CmrText.chip(
+                  size: dense ? 11.0 : 11.4,
+                  color: selected ? _CmrColors.greenDark : _CmrColors.secondary,
+                ).copyWith(
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  height: 1,
+                ),
+              ),
               if (selected) ...[
+                const SizedBox(width: 6),
                 Container(
                   width: 5,
                   height: 5,
@@ -4838,15 +5371,7 @@ class _FilterChip extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                 ),
-                const SizedBox(width: 6),
               ],
-              Text(
-                label,
-                style: _CmrText.chip(
-                  size: dense ? 10.9 : 11.4,
-                  color: selected ? _CmrColors.greenDark : _CmrColors.muted,
-                ),
-              ),
             ],
           ),
         ),
@@ -4864,38 +5389,26 @@ class _ActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(12),
+      color: _CmrColors.green,
+      borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
-          decoration: _CmrDecor.fluentSurface(
-            radius: 12,
-            accent: _CmrColors.green,
-            active: true,
-            compact: true,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: _CmrColors.greenDark, size: 17),
-              const SizedBox(width: 8),
-              Text(
-                text,
-                style: _CmrText.action().copyWith(color: _CmrColors.text),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
+          height: 34,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius), border: Border.all(color: _CmrColors.green, width: .7)),
+          child: Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(icon, color: Colors.white, size: 15),
+            const SizedBox(width: 7),
+            Text(text, style: _CmrText.whiteAction(size: 10.8), maxLines: 1, overflow: TextOverflow.ellipsis),
+          ]),
         ),
       ),
     );
   }
 }
+
 
 class _IconAction extends StatelessWidget {
   final IconData icon;
@@ -4906,28 +5419,21 @@ class _IconAction extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
       child: Container(
-        width: 38,
-        height: 38,
+        width: 36,
+        height: 36,
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(.94),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withOpacity(.76)),
-          boxShadow: [
-            BoxShadow(
-              color: _CmrColors.cyan.withOpacity(.10),
-              blurRadius: 14,
-              spreadRadius: -8,
-              offset: const Offset(0, 8),
-            ),
-          ],
+          color: _CmrColors.panel,
+          borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
+          border: Border.all(color: _CmrColors.divider, width: .7),
         ),
-        child: Icon(icon, color: _CmrColors.cyan, size: 18),
+        child: Icon(icon, color: _CmrColors.text, size: 17),
       ),
     );
   }
 }
+
 
 class _IconBadge extends StatelessWidget {
   final IconData icon;
@@ -4941,25 +5447,11 @@ class _IconBadge extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(.94),
-        borderRadius: BorderRadius.circular(size * .28),
-        border: Border.all(color: Colors.white.withOpacity(.82)),
-        boxShadow: [
-          BoxShadow(
-            color: _CmrColors.blue.withOpacity(0.10),
-            blurRadius: 18,
-            spreadRadius: -8,
-            offset: const Offset(0, 10),
-          ),
-          BoxShadow(
-            color: _CmrColors.green.withOpacity(0.08),
-            blurRadius: 16,
-            spreadRadius: -9,
-            offset: const Offset(-5, 7),
-          ),
-        ],
+        color: _CmrColors.greenSoft,
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
+        border: Border.all(color: _CmrColors.green.withOpacity(.16), width: .7),
       ),
-      child: Icon(icon, color: _CmrColors.graphite2, size: iconSize),
+      child: Icon(icon, color: _CmrColors.greenDark, size: iconSize),
     );
   }
 }
@@ -4969,7 +5461,12 @@ class _TeamLogo extends StatelessWidget {
   final String name;
   final double size;
   final bool active;
-  const _TeamLogo({required this.url, required this.name, required this.size, required this.active});
+  const _TeamLogo({
+    required this.url,
+    required this.name,
+    required this.size,
+    required this.active,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -4978,19 +5475,17 @@ class _TeamLogo extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: _CmrColors.panel,
-        borderRadius: BorderRadius.circular(size * .3),
-        border: Border.all(
-          color: active ? _CmrColors.green.withOpacity(0.42) : _CmrColors.divider,
-          width: active ? 1.2 : 1,
-        ),
+        color: active ? _CmrColors.greenSoft : _CmrColors.soft,
+        borderRadius: BorderRadius.circular(size * .28),
       ),
       clipBehavior: Clip.antiAlias,
       child: image == null
           ? Center(
               child: Text(
                 _initials(name),
-                style: _CmrText.value(size * .28),
+                style: _CmrText.value(size * .26).copyWith(
+                  color: active ? _CmrColors.greenDark : _CmrColors.text,
+                ),
               ),
             )
           : Image(
@@ -4999,7 +5494,9 @@ class _TeamLogo extends StatelessWidget {
               errorBuilder: (_, __, ___) => Center(
                 child: Text(
                   _initials(name),
-                  style: _CmrText.value(size * .28),
+                  style: _CmrText.value(size * .26).copyWith(
+                    color: active ? _CmrColors.greenDark : _CmrColors.text,
+                  ),
                 ),
               ),
             ),
@@ -5017,7 +5514,7 @@ class _Metric extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: _CmrDecor.softCard(radius: 14),
+      decoration: _CmrDecor.softCard(radius: _CmrDecor.mobileInnerRadius),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -5049,8 +5546,8 @@ class _BigMetric extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
         decoration: BoxDecoration(
           color: _CmrColors.panel,
-          borderRadius: BorderRadius.circular(11),
-          border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
+          borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
+          
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -5060,8 +5557,8 @@ class _BigMetric extends StatelessWidget {
               height: 20,
               decoration: BoxDecoration(
                 color: _CmrColors.soft,
-                borderRadius: BorderRadius.circular(7),
-                border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
+                borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
+                
               ),
               child: Icon(icon, color: _CmrColors.graphite2, size: 11.5),
             ),
@@ -5072,7 +5569,7 @@ class _BigMetric extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label, style: _CmrText.caption().copyWith(fontSize: 8.5), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(label, style: _CmrText.caption().copyWith(fontSize: 9.8), maxLines: 1, overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 1),
                   Text(value, style: _CmrText.value(11.5), maxLines: 1, overflow: TextOverflow.ellipsis),
                 ],
@@ -5144,13 +5641,13 @@ class _DetailAction extends StatelessWidget {
       constraints: const BoxConstraints(minWidth: 108, maxWidth: 142, minHeight: 38),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(11),
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
           decoration: BoxDecoration(
             color: _CmrColors.panel,
-            borderRadius: BorderRadius.circular(11),
-            border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
+            borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
+            
           ),
           child: Row(
             mainAxisSize: MainAxisSize.max,
@@ -5160,8 +5657,8 @@ class _DetailAction extends StatelessWidget {
                 height: 21,
                 decoration: BoxDecoration(
                   color: _CmrColors.soft,
-                  borderRadius: BorderRadius.circular(7),
-                  border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
+                  borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
+                  
                 ),
                 child: Icon(icon, color: _CmrColors.graphite2, size: 12),
               ),
@@ -5198,8 +5695,8 @@ class _Pill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
         color: _CmrColors.panel,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: _CmrColors.divider.withOpacity(0.0)),
+        borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
+        
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -5373,6 +5870,40 @@ String _teamName(Map<String, dynamic> team) {
 String _teamSubtitle(Map<String, dynamic> team) {
   final value = _s(team['age_group'] ?? team['ageGroup'] ?? team['category'] ?? team['sport'] ?? team['stage']);
   return value.isEmpty ? 'Футбол' : value;
+}
+
+
+String _teamSport(Map<String, dynamic> team) {
+  final value = _s(team['sport'] ?? team['sport_name'] ?? team['sportName'] ?? team['category']);
+  return value.isEmpty ? 'Футбол' : value;
+}
+
+String _teamLongDescription(Map<String, dynamic> team) {
+  return _s(team['description'] ?? team['about'] ?? team['team_description'] ?? team['teamDescription'] ?? team['info']);
+}
+
+String _teamSeason(Map<String, dynamic> team) {
+  final value = _s(team['season'] ?? team['season_title'] ?? team['seasonTitle'] ?? team['year'] ?? team['period']);
+  return value.isEmpty ? 'Не указан' : value;
+}
+
+String _teamCity(Map<String, dynamic> team) {
+  final value = _s(team['city'] ?? team['location'] ?? team['region'] ?? team['stadium'] ?? team['base']);
+  return value.isEmpty ? 'Не указана' : value;
+}
+
+String _teamCoach(Map<String, dynamic> team) {
+  final value = _s(team['head_coach'] ?? team['headCoach'] ?? team['coach'] ?? team['trainer_name'] ?? team['trainerName']);
+  return value.isEmpty ? 'Не назначен' : value;
+}
+
+String _teamStatus(Map<String, dynamic> team) {
+  final explicit = _s(team['status'] ?? team['team_status'] ?? team['state']);
+  if (explicit.isNotEmpty) return explicit;
+  final activeRaw = _s(team['is_active'] ?? team['active'] ?? team['enabled']).toLowerCase();
+  if (activeRaw == '1' || activeRaw == 'true' || activeRaw == 'yes') return 'Активна';
+  if (activeRaw == '0' || activeRaw == 'false' || activeRaw == 'no') return 'Неактивна';
+  return 'Рабочая';
 }
 
 String _teamLogo(Map<String, dynamic> team) {

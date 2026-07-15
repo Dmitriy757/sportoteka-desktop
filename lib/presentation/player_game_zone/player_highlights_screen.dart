@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'game_zone_api.dart';
+import 'game_zone_cmr_style.dart';
 
 class PlayerHighlightsScreen extends StatefulWidget {
   const PlayerHighlightsScreen({super.key});
@@ -140,13 +141,7 @@ class _PlayerHighlightsScreenState extends State<PlayerHighlightsScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0D000000),
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
+      border: Border.all(color: GzColors.divider),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -162,7 +157,7 @@ class _PlayerHighlightsScreenState extends State<PlayerHighlightsScreen> {
           Text(
             h['description'] ?? '',
             style: const TextStyle(
-              color: Color(0xFF6B7280),
+              color: GzColors.subtle,
               height: 1.4,
             ),
           ),
@@ -202,22 +197,29 @@ class _PlayerHighlightsScreenState extends State<PlayerHighlightsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      backgroundColor: GzColors.bg,
+      appBar: GameZoneCmr.appBar(
         title: const Text('Мои лучшие моменты'),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: GzColors.graphite,
+        foregroundColor: Colors.white,
+        elevation: 0,
         onPressed: _addHighlight,
         icon: const Icon(Icons.add),
         label: const Text('Добавить'),
       ),
-      body: loading
+      body: GameZoneCmr.page(
+        context,
+        child: loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: GameZoneCmr.listPadding(context),
               children: [
                 ...items.map((e) => _highlightCard(Map<String, dynamic>.from(e))),
               ],
             ),
+      ),
     );
   }
 }

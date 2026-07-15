@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'game_zone_api.dart';
+import 'game_zone_cmr_style.dart';
 
 class PlayerQuizzesScreen extends StatefulWidget {
   const PlayerQuizzesScreen({super.key});
@@ -17,10 +18,10 @@ class _PlayerQuizzesScreenState extends State<PlayerQuizzesScreen> {
   List<dynamic> items = [];
 
   Color get primary => const Color(0xFF00C853);
-  Color get bg => const Color(0xFFF3F5F8);
+  Color get bg => GzColors.bg;
   Color get cardBg => Colors.white;
-  Color get textPrimary => const Color(0xFF1E293B);
-  Color get textSecondary => const Color(0xFF64748B);
+  Color get textPrimary => GzColors.text;
+  Color get textSecondary => GzColors.subtle;
 
   @override
   void initState() {
@@ -52,14 +53,7 @@ class _PlayerQuizzesScreenState extends State<PlayerQuizzesScreen> {
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x11000000),
-            blurRadius: 16,
-            offset: Offset(0, 6),
-          ),
-        ],
+        border: Border.all(color: GzColors.divider),
       ),
       child: child,
     );
@@ -262,7 +256,7 @@ final pointsReward = quiz['points_reward'] ?? 0;
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: bg,
-      appBar: AppBar(
+      appBar: GameZoneCmr.appBar(
         backgroundColor: bg,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
@@ -278,7 +272,9 @@ final pointsReward = quiz['points_reward'] ?? 0;
           ),
         ],
       ),
-      body: RefreshIndicator(
+      body: GameZoneCmr.page(
+        context,
+        child: RefreshIndicator(
         onRefresh: _load,
         color: primary,
         child: loading
@@ -337,7 +333,7 @@ final pointsReward = quiz['points_reward'] ?? 0;
                     ),
                   )
                 : ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                    padding: GameZoneCmr.listPadding(context),
                     children: [
                       ...items.map((e) => Padding(
                             padding: const EdgeInsets.only(bottom: 12),
@@ -345,6 +341,7 @@ final pointsReward = quiz['points_reward'] ?? 0;
                           )),
                     ],
                   ),
+      ),
       ),
     );
   }
@@ -392,7 +389,7 @@ class _QuizBottomSheetState extends State<_QuizBottomSheet> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
+          border: Border.all(color: GzColors.divider),
           boxShadow: const [
             BoxShadow(
               color: Color(0x22000000),
@@ -409,7 +406,7 @@ class _QuizBottomSheetState extends State<_QuizBottomSheet> {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
               decoration: BoxDecoration(
                 border: Border(
-                  bottom: BorderSide(color: const Color(0xFFE5E7EB), width: 1),
+                  bottom: BorderSide(color: GzColors.divider, width: 1),
                 ),
               ),
               child: Row(
@@ -487,7 +484,7 @@ class _QuizBottomSheetState extends State<_QuizBottomSheet> {
                       borderRadius: BorderRadius.circular(8),
                       child: LinearProgressIndicator(
                         value: answeredCount / totalCount,
-                        backgroundColor: const Color(0xFFE5E7EB),
+                        backgroundColor: GzColors.divider,
                         color: widget.primary,
                         minHeight: 6,
                       ),
@@ -520,7 +517,7 @@ class _QuizBottomSheetState extends State<_QuizBottomSheet> {
                         border: Border.all(
                           color: isAnswered 
                               ? widget.primary.withOpacity(0.3)
-                              : const Color(0xFFE5E7EB),
+                              : GzColors.divider,
                           width: isAnswered ? 1.5 : 1,
                         ),
                       ),
@@ -609,7 +606,7 @@ class _QuizBottomSheetState extends State<_QuizBottomSheet> {
                                           border: Border.all(
                                             color: isSelected
                                                 ? widget.primary
-                                                : const Color(0xFFE5E7EB),
+                                                : GzColors.divider,
                                             width: isSelected ? 1.5 : 1,
                                           ),
                                         ),
@@ -687,7 +684,7 @@ class _QuizBottomSheetState extends State<_QuizBottomSheet> {
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
               decoration: BoxDecoration(
                 border: Border(
-                  top: BorderSide(color: const Color(0xFFE5E7EB), width: 1),
+                  top: BorderSide(color: GzColors.divider, width: 1),
                 ),
               ),
               child: SizedBox(
@@ -713,7 +710,7 @@ class _QuizBottomSheetState extends State<_QuizBottomSheet> {
                       borderRadius: BorderRadius.circular(14),
                     ),
                     elevation: 0,
-                    disabledBackgroundColor: const Color(0xFFE5E7EB),
+                    disabledBackgroundColor: GzColors.divider,
                   ),
                   child: _isSubmitting
                       ? const SizedBox(

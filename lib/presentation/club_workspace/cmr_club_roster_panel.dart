@@ -1,29 +1,33 @@
 // lib/presentation/club_workspace/cmr_club_roster_panel.dart
-// Windows 11 / Fluent unified window refresh.
+// Typography uses the centralized Sportoteka AppTypography / Inter system.
 import 'dart:math' as math;
 import 'dart:ui' show FontFeature;
 
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import 'package:sportoteka/routes/app_routes.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
+
+import 'package:sportoteka/presentation/player_profile_screen/cmr_player_profile_screen.dart';
 
 // ==================== Цветовая схема ====================
 
 class _CmrRosterColors {
-  static const Color bg = Color(0xFFF6F7F9);
+  static const Color bg = Colors.white;
   static const Color panel = Colors.white;
-  static const Color glass = Color(0xF7FFFFFF);
-  static const Color soft = Color(0xFFFAFBFC);
-  static const Color soft2 = Color(0xFFF6F7F9);
+  static const Color glass = Colors.white;
+  static const Color soft = Color(0xFFF7F8F7);
+  static const Color soft2 = Color(0xFFF2F4F2);
   static const Color active = Colors.white;
 
   static const Color text = Color(0xFF0B0F14);
   static const Color text2 = Color(0xFF0B0F14);
   static const Color muted = Color(0xFF374151);
-  static const Color muted2 = Color(0xFF6B7280);
-  static const Color line = Color(0xFFEFF1F4);
-  static const Color divider = Color(0xFFEFF1F4);
+  static const Color muted2 = Color(0xFF5F6670);
+  static const Color subtle = Color(0xFF8A9099);
+  static const Color line = Color(0xFFE9ECEA);
+  static const Color divider = Color(0xFFE9ECEA);
   static const Color graphite = Color(0xFF111827);
   static const Color graphiteSoft = Color(0xFF4B5563);
   static const Color graphite2 = Color(0xFF1F2937);
@@ -33,7 +37,7 @@ class _CmrRosterColors {
   // Фирменный цвет — только как тонкий премиальный акцент.
   static const Color green = Color(0xFF00A750);
   static const Color greenDark = Color(0xFF067A46);
-  static const Color greenSoft = Color(0xFFF3FBF7);
+  static const Color greenSoft = Color(0xFFF3FAF6);
   static const Color greenSoft2 = Color(0xFFF8FEFA);
   static const Color greenBorder = Color(0xFFD7F0E2);
 
@@ -50,133 +54,138 @@ class _CmrRosterColors {
 
 // ==================== Текстовые стили ====================
 
+
 class _CmrRosterText {
-  static const String font = 'Roboto';
-
-  static TextStyle title(double size) => TextStyle(
+  static TextStyle title(double size) => AppTypography.custom(
+        size: size,
+        weight: FontWeight.w600,
         color: _CmrRosterColors.text,
-        fontFamily: font,
-        fontSize: size,
-        fontWeight: FontWeight.w500,
-        height: 1.14,
-        letterSpacing: -.2,
-        fontFeatures: const [FontFeature.tabularFigures()],
-      );
-
-  static TextStyle section() => const TextStyle(
-        color: _CmrRosterColors.text,
-        fontFamily: font,
-        fontSize: 14,
-        fontWeight: FontWeight.w500,
         height: 1.18,
-        letterSpacing: -.1,
+        letterSpacing: 0,
+        features: const <FontFeature>[
+          FontFeature.tabularFigures(),
+        ],
       );
 
-  static TextStyle value(double size) => TextStyle(
+  static TextStyle section() => AppTypography.custom(
+        size: 12.2,
+        weight: FontWeight.w600,
         color: _CmrRosterColors.text,
-        fontFamily: font,
-        fontSize: size,
-        fontWeight: FontWeight.w500,
-        height: 1.24,
-        fontFeatures: const [FontFeature.tabularFigures()],
+        height: 1.20,
+        letterSpacing: 0,
       );
 
-  static TextStyle muted(double size) => TextStyle(
-        color: _CmrRosterColors.muted,
-        fontFamily: font,
-        fontSize: size,
-        fontWeight: FontWeight.w400,
-        height: 1.34,
+  static TextStyle value(double size) => AppTypography.custom(
+        size: size,
+        weight: FontWeight.w600,
+        color: _CmrRosterColors.text,
+        height: 1.18,
+        letterSpacing: 0,
+        features: const <FontFeature>[
+          FontFeature.tabularFigures(),
+        ],
       );
 
-  static TextStyle caption() => const TextStyle(
+  static TextStyle muted(double size) => AppTypography.custom(
+        size: size,
+        weight: FontWeight.w400,
         color: _CmrRosterColors.muted2,
-        fontFamily: font,
-        fontSize: 10.5,
-        fontWeight: FontWeight.w500,
-        height: 1.14,
-        letterSpacing: .1,
+        height: 1.32,
+        letterSpacing: 0,
       );
 
-  static TextStyle pill({Color? color}) => TextStyle(
-        color: color ?? _CmrRosterColors.text,
-        fontFamily: font,
-        fontSize: 11,
-        fontWeight: FontWeight.w500,
-        height: 1,
+  static TextStyle caption() => AppTypography.custom(
+        size: 10.8,
+        weight: FontWeight.w500,
+        color: _CmrRosterColors.subtle,
+        height: 1.18,
+        letterSpacing: 0,
       );
 
-  static TextStyle tab({bool active = false}) => TextStyle(
-        color: active ? Colors.white : _CmrRosterColors.text,
-        fontFamily: font,
-        fontSize: 12,
-        fontWeight: FontWeight.w500,
-        height: 1,
+  static TextStyle pill() => AppTypography.custom(
+        size: 11.2,
+        weight: FontWeight.w600,
+        color: _CmrRosterColors.text,
+        letterSpacing: 0,
       );
 
-  static TextStyle action({Color color = _CmrRosterColors.text}) => TextStyle(
-        color: color,
-        fontFamily: font,
-        fontSize: 12.5,
-        fontWeight: FontWeight.w500,
+  static TextStyle tab() => AppTypography.custom(
+        size: 11.8,
+        weight: FontWeight.w600,
+        color: _CmrRosterColors.text,
+        letterSpacing: 0,
       );
 
-  static TextStyle danger() => const TextStyle(
+  static TextStyle tabSelected() => AppTypography.custom(
+        size: 11.8,
+        weight: FontWeight.w700,
+        color: _CmrRosterColors.text,
+        letterSpacing: 0,
+      );
+
+  static TextStyle action() => AppTypography.custom(
+        size: 11.8,
+        weight: FontWeight.w600,
+        color: _CmrRosterColors.text,
+        letterSpacing: 0,
+      );
+
+  static TextStyle danger() => AppTypography.custom(
+        size: 11.8,
+        weight: FontWeight.w500,
         color: _CmrRosterColors.red,
-        fontFamily: font,
-        fontSize: 12.5,
-        fontWeight: FontWeight.w500,
+        letterSpacing: 0,
       );
 }
 
-// ==================== Декораторы ====================
 
 class _CmrRosterDecor {
-  static double _hardRadius(double radius, {double max = 24}) => math.min(radius, max);
+  // Геометрия приведена к Tracker Workspace: мобильный — карточки 18,
+  // планшет/ПК — единые окна 16, внутренние блоки 12.
+  static const double mobilePagePadding = 2.0;
+  static const double mobileCardRadius = 18.0;
+  static const double mobileInnerRadius = 12.0;
+  static const double mobileButtonRadius = 14.0;
+  static const double tabletCardRadius = 16.0;
+  static const double tabletInnerRadius = 12.0;
+  static const double sheetRadius = 18.0;
+  // Хвост прокрутки под плавающий мобильный Dock Workspace.
+  static const double mobileDockScrollInset = 132.0;
+
+  static List<BoxShadow> get windowShadow => [
+        BoxShadow(
+          color: Colors.black.withOpacity(.035),
+          blurRadius: 28,
+          spreadRadius: -18,
+          offset: const Offset(0, 16),
+        ),
+      ];
+
+  static List<BoxShadow> get cardShadow => [
+        BoxShadow(
+          color: Colors.black.withOpacity(.015),
+          blurRadius: 16,
+          spreadRadius: -11,
+          offset: const Offset(0, 9),
+        ),
+      ];
 
   static BoxDecoration workspaceBg() => const BoxDecoration(
         color: _CmrRosterColors.bg,
       );
 
-  static BoxDecoration panel({double radius = 22, bool elevated = true}) => BoxDecoration(
+  static BoxDecoration panel({double radius = tabletCardRadius, bool elevated = true}) => BoxDecoration(
         color: _CmrRosterColors.panel,
-        borderRadius: BorderRadius.circular(_hardRadius(radius, max: 24)),
-        boxShadow: elevated
-            ? [
-                BoxShadow(
-                  color: Colors.black.withOpacity(.045),
-                  blurRadius: 34,
-                  spreadRadius: -14,
-                  offset: const Offset(0, 20),
-                ),
-                BoxShadow(
-                  color: Colors.black.withOpacity(.025),
-                  blurRadius: 10,
-                  spreadRadius: -7,
-                  offset: const Offset(0, 4),
-                ),
-              ]
-            : null,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: _CmrRosterColors.line.withOpacity(.55), width: .7),
+        boxShadow: elevated ? cardShadow : null,
       );
 
-  static BoxDecoration unifiedWindow({double radius = 24}) => BoxDecoration(
+  static BoxDecoration unifiedWindow({double radius = tabletCardRadius}) => BoxDecoration(
         color: _CmrRosterColors.glass,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: Colors.white.withOpacity(.86), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(.055),
-            blurRadius: 38,
-            spreadRadius: -18,
-            offset: const Offset(0, 22),
-          ),
-          BoxShadow(
-            color: _CmrRosterColors.blue.withOpacity(.035),
-            blurRadius: 24,
-            spreadRadius: -18,
-            offset: const Offset(0, 10),
-          ),
-        ],
+        border: Border.all(color: Colors.transparent, width: 0),
+        boxShadow: windowShadow,
       );
 
   static BoxDecoration seamlessPane({double radius = 0}) => BoxDecoration(
@@ -184,63 +193,25 @@ class _CmrRosterDecor {
         borderRadius: BorderRadius.circular(radius),
       );
 
-  static BoxDecoration softCard({double radius = 18, bool active = false}) => BoxDecoration(
-        color: active ? Colors.white.withOpacity(.96) : Colors.white.withOpacity(.78),
-        borderRadius: BorderRadius.circular(_hardRadius(radius, max: 24)),
-        border: Border.all(color: active ? _CmrRosterColors.green.withOpacity(.18) : Colors.white.withOpacity(.72)),
-        boxShadow: active
-            ? [
-                BoxShadow(
-                  color: Colors.black.withOpacity(.050),
-                  blurRadius: 24,
-                  spreadRadius: -12,
-                  offset: const Offset(0, 14),
-                ),
-              ]
-            : null,
+  static BoxDecoration softCard({double radius = mobileInnerRadius, bool active = false}) => BoxDecoration(
+        color: active ? _CmrRosterColors.greenSoft : _CmrRosterColors.panel,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: active ? _CmrRosterColors.greenBorder : _CmrRosterColors.line.withOpacity(.55), width: .7),
       );
 
-  static BoxDecoration fluentSurface({double radius = 16, bool active = false}) => BoxDecoration(
-        color: active ? Colors.white.withOpacity(.96) : Colors.white.withOpacity(.82),
-        borderRadius: BorderRadius.circular(_hardRadius(radius, max: 24)),
-        border: Border.all(
-          color: active ? _CmrRosterColors.green.withOpacity(.20) : Colors.white.withOpacity(.78),
-          width: active ? 1.05 : 1,
-        ),
-        boxShadow: active
-            ? [
-                BoxShadow(
-                  color: Colors.black.withOpacity(.050),
-                  blurRadius: 24,
-                  spreadRadius: -12,
-                  offset: const Offset(0, 14),
-                ),
-                BoxShadow(
-                  color: _CmrRosterColors.green.withOpacity(.045),
-                  blurRadius: 16,
-                  spreadRadius: -11,
-                  offset: const Offset(0, 5),
-                ),
-              ]
-            : null,
+  static BoxDecoration fluentSurface({double radius = mobileInnerRadius, bool active = false}) => BoxDecoration(
+        color: active ? _CmrRosterColors.greenSoft : _CmrRosterColors.panel,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: active ? _CmrRosterColors.greenBorder : _CmrRosterColors.line.withOpacity(.78), width: .85),
       );
 
-  static BoxDecoration greenCard({double radius = 18}) => BoxDecoration(
-        color: Colors.white.withOpacity(.86),
-        borderRadius: BorderRadius.circular(_hardRadius(radius, max: 24)),
-        border: Border.all(color: Colors.white.withOpacity(.78)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(.035),
-            blurRadius: 22,
-            spreadRadius: -12,
-            offset: const Offset(0, 12),
-          ),
-        ],
+  static BoxDecoration greenCard({double radius = mobileInnerRadius}) => BoxDecoration(
+        color: _CmrRosterColors.greenSoft,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: _CmrRosterColors.greenBorder, width: .85),
+        boxShadow: cardShadow,
       );
 }
-
-// ==================== Основной виджет ====================
 
 class CmrClubRosterPanel extends StatefulWidget {
   final String teamName;
@@ -283,6 +254,9 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
   final ScrollController _scrollC = ScrollController();
   _RosterFilter _filter = _RosterFilter.all;
 
+  bool _showFullProfileInRightPane = false;
+  Map<String, dynamic>? _rightPanePlayer;
+
   @override
   void initState() {
     super.initState();
@@ -292,6 +266,24 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
   void _onSearchChanged() {
     if (!mounted) return;
     setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(covariant CmrClubRosterPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    final selected = widget.selectedPlayer;
+    if (selected == null) {
+      _rightPanePlayer = null;
+      _showFullProfileInRightPane = false;
+      return;
+    }
+
+    final oldKey = _playerIdentity(oldWidget.selectedPlayer);
+    final newKey = _playerIdentity(selected);
+    if (oldKey != newKey) {
+      _rightPanePlayer = Map<String, dynamic>.from(selected);
+    }
   }
 
   @override
@@ -364,27 +356,78 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
     return fallback.isEmpty ? '' : 'fallback:$fallback';
   }
 
-  void _openFullProfile(Map<String, dynamic> player) {
+  bool _shouldOpenFullProfileInWorkspace() {
+    // Дизайн состава не трогаем. Меняем только способ открытия профиля.
+    // Внутреннее CMR-окно оставляем только для настоящего широкого ПК.
+    // Многие планшеты/iPad в браузере могут определяться как macOS/desktop,
+    // поэтому одной проверки defaultTargetPlatform недостаточно.
+    if (widget.onOpenFullPlayer == null) return false;
+
+    final size = MediaQuery.maybeOf(context)?.size;
+    final width = size?.width ?? 0;
+    if (width < 1400) return false;
+
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.windows:
+      case TargetPlatform.macOS:
+      case TargetPlatform.linux:
+        return true;
+      case TargetPlatform.android:
+      case TargetPlatform.iOS:
+      case TargetPlatform.fuchsia:
+        return false;
+    }
+  }
+
+  Future<void> _openFullProfile(
+    Map<String, dynamic> player, {
+    Duration delay = Duration.zero,
+  }) async {
     final mp = Map<String, dynamic>.from(player);
     mp['team_id'] ??= mp['teamId'] ?? widget.selectedTeamId;
     mp['teamId'] ??= mp['team_id'] ?? widget.selectedTeamId;
     mp['club_id'] ??= mp['clubId'] ?? widget.clubId;
     mp['clubId'] ??= mp['club_id'] ?? widget.clubId;
+    mp['team_name'] ??= widget.teamName;
+    mp['teamName'] ??= widget.teamName;
 
-    if (widget.onOpenFullPlayer != null) {
-      widget.onOpenFullPlayer!(mp);
+    final width = MediaQuery.sizeOf(context).width;
+
+    // На планшете и ПК полный профиль раскрывается внутри правой рабочей
+    // области состава. Список игроков слева остаётся доступен.
+    if (width >= 640) {
+      widget.onOpenPlayer(mp);
+      if (!mounted) return;
+      setState(() {
+        _rightPanePlayer = mp;
+        _showFullProfileInRightPane = true;
+      });
       return;
     }
 
-    Get.toNamed(
-      AppRoutes.playerProfileScreen,
-      arguments: mp,
+    // На телефоне правой области недостаточно — используем отдельный экран.
+    if (delay > Duration.zero) {
+      await Future<void>.delayed(delay);
+    }
+    if (!mounted) return;
+
+    await Navigator.of(context, rootNavigator: true).push<void>(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: 'cmr_player_profile'),
+        builder: (_) => CmrPlayerProfileScreen(player: mp),
+      ),
     );
   }
 
   void _handleOpenPlayer(Map<String, dynamic> player, bool mobile) {
     widget.onOpenPlayer(player);
-    if (!mobile) return;
+
+    if (!mobile) {
+      setState(() {
+        _rightPanePlayer = Map<String, dynamic>.from(player);
+      });
+      return;
+    }
 
     showModalBottomSheet<void>(
       context: context,
@@ -404,7 +447,10 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
               scrollController: controller,
               onOpenFullProfile: () {
                 Navigator.of(sheetContext).pop();
-                _openFullProfile(player);
+                _openFullProfile(
+                  player,
+                  delay: const Duration(milliseconds: 180),
+                );
               },
               onDeletePlayer: widget.onDeletePlayer == null
                   ? null
@@ -443,7 +489,7 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
               child: Container(
                 constraints: const BoxConstraints(maxWidth: 460),
                 padding: const EdgeInsets.all(20),
-                decoration: _CmrRosterDecor.panel(radius: 28),
+                decoration: _CmrRosterDecor.panel(radius: _CmrRosterDecor.mobileCardRadius),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -455,7 +501,7 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
                           height: 54,
                           decoration: BoxDecoration(
                             color: _CmrRosterColors.redSoft,
-                            borderRadius: BorderRadius.circular(19),
+                            borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
                           ),
                           child: const Icon(
                             Icons.delete_forever_rounded,
@@ -487,7 +533,7 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
                         color: _CmrRosterColors.redSoft,
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
                       ),
                       child: Text(
                         'Игрок будет удалён из состава. Это действие нельзя будет отменить без повторного добавления игрока.',
@@ -606,7 +652,12 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
         builder: (context, constraints) {
           final mobile = constraints.maxWidth < 640;
           final compact = constraints.maxWidth < 980;
-          final listWidth = math.min(480.0, constraints.maxWidth * .45);
+          final listWidth = _showFullProfileInRightPane
+              ? math.min(compact ? 300.0 : 340.0, constraints.maxWidth * .30)
+              : math.min(
+                  compact ? 430.0 : 480.0,
+                  constraints.maxWidth * (compact ? .43 : .45),
+                );
 
           final list = _RosterListPanel(
             teamName: widget.teamName,
@@ -628,32 +679,73 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
           );
 
           if (mobile) {
-            return SizedBox(width: double.infinity, child: list);
+            return Container(
+              width: double.infinity,
+              color: const Color(0xFFF6F7F6),
+              padding: const EdgeInsets.all(6),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: list,
+                  ),
+                ),
+              ),
+            );
           }
 
-          return Padding(
-            padding: const EdgeInsets.all(10),
-            child: Container(
-              clipBehavior: Clip.antiAlias,
-              decoration: _CmrRosterDecor.unifiedWindow(radius: 24),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(width: listWidth, child: list),
-                  Container(width: 1, color: _CmrRosterColors.line),
-                  Expanded(
-                    child: _PlayerDetailPanel(
-                      player: widget.selectedPlayer,
-                      teamName: widget.teamName,
-                      onOpenFullProfile: widget.selectedPlayer == null
-                          ? null
-                          : () => _openFullProfile(widget.selectedPlayer!),
-                      onDeletePlayer: widget.selectedPlayer == null || widget.onDeletePlayer == null
-                          ? null
-                          : () => _confirmDeletePlayer(widget.selectedPlayer!),
+          return Container(
+            width: double.infinity,
+            color: const Color(0xFFF6F7F6),
+            padding: EdgeInsets.all(compact ? 8 : 10),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(compact ? 18 : 20),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(compact ? 18 : 20),
+                  boxShadow: _CmrRosterDecor.windowShadow,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(width: listWidth, child: list),
+                    Container(width: 1, color: _CmrRosterColors.line),
+                    Expanded(
+                      child: _showFullProfileInRightPane &&
+                              (_rightPanePlayer ?? widget.selectedPlayer) != null
+                          ? CmrPlayerProfileScreen(
+                              key: ValueKey(
+                                'right-profile-${_playerIdentity(_rightPanePlayer ?? widget.selectedPlayer)}',
+                              ),
+                              player: Map<String, dynamic>.from(
+                                _rightPanePlayer ?? widget.selectedPlayer!,
+                              ),
+                              embeddedInWorkspace: true,
+                              onClose: () {
+                                if (!mounted) return;
+                                setState(() => _showFullProfileInRightPane = false);
+                              },
+                            )
+                          : _PlayerDetailPanel(
+                              player: widget.selectedPlayer,
+                              teamName: widget.teamName,
+                              onOpenFullProfile: widget.selectedPlayer == null
+                                  ? null
+                                  : () => _openFullProfile(widget.selectedPlayer!),
+                              onDeletePlayer: widget.selectedPlayer == null ||
+                                      widget.onDeletePlayer == null
+                                  ? null
+                                  : () => _confirmDeletePlayer(widget.selectedPlayer!),
+                            ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           );
@@ -664,6 +756,7 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
 }
 
 // ==================== Левая панель состава ====================
+
 
 class _RosterListPanel extends StatelessWidget {
   final String teamName;
@@ -704,37 +797,57 @@ class _RosterListPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final padding = mobile ? 10.0 : 12.0;
-
     return Container(
-      decoration: mobile ? _CmrRosterDecor.panel(radius: 14) : _CmrRosterDecor.seamlessPane(),
-      padding: EdgeInsets.all(padding),
+      clipBehavior: Clip.antiAlias,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _RosterToolbar(
-            teamName: teamName,
-            onAddPlayer: onAddPlayer,
-            onRefresh: onRefresh,
-            mobile: mobile,
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 12, vertical: mobile ? 10 : 10),
+            decoration: const BoxDecoration(
+        color: Colors.transparent,
+        border: Border(bottom: BorderSide(color: _CmrRosterColors.line, width: .55)),
+      ),
+            child: _RosterToolbar(
+              teamName: teamName,
+              onAddPlayer: onAddPlayer,
+              onRefresh: onRefresh,
+              mobile: mobile,
+            ),
           ),
-          SizedBox(height: mobile ? 10 : 12),
-          _RosterSearch(controller: searchController, mobile: mobile),
-          const SizedBox(height: 8),
-          _RosterFilterBar(value: filter, onChanged: onFilterChanged, mobile: mobile),
-          SizedBox(height: mobile ? 9 : 10),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 12, vertical: 8),
+            decoration: const BoxDecoration(color: Colors.transparent),
+            child: _RosterSearch(controller: searchController, mobile: mobile),
+          ),
+          Container(
+            height: mobile ? 44 : 46,
+            padding: EdgeInsets.symmetric(
+              horizontal: mobile ? 10 : 12,
+              vertical: 5,
+            ),
+            decoration: const BoxDecoration(color: Colors.transparent),
+            child: _RosterFilterBar(value: filter, onChanged: onFilterChanged, mobile: mobile),
+          ),
           Expanded(
             child: players.isEmpty
                 ? _RosterEmptyState(onAddPlayer: onAddPlayer)
                 : RefreshIndicator(
                     color: _CmrRosterColors.green,
                     onRefresh: onRefresh ?? () async {},
-                    child: ListView.separated(
+                    child: ListView.builder(
                       controller: scrollController,
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: EdgeInsets.only(bottom: mobile ? 20 : 8),
+                      padding: EdgeInsets.only(
+                        top: 0,
+                        bottom: mobile
+                            ? _CmrRosterDecor.mobileDockScrollInset
+                            : 12,
+                      ),
                       itemCount: players.length,
-                      separatorBuilder: (_, __) => SizedBox(height: mobile ? 6 : 7),
                       itemBuilder: (_, index) {
                         final player = players[index];
                         final active = selectedKey.isNotEmpty && selectedKey == playerIdentity(player);
@@ -773,17 +886,6 @@ class _RosterToolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Container(
-          width: mobile ? 34 : 36,
-          height: mobile ? 34 : 36,
-          decoration: BoxDecoration(
-            color: _CmrRosterColors.greenSoft,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: _CmrRosterColors.green.withOpacity(.12)),
-          ),
-          child: const Icon(Icons.groups_2_rounded, color: _CmrRosterColors.green, size: 18),
-        ),
-        SizedBox(width: mobile ? 9 : 10),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -808,10 +910,10 @@ class _RosterToolbar extends StatelessWidget {
           _CmrRosterIconButton(
             icon: Icons.refresh_rounded,
             tooltip: 'Обновить',
-            onTap: onRefresh!,
+            onTap: () => onRefresh?.call(),
             compact: true,
           ),
-          const SizedBox(width: 7),
+          const SizedBox(width: 6),
         ],
         _CmrRosterIconButton(
           icon: Icons.person_add_alt_1_rounded,
@@ -834,12 +936,16 @@ class _RosterSearch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: mobile ? 40 : 42,
-      decoration: _CmrRosterDecor.softCard(radius: mobile ? 10 : 11),
+      height: mobile ? 42 : 42,
+      decoration: BoxDecoration(
+        color: _CmrRosterColors.soft,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _CmrRosterColors.line.withOpacity(.7), width: .7),
+      ),
       padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 12),
       child: Row(
         children: [
-          const Icon(Icons.search_rounded, color: _CmrRosterColors.muted, size: 21),
+          const Icon(Icons.search_rounded, color: _CmrRosterColors.muted2, size: 16),
           const SizedBox(width: 8),
           Expanded(
             child: TextField(
@@ -933,24 +1039,37 @@ class _FilterPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(9),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
         onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          padding: EdgeInsets.symmetric(horizontal: dense ? 9 : 11, vertical: dense ? 7 : 8),
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          constraints: BoxConstraints(
+            minHeight: dense ? 34 : 36,
+          ),
+          padding: EdgeInsets.symmetric(
+            horizontal: dense ? 9 : 11,
+            vertical: dense ? 7 : 8,
+          ),
           decoration: BoxDecoration(
-            color: active ? Colors.white.withOpacity(.96) : Colors.white.withOpacity(.76),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: active ? _CmrRosterColors.green.withOpacity(.18) : Colors.white.withOpacity(.72)),
+            color: active
+                ? _CmrRosterColors.greenSoft
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+            border: Border.all(
+              color: active
+                  ? _CmrRosterColors.greenBorder
+                  : Colors.transparent,
+              width: .8,
+            ),
             boxShadow: active
                 ? [
                     BoxShadow(
-                      color: Colors.black.withOpacity(.035),
-                      blurRadius: 16,
-                      spreadRadius: -10,
-                      offset: const Offset(0, 8),
+                      color: _CmrRosterColors.green.withOpacity(.055),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
                   ]
                 : null,
@@ -958,25 +1077,40 @@ class _FilterPill extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: dense ? 18 : 20,
-                height: dense ? 18 : 20,
-                decoration: BoxDecoration(
-                  color: active ? _CmrRosterColors.greenSoft : Colors.white.withOpacity(.86),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Icon(icon, color: active ? _CmrRosterColors.green : _CmrRosterColors.muted, size: dense ? 14 : 15),
+              Icon(
+                icon,
+                size: dense ? 13.5 : 14,
+                color: active
+                    ? _CmrRosterColors.greenDark
+                    : _CmrRosterColors.subtle,
               ),
-              const SizedBox(width: 7),
+              SizedBox(width: dense ? 5 : 6),
               Text(
                 label,
-                style: TextStyle(
-                  color: active ? _CmrRosterColors.greenDark : _CmrRosterColors.text,
-                  fontSize: dense ? 11.5 : 12,
-                  fontWeight: FontWeight.w500,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _CmrRosterText.action().copyWith(
+                  color: active
+                      ? _CmrRosterColors.greenDark
+                      : _CmrRosterColors.muted2,
+                  fontSize: dense ? 11.0 : 11.4,
+                  fontWeight: active
+                      ? FontWeight.w700
+                      : FontWeight.w500,
                   height: 1,
                 ),
               ),
+              if (active) ...[
+                const SizedBox(width: 6),
+                Container(
+                  width: 5,
+                  height: 5,
+                  decoration: const BoxDecoration(
+                    color: _CmrRosterColors.green,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -1005,66 +1139,79 @@ class _PlayerTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final name = _playerName(player);
-    final position = _playerPosition(player).isEmpty ? 'Амплуа не указано' : _playerPosition(player);
-    final photo = _absoluteUrl(_first(player, const ['photo', 'avatar', 'image', 'photo_url', 'avatar_url']));
+    final position = _playerPosition(player);
     final number = _jerseyNumber(player);
-    final height = _first(player, const ['height']);
-    final weight = _first(player, const ['weight']);
+    final photo = _absoluteUrl(
+      _first(
+        player,
+        const ['photo', 'avatar', 'image', 'photo_url', 'avatar_url'],
+      ),
+    );
     final age = _ageLabel(player);
-    final metric = [
-      if (number.isNotEmpty) '№ $number',
-      if (age.isNotEmpty) age,
-      if (height.isNotEmpty) '$height см',
-      if (weight.isNotEmpty) '$weight кг',
-    ].join('  •  ');
-    final meta = [position, if (metric.isNotEmpty) metric].where((e) => e.trim().isNotEmpty).join('  •  ');
+    final polar = _playerHasPolar(player);
+    final gps = _playerHasGps(player);
+    final activity = _playerActivityLabel(player);
 
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(11),
       child: InkWell(
-        borderRadius: BorderRadius.circular(11),
         onTap: onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 170),
-          padding: EdgeInsets.symmetric(horizontal: mobile ? 9 : 10, vertical: mobile ? 8 : 9),
+          duration: const Duration(milliseconds: 180),
+          constraints: BoxConstraints(minHeight: mobile ? 80 : 76),
+          padding: EdgeInsets.fromLTRB(
+            mobile ? 10 : 12,
+            9,
+            mobile ? 10 : 12,
+            9,
+          ),
           decoration: BoxDecoration(
-            color: active ? Colors.white.withOpacity(.96) : Colors.white.withOpacity(.72),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: active ? _CmrRosterColors.green.withOpacity(.20) : Colors.white.withOpacity(.66)),
-            boxShadow: active
-                ? [
-                    BoxShadow(color: Colors.black.withOpacity(.050), blurRadius: 22, spreadRadius: -10, offset: const Offset(0, 12)),
-                    BoxShadow(color: _CmrRosterColors.green.withOpacity(.045), blurRadius: 16, spreadRadius: -11, offset: const Offset(0, 5)),
-                  ]
-                : null,
+            color: active
+                ? _CmrRosterColors.greenSoft2
+                : Colors.white,
+            border: const Border(
+              bottom: BorderSide(
+                color: _CmrRosterColors.line,
+                width: .65,
+              ),
+            ),
           ),
           child: Row(
             children: [
               AnimatedContainer(
-                duration: const Duration(milliseconds: 170),
+                duration: const Duration(milliseconds: 180),
                 width: 3,
-                height: mobile ? 42 : 46,
+                height: mobile ? 50 : 48,
                 decoration: BoxDecoration(
-                  color: active ? _CmrRosterColors.green : Colors.transparent,
+                  color: active
+                      ? _CmrRosterColors.green
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(99),
                 ),
               ),
-              SizedBox(width: active ? 8 : 6),
+              const SizedBox(width: 9),
               Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  _CmrRosterAvatar(photo: photo, name: name, size: mobile ? 40 : 44),
+                  _CmrRosterAvatar(
+                    photo: photo,
+                    name: name,
+                    size: mobile ? 52 : 50,
+                  ),
                   Positioned(
                     right: -3,
                     bottom: -3,
-                    child: _PlayerStatusBadge(number: number, active: active),
+                    child: _PlayerStatusBadge(
+                      number: number,
+                      active: active,
+                    ),
                   ),
                 ],
               ),
-              SizedBox(width: mobile ? 9 : 10),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
@@ -1074,31 +1221,145 @@ class _PlayerTile extends StatelessWidget {
                             name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: _CmrRosterText.title(mobile ? 13.4 : 14.2),
+                            style: _CmrRosterText.title(
+                              mobile ? 14.2 : 14.0,
+                            ),
                           ),
                         ),
-                        if (active) ...[
+                        if (activity.isNotEmpty) ...[
                           const SizedBox(width: 6),
-                          const _RosterActiveDot(),
+                          _ActivityDot(label: activity),
                         ],
                       ],
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 5),
                     Text(
-                      meta.isEmpty ? 'Данные не заполнены' : meta,
+                      [
+                        position.isEmpty ? 'Без амплуа' : position,
+                        if (age.isNotEmpty) age,
+                      ].join('  ·  '),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _CmrRosterText.muted(mobile ? 10.8 : 11.2),
+                      style: _CmrRosterText.muted(11.4),
                     ),
+                    if (polar || gps) ...[
+                      const SizedBox(height: 5),
+                      Row(
+                        children: [
+                          if (polar)
+                            const _InlineStatusDot(
+                              label: 'POLAR',
+                              color: _CmrRosterColors.red,
+                            ),
+                          if (polar && gps)
+                            const SizedBox(width: 12),
+                          if (gps)
+                            const _InlineStatusDot(
+                              label: 'GPS',
+                              color: _CmrRosterColors.blue,
+                            ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
-              if (!mobile) ...[
-                const SizedBox(width: 8),
+              const SizedBox(width: 8),
+              if (mobile)
+                _RosterPlayerActionsButton(
+                  onDelete: onDelete,
+                  compact: true,
+                )
+              else
                 _ChevronBadge(active: active),
-              ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniPlayerChip extends StatelessWidget {
+  final String text;
+  final IconData icon;
+  final bool active;
+  final Color? accent;
+
+  const _MiniPlayerChip({
+    required this.text,
+    required this.icon,
+    this.active = false,
+    this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = accent ?? (active ? _CmrRosterColors.green : _CmrRosterColors.muted2);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(active || accent != null ? .075 : .045),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            text,
+            style: TextStyle(
+              color: active ? _CmrRosterColors.greenDark : _CmrRosterColors.graphiteSoft,
+              fontSize: 11.4,
+              fontWeight: FontWeight.w500,
+              height: 1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+class _InlineStatusDot extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _InlineStatusDot({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(width: 6, height: 6, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 5),
+        Text(label, style: TextStyle(color: _CmrRosterColors.subtle, fontSize: 10.2, fontWeight: FontWeight.w700, letterSpacing: .2)),
+      ],
+    );
+  }
+}
+
+class _ActivityDot extends StatelessWidget {
+  final String label;
+  const _ActivityDot({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final lower = label.toLowerCase();
+    final color = lower.contains('сегодня')
+        ? _CmrRosterColors.green
+        : lower.contains('вчера')
+            ? _CmrRosterColors.amber
+            : _CmrRosterColors.muted2;
+    return Tooltip(
+      message: label,
+      child: Container(
+        width: 8,
+        height: 8,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          boxShadow: [BoxShadow(color: color.withOpacity(.22), blurRadius: 5)],
         ),
       ),
     );
@@ -1134,7 +1395,7 @@ class _PlayerStatusBadge extends StatelessWidget {
       height: 19,
       decoration: BoxDecoration(
         color: active ? _CmrRosterColors.greenSoft : Colors.white,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
         border: Border.all(color: active ? _CmrRosterColors.green.withOpacity(.18) : _CmrRosterColors.line),
       ),
       alignment: Alignment.center,
@@ -1145,7 +1406,7 @@ class _PlayerStatusBadge extends StatelessWidget {
               overflow: TextOverflow.clip,
               style: TextStyle(
                 color: active ? _CmrRosterColors.green : _CmrRosterColors.muted,
-                fontSize: number.length == 1 ? 10 : 9,
+                fontSize: number.length == 1 ? 10.5 : 9.6,
                 fontWeight: FontWeight.w500,
                 height: 1,
               ),
@@ -1183,7 +1444,9 @@ class _PlayerDetailPanel extends StatelessWidget {
     final p = player;
     if (p == null) {
       return Container(
-        decoration: onClose == null ? _CmrRosterDecor.seamlessPane() : _CmrRosterDecor.panel(radius: 22),
+        decoration: onClose == null
+            ? _CmrRosterDecor.seamlessPane()
+            : _CmrRosterDecor.panel(radius: _CmrRosterDecor.sheetRadius),
         padding: const EdgeInsets.all(18),
         child: const _NoPlayerSelected(),
       );
@@ -1205,8 +1468,12 @@ class _PlayerDetailPanel extends StatelessWidget {
 
     final content = ListView(
       controller: scrollController,
-      padding: const EdgeInsets.all(14),
+      padding: EdgeInsets.fromLTRB(14, onClose == null ? 14 : 8, 14, 14),
       children: [
+        if (onClose != null) ...[
+          const _ModalGrabber(),
+          const SizedBox(height: 8),
+        ],
         _PlayerDetailHeader(
           name: name,
           position: position,
@@ -1224,7 +1491,7 @@ class _PlayerDetailPanel extends StatelessWidget {
               width: 148,
               child: _PrimaryActionButton(
                 icon: Icons.open_in_new_rounded,
-                text: 'Полный профиль',
+                text: 'Открыть профиль',
                 onTap: onOpenFullProfile,
               ),
             ),
@@ -1238,50 +1505,20 @@ class _PlayerDetailPanel extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 12),
-        _PlayerSummaryCard(
-          name: name,
-          position: position,
-          number: number,
-          age: age,
-          teamName: teamName,
+        const SizedBox(height: 18),
+        _PlayerMetricsStrip(
+          age: age.isEmpty ? '—' : age,
+          height: height.isEmpty ? '—' : '$height см',
+          weight: weight.isEmpty ? '—' : '$weight кг',
+          number: number.isEmpty ? '—' : '№ $number',
         ),
-        const SizedBox(height: 10),
-        LayoutBuilder(
-          builder: (context, c) {
-            final twoColumns = c.maxWidth >= 520;
-            final cards = [
-              _MiniMetric(icon: Icons.cake_rounded, label: 'Возраст', value: age.isEmpty ? '—' : age),
-              _MiniMetric(icon: Icons.height_rounded, label: 'Рост', value: height.isEmpty ? '—' : '$height см'),
-              _MiniMetric(icon: Icons.monitor_weight_rounded, label: 'Вес', value: weight.isEmpty ? '—' : '$weight кг'),
-              if (number.isNotEmpty) _MiniMetric(icon: Icons.tag_rounded, label: 'Номер', value: '№ $number'),
-            ];
-
-            if (!twoColumns) {
-              return Column(
-                children: [
-                  for (var i = 0; i < cards.length; i++) ...[
-                    cards[i],
-                    if (i != cards.length - 1) const SizedBox(height: 10),
-                  ],
-                ],
-              );
-            }
-
-            return Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                for (final card in cards)
-                  SizedBox(
-                    width: (c.maxWidth - 10) / 2,
-                    child: card,
-                  ),
-              ],
-            );
-          },
+        const SizedBox(height: 18),
+        _PlayerConnectionCard(
+          polar: _playerHasPolar(p),
+          gps: _playerHasGps(p),
+          activity: _playerActivityLabel(p),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 18),
         _DetailSection(
           title: 'Данные игрока',
           children: [
@@ -1326,11 +1563,34 @@ class _PlayerDetailPanel extends StatelessWidget {
       ],
     );
 
+    final radius = onClose == null ? 0.0 : _CmrRosterDecor.sheetRadius;
     return Container(
-      decoration: onClose == null ? _CmrRosterDecor.seamlessPane() : _CmrRosterDecor.panel(radius: 22),
+      clipBehavior: onClose == null ? Clip.none : Clip.antiAlias,
+      decoration: onClose == null
+          ? _CmrRosterDecor.seamlessPane()
+          : _CmrRosterDecor.panel(radius: radius),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(onClose == null ? 0 : 22),
+        borderRadius: BorderRadius.circular(radius),
         child: content,
+      ),
+    );
+  }
+}
+
+
+class _ModalGrabber extends StatelessWidget {
+  const _ModalGrabber();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        width: 42,
+        height: 4,
+        decoration: BoxDecoration(
+          color: _CmrRosterColors.line,
+          borderRadius: BorderRadius.circular(99),
+        ),
       ),
     );
   }
@@ -1360,7 +1620,7 @@ class _PlayerDetailHeader extends StatelessWidget {
         Stack(
           clipBehavior: Clip.none,
           children: [
-            _CmrRosterAvatar(photo: photo, name: name, size: 52),
+            _CmrRosterAvatar(photo: photo, name: name, size: 88),
             Positioned(right: -4, bottom: -4, child: _PlayerStatusBadge(number: number, active: true)),
           ],
         ),
@@ -1369,15 +1629,15 @@ class _PlayerDetailHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(name, style: _CmrRosterText.title(17.5), maxLines: 2, overflow: TextOverflow.ellipsis),
+              Text(name, style: _CmrRosterText.title(20), maxLines: 2, overflow: TextOverflow.ellipsis),
               const SizedBox(height: 6),
               Wrap(
                 spacing: 6,
                 runSpacing: 6,
                 children: [
-                  _CmrRosterPill(text: position, icon: Icons.sports_soccer_rounded, active: true),
-                  if (number.isNotEmpty) _CmrRosterPill(text: '№ $number', icon: Icons.tag_rounded, active: true),
-                  _CmrRosterPill(text: teamName, icon: Icons.groups_2_rounded),
+                  _CmrRosterPill(text: position, active: true),
+                  if (number.isNotEmpty) _CmrRosterPill(text: '№ $number', active: true),
+                  _CmrRosterPill(text: teamName),
                 ],
               ),
             ],
@@ -1411,7 +1671,7 @@ class _PlayerSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: _CmrRosterDecor.greenCard(radius: 26),
+      decoration: _CmrRosterDecor.greenCard(radius: _CmrRosterDecor.mobileInnerRadius),
       child: Row(
         children: [
           _CmrRosterRoundIcon(icon: Icons.person_rounded, color: _CmrRosterColors.green, size: 54),
@@ -1437,13 +1697,179 @@ class _PlayerSummaryCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: _CmrRosterColors.soft,
-                borderRadius: BorderRadius.circular(15),
+                borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
               ),
               child: Text('№ $number', style: _CmrRosterText.value(15)),
             ),
           ],
         ],
       ),
+    );
+  }
+}
+
+class _PlayerMetricsStrip extends StatelessWidget {
+  final String age;
+  final String height;
+  final String weight;
+  final String number;
+
+  const _PlayerMetricsStrip({
+    required this.age,
+    required this.height,
+    required this.weight,
+    required this.number,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final items = <({String value, String label})>[
+      (value: age, label: 'Возраст'),
+      (value: height, label: 'Рост'),
+      (value: weight, label: 'Вес'),
+      (value: number, label: 'Номер'),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final twoColumns = constraints.maxWidth < 520;
+        final itemWidth = twoColumns
+            ? (constraints.maxWidth - 8) / 2
+            : (constraints.maxWidth - 24) / 4;
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final item in items)
+              SizedBox(
+                width: itemWidth,
+                child: Container(
+                  height: 64,
+                  padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: _CmrRosterColors.soft,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _CmrRosterColors.line.withOpacity(.72), width: .7),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(item.value, style: _CmrRosterText.title(16), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text(item.label, style: _CmrRosterText.caption()),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _PlayerConnectionCard extends StatelessWidget {
+  final bool polar;
+  final bool gps;
+  final String activity;
+
+  const _PlayerConnectionCard({
+    required this.polar,
+    required this.gps,
+    required this.activity,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _CmrRosterColors.line.withOpacity(.72), width: .7),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text('Состояние игрока', style: _CmrRosterText.section())),
+              if (activity.isNotEmpty) _StatusLabel(text: activity),
+            ],
+          ),
+          const SizedBox(height: 11),
+          Row(
+            children: [
+              Expanded(
+                child: _ConnectionItem(
+                  icon: Icons.favorite_rounded,
+                  title: 'Polar',
+                  enabled: polar,
+                  activeColor: _CmrRosterColors.red,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _ConnectionItem(
+                  icon: Icons.satellite_alt_rounded,
+                  title: 'GPS',
+                  enabled: gps,
+                  activeColor: _CmrRosterColors.blue,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ConnectionItem extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final bool enabled;
+  final Color activeColor;
+
+  const _ConnectionItem({required this.icon, required this.title, required this.enabled, required this.activeColor});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = enabled ? activeColor : _CmrRosterColors.muted2;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: enabled ? color.withOpacity(.065) : _CmrRosterColors.soft,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Container(width: 7, height: 7, decoration: BoxDecoration(color: enabled ? color : _CmrRosterColors.line, shape: BoxShape.circle)),
+          const SizedBox(width: 7),
+          Expanded(child: Text(title, style: _CmrRosterText.value(11.5))),
+          Container(width: 7, height: 7, decoration: BoxDecoration(color: enabled ? color : _CmrRosterColors.line, shape: BoxShape.circle)),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusLabel extends StatelessWidget {
+  final String text;
+  const _StatusLabel({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final lower = text.toLowerCase();
+    final color = lower.contains('сегодня')
+        ? _CmrRosterColors.green
+        : lower.contains('вчера')
+            ? _CmrRosterColors.amber
+            : _CmrRosterColors.muted2;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(color: color.withOpacity(.08), borderRadius: BorderRadius.circular(8)),
+      child: Text(text, style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w500)),
     );
   }
 }
@@ -1459,7 +1885,7 @@ class _MiniMetric extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: _CmrRosterDecor.softCard(radius: 20),
+      decoration: _CmrRosterDecor.softCard(radius: _CmrRosterDecor.mobileInnerRadius),
       child: Row(
         children: [
           _CmrRosterRoundIcon(icon: icon, color: _CmrRosterColors.green, size: 38),
@@ -1480,6 +1906,7 @@ class _MiniMetric extends StatelessWidget {
   }
 }
 
+
 class _DetailSection extends StatelessWidget {
   final String title;
   final List<Widget> children;
@@ -1488,33 +1915,27 @@ class _DetailSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: _CmrRosterDecor.softCard(radius: 11),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 3,
-                height: 16,
-                decoration: BoxDecoration(
-                  color: _CmrRosterColors.green,
-                  borderRadius: BorderRadius.circular(99),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(child: Text(title, style: _CmrRosterText.section())),
-            ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(2, 0, 2, 10),
+          child: Text(title, style: _CmrRosterText.section()),
+        ),
+        Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: _CmrRosterColors.panel,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _CmrRosterColors.line.withOpacity(.65), width: .7),
           ),
-          const SizedBox(height: 9),
-          ...children,
-        ],
-      ),
+          child: Column(children: children),
+        ),
+      ],
     );
   }
 }
+
 
 class _DetailRow extends StatelessWidget {
   final IconData icon;
@@ -1525,28 +1946,19 @@ class _DetailRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _CmrRosterRoundIcon(icon: icon, color: _CmrRosterColors.green, size: 28),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: _CmrRosterText.caption(), maxLines: 1, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 3),
-                Text(value, style: _CmrRosterText.value(12.8), maxLines: 3, overflow: TextOverflow.ellipsis),
-              ],
-            ),
-          ),
-        ],
-      ),
+    return Container(
+      constraints: const BoxConstraints(minHeight: 44),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: const BoxDecoration(color: Colors.transparent),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+        SizedBox(width: 98, child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrRosterText.caption())),
+        const SizedBox(width: 10),
+        Expanded(child: Text(value, textAlign: TextAlign.right, style: _CmrRosterText.value(11.6), maxLines: 2, overflow: TextOverflow.ellipsis)),
+      ]),
     );
   }
 }
+
 
 class _CommentBox extends StatelessWidget {
   final String title;
@@ -1557,23 +1969,24 @@ class _CommentBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: _CmrRosterDecor.softCard(radius: 11),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _CmrRosterRoundIcon(icon: Icons.notes_rounded, color: _CmrRosterColors.green, size: 30),
-              const SizedBox(width: 10),
-              Expanded(child: Text(title, style: _CmrRosterText.section())),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(text, style: _CmrRosterText.muted(12.5)),
-        ],
-      ),
+      clipBehavior: Clip.antiAlias,
+      decoration: _CmrRosterDecor.softCard(radius: _CmrRosterDecor.mobileInnerRadius),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Container(
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: const BoxDecoration(color: Colors.transparent),
+          child: Row(children: [
+            const Icon(Icons.notes_rounded, color: _CmrRosterColors.muted2, size: 15),
+            const SizedBox(width: 8),
+            Expanded(child: Text(title, style: _CmrRosterText.section())),
+          ]),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Text(text, style: _CmrRosterText.muted(11.4)),
+        ),
+      ]),
     );
   }
 }
@@ -1617,7 +2030,7 @@ class _RosterPlayerActionsButton extends StatelessWidget {
       elevation: 0,
       color: _CmrRosterColors.panel,
       surfaceTintColor: _CmrRosterColors.panel,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius)),
       position: PopupMenuPosition.under,
       offset: const Offset(0, 8),
       onSelected: (action) {
@@ -1635,7 +2048,7 @@ class _RosterPlayerActionsButton extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
             decoration: BoxDecoration(
               color: _CmrRosterColors.redSoft,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -1653,7 +2066,7 @@ class _RosterPlayerActionsButton extends StatelessWidget {
         height: compact ? 26 : 38,
         decoration: BoxDecoration(
           color: _CmrRosterColors.soft,
-          borderRadius: BorderRadius.circular(compact ? 8 : 9),
+          borderRadius: BorderRadius.circular(compact ? 10 : _CmrRosterDecor.mobileInnerRadius),
         ),
         alignment: Alignment.center,
         child: Icon(
@@ -1678,16 +2091,16 @@ class _CmrRosterOutlineButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(17),
+      borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
       child: InkWell(
-        borderRadius: BorderRadius.circular(17),
+        borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
         onTap: onTap,
         child: Container(
           height: 48,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: _CmrRosterColors.soft,
-            borderRadius: BorderRadius.circular(17),
+            borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
           ),
           child: Text(title, style: _CmrRosterText.title(14)),
         ),
@@ -1711,9 +2124,9 @@ class _CmrRosterDangerButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(17),
+      borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
       child: InkWell(
-        borderRadius: BorderRadius.circular(17),
+        borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
         onTap: enabled ? onTap : null,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
@@ -1721,7 +2134,7 @@ class _CmrRosterDangerButton extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: enabled ? _CmrRosterColors.red : _CmrRosterColors.soft,
-            borderRadius: BorderRadius.circular(17),
+            borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
           ),
           child: Text(
             title,
@@ -1740,7 +2153,7 @@ class _CmrRosterDangerButton extends StatelessWidget {
 class _CmrRosterIconButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final bool emphasized;
   final bool compact;
 
@@ -1757,18 +2170,29 @@ class _CmrRosterIconButton extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: emphasized ? _CmrRosterColors.greenSoft : Colors.white.withOpacity(.78),
-        borderRadius: BorderRadius.circular(10),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: onTap,
-          child: SizedBox(
-            width: compact ? 34 : 38,
-            height: compact ? 34 : 38,
-            child: Icon(
-              icon,
-              color: emphasized ? _CmrRosterColors.green : _CmrRosterColors.text,
-              size: compact ? 17 : 18,
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
+        child: Ink(
+          decoration: _CmrRosterDecor.fluentSurface(
+            radius: 10,
+            active: emphasized,
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
+            onTap: onTap,
+            child: Opacity(
+              opacity: onTap == null ? .45 : 1,
+              child: SizedBox(
+                width: compact ? 34 : 38,
+                height: compact ? 34 : 38,
+                child: Icon(
+                  icon,
+                  color: emphasized
+                      ? _CmrRosterColors.green
+                      : _CmrRosterColors.text,
+                  size: compact ? 15 : 16,
+                ),
+              ),
             ),
           ),
         ),
@@ -1792,7 +2216,7 @@ class _CmrRosterAvatar extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         color: _CmrRosterColors.soft,
-        borderRadius: BorderRadius.circular(math.min(size * .18, 12)),
+        borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
       ),
       clipBehavior: Clip.antiAlias,
       child: photo.isEmpty
@@ -1822,7 +2246,7 @@ class _CmrRosterRoundIcon extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         color: _CmrRosterColors.soft,
-        borderRadius: BorderRadius.circular(math.min(size * .22, 10)),
+        borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
       ),
       child: Icon(
         icon,
@@ -1846,7 +2270,7 @@ class _SmallIcon extends StatelessWidget {
       height: 34,
       decoration: BoxDecoration(
         color: soft ? Colors.white : _CmrRosterColors.panel,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
       ),
       child: Icon(icon, color: _CmrRosterColors.muted, size: 18),
     );
@@ -1867,7 +2291,7 @@ class _CmrRosterPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
       decoration: BoxDecoration(
         color: _CmrRosterColors.soft,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1878,7 +2302,7 @@ class _CmrRosterPill extends StatelessWidget {
               height: 18,
               decoration: BoxDecoration(
                 color: accent.withOpacity(.08),
-                borderRadius: BorderRadius.circular(5),
+                borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
               ),
               child: Icon(icon, size: 12, color: accent),
             ),
@@ -1910,8 +2334,8 @@ class _ChevronBadge extends StatelessWidget {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: active ? _CmrRosterColors.greenSoft : Colors.white.withOpacity(.76),
-        borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: active ? _CmrRosterColors.green.withOpacity(.18) : Colors.white.withOpacity(.72)),
+        borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
+        border: Border.all(color: active ? _CmrRosterColors.greenBorder : _CmrRosterColors.line, width: .7),
       ),
       child: Icon(
         Icons.chevron_right_rounded,
@@ -1930,10 +2354,10 @@ class _CloseButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: _CmrRosterColors.soft,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
         child: const SizedBox(
           width: 44,
           height: 44,
@@ -1943,6 +2367,7 @@ class _CloseButton extends StatelessWidget {
     );
   }
 }
+
 
 class _PrimaryActionButton extends StatelessWidget {
   final IconData icon;
@@ -1954,39 +2379,28 @@ class _PrimaryActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: _CmrRosterColors.greenSoft,
-      borderRadius: BorderRadius.circular(10),
+      color: _CmrRosterColors.green,
+      borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
         child: Opacity(
           opacity: onTap == null ? .55 : 1,
           child: Container(
-            height: 34,
+            height: 38,
             alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, color: _CmrRosterColors.green, size: 16),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    text,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: _CmrRosterColors.greenDark, fontSize: 12, fontWeight: FontWeight.w500),
-                  ),
-                ),
-              ],
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 11),
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileButtonRadius), border: Border.all(color: _CmrRosterColors.green, width: .8)),
+            child: Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: [
+              Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 11.4, fontWeight: FontWeight.w500))),
+            ]),
           ),
         ),
       ),
     );
   }
 }
+
 
 class _SecondaryActionButton extends StatelessWidget {
   final IconData icon;
@@ -1998,38 +2412,28 @@ class _SecondaryActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: _CmrRosterColors.soft,
-      borderRadius: BorderRadius.circular(10),
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
         child: Opacity(
           opacity: onTap == null ? .55 : 1,
           child: Container(
-            height: 34,
+            height: 38,
             alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, color: _CmrRosterColors.green, size: 16),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    text,
-                    style: _CmrRosterText.action(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 11),
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileButtonRadius), border: Border.all(color: _CmrRosterColors.line, width: .8)),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Flexible(child: Text(text, style: _CmrRosterText.action(), maxLines: 1, overflow: TextOverflow.ellipsis)),
+            ]),
           ),
         ),
       ),
     );
   }
 }
+
 
 class _DeletePlayerButton extends StatelessWidget {
   final Future<void> Function()? onTap;
@@ -2039,42 +2443,30 @@ class _DeletePlayerButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: onTap == null ? _CmrRosterColors.soft : _CmrRosterColors.panel,
-      borderRadius: BorderRadius.circular(10),
+      color: _CmrRosterColors.panel,
+      borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
         onTap: onTap,
         child: Opacity(
           opacity: onTap == null ? .55 : 1,
           child: Container(
-            height: 44,
+            height: 38,
             alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.delete_outline_rounded, color: onTap == null ? _CmrRosterColors.muted : _CmrRosterColors.red, size: 18),
-                const SizedBox(width: 7),
-                Flexible(
-                  child: Text(
-                    'Удалить игрока',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: onTap == null ? _CmrRosterColors.muted : _CmrRosterColors.red,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 11),
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileButtonRadius), border: Border.all(color: _CmrRosterColors.red.withOpacity(.35), width: .8)),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Icon(Icons.delete_outline_rounded, color: onTap == null ? _CmrRosterColors.muted : _CmrRosterColors.red, size: 14),
+              const SizedBox(width: 6),
+              Flexible(child: Text('Удалить игрока', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: onTap == null ? _CmrRosterColors.muted : _CmrRosterColors.red, fontSize: 11.4, fontWeight: FontWeight.w500))),
+            ]),
           ),
         ),
       ),
     );
   }
 }
+
 
 class _RosterEmptyState extends StatelessWidget {
   final VoidCallback onAddPlayer;
@@ -2084,28 +2476,21 @@ class _RosterEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Container(
-        padding: const EdgeInsets.all(22),
-        decoration: _CmrRosterDecor.softCard(radius: 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _CmrRosterRoundIcon(icon: Icons.group_off_rounded, color: _CmrRosterColors.muted, size: 58),
-            const SizedBox(height: 12),
-            Text('Игроки не найдены', textAlign: TextAlign.center, style: _CmrRosterText.title(16)),
-            const SizedBox(height: 6),
-            Text(
-              'Измените фильтр или добавьте первого игрока в выбранную команду.',
-              textAlign: TextAlign.center,
-              style: _CmrRosterText.muted(12.5),
-            ),
-            const SizedBox(height: 16),
-            _PrimaryActionButton(
-              icon: Icons.person_add_alt_1_rounded,
-              text: 'Добавить игрока',
-              onTap: onAddPlayer,
-            ),
-          ],
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
+        decoration: const BoxDecoration(
+          color: _CmrRosterColors.panel,
+          border: Border(bottom: BorderSide(color: _CmrRosterColors.line, width: .7)),
         ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          _CmrRosterRoundIcon(icon: Icons.group_off_rounded, color: _CmrRosterColors.muted, size: 42),
+          const SizedBox(height: 10),
+          Text('Игроки не найдены', textAlign: TextAlign.center, style: _CmrRosterText.title(14.2)),
+          const SizedBox(height: 5),
+          Text('Измените фильтр или добавьте первого игрока в выбранную команду.', textAlign: TextAlign.center, style: _CmrRosterText.muted(11.2)),
+          const SizedBox(height: 12),
+          _PrimaryActionButton(icon: Icons.add_rounded, text: 'Добавить игрока', onTap: onAddPlayer),
+        ]),
       ),
     );
   }
@@ -2139,7 +2524,6 @@ String _playerPosition(Map<String, dynamic> player) {
   return _first(player, const ['position', 'role', 'amplua', 'player_position']);
 }
 
-
 String _jerseyNumber(Map<String, dynamic> player) {
   return _first(player, const ['number', 'player_number', 'shirt_number']);
 }
@@ -2148,8 +2532,72 @@ String _absoluteUrl(String raw) {
   final value = raw.trim();
   if (value.isEmpty || value == 'null') return '';
   if (value.startsWith('http://') || value.startsWith('https://')) return value;
+  if (value.startsWith('//')) return 'https:$value';
+  if (value.startsWith('sportotekaapp.ru/')) return 'https://$value';
+  if (value.startsWith('www.sportotekaapp.ru/')) return 'https://$value';
   final cleaned = value.startsWith('/') ? value.substring(1) : value;
   return 'https://sportotekaapp.ru/$cleaned';
+}
+
+bool _boolish(dynamic value) {
+  if (value is bool) return value;
+  if (value is num) return value != 0;
+  final text = _s(value).toLowerCase();
+  return const {'1', 'true', 'yes', 'on', 'connected', 'active', 'assigned'}.contains(text);
+}
+
+bool _playerHasPolar(Map<String, dynamic> player) {
+  const keys = [
+    'polar_connected', 'polarConnected', 'has_polar', 'hasPolar',
+    'polar_assigned', 'polarAssigned', 'heart_rate_connected',
+    'hr_connected', 'hrConnected', 'polar_id', 'polarId',
+  ];
+  for (final key in keys) {
+    final value = player[key];
+    if (_boolish(value)) return true;
+    final text = _s(value);
+    if ((key.endsWith('_id') || key.endsWith('Id')) && text.isNotEmpty && text != '0') return true;
+  }
+  return false;
+}
+
+bool _playerHasGps(Map<String, dynamic> player) {
+  const keys = [
+    'gps_connected', 'gpsConnected', 'has_gps', 'hasGps',
+    'tracker_connected', 'trackerConnected', 'tracker_assigned',
+    'trackerAssigned', 'device_connected', 'gps_id', 'gpsId',
+    'tracker_id', 'trackerId',
+  ];
+  for (final key in keys) {
+    final value = player[key];
+    if (_boolish(value)) return true;
+    final text = _s(value);
+    if ((key.endsWith('_id') || key.endsWith('Id')) && text.isNotEmpty && text != '0') return true;
+  }
+  return false;
+}
+
+String _playerActivityLabel(Map<String, dynamic> player) {
+  final direct = _first(player, const [
+    'activity_label', 'activityLabel', 'last_training_label',
+    'lastTrainingLabel', 'training_status', 'trainingStatus',
+  ]);
+  if (direct.isNotEmpty) return direct;
+
+  final raw = _first(player, const [
+    'last_training_at', 'lastTrainingAt', 'last_session_at',
+    'lastSessionAt', 'last_activity_at', 'lastActivityAt',
+  ]);
+  final date = _parseDate(raw);
+  if (date == null) return '';
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final day = DateTime(date.year, date.month, date.day);
+  final diff = today.difference(day).inDays;
+  if (diff <= 0) return 'Сегодня';
+  if (diff == 1) return 'Вчера';
+  if (diff < 7) return '$diff дн. назад';
+  return 'Нет свежих данных';
 }
 
 String _ageLabel(Map<String, dynamic> player) {
@@ -2210,3 +2658,4 @@ String _initials(String name) {
   }
   return '${parts[0].substring(0, 1)}${parts[1].substring(0, 1)}'.toUpperCase();
 }
+

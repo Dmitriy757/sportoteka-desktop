@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'game_zone_api.dart';
+import 'game_zone_cmr_style.dart';
 
 class PlayerBattlesScreen extends StatefulWidget {
   const PlayerBattlesScreen({super.key});
@@ -130,7 +131,7 @@ class _PlayerBattlesScreenState extends State<PlayerBattlesScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
+        color: GzColors.soft,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
@@ -165,13 +166,7 @@ class _PlayerBattlesScreenState extends State<PlayerBattlesScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0D000000),
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
+      border: Border.all(color: GzColors.divider),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -186,7 +181,7 @@ class _PlayerBattlesScreenState extends State<PlayerBattlesScreen> {
           const SizedBox(height: 8),
           Text(
             b['description'] ?? '',
-            style: const TextStyle(color: Color(0xFF6B7280)),
+            style: const TextStyle(color: GzColors.subtle),
           ),
           const SizedBox(height: 12),
           Row(
@@ -220,7 +215,7 @@ class _PlayerBattlesScreenState extends State<PlayerBattlesScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFEAFBF1),
+                color: GzColors.greenSoft,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: const Text(
@@ -255,17 +250,21 @@ class _PlayerBattlesScreenState extends State<PlayerBattlesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      backgroundColor: GzColors.bg,
+      appBar: GameZoneCmr.appBar(
         title: const Text('Битва игроков'),
       ),
-      body: loading
+      body: GameZoneCmr.page(
+        context,
+        child: loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: GameZoneCmr.listPadding(context),
               children: [
                 ...items.map((e) => _battleCard(Map<String, dynamic>.from(e))),
               ],
             ),
+      ),
     );
   }
 }

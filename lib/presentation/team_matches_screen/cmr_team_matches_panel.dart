@@ -23,11 +23,11 @@ class _CmrMatchColors {
 
   static const Color panel = Colors.white;
   static const Color workspace = Colors.white;
-  static const Color surface = Color(0xFFFAFBFC);
-  static const Color soft = Color(0xFFF6F7F9);
-  static const Color soft2 = Color(0xFFF5F7FB);
-  static const Color border = Color(0xFFF0F2F4);
-  static const Color borderStrong = Color(0xFFE5E7EB);
+  static const Color surface = Colors.white;
+  static const Color soft = Color(0xFFF8F9F8);
+  static const Color soft2 = Color(0xFFF4F6F4);
+  static const Color border = Color(0xFFE9ECEA);
+  static const Color borderStrong = Color(0xFFE1E6E3);
 
   static const Color text = Color(0xFF0B0F14);
   static const Color muted = Color(0xFF374151);
@@ -39,9 +39,9 @@ class _CmrMatchColors {
 
   static const Color green = Color(0xFF00A750);
   static const Color greenDark = Color(0xFF067A46);
-  static const Color greenSoft = Color(0xFFF3FBF7);
+  static const Color greenSoft = Color(0xFFF3FAF6);
   static const Color greenSoft2 = Color(0xFFF8FEFA);
-  static const Color greenBorder = Color(0xFFDCEFE5);
+  static const Color greenBorder = Color(0xFFD7F0E2);
 
   static const Color blue = Color(0xFF2563EB);
   static const Color blueSoft = Color(0xFFF4F7FF);
@@ -87,239 +87,183 @@ Color _matchWinAccentSoft(int index) {
 
 // ==================== Текстовые стили ====================
 
+
 class _CmrMatchText {
-  // Windows 11 / Fluent typography.
-  static const String font = 'Segoe UI';
-  static const List<String> fallback = <String>[
-    'SF Pro Display',
-    'SF Pro Text',
-    'Inter',
-    'Roboto',
-    'Arial',
-  ];
+  static const String family = 'Segoe UI';
+  static const String font = family;
+  static const List<String> fallback = <String>['SF Pro Display', 'SF Pro Text', 'Inter', 'Roboto', 'Arial'];
 
-  static TextStyle _base({
-    required double size,
-    required FontWeight weight,
-    required Color color,
-    double height = 1.18,
-    double letterSpacing = -0.10,
-    List<FontFeature>? features,
-  }) {
-    return TextStyle(
-      fontFamily: font,
-      fontFamilyFallback: fallback,
-      color: color,
-      fontSize: size,
-      fontWeight: weight,
-      height: height,
-      letterSpacing: letterSpacing,
-      fontFeatures: features,
-    );
-  }
-
-  static TextStyle title(double size) => _base(
-        size: size,
-        weight: FontWeight.w700,
+  static TextStyle title(double size) => TextStyle(
         color: _CmrMatchColors.text,
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        fontSize: size,
+        fontWeight: FontWeight.w600,
         height: 1.08,
-        letterSpacing: -0.38,
+        letterSpacing: -.18,
+        fontFeatures: const [FontFeature.tabularFigures()],
       );
 
-  static TextStyle section() => _base(
-        size: 13.4,
-        weight: FontWeight.w700,
+  static TextStyle section() => const TextStyle(
         color: _CmrMatchColors.text,
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        fontSize: 11.4,
+        fontWeight: FontWeight.w600,
         height: 1.12,
-        letterSpacing: -0.22,
+        letterSpacing: -.08,
       );
 
-  static TextStyle value(double size) => _base(
-        size: size,
-        weight: FontWeight.w700,
+  static TextStyle value(double size) => TextStyle(
         color: _CmrMatchColors.text,
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        fontSize: size,
+        fontWeight: FontWeight.w600,
         height: 1.08,
-        letterSpacing: -0.28,
-        features: const [FontFeature.tabularFigures()],
+        letterSpacing: -.12,
+        fontFeatures: const [FontFeature.tabularFigures()],
       );
 
-  static TextStyle muted(double size) => _base(
-        size: size,
-        weight: FontWeight.w500,
-        color: _CmrMatchColors.muted,
-        height: 1.34,
-        letterSpacing: -0.05,
-      );
-
-  static TextStyle caption() => _base(
-        size: 10.8,
-        weight: FontWeight.w600,
+  static TextStyle muted(double size) => TextStyle(
         color: _CmrMatchColors.muted2,
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        fontSize: size,
+        fontWeight: FontWeight.w500,
+        height: 1.28,
+        letterSpacing: -.02,
+      );
+
+  static TextStyle caption() => const TextStyle(
+        color: _CmrMatchColors.muted2,
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        fontSize: 9.4,
+        fontWeight: FontWeight.w500,
         height: 1.08,
-        letterSpacing: .08,
+        letterSpacing: .02,
       );
 
-  static TextStyle pill({Color? color}) => _base(
-        size: 11.2,
-        weight: FontWeight.w700,
-        color: color ?? _CmrMatchColors.text,
-        height: 1.05,
+
+  static TextStyle pill({Color color = _CmrMatchColors.text}) => TextStyle(
+        color: color,
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        fontSize: 9.8,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -.02,
       );
 
-  static TextStyle tab({bool active = false}) => _base(
-        size: 11.8,
-        weight: FontWeight.w700,
-        color: active ? _CmrMatchColors.greenDark : _CmrMatchColors.text,
-        height: 1,
-      );
-
-  static TextStyle tabSelected() => tab(active: true);
-
-  static TextStyle action() => _base(
-        size: 11.8,
-        weight: FontWeight.w700,
+  static TextStyle tab() => const TextStyle(
         color: _CmrMatchColors.text,
-        height: 1.05,
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        fontSize: 10.6,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -.02,
       );
 
-  static TextStyle whiteAction({double size = 11.8}) => _base(
-        size: size,
-        weight: FontWeight.w700,
-        color: Colors.white,
-        height: 1.05,
+  static TextStyle tabSelected() => const TextStyle(
+        color: _CmrMatchColors.text,
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        fontSize: 10.6,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -.02,
       );
 
-  static TextStyle danger() => _base(
-        size: 11.8,
-        weight: FontWeight.w700,
+  static TextStyle action() => const TextStyle(
+        color: _CmrMatchColors.text,
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        fontSize: 10.8,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -.02,
+      );
+
+  static TextStyle danger() => const TextStyle(
         color: _CmrMatchColors.red,
-        height: 1,
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        fontSize: 10.8,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -.02,
       );
 }
 
-// ==================== Декораторы ====================
-
 
 class _CmrMatchDecor {
-  static List<BoxShadow> get softShadow => [
-        BoxShadow(
-          color: Colors.black.withOpacity(.045),
-          blurRadius: 34,
-          spreadRadius: -14,
-          offset: const Offset(0, 20),
-        ),
-        BoxShadow(
-          color: Colors.black.withOpacity(.025),
-          blurRadius: 10,
-          spreadRadius: -7,
-          offset: const Offset(0, 4),
-        ),
-      ];
+  static List<BoxShadow> get softShadow => const <BoxShadow>[];
 
-  static List<BoxShadow> get microShadow => [
-        BoxShadow(
-          color: Colors.black.withOpacity(.035),
-          blurRadius: 18,
-          spreadRadius: -12,
-          offset: const Offset(0, 10),
-        ),
-      ];
+  static List<BoxShadow> get microShadow => const <BoxShadow>[];
 
-  static List<BoxShadow> get panelShadow => softShadow;
+  static List<BoxShadow> get panelShadow => const <BoxShadow>[];
 
   static BoxDecoration workspaceBg() => const BoxDecoration(
-        color: Color(0xFFF6F7F9),
+        color: _CmrMatchColors.workspace,
       );
 
-  static BoxDecoration panel({double radius = 22}) => BoxDecoration(
+  static BoxDecoration panel({double radius = 0}) => const BoxDecoration(
         color: _CmrMatchColors.panel,
-        borderRadius: BorderRadius.circular(radius),
-        boxShadow: softShadow,
       );
 
-  static BoxDecoration unifiedWindow({double radius = 24}) => BoxDecoration(
-        color: _CmrMatchColors.glass,
-        borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: Colors.white.withOpacity(.86), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(.055),
-            blurRadius: 38,
-            spreadRadius: -18,
-            offset: const Offset(0, 22),
-          ),
-          BoxShadow(
-            color: _CmrMatchColors.blue.withOpacity(.035),
-            blurRadius: 24,
-            spreadRadius: -18,
-            offset: const Offset(0, 10),
-          ),
-        ],
+  static BoxDecoration calendarHeader({double radius = 0}) => const BoxDecoration(
+        color: _CmrMatchColors.panel,
       );
 
-  static BoxDecoration seamlessPane({double radius = 0}) => BoxDecoration(
+  static BoxDecoration unifiedWindow({double radius = 0}) => const BoxDecoration(
+        color: _CmrMatchColors.panel,
+      );
+
+  static BoxDecoration seamlessPane({double radius = 18}) => BoxDecoration(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(radius),
       );
 
   static BoxDecoration fluentSurface({
-    double radius = 16,
+    double radius = 8,
     Color accent = _CmrMatchColors.green,
     bool active = false,
-    bool elevated = true,
+    bool elevated = false,
   }) {
     return BoxDecoration(
-      color: active ? Colors.white.withOpacity(.96) : Colors.white.withOpacity(.82),
+      color: active
+          ? Color.alphaBlend(accent.withOpacity(.045), Colors.white)
+          : Colors.transparent,
       borderRadius: BorderRadius.circular(radius),
-      border: Border.all(
-        color: active ? Color.alphaBlend(accent.withOpacity(.18), Colors.white) : Colors.white.withOpacity(.78),
-        width: 1,
-      ),
-      boxShadow: elevated
-          ? [
-              BoxShadow(
-                color: Colors.black.withOpacity(active ? .040 : .025),
-                blurRadius: active ? 20 : 14,
-                spreadRadius: -12,
-                offset: Offset(0, active ? 12 : 8),
-              ),
-            ]
-          : null,
     );
   }
 
-  static BoxDecoration softCard({double radius = 18, bool active = false, Color? tint}) => BoxDecoration(
-        color: active ? Colors.white.withOpacity(.96) : (tint ?? _CmrMatchColors.surface),
+  static BoxDecoration softCard({
+    double radius = 8,
+    bool active = false,
+    Color? tint,
+  }) => BoxDecoration(
+        color: active ? _CmrMatchColors.greenSoft : (tint ?? Colors.transparent),
         borderRadius: BorderRadius.circular(radius),
-        border: active ? Border.all(color: _CmrMatchColors.greenBorder) : null,
-        boxShadow: active ? microShadow : null,
       );
 
-  static BoxDecoration accentCard({required Color color, double radius = 18}) => BoxDecoration(
+  static BoxDecoration accentCard({required Color color, double radius = 12}) => BoxDecoration(
         color: Color.alphaBlend(color.withOpacity(.08), Colors.white),
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: Color.alphaBlend(color.withOpacity(.16), Colors.white)),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(.08),
-            blurRadius: 22,
-            spreadRadius: -13,
-            offset: const Offset(0, 12),
-          ),
-        ],
+        border: Border.all(color: Color.alphaBlend(color.withOpacity(.16), Colors.white), width: .8),
       );
 
-  static BoxDecoration glassCard({double radius = 22, Color? tint}) => BoxDecoration(
-        color: tint ?? Colors.white.withOpacity(.72),
+  static BoxDecoration glassCard({double radius = 12, Color? tint}) => BoxDecoration(
+        color: tint ?? _CmrMatchColors.panel,
         borderRadius: BorderRadius.circular(radius),
-        boxShadow: null,
+        border: Border.all(color: Colors.transparent, width: 0),
+        boxShadow: microShadow,
       );
 }
+
 
 // ==================== Основной виджет ====================
 
 enum CmrMatchesFilter { all, upcoming, past }
 enum CmrMatchKindFilter { all, tournament, friendly, home, away }
+enum _MatchesCalendarMode { month, week }
 enum _MatchesWorkPanel { list, details, editor }
 
 class CmrTeamMatchesPanel extends StatefulWidget {
@@ -358,6 +302,7 @@ class _CmrTeamMatchesPanelState extends State<CmrTeamMatchesPanel> {
   String role = '';
   CmrMatchesFilter filter = CmrMatchesFilter.all;
   CmrMatchKindFilter matchKindFilter = CmrMatchKindFilter.all;
+  _MatchesCalendarMode calendarMode = _MatchesCalendarMode.month;
   DateTime selectedMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
   DateTime? selectedDay;
   int openingMatchId = 0;
@@ -646,6 +591,11 @@ class _CmrTeamMatchesPanelState extends State<CmrTeamMatchesPanel> {
   int _matchId(Map<String, dynamic> m) => _i(m['match_id'] ?? m['id']);
 
   bool _sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+
+  DateTime _startOfWeekMonday(DateTime d) {
+    final base = DateTime(d.year, d.month, d.day);
+    return base.subtract(Duration(days: base.weekday - DateTime.monday));
+  }
 
   String _monthTitleLower(DateTime d) {
     const months = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
@@ -1056,7 +1006,7 @@ class _CmrTeamMatchesPanelState extends State<CmrTeamMatchesPanel> {
                     top: false,
                     child: Column(
                       children: [
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 8),
                         Center(
                           child: Container(
                             width: 44,
@@ -1076,7 +1026,7 @@ class _CmrTeamMatchesPanelState extends State<CmrTeamMatchesPanel> {
                                 height: 42,
                                 decoration: BoxDecoration(
                                   color: _CmrMatchColors.soft,
-                                  borderRadius: BorderRadius.circular(15),
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: const Icon(Icons.history_rounded, color: _CmrMatchColors.text, size: 19),
                               ),
@@ -1293,12 +1243,7 @@ Widget _buildTabletMatchesWorkspace({
       height: height,
       child: Container(
         decoration: _CmrMatchDecor.workspaceBg(),
-        padding: const EdgeInsets.all(10),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
-          child: Container(
-            decoration: _CmrMatchDecor.unifiedWindow(radius: 24),
-            child: Row(
+        child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 SizedBox(
@@ -1308,7 +1253,7 @@ Widget _buildTabletMatchesWorkspace({
                     monthMap: monthMap,
                   ),
                 ),
-                Container(width: 1, color: _CmrMatchColors.border.withOpacity(.78)),
+                const SizedBox(width: 1, child: ColoredBox(color: _CmrMatchColors.border)),
                 Expanded(
                   child: _buildMatchesRightPane(
                     timeline: timeline,
@@ -1319,8 +1264,6 @@ Widget _buildTabletMatchesWorkspace({
                 ),
               ],
             ),
-          ),
-        ),
       ),
     );
   }
@@ -1535,7 +1478,7 @@ Widget _buildTabletMatchesWorkspace({
           height: 36,
           decoration: BoxDecoration(
             color: _CmrMatchColors.iconSoft,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: const Icon(Icons.sports_soccer_rounded, color: _CmrMatchColors.icon, size: 16),
         ),
@@ -1586,8 +1529,9 @@ Widget _buildTabletMatchesWorkspace({
     return Container(
       height: 58,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
+        color: _CmrMatchColors.panel,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.transparent, width: 0),
         boxShadow: _CmrMatchDecor.softShadow,
       ),
       padding: const EdgeInsets.fromLTRB(10, 7, 8, 7),
@@ -1598,7 +1542,7 @@ Widget _buildTabletMatchesWorkspace({
             height: 34,
             decoration: BoxDecoration(
               color: _CmrMatchColors.iconSoft,
-              borderRadius: BorderRadius.circular(7),
+              borderRadius: BorderRadius.circular(12),
               border: null,
             ),
             child: const Icon(Icons.sports_soccer_rounded, color: _CmrMatchColors.icon, size: 17),
@@ -1750,14 +1694,15 @@ Widget _buildTabletMatchesWorkspace({
           const SizedBox(height: 8),
           Expanded(
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
               child: Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: Colors.transparent,
+                  color: Colors.white.withOpacity(.70),
                   borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.transparent, width: 0),
                 ),
-                padding: const EdgeInsets.all(7),
+                padding: const EdgeInsets.all(8),
                 child: LayoutBuilder(
                   builder: (context, calendarBox) => _MonthMatchesGrid(
                     key: ValueKey('strict-matches-calendar-${selectedMonth.year}-${selectedMonth.month}-$calendarRevision'),
@@ -1876,13 +1821,15 @@ Widget _buildTabletMatchesWorkspace({
   }) {
     final listTitle = selectedDay == null ? 'Матчи за ${_monthTitle(selectedMonth)}' : 'Матчи за ${_dateRu(selectedDay!)}';
 
-    return RefreshIndicator(
-      color: _CmrMatchColors.green,
-      onRefresh: () => _fetch(),
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(0, 0, 0, 18),
-        physics: const AlwaysScrollableScrollPhysics(),
-        children: [
+    return DecoratedBox(
+      decoration: _CmrMatchDecor.workspaceBg(),
+      child: RefreshIndicator(
+        color: _CmrMatchColors.green,
+        onRefresh: () => _fetch(),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(2, 4, 2, 18),
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
           _buildSlimProfileCalendar(monthMap),
           const SizedBox(height: 14),
           _buildMatchKindFilters(),
@@ -1915,7 +1862,7 @@ Widget _buildTabletMatchesWorkspace({
           ),
           const SizedBox(height: 12),
           _buildProfileFilters(),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           _CmrSearch(
             controller: _searchCtrl,
             hint: 'Поиск по сопернику, турниру, стадиону...',
@@ -1926,7 +1873,7 @@ Widget _buildTabletMatchesWorkspace({
             },
           ),
           if (selectedDay != null) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerLeft,
               child: _SelectedDateChip(
@@ -1946,7 +1893,8 @@ Widget _buildTabletMatchesWorkspace({
             _buildProfileMatchCardsList(timeline, maxWidth: maxWidth),
         ],
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildMatchKindFilters() {
@@ -1997,12 +1945,6 @@ Widget _buildTabletMatchesWorkspace({
   Widget _buildProfileFilters() {
     return Container(
       height: 38,
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: _CmrMatchColors.soft,
-        borderRadius: BorderRadius.circular(14),
-        border: null,
-      ),
       child: Row(
         children: [
           Expanded(
@@ -2052,7 +1994,7 @@ Widget _buildTabletMatchesWorkspace({
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: BorderRadius.circular(12),
         border: null,
         boxShadow: null,
       ),
@@ -2120,9 +2062,9 @@ Widget _buildTabletMatchesWorkspace({
 
               return Material(
                 color: Colors.transparent,
-                borderRadius: BorderRadius.circular(15),
+                borderRadius: BorderRadius.circular(12),
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(15),
+                  borderRadius: BorderRadius.circular(12),
                   onTap: () {
                     setState(() {
                       selectedDay = day;
@@ -2136,11 +2078,11 @@ Widget _buildTabletMatchesWorkspace({
                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                     decoration: BoxDecoration(
                       color: selected
-                          ? Colors.white.withOpacity(.96)
+                          ? _CmrMatchColors.greenSoft
                           : has
                               ? Colors.white
                               : (inMonth ? _CmrMatchColors.soft : _CmrMatchColors.soft2),
-                      borderRadius: BorderRadius.circular(15),
+                      borderRadius: BorderRadius.circular(12),
                       border: selected ? Border.all(color: _CmrMatchColors.greenBorder) : null,
                       boxShadow: selected ? _CmrMatchDecor.microShadow : null,
                     ),
@@ -2438,7 +2380,7 @@ Widget _buildTabletMatchesWorkspace({
               height: 24,
               decoration: BoxDecoration(
                 color: done ? _CmrMatchColors.greenSoft : _CmrMatchColors.soft,
-                borderRadius: BorderRadius.circular(9),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, size: 13, color: done ? _CmrMatchColors.green : _CmrMatchColors.muted2),
             ),
@@ -2484,7 +2426,7 @@ Widget _buildTabletMatchesWorkspace({
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(opponent, maxLines: 2, overflow: TextOverflow.ellipsis, style: _CmrMatchText.title(compact ? 17 : 18.5).copyWith(fontWeight: FontWeight.w700)),
+                      Text(opponent, maxLines: 2, overflow: TextOverflow.ellipsis, style: _CmrMatchText.title(compact ? 17 : 18.5).copyWith(fontWeight: FontWeight.w600)),
                       const SizedBox(height: 5),
                       Wrap(
                         spacing: 6,
@@ -2536,7 +2478,7 @@ Widget _buildTabletMatchesWorkspace({
                       const SizedBox(width: 12),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(color: Colors.white.withOpacity(.72), borderRadius: BorderRadius.circular(14)),
+                        decoration: BoxDecoration(color: Colors.white.withOpacity(.72), borderRadius: BorderRadius.circular(12)),
                         child: Text(score, style: _CmrMatchText.value(compact ? 17 : 19).copyWith(color: statusColor)),
                       ),
                     ],
@@ -2636,7 +2578,7 @@ Widget _buildTabletMatchesWorkspace({
             if (canEdit) ...[
               const SizedBox(height: 12),
               InkWell(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(12),
                 onTap: () => _deleteMatch(match),
                 child: Container(
                   width: double.infinity,
@@ -2664,228 +2606,436 @@ Widget _buildTabletMatchesWorkspace({
     );
   }
 
+  Widget _buildMatchesMobileHeader(List<Map<String, dynamic>> monthList) {
+    final activeDay = selectedDay ?? DateTime.now();
+    final safeDay = DateTime(activeDay.year, activeDay.month, activeDay.day);
+    final dayMatches = _matchesForDay(safeDay);
+    final count = selectedDay == null ? monthList.length : dayMatches.length;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: _CmrMatchDecor.calendarHeader(radius: 24),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: _CmrMatchColors.surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.transparent, width: 0),
+            ),
+            child: const Icon(Icons.calendar_month_rounded, color: _CmrMatchColors.text, size: 19),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _monthTitle(selectedMonth),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _CmrMatchText.title(15.25).copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${widget.teamName.trim().isEmpty ? 'Команда' : widget.teamName} · ${_dateRu(safeDay)} · $count ${_pluralMatch(count)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _CmrMatchText.muted(11.05).copyWith(fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+          if (canEdit) _ProfileRoundButton(icon: Icons.add_rounded, onTap: _openCreate),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMatchesMobileFilters() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+      decoration: const BoxDecoration(color: Colors.white),
+      child: Column(
+        children: [
+          _CmrSearch(
+            controller: _searchCtrl,
+            hint: 'Поиск матча',
+            compact: true,
+            onClear: () {
+              _searchCtrl.clear();
+              setState(() {});
+            },
+          ),
+          const SizedBox(height: 9),
+          _buildProfileFilters(),
+          const SizedBox(height: 9),
+          _buildMatchKindFilters(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMatchesMobileModeSelector() {
+    return Container(
+      height: 34,
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: _CmrMatchColors.soft,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.transparent),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _MatchesModeButton(
+              text: 'Месяц',
+              active: calendarMode == _MatchesCalendarMode.month,
+              onTap: () {
+                if (calendarMode == _MatchesCalendarMode.month) return;
+                setState(() {
+                  calendarMode = _MatchesCalendarMode.month;
+                  final base = selectedDay ?? DateTime.now();
+                  selectedMonth = DateTime(base.year, base.month, 1);
+                  calendarRevision++;
+                });
+              },
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _MatchesModeButton(
+              text: 'Неделя',
+              active: calendarMode == _MatchesCalendarMode.week,
+              onTap: () {
+                if (calendarMode == _MatchesCalendarMode.week) return;
+                setState(() {
+                  calendarMode = _MatchesCalendarMode.week;
+                  selectedDay ??= DateTime.now();
+                  selectedMonth = DateTime(selectedDay!.year, selectedDay!.month, 1);
+                  calendarRevision++;
+                });
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPhoneWeekMatchesGrid() {
+    final base = selectedDay ?? DateTime.now();
+    final weekStart = _startOfWeekMonday(base);
+    const weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            for (final d in weekdays)
+              Expanded(
+                child: Center(
+                  child: Text(
+                    d,
+                    style: const TextStyle(
+                      color: _CmrMatchColors.muted2,
+                      fontSize: 9.9,
+                      fontWeight: FontWeight.w700,
+                      height: 1.15,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 5),
+        Row(
+          children: [
+            for (var i = 0; i < 7; i++)
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(right: i == 6 ? 0 : 5),
+                  child: Builder(
+                    builder: (context) {
+                      final day = weekStart.add(Duration(days: i));
+                      final list = _matchesForDay(day);
+                      final now = DateTime.now();
+                      final today = DateTime(now.year, now.month, now.day);
+                      final isToday = _sameDay(day, today);
+                      final isSelected = selectedDay != null && _sameDay(day, selectedDay!);
+                      return Material(
+                        color: Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(10),
+                          onTap: () {
+                            setState(() {
+                              selectedDay = DateTime(day.year, day.month, day.day);
+                              selectedMonth = DateTime(day.year, day.month, 1);
+                              selectedMatchId = list.isNotEmpty ? _matchId(list.first) : 0;
+                              _workPanel = list.isNotEmpty ? _MatchesWorkPanel.details : _MatchesWorkPanel.list;
+                              filter = CmrMatchesFilter.all;
+                              calendarRevision++;
+                            });
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 160),
+                            height: 54,
+                            decoration: BoxDecoration(
+                              color: isSelected ? Colors.white.withOpacity(.96) : _CmrMatchColors.soft,
+                              borderRadius: BorderRadius.circular(10),
+                              boxShadow: isSelected ? _CmrMatchDecor.microShadow : null,
+                              border: isSelected
+                                  ? Border.all(color: _CmrMatchColors.green.withOpacity(.28), width: 1.05)
+                                  : isToday
+                                      ? Border.all(color: _CmrMatchColors.greenBorder)
+                                      : Border.all(color: Colors.transparent),
+                            ),
+                            child: Stack(
+                              children: [
+                                Center(
+                                  child: Text(
+                                    '${day.day}',
+                                    style: TextStyle(
+                                      color: isSelected ? _CmrMatchColors.greenDark : isToday ? _CmrMatchColors.greenDark : _CmrMatchColors.text,
+                                      fontSize: 12.4,
+                                      fontWeight: FontWeight.w700,
+                                      height: 1,
+                                    ),
+                                  ),
+                                ),
+                                if (list.isNotEmpty)
+                                  Positioned(
+                                    top: 5,
+                                    right: 5,
+                                    child: Container(
+                                      width: 14,
+                                      height: 14,
+                                      alignment: Alignment.center,
+                                      decoration: BoxDecoration(color: _CmrMatchColors.green, borderRadius: BorderRadius.circular(999)),
+                                      child: Text(
+                                        '${list.length}',
+                                        style: const TextStyle(color: Colors.white, fontSize: 8.2, fontWeight: FontWeight.w800, height: 1),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSlimMatchesCalendarBlock(
+    Map<DateTime, List<Map<String, dynamic>>> monthMap,
+    List<Map<String, dynamic>> monthList,
+  ) {
+    final title = calendarMode == _MatchesCalendarMode.month
+        ? _monthTitle(selectedMonth)
+        : 'Неделя • ${_dateRu(_startOfWeekMonday(selectedDay ?? DateTime.now()))}';
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(6, 6, 6, 8),
+      decoration: const BoxDecoration(color: Colors.white),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              _ProfileCalendarArrow(
+                icon: Icons.chevron_left_rounded,
+                onTap: calendarMode == _MatchesCalendarMode.month
+                    ? _prevMonth
+                    : () {
+                        final base = selectedDay ?? DateTime.now();
+                        final prev = base.subtract(const Duration(days: 7));
+                        setState(() {
+                          selectedDay = DateTime(prev.year, prev.month, prev.day);
+                          selectedMonth = DateTime(prev.year, prev.month, 1);
+                          calendarRevision++;
+                        });
+                      },
+              ),
+              Expanded(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _CmrMatchText.title(15.05).copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+              ),
+              _ProfileCalendarArrow(
+                icon: Icons.chevron_right_rounded,
+                onTap: calendarMode == _MatchesCalendarMode.month
+                    ? _nextMonth
+                    : () {
+                        final base = selectedDay ?? DateTime.now();
+                        final next = base.add(const Duration(days: 7));
+                        setState(() {
+                          selectedDay = DateTime(next.year, next.month, next.day);
+                          selectedMonth = DateTime(next.year, next.month, 1);
+                          calendarRevision++;
+                        });
+                      },
+              ),
+              const SizedBox(width: 6),
+              _ProfileRoundButton(icon: Icons.today_rounded, onTap: _thisMonth),
+            ],
+          ),
+          const SizedBox(height: 9),
+          if (calendarMode == _MatchesCalendarMode.month)
+            _MonthMatchesGrid(
+              key: ValueKey('phone-matches-calendar-${selectedMonth.year}-${selectedMonth.month}-$calendarRevision'),
+              month: selectedMonth,
+              selectedDay: selectedDay,
+              matchesByDay: monthMap,
+              dateText: _dateRu,
+              compact: true,
+              onDayTap: (day, list) {
+                setState(() {
+                  selectedDay = day;
+                  selectedMonth = DateTime(day.year, day.month, 1);
+                  selectedMatchId = list.isNotEmpty ? _matchId(list.first) : 0;
+                  _workPanel = list.isNotEmpty ? _MatchesWorkPanel.details : _MatchesWorkPanel.list;
+                  filter = CmrMatchesFilter.all;
+                  calendarRevision++;
+                });
+              },
+            )
+          else
+            _buildPhoneWeekMatchesGrid(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectedDayMatchesWindow(
+    List<Map<String, dynamic>> visible,
+    List<Map<String, dynamic>> monthList,
+  ) {
+    final selectedDayMatches = selectedDay == null ? const <Map<String, dynamic>>[] : _matchesForDay(selectedDay!);
+    final list = selectedDay == null ? visible : selectedDayMatches;
+    final title = selectedDay == null ? 'Матчи периода' : 'Матчи дня';
+    final subtitle = selectedDay == null
+        ? '${_monthTitle(selectedMonth)} · ${visible.length} ${_pluralMatch(visible.length)}'
+        : '${_dateRu(selectedDay!)} · ${selectedDayMatches.length} ${_pluralMatch(selectedDayMatches.length)}';
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      decoration: const BoxDecoration(color: Colors.white),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: _CmrMatchDecor.fluentSurface(
+                  radius: 14,
+                  accent: _CmrMatchColors.blue,
+                  elevated: false,
+                ),
+                child: const Icon(Icons.view_agenda_rounded, color: _CmrMatchColors.blue, size: 18),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrMatchText.title(15.0)),
+                    const SizedBox(height: 3),
+                    Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrMatchText.muted(10.8)),
+                  ],
+                ),
+              ),
+              _ProfileRoundButton(icon: refreshing ? Icons.sync_rounded : Icons.refresh_rounded, onTap: () => _fetch()),
+              if (canEdit) ...[
+                const SizedBox(width: 6),
+                _ProfileRoundButton(icon: Icons.add_rounded, onTap: _openCreate),
+              ],
+              if (selectedDay != null) ...[
+                const SizedBox(width: 6),
+                _ProfileRoundButton(
+                  icon: Icons.close_rounded,
+                  onTap: () => setState(() {
+                    selectedDay = null;
+                    selectedMatchId = 0;
+                    _workPanel = _MatchesWorkPanel.list;
+                    calendarRevision++;
+                  }),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (list.isEmpty)
+            _MiniEmpty(text: monthList.isEmpty ? 'В этом месяце матчей нет' : 'Матчи скрыты фильтром или поиском')
+          else
+            ...List.generate(list.length, (i) {
+              final m = list[i];
+              return Padding(
+                padding: EdgeInsets.only(bottom: i == list.length - 1 ? 0 : 8),
+                child: _CmrMatchTile(
+                  eventType: _eventTypeLabel(_s(m['event_type'])),
+                  opponent: _s(m['opponent']),
+                  date: _dateRu(_parseDate(_s(m['match_date']))),
+                  competition: _s(m['competition_name']),
+                  stadium: _s(m['stadium']),
+                  score: '${_i(m['our_score'])}:${_i(m['opponent_score'])}',
+                  upcoming: _isUpcoming(_parseDate(_s(m['match_date']))),
+                  active: _matchId(m) == selectedMatchId,
+                  canEdit: canEdit,
+                  compact: true,
+                  onTap: () => _handleMatchTap(m),
+                  onDelete: () => _deleteMatch(m),
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPhoneLayout({
     required List<Map<String, dynamic>> visible,
     required List<Map<String, dynamic>> monthList,
     required Map<DateTime, List<Map<String, dynamic>>> monthMap,
   }) {
-    final upcomingCount = matches.where((m) => _isUpcoming(_parseDate(_s(m['match_date'])))).length;
-    final listTitle = filter == CmrMatchesFilter.upcoming
-        ? 'Будущие матчи за ${_monthTitle(selectedMonth)}'
-        : filter == CmrMatchesFilter.past
-            ? 'Архив за ${_monthTitle(selectedMonth)}'
-            : 'Матчи за ${_monthTitle(selectedMonth)}';
-
-    return RefreshIndicator(
-      color: _CmrMatchColors.green,
-      onRefresh: () => _fetch(),
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(0, 0, 0, 18),
-        physics: const AlwaysScrollableScrollPhysics(),
-        children: [
-          Container(
-            decoration: _CmrMatchDecor.panel(),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-                  decoration: BoxDecoration(
-                    color: _CmrMatchColors.panel,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _CmrIconBox(icon: Icons.sports_soccer_rounded, size: 36),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  widget.teamName.trim().isEmpty ? 'Команда' : widget.teamName,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: _CmrMatchText.title(16.5),
-                                ),
-                                const SizedBox(height: 4),
-                                const Text(
-                                  'Матчи и календарь команды',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(color: _CmrMatchColors.muted, fontWeight: FontWeight.w600, fontSize: 11.05),
-                                ),
-                              ],
-                            ),
-                          ),
-                          _HeaderIconButton(icon: refreshing ? Icons.sync_rounded : Icons.refresh_rounded, onTap: () => _fetch()),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(child: _HeroStat(value: '${matches.length}', title: 'всего', compact: true)),
-                          const SizedBox(width: 8),
-                          Expanded(child: _HeroStat(value: '$upcomingCount', title: 'впереди', compact: true)),
-                          const SizedBox(width: 8),
-                          Expanded(child: _HeroStat(value: canEdit ? 'Да' : 'Нет', title: 'редакт.', compact: true)),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-                  child: _CmrSearch(
-                    controller: _searchCtrl,
-                    hint: 'Поиск матча',
-                    compact: true,
-                    onClear: () {
-                      _searchCtrl.clear();
-                      setState(() {});
-                    },
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                  child: Row(
-                    children: [
-                      Expanded(child: _FilterButton(text: 'Все', active: filter == CmrMatchesFilter.all, compact: true, onTap: () => setState(() => filter = CmrMatchesFilter.all))),
-                      const SizedBox(width: 8),
-                      Expanded(child: _FilterButton(text: 'Впереди', active: filter == CmrMatchesFilter.upcoming, compact: true, onTap: () => setState(() => filter = CmrMatchesFilter.upcoming))),
-                      const SizedBox(width: 8),
-                      Expanded(child: _FilterButton(text: 'Архив', active: filter == CmrMatchesFilter.past, compact: true, onTap: () => setState(() => filter = CmrMatchesFilter.past))),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            decoration: _CmrMatchDecor.panel(),
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: const BoxDecoration(
-                    color: _CmrMatchColors.panel,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _CmrIconBox(icon: Icons.event_available_rounded, size: 36),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(_monthTitle(selectedMonth), maxLines: 2, overflow: TextOverflow.ellipsis, style: _CmrMatchText.title(18)),
-                                const SizedBox(height: 4),
-                                Text('П ${_wins(monthList)} • Н ${_draws(monthList)} • Пор ${_losses(monthList)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrMatchText.caption()),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(child: _TopActionButton(icon: Icons.today_rounded, text: 'Текущий месяц', compact: true, onTap: _thisMonth)),
-                          const SizedBox(width: 8),
-                          _SquareButton(icon: Icons.chevron_left_rounded, compact: true, onTap: _prevMonth),
-                          const SizedBox(width: 8),
-                          _SquareButton(icon: Icons.chevron_right_rounded, compact: true, onTap: _nextMonth),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: _buildStatsRow(monthList, isPhone: true),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
-                  child: SizedBox(
-                    height: 330,
-                    child: _MonthMatchesGrid(
-                      key: ValueKey('phone-matches-calendar-${selectedMonth.year}-${selectedMonth.month}-$calendarRevision'),
-                      month: selectedMonth,
-                      selectedDay: selectedDay,
-                      matchesByDay: monthMap,
-                      dateText: _dateRu,
-                      compact: true,
-                      onDayTap: (day, list) {
-                        setState(() {
-                          selectedDay = day;
-                          calendarRevision++;
-                        });
-
-                        if (list.isEmpty) return;
-                        if (list.length == 1) {
-                          _showMatchPreviewSheet(list.first);
-                          return;
-                        }
-                        _showDayMatches(day, list);
-                      },
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            decoration: _CmrMatchDecor.panel(),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _SelectedMatchesHeader(
-                    title: listTitle,
-                    canEdit: canEdit,
-                    compact: true,
-                    onAdd: _openCreate,
-                  ),
-                  const SizedBox(height: 10),
-                  if (visible.isEmpty)
-                    _MiniEmpty(text: monthList.isEmpty ? 'В этом месяце матчей нет' : 'Матчи есть в календаре, но скрыты фильтром или поиском')
-                  else
-                    ...List.generate(visible.length, (i) {
-                      final m = visible[i];
-                      return Padding(
-                        padding: EdgeInsets.only(bottom: i == visible.length - 1 ? 0 : 8),
-                        child: _CmrMatchTile(
-                          eventType: _eventTypeLabel(_s(m['event_type'])),
-                          opponent: _s(m['opponent']),
-                          date: _dateRu(_parseDate(_s(m['match_date']))),
-                          competition: _s(m['competition_name']),
-                          stadium: _s(m['stadium']),
-                          score: '${_i(m['our_score'])}:${_i(m['opponent_score'])}',
-                          upcoming: _isUpcoming(_parseDate(_s(m['match_date']))),
-                          active: _matchId(m) == selectedMatchId,
-                          canEdit: canEdit,
-                          compact: true,
-                          onTap: () => _handleMatchTap(m),
-                          onDelete: () => _deleteMatch(m),
-                        ),
-                      );
-                    }),
-                ],
-              ),
-            ),
-          ),
-        ],
+    return DecoratedBox(
+      decoration: _CmrMatchDecor.workspaceBg(),
+      child: RefreshIndicator(
+        color: _CmrMatchColors.green,
+        onRefresh: () => _fetch(),
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(8, 6, 8, MediaQuery.paddingOf(context).bottom + 112),
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            _buildMatchesMobileHeader(monthList),
+            const SizedBox(height: 8),
+            _buildMatchesMobileModeSelector(),
+            const SizedBox(height: 8),
+            _buildSlimMatchesCalendarBlock(monthMap, monthList),
+            const SizedBox(height: 8),
+            _buildSelectedDayMatchesWindow(visible, monthList),
+            const SizedBox(height: 8),
+            _buildMatchesMobileFilters(),
+          ],
+        ),
       ),
     );
   }
@@ -2901,7 +3051,7 @@ Widget _buildTabletMatchesWorkspace({
             padding: EdgeInsets.fromLTRB(isPhone ? 14 : 18, isPhone ? 14 : 18, isPhone ? 14 : 18, isPhone ? 12 : 18),
             decoration: BoxDecoration(
               color: _CmrMatchColors.panel,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -3013,14 +3163,19 @@ Widget _buildTabletMatchesWorkspace({
 
   Widget _buildCalendarArea(Map<DateTime, List<Map<String, dynamic>>> monthMap, List<Map<String, dynamic>> monthList, {bool isPhone = false}) {
     return Container(
-      decoration: _CmrMatchDecor.panel(),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.transparent),
+        boxShadow: _CmrMatchDecor.panelShadow,
+      ),
       child: Column(
         children: [
           Container(
             padding: EdgeInsets.all(isPhone ? 14 : 18),
             decoration: const BoxDecoration(
-              color: _CmrMatchColors.panel,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              color: Colors.transparent,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
             ),
             child: isPhone
                 ? Column(
@@ -3165,8 +3320,8 @@ Widget _buildTabletMatchesWorkspace({
         maxChildSize: .90,
         expand: false,
         builder: (_, scrollController) => Container(
-          margin: EdgeInsets.fromLTRB(isPhone ? 8 : 12, 0, isPhone ? 8 : 12, isPhone ? 8 : 12),
-          decoration: _CmrMatchDecor.panel(),
+          margin: EdgeInsets.fromLTRB(isPhone ? 4 : 12, 0, isPhone ? 4 : 12, isPhone ? 8 : 12),
+          decoration: _CmrMatchDecor.panel(radius: 22),
           child: SafeArea(
             top: false,
             child: ListView(
@@ -3341,7 +3496,7 @@ Widget _buildTabletMatchesWorkspace({
                     _MatchInfoRow(icon: Icons.stadium_rounded, title: 'Стадион', value: stadium.isEmpty ? 'Не указан' : stadium),
                     _MatchInfoRow(icon: Icons.sports_rounded, title: 'Судьи', value: referees.isEmpty ? 'Не указаны' : referees),
                     if (notes.isNotEmpty) ...[
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
                       Container(
                         padding: const EdgeInsets.all(13),
                         decoration: _CmrMatchDecor.softCard(radius: 18),
@@ -3409,43 +3564,39 @@ class _MatchInfoCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tint = Color.alphaBlend(item.color.withOpacity(.065), Colors.white);
     return Container(
       height: 42,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: Color.alphaBlend(item.color.withOpacity(.045), Colors.white),
-        borderRadius: BorderRadius.circular(13),
-        boxShadow: _CmrMatchDecor.microShadow,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
       child: Row(
         children: [
-          Container(
-            width: 4,
-            height: 22,
-            decoration: BoxDecoration(
-              color: item.color,
-              borderRadius: BorderRadius.circular(99),
-            ),
+          Text(
+            item.value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: _CmrMatchText.value(14.2),
           ),
-          const SizedBox(width: 7),
-          Container(
-            width: 25,
-            height: 25,
-            decoration: BoxDecoration(color: item.color.withOpacity(.075), borderRadius: BorderRadius.circular(8)),
-            child: Icon(item.icon, color: item.color, size: 13),
-          ),
-          const SizedBox(width: 7),
-          Text(item.value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrMatchText.value(13.8)),
           const SizedBox(width: 7),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrMatchText.caption().copyWith(color: _CmrMatchColors.text, fontSize: 9.35)),
+                Text(
+                  item.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _CmrMatchText.caption().copyWith(
+                    color: _CmrMatchColors.text,
+                    fontSize: 9.4,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(item.hint, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrMatchText.caption().copyWith(fontSize: 8.8)),
+                Text(
+                  item.hint,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _CmrMatchText.caption().copyWith(fontSize: 8.8),
+                ),
               ],
             ),
           ),
@@ -3473,54 +3624,34 @@ class _MatchSideKpi extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tint = Color.alphaBlend(color.withOpacity(.055), Colors.white);
     return Container(
-      height: 62,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-      decoration: BoxDecoration(
-        color: Color.alphaBlend(color.withOpacity(.045), Colors.white),
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: _CmrMatchDecor.microShadow,
-      ),
+      height: 58,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  color: Color.alphaBlend(color.withOpacity(.08), Colors.white),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, color: color, size: 11.5),
-              ),
-              const Spacer(),
-              Flexible(
-                child: Text(
-                  value,
-                  maxLines: 1,
-                  textAlign: TextAlign.right,
-                  overflow: TextOverflow.ellipsis,
-                  style: _CmrMatchText.value(14.8),
-                ),
-              ),
-            ],
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: _CmrMatchText.value(15),
           ),
           const Spacer(),
           Text(
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: _CmrMatchText.caption().copyWith(color: _CmrMatchColors.text, fontSize: 9.25),
+            style: _CmrMatchText.caption().copyWith(
+              color: _CmrMatchColors.text,
+              fontSize: 9.3,
+            ),
           ),
           const SizedBox(height: 1),
           Text(
             hint,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: _CmrMatchText.caption().copyWith(fontSize: 8.35),
+            style: _CmrMatchText.caption().copyWith(fontSize: 8.4),
           ),
         ],
       ),
@@ -3549,7 +3680,7 @@ class _MatchNextStrip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
         color: Color.alphaBlend(accent.withOpacity(.045), Colors.white),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: _CmrMatchDecor.microShadow,
       ),
       child: Row(
@@ -3568,7 +3699,7 @@ class _MatchNextStrip extends StatelessWidget {
             height: 34,
             decoration: BoxDecoration(
               color: Color.alphaBlend(accent.withOpacity(.08), Colors.white),
-              borderRadius: BorderRadius.circular(11),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(Icons.event_available_rounded, color: accent, size: 16),
           ),
@@ -3623,7 +3754,7 @@ class _MatchTopLine extends StatelessWidget {
           Container(
             width: 27,
             height: 27,
-            decoration: BoxDecoration(color: color.withOpacity(.08), borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(color: color.withOpacity(.08), borderRadius: BorderRadius.circular(12)),
             child: Icon(icon, color: color, size: 13),
           ),
           const SizedBox(width: 7),
@@ -3660,67 +3791,60 @@ class _StrictMatchesCard extends StatelessWidget {
   final Widget? trailing;
   final bool dense;
 
-  const _StrictMatchesCard({required this.icon, required this.title, required this.subtitle, required this.child, this.trailing, this.dense = false});
+  const _StrictMatchesCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.child,
+    this.trailing,
+    this.dense = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final accent = _matchWinAccent(icon.codePoint);
-    final outerPadding = dense ? 10.0 : 12.0;
-    final iconSize = dense ? 36.0 : 40.0;
-
-    final header = Row(
-      children: [
-        Container(
-          width: iconSize,
-          height: iconSize,
-          decoration: _CmrMatchDecor.fluentSurface(
-            radius: dense ? 13 : 14,
-            accent: accent,
-            elevated: false,
-          ),
-          child: Icon(icon, color: accent, size: dense ? 17 : 19),
-        ),
-        SizedBox(width: dense ? 8 : 10),
-        Expanded(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: _CmrMatchText.title(dense ? 14.0 : 16.0),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: _CmrMatchText.muted(dense ? 10.4 : 11.3),
-              ),
-            ],
-          ),
-        ),
-        if (trailing != null) ...[SizedBox(width: dense ? 6 : 8), trailing!],
-      ],
-    );
+    final pad = dense ? 8.0 : 10.0;
 
     return Container(
-      decoration: _CmrMatchDecor.seamlessPane(),
-      padding: EdgeInsets.all(outerPadding),
+      color: _CmrMatchColors.panel,
+      padding: EdgeInsets.fromLTRB(pad, pad, pad, dense ? 8 : 10),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          header,
-          SizedBox(height: dense ? 10 : 12),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _CmrMatchText.title(dense ? 14.2 : 16.2),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _CmrMatchText.muted(dense ? 10.4 : 11.2),
+                    ),
+                  ],
+                ),
+              ),
+              if (trailing != null) ...[
+                const SizedBox(width: 8),
+                trailing!,
+              ],
+            ],
+          ),
+          SizedBox(height: dense ? 8 : 10),
           if (dense) child else Expanded(child: child),
         ],
       ),
     );
   }
 }
-
 
 class _WorkspaceIconButton extends StatelessWidget {
   final IconData icon;
@@ -3731,7 +3855,7 @@ class _WorkspaceIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final emphasized = icon == Icons.add_rounded;
-    final radius = BorderRadius.circular(13);
+    final radius = BorderRadius.circular(12);
     final accent = emphasized ? _CmrMatchColors.green : _CmrMatchColors.icon;
     return Material(
       color: Colors.transparent,
@@ -3742,13 +3866,11 @@ class _WorkspaceIconButton extends StatelessWidget {
         child: Container(
           width: 38,
           height: 38,
-          decoration: _CmrMatchDecor.fluentSurface(
-            radius: 13,
-            accent: emphasized ? _CmrMatchColors.green : _CmrMatchColors.blue,
-            active: emphasized,
-            elevated: false,
+          decoration: BoxDecoration(
+            color: emphasized ? _CmrMatchColors.green : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(icon, color: accent, size: 18),
+          child: Icon(icon, color: emphasized ? Colors.white : accent, size: 18),
         ),
       ),
     );
@@ -3762,39 +3884,36 @@ class _KindFilterChip extends StatelessWidget {
   final bool active;
   final VoidCallback onTap;
 
-  const _KindFilterChip({required this.icon, required this.text, required this.active, required this.onTap});
+  const _KindFilterChip({
+    required this.icon,
+    required this.text,
+    required this.active,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          height: 34,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: _CmrMatchDecor.fluentSurface(
-            radius: 999,
-            accent: _CmrMatchColors.green,
-            active: active,
-            elevated: false,
+    return InkWell(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: active ? _CmrMatchColors.green : Colors.transparent,
+              width: 2,
+            ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 14, color: active ? _CmrMatchColors.green : _CmrMatchColors.muted2),
-              const SizedBox(width: 7),
-              Text(
-                text,
-                style: _CmrMatchText.action().copyWith(
-                  color: active ? _CmrMatchColors.greenDark : _CmrMatchColors.text.withOpacity(.78),
-                  fontSize: 11.2,
-                ),
-              ),
-            ],
+        ),
+        child: Text(
+          text,
+          style: _CmrMatchText.action().copyWith(
+            color: active ? _CmrMatchColors.text : _CmrMatchColors.muted2,
+            fontSize: 11.1,
+            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
           ),
         ),
       ),
@@ -3808,44 +3927,35 @@ class _SegmentedTab extends StatelessWidget {
   final bool active;
   final VoidCallback onTap;
 
-  const _SegmentedTab({required this.text, required this.active, required this.onTap});
+  const _SegmentedTab({
+    required this.text,
+    required this.active,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          alignment: Alignment.center,
-          decoration: _CmrMatchDecor.fluentSurface(
-            radius: 14,
-            accent: _CmrMatchColors.green,
-            active: active,
-            elevated: false,
+    return InkWell(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: active ? _CmrMatchColors.green : Colors.transparent,
+              width: 2,
+            ),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (active) ...[
-                Container(width: 5, height: 5, decoration: const BoxDecoration(color: _CmrMatchColors.green, shape: BoxShape.circle)),
-                const SizedBox(width: 6),
-              ],
-              Flexible(
-                child: Text(
-                  text,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _CmrMatchText.action().copyWith(
-                    color: active ? _CmrMatchColors.greenDark : _CmrMatchColors.text.withOpacity(.70),
-                    fontSize: 11.55,
-                  ),
-                ),
-              ),
-            ],
+        ),
+        child: Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: _CmrMatchText.action().copyWith(
+            color: active ? _CmrMatchColors.text : _CmrMatchColors.muted2,
+            fontSize: 11.4,
+            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
           ),
         ),
       ),
@@ -3895,7 +4005,6 @@ class _StatusPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: Color.alphaBlend(color.withOpacity(.055), Colors.white),
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: color.withOpacity(.07), blurRadius: 14, spreadRadius: -10, offset: const Offset(0, 8))],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -3984,9 +4093,9 @@ class _DetailsActionButton extends StatelessWidget {
     final accent = _matchWinAccent(icon.codePoint);
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(15),
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: Container(
           height: 46,
@@ -4018,6 +4127,43 @@ class _DetailsActionButton extends StatelessWidget {
   }
 }
 
+
+
+class _MatchesModeButton extends StatelessWidget {
+  final String text;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _MatchesModeButton({required this.text, required this.active, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: active ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: active ? _CmrMatchColors.greenBorder : Colors.transparent, width: .8),
+            boxShadow: active ? _CmrMatchDecor.microShadow : null,
+          ),
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: _CmrMatchText.tab().copyWith(color: active ? _CmrMatchColors.greenDark : _CmrMatchColors.text),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _SelectedDateChip extends StatelessWidget {
   final String text;
@@ -4067,7 +4213,7 @@ class _ProfileRoundButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final emphasized = icon == Icons.add_rounded;
-    final radius = BorderRadius.circular(13);
+    final radius = BorderRadius.circular(12);
     final accent = emphasized ? _CmrMatchColors.green : _CmrMatchColors.icon;
     return Material(
       color: Colors.transparent,
@@ -4078,13 +4224,11 @@ class _ProfileRoundButton extends StatelessWidget {
         child: Container(
           width: 38,
           height: 38,
-          decoration: _CmrMatchDecor.fluentSurface(
-            radius: 13,
-            accent: emphasized ? _CmrMatchColors.green : _CmrMatchColors.blue,
-            active: emphasized,
-            elevated: false,
+          decoration: BoxDecoration(
+            color: emphasized ? _CmrMatchColors.green : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(icon, color: accent, size: 18),
+          child: Icon(icon, color: emphasized ? Colors.white : accent, size: 18),
         ),
       ),
     );
@@ -4125,7 +4269,7 @@ class _ProfileActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final enabled = onTap != null;
     return InkWell(
-      borderRadius: BorderRadius.circular(999),
+      borderRadius: BorderRadius.circular(12),
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -4184,7 +4328,7 @@ class _ProfileMetaPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-      decoration: BoxDecoration(color: Color.alphaBlend(color.withOpacity(.065), Colors.white), borderRadius: BorderRadius.circular(999)),
+      decoration: BoxDecoration(color: Color.alphaBlend(color.withOpacity(.065), Colors.white), borderRadius: BorderRadius.circular(12)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -4217,7 +4361,7 @@ class _ProfileNoteBlock extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
-      decoration: BoxDecoration(color: _CmrMatchColors.soft, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(color: _CmrMatchColors.soft, borderRadius: BorderRadius.circular(12)),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -4255,13 +4399,13 @@ class _CompactProfileButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final enabled = onTap != null;
     return InkWell(
-      borderRadius: BorderRadius.circular(999),
+      borderRadius: BorderRadius.circular(12),
       onTap: onTap,
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: compact ? 9 : 12, vertical: compact ? 7 : 9),
         decoration: BoxDecoration(
           color: enabled ? Colors.white : _CmrMatchColors.soft,
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(12),
           border: null,
         ),
         child: Row(
@@ -4332,7 +4476,7 @@ class _DetailInfoPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(color: Color.alphaBlend(color.withOpacity(.065), Colors.white), borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(color: Color.alphaBlend(color.withOpacity(.065), Colors.white), borderRadius: BorderRadius.circular(12)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -4348,6 +4492,7 @@ class _DetailInfoPill extends StatelessWidget {
     );
   }
 }
+
 
 class _MonthMatchesGrid extends StatelessWidget {
   final DateTime month;
@@ -4401,10 +4546,10 @@ class _MonthMatchesGrid extends StatelessWidget {
                   child: Center(
                     child: Text(
                       d,
-                      style: const TextStyle(
-                        color: _CmrMatchColors.muted,
-                        fontSize: 10.55,
-                        fontWeight: FontWeight.w600,
+                      style: TextStyle(
+                        color: _CmrMatchColors.muted2,
+                        fontSize: compact ? 9.9 : 10.55,
+                        fontWeight: FontWeight.w700,
                         height: 1.15,
                       ),
                     ),
@@ -4418,7 +4563,8 @@ class _MonthMatchesGrid extends StatelessWidget {
           builder: (context, gridBox) {
             const gap = 5.0;
             final availableWidth = gridBox.maxWidth.isFinite ? gridBox.maxWidth : MediaQuery.sizeOf(context).width;
-            final maxGridHeight = maxHeight != null && maxHeight!.isFinite ? math.max(180.0, maxHeight! - 20.0) : null;
+            final safeMaxHeight = maxHeight;
+            final maxGridHeight = safeMaxHeight != null && safeMaxHeight.isFinite ? math.max(180.0, safeMaxHeight - 20.0) : null;
             final cellWidth = (availableWidth - gap * 6) / 7;
             final naturalCellHeight = cellWidth / 1.22;
             final fittedCellHeight = maxGridHeight == null
@@ -4461,6 +4607,8 @@ class _MonthMatchesGrid extends StatelessWidget {
                 final now = DateTime.now();
                 final isToday = _sameDay(day, DateTime(now.year, now.month, now.day));
                 final isSelected = selectedDay != null && _sameDay(day, selectedDay!);
+                final colors = hasMatches ? list.map(_matchBadgeColor).toList(growable: false) : const <Color>[];
+                final eventAccent = colors.isNotEmpty ? colors.first : _CmrMatchColors.muted2;
 
                 return Material(
                   color: Colors.transparent,
@@ -4470,15 +4618,22 @@ class _MonthMatchesGrid extends StatelessWidget {
                     onTap: () => onDayTap(day, list),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 160),
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+                      padding: EdgeInsets.symmetric(horizontal: compact ? 4 : 5, vertical: compact ? 4 : 5),
                       decoration: BoxDecoration(
                         color: isSelected
                             ? Colors.white.withOpacity(.96)
                             : hasMatches
-                                ? _CmrMatchColors.iconSoft2
+                                ? Color.alphaBlend(eventAccent.withOpacity(.045), Colors.white)
                                 : _CmrMatchColors.soft,
                         borderRadius: BorderRadius.circular(10),
-                        border: isSelected ? Border.all(color: _CmrMatchColors.greenBorder) : null,
+                        boxShadow: isSelected ? _CmrMatchDecor.microShadow : null,
+                        border: isSelected
+                            ? Border.all(color: _CmrMatchColors.green.withOpacity(.28), width: 1.05)
+                            : isToday
+                                ? Border.all(color: _CmrMatchColors.greenBorder)
+                                : hasMatches
+                                    ? Border.all(color: eventAccent.withOpacity(.12))
+                                    : Border.all(color: Colors.transparent),
                       ),
                       child: Stack(
                         children: [
@@ -4486,13 +4641,16 @@ class _MonthMatchesGrid extends StatelessWidget {
                             child: Text(
                               '${day.day}',
                               style: TextStyle(
+                                fontFamily: _CmrMatchText.family,
+                                fontFamilyFallback: _CmrMatchText.fallback,
                                 color: isSelected
                                     ? _CmrMatchColors.greenDark
                                     : inMonth
-                                        ? (isToday ? _CmrMatchColors.icon : _CmrMatchColors.text)
-                                        : _CmrMatchColors.muted.withOpacity(.64),
-                                fontSize: maxHeight == null ? 13 : 12.5,
-                                fontWeight: FontWeight.w600,
+                                        ? (isToday ? _CmrMatchColors.greenDark : _CmrMatchColors.text)
+                                        : _CmrMatchColors.muted2.withOpacity(.64),
+                                fontSize: maxHeight == null ? (compact ? 12.4 : 13.0) : 12.5,
+                                fontWeight: FontWeight.w700,
+                                height: 1,
                               ),
                             ),
                           ),
@@ -4501,9 +4659,9 @@ class _MonthMatchesGrid extends StatelessWidget {
                               top: 2,
                               right: 3,
                               child: _SegmentedMatchBadge(
-                                colors: list.map(_matchBadgeColor).take(3).toList(growable: false),
+                                colors: colors,
                                 count: list.length,
-                                size: maxHeight == null ? 16 : 15,
+                                size: maxHeight == null ? (compact ? 14 : 16) : 15,
                               ),
                             ),
                         ],
@@ -4615,7 +4773,7 @@ class _MatchPreviewStat extends StatelessWidget {
           height: 34,
           decoration: BoxDecoration(
             color: _CmrMatchColors.panel,
-            borderRadius: BorderRadius.circular(13),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(icon, color: _CmrMatchColors.icon, size: 16),
         ),
@@ -4706,9 +4864,9 @@ class _SheetPrimaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: _CmrMatchColors.green,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: Container(
           height: 52,
@@ -4743,9 +4901,9 @@ class _SheetIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: _CmrMatchColors.panel,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: Container(
           width: 52,
@@ -4890,9 +5048,9 @@ class _CmrAddMatchSheetState extends State<_CmrAddMatchSheet> {
                 onChanged: saving ? null : (v) => setState(() => eventType = v ?? 'championship'),
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             _CmrTextField(controller: opponent, icon: Icons.shield_outlined, hint: 'Соперник', onChanged: (_) => setState(() {})),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(child: _CmrTextField(controller: ourScore, icon: Icons.looks_one_rounded, hint: 'Наш счёт', keyboardType: TextInputType.number)),
@@ -4900,7 +5058,7 @@ class _CmrAddMatchSheetState extends State<_CmrAddMatchSheet> {
                 Expanded(child: _CmrTextField(controller: opponentScore, icon: Icons.looks_two_rounded, hint: 'Счёт соперника', keyboardType: TextInputType.number)),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             _CmrFieldShell(
               onTap: saving ? null : _pickDate,
               child: Row(
@@ -4919,15 +5077,15 @@ class _CmrAddMatchSheetState extends State<_CmrAddMatchSheet> {
                 ],
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             _CmrTextField(controller: competition, icon: Icons.emoji_events_outlined, hint: 'Турнир / соревнование'),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             _CmrTextField(controller: tour, icon: Icons.format_list_numbered_rounded, hint: 'Тур / этап'),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             _CmrTextField(controller: stadium, icon: Icons.location_on_outlined, hint: 'Стадион'),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             _CmrTextField(controller: referees, icon: Icons.gavel_rounded, hint: 'Судьи'),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             _CmrTextField(controller: notes, icon: Icons.notes_rounded, hint: 'Примечания', maxLines: widget.embedded ? 4 : 3),
             const SizedBox(height: 14),
             Row(
@@ -4993,6 +5151,7 @@ class _CmrAddMatchSheetState extends State<_CmrAddMatchSheet> {
   }
 }
 
+
 class _CmrMatchTile extends StatelessWidget {
   final String eventType;
   final String opponent;
@@ -5025,101 +5184,80 @@ class _CmrMatchTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = opponent.trim().isEmpty ? 'Соперник' : opponent.trim();
-    final primaryMeta = [eventType, date].where((e) => e.trim().isNotEmpty).join('  •  ');
-    final secondaryMeta = [competition, stadium].where((e) => e.trim().isNotEmpty).join('  •  ');
-    final radius = BorderRadius.circular(11);
-    final stripHeight = compact ? 42.0 : 46.0;
+    final mainMeta = [eventType, date]
+        .where((e) => e.trim().isNotEmpty)
+        .join('  ·  ');
+    final extraMeta = [competition, stadium]
+        .where((e) => e.trim().isNotEmpty)
+        .join('  ·  ');
 
     return Material(
       color: Colors.transparent,
-      borderRadius: radius,
       child: InkWell(
-        borderRadius: radius,
         onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 170),
-          curve: Curves.easeOutCubic,
-          padding: EdgeInsets.symmetric(horizontal: compact ? 9 : 10, vertical: compact ? 8 : 9),
-          decoration: BoxDecoration(
-            color: _CmrMatchColors.panel,
-            borderRadius: radius,
-            border: null,
-            boxShadow: active
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(.035),
-                      blurRadius: 12,
-                      offset: const Offset(0, 7),
-                    ),
-                  ]
-                : null,
+        child: Container(
+          constraints: BoxConstraints(minHeight: compact ? 62 : 66),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 6 : 8,
+            vertical: compact ? 7 : 8,
           ),
+          color: active ? _CmrMatchColors.greenSoft2 : Colors.white,
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               AnimatedContainer(
-                duration: const Duration(milliseconds: 170),
+                duration: const Duration(milliseconds: 160),
                 width: 3,
-                height: stripHeight,
+                height: compact ? 38 : 42,
                 decoration: BoxDecoration(
-                  color: active ? _CmrMatchColors.green : Colors.transparent,
+                  color: active
+                      ? _CmrMatchColors.green
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(99),
                 ),
               ),
-              SizedBox(width: active ? 8 : 6),
-              _MatchEventAvatar(active: active, upcoming: upcoming, compact: compact),
-              SizedBox(width: compact ? 9 : 10),
+              const SizedBox(width: 9),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: _CmrMatchText.title(compact ? 13.4 : 14.2),
-                          ),
-                        ),
-                        if (active) ...[
-                          const SizedBox(width: 6),
-                          const _MatchActiveDot(),
-                        ],
-                      ],
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _CmrMatchText.title(compact ? 13.2 : 13.8),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      primaryMeta.isEmpty ? 'Матч команды' : primaryMeta,
+                      mainMeta.isEmpty ? 'Матч команды' : mainMeta,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _CmrMatchText.muted(compact ? 10.8 : 11.2),
+                      style: _CmrMatchText.muted(compact ? 10.4 : 10.8),
                     ),
-                    if (!compact && secondaryMeta.isNotEmpty) ...[
+                    if (!compact && extraMeta.isNotEmpty) ...[
                       const SizedBox(height: 3),
                       Text(
-                        secondaryMeta,
+                        extraMeta,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: _CmrMatchText.muted(10.8).copyWith(color: _CmrMatchColors.muted2),
+                        style: _CmrMatchText.muted(10.2),
                       ),
                     ],
                   ],
                 ),
               ),
-              SizedBox(width: compact ? 8 : 10),
-              _MatchScoreMiniBadge(score: score, active: active, compact: compact),
-              if (!compact) ...[
-                const SizedBox(width: 8),
-                if (canEdit)
-                  _MatchActionBadge(active: active, onDelete: onDelete)
-                else
-                  _MatchChevronBadge(active: active),
-              ] else if (canEdit) ...[
+              const SizedBox(width: 8),
+              Text(
+                score.trim().isEmpty ? '—' : score.trim(),
+                style: _CmrMatchText.value(compact ? 13.2 : 14),
+              ),
+              if (canEdit) ...[
                 const SizedBox(width: 6),
-                _MatchActionBadge(active: active, onDelete: onDelete, compact: true),
+                _MatchActionBadge(
+                  active: active,
+                  onDelete: onDelete,
+                  compact: compact,
+                ),
               ],
             ],
           ),
@@ -5140,7 +5278,6 @@ class _MatchActiveDot extends StatelessWidget {
       decoration: BoxDecoration(
         color: _CmrMatchColors.green,
         shape: BoxShape.circle,
-        boxShadow: [BoxShadow(color: _CmrMatchColors.green.withOpacity(.26), blurRadius: 10, spreadRadius: 1)],
       ),
     );
   }
@@ -5152,31 +5289,43 @@ class _MatchEventAvatar extends StatelessWidget {
   final bool upcoming;
   final bool compact;
 
-  const _MatchEventAvatar({required this.active, required this.upcoming, required this.compact});
+  const _MatchEventAvatar({
+    required this.active,
+    required this.upcoming,
+    required this.compact,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final size = compact ? 40.0 : 44.0;
-    final accent = active ? _CmrMatchColors.green : (upcoming ? _CmrMatchColors.blue : _CmrMatchColors.violet);
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 170),
+    final size = compact ? 40.0 : 42.0;
+
+    return Container(
       width: size,
       height: size,
-      decoration: _CmrMatchDecor.fluentSurface(
-        radius: 14,
-        accent: accent,
-        active: active,
-        elevated: false,
+      decoration: BoxDecoration(
+        color: active
+            ? _CmrMatchColors.greenSoft
+            : _CmrMatchColors.soft,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: active
+              ? _CmrMatchColors.greenBorder
+              : _CmrMatchColors.border,
+          width: .7,
+        ),
       ),
       child: Icon(
-        upcoming ? Icons.sports_soccer_rounded : Icons.history_rounded,
-        color: accent,
-        size: compact ? 20 : 22,
+        upcoming
+            ? Icons.sports_soccer_rounded
+            : Icons.history_rounded,
+        color: active
+            ? _CmrMatchColors.greenDark
+            : _CmrMatchColors.icon,
+        size: compact ? 19 : 20,
       ),
     );
   }
 }
-
 
 class _MatchScoreMiniBadge extends StatelessWidget {
   final String score;
@@ -5253,7 +5402,7 @@ class _MatchActionBadge extends StatelessWidget {
       elevation: 14,
       color: Colors.white,
       surfaceTintColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       position: PopupMenuPosition.under,
       offset: const Offset(0, 8),
       icon: Container(
@@ -5304,7 +5453,7 @@ class _MiniBadge extends StatelessWidget {
       padding: EdgeInsets.symmetric(horizontal: compact ? 7 : 8, vertical: compact ? 4 : 5),
       decoration: BoxDecoration(
         color: _CmrMatchColors.soft,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -5326,32 +5475,45 @@ class _MiniBadge extends StatelessWidget {
   }
 }
 
+
 class _MetricCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String value;
   final bool compact;
 
-  const _MetricCard({required this.icon, required this.title, required this.value, this.compact = false});
+  const _MetricCard({
+    required this.icon,
+    required this.title,
+    required this.value,
+    this.compact = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 10, vertical: compact ? 7 : 9),
-      decoration: _CmrMatchDecor.softCard(radius: compact ? 14 : 17),
-      child: Row(
+      constraints: BoxConstraints(minHeight: compact ? 36 : 42),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 6 : 8,
+        vertical: compact ? 5 : 6,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: _CmrMatchColors.icon, size: compact ? 13 : 15),
-          SizedBox(width: compact ? 6 : 7),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrMatchText.value(compact ? 12.8 : 14.4)),
-                const SizedBox(height: 1),
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrMatchText.caption().copyWith(fontSize: compact ? 9.4 : 10)),
-              ],
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: _CmrMatchText.value(compact ? 12.4 : 13.4),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: _CmrMatchText.caption().copyWith(
+              fontSize: compact ? 8.8 : 9.4,
             ),
           ),
         ],
@@ -5385,16 +5547,24 @@ class _CmrSearch extends StatelessWidget {
   final VoidCallback onClear;
   final bool compact;
 
-  const _CmrSearch({required this.controller, required this.hint, required this.onClear, this.compact = false});
+  const _CmrSearch({
+    required this.controller,
+    required this.hint,
+    required this.onClear,
+    this.compact = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return _CmrFieldShell(
-      compact: compact,
+    return Container(
+      constraints: BoxConstraints(minHeight: compact ? 34 : 38),
+      decoration: const BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: _CmrMatchColors.border, width: .7),
+        ),
+      ),
       child: Row(
         children: [
-          Icon(Icons.search_rounded, size: compact ? 17 : 19, color: _CmrMatchColors.muted),
-          const SizedBox(width: 8),
           Expanded(
             child: TextField(
               controller: controller,
@@ -5403,12 +5573,26 @@ class _CmrSearch extends StatelessWidget {
                 hintText: hint,
                 border: InputBorder.none,
                 isDense: true,
-                hintStyle: _CmrMatchText.muted(compact ? 12.5 : 14),
+                hintStyle: _CmrMatchText.muted(compact ? 12.2 : 13.4),
               ),
               textInputAction: TextInputAction.search,
             ),
           ),
-          if (controller.text.isNotEmpty) IconButton(padding: EdgeInsets.zero, constraints: const BoxConstraints(), icon: const Icon(Icons.close_rounded, size: 18), onPressed: onClear),
+          if (controller.text.isNotEmpty)
+            InkWell(
+              onTap: onClear,
+              child: const Padding(
+                padding: EdgeInsets.all(5),
+                child: Text(
+                  '×',
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: _CmrMatchColors.muted2,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -5450,6 +5634,7 @@ class _CmrTextField extends StatelessWidget {
   }
 }
 
+
 class _CmrFieldShell extends StatelessWidget {
   final Widget child;
   final VoidCallback? onTap;
@@ -5460,18 +5645,20 @@ class _CmrFieldShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final box = Container(
-      padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 12, vertical: compact ? 7 : 8),
+      constraints: BoxConstraints(minHeight: compact ? 34 : 38),
+      padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 12, vertical: compact ? 6 : 7),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(.78),
-        borderRadius: BorderRadius.circular(compact ? 14 : 16),
-        border: Border.all(color: Colors.white.withOpacity(.82)),
+        color: _CmrMatchColors.panel,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.transparent, width: 0),
       ),
       child: child,
     );
     if (onTap == null) return box;
     return Material(
       color: Colors.transparent,
-      child: InkWell(borderRadius: BorderRadius.circular(compact ? 15 : 17), onTap: onTap, child: box),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(borderRadius: BorderRadius.circular(16), onTap: onTap, child: box),
     );
   }
 }
@@ -5563,6 +5750,7 @@ class _ArchiveMiniStat extends StatelessWidget {
 }
 
 
+
 class _FilterButton extends StatelessWidget {
   final String text;
   final bool active;
@@ -5574,34 +5762,29 @@ class _FilterButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(compact ? 14 : 16),
+      color: active ? _CmrMatchColors.greenSoft : _CmrMatchColors.panel,
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
-        borderRadius: BorderRadius.circular(compact ? 14 : 16),
+        borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: Container(
-          height: compact ? 36 : 42,
+          height: compact ? 32 : 36,
           alignment: Alignment.center,
-          decoration: _CmrMatchDecor.fluentSurface(
-            radius: compact ? 14 : 16,
-            accent: _CmrMatchColors.green,
-            active: active,
-            elevated: false,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: active ? _CmrMatchColors.greenBorder : _CmrMatchColors.border, width: .8),
           ),
           child: Text(
             text,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: _CmrMatchText.tab().copyWith(
-              color: active ? _CmrMatchColors.greenDark : _CmrMatchColors.text,
-            ),
+            style: _CmrMatchText.tab().copyWith(color: active ? _CmrMatchColors.greenDark : _CmrMatchColors.text),
           ),
         ),
       ),
     );
   }
 }
-
 
 class _TopActionButton extends StatelessWidget {
   final IconData icon;
@@ -5615,9 +5798,9 @@ class _TopActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(compact ? 15 : 17),
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
-        borderRadius: BorderRadius.circular(compact ? 15 : 17),
+        borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: Container(
           height: compact ? 38 : 42,
@@ -5657,9 +5840,9 @@ class _SquareButton extends StatelessWidget {
     final size = compact ? 38.0 : 42.0;
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(compact ? 14 : 15),
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
-        borderRadius: BorderRadius.circular(compact ? 14 : 15),
+        borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: Container(
           width: size,
@@ -5756,7 +5939,7 @@ class _CmrIconBox extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         color: dark ? Colors.white.withOpacity(.08) : _CmrMatchColors.iconSoft,
-        borderRadius: BorderRadius.circular(size * .35),
+        borderRadius: BorderRadius.circular(12),
         border: null,
       ),
       child: Icon(icon, color: dark ? Colors.white : _CmrMatchColors.icon, size: size * .48),

@@ -22,13 +22,18 @@ class _TrackerExportViewerState extends State<TrackerExportViewer> {
     _viewType = 'sportoteka-export-viewer-${DateTime.now().microsecondsSinceEpoch}-${widget.uri.hashCode}';
     ui_web.platformViewRegistry.registerViewFactory(_viewType, (int viewId) {
       final iframe = html.IFrameElement()
-        ..src = widget.uri.toString()
         ..style.border = '0'
         ..style.width = '100%'
         ..style.height = '100%'
         ..style.backgroundColor = '#ffffff'
         ..allowFullscreen = true;
-      iframe.setAttribute('loading', 'lazy');
+      final data = widget.uri.data;
+      if (widget.uri.scheme == 'data' && data != null && data.mimeType.toLowerCase().contains('text/html')) {
+        iframe.srcdoc = data.contentAsString();
+      } else {
+        iframe.src = widget.uri.toString();
+        iframe.setAttribute('loading', 'lazy');
+      }
       return iframe;
     });
   }

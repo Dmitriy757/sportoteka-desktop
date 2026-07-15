@@ -8,7 +8,7 @@ class TrackerExportViewer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFFF6F7F9),
+      color: Colors.white,
       alignment: Alignment.center,
       padding: const EdgeInsets.all(24),
       child: Container(
@@ -26,7 +26,7 @@ class TrackerExportViewer extends StatelessWidget {
               width: 46,
               height: 46,
               decoration: BoxDecoration(
-                color: const Color(0xFFF6F7F9),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: const Color(0xFFE5E7EB)),
               ),
@@ -40,15 +40,9 @@ class TrackerExportViewer extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             const Text(
-              'На Web PDF/CSV откроется прямо в этом окне. Для macOS/Windows/iOS/Android без PDF-viewer пакета показывается адрес экспорта внутри программы.',
+              'Экспорт готов. Нажмите кнопку открытия или сохранения в окне выгрузки. Адрес отчёта скрыт.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Color(0xFF667085), fontSize: 10.5, fontWeight: FontWeight.w600, height: 1.35),
-            ),
-            const SizedBox(height: 12),
-            SelectableText(
-              uri.toString(),
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Color(0xFF374151), fontSize: 10, fontWeight: FontWeight.w600),
             ),
           ],
         ),

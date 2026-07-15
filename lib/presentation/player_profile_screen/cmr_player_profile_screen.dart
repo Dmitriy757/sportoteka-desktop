@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
@@ -48,6 +49,31 @@ class _AppColors {
   static const Color cmrBorder = Color(0xFFD7E8DE);
   static const Color cmrPanel = Colors.white;
   static const Color cmrSoftPanel = Color(0xFFF6F8FA);
+
+  // Визуальный язык Tracker: тонкие линии, компактный шрифт, белые панели
+  // на спокойном сером фоне. Эти цвета используем в CMR-профиле игрока,
+  // чтобы он выглядел как единая часть трекера/аналитики.
+  static const Color trackerBg = Color(0xFFF6F7F6);
+  static const Color trackerPanel = Color(0xFFFFFFFF);
+  static const Color trackerCard = Color(0xFFFFFFFF);
+  static const Color trackerSoft = Color(0xFFFAFBFA);
+  static const Color trackerSoft2 = Color(0xFFF5F7FB);
+  static const Color trackerLine = Color(0xFFE9ECEA);
+  static const Color trackerLineStrong = Color(0xFFE1E6E3);
+  static const Color trackerGrid = Color(0xFFD8DEE6);
+  static const Color trackerText = Color(0xFF0B0F14);
+  static const Color trackerGraphite = Color(0xFF344054);
+  static const Color trackerGraphiteSoft = Color(0xFF475467);
+  static const Color trackerMuted = Color(0xFF374151);
+  static const Color trackerDim = Color(0xFF6B7280);
+  static const Color trackerGreen = Color(0xFF00A750);
+  static const Color trackerGreenDark = Color(0xFF067A46);
+  static const Color trackerGreenSoft = Color(0xFFF3FBF7);
+  static const Color trackerGreenBorder = Color(0xFFDCEFE5);
+  static const Color trackerBlue = Color(0xFF2563EB);
+  static const Color trackerBlueSoft = Color(0xFFF4F7FF);
+  static const Color trackerOrange = Color(0xFFF59E0B);
+  static const Color trackerRed = Color(0xFFDC2626);
 
   static const Color blue = Color(0xFF3B82F6);
   static const Color blueSoft = Color(0xFFEFF6FF);
@@ -170,17 +196,17 @@ class _PlayerProfileDesign {
   factory _PlayerProfileDesign.defaults() {
     return const _PlayerProfileDesign(
       fontFamily: 'inter',
-      headerRadius: 30,
-      cardRadius: 28,
-      avatarSize: 92,
-      titleFontSize: 22,
-      bodyFontSize: 14.5,
-      primaryColorValue: 0xFF1F7A4D,
-      secondaryColorValue: 0xFF101828,
-      backgroundColorValue: 0xFFFFFFFF,
+      headerRadius: 22,
+      cardRadius: 18,
+      avatarSize: 88,
+      titleFontSize: 20.5,
+      bodyFontSize: 13.5,
+      primaryColorValue: 0xFF00A750,
+      secondaryColorValue: 0xFF0B0F14,
+      backgroundColorValue: 0xFFF6F7F6,
       cardColorValue: 0xFFFFFFFF,
-      textPrimaryColorValue: 0xFF111827,
-      textSecondaryColorValue: 0xFF64748B,
+      textPrimaryColorValue: 0xFF0B0F14,
+      textSecondaryColorValue: 0xFF374151,
       sectionOrder: ['main_info', 'club_info', 'bio_info'],
       showQuickActions: true,
       showClubCard: true,
@@ -191,7 +217,7 @@ class _PlayerProfileDesign {
 
   Color get primaryColor => Color(primaryColorValue);
   Color get secondaryColor => Color(secondaryColorValue);
-  Color get backgroundColor => Colors.white;
+  Color get backgroundColor => Color(backgroundColorValue);
   Color get cardColor => Color(cardColorValue);
   Color get textPrimaryColor => Color(textPrimaryColorValue);
   Color get textSecondaryColor => Color(textSecondaryColorValue);
@@ -303,11 +329,13 @@ enum _CmrRightEditorMode {
 class CmrPlayerProfileScreen extends StatefulWidget {
   final Map<String, dynamic> player;
   final bool embeddedInWorkspace;
+  final VoidCallback? onClose;
 
   const CmrPlayerProfileScreen({
     super.key,
     required this.player,
     this.embeddedInWorkspace = false,
+    this.onClose,
   });
 
   @override
@@ -402,6 +430,25 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen>
   bool _attendanceShowAll = false;
   String _attendanceTypeFilter = 'all';
 
+  // Tracker Pro: реальные сессии игрока, которые сохраняются из BLE/GPS-трекера.
+  // Эти данные теперь используются в профиле игрока как отдельная статистика
+  // нагрузки и как часть футбольного рейтинга.
+  bool trackerSessionsLoading = false;
+  String? trackerSessionsError;
+  List<Map<String, dynamic>> trackerSessions = [];
+
+  // Polar H10 / heart rate: агрегат по игроку для оценки нагрузки, восстановления
+  // и официального отчёта по ученику. Данные приходят из tracker_heart_rate_samples.
+  bool trackerHeartRateLoading = false;
+  String? trackerHeartRateError;
+  Map<String, dynamic>? trackerHeartRateSummary;
+
+  // Период для вкладки «Нагрузка» — как в матчах: тренер выбирает окно анализа,
+  // а профиль перестраивает сессии, Polar и итоговую оценку.
+  String _loadPeriodPreset = '30d';
+  DateTimeRange? _loadCustomRange;
+  DateTime? _selectedLoadDay;
+
   // Matches
   bool matchesLoading = false;
   String? matchesError;
@@ -431,6 +478,7 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen>
   DateTime? _calendarTo;
 
   bool _trainingCalendarExpanded = false;
+  // Legacy guide state: UI block is no longer mounted in the profile workspace.
   bool _cmrGuideCollapsed = true;
   bool _diaryCalendarExpanded = false;
   bool _matchesCalendarExpanded = false;
@@ -449,24 +497,133 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen>
   DateTime? _diaryCalendarMonth;
   DateTime? _testingCalendarMonth;
 
+  bool _sectionSheetRebuildQueued = false;
+
+  // Аналитические окна живут в Navigator/Overlay и могут пережить сам профиль
+  // при переключении игрока или закрытии CMR-панели. Храним Navigator, чтобы
+  // закрыть именно открытое окно до уничтожения State.
+  NavigatorState? _playerAnalyticsNavigator;
+  bool _playerAnalyticsModalOpen = false;
+  bool _playerAnalyticsModalClosing = false;
+
+  // В CMR на ПК/планшете аналитика открывается не через root Navigator,
+  // а как внутреннее рабочее окно поверх профиля. Так окно остаётся внутри
+  // границ CMR и не переживает State профиля после его закрытия.
+  String? _inlineAnalyticsTitle;
+  String? _inlineAnalyticsSubtitle;
+  IconData? _inlineAnalyticsIcon;
+  Widget Function()? _inlineAnalyticsBuilder;
+  bool _inlineAnalyticsOpenQueued = false;
+
+  bool get _inlineAnalyticsOpen =>
+      _inlineAnalyticsTitle != null && _inlineAnalyticsBuilder != null;
+
+  void _closeInlineAnalyticsPane() {
+    if (!mounted) return;
+    setState(() {
+      _inlineAnalyticsTitle = null;
+      _inlineAnalyticsSubtitle = null;
+      _inlineAnalyticsIcon = null;
+      _inlineAnalyticsBuilder = null;
+      _activeSectionSheetSetState = null;
+      _inlineAnalyticsOpenQueued = false;
+    });
+  }
+
+  void _closePlayerAnalyticsModalSafely() {
+    // Внутреннее CMR-окно закрывается локально и не требует Navigator.pop().
+    if (_inlineAnalyticsOpen) {
+      _inlineAnalyticsTitle = null;
+      _inlineAnalyticsSubtitle = null;
+      _inlineAnalyticsIcon = null;
+      _inlineAnalyticsBuilder = null;
+      _activeSectionSheetSetState = null;
+    }
+    if (!_playerAnalyticsModalOpen || _playerAnalyticsModalClosing) return;
+    final navigator = _playerAnalyticsNavigator;
+    if (navigator == null || !navigator.mounted || !navigator.canPop()) {
+      _playerAnalyticsModalOpen = false;
+      _playerAnalyticsNavigator = null;
+      return;
+    }
+
+    _playerAnalyticsModalClosing = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final nav = _playerAnalyticsNavigator;
+      if (nav != null && nav.mounted && nav.canPop()) {
+        nav.pop();
+      }
+      _playerAnalyticsModalOpen = false;
+      _playerAnalyticsModalClosing = false;
+      _playerAnalyticsNavigator = null;
+      _activeSectionSheetSetState = null;
+    });
+  }
+
   void _safeSetState(VoidCallback fn) {
     if (!mounted) return;
     setState(fn);
     _rebuildOpenSectionSheet();
   }
 
+  // StatefulBuilder внутри модального окна нельзя перестраивать синхронно
+  // во время mouse/pointer update. На macOS/Windows это приводит к
+  // mouse_tracker.dart: !_debugDuringDeviceUpdate. Поэтому объединяем
+  // повторные запросы и выполняем обновление только после текущего кадра.
   void _rebuildOpenSectionSheet() {
-    final updater = _activeSectionSheetSetState;
-    if (updater == null) return;
-    try {
-      updater(() {});
-    } catch (_) {
-      _activeSectionSheetSetState = null;
+    if (_activeSectionSheetSetState == null || _sectionSheetRebuildQueued) {
+      return;
+    }
+
+    _sectionSheetRebuildQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _sectionSheetRebuildQueued = false;
+      if (!mounted) return;
+
+      final updater = _activeSectionSheetSetState;
+      if (updater == null) return;
+      try {
+        updater(() {});
+      } catch (_) {
+        _activeSectionSheetSetState = null;
+      }
+    });
+  }
+
+  bool _isTouchDevicePlatform() {
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+      case TargetPlatform.iOS:
+      case TargetPlatform.fuchsia:
+        return true;
+      case TargetPlatform.linux:
+      case TargetPlatform.macOS:
+      case TargetPlatform.windows:
+        return false;
     }
   }
 
   bool _usesCmrRightDetailsPane(BuildContext context) {
+    // Правая рабочая панель безопасна только на desktop. На планшетах профиль
+    // должен открываться как отдельный адаптивный экран, иначе часть контента
+    // оказывается за пределами доступной области.
+    if (_isTouchDevicePlatform()) return false;
     return MediaQuery.of(context).size.width >= 1080;
+  }
+
+  bool _usesCmrPcProfileShell(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    final width = mq.size.width;
+
+    // Дизайн ПК-окна не меняем: когда профиль встроен в CMR workspace,
+    // он остаётся таким же, как на скрине. Для отдельного маршрута включаем
+    // ПК-оболочку только на действительно широком desktop. Это важно для iPad/
+    // планшетов в браузере: они иногда определяются как macOS/desktop, но
+    // по ширине должны получать адаптивный экран с явным крестиком назад.
+    if (widget.embeddedInWorkspace) return true;
+    if (_isTouchDevicePlatform()) return false;
+
+    return width >= 1400;
   }
 
   bool _isWideSplitDetailsMode() {
@@ -530,11 +687,25 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen>
     _CategoryTab(7, "Тестирование", "Результаты тестов", Icons.show_chart_rounded),
     _CategoryTab(50, "ТТД", "Технико-тактические действия", Icons.bar_chart_rounded),
     _CategoryTab(1, "Физика", "Рост, вес, состояние", Icons.health_and_safety_rounded),
-    _CategoryTab(51, "Нагрузка", "Скорость, выносливость, объём", Icons.monitor_heart_rounded),
+    _CategoryTab(51, "Аналитика", "GPS, Polar, матчи и динамика", Icons.analytics_rounded),
     _CategoryTab(52, "Посещаемость", "Журнал тренировок", Icons.calendar_month_rounded),
     _CategoryTab(2, "Медиа", "Достижения, фото и видео", Icons.play_circle_fill_rounded),
     _CategoryTab(3, "Медкарта", "Медицинские записи", Icons.medical_information_rounded),
     _CategoryTab(8, "Экспорт", "PDF карточка игрока", Icons.file_upload_outlined),
+  ];
+
+  // Основная навигация Sportoteka Pro 2.0.
+  // Повторяющиеся разделы объединены в логические группы:
+  // Активность = тренировки + назначения + посещаемость,
+  // Матчи = матчи + ТТД,
+  // Форма = нагрузка + Polar + физические данные.
+  final List<_CategoryTab> _mainCategoryTabs = const [
+    _CategoryTab(0, "Обзор", "Краткая сводка", Icons.home_rounded),
+    _CategoryTab(4, "Активность", "Тренировки и посещаемость", Icons.directions_run_rounded),
+    _CategoryTab(5, "Матчи", "Матчи и ТТД", Icons.sports_soccer_rounded),
+    _CategoryTab(51, "Аналитика", "Полный анализ игрока", Icons.analytics_rounded),
+    _CategoryTab(7, "Тестирование", "Результаты тестов", Icons.show_chart_rounded),
+    _CategoryTab(90, "Ещё", "Медкарта, медиа и экспорт", Icons.more_horiz_rounded),
   ];
 
   // helpers
@@ -749,6 +920,9 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen>
       if (wide || _selectedTabIndex == 4 || _selectedTabIndex == 54) {
         _loadTrainingSectionData(force: false);
       }
+      if (wide || _selectedTabIndex == 0 || _selectedTabIndex == 51) {
+        _loadPlayerTrackerSessions(force: false);
+      }
     });
   }
 
@@ -762,8 +936,11 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen>
           oldWidget.player["user_id"],
     );
     if (oldId != _playerId) {
+      _closePlayerAnalyticsModalSafely();
       teamEvents = [];
       attendanceLog = [];
+      trackerSessions = [];
+      trackerSessionsError = null;
       calendarEvents = [];
       playerTestingSessions = [];
       playerTestingResults = [];
@@ -785,6 +962,9 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen>
 
   @override
   void dispose() {
+    _closePlayerAnalyticsModalSafely();
+    _activeSectionSheetSetState = null;
+    _sectionSheetRebuildQueued = false;
     _eventSearchC.dispose();
     _calendarSearchC.dispose();
     _animationController.dispose();
@@ -836,7 +1016,7 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen>
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(4),
             ),
             child: Row(
               children: [
@@ -1697,6 +1877,7 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen>
     await _loadTeamCalendar(force: force);
     await _loadPlayerTrainingHistory(force: force);
     await _loadAttendanceLog(force: force);
+    await _loadPlayerTrackerSessions(force: force);
     if (!diaryLoading && (force || diaryItems.isEmpty)) {
       await _loadDiary();
     }
@@ -1709,10 +1890,808 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen>
     await _loadTeamCalendar(force: force);
     await _loadPlayerTrainingHistory(force: force);
     await _loadAttendanceLog(force: force);
+    await _loadPlayerTrackerSessions(force: force);
     if (!diaryLoading && (force || diaryItems.isEmpty)) {
       await _loadDiary();
     }
     _rebuildOpenSectionSheet();
+  }
+
+
+  String _normalizeTrackerPlayerName(String value) {
+    return value
+        .trim()
+        .toLowerCase()
+        .replaceAll('ё', 'е')
+        .replaceAll(RegExp(r'[^a-zа-я0-9]+', caseSensitive: false), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
+  String _currentTrackerPlayerName() {
+    return _firstNotEmpty([
+      widget.player['full_name'],
+      widget.player['fullName'],
+      widget.player['player_name'],
+      widget.player['name'],
+      widget.player['fio'],
+    ]);
+  }
+
+  bool _trackerSessionBelongsToPlayer(
+    Map<String, dynamic> row,
+    int playerId,
+  ) {
+    final rowIds = <int>{};
+    for (final key in const [
+      'player_id',
+      'playerId',
+      'athlete_id',
+      'footballer_id',
+      'user_id',
+      'student_id',
+    ]) {
+      final id = _asInt(row[key]);
+      if (id > 0) rowIds.add(id);
+    }
+
+    if (rowIds.contains(playerId)) return true;
+    if (rowIds.isNotEmpty) return false;
+
+    // Старые tracker-сессии иногда сохранены без player_id, но с ФИО.
+    // Используем тот же fallback, что и аналитика трекера: id -> имя.
+    final rowName = _normalizeTrackerPlayerName(
+      _firstNotEmpty([
+        row['player_name'],
+        row['full_name'],
+        row['fullName'],
+        row['name'],
+        row['fio'],
+        row['athlete_name'],
+      ]),
+    );
+    final playerName =
+        _normalizeTrackerPlayerName(_currentTrackerPlayerName());
+
+    if (rowName.isEmpty || playerName.isEmpty) return false;
+    return rowName == playerName ||
+        rowName.contains(playerName) ||
+        playerName.contains(rowName);
+  }
+
+  Future<void> _loadPlayerTrackerSessions({bool force = false}) async {
+    if (trackerSessionsLoading) return;
+    if (!force &&
+        trackerSessions.isNotEmpty &&
+        trackerHeartRateSummary != null) {
+      return;
+    }
+
+    final teamId = _teamId;
+    if (teamId <= 0) return;
+
+    if (mounted) {
+      setState(() {
+        trackerSessionsLoading = true;
+        trackerSessionsError = null;
+      });
+    }
+
+    try {
+      final playerId = await _resolvePlayerId();
+      if (playerId <= 0) {
+        throw 'Не удалось определить player_id для трекера';
+      }
+
+      final range = _loadAnalysisRange();
+      final dateFrom = DateFormat('yyyy-MM-dd').format(range.start);
+      final dateTo = DateFormat('yyyy-MM-dd').format(range.end);
+
+      // ВАЖНО: не передаём player_id на сервер.
+      // Часть старых сессий трекера имеет ФИО игрока, но player_id = null.
+      // Серверный фильтр такие записи отрезает, хотя в самом трекере
+      // они видны у выбранного игрока.
+      final query = <String, String>{
+        'team_id': '$teamId',
+        'limit': '900',
+        'session_kind': 'all',
+        'include_personal': '1',
+        'include_player_sessions': '1',
+      };
+
+      if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(dateFrom)) {
+        query['date_from'] = dateFrom;
+      }
+      if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(dateTo)) {
+        query['date_to'] = dateTo;
+      }
+
+      final uri = Uri.parse(
+        '$_apiBase/tracker/get_tracker_sessions.php',
+      ).replace(queryParameters: query);
+
+      final res = await http.get(uri).timeout(const Duration(seconds: 18));
+      final data = _decodeResponseMap(res.body);
+      if (_isBadApiResponse(data)) {
+        throw _apiErrorMessage(data, 'Ошибка загрузки tracker-сессий');
+      }
+
+      final raw =
+          data['sessions'] ?? data['items'] ?? data['data'] ?? data['rows'] ?? [];
+      final allSessions = <Map<String, dynamic>>[];
+
+      if (raw is List) {
+        for (final item in raw.whereType<Map>()) {
+          allSessions.add(
+            _normalizeTrackerSession(Map<String, dynamic>.from(item)),
+          );
+        }
+      } else if (raw is Map) {
+        for (final entry in raw.entries) {
+          final value = entry.value;
+          if (value is Map) {
+            allSessions.add(
+              _normalizeTrackerSession({
+                'id': entry.key,
+                ...Map<String, dynamic>.from(value),
+              }),
+            );
+          }
+        }
+      }
+
+      final list = allSessions
+          .where((row) => _trackerSessionBelongsToPlayer(row, playerId))
+          .toList(growable: false)
+        ..sort(
+          (a, b) => (_trackerDateOf(b) ?? DateTime(1970))
+              .compareTo(_trackerDateOf(a) ?? DateTime(1970)),
+        );
+
+      if (!mounted) return;
+      setState(() {
+        trackerSessions = list;
+        trackerSessionsLoading = false;
+        trackerSessionsError = list.isEmpty
+            ? 'За выбранный период персональные сессии не найдены'
+            : null;
+      });
+
+      await _loadPlayerHeartRateSummary(force: force);
+      _rebuildOpenSectionSheet();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        trackerSessionsLoading = false;
+        trackerSessionsError = e.toString();
+        if (force) trackerSessions = [];
+      });
+      _rebuildOpenSectionSheet();
+    }
+
+  }
+
+
+  DateTimeRange _loadAnalysisRange() {
+    final now = DateTime.now();
+    if (_loadPeriodPreset == 'custom' && _loadCustomRange != null) return _loadCustomRange!;
+    DateTime start;
+    switch (_loadPeriodPreset) {
+      case '7d':
+        start = now.subtract(const Duration(days: 6));
+        break;
+      case '14d':
+        start = now.subtract(const Duration(days: 13));
+        break;
+      case 'month':
+        final base = _trainingCalendarMonth ?? now;
+        return DateTimeRange(start: DateTime(base.year, base.month, 1), end: DateTime(base.year, base.month + 1, 0));
+      case 'season':
+        start = DateTime(now.month >= 7 ? now.year : now.year - 1, 7, 1);
+        break;
+      case '30d':
+      default:
+        start = now.subtract(const Duration(days: 29));
+    }
+    return DateTimeRange(start: DateTime(start.year, start.month, start.day), end: DateTime(now.year, now.month, now.day));
+  }
+
+  String _loadRangeLabel() {
+    final r = _loadAnalysisRange();
+    return '${DateFormat('dd.MM.yyyy').format(r.start)} — ${DateFormat('dd.MM.yyyy').format(r.end)}';
+  }
+
+  Future<void> _setLoadPeriodPreset(String preset) async {
+    if (preset == 'custom') {
+      await _pickLoadDateRange();
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _loadPeriodPreset = preset;
+      _loadCustomRange = null;
+      trackerSessions = [];
+      trackerHeartRateSummary = null;
+      trackerSessionsError = null;
+      trackerHeartRateError = null;
+      _selectedLoadDay = null;
+    });
+    await _loadPlayerTrackerSessions(force: true);
+    _rebuildOpenSectionSheet();
+  }
+
+  Future<void> _pickLoadDateRange() async {
+    final current = _loadAnalysisRange();
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 4, 1, 1),
+      lastDate: DateTime(now.year + 1, 12, 31),
+      initialDateRange: current,
+      helpText: 'Период нагрузки',
+      cancelText: 'Отмена',
+      confirmText: 'Применить',
+      saveText: 'Применить',
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(primary: _AppColors.trackerGreen),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _loadPeriodPreset = 'custom';
+      _loadCustomRange = DateTimeRange(
+        start: DateTime(picked.start.year, picked.start.month, picked.start.day),
+        end: DateTime(picked.end.year, picked.end.month, picked.end.day),
+      );
+      trackerSessions = [];
+      trackerHeartRateSummary = null;
+      trackerSessionsError = null;
+      trackerHeartRateError = null;
+      _selectedLoadDay = null;
+    });
+    await _loadPlayerTrackerSessions(force: true);
+    _rebuildOpenSectionSheet();
+  }
+
+  Future<void> _loadPlayerHeartRateSummary({bool force = false}) async {
+    if (trackerHeartRateLoading) return;
+    if (!force && trackerHeartRateSummary != null) return;
+    final teamId = _teamId;
+    if (teamId <= 0) return;
+    final playerId = await _resolvePlayerId();
+    if (playerId <= 0) return;
+
+    if (mounted) {
+      setState(() {
+        trackerHeartRateLoading = true;
+        trackerHeartRateError = null;
+      });
+    }
+
+    try {
+      final range = _loadAnalysisRange();
+      final params = <String, String>{
+        'team_id': '$teamId',
+        'player_id': '$playerId',
+      };
+      final sessionIds = trackerSessions
+          .map((e) => _asInt(e['session_id'] ?? e['id']))
+          .where((id) => id > 0)
+          .take(24)
+          .toList();
+
+      final rows = <Map<String, dynamic>>[];
+      final seen = <String>{};
+
+      void addHeartRateRow(Map<String, dynamic> row) {
+        final rowPlayerId = _asInt(
+          row['player_id'] ?? row['athlete_id'] ?? row['user_id'],
+        );
+        if (rowPlayerId > 0 && rowPlayerId != playerId) return;
+
+        final key = [
+          row['session_id'] ?? row['live_session_id'] ?? row['date'] ?? '',
+          row['samples_count'] ?? row['count'] ?? '',
+          row['avg_bpm'] ?? row['average_bpm'] ?? '',
+          row['max_bpm'] ?? '',
+        ].join('|');
+        if (!seen.add(key)) return;
+        rows.add(row);
+      }
+
+      Future<void> scanHeartRate(Map<String, String> qp) async {
+        final uri = Uri.parse(
+          '$_apiBase/tracker/get_tracker_heart_rate_summary.php',
+        ).replace(queryParameters: qp);
+        final res = await http.get(uri).timeout(const Duration(seconds: 12));
+        final data = _decodeResponseMap(res.body);
+        if (_isBadApiResponse(data)) return;
+
+        final rawItems = data['items'] ?? data['rows'] ?? data['data'];
+        if (rawItems is List) {
+          for (final item in rawItems.whereType<Map>()) {
+            addHeartRateRow(Map<String, dynamic>.from(item));
+          }
+        } else if (rawItems is Map) {
+          for (final value in rawItems.values) {
+            if (value is Map) {
+              addHeartRateRow(Map<String, dynamic>.from(value));
+            }
+          }
+        }
+      }
+
+      if (sessionIds.isNotEmpty) {
+        // Новый endpoint понимает список id и возвращает все записи Polar
+        // за выбранные tracker-сессии одним запросом.
+        final qp = Map<String, String>.from(params)
+          ..['session_ids'] = sessionIds.join(',')
+          ..['date_from'] = DateFormat('yyyy-MM-dd').format(range.start)
+          ..['date_to'] = DateFormat('yyyy-MM-dd').format(range.end);
+        await scanHeartRate(qp);
+      }
+
+      // Совместимость со старым сервером, где поддерживается только session_id.
+      if (rows.isEmpty) {
+        for (final sessionId in sessionIds) {
+          final qp = Map<String, String>.from(params)
+            ..['session_id'] = '$sessionId';
+          await scanHeartRate(qp);
+        }
+      }
+
+      if (rows.isEmpty) {
+        final qp = Map<String, String>.from(params)
+          ..['date_from'] = DateFormat('yyyy-MM-dd').format(range.start)
+          ..['date_to'] = DateFormat('yyyy-MM-dd').format(range.end);
+        await scanHeartRate(qp);
+      }
+
+      // Последний резерв — тот же отчёт, который использует раздел трекера.
+      // Он возвращает Polar даже когда summary endpoint не связал live_session_id
+      // с финальной tracker-сессией.
+      if (rows.isEmpty && sessionIds.isNotEmpty) {
+        for (final sessionId in sessionIds.take(8)) {
+          try {
+            final reportUri = Uri.parse(
+              '$_apiBase/tracker/get_training_report.php',
+            ).replace(queryParameters: {
+              'session_id': '$sessionId',
+              'team_id': '$teamId',
+              'player_id': '$playerId',
+              'hr_fallback': '1',
+              'include_hr': '1',
+              'include_players': '1',
+              'include_charts': '1',
+            });
+            final reportRes =
+                await http.get(reportUri).timeout(const Duration(seconds: 14));
+            final reportData = _decodeResponseMap(reportRes.body);
+            final report = reportData['report'] is Map
+                ? Map<String, dynamic>.from(reportData['report'])
+                : reportData;
+            final summary = report['summary'] is Map
+                ? Map<String, dynamic>.from(report['summary'])
+                : <String, dynamic>{};
+
+            final avg = summary['avg_bpm'] ??
+                summary['heart_rate_avg_bpm'] ??
+                summary['hr_avg_bpm'];
+            final max = summary['max_bpm'] ??
+                summary['heart_rate_max_bpm'] ??
+                summary['hr_max_bpm'];
+            final samples = summary['samples_count'] ??
+                summary['heart_rate_samples_count'] ??
+                summary['hr_samples_count'];
+
+            if ((_parseOverviewNumber(samples) ?? 0) > 0 ||
+                (_parseOverviewNumber(avg) ?? 0) > 0) {
+              addHeartRateRow({
+                'session_id': sessionId,
+                'player_id': playerId,
+                'samples_count': samples ?? 0,
+                'avg_bpm': avg ?? 0,
+                'max_bpm': max ?? 0,
+                'min_bpm': summary['min_bpm'] ?? 0,
+                'z1': summary['z1'] ?? 0,
+                'z2': summary['z2'] ?? 0,
+                'z3': summary['z3'] ?? 0,
+                'z4': summary['z4'] ?? 0,
+                'z5': summary['z5'] ?? 0,
+              });
+            }
+          } catch (_) {}
+        }
+      }
+
+      final aggregate = <String, dynamic>{};
+      if (rows.isNotEmpty) {
+        var samplesTotal = 0;
+        var weightedBpm = 0.0;
+        var maxBpm = 0.0;
+        double? minBpm;
+        final zones = <String, int>{
+          'z1': 0,
+          'z2': 0,
+          'z3': 0,
+          'z4': 0,
+          'z5': 0,
+        };
+
+        for (final row in rows) {
+          final samples = (_parseOverviewNumber(
+                    row['samples_count'] ?? row['count'],
+                  ) ??
+                  0)
+              .round();
+          final avg = _parseOverviewNumber(
+                row['avg_bpm'] ?? row['average_bpm'],
+              ) ??
+              0;
+          final max = _parseOverviewNumber(row['max_bpm']) ?? 0;
+          final min = _parseOverviewNumber(row['min_bpm']) ?? 0;
+          final weight = samples > 0 ? samples : (avg > 0 ? 1 : 0);
+
+          samplesTotal += samples;
+          weightedBpm += avg * weight;
+          if (max > maxBpm) maxBpm = max;
+          if (min > 0 && (minBpm == null || min < minBpm!)) minBpm = min;
+
+          for (final zone in zones.keys) {
+            zones[zone] = zones[zone]! +
+                (_parseOverviewNumber(row[zone]) ?? 0).round();
+          }
+        }
+
+        final totalWeight = rows.fold<int>(0, (sum, row) {
+          final samples = (_parseOverviewNumber(
+                    row['samples_count'] ?? row['count'],
+                  ) ??
+                  0)
+              .round();
+          final avg = _parseOverviewNumber(
+                row['avg_bpm'] ?? row['average_bpm'],
+              ) ??
+              0;
+          return sum + (samples > 0 ? samples : (avg > 0 ? 1 : 0));
+        });
+
+        aggregate.addAll({
+          'player_id': playerId,
+          'samples_count': samplesTotal,
+          'avg_bpm': totalWeight > 0 ? weightedBpm / totalWeight : 0,
+          'max_bpm': maxBpm,
+          'min_bpm': minBpm ?? 0,
+          'sessions_count': rows.length,
+          'date_from': DateFormat('yyyy-MM-dd').format(range.start),
+          'date_to': DateFormat('yyyy-MM-dd').format(range.end),
+          ...zones,
+        });
+      }
+
+      if (!mounted) return;
+      setState(() {
+        trackerHeartRateSummary = aggregate;
+        trackerHeartRateLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        trackerHeartRateLoading = false;
+        trackerHeartRateError = e.toString();
+        if (force) trackerHeartRateSummary = null;
+      });
+    }
+  }
+
+  double _hrNumber(List<String> keys) {
+    final row = trackerHeartRateSummary;
+    if (row == null) return 0;
+    for (final key in keys) {
+      final parsed = _parseOverviewNumber(row[key]);
+      if (parsed != null) return parsed;
+    }
+    return 0;
+  }
+
+  int _hrSamplesCount() => _hrNumber(const ['samples_count', 'count']).round();
+  double _hrAvgBpm() => _hrNumber(const ['avg_bpm', 'average_bpm']);
+  double _hrMaxBpm() => _hrNumber(const ['max_bpm']);
+  double _hrMinBpm() => _hrNumber(const ['min_bpm']);
+  int _hrZoneCount(String zone) => _hrNumber([zone]).round();
+
+  int _heartRateLoadScore() {
+    final samples = _hrSamplesCount();
+    if (samples <= 0) return 0;
+    final avg = _hrAvgBpm();
+    final max = _hrMaxBpm();
+    final intense = _hrZoneCount('z4') + _hrZoneCount('z5');
+    final zoneShare = samples <= 0 ? 0.0 : (intense / samples).clamp(0.0, 1.0);
+    final avgScore = avg <= 0 ? 0.0 : ((avg - 95) / 70).clamp(0.0, 1.0) * 38;
+    final maxScore = max <= 0 ? 0.0 : (max / 195).clamp(0.0, 1.0) * 32;
+    final zoneScore = zoneShare * 30;
+    return (avgScore + maxScore + zoneScore).round().clamp(0, 100);
+  }
+
+  String _fmtBpm(double value) {
+    if (value <= 0) return '—';
+    return '${value.round()} уд/мин';
+  }
+
+  String _loadAssessmentTitle() {
+    final rating = _footballPlayerRating();
+    final hr = _heartRateLoadScore();
+    final tracker = trackerSessions.isEmpty ? 0 : _trackerPerformanceScore();
+    if (tracker == 0 && hr == 0) return 'Нет полной нагрузки';
+    if (hr >= 82 && tracker < 45) return 'Пульс высокий при низком объёме';
+    if (rating >= 78) return 'Готовность хорошая';
+    if (rating < 55) return 'Нужен контроль нагрузки';
+    return 'Нагрузка в рабочей зоне';
+  }
+
+  String _loadAssessmentText() {
+    final notes = _playerCoachNotesCount();
+    final matchesCount = matches.length;
+    final attendance = _overviewAttendancePercent();
+    final hr = _heartRateLoadScore();
+    final tracker = trackerSessions.isEmpty ? 0 : _trackerPerformanceScore();
+    final base = <String>[];
+    if (trackerSessions.isEmpty) base.add('нет GPS-сессий за период');
+    if (_hrSamplesCount() <= 0) base.add('нет Polar-пульса за период');
+    if (attendance != null && attendance < 85) base.add('посещаемость ${attendance.round()}%');
+    if (hr >= 82 && tracker < 45) base.add('ЧСС высокая относительно бегового объёма');
+    if (notes > 0) base.add('учтены заметки тренера: $notes');
+    if (matchesCount > 0) base.add('учтены матчи: $matchesCount');
+    if (base.isEmpty) base.add('объём, скорость, спринты, ЧСС, посещаемость и матчи выглядят сбалансированно');
+    return base.join(' · ');
+  }
+
+  int _playerCoachNotesCount() {
+    var count = 0;
+    for (final e in teamEvents) {
+      final note = _firstNotEmpty([e['coach_note'], e['notes'], e['comment'], e['description']]).trim();
+      if (note.isNotEmpty) count++;
+    }
+    for (final m in matches) {
+      if (_matchCoachComment(m).trim().isNotEmpty) count++;
+    }
+    for (final d in diaryItems) {
+      final note = _firstNotEmpty([d['coach_note'], d['notes'], d['comment'], d['text'], d['description']]).trim();
+      if (note.isNotEmpty) count++;
+    }
+    return count;
+  }
+
+  Map<String, dynamic> _normalizeTrackerSession(Map<String, dynamic> raw) {
+    final out = Map<String, dynamic>.from(raw);
+    out['session_id'] ??= out['id'] ?? out['tracker_session_id'] ?? out['live_session_id'];
+    out['player_id'] ??= out['athlete_id'] ?? out['user_id'];
+    out['started_at'] ??= out['start_at'] ?? out['date'] ?? out['created_at'];
+    out['finished_at'] ??= out['finish_at'] ?? out['end_at'] ?? out['ended_at'];
+    out['total_distance_m'] ??= out['distance_m'] ?? out['distance'] ?? out['totalDistanceM'];
+    out['max_speed_kmh'] ??= out['max_speed'] ?? out['speed_max_kmh'];
+    out['avg_speed_kmh'] ??= out['average_speed_kmh'] ?? out['avg_speed'];
+    out['sprint_count'] ??= out['sprints'] ?? out['spr_count'];
+    out['load_score'] ??= out['player_load'] ?? out['training_load'] ?? out['load'];
+    out['high_speed_distance_m'] ??= out['hsr_m'] ?? out['v4_hsr_m'] ?? out['high_speed_work_m'];
+    out['sprint_distance_m'] ??= out['v5_sprint_m'];
+    out['points_count'] ??= out['gps_points_count'] ?? out['samples_count'];
+    out['duration_sec'] ??= out['duration_seconds'] ?? out['total_duration_sec'];
+    return out;
+  }
+
+  DateTime? _trackerDateOf(Map<String, dynamic> row) {
+    final raw = _firstNotEmpty([
+      row['started_at'],
+      row['start_at'],
+      row['date'],
+      row['session_date'],
+      row['created_at'],
+      row['finished_at'],
+    ]).replaceAll(' ', 'T');
+    if (raw.isEmpty) return null;
+    return DateTime.tryParse(raw) ?? _tryParseRuDate(raw);
+  }
+
+  int _trackerDurationSecOf(Map<String, dynamic> row) {
+    final direct = _parseOverviewNumber(_firstNotEmpty([
+      row['duration_sec'],
+      row['duration_seconds'],
+      row['total_duration_sec'],
+      row['elapsed_sec'],
+    ]));
+    if (direct != null && direct > 0) return direct.round();
+
+    final label = _firstNotEmpty([row['duration'], row['duration_label'], row['time_label']]).trim();
+    if (label.contains(':')) {
+      final parts = label.split(':').map((e) => int.tryParse(e.trim()) ?? 0).toList();
+      if (parts.length == 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+      if (parts.length == 2) return parts[0] * 60 + parts[1];
+    }
+
+    final start = DateTime.tryParse(_firstNotEmpty([row['started_at'], row['start_at']]).replaceAll(' ', 'T'));
+    final end = DateTime.tryParse(_firstNotEmpty([row['finished_at'], row['finish_at'], row['end_at'], row['ended_at']]).replaceAll(' ', 'T'));
+    if (start != null && end != null && end.isAfter(start)) return end.difference(start).inSeconds;
+    return 0;
+  }
+
+  double _trackerNumber(Map<String, dynamic> row, List<String> keys) {
+    for (final key in keys) {
+      final parsed = _parseOverviewNumber(row[key]);
+      if (parsed != null) return parsed;
+    }
+    return 0;
+  }
+
+  double _trackerTotalDistanceM() {
+    double total = 0;
+    for (final row in trackerSessions) {
+      total += _trackerNumber(row, const ['total_distance_m', 'distance_m', 'distance', 'totalDistanceM']);
+    }
+    return total;
+  }
+
+  int _trackerTotalDurationSec() {
+    var total = 0;
+    for (final row in trackerSessions) {
+      total += _trackerDurationSecOf(row);
+    }
+    return total;
+  }
+
+  double _trackerMaxSpeedKmh() {
+    double maxSpeed = 0;
+    for (final row in trackerSessions) {
+      maxSpeed = math.max(maxSpeed, _trackerNumber(row, const ['max_speed_kmh', 'max_speed', 'speed_max_kmh']));
+    }
+    return maxSpeed;
+  }
+
+  double _trackerAvgSpeedKmh() {
+    final durationSec = _trackerTotalDurationSec();
+    final distanceM = _trackerTotalDistanceM();
+    if (durationSec > 0 && distanceM > 0) return (distanceM / 1000) / (durationSec / 3600);
+    final values = trackerSessions
+        .map((row) => _trackerNumber(row, const ['avg_speed_kmh', 'average_speed_kmh', 'avg_speed']))
+        .where((v) => v > 0)
+        .toList();
+    if (values.isEmpty) return 0;
+    return values.reduce((a, b) => a + b) / values.length;
+  }
+
+  int _trackerSprintCount() {
+    var total = 0;
+    for (final row in trackerSessions) {
+      total += _trackerNumber(row, const ['sprint_count', 'sprints', 'spr_count']).round();
+    }
+    return total;
+  }
+
+  double _trackerHighSpeedDistanceM() {
+    double total = 0;
+    for (final row in trackerSessions) {
+      total += _trackerNumber(row, const ['high_speed_distance_m', 'hsr_m', 'v4_hsr_m', 'high_speed_work_m']);
+    }
+    return total;
+  }
+
+  double _trackerLoadScore() {
+    final values = trackerSessions
+        .map((row) => _trackerNumber(row, const ['load_score', 'player_load', 'training_load', 'load']))
+        .where((v) => v > 0)
+        .toList();
+    if (values.isEmpty) return 0;
+    return values.reduce((a, b) => a + b) / values.length;
+  }
+
+  int _trackerPointsCount() {
+    var total = 0;
+    for (final row in trackerSessions) {
+      total += _trackerNumber(row, const ['points_count', 'gps_points_count', 'samples_count']).round();
+    }
+    return total;
+  }
+
+  String _fmtDistance(double meters) {
+    if (meters <= 0) return '—';
+    if (meters >= 1000) return '${(meters / 1000).toStringAsFixed(1).replaceAll('.', ',')} км';
+    return '${meters.round()} м';
+  }
+
+  String _fmtSpeed(double kmh) {
+    if (kmh <= 0) return '—';
+    return '${kmh.toStringAsFixed(1).replaceAll('.', ',')} км/ч';
+  }
+
+  String _fmtDurationFromSeconds(int seconds) {
+    if (seconds <= 0) return '—';
+    final h = seconds ~/ 3600;
+    final m = (seconds % 3600) ~/ 60;
+    if (h > 0) return '${h}ч ${m}м';
+    return '${m}м';
+  }
+
+  int _trackerPerformanceScore() {
+    if (trackerSessions.isEmpty) return 0;
+    final sessions = math.max(1, trackerSessions.length);
+    final avgDistance = _trackerTotalDistanceM() / sessions;
+    final avgSprints = _trackerSprintCount() / sessions;
+    final avgHsr = _trackerHighSpeedDistanceM() / sessions;
+    final maxSpeed = _trackerMaxSpeedKmh();
+    final load = _trackerLoadScore();
+
+    final distanceScore = (avgDistance / 5200).clamp(0.0, 1.0) * 28;
+    final speedScore = (maxSpeed / 27).clamp(0.0, 1.0) * 24;
+    final sprintScore = (avgSprints / 14).clamp(0.0, 1.0) * 20;
+    final hsrScore = (avgHsr / 650).clamp(0.0, 1.0) * 16;
+    final loadScore = load <= 0 ? 8 : (load / 100).clamp(0.0, 1.0) * 12;
+    return (distanceScore + speedScore + sprintScore + hsrScore + loadScore).round().clamp(0, 100);
+  }
+
+  int _footballPlayerRating() {
+    final attendance = (_overviewAttendancePercent() ?? 82).clamp(0, 100).toDouble();
+    final coach = _overviewAverageScore() > 0 ? (_overviewAverageScore() * 10).clamp(0, 100).toDouble() : 66.0;
+    final tracker = trackerSessions.isEmpty ? 64.0 : _trackerPerformanceScore().toDouble();
+    final heart = _hrSamplesCount() <= 0 ? 60.0 : _heartRateLoadScore().toDouble();
+    final testingParsed = _parseOverviewNumber(_overviewTestingScoreText()) ?? 0;
+    final testing = testingParsed > 0 ? (testingParsed <= 10 ? testingParsed * 10 : testingParsed).clamp(0, 100).toDouble() : 62.0;
+    final match = matches.isEmpty ? 60.0 : (68.0 + math.min(matches.length, 12) * 2.0).clamp(0, 92).toDouble();
+    final profile = _profileReadinessPercent().toDouble();
+
+    final rating = attendance * .16 + coach * .19 + tracker * .25 + heart * .18 + testing * .10 + match * .08 + profile * .04;
+    return rating.round().clamp(0, 100);
+  }
+
+  String _footballRatingTier(int rating) {
+    if (rating >= 86) return 'Лидер команды';
+    if (rating >= 75) return 'Стабильный игрок';
+    if (rating >= 64) return 'Хорошая база';
+    if (rating >= 52) return 'Нужен контроль';
+    return 'Зона риска';
+  }
+
+  Color _footballRatingColor(int rating) {
+    if (rating >= 75) return _AppColors.trackerGreen;
+    if (rating >= 60) return _AppColors.trackerOrange;
+    return _AppColors.trackerRed;
+  }
+
+  String _footballRatingRecommendation(int rating) {
+    if (trackerSessions.isEmpty) {
+      return 'Добавьте GPS/BLE-сессии трекера: рейтинг станет точнее по дистанции, скорости, рывкам и нагрузке.';
+    }
+    final maxSpeed = _trackerMaxSpeedKmh();
+    final avgDistance = trackerSessions.isEmpty ? 0 : _trackerTotalDistanceM() / trackerSessions.length;
+    final attendance = _overviewAttendancePercent() ?? 100;
+    if (attendance < 85) return 'Главный фокус — регулярность посещения и постепенное возвращение к полной нагрузке.';
+    if (maxSpeed > 0 && maxSpeed < 20) return 'Добавить короткие ускорения 10–20 м и контроль техники бега после разминки.';
+    if (avgDistance > 0 && avgDistance < 3200) return 'Увеличить игровой объём через рондо, позиционные игры и интервальные блоки.';
+    if (rating >= 80) return 'Можно давать более сложные игровые задачи: прессинг, открывания, решения под давлением.';
+    return 'Поддерживать баланс: техника + игровые решения + дозированная скоростная работа.';
+  }
+
+  List<({String label, int value, IconData icon, Color color})> _footballRatingComponents() {
+    final attendance = ((_overviewAttendancePercent() ?? 82).clamp(0, 100)).toInt();
+    final coach = _overviewAverageScore() > 0
+        ? ((_overviewAverageScore() * 10).round().clamp(0, 100)).toInt()
+        : 0;
+    final tracker = trackerSessions.isEmpty ? 0 : _trackerPerformanceScore();
+    final testingRaw = _parseOverviewNumber(_overviewTestingScoreText()) ?? 0;
+    final testing = testingRaw > 0
+        ? (((testingRaw <= 10 ? testingRaw * 10 : testingRaw).round()).clamp(0, 100)).toInt()
+        : 0;
+    return [
+      (label: 'Посещаемость', value: attendance, icon: Icons.calendar_month_rounded, color: _AppColors.trackerGreen),
+      (label: 'Оценка тренера', value: coach, icon: Icons.workspace_premium_rounded, color: _AppColors.trackerBlue),
+      (label: 'Трекер', value: tracker, icon: Icons.monitor_heart_rounded, color: _AppColors.trackerGreen),
+      (label: 'Polar ЧСС', value: _hrSamplesCount() <= 0 ? 0 : _heartRateLoadScore(), icon: Icons.favorite_rounded, color: _AppColors.trackerRed),
+      (label: 'Тесты', value: testing, icon: Icons.show_chart_rounded, color: _AppColors.trackerOrange),
+    ];
   }
 
   Future<void> _loadPlayerTrainingHistory({bool force = false}) async {
@@ -2471,7 +3450,7 @@ Future<void> _loadPlayerInfoForEvent(int eventId) async {
                       Container(
                         width: 44,
                         height: 44,
-                        decoration: BoxDecoration(color: _AppColors.blueSoft, borderRadius: BorderRadius.circular(16)),
+                        decoration: BoxDecoration(color: _AppColors.blueSoft, borderRadius: BorderRadius.circular(4)),
                         child: const Icon(Icons.workspace_premium_rounded, color: _AppColors.blue, size: 23),
                       ),
                       const SizedBox(width: 12),
@@ -2507,7 +3486,7 @@ Future<void> _loadPlayerInfoForEvent(int eventId) async {
                         foregroundColor: Colors.white,
                         elevation: 0,
                         minimumSize: const Size.fromHeight(48),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                       ),
                     ),
                   ),
@@ -2590,7 +3569,7 @@ Future<void> _loadPlayerInfoForEvent(int eventId) async {
                       height: 40,
                       decoration: BoxDecoration(
                         color: _primary.withOpacity(0.10),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(4),
                       ),
                       child: Icon(Icons.sticky_note_2_rounded,
                           color: _primary),
@@ -2608,7 +3587,7 @@ Future<void> _loadPlayerInfoForEvent(int eventId) async {
                 Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(4),
                   ),
                   child: TextField(
                     controller: c,
@@ -2666,7 +3645,7 @@ Future<void> _loadPlayerInfoForEvent(int eventId) async {
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
+                          borderRadius: BorderRadius.circular(4)),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                   ),
@@ -3180,79 +4159,173 @@ Widget _buildCircleNetworkImage({
     }
   }
 
- Future<void> _loadMatches({bool force = false}) async {
-  if (matchesLoading) return;
-  if (!force && matches.isNotEmpty) return;
+  bool _matchBelongsToPlayer(Map<String, dynamic> match, int playerId) {
+    if (playerId <= 0) return true;
 
-  setState(() {
-    matchesLoading = true;
-    matchesError = null;
-  });
+    final directIds = <int>{};
+    for (final key in const [
+      'player_id',
+      'footballer_id',
+      'athlete_id',
+      'user_id',
+      'playerId',
+    ]) {
+      final id = _asInt(match[key]);
+      if (id > 0) directIds.add(id);
+    }
+    if (directIds.isNotEmpty) return directIds.contains(playerId);
 
-  try {
-    final teamId = _teamId;
-    if (teamId <= 0) throw "team_id is required";
+    var hasExplicitRoster = false;
+    final rosterValues = <dynamic>[
+      match['players'],
+      match['participants'],
+      match['lineup'],
+      match['squad'],
+      match['player_ids'],
+      match['participant_ids'],
+    ];
 
-    final uri = Uri.parse(
-      "$_apiBase/get_team_matches.php?team_id=$teamId",
-    );
-
-    final res = await http.get(uri).timeout(const Duration(seconds: 15));
-
-    if (res.statusCode != 200) {
-      throw "Ошибка сервера: ${res.statusCode}";
+    for (final raw in rosterValues) {
+      if (raw is List) {
+        hasExplicitRoster = true;
+        for (final item in raw) {
+          if (item is Map) {
+            final id = _asInt(
+              item['player_id'] ??
+                  item['id'] ??
+                  item['user_id'] ??
+                  item['athlete_id'],
+            );
+            if (id == playerId) return true;
+          } else if (_asInt(item) == playerId) {
+            return true;
+          }
+        }
+      } else if (raw is String && raw.trim().isNotEmpty) {
+        hasExplicitRoster = true;
+        final ids = RegExp(r'\d+')
+            .allMatches(raw)
+            .map((m) => int.tryParse(m.group(0) ?? '') ?? 0);
+        if (ids.contains(playerId)) return true;
+      }
     }
 
-    final body = res.body.trim();
-    if (body.isEmpty) {
-      throw "Сервер вернул пустой ответ";
-    }
-
-    final data = jsonDecode(body);
-
-    if (data is! Map || data["success"] != true) {
-      throw (data is Map
-              ? (data["message"] ?? "Ошибка загрузки матчей")
-              : "Ошибка загрузки матчей")
-          .toString();
-    }
-
-    final raw = (data["matches"] ?? []) as List;
-    final list = raw
-        .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e))
-        .toList();
-
-    list.sort((a, b) {
-      final da = DateTime.tryParse(
-            _asStr(a["match_date"] ?? a["date"] ?? a["created_at"])
-                .replaceAll(' ', 'T'),
-          ) ??
-          DateTime(1970);
-      final db = DateTime.tryParse(
-            _asStr(b["match_date"] ?? b["date"] ?? b["created_at"])
-                .replaceAll(' ', 'T'),
-          ) ??
-          DateTime(1970);
-      return db.compareTo(da);
-    });
-
-    if (!mounted) return;
-    setState(() {
-      matches = list;
-      matchesLoading = false;
-    });
-    _rebuildOpenSectionSheet();
-  } catch (e) {
-    if (!mounted) return;
-    setState(() {
-      matchesLoading = false;
-      matchesError = e.toString();
-      matches = [];
-    });
-    _rebuildOpenSectionSheet();
+    // Старый get_team_matches.php часто не возвращает состав матча.
+    // В этом случае оставляем запись как командную историю, но при наличии
+    // явного состава строго фильтруем по текущему игроку.
+    return !hasExplicitRoster;
   }
-}
+
+  Future<void> _loadMatches({bool force = false}) async {
+    if (matchesLoading) return;
+    if (!force && matches.isNotEmpty) return;
+
+    setState(() {
+      matchesLoading = true;
+      matchesError = null;
+    });
+
+    try {
+      final teamId = _teamId;
+      if (teamId <= 0) throw 'team_id is required';
+      final playerId = await _resolvePlayerId();
+
+      List<Map<String, dynamic>> list = [];
+      var playerEndpointResolved = false;
+
+      // Сначала пробуем персональные endpoints. На серверах, где они есть,
+      // профиль получает только матчи текущего игрока, а не всю историю команды.
+      if (playerId > 0) {
+        final params = <String, String>{
+          'team_id': '$teamId',
+          'player_id': '$playerId',
+          'user_id': '$playerId',
+        };
+        for (final endpoint in const [
+          'get_player_matches.php',
+          'get_player_match_history.php',
+          'get_matches_by_player.php',
+        ]) {
+          final data = await _getJsonFlexible(endpoint, params);
+          if (data == null) continue;
+          final hasRowsKey = data.containsKey('matches') ||
+              data.containsKey('items') ||
+              data.containsKey('rows') ||
+              data.containsKey('data');
+          if (_isBadApiResponse(data) && !hasRowsKey) continue;
+
+          playerEndpointResolved = true;
+          final raw = _firstList(
+            data,
+            const ['matches', 'items', 'rows', 'data'],
+          );
+          list = raw
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .where((e) => _matchBelongsToPlayer(e, playerId))
+              .toList();
+          break;
+        }
+      }
+
+      if (!playerEndpointResolved) {
+        final uri = Uri.parse('$_apiBase/get_team_matches.php').replace(
+          queryParameters: {
+            'team_id': '$teamId',
+            if (playerId > 0) 'player_id': '$playerId',
+          },
+        );
+        final res = await http.get(uri).timeout(const Duration(seconds: 15));
+        if (res.statusCode != 200) {
+          throw 'Ошибка сервера: ${res.statusCode}';
+        }
+
+        final data = _decodeResponseMap(res.body);
+        if (_isBadApiResponse(data) && !data.containsKey('matches')) {
+          throw _apiErrorMessage(data, 'Ошибка загрузки матчей');
+        }
+
+        final raw = _firstList(
+          data,
+          const ['matches', 'items', 'rows', 'data'],
+        );
+        list = raw
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .where((e) => _matchBelongsToPlayer(e, playerId))
+            .toList();
+      }
+
+      list.sort((a, b) {
+        final da = DateTime.tryParse(
+              _asStr(a['match_date'] ?? a['date'] ?? a['created_at'])
+                  .replaceAll(' ', 'T'),
+            ) ??
+            DateTime(1970);
+        final db = DateTime.tryParse(
+              _asStr(b['match_date'] ?? b['date'] ?? b['created_at'])
+                  .replaceAll(' ', 'T'),
+            ) ??
+            DateTime(1970);
+        return db.compareTo(da);
+      });
+
+      if (!mounted) return;
+      setState(() {
+        matches = list;
+        matchesLoading = false;
+      });
+      _rebuildOpenSectionSheet();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        matchesLoading = false;
+        matchesError = e.toString();
+        matches = [];
+      });
+      _rebuildOpenSectionSheet();
+    }
+  }
 
   Future<void> _openPrivateChat() async {
     try {
@@ -3567,15 +4640,18 @@ Widget _buildCircleNetworkImage({
   Widget _buildHeaderChatIconButton() {
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(4),
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(4),
         onTap: _openPrivateChat,
         child: Container(
           width: 56,
           height: 56,
           alignment: Alignment.center,
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(18)),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: _AppColors.trackerLine, width: .7),
+          ),
           child: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF2563EB), size: 27),
         ),
       ),
@@ -3585,15 +4661,18 @@ Widget _buildCircleNetworkImage({
   Widget _buildHeaderEditButtonLight() {
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(4),
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(4),
         onTap: _openPlayerEditorPanel,
         child: Container(
           width: 52,
           height: 52,
           alignment: Alignment.center,
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(18)),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: _AppColors.trackerLine, width: .7),
+          ),
           child: const Icon(Icons.edit_outlined, color: Color(0xFF2563EB), size: 22),
         ),
       ),
@@ -3603,15 +4682,18 @@ Widget _buildCircleNetworkImage({
   Widget _buildSmallChatButton() {
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(4),
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(4),
         onTap: _openPrivateChat,
         child: Container(
           width: 42,
           height: 42,
           alignment: Alignment.center,
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(14)),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: _AppColors.trackerLine, width: .7),
+          ),
           child: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF2563EB), size: 20),
         ),
       ),
@@ -3622,16 +4704,17 @@ Widget _buildCircleNetworkImage({
   Widget _buildSmallEditButton() {
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(4),
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(4),
         onTap: _openPlayerEditorPanel,
         child: Container(
           width: 42,
           height: 42,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: _AppColors.trackerLine, width: .7),
           ),
           child: const Icon(Icons.edit_outlined, color: Color(0xFF2563EB), size: 20),
         ),
@@ -3644,7 +4727,7 @@ Widget _buildCircleNetworkImage({
     return Container(
       constraints: const BoxConstraints(minHeight: 74),
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 13),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -3652,7 +4735,7 @@ Widget _buildCircleNetworkImage({
           Row(children: [
             Icon(icon, size: 18, color: const Color(0xFF178A45)),
             const SizedBox(width: 8),
-            Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 11.4, height: 1.05, fontWeight: FontWeight.w700, color: const Color(0xFF6B778A)))),
+            Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 10.8, height: 1.05, fontWeight: FontWeight.w700, color: const Color(0xFF6B778A)))),
           ]),
           const SizedBox(height: 10),
           Text(value.isEmpty ? '—' : value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: isPosition ? 12.9 : 15.8, height: 1.05, fontWeight: FontWeight.w700, color: const Color(0xFF101828), letterSpacing: -0.2)),
@@ -3669,26 +4752,28 @@ Widget _buildCircleNetworkImage({
 
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(4),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(4),
         child: Ink(
-          height: 58,
-          padding: EdgeInsets.symmetric(horizontal: isLong ? 8 : 12),
+          height: 40,
+          padding: EdgeInsets.symmetric(horizontal: isLong ? 8 : 10),
           decoration: BoxDecoration(
-            color: soft,
-            borderRadius: BorderRadius.circular(18),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: _AppColors.trackerLine, width: .7),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 32,
-                height: 32,
+                width: 26,
+                height: 26,
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(.78),
-                  borderRadius: BorderRadius.circular(12),
+                  color: soft,
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 child: Icon(icon, color: accent, size: isLong ? 17 : 18),
               ),
@@ -3705,12 +4790,12 @@ Widget _buildCircleNetworkImage({
                       style: TextStyle(
                         fontFamily: _fontFamily,
                         color: accent,
-                        fontSize: 9.5,
+                        fontSize: 8.8,
                         height: 1,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 2),
                     FittedBox(
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
@@ -3720,11 +4805,11 @@ Widget _buildCircleNetworkImage({
                         textAlign: TextAlign.left,
                         style: TextStyle(
                           fontFamily: _fontFamily,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF101828),
-                          fontSize: isLong ? 12.2 : 13.8,
+                          fontWeight: FontWeight.w600,
+                          color: _AppColors.trackerText,
+                          fontSize: isLong ? 10.8 : 11.6,
                           height: 1.05,
-                          letterSpacing: -0.2,
+                          letterSpacing: -0.12,
                         ),
                       ),
                     ),
@@ -3868,10 +4953,10 @@ Widget _buildCircleNetworkImage({
                 ),
                 const SizedBox(height: 14),
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                   child: Column(
                     children: [
@@ -3928,9 +5013,9 @@ Widget _buildCircleNetworkImage({
   Widget _buildHeaderEditButton() {
     return Material(
       color: Colors.white.withOpacity(0.16),
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(4),
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(4),
         onTap: () => Get.toNamed(
           AppRoutes.editPlayerScreen,
           arguments: widget.player,
@@ -3940,7 +5025,7 @@ Widget _buildCircleNetworkImage({
           height: 38,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(4),
           ),
           child: const Icon(
             Icons.edit_outlined,
@@ -3993,22 +5078,24 @@ Widget _buildCircleNetworkImage({
     required String value,
   }) {
     return Container(
-      constraints: const BoxConstraints(minHeight: 58),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      constraints: const BoxConstraints(minHeight: 52),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: _AppColors.trackerLine, width: .7),
       ),
       child: Row(
         children: [
           Container(
-            width: 30,
-            height: 30,
+            width: 26,
+            height: 26,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
               color: const Color(0xFF178A45).withOpacity(0.10),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(4),
             ),
-            child: Icon(icon, color: const Color(0xFF178A45), size: 15),
+            child: Icon(icon, color: const Color(0xFF178A45), size: 14),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -4022,10 +5109,10 @@ Widget _buildCircleNetworkImage({
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontFamily: _fontFamily,
-                    fontSize: 10.1,
+                    fontSize: 8.8,
                     height: 1.05,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF667085),
+                    fontWeight: FontWeight.w700,
+                    color: _AppColors.trackerDim,
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -4035,10 +5122,10 @@ Widget _buildCircleNetworkImage({
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontFamily: _fontFamily,
-                    fontSize: label == 'Амплуа' ? 11.6 : 12.2,
+                    fontSize: label == 'Амплуа' ? 10.6 : 11.2,
                     height: 1.10,
                     fontWeight: FontWeight.w600,
-                    color: const Color(0xFF101828),
+                    color: _AppColors.trackerText,
                     letterSpacing: -0.1,
                   ),
                 ),
@@ -4057,22 +5144,23 @@ Widget _buildCircleNetworkImage({
   }) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(4),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(4),
         child: Container(
-  constraints: const BoxConstraints(minHeight: 44),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          constraints: const BoxConstraints(minHeight: 36),
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
           decoration: BoxDecoration(
-            color: const Color(0xFFEAF5EE),
-            borderRadius: BorderRadius.circular(16),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: _AppColors.trackerLine, width: .7),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: const Color(0xFF178A45), size: 16),
-              SizedBox(width: _isDesktopOrTablet(context) ? 12 : 7),
+              Icon(icon, color: const Color(0xFF178A45), size: 15),
+              SizedBox(width: _isDesktopOrTablet(context) ? 9 : 6),
               Flexible(
                 child: Text(
                   label,
@@ -4082,8 +5170,8 @@ Widget _buildCircleNetworkImage({
                   style: TextStyle(
                     fontFamily: _fontFamily,
                     fontWeight: FontWeight.w600,
-                    color: const Color(0xFF101828),
-                    fontSize: label.length > 12 ? 11.0 : 12.0,
+                    color: _AppColors.trackerText,
+                    fontSize: label.length > 12 ? 10.0 : 10.6,
                     height: 1.05,
                     letterSpacing: -0.05,
                   ),
@@ -4107,7 +5195,11 @@ Widget _buildCircleNetworkImage({
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: isTablet ? 1120 : double.infinity),
         child: Container(
-          padding: EdgeInsets.fromLTRB(isTablet ? 22 : 16, isTablet ? 18 : 16, isTablet ? 22 : 16, 10),
+          padding: EdgeInsets.fromLTRB(isTablet ? 22 : 12, isTablet ? 10 : 8, isTablet ? 22 : 12, 8),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
+          ),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
@@ -4115,11 +5207,13 @@ Widget _buildCircleNetworkImage({
               children: List.generate(_categoryTabs.length, (i) {
                 final tab = _categoryTabs[i];
                 final isActive = tab.index == _selectedTabIndex;
+                final accent = isActive ? _AppColors.trackerGreenDark : _AppColors.trackerGraphite;
 
                 return Container(
-                  margin: const EdgeInsets.only(right: 10),
+                  margin: const EdgeInsets.only(right: 6),
                   child: Material(
                     color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(4),
                     child: InkWell(
                       onTap: () async {
                         setState(() => _selectedTabIndex = tab.index);
@@ -4135,32 +5229,35 @@ Widget _buildCircleNetworkImage({
                         }
 
                         if (tab.index == 5 || tab.index == 50) await _loadMatches();
+                        if (tab.index == 0 || tab.index == 51) await _loadPlayerTrackerSessions(force: false);
 
                         if (tab.index == 7) {
                           await _loadPlayerTestingHistory(force: false);
                         }
                       },
-                      borderRadius: BorderRadius.circular(18),
+                      borderRadius: BorderRadius.circular(4),
                       child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        padding: EdgeInsets.symmetric(horizontal: isTablet ? 20 : 16, vertical: isTablet ? 14 : 12),
+                        duration: const Duration(milliseconds: 160),
+                        height: isTablet ? 32 : 30,
+                        padding: EdgeInsets.symmetric(horizontal: isTablet ? 10 : 8),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(18),
-                          color: isActive ? const Color(0xFF334155) : Colors.white,
+                          borderRadius: BorderRadius.circular(4),
+                          color: isActive ? _AppColors.trackerGreenSoft : Colors.white,
+                          border: Border.all(color: isActive ? _AppColors.trackerGreenBorder : _AppColors.trackerLine, width: .7),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(tab.icon, color: isActive ? Colors.white : const Color(0xFF334155), size: isTablet ? 20 : 18),
-                            const SizedBox(width: 8),
+                            Icon(tab.icon, color: accent, size: isTablet ? 15 : 14),
+                            const SizedBox(width: 6),
                             Text(
                               tab.title,
                               style: TextStyle(
                                 fontFamily: _fontFamily,
-                                fontWeight: FontWeight.w700,
-                                color: isActive ? Colors.white : const Color(0xFF101828),
-                                fontSize: isTablet ? 15 : 13.5,
-                                letterSpacing: -0.1,
+                                fontWeight: FontWeight.w600,
+                                color: isActive ? _AppColors.trackerGreenDark : _AppColors.trackerText,
+                                fontSize: isTablet ? 10.4 : 9.8,
+                                letterSpacing: -0.12,
                               ),
                             ),
                           ],
@@ -4207,19 +5304,2633 @@ Widget _buildCircleNetworkImage({
       case 50:
         return _buildPlayerTtdFocusTab();
       case 51:
-        return _buildFilteredMetricsTab(
-          title: 'Нагрузка игрока',
-          subtitle: 'Скорость, рывки, дистанция, выносливость и тренировочный объём.',
-          icon: Icons.monitor_heart_rounded,
-          emptyMessage: 'Показатели нагрузки пока не заполнены.',
-          filter: (metric) => _metricGroup(_splitMetricLine(metric)['title'] ?? '') == 'Нагрузка',
-          fallbackToAll: false,
-        );
+        return _buildPlayerLoadFocusTab();
       case 52:
         return _buildPlayerAttendanceFocusTab();
       default:
         return _buildGeneralTab();
     }
+  }
+
+  Widget _buildPlayerLoadFocusTab() {
+    final children = <Widget>[
+      _buildPlayerAnalyticsHero(),
+      _buildPlayerAnalyticsKpis(),
+      _buildPlayerAnalyticsQuickActions(),
+      _buildPlayerAnalyticsCompactConclusion(),
+      const SizedBox(height: 14),
+    ];
+
+    // Аналитика больше не строится как длинный отчёт. На основном экране
+    // остаётся только сводка, а календарь, GPS/Polar, динамика и контроль
+    // источников открываются отдельными адаптивными рабочими окнами.
+    if (MediaQuery.of(context).size.width < 720) {
+      return Column(
+        key: const ValueKey('player-analytics-dashboard-mobile'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
+      );
+    }
+
+    return RefreshIndicator(
+      color: _AppColors.trackerGreen,
+      onRefresh: () => _loadPlayerAnalyticsData(force: true),
+      child: ListView(
+        key: const ValueKey('player-analytics-dashboard'),
+        padding: EdgeInsets.zero,
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        children: children,
+      ),
+    );
+  }
+
+  Widget _buildPlayerAnalyticsQuickActions() {
+    final sessions = trackerSessions.length;
+    final matchesCount = matches.length;
+    final attendance = _overviewAttendancePercent();
+    final sourcesReady = <bool>[
+      trackerSessions.isNotEmpty,
+      _hrSamplesCount() > 0,
+      attendanceLog.isNotEmpty,
+      matches.isNotEmpty,
+      playerTestingResults.isNotEmpty || playerTestingSessions.isNotEmpty,
+    ].where((value) => value).length;
+
+    final items = <({
+      String title,
+      String subtitle,
+      String value,
+      IconData icon,
+      Color color,
+      VoidCallback onTap,
+    })>[
+      (
+        title: 'Календарь',
+        subtitle: 'Период, дни и события',
+        value: _loadRangeLabel(),
+        icon: Icons.calendar_month_rounded,
+        color: _AppColors.trackerGreen,
+        onTap: () => _openPlayerAnalyticsModal(
+          title: 'Календарь аналитики',
+          subtitle: 'Выберите период или конкретный день игрока',
+          icon: Icons.calendar_month_rounded,
+          builder: () => _buildPlayerAnalyticsCalendar(),
+        ),
+      ),
+      (
+        title: 'Нагрузка и Polar',
+        subtitle: 'GPS/BLE, скорость и ЧСС',
+        value: '$sessions сесс.',
+        icon: Icons.monitor_heart_rounded,
+        color: _AppColors.trackerRed,
+        onTap: () => _openPlayerAnalyticsModal(
+          title: 'Нагрузка и Polar',
+          subtitle: 'Подробные показатели выбранного периода',
+          icon: Icons.monitor_heart_rounded,
+          builder: () => Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildTrackerLoadSummaryPanel(),
+              _buildTrackerSessionsPanel(),
+              _buildTrackerRatingBreakdownPanel(),
+            ],
+          ),
+        ),
+      ),
+      (
+        title: 'Динамика',
+        subtitle: 'Изменения и тенденции',
+        value: '${_footballPlayerRating()} / 100',
+        icon: Icons.show_chart_rounded,
+        color: _AppColors.trackerBlue,
+        onTap: () => _openPlayerAnalyticsModal(
+          title: 'Динамика игрока',
+          subtitle: 'Нагрузка, готовность и изменения показателей',
+          icon: Icons.show_chart_rounded,
+          builder: () => Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildPlayerAnalyticsTrendCard(),
+              _buildPlayerAnalyticsRecommendationCard(),
+            ],
+          ),
+        ),
+      ),
+      (
+        title: 'Контроль данных',
+        subtitle: 'Источники и полнота профиля',
+        value: '$sourcesReady / 5',
+        icon: Icons.fact_check_outlined,
+        color: _AppColors.trackerOrange,
+        onTap: () => _openPlayerAnalyticsModal(
+          title: 'Контроль данных',
+          subtitle: 'Проверка источников персональной аналитики',
+          icon: Icons.fact_check_outlined,
+          builder: () => Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildPlayerAnalyticsSourcesCard(),
+              _buildPlayerAnalyticsRecommendationCard(),
+            ],
+          ),
+        ),
+      ),
+      (
+        title: 'Матчи и ТТД',
+        subtitle: 'Игры и действия игрока',
+        value: '$matchesCount матч.',
+        icon: Icons.sports_soccer_rounded,
+        color: _AppColors.trackerGreenDark,
+        onTap: () {
+          _openPlayerAnalyticsModal(
+            title: 'Матчи и ТТД',
+            subtitle: 'Матчи текущего игрока и персональные показатели',
+            icon: Icons.sports_soccer_rounded,
+            builder: () => _buildPlayerTtdFocusTab(),
+          );
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            _loadMatches(force: false);
+          });
+        },
+      ),
+      (
+        title: 'Посещаемость',
+        subtitle: 'Журнал и оценки тренера',
+        value: attendance == null ? '—' : '${attendance.round()}%',
+        icon: Icons.event_available_rounded,
+        color: _AppColors.trackerGreen,
+        onTap: () => _openPlayerAnalyticsModal(
+          title: 'Посещаемость игрока',
+          subtitle: 'Тренировки, статусы и оценки тренера',
+          icon: Icons.event_available_rounded,
+          builder: () => _buildPlayerAttendanceFocusTab(),
+        ),
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final columns = width >= 1060 ? 3 : (width >= 620 ? 2 : 1);
+        final gap = width < 720 ? 8.0 : 10.0;
+        final itemWidth = (width - gap * (columns - 1)) / columns;
+
+        return Container(
+          color: Colors.white,
+          padding: EdgeInsets.fromLTRB(
+            width < 720 ? 10 : 14,
+            12,
+            width < 720 ? 10 : 14,
+            14,
+          ),
+          child: Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            children: items.map((item) {
+              return SizedBox(
+                width: itemWidth,
+                child: _buildPlayerAnalyticsActionCard(
+                  title: item.title,
+                  subtitle: item.subtitle,
+                  value: item.value,
+                  icon: item.icon,
+                  color: item.color,
+                  onTap: item.onTap,
+                ),
+              );
+            }).toList(),
+          ),
+        );
+      },
+    );
+  }
+
+
+  Widget _buildPlayerAnalyticsActionCard({
+    required String title,
+    required String subtitle,
+    required String value,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          height: 50,
+          padding: const EdgeInsets.symmetric(horizontal: 9),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: _AppColors.trackerLine, width: .7),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 26,
+                height: 26,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: _AppColors.softFor(color),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Icon(icon, color: color, size: 14),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: _fontFamily,
+                              color: _AppColors.trackerText,
+                              fontSize: 10.8,
+                              height: 1,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          value,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: _fontFamily,
+                            color: color,
+                            fontSize: 9.2,
+                            height: 1,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(width: 3),
+                        const Icon(Icons.chevron_right_rounded, color: _AppColors.trackerDim, size: 16),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: _fontFamily,
+                        color: _AppColors.trackerDim,
+                        fontSize: 8.5,
+                        height: 1,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlayerAnalyticsCompactConclusion() {
+    final rating = _footballPlayerRating();
+    final color = _footballRatingColor(rating);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 11, 14, 12),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          top: BorderSide(color: _AppColors.trackerLine, width: .7),
+          bottom: BorderSide(color: _AppColors.trackerLine, width: .7),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: _AppColors.softFor(color),
+              borderRadius: BorderRadius.circular(7),
+            ),
+            child: Icon(Icons.auto_awesome_rounded, color: color, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _loadAssessmentTitle(),
+                  style: TextStyle(
+                    fontFamily: _fontFamily,
+                    color: _AppColors.trackerText,
+                    fontSize: 11.4,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  _footballRatingRecommendation(rating),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: _fontFamily,
+                    color: _AppColors.trackerDim,
+                    fontSize: 9.6,
+                    height: 1.3,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: () => _openPlayerAnalyticsModal(
+              title: 'Рекомендации тренеру',
+              subtitle: 'Выводы по текущему периоду',
+              icon: Icons.auto_awesome_rounded,
+              builder: () => Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildPlayerAnalyticsRecommendationCard(),
+                  _buildPlayerAnalyticsSourcesCard(),
+                ],
+              ),
+            ),
+            child: const Text('Подробнее'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openPlayerAnalyticsModal({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Widget Function() builder,
+  }) async {
+    if (!mounted) return;
+
+    // Встроенный CMR и широкая ПК-оболочка используют внутреннее окно.
+    // Никакого root showDialog: окно остаётся в пределах профиля/CMR.
+    final useInlineCmrPane = widget.embeddedInWorkspace || _usesCmrPcProfileShell(context);
+    if (useInlineCmrPane) {
+      if (_inlineAnalyticsOpenQueued) return;
+      _inlineAnalyticsOpenQueued = true;
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _inlineAnalyticsOpenQueued = false;
+        if (!mounted) return;
+        setState(() {
+          _inlineAnalyticsTitle = title;
+          _inlineAnalyticsSubtitle = subtitle;
+          _inlineAnalyticsIcon = icon;
+          _inlineAnalyticsBuilder = builder;
+          _activeSectionSheetSetState = null;
+        });
+      });
+      return;
+    }
+
+    if (_playerAnalyticsModalOpen) return;
+    final navigator = Navigator.of(context);
+    final width = MediaQuery.sizeOf(context).width;
+    final desktop = width >= 920;
+
+    _playerAnalyticsNavigator = navigator;
+    _playerAnalyticsModalOpen = true;
+    _playerAnalyticsModalClosing = false;
+
+    Widget modalBody(BuildContext modalContext, StateSetter setModalState) {
+      // Overlay может получить последний build уже после удаления профиля из
+      // дерева (например, при переключении игрока). Не обращаемся к State/context
+      // уничтоженного профиля и отдаём пустой кадр до закрытия route.
+      if (!mounted) return const SizedBox.shrink();
+
+      _activeSectionSheetSetState = setModalState;
+      return Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(desktop ? 14 : 18),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            Container(
+              constraints: const BoxConstraints(minHeight: 58),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(
+                  bottom: BorderSide(color: _AppColors.trackerLine, width: .7),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: _AppColors.trackerGreenSoft,
+                      borderRadius: BorderRadius.circular(7),
+                    ),
+                    child: Icon(icon, color: _AppColors.trackerGreenDark, size: 18),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: _fontFamily,
+                            color: _AppColors.trackerText,
+                            fontSize: 13.2,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: _fontFamily,
+                            color: _AppColors.trackerDim,
+                            fontSize: 9.4,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Закрыть',
+                    onPressed: () => Navigator.of(modalContext).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: EdgeInsets.zero,
+                child: builder(),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (desktop) {
+      await showDialog<void>(
+        context: context,
+        barrierColor: Colors.black.withOpacity(.28),
+        builder: (dialogContext) {
+          final size = MediaQuery.of(dialogContext).size;
+          return Dialog(
+            insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
+            backgroundColor: Colors.transparent,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: math.min<double>(1240.0, size.width * .96),
+                maxHeight: size.height * .90,
+              ),
+              child: StatefulBuilder(
+                builder: (context, setModalState) =>
+                    modalBody(dialogContext, setModalState),
+              ),
+            ),
+          );
+        },
+      );
+    } else {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        barrierColor: Colors.black.withOpacity(.30),
+        builder: (sheetContext) {
+          return FractionallySizedBox(
+            heightFactor: .94,
+            child: StatefulBuilder(
+              builder: (context, setModalState) =>
+                  modalBody(sheetContext, setModalState),
+            ),
+          );
+        },
+      );
+    }
+
+    _activeSectionSheetSetState = null;
+    _playerAnalyticsModalOpen = false;
+    _playerAnalyticsModalClosing = false;
+    _playerAnalyticsNavigator = null;
+  }
+
+
+  Widget _buildInlineAnalyticsPane({required bool compact}) {
+    final title = _inlineAnalyticsTitle;
+    final subtitle = _inlineAnalyticsSubtitle ?? '';
+    final icon = _inlineAnalyticsIcon ?? Icons.analytics_rounded;
+    final contentBuilder = _inlineAnalyticsBuilder;
+
+    if (title == null || contentBuilder == null) {
+      return const SizedBox.expand();
+    }
+
+    return ColoredBox(
+      color: const Color(0xFFF6F7F6),
+      child: Padding(
+        padding: EdgeInsets.all(compact ? 8 : 10),
+        child: Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              Container(
+                height: 58,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  border: Border(
+                    bottom: BorderSide(
+                      color: _AppColors.trackerLine,
+                      width: .7,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: _AppColors.trackerGreenSoft,
+                        borderRadius: BorderRadius.circular(7),
+                      ),
+                      child: Icon(
+                        icon,
+                        color: _AppColors.trackerGreenDark,
+                        size: 18,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: _fontFamily,
+                              color: _AppColors.trackerText,
+                              fontSize: 13.2,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: _fontFamily,
+                              color: _AppColors.trackerDim,
+                              fontSize: 9.4,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Закрыть',
+                      onPressed: _closeInlineAnalyticsPane,
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+              ),
+              // Контент аналитики сам управляет прокруткой.
+              // Например, «Матчи и ТТД» возвращает RefreshIndicator + ListView.
+              // Нельзя вкладывать этот ListView в SingleChildScrollView:
+              // он получает бесконечную высоту и ломает layout.
+              Expanded(
+                child: ClipRect(
+                  child: SizedBox.expand(
+                    child: contentBuilder(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+
+
+  Widget _buildPlayerAnalyticsHero() {
+    final rating = _footballPlayerRating();
+    final color = _footballRatingColor(rating);
+    final loading = trackerSessionsLoading ||
+        trackerHeartRateLoading ||
+        attendanceLoading ||
+        matchesLoading ||
+        playerTestingLoading;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 720;
+        final title = Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: _AppColors.softFor(color),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$rating',
+                style: TextStyle(
+                  fontFamily: _fontFamily,
+                  color: color,
+                  fontSize: 18,
+                  height: 1,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Аналитика игрока · ${_footballRatingTier(rating)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: _fontFamily,
+                            color: _AppColors.trackerText,
+                            fontSize: 12.2,
+                            height: 1,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if (loading)
+                        const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: _AppColors.trackerGreen,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    'GPS/BLE · Polar · посещаемость · матчи · тесты',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: _fontFamily,
+                      color: _AppColors.trackerDim,
+                      fontSize: 9.1,
+                      height: 1,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
+          ),
+          child: compact
+              ? Column(
+                  children: [
+                    SizedBox(height: 42, child: title),
+                    const SizedBox(height: 7),
+                    _buildTrackerPeriodToolbar(),
+                  ],
+                )
+              : SizedBox(
+                  height: 44,
+                  child: Row(
+                    children: [
+                      Expanded(child: title),
+                      const SizedBox(width: 10),
+                      SizedBox(width: 300, child: _buildTrackerPeriodToolbar()),
+                    ],
+                  ),
+                ),
+        );
+      },
+    );
+  }
+
+
+  Widget _buildPlayerAnalyticsKpis() {
+    final attendance = _overviewAttendancePercent();
+    final rows = <({String label, String value, IconData icon, Color color})>[
+      (label: 'Дистанция', value: _fmtDistance(_trackerTotalDistanceM()), icon: Icons.route_rounded, color: _AppColors.trackerGreen),
+      (label: 'Макс. скорость', value: _fmtSpeed(_trackerMaxSpeedKmh()), icon: Icons.speed_rounded, color: _AppColors.trackerOrange),
+      (label: 'Спринты', value: _trackerSprintCount() > 0 ? '${_trackerSprintCount()}' : '—', icon: Icons.flash_on_rounded, color: _AppColors.trackerOrange),
+      (label: 'Средний пульс', value: _fmtBpm(_hrAvgBpm()), icon: Icons.favorite_rounded, color: _AppColors.trackerRed),
+      (label: 'Посещаемость', value: attendance == null ? '—' : '${attendance.round()}%', icon: Icons.event_available_rounded, color: _AppColors.trackerGreen),
+      (label: 'Сессии', value: '${trackerSessions.length}', icon: Icons.sensors_rounded, color: _AppColors.trackerBlue),
+    ];
+
+    return Container(
+      height: 58,
+      padding: const EdgeInsets.all(6),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
+      ),
+      child: Row(
+        children: List.generate(rows.length, (index) {
+          final row = rows[index];
+          return Expanded(
+            child: Container(
+              margin: EdgeInsets.only(right: index == rows.length - 1 ? 0 : 5),
+              padding: const EdgeInsets.symmetric(horizontal: 7),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: _AppColors.trackerLine, width: .7),
+              ),
+              child: Row(
+                children: [
+                  Icon(row.icon, color: row.color, size: 14),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(row.value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerText, fontSize: 10.7, height: 1, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 4),
+                        Text(row.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerDim, fontSize: 7.9, height: 1, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _buildPlayerAnalyticsMetricTile({
+    required String label,
+    required String value,
+    required IconData icon,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: _AppColors.trackerLine, width: .7),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 26,
+            height: 26,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: _AppColors.softFor(color),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Icon(icon, color: color, size: 14),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: _fontFamily,
+                    color: _AppColors.trackerText,
+                    fontSize: 12.2,
+                    height: 1.05,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: _fontFamily,
+                    color: _AppColors.trackerDim,
+                    fontSize: 8.9,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  DateTime _analyticsCalendarCursor() {
+    final base = _trainingCalendarMonth ?? _loadAnalysisRange().end;
+    return DateTime(base.year, base.month, 1);
+  }
+
+  String _analyticsMonthTitle(DateTime month) {
+    const names = [
+      'Январь',
+      'Февраль',
+      'Март',
+      'Апрель',
+      'Май',
+      'Июнь',
+      'Июль',
+      'Август',
+      'Сентябрь',
+      'Октябрь',
+      'Ноябрь',
+      'Декабрь',
+    ];
+    return '${names[month.month - 1]} ${month.year}';
+  }
+
+  Future<void> _shiftPlayerAnalyticsMonth(int delta) async {
+    final current = _analyticsCalendarCursor();
+    final next = DateTime(current.year, current.month + delta, 1);
+    if (!mounted) return;
+    setState(() {
+      _trainingCalendarMonth = next;
+      _loadPeriodPreset = 'month';
+      _loadCustomRange = null;
+      _selectedLoadDay = null;
+      trackerSessions = [];
+      trackerHeartRateSummary = null;
+      trackerSessionsError = null;
+      trackerHeartRateError = null;
+    });
+    await _loadPlayerAnalyticsData(force: true);
+  }
+
+  Future<void> _selectPlayerAnalyticsToday() async {
+    final now = DateTime.now();
+    if (!mounted) return;
+    setState(() {
+      _trainingCalendarMonth = DateTime(now.year, now.month, 1);
+      _loadPeriodPreset = 'month';
+      _loadCustomRange = null;
+      _selectedLoadDay = DateTime(now.year, now.month, now.day);
+      trackerSessions = [];
+      trackerHeartRateSummary = null;
+    });
+    await _loadPlayerAnalyticsData(force: true);
+  }
+
+  Map<DateTime, List<Map<String, dynamic>>> _analyticsSessionsByDay() {
+    final out = <DateTime, List<Map<String, dynamic>>>{};
+    for (final row in trackerSessions) {
+      final date = _trackerDateOf(row);
+      if (date == null) continue;
+      final key = DateTime(date.year, date.month, date.day);
+      out.putIfAbsent(key, () => <Map<String, dynamic>>[]).add(row);
+    }
+    return out;
+  }
+
+
+  Widget _buildPlayerAnalyticsCalendar() {
+    final cursor = _analyticsCalendarCursor();
+    final grouped = _analyticsSessionsByDay();
+    final selected = _selectedLoadDay ?? DateTime.now();
+    final selectedKey = DateTime(selected.year, selected.month, selected.day);
+    final selectedRows =
+        grouped[selectedKey] ?? const <Map<String, dynamic>>[];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final split = constraints.maxWidth >= 580;
+        final workspaceHeight = math.min<double>(
+          500,
+          math.max<double>(410, MediaQuery.sizeOf(context).height * .62),
+        );
+
+        final calendarPane = Container(
+          color: Colors.white,
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+          child: Column(
+            children: [
+              SizedBox(
+                height: 48,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: _AppColors.trackerGreenSoft,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.calendar_month_rounded,
+                        color: _AppColors.trackerGreenDark,
+                        size: 17,
+                      ),
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _analyticsMonthTitle(cursor),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: _fontFamily,
+                              color: _AppColors.trackerText,
+                              fontSize: 13.2,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${trackerSessions.length} сесс. · ${_loadRangeLabel()}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: _fontFamily,
+                              color: _AppColors.trackerDim,
+                              fontSize: 8.8,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    _calendarArrow(
+                      Icons.chevron_left_rounded,
+                      () => _shiftPlayerAnalyticsMonth(-1),
+                    ),
+                    const SizedBox(width: 5),
+                    _calendarArrow(
+                      Icons.chevron_right_rounded,
+                      () => _shiftPlayerAnalyticsMonth(1),
+                    ),
+                    const SizedBox(width: 5),
+                    _calendarArrow(
+                      Icons.today_rounded,
+                      _selectPlayerAnalyticsToday,
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(
+                height: 1,
+                thickness: .7,
+                color: _AppColors.trackerLine,
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: _buildPlayerAnalyticsMonthGrid(
+                  cursor: cursor,
+                  selected: selected,
+                  grouped: grouped,
+                ),
+              ),
+            ],
+          ),
+        );
+
+        final dayPane = Container(
+          color: Colors.white,
+          child: _buildPlayerAnalyticsSelectedDayPanel(
+            selected: selectedKey,
+            sessions: selectedRows,
+          ),
+        );
+
+        if (!split) {
+          return Column(
+            children: [
+              SizedBox(height: 390, child: calendarPane),
+              const SizedBox(height: 8),
+              dayPane,
+            ],
+          );
+        }
+
+        return SizedBox(
+          height: workspaceHeight,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                width: math.min<double>(
+                  390,
+                  math.max<double>(330, constraints.maxWidth * .42),
+                ),
+                child: calendarPane,
+              ),
+              const SizedBox(
+                width: 1,
+                child: ColoredBox(color: _AppColors.trackerLine),
+              ),
+              Expanded(child: dayPane),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPlayerAnalyticsIconButton({
+    required IconData icon,
+    required Future<void> Function() onTap,
+  }) {
+    return Material(
+      color: const Color(0xFFF6F8FA),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          onTap();
+        },
+        child: SizedBox(
+          width: 34,
+          height: 34,
+          child: Icon(icon, size: 18, color: _AppColors.trackerGraphite),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlayerAnalyticsMonthGrid({
+    required DateTime cursor,
+    required DateTime selected,
+    required Map<DateTime, List<Map<String, dynamic>>> grouped,
+  }) {
+    const weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+    final first = DateTime(cursor.year, cursor.month, 1);
+    final daysInMonth = DateTime(cursor.year, cursor.month + 1, 0).day;
+    final previousDays = DateTime(cursor.year, cursor.month, 0).day;
+    final leading = first.weekday - 1;
+    final total = ((leading + daysInMonth + 6) ~/ 7) * 7;
+    final rowsCount = total ~/ 7;
+
+    return Column(
+      children: [
+        Row(
+          children: weekdays
+              .map(
+                (day) => Expanded(
+                  child: Center(
+                    child: Text(
+                      day,
+                      style: TextStyle(
+                        fontFamily: _fontFamily,
+                        color: _AppColors.trackerDim,
+                        fontSize: 10.0,
+                        fontWeight: FontWeight.w700,
+                        height: 1.15,
+                      ),
+                    ),
+                  ),
+                ),
+              )
+              .toList(),
+        ),
+        const SizedBox(height: 5),
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, gridBox) {
+              const gap = 5.0;
+              final cellWidth = (gridBox.maxWidth - gap * 6) / 7;
+              final cellHeight =
+                  (gridBox.maxHeight - gap * (rowsCount - 1)) / rowsCount;
+              final ratio = math.max(
+                .82,
+                math.min(2.75, cellWidth / math.max(36.0, cellHeight)),
+              );
+
+              return GridView.builder(
+                itemCount: total,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 7,
+                  mainAxisSpacing: gap,
+                  crossAxisSpacing: gap,
+                  childAspectRatio: ratio,
+                ),
+                itemBuilder: (_, index) {
+                  final number = index - leading + 1;
+                  late DateTime day;
+                  var inMonth = true;
+
+                  if (number < 1) {
+                    day = DateTime(
+                      cursor.year,
+                      cursor.month - 1,
+                      previousDays + number,
+                    );
+                    inMonth = false;
+                  } else if (number > daysInMonth) {
+                    day = DateTime(
+                      cursor.year,
+                      cursor.month + 1,
+                      number - daysInMonth,
+                    );
+                    inMonth = false;
+                  } else {
+                    day = DateTime(cursor.year, cursor.month, number);
+                  }
+
+                  final key = DateTime(day.year, day.month, day.day);
+                  final rows =
+                      grouped[key] ?? const <Map<String, dynamic>>[];
+
+                  return _buildPlayerAnalyticsDayCell(
+                    day: day,
+                    inMonth: inMonth,
+                    selected: _sameLoadDay(day, selected),
+                    today: _sameLoadDay(day, DateTime.now()),
+                    sessions: rows,
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+
+  Widget _buildPlayerAnalyticsDayCell({
+    required DateTime day,
+    required bool inMonth,
+    required bool selected,
+    required bool today,
+    required List<Map<String, dynamic>> sessions,
+  }) {
+    final has = sessions.isNotEmpty;
+    final accent = _AppColors.trackerGreen;
+
+    final background = selected
+        ? Colors.white.withOpacity(.98)
+        : has
+            ? Color.alphaBlend(accent.withOpacity(.045), Colors.white)
+            : _AppColors.trackerSoft2;
+
+    final textColor = selected
+        ? _AppColors.trackerGreenDark
+        : inMonth
+            ? (today
+                ? _AppColors.trackerGreenDark
+                : _AppColors.trackerText)
+            : _AppColors.trackerDim.withOpacity(.64);
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () {
+          final targetDay = DateTime(day.year, day.month, day.day);
+
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+
+            if (!inMonth) {
+              setState(() {
+                _trainingCalendarMonth =
+                    DateTime(day.year, day.month, 1);
+                _loadPeriodPreset = 'month';
+                _selectedLoadDay = targetDay;
+                trackerSessions = [];
+                trackerHeartRateSummary = null;
+              });
+              _loadPlayerAnalyticsData(force: true);
+            } else {
+              setState(() => _selectedLoadDay = targetDay);
+              _rebuildOpenSectionSheet();
+            }
+          });
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: selected
+                ? const [
+                    BoxShadow(
+                      color: Color(0x06111827),
+                      blurRadius: 16,
+                      spreadRadius: -10,
+                      offset: Offset(0, 8),
+                    ),
+                  ]
+                : null,
+            border: selected
+                ? Border.all(
+                    color: _AppColors.trackerGreen.withOpacity(.28),
+                    width: 1.05,
+                  )
+                : today
+                    ? Border.all(
+                        color: _AppColors.trackerGreenBorder,
+                        width: .8,
+                      )
+                    : has
+                        ? Border.all(
+                            color: accent.withOpacity(.12),
+                            width: .8,
+                          )
+                        : Border.all(color: Colors.transparent),
+          ),
+          child: Stack(
+            children: [
+              Center(
+                child: Text(
+                  '${day.day}',
+                  style: TextStyle(
+                    fontFamily: _fontFamily,
+                    color: textColor,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    height: 1,
+                  ),
+                ),
+              ),
+              if (has)
+                Positioned(
+                  top: 1,
+                  right: 1,
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 15),
+                    height: 15,
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: accent,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: Colors.white, width: 1),
+                    ),
+                    child: Text(
+                      sessions.length > 9 ? '9+' : '${sessions.length}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 8.1,
+                        fontWeight: FontWeight.w700,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+
+  Widget _buildPlayerAnalyticsSelectedDayPanel({
+    required DateTime selected,
+    required List<Map<String, dynamic>> sessions,
+  }) {
+    final distance = sessions.fold<double>(
+      0,
+      (sum, row) => sum + _trackerNumber(
+        row,
+        const ['total_distance_m', 'distance_m', 'distance'],
+      ),
+    );
+    final maxSpeed = sessions.fold<double>(
+      0,
+      (value, row) => math.max(
+        value,
+        _trackerNumber(row, const ['max_speed_kmh', 'max_speed']),
+      ),
+    );
+    final sprints = sessions.fold<int>(
+      0,
+      (sum, row) => sum +
+          _trackerNumber(row, const ['sprint_count', 'sprints']).round(),
+    );
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            height: 54,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: const BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: _AppColors.trackerLine),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: _AppColors.blueSoft,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.view_list_rounded,
+                    color: _AppColors.trackerBlue,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Сессии дня',
+                        style: TextStyle(
+                          fontFamily: _fontFamily,
+                          color: _AppColors.trackerText,
+                          fontSize: 14.2,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${DateFormat('dd.MM.yyyy').format(selected)} · ${sessions.length} сесс.',
+                        style: TextStyle(
+                          fontFamily: _fontFamily,
+                          color: _AppColors.trackerDim,
+                          fontSize: 10.2,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _buildPlayerAnalyticsMiniKpi(
+                    'Дист.',
+                    _fmtDistance(distance),
+                    Icons.route_rounded,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _buildPlayerAnalyticsMiniKpi(
+                    'Макс.',
+                    _fmtSpeed(maxSpeed),
+                    Icons.speed_rounded,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _buildPlayerAnalyticsMiniKpi(
+                    'Спринты',
+                    '$sprints',
+                    Icons.flash_on_rounded,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (sessions.isEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
+              child: Text(
+                'На выбранный день нет сохранённых GPS/BLE-сессий. Тренировки, посещаемость и заметки остаются в общей аналитике периода.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: _fontFamily,
+                  color: _AppColors.trackerDim,
+                  fontSize: 10.6,
+                  height: 1.35,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            )
+          else
+            Column(
+              children: List.generate(
+                sessions.length,
+                (index) => _buildTrackerSessionTile(
+                  sessions[index],
+                  last: index == sessions.length - 1,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlayerAnalyticsMiniKpi(
+    String label,
+    String value,
+    IconData icon,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      decoration: BoxDecoration(
+        color: _AppColors.trackerSoft,
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: _AppColors.trackerLine, width: .7),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: _AppColors.trackerGreenDark, size: 14),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: _fontFamily,
+                    color: _AppColors.trackerText,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: _fontFamily,
+                    color: _AppColors.trackerDim,
+                    fontSize: 8.2,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<double> _playerAnalyticsTrendValues() {
+    final range = _loadAnalysisRange();
+    final end = DateTime(range.end.year, range.end.month, range.end.day);
+    final start = end.subtract(const Duration(days: 13));
+    final grouped = _analyticsSessionsByDay();
+    final values = <double>[];
+    for (var i = 0; i < 14; i++) {
+      final day = start.add(Duration(days: i));
+      final rows = grouped[DateTime(day.year, day.month, day.day)] ??
+          const <Map<String, dynamic>>[];
+      values.add(
+        rows.fold<double>(
+          0,
+          (sum, row) => sum +
+              _trackerNumber(
+                row,
+                const ['total_distance_m', 'distance_m', 'distance'],
+              ),
+        ),
+      );
+    }
+    return values;
+  }
+
+  Widget _buildPlayerAnalyticsTrendCard() {
+    final values = _playerAnalyticsTrendValues();
+    final average = values.isEmpty
+        ? 0.0
+        : values.reduce((a, b) => a + b) / values.length;
+    final peak = values.isEmpty ? 0.0 : values.reduce((a, b) => math.max(a, b).toDouble());
+
+    return _buildTrackerPanel(
+      title: 'Динамика нагрузки',
+      subtitle: 'последние 14 дней выбранного периода',
+      icon: Icons.show_chart_rounded,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 13),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              height: 116,
+              child: CustomPaint(
+                painter: _OverviewLinePainter(
+                  values: values,
+                  color: _AppColors.trackerGreen,
+                  fill: true,
+                ),
+                child: const SizedBox.expand(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildPlayerAnalyticsMiniKpi(
+                    'Средний день',
+                    _fmtDistance(average),
+                    Icons.timeline_rounded,
+                  ),
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: _buildPlayerAnalyticsMiniKpi(
+                    'Пиковый день',
+                    _fmtDistance(peak),
+                    Icons.trending_up_rounded,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlayerAnalyticsSourcesCard() {
+    final sources = <({
+      String title,
+      String value,
+      String detail,
+      IconData icon,
+      Color color,
+      bool ready,
+    })>[
+      (
+        title: 'GPS / BLE',
+        value: '${trackerSessions.length} сесс.',
+        detail: _fmtDistance(_trackerTotalDistanceM()),
+        icon: Icons.sensors_rounded,
+        color: _AppColors.trackerGreen,
+        ready: trackerSessions.isNotEmpty,
+      ),
+      (
+        title: 'Polar H10',
+        value: _hrSamplesCount() > 0 ? '${_hrSamplesCount()} замеров' : 'нет данных',
+        detail: _fmtBpm(_hrAvgBpm()),
+        icon: Icons.favorite_rounded,
+        color: _AppColors.trackerRed,
+        ready: _hrSamplesCount() > 0,
+      ),
+      (
+        title: 'Посещаемость',
+        value: '${attendanceLog.length} записей',
+        detail: _overviewAttendancePercent() == null
+            ? '—'
+            : '${_overviewAttendancePercent()!.round()}%',
+        icon: Icons.event_available_rounded,
+        color: _AppColors.trackerGreen,
+        ready: attendanceLog.isNotEmpty,
+      ),
+      (
+        title: 'Матчи и ТТД',
+        value: '${matches.length} матч.',
+        detail: '${matches.where(_hasMatchTtd).length} с ТТД',
+        icon: Icons.sports_soccer_rounded,
+        color: _AppColors.trackerBlue,
+        ready: matches.isNotEmpty,
+      ),
+      (
+        title: 'Тестирование',
+        value: '${playerTestingResults.length} рез.',
+        detail: _overviewTestingScoreText(),
+        icon: Icons.show_chart_rounded,
+        color: _AppColors.trackerOrange,
+        ready: playerTestingResults.isNotEmpty,
+      ),
+      (
+        title: 'Заметки тренера',
+        value: '${_playerCoachNotesCount()} заметок',
+        detail: 'учтены в выводе',
+        icon: Icons.edit_note_rounded,
+        color: _AppColors.trackerGraphite,
+        ready: _playerCoachNotesCount() > 0,
+      ),
+    ];
+
+    return _buildTrackerPanel(
+      title: 'Источники данных',
+      subtitle: 'что уже связано с профилем игрока',
+      icon: Icons.hub_rounded,
+      child: Column(
+        children: List.generate(
+          sources.length,
+          (index) {
+            final source = sources[index];
+            return _buildPlayerAnalyticsSourceRow(
+              title: source.title,
+              value: source.value,
+              detail: source.detail,
+              icon: source.icon,
+              color: source.color,
+              ready: source.ready,
+              last: index == sources.length - 1,
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlayerAnalyticsSourceRow({
+    required String title,
+    required String value,
+    required String detail,
+    required IconData icon,
+    required Color color,
+    required bool ready,
+    required bool last,
+  }) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 50),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        border: last
+            ? null
+            : const Border(
+                bottom: BorderSide(color: _AppColors.trackerLine, width: .7),
+              ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: _AppColors.softFor(color),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 15),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: _fontFamily,
+                    color: _AppColors.trackerText,
+                    fontSize: 10.6,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  detail,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: _fontFamily,
+                    color: _AppColors.trackerDim,
+                    fontSize: 8.9,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: _fontFamily,
+                  color: ready ? _AppColors.trackerText : _AppColors.trackerDim,
+                  fontSize: 9.8,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    ready
+                        ? Icons.check_circle_rounded
+                        : Icons.radio_button_unchecked_rounded,
+                    size: 12,
+                    color: ready
+                        ? _AppColors.trackerGreen
+                        : _AppColors.trackerDim,
+                  ),
+                  const SizedBox(width: 3),
+                  Text(
+                    ready ? 'подключено' : 'нет данных',
+                    style: TextStyle(
+                      fontFamily: _fontFamily,
+                      color: ready
+                          ? _AppColors.trackerGreenDark
+                          : _AppColors.trackerDim,
+                      fontSize: 7.8,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlayerAnalyticsRecommendationCard() {
+    final rating = _footballPlayerRating();
+    final components = _footballRatingComponents();
+    return _buildTrackerPanel(
+      title: 'Вывод для тренера',
+      subtitle: _loadAssessmentTitle(),
+      icon: Icons.tips_and_updates_rounded,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              _footballRatingRecommendation(rating),
+              style: TextStyle(
+                fontFamily: _fontFamily,
+                color: _AppColors.trackerGraphite,
+                fontSize: 10.8,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...components.map((component) {
+              final value = component.value.clamp(0, 100);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 9),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(component.icon, size: 13, color: component.color),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            component.label,
+                            style: TextStyle(
+                              fontFamily: _fontFamily,
+                              color: _AppColors.trackerText,
+                              fontSize: 9.4,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '$value%',
+                          style: TextStyle(
+                            fontFamily: _fontFamily,
+                            color: component.color,
+                            fontSize: 9.4,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(99),
+                      child: LinearProgressIndicator(
+                        value: value / 100,
+                        minHeight: 6,
+                        backgroundColor: _AppColors.trackerLine,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          component.color,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            Container(
+              margin: const EdgeInsets.only(top: 2),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: _AppColors.trackerGreenSoft,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _AppColors.trackerGreenBorder,
+                  width: .7,
+                ),
+              ),
+              child: Text(
+                _loadAssessmentText(),
+                style: TextStyle(
+                  fontFamily: _fontFamily,
+                  color: _AppColors.trackerGreenDark,
+                  fontSize: 9.2,
+                  height: 1.3,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  DateTime _loadDateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  bool _sameLoadDay(DateTime a, DateTime b) {
+    final aa = _loadDateOnly(a);
+    final bb = _loadDateOnly(b);
+    return aa.year == bb.year && aa.month == bb.month && aa.day == bb.day;
+  }
+
+  Map<DateTime, List<Map<String, dynamic>>> _trackerSessionsByDay() {
+    final out = <DateTime, List<Map<String, dynamic>>>{};
+    for (final row in trackerSessions) {
+      final date = _trackerDateOf(row);
+      if (date == null) continue;
+      final key = _loadDateOnly(date);
+      out.putIfAbsent(key, () => <Map<String, dynamic>>[]).add(row);
+    }
+    return out;
+  }
+
+  List<Map<String, dynamic>> _trackerSessionsForLoadView() {
+    final selected = _selectedLoadDay;
+    if (selected == null) return trackerSessions.take(12).toList();
+    return trackerSessions.where((row) {
+      final date = _trackerDateOf(row);
+      return date != null && _sameLoadDay(date, selected);
+    }).toList();
+  }
+
+  Widget _buildTrackerLoadWorkspace() {
+    return LayoutBuilder(builder: (context, constraints) {
+      final wide = constraints.maxWidth >= 940;
+      if (!wide) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildLoadLeftColumn(compact: true),
+            _buildTrackerLoadSummaryPanel(),
+            _buildTrackerRatingBreakdownPanel(),
+          ],
+        );
+      }
+      return Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
+        ),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                width: 388,
+                child: _buildLoadLeftColumn(compact: false),
+              ),
+              const VerticalDivider(width: 1, thickness: .7, color: _AppColors.trackerLine),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildTrackerLoadSummaryPanel(),
+                    _buildTrackerRatingBreakdownPanel(),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    });
+  }
+
+  Widget _buildLoadLeftColumn({required bool compact}) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildTrackerPanelHeader(
+            title: 'Календарь нагрузки',
+            subtitle: 'период, дни с GPS/BLE и Polar, последние сессии',
+            icon: Icons.calendar_month_rounded,
+            trailing: _buildTrackerSquareButton(
+              icon: Icons.refresh_rounded,
+              label: 'Обновить',
+              onTap: () => _loadPlayerTrackerSessions(force: true),
+              primary: true,
+            ),
+          ),
+          _buildTrackerPeriodToolbar(),
+          _buildLoadCalendarGrid(),
+          _buildLoadSessionsList(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTrackerPanelHeader({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    Widget? trailing,
+  }) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 38),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
+      ),
+      child: Row(children: [
+        Container(
+          width: 28,
+          height: 28,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: _AppColors.trackerGreenSoft,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: _AppColors.trackerGreenBorder, width: .7),
+          ),
+          child: Icon(icon, size: 15, color: _AppColors.trackerGreenDark),
+        ),
+        const SizedBox(width: 9),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerText, fontSize: 11.4, fontWeight: FontWeight.w600, letterSpacing: -.18)),
+            if (subtitle.trim().isNotEmpty) ...[
+              const SizedBox(height: 1),
+              Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerDim, fontSize: 8.8, fontWeight: FontWeight.w600)),
+            ],
+          ]),
+        ),
+        if (trailing != null) ...[
+          const SizedBox(width: 8),
+          trailing,
+        ],
+      ]),
+    );
+  }
+
+  Widget _buildLoadCalendarGrid() {
+    final range = _loadAnalysisRange();
+    final grouped = _trackerSessionsByDay();
+    final end = _loadDateOnly(range.end);
+    final startRaw = _loadDateOnly(range.start);
+    final daysCount = end.difference(startRaw).inDays + 1;
+    final start = daysCount > 42 ? end.subtract(const Duration(days: 41)) : startRaw;
+    final visibleDays = List<DateTime>.generate(end.difference(start).inDays + 1, (i) => start.add(Duration(days: i)));
+
+    return Container(
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7))),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Expanded(child: Text(_loadRangeLabel(), style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerText, fontSize: 10.4, fontWeight: FontWeight.w600))),
+          Text('${trackerSessions.length} сесс.', style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerDim, fontSize: 9.2, fontWeight: FontWeight.w700)),
+        ]),
+        const SizedBox(height: 8),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: visibleDays.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 7,
+            mainAxisSpacing: 4,
+            crossAxisSpacing: 4,
+            childAspectRatio: 1.28,
+          ),
+          itemBuilder: (context, index) {
+            final day = visibleDays[index];
+            final rows = grouped[_loadDateOnly(day)] ?? const <Map<String, dynamic>>[];
+            final selected = _selectedLoadDay != null && _sameLoadDay(_selectedLoadDay!, day);
+            final hasLoad = rows.isNotEmpty;
+            final distance = rows.fold<double>(0, (sum, row) => sum + _trackerNumber(row, const ['total_distance_m', 'distance_m', 'distance']));
+            return Material(
+              color: selected ? _AppColors.trackerGreen : (hasLoad ? _AppColors.trackerGreenSoft : Colors.white),
+              borderRadius: BorderRadius.circular(4),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(4),
+                onTap: () {
+                  setState(() => _selectedLoadDay = selected ? null : _loadDateOnly(day));
+                  _rebuildOpenSectionSheet();
+                },
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: selected ? _AppColors.trackerGreen : _AppColors.trackerLine, width: .7),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    Text('${day.day}', style: TextStyle(fontFamily: _fontFamily, color: selected ? Colors.white : _AppColors.trackerText, fontSize: 10.2, fontWeight: FontWeight.w600)),
+                    if (hasLoad)
+                      Text(_fmtDistance(distance), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: selected ? Colors.white : _AppColors.trackerGreenDark, fontSize: 7.8, fontWeight: FontWeight.w600))
+                    else
+                      Text('—', style: TextStyle(fontFamily: _fontFamily, color: selected ? Colors.white70 : _AppColors.trackerDim, fontSize: 7.8, fontWeight: FontWeight.w600)),
+                  ]),
+                ),
+              ),
+            );
+          },
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildLoadSessionsList() {
+    final rows = _trackerSessionsForLoadView();
+    final selected = _selectedLoadDay;
+    final title = selected == null ? 'Последние нагрузки' : 'Нагрузки за ${DateFormat('dd.MM.yyyy').format(selected)}';
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Container(
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        alignment: Alignment.centerLeft,
+        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7))),
+        child: Row(children: [
+          Expanded(child: Text(title, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerText, fontSize: 10.6, fontWeight: FontWeight.w600))),
+          if (selected != null)
+            InkWell(
+              onTap: () {
+                setState(() => _selectedLoadDay = null);
+                _rebuildOpenSectionSheet();
+              },
+              child: Text('сбросить', style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerGreenDark, fontSize: 9.2, fontWeight: FontWeight.w600)),
+            ),
+        ]),
+      ),
+      if (rows.isEmpty)
+        Padding(
+          padding: const EdgeInsets.all(10),
+          child: _buildTrackerTextLine('Сессии', selected == null ? 'Нет сохранённых нагрузок за выбранный период' : 'В этот день нет GPS/BLE-сессий'),
+        )
+      else
+        Column(children: List.generate(rows.length, (i) => _buildTrackerSessionTile(rows[i], last: i == rows.length - 1))),
+    ]);
+  }
+
+  Widget _buildTrackerPanel({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Widget child,
+    Widget? trailing,
+  }) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            constraints: const BoxConstraints(minHeight: 38),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
+            ),
+            child: Row(children: [
+              Container(
+                width: 28,
+                height: 28,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: _AppColors.trackerGreenSoft,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: _AppColors.trackerGreenBorder, width: .7),
+                ),
+                child: Icon(icon, size: 15, color: _AppColors.trackerGreenDark),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerText, fontSize: 11.4, fontWeight: FontWeight.w700, letterSpacing: -.18)),
+                  if (subtitle.trim().isNotEmpty) ...[
+                    const SizedBox(height: 1),
+                    Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerDim, fontSize: 8.8, fontWeight: FontWeight.w700)),
+                  ],
+                ]),
+              ),
+              if (trailing != null) ...[
+                const SizedBox(width: 8),
+                trailing,
+              ],
+            ]),
+          ),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTrackerSquareButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool primary = false,
+  }) {
+    return Material(
+      color: primary ? _AppColors.trackerGreen : Colors.white,
+      borderRadius: BorderRadius.circular(4),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: Container(
+          height: 27,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: primary ? _AppColors.trackerGreen : _AppColors.trackerLine),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 14, color: primary ? Colors.white : _AppColors.trackerGreenDark),
+            const SizedBox(width: 5),
+            Text(label, style: TextStyle(fontFamily: _fontFamily, color: primary ? Colors.white : _AppColors.trackerText, fontSize: 9.4, fontWeight: FontWeight.w700)),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTrackerLoadingPanel() {
+    return _buildTrackerPanel(
+      title: 'Нагрузка игрока',
+      subtitle: 'получаю GPS/BLE-сессии игрока',
+      icon: Icons.monitor_heart_rounded,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+        child: Row(children: [
+          const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: _AppColors.trackerGreen)),
+          const SizedBox(width: 10),
+          Expanded(child: Text('Загружаю сессии трекера…', style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerGraphite, fontSize: 11.4, fontWeight: FontWeight.w600))),
+        ]),
+      ),
+    );
+  }
+
+  Widget _buildTrackerErrorPanel(String message) {
+    return _buildTrackerPanel(
+      title: 'Нагрузка игрока',
+      subtitle: 'ошибка загрузки сессий',
+      icon: Icons.info_outline_rounded,
+      trailing: _buildTrackerSquareButton(icon: Icons.refresh_rounded, label: 'Повторить', onTap: () => _loadPlayerTrackerSessions(force: true), primary: true),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+        child: _buildTrackerTextLine('Ошибка', message, valueColor: _AppColors.trackerRed),
+      ),
+    );
+  }
+
+  Widget _buildTrackerLoadSummaryPanel() {
+    final sessions = trackerSessions.length;
+    final totalDistance = _trackerTotalDistanceM();
+    final totalDuration = _trackerTotalDurationSec();
+    final avgDistance = sessions == 0 ? 0.0 : totalDistance / sessions;
+    final avgSpeed = _trackerAvgSpeedKmh();
+    final maxSpeed = _trackerMaxSpeedKmh();
+    final sprints = _trackerSprintCount();
+    final hsr = _trackerHighSpeedDistanceM();
+    final points = _trackerPointsCount();
+    final trackerScore = trackerSessions.isEmpty ? 0 : _trackerPerformanceScore();
+    final footballRating = _footballPlayerRating();
+    final ratingColor = _footballRatingColor(footballRating);
+
+    return _buildTrackerPanel(
+      title: 'Нагрузка игрока',
+      subtitle: 'футбольные данные трекера: объём, скорость, HSR, спринты, GPS-точки',
+      icon: Icons.monitor_heart_rounded,
+      trailing: _buildTrackerSquareButton(icon: Icons.refresh_rounded, label: 'Обновить', onTap: () => _loadPlayerTrackerSessions(force: true), primary: true),
+      child: trackerSessions.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                _buildTrackerTextLine('Статус', 'Нет сохранённых GPS/BLE-сессий по этому игроку', valueColor: _AppColors.trackerDim),
+                _buildTrackerDivider(),
+                _buildTrackerTextLine('После тренировки', 'появятся дистанция, длительность, скорость, HSR, спринты, GPS-точки и рейтинг'),
+              ]),
+            )
+          : LayoutBuilder(builder: (context, constraints) {
+              final compact = constraints.maxWidth < 760;
+              final stats = Wrap(
+                spacing: 0,
+                runSpacing: 0,
+                children: [
+                  _buildTrackerStatCell('Футбольный рейтинг', '$footballRating', Icons.workspace_premium_rounded, ratingColor, compact: compact),
+                  _buildTrackerStatCell('Индекс трекера', '$trackerScore', Icons.monitor_heart_rounded, _AppColors.trackerGreen, compact: compact),
+                  _buildTrackerStatCell('Сессии', '$sessions', Icons.sensors_rounded, _AppColors.trackerGreen, compact: compact),
+                  _buildTrackerStatCell('Дистанция', _fmtDistance(totalDistance), Icons.route_rounded, _AppColors.trackerGreen, compact: compact),
+                  _buildTrackerStatCell('Средняя сессия', _fmtDistance(avgDistance), Icons.timeline_rounded, _AppColors.trackerBlue, compact: compact),
+                  _buildTrackerStatCell('Длительность', _fmtDurationFromSeconds(totalDuration), Icons.timer_rounded, _AppColors.trackerBlue, compact: compact),
+                  _buildTrackerStatCell('Макс. скорость', _fmtSpeed(maxSpeed), Icons.speed_rounded, _AppColors.trackerOrange, compact: compact),
+                  _buildTrackerStatCell('Средняя скорость', _fmtSpeed(avgSpeed), Icons.query_stats_rounded, _AppColors.trackerBlue, compact: compact),
+                  _buildTrackerStatCell('Спринты', '$sprints', Icons.flash_on_rounded, _AppColors.trackerOrange, compact: compact),
+                  _buildTrackerStatCell('HSR', _fmtDistance(hsr), Icons.directions_run_rounded, _AppColors.trackerGreen, compact: compact),
+                  _buildTrackerStatCell('Средний пульс', _fmtBpm(_hrAvgBpm()), Icons.favorite_rounded, _AppColors.trackerRed, compact: compact),
+                  _buildTrackerStatCell('Пик ЧСС', _fmtBpm(_hrMaxBpm()), Icons.monitor_heart_rounded, _AppColors.trackerRed, compact: compact),
+                  _buildTrackerStatCell('GPS-точки', '$points', Icons.gps_fixed_rounded, _AppColors.trackerBlue, compact: compact),
+                ],
+              );
+
+              return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                stats,
+                _buildTrackerHeartRateStrip(compact: compact),
+                _buildTrackerAssessmentLine(),
+                _buildTrackerCoachLine(),
+              ]);
+            }),
+    );
+  }
+
+  Widget _buildTrackerPeriodToolbar() {
+    final items = const [
+      ('7d', '7 дней'),
+      ('14d', '14 дней'),
+      ('30d', '30 дней'),
+      ('month', 'Месяц'),
+      ('season', 'Сезон'),
+      ('custom', 'Период'),
+    ];
+
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(items.length, (index) {
+            final item = items[index];
+            final active = _loadPeriodPreset == item.$1;
+            return Padding(
+              padding: EdgeInsets.only(right: index == items.length - 1 ? 0 : 6),
+              child: Material(
+                color: active ? _AppColors.trackerGreen : Colors.white,
+                borderRadius: BorderRadius.circular(4),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(4),
+                  onTap: () => _setLoadPeriodPreset(item.$1),
+                  child: Container(
+                    height: 28,
+                    constraints: const BoxConstraints(minWidth: 72),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: active ? _AppColors.trackerGreen : _AppColors.trackerLine,
+                        width: .7,
+                      ),
+                    ),
+                    child: Text(
+                      item.$2,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: _fontFamily,
+                        color: active ? Colors.white : _AppColors.trackerText,
+                        fontSize: 9.4,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTrackerHeartRateStrip({required bool compact}) {
+    if (trackerHeartRateLoading) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7))),
+        child: Row(children: [
+          const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: _AppColors.trackerGreen)),
+          const SizedBox(width: 8),
+          Expanded(child: Text('Получаю Polar H10 / ЧСС…', style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerDim, fontSize: 9.8, fontWeight: FontWeight.w700))),
+        ]),
+      );
+    }
+    final samples = _hrSamplesCount();
+    if (samples <= 0 && (trackerHeartRateError == null || trackerHeartRateError!.trim().isEmpty)) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7))),
+        child: _buildTrackerTextLine('Polar H10', 'За выбранный период нет сохранённых данных ЧСС'),
+      );
+    }
+    if (samples <= 0 && trackerHeartRateError != null) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7))),
+        child: _buildTrackerTextLine('Polar H10', trackerHeartRateError!, valueColor: _AppColors.trackerRed),
+      );
+    }
+    final zones = ['z1', 'z2', 'z3', 'z4', 'z5'];
+    return Container(
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7))),
+          child: Row(children: [
+            const Icon(Icons.favorite_rounded, color: _AppColors.trackerRed, size: 15),
+            const SizedBox(width: 7),
+            Expanded(child: Text('Polar H10 · ${_fmtBpm(_hrAvgBpm())} средний · ${_fmtBpm(_hrMaxBpm())} максимум · $samples samples', style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerText, fontSize: 10.2, fontWeight: FontWeight.w600))),
+          ]),
+        ),
+        Wrap(
+          spacing: 0,
+          runSpacing: 0,
+          children: zones.map((z) {
+            final count = _hrZoneCount(z);
+            final percent = samples <= 0 ? 0 : ((count / samples) * 100).round();
+            return _buildTrackerStatCell(z.toUpperCase(), '$percent%', Icons.favorite_border_rounded, _AppColors.trackerRed, compact: compact);
+          }).toList(),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildTrackerAssessmentLine() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7))),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Icon(Icons.insights_rounded, color: _AppColors.trackerGreenDark, size: 16),
+        const SizedBox(width: 8),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(_loadAssessmentTitle(), style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerText, fontSize: 10.8, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 2),
+          Text(_loadAssessmentText(), style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerDim, fontSize: 9.5, height: 1.25, fontWeight: FontWeight.w700)),
+        ])),
+      ]),
+    );
+  }
+
+  Widget _buildTrackerRatingBreakdownPanel() {
+    final components = _footballRatingComponents();
+    return _buildTrackerPanel(
+      title: 'Из чего строится рейтинг',
+      subtitle: 'посещаемость, оценка тренера, трекер, тесты и игровые данные',
+      icon: Icons.workspace_premium_rounded,
+      child: LayoutBuilder(builder: (context, constraints) {
+        final compact = constraints.maxWidth < 720;
+        return Wrap(
+          spacing: 0,
+          runSpacing: 0,
+          children: components.map((c) {
+            return _buildTrackerStatCell(c.label, '${c.value} / 100', c.icon, c.color, compact: compact);
+          }).toList(),
+        );
+      }),
+    );
+  }
+
+  Widget _buildTrackerRatingCell({required String title, required String value, required String subtitle, required double progress, required Color color}) {
+    final normalized = progress.clamp(0.0, 1.0).toDouble();
+    return Padding(
+      padding: const EdgeInsets.all(10),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+        Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerDim, fontSize: 9.6, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        Text(value, style: TextStyle(fontFamily: _fontFamily, color: color, fontSize: 34, height: .92, fontWeight: FontWeight.w700, letterSpacing: -1)),
+        const SizedBox(height: 5),
+        Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerText, fontSize: 10.6, height: 1.15, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 9),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(3),
+          child: LinearProgressIndicator(
+            value: normalized,
+            minHeight: 5,
+            backgroundColor: _AppColors.trackerLine,
+            valueColor: AlwaysStoppedAnimation<Color>(color),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildTrackerCoachLine() {
+    final rating = _footballPlayerRating();
+    return Container(
+      decoration: const BoxDecoration(border: Border(top: BorderSide(color: _AppColors.trackerLine))),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Icon(Icons.sports_soccer_rounded, color: _AppColors.trackerGreenDark, size: 16),
+        const SizedBox(width: 8),
+        Expanded(child: Text(_footballRatingRecommendation(rating), style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerGraphite, fontSize: 10.5, height: 1.3, fontWeight: FontWeight.w600))),
+      ]),
+    );
+  }
+
+  Widget _buildTrackerTextLine(String title, String value, {Color? valueColor}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SizedBox(width: 112, child: Text(title, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerDim, fontSize: 9.8, fontWeight: FontWeight.w600))),
+        Expanded(child: Text(value, style: TextStyle(fontFamily: _fontFamily, color: valueColor ?? _AppColors.trackerText, fontSize: 10.6, height: 1.28, fontWeight: FontWeight.w600))),
+      ]),
+    );
+  }
+
+  Widget _buildTrackerDivider() => Container(height: 1, color: _AppColors.trackerLine);
+
+  Widget _buildTrackerStatCell(String title, String value, IconData icon, Color color, {required bool compact}) {
+    return SizedBox(
+      width: compact ? double.infinity : 150,
+      height: 52,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(right: BorderSide(color: _AppColors.trackerLine, width: .7), bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
+        ),
+        child: Row(children: [
+          Container(
+            width: 26,
+            height: 26,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: _AppColors.softFor(color),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: color.withOpacity(.14), width: .7),
+            ),
+            child: Icon(icon, size: 13, color: color),
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+            Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerText, fontSize: 11.8, height: 1.05, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 3),
+            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerDim, fontSize: 8.8, fontWeight: FontWeight.w600)),
+          ])),
+        ]),
+      ),
+    );
+  }
+
+  Widget _buildTrackerSessionsPanel() {
+    final rows = trackerSessions.take(10).toList();
+    return _buildTrackerPanel(
+      title: 'Последние сессии трекера',
+      subtitle: rows.isEmpty ? 'после сохранения тренировки данные появятся здесь' : 'дата, дистанция, длительность, спринты и нагрузка',
+      icon: Icons.sensors_rounded,
+      trailing: Container(
+        height: 27,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(color: _AppColors.trackerGreenSoft, borderRadius: BorderRadius.circular(4), border: Border.all(color: _AppColors.trackerGreenBorder)),
+        child: Text('${trackerSessions.length}', style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerGreenDark, fontSize: 9.8, fontWeight: FontWeight.w700)),
+      ),
+      child: rows.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.all(10),
+              child: _buildTrackerTextLine('Сессии', 'Нет сохранённых GPS/BLE-сессий по выбранному игроку'),
+            )
+          : Column(children: List.generate(rows.length, (i) => _buildTrackerSessionTile(rows[i], last: i == rows.length - 1))),
+    );
+  }
+
+  Widget _buildTrackerSessionTile(Map<String, dynamic> row, {required bool last}) {
+    final date = _trackerDateOf(row);
+    final distance = _trackerNumber(row, const ['total_distance_m', 'distance_m', 'distance']);
+    final maxSpeed = _trackerNumber(row, const ['max_speed_kmh', 'max_speed']);
+    final sprints = _trackerNumber(row, const ['sprint_count', 'sprints']).round();
+    final duration = _trackerDurationSecOf(row);
+    final load = _trackerNumber(row, const ['load_score', 'player_load', 'training_load', 'load']);
+    final points = _trackerNumber(row, const ['points_count', 'gps_points_count', 'samples_count']).round();
+    return Container(
+      constraints: const BoxConstraints(minHeight: 46),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(border: last ? null : const Border(bottom: BorderSide(color: _AppColors.trackerLine))),
+      child: Row(children: [
+        Container(
+          width: 28,
+          height: 28,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(color: _AppColors.trackerGreenSoft, borderRadius: BorderRadius.circular(4), border: Border.all(color: _AppColors.trackerGreenBorder)),
+          child: const Icon(Icons.sensors_rounded, color: _AppColors.trackerGreenDark, size: 15),
+        ),
+        const SizedBox(width: 9),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(date == null ? 'GPS-сессия' : DateFormat('dd.MM.yyyy HH:mm').format(date), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerText, fontSize: 10.8, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 3),
+          Text('${_fmtDistance(distance)} · ${_fmtDurationFromSeconds(duration)} · ${sprints > 0 ? '$sprints спринт.' : 'спринты —'} · GPS $points', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerDim, fontSize: 9.3, fontWeight: FontWeight.w700)),
+        ])),
+        const SizedBox(width: 8),
+        Column(crossAxisAlignment: CrossAxisAlignment.end, mainAxisAlignment: MainAxisAlignment.center, children: [
+          Text(_fmtSpeed(maxSpeed), style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerOrange, fontSize: 10.4, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 3),
+          Text(load > 0 ? 'нагрузка ${load.round()}' : 'нагрузка —', style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerDim, fontSize: 8.8, fontWeight: FontWeight.w600)),
+        ]),
+      ]),
+    );
   }
 
   Widget _buildFilteredMetricsTab({
@@ -4427,18 +8138,14 @@ Widget _buildCircleNetworkImage({
   }
 
 
+
   Widget _calendarLikeCmrPanelSize(Widget child, {double maxWidth = 480}) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final available = constraints.maxWidth.isFinite ? constraints.maxWidth : maxWidth;
-        final width = math.min(maxWidth, available);
-        return Align(
-          alignment: Alignment.centerLeft,
-          child: SizedBox(width: width, child: child),
-        );
-      },
-    );
+    // Все календари внутри профиля теперь ведут себя как календарь нагрузки:
+    // занимают ширину рабочей панели и не создают отдельную «карточку» с отступами.
+    return child;
   }
+
+
 
   Widget _buildTtdCalendar({
     required List<Map<String, dynamic>> items,
@@ -4448,65 +8155,63 @@ Widget _buildCircleNetworkImage({
     ValueChanged<DateTime>? onMonthChanged,
     bool loading = false,
   }) {
+    final now = DateTime.now();
     final month = DateTime(displayMonth.year, displayMonth.month, 1);
     final first = DateTime(month.year, month.month, 1);
     final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
     final leading = (first.weekday + 6) % 7;
     final total = ((leading + daysInMonth + 6) ~/ 7) * 7;
 
-    return _calendarLikeCmrPanelSize(
-      Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              _calendarArrow(
-                Icons.chevron_left_rounded,
-                () => onMonthChanged != null
-                    ? onMonthChanged(DateTime(month.year, month.month - 1, 1))
-                    : onSelect(DateTime(month.year, month.month - 1, 1), const <Map<String, dynamic>>[]),
-              ),
-              Expanded(
-                child: Center(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(DateFormat('LLLL yyyy', 'ru').format(month), style: _titleStyle(size: 14.5, color: const Color(0xFF101828))),
-                      if (loading) ...[
-                        const SizedBox(width: 8),
-                        const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-              _calendarArrow(
-                Icons.chevron_right_rounded,
-                () => onMonthChanged != null
-                    ? onMonthChanged(DateTime(month.year, month.month + 1, 1))
-                    : onSelect(DateTime(month.year, month.month + 1, 1), const <Map<String, dynamic>>[]),
-              ),
-            ],
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
+      ),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          _calendarArrow(
+            Icons.chevron_left_rounded,
+            () => onMonthChanged != null
+                ? onMonthChanged(DateTime(month.year, month.month - 1, 1))
+                : onSelect(DateTime(month.year, month.month - 1, 1), const <Map<String, dynamic>>[]),
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
-                .map((d) => Expanded(child: Center(child: Text(d, style: _bodyStyle(size: 10.5, color: const Color(0xFF667085), weight: FontWeight.w700)))))
-                .toList(),
+          Expanded(
+            child: Center(
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Text(DateFormat('LLLL yyyy', 'ru').format(month), style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerText, fontSize: 11.4, fontWeight: FontWeight.w700)),
+                if (loading) ...[
+                  const SizedBox(width: 7),
+                  const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: _AppColors.trackerGreen)),
+                ],
+              ]),
+            ),
           ),
-          const SizedBox(height: 6),
-          GridView.builder(
+          _calendarArrow(
+            Icons.chevron_right_rounded,
+            () => onMonthChanged != null
+                ? onMonthChanged(DateTime(month.year, month.month + 1, 1))
+                : onSelect(DateTime(month.year, month.month + 1, 1), const <Map<String, dynamic>>[]),
+          ),
+        ]),
+        const SizedBox(height: 8),
+        Row(
+          children: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+              .map((d) => Expanded(child: Center(child: Text(d, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerDim, fontSize: 8.8, fontWeight: FontWeight.w600)))))
+              .toList(),
+        ),
+        const SizedBox(height: 6),
+        LayoutBuilder(builder: (context, gridBox) {
+          final cellAspect = gridBox.maxWidth >= 680 ? 1.42 : (gridBox.maxWidth >= 520 ? 1.28 : 1.18);
+          return GridView.builder(
             itemCount: total,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 7,
-              mainAxisSpacing: 6,
-              crossAxisSpacing: 6,
-              childAspectRatio: 1.28,
+              mainAxisSpacing: 4,
+              crossAxisSpacing: 4,
+              childAspectRatio: cellAspect,
             ),
             itemBuilder: (context, i) {
               final dayNum = i - leading + 1;
@@ -4520,61 +8225,69 @@ Widget _buildCircleNetworkImage({
               final count = dayMatches.length;
               final has = count > 0;
               final selected = selectedDay != null && _sameDateOnly(day, selectedDay);
-              final accent = has ? _ttdAccentForMatches(dayMatches) : const Color(0xFFCBD5E1);
-final danger = has && accent == _AppColors.error;
+              final today = _sameDateOnly(day, now);
+              final accent = has ? _ttdAccentForMatches(dayMatches) : _AppColors.trackerGreenDark;
+              final hasTtd = dayMatches.any(_hasMatchTtd);
 
-final markerColors = dayMatches
-    .map((m) => _ttdAccentForMatches([m]))
-    .toList();
-
-              return InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () => onSelect(day, dayMatches.map((e) => Map<String, dynamic>.from(e)).toList()),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? _AppColors.cmrGreen
-                        : has
-                            ? (danger ? _AppColors.redSoft : _AppColors.cmrSoft)
-                            : _AppColors.cmrSoftPanel,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text('$dayNum', style: TextStyle(color: selected ? Colors.white : const Color(0xFF101828), fontSize: 11.3, fontWeight: FontWeight.w700)),
-                          if (has) ...[
-                            const SizedBox(width: 3),
-                            Container(
-                              constraints: const BoxConstraints(minWidth: 14),
-                              height: 14,
-                              padding: const EdgeInsets.symmetric(horizontal: 3),
-                              decoration: BoxDecoration(color: selected ? Colors.white : accent, borderRadius: BorderRadius.circular(99)),
-                              child: Center(child: Text('$count', style: TextStyle(color: selected ? _AppColors.cmrGreen : Colors.white, fontSize: 8.2, fontWeight: FontWeight.w700))),
-                            ),
-                          ],
-                        ],
+              return Material(
+                color: selected ? _AppColors.trackerGreen : (has ? _AppColors.softFor(accent) : Colors.white),
+                borderRadius: BorderRadius.circular(4),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(4),
+                  onTap: () => onSelect(day, dayMatches.map((e) => Map<String, dynamic>.from(e)).toList()),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: selected
+                            ? _AppColors.trackerGreen
+                            : today
+                                ? _AppColors.trackerGreenBorder
+                                : _AppColors.trackerLine,
+                        width: .7,
                       ),
-                      if (has) ...[
-                        const SizedBox(height: 3),
-                        _buildCalendarSegmentMarker(markerColors, selected: selected),
-                      ],
-                    ],
+                    ),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      Row(children: [
+                        Expanded(
+                          child: Text(
+                            '$dayNum',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontFamily: _fontFamily, color: selected ? Colors.white : _AppColors.trackerText, fontSize: 10.2, fontWeight: FontWeight.w700, height: 1),
+                          ),
+                        ),
+                        if (has)
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(color: selected ? Colors.white : accent, borderRadius: BorderRadius.circular(99)),
+                          ),
+                      ]),
+                      Text(
+                        has ? (hasTtd ? 'ТТД $count' : '$count матч') : '—',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontFamily: _fontFamily,
+                          color: selected ? Colors.white : (has ? _AppColors.trackerGreenDark : _AppColors.trackerDim),
+                          fontSize: 7.8,
+                          fontWeight: FontWeight.w600,
+                          height: 1,
+                        ),
+                      ),
+                    ]),
                   ),
                 ),
               );
             },
-          ),
-        ],
-      ),
-    ),
+          );
+        }),
+      ]),
     );
   }
+
 
   Widget _buildTtdMatchPeriodRow(Map<String, dynamic> m, {required bool active}) {
     final matchId = _asInt(m['match_id'] ?? m['id']);
@@ -4614,7 +8327,7 @@ final markerColors = dayMatches
               Container(
                 width: 32,
                 height: 32,
-                decoration: BoxDecoration(color: _AppColors.cmrSoft, borderRadius: BorderRadius.circular(13)),
+                decoration: BoxDecoration(color: _AppColors.cmrSoft, borderRadius: BorderRadius.circular(4)),
                 child: const Icon(Icons.sports_soccer_rounded, color: _AppColors.cmrGreen, size: 18),
               ),
               const SizedBox(width: 10),
@@ -4647,7 +8360,7 @@ final markerColors = dayMatches
                   Container(
                     constraints: const BoxConstraints(minWidth: 44),
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(color: _AppColors.softFor(resultColor), borderRadius: BorderRadius.circular(13)),
+                    decoration: BoxDecoration(color: _AppColors.softFor(resultColor), borderRadius: BorderRadius.circular(4)),
                     child: Text(score, textAlign: TextAlign.center, style: _bodyStyle(size: 12.4, color: resultColor, weight: FontWeight.w700)),
                   ),
                   const SizedBox(height: 4),
@@ -4966,7 +8679,7 @@ final markerColors = dayMatches
             return Material(
               color: Colors.transparent,
               child: InkWell(
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(4),
                 onTap: !inMonth
                     ? null
                     : () async {
@@ -4982,7 +8695,7 @@ final markerColors = dayMatches
                   padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
                   decoration: BoxDecoration(
                     color: fill,
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(4),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -5025,7 +8738,7 @@ final markerColors = dayMatches
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-      decoration: BoxDecoration(color: _AppColors.cmrSoft, borderRadius: BorderRadius.circular(18)),
+      decoration: BoxDecoration(color: _AppColors.cmrSoft, borderRadius: BorderRadius.circular(4)),
       child: Wrap(
         spacing: 12,
         runSpacing: 8,
@@ -5170,13 +8883,13 @@ final markerColors = dayMatches
               width: itemWidth,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4)),
                 child: Row(
                   children: [
                     Container(
                       width: 38,
                       height: 38,
-                      decoration: BoxDecoration(color: empty ? const Color(0xFFF6F8FA) : _AppColors.softFor(accent), borderRadius: BorderRadius.circular(14)),
+                      decoration: BoxDecoration(color: empty ? const Color(0xFFF6F8FA) : _AppColors.softFor(accent), borderRadius: BorderRadius.circular(4)),
                       child: Icon(item.icon, size: 20, color: empty ? const Color(0xFF98A2B3) : accent),
                     ),
                     const SizedBox(width: 10),
@@ -5223,13 +8936,13 @@ final markerColors = dayMatches
     ];
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: _AppColors.cmrSoftPanel, borderRadius: BorderRadius.circular(24), ),
+      decoration: BoxDecoration(color: _AppColors.cmrSoftPanel, borderRadius: BorderRadius.circular(4), ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(width: 44, height: 44, decoration: BoxDecoration(color: _AppColors.cmrSoft, borderRadius: BorderRadius.circular(16)), child: const Icon(Icons.tune_rounded, color: _AppColors.primaryGreen, size: 22)),
+              Container(width: 44, height: 44, decoration: BoxDecoration(color: _AppColors.cmrSoft, borderRadius: BorderRadius.circular(4)), child: const Icon(Icons.tune_rounded, color: _AppColors.primaryGreen, size: 22)),
               const SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text('Основные характеристики', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, fontSize: 15.5, height: 1.05, fontWeight: FontWeight.w600, color: const Color(0xFF101828), letterSpacing: -0.25)),
@@ -5291,7 +9004,7 @@ final markerColors = dayMatches
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(4),
         ),
         child: Text(
           bio,
@@ -5323,9 +9036,9 @@ final markerColors = dayMatches
               width: itemWidth,
               child: Container(
                 padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4)),
                 child: Row(children: [
-                  Container(width: 36, height: 36, decoration: BoxDecoration(color: _AppColors.softFor(accent), borderRadius: BorderRadius.circular(14)), child: Icon(item.icon, color: accent, size: 19)),
+                  Container(width: 36, height: 36, decoration: BoxDecoration(color: _AppColors.softFor(accent), borderRadius: BorderRadius.circular(4)), child: Icon(item.icon, color: accent, size: 19)),
                   const SizedBox(width: 10),
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(item.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 11.2, color: const Color(0xFF667085), weight: FontWeight.w700)),
@@ -5353,10 +9066,10 @@ final markerColors = dayMatches
     final accent = _AppColors.accentForIcon(icon);
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: _AppColors.cmrSoftPanel, borderRadius: BorderRadius.circular(24)),
+      decoration: BoxDecoration(color: _AppColors.cmrSoftPanel, borderRadius: BorderRadius.circular(4)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Container(width: 42, height: 42, decoration: BoxDecoration(color: _AppColors.softFor(accent), borderRadius: BorderRadius.circular(16)), child: Icon(icon, color: accent, size: 21)),
+          Container(width: 42, height: 42, decoration: BoxDecoration(color: _AppColors.softFor(accent), borderRadius: BorderRadius.circular(4)), child: Icon(icon, color: accent, size: 21)),
           const SizedBox(width: 12),
           Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _titleStyle(size: 17, color: _AppColors.textPrimary, weight: FontWeight.w600))),
         ]),
@@ -5392,7 +9105,7 @@ final markerColors = dayMatches
                 height: isTablet ? 54 : 48,
                 decoration: BoxDecoration(
                   color: const Color(0xFFEAF5EE),
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 child: const Icon(Icons.dashboard_customize_rounded, color: Color(0xFF2563EB), size: 26),
               ),
@@ -5462,7 +9175,7 @@ final markerColors = dayMatches
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -5481,14 +9194,14 @@ final markerColors = dayMatches
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Row(
         children: [
           Container(
             width: 34,
             height: 34,
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4)),
             child: Icon(icon, size: 18, color: const Color(0xFF178A45)),
           ),
           const SizedBox(width: 10),
@@ -5599,7 +9312,7 @@ final markerColors = dayMatches
                 height: 50,
                 decoration: BoxDecoration(
                   color: const Color(0xFFEAF5EE),
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 child: Icon(icon, size: 24, color: const Color(0xFF178A45)),
               ),
@@ -5629,13 +9342,13 @@ final markerColors = dayMatches
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(4),
         onTap: onTap,
         child: Ink(
           padding: const EdgeInsets.all(15),
           decoration: BoxDecoration(
             color: _AppColors.softFor(accent),
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(4),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -5647,7 +9360,7 @@ final markerColors = dayMatches
                     height: 38,
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(.82),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(4),
                     ),
                     child: Icon(icon, color: accent, size: 20),
                   ),
@@ -5690,7 +9403,7 @@ final markerColors = dayMatches
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
             child: Row(
               children: [
-                Container(width: 42, height: 42, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)), child: Icon(icon, size: 21, color: const Color(0xFF178A45))),
+                Container(width: 42, height: 42, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4)), child: Icon(icon, size: 21, color: const Color(0xFF178A45))),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -5773,27 +9486,23 @@ final markerColors = dayMatches
 
     Widget? topSummary;
     if (hideHeader || splitMode) {
-      // В режиме ПК/планшета справа уже есть детальная панель, поэтому
-      // центральная область должна начинаться сразу с основного инструмента
-      // раздела: календаря, списка или карточек, без верхних статистических плиток.
       topSummary = null;
     } else {
       topSummary = Container(
-        padding: EdgeInsets.all(isMobile ? 14 : 16),
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(30),
+          border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
         ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           _buildCmrSectionBanner(title: title, subtitle: subtitle, icon: icon, accent: accent),
-          if (stats.isNotEmpty) ...[
-            SizedBox(height: isMobile ? 10 : 10),
-            Wrap(spacing: isMobile ? 7 : 10, runSpacing: isMobile ? 7 : 10, children: stats),
-          ],
-          if (actions.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Wrap(spacing: 8, runSpacing: 8, children: actions),
-          ],
+          if (stats.isNotEmpty)
+            Wrap(spacing: 0, runSpacing: 0, children: stats),
+          if (actions.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: const BoxDecoration(border: Border(top: BorderSide(color: _AppColors.trackerLine, width: .7))),
+              child: Wrap(spacing: 6, runSpacing: 6, children: actions),
+            ),
         ]),
       );
     }
@@ -5807,7 +9516,6 @@ final markerColors = dayMatches
         children: [
           if (topSummary != null) ...[
             topSummary,
-            SizedBox(height: isMobile ? 12 : 14),
           ],
           ...children,
         ],
@@ -5823,15 +9531,25 @@ final markerColors = dayMatches
   }) {
     final isMobile = MediaQuery.of(context).size.width < 720;
     return Container(
-      padding: EdgeInsets.all(isMobile ? 13 : 16),
-      decoration: BoxDecoration(color: _AppColors.cmrSoftPanel, borderRadius: BorderRadius.circular(isMobile ? 22 : 24)),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Container(width: isMobile ? 42 : 48, height: isMobile ? 42 : 48, decoration: BoxDecoration(color: _AppColors.softFor(accent), borderRadius: BorderRadius.circular(isMobile ? 15 : 18)), child: Icon(icon, color: accent, size: isMobile ? 21 : 24)),
-        const SizedBox(width: 12),
+      padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 10, vertical: isMobile ? 8 : 9),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: _AppColors.trackerLine))),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+        Container(
+          width: isMobile ? 28 : 30,
+          height: isMobile ? 28 : 30,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: _AppColors.softFor(accent),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: accent.withOpacity(.18)),
+          ),
+          child: Icon(icon, color: accent, size: isMobile ? 15 : 16),
+        ),
+        const SizedBox(width: 8),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, maxLines: isMobile ? 2 : 1, overflow: TextOverflow.ellipsis, style: _cmrTitleText(context, mobile: 17.5, wide: 20, color: _AppColors.textPrimary, weight: FontWeight.w600)),
-          const SizedBox(height: 5),
-          Text(subtitle, maxLines: isMobile ? 3 : 2, overflow: TextOverflow.ellipsis, style: _cmrSubtitleText(context, mobile: 12.2, wide: 13.3, color: _AppColors.textSecondary, weight: FontWeight.w600)),
+          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerText, fontSize: isMobile ? 11.4 : 11.8, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 2),
+          Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerDim, fontSize: isMobile ? 8.6 : 8.8, fontWeight: FontWeight.w700)),
         ])),
       ]),
     );
@@ -5843,53 +9561,37 @@ final markerColors = dayMatches
     final accent = _AppColors.accentForIcon(icon);
     final screenWidth = MediaQuery.of(context).size.width;
     final tileWidth = isMobile
-        ? ((screenWidth - 46) / 2).clamp(136.0, 166.0).toDouble()
-        : (splitMode ? 118.0 : 150.0);
-    final tileHeight = isMobile ? 52.0 : (splitMode ? 88.0 : 78.0);
+        ? ((screenWidth - 42) / 2).clamp(136.0, 168.0).toDouble()
+        : (splitMode ? 118.0 : 154.0);
 
     return SizedBox(
       width: tileWidth,
-      height: tileHeight,
+      height: isMobile ? 50 : 54,
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: isMobile ? 10 : 12, vertical: isMobile ? 8 : 10),
-        decoration: BoxDecoration(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+        decoration: const BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(isMobile ? 16 : 20),
+          border: Border(right: BorderSide(color: _AppColors.trackerLine), bottom: BorderSide(color: _AppColors.trackerLine)),
         ),
-        child: isMobile
-            ? Row(children: [
-                Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(color: _AppColors.softFor(accent), borderRadius: BorderRadius.circular(11)),
-                  child: Icon(icon, size: 15, color: accent),
-                ),
-                const SizedBox(width: 8),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _cmrTitleText(context, mobile: 13.5, wide: 13.5, color: _AppColors.textPrimary, weight: FontWeight.w700)),
-                  const SizedBox(height: 2),
-                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _cmrSubtitleText(context, mobile: 9.8, wide: 10.2, color: _AppColors.textSecondary, weight: FontWeight.w700)),
-                ])),
-              ])
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(children: [
-                    Container(
-                      width: 30,
-                      height: 30,
-                      decoration: BoxDecoration(color: _AppColors.softFor(accent), borderRadius: BorderRadius.circular(12)),
-                      child: Icon(icon, size: 17, color: accent),
-                    ),
-                    const Spacer(),
-                    const Icon(Icons.arrow_upward_rounded, color: _AppColors.cmrGreen, size: 14),
-                  ]),
-                  const Spacer(),
-                  Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _cmrTitleText(context, mobile: 18, wide: 19.5, color: _AppColors.textPrimary, weight: FontWeight.w700)),
-                  const SizedBox(height: 4),
-                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _cmrSubtitleText(context, mobile: 10.4, wide: 11, color: _AppColors.textSecondary, weight: FontWeight.w600)),
-                ],
-              ),
+        child: Row(children: [
+          Container(
+            width: 25,
+            height: 25,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: _AppColors.softFor(accent),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: accent.withOpacity(.18)),
+            ),
+            child: Icon(icon, size: 13, color: accent),
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+            Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerText, fontSize: isMobile ? 12.0 : 12.5, height: 1.05, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 3),
+            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerDim, fontSize: isMobile ? 8.8 : 9.2, fontWeight: FontWeight.w600)),
+          ])),
+        ]),
       ),
     );
   }
@@ -5901,27 +9603,30 @@ final markerColors = dayMatches
     bool primary = false,
     bool compact = false,
   }) {
-    final accent = primary ? _AppColors.cmrGreen : _actionAccent(icon, label);
-    final background = primary ? _AppColors.cmrGreen : accent.withOpacity(.09);
-    final foreground = primary ? Colors.white : accent;
+    final accent = primary ? _AppColors.trackerGreenDark : _actionAccent(icon, label);
+    final foreground = primary ? Colors.white : _AppColors.trackerText;
     return Material(
-      color: background,
-      borderRadius: BorderRadius.circular(20),
+      color: primary ? _AppColors.trackerGreen : Colors.white,
+      borderRadius: BorderRadius.circular(4),
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(4),
         onTap: onTap,
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: compact ? 10 : 12, horizontal: compact ? 12 : 14),
+        child: Container(
+          height: compact ? 28 : 32,
+          padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: primary ? _AppColors.trackerGreen : _AppColors.trackerLine),
+          ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon, size: compact ? 18 : 20, color: foreground),
-            const SizedBox(width: 8),
-            Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: foreground, fontSize: compact ? 12.5 : 13, fontWeight: FontWeight.w600))),
+            Icon(icon, size: compact ? 14 : 15, color: primary ? Colors.white : accent),
+            const SizedBox(width: 6),
+            Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: foreground, fontSize: compact ? 9.6 : 10.4, fontWeight: FontWeight.w700))),
           ]),
         ),
       ),
     );
   }
-
 
   Widget _buildCmrEditButton({
     required String label,
@@ -5940,11 +9645,11 @@ final markerColors = dayMatches
   Widget _buildCmrCard({required Widget child}) {
     final isMobile = MediaQuery.of(context).size.width < 720;
     return Container(
-      margin: EdgeInsets.only(bottom: isMobile ? 10 : 14),
-      padding: EdgeInsets.all(isMobile ? 14 : 18),
-      decoration: BoxDecoration(
+      margin: EdgeInsets.zero,
+      padding: EdgeInsets.all(isMobile ? 10 : 12),
+      decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(isMobile ? 22 : 28),
+        border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
       ),
       child: child,
     );
@@ -5953,11 +9658,11 @@ final markerColors = dayMatches
   Widget _buildCmrSoftCard({required Widget child, EdgeInsets? padding}) {
     final isMobile = MediaQuery.of(context).size.width < 720;
     return Container(
-      margin: EdgeInsets.only(bottom: isMobile ? 10 : 14),
-      padding: padding ?? EdgeInsets.all(isMobile ? 13 : 16),
-      decoration: BoxDecoration(
-        color: _AppColors.cmrSoftPanel,
-        borderRadius: BorderRadius.circular(isMobile ? 20 : 24),
+      margin: EdgeInsets.zero,
+      padding: padding ?? EdgeInsets.all(isMobile ? 10 : 12),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
       ),
       child: child,
     );
@@ -6027,7 +9732,7 @@ final markerColors = dayMatches
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: _AppColors.cmrSoftPanel,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -6037,7 +9742,7 @@ final markerColors = dayMatches
             height: 38,
             decoration: BoxDecoration(
               color: _AppColors.softFor(_AppColors.cmrGreen),
-              borderRadius: BorderRadius.circular(15),
+              borderRadius: BorderRadius.circular(4),
             ),
             child: const Icon(Icons.monitor_heart_outlined, color: _AppColors.cmrGreen, size: 21),
           ),
@@ -6084,6 +9789,7 @@ final markerColors = dayMatches
     );
   }
 
+
   Widget _buildMetricCard(String metric) {
     final parsed = _splitMetricLine(metric);
     final rawTitle = parsed['title']?.trim() ?? '';
@@ -6096,82 +9802,54 @@ final markerColors = dayMatches
     final selected = _selectedMetricForDetails == metric;
 
     return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(24),
+      color: selected ? _AppColors.trackerGreenSoft : Colors.white,
       child: InkWell(
-        borderRadius: BorderRadius.circular(24),
         onTap: () {
           setState(() => _selectedMetricForDetails = metric);
           _rebuildOpenSectionSheet();
         },
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 88),
-          child: Ink(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: selected ? _AppColors.cmrSoft : Colors.white,
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: selected ? Colors.white : _AppColors.softFor(accent),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(icon, color: accent, size: 21),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: _cmrSubtitleText(context, mobile: 12.0, wide: 12.6, color: const Color(0xFF667085), weight: FontWeight.w600),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        _buildMetricMetaPill(_metricGroupIcon(group), group, accent),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      value,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: _cmrTitleText(context, mobile: 17.0, wide: 17.6, color: const Color(0xFF101828), weight: FontWeight.w700),
-                    ),
-                  ],
-                ),
-              ),
-              if (selected) ...[
-                const SizedBox(width: 8),
-                Icon(Icons.check_circle_rounded, color: accent, size: 20),
-              ],
-            ],
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 54),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
           ),
+          child: Row(children: [
+            Container(
+              width: 28,
+              height: 28,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: _AppColors.softFor(accent),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: accent.withOpacity(.16), width: .7),
+              ),
+              child: Icon(icon, color: accent, size: 15),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerText, fontSize: 12.2, fontWeight: FontWeight.w700, height: 1.05)),
+                const SizedBox(height: 3),
+                Text('$title · $group', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerDim, fontSize: 9.2, fontWeight: FontWeight.w600)),
+              ]),
+            ),
+            const SizedBox(width: 8),
+            Icon(selected ? Icons.check_rounded : Icons.chevron_right_rounded, color: selected ? accent : _AppColors.trackerDim, size: 18),
+          ]),
         ),
       ),
-    ),
-  );
+    );
   }
+
 
   Widget _buildMetricMetaPill(IconData icon, String label, Color accent) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
-        color: _AppColors.softFor(accent),
-        borderRadius: BorderRadius.circular(999),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: _AppColors.trackerLine, width: .7),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -6309,7 +9987,7 @@ final markerColors = dayMatches
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(4),
         onTap: () {
           if (_usesCmrRightDetailsPane(context)) {
             setState(() => _selectedMediaForDetails = url);
@@ -6321,7 +9999,7 @@ final markerColors = dayMatches
         child: Ink(
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(4),
             image: isImage ? DecorationImage(image: NetworkImage(norm), fit: BoxFit.cover) : null,
           ),
           child: Stack(
@@ -6435,9 +10113,9 @@ final markerColors = dayMatches
 
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.circular(4),
       child: InkWell(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(4),
         onTap: () {
           setState(() => _selectedMedicalRecordForDetails = Map<String, dynamic>.from(record));
           _rebuildOpenSectionSheet();
@@ -6446,7 +10124,7 @@ final markerColors = dayMatches
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: selected ? _AppColors.cmrSoft : Colors.white,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(4),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -6460,7 +10138,7 @@ final markerColors = dayMatches
                     height: 42,
                     decoration: BoxDecoration(
                       color: selected ? Colors.white : _AppColors.softFor(accent),
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(4),
                     ),
                     child: Icon(_medicalIcon('$type $title $value'), color: accent, size: 21),
                   ),
@@ -6500,7 +10178,7 @@ final markerColors = dayMatches
                   padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
                   decoration: BoxDecoration(
                     color: selected ? Colors.white.withOpacity(.75) : _AppColors.cmrSoftPanel,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
                     value,
@@ -6677,7 +10355,6 @@ final markerColors = dayMatches
             },
           ),
         if (splitMode || _trainingCalendarExpanded) ...[
-          if (!splitMode) const SizedBox(height: 10),
           _buildMarkedCalendar(
             items: _trainingCalendarItems(),
             dateOf: _trainingDateOf,
@@ -7036,14 +10713,14 @@ final markerColors = dayMatches
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(4),
         onTap: () => openDetails(),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           padding: EdgeInsets.all(compact ? 13 : 15),
           decoration: BoxDecoration(
             color: active ? _AppColors.cmrSoft : Colors.white,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(4),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -7057,7 +10734,7 @@ final markerColors = dayMatches
                     height: compact ? 40 : 44,
                     decoration: BoxDecoration(
                       color: active ? Colors.white : _AppColors.softFor(accent),
-                      borderRadius: BorderRadius.circular(15),
+                      borderRadius: BorderRadius.circular(4),
                     ),
                     child: Icon(_trainingTypeIcon(typeLabel), color: accent, size: compact ? 20 : 22),
                   ),
@@ -7228,7 +10905,7 @@ final markerColors = dayMatches
                         height: 46,
                         decoration: BoxDecoration(
                           color: _primary.withOpacity(0.10),
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(4),
                         ),
                         child: Icon(Icons.fitness_center_rounded, color: _primary, size: 23),
                       ),
@@ -7322,7 +10999,7 @@ final markerColors = dayMatches
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -7334,7 +11011,7 @@ final markerColors = dayMatches
                 height: 42,
                 decoration: BoxDecoration(
                   color: meta.color.withOpacity(0.10),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 child: Icon(meta.icon, color: meta.color, size: 21),
               ),
@@ -7488,7 +11165,7 @@ final markerColors = dayMatches
             Expanded(
               child: Container(
                 height: 42,
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4), border: Border.all(color: _AppColors.trackerLine, width: .7)),
                 child: TextField(
                   controller: _eventSearchC,
                   onChanged: (_) {
@@ -7527,7 +11204,7 @@ final markerColors = dayMatches
                   Container(
                     width: 38,
                     height: 38,
-                    decoration: BoxDecoration(color: _AppColors.cmrSoft, borderRadius: BorderRadius.circular(14)),
+                    decoration: BoxDecoration(color: _AppColors.cmrSoft, borderRadius: BorderRadius.circular(4)),
                     child: const Icon(Icons.touch_app_rounded, color: _AppColors.cmrGreen, size: 20),
                   ),
                   const SizedBox(width: 10),
@@ -7599,9 +11276,9 @@ final markerColors = dayMatches
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
         color: selected ? _AppColors.cmrSoft : _AppColors.cmrSoftPanel,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(4),
         child: InkWell(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(4),
           onTap: () => _selectTrainingForDetails(e, loadInfo: true),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
@@ -7610,7 +11287,7 @@ final markerColors = dayMatches
                 Container(
                   width: 36,
                   height: 36,
-                  decoration: BoxDecoration(color: selected ? Colors.white : _AppColors.softFor(meta.color), borderRadius: BorderRadius.circular(13)),
+                  decoration: BoxDecoration(color: selected ? Colors.white : _AppColors.softFor(meta.color), borderRadius: BorderRadius.circular(4)),
                   child: Icon(meta.icon, color: meta.color, size: 18),
                 ),
                 const SizedBox(width: 10),
@@ -7672,7 +11349,8 @@ final markerColors = dayMatches
                 height: 42,
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: _AppColors.trackerLine, width: .7),
                 ),
                 child: TextField(
                   controller: _eventSearchC,
@@ -7915,7 +11593,7 @@ final markerColors = dayMatches
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -8009,7 +11687,7 @@ final markerColors = dayMatches
               final meta = _statusMeta(status, 0);
 
               return InkWell(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(4),
                 onTap: () {
                   setState(() {
                     _selectedTrainingDay = day;
@@ -8028,7 +11706,7 @@ final markerColors = dayMatches
                         : rows.isNotEmpty
                             ? Colors.white
                             : Colors.white,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(4),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -8289,7 +11967,7 @@ final markerColors = dayMatches
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(4),
         onTap: () => _selectTrainingForDetails(row, loadInfo: true),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
@@ -8297,7 +11975,7 @@ final markerColors = dayMatches
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color: active ? _AppColors.cmrSoft : Colors.white,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(4),
           ),
           child: Row(
             children: [
@@ -8314,7 +11992,7 @@ final markerColors = dayMatches
               Container(
                 width: 38,
                 height: 38,
-                decoration: BoxDecoration(color: _AppColors.softFor(accent), borderRadius: BorderRadius.circular(14)),
+                decoration: BoxDecoration(color: _AppColors.softFor(accent), borderRadius: BorderRadius.circular(4)),
                 child: Icon(_trainingTypeIcon(typeLabel), color: accent, size: 20),
               ),
               const SizedBox(width: 12),
@@ -8450,9 +12128,9 @@ final markerColors = dayMatches
   Widget _attendanceReportMetric(IconData icon, String label, String value, Color accent) {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4), ),
       child: Row(children: [
-        Container(width: 30, height: 30, decoration: BoxDecoration(color: _AppColors.softFor(accent), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: accent, size: 16)),
+        Container(width: 30, height: 30, decoration: BoxDecoration(color: _AppColors.softFor(accent), borderRadius: BorderRadius.circular(4)), child: Icon(icon, color: accent, size: 16)),
         const SizedBox(width: 9),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 10.7, color: _AppColors.textSecondary, weight: FontWeight.w600)),
@@ -8466,7 +12144,7 @@ final markerColors = dayMatches
   Widget _attendanceDynamicsTile(String value, String title, String subtitle, IconData icon, Color accent) {
     return Container(
       padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4), ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(value, style: _cmrTitleText(context, mobile: 22, wide: 24, color: _AppColors.textPrimary, weight: FontWeight.w700)),
         const SizedBox(height: 2),
@@ -8522,7 +12200,7 @@ final markerColors = dayMatches
       padding: EdgeInsets.all(compact ? 14 : 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -8536,7 +12214,7 @@ final markerColors = dayMatches
                 height: compact ? 40 : 44,
                 decoration: BoxDecoration(
                   color: _AppColors.softFor(meta.color),
-                  borderRadius: BorderRadius.circular(15),
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 child: Icon(meta.icon, color: meta.color, size: compact ? 20 : 22),
               ),
@@ -8603,7 +12281,7 @@ final markerColors = dayMatches
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: _AppColors.cmrSoftPanel,
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(4),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -8613,7 +12291,7 @@ final markerColors = dayMatches
                 height: 42,
                 decoration: BoxDecoration(
                   color: _AppColors.softFor(_AppColors.cmrGreen),
-                  borderRadius: BorderRadius.circular(15),
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 child: const Icon(Icons.fitness_center_rounded, color: _AppColors.cmrGreen, size: 21),
               ),
@@ -8665,7 +12343,7 @@ final markerColors = dayMatches
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: _AppColors.cmrSoftPanel,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide.none),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                   hintText: 'Поиск по личным заданиям…',
                   prefixIcon: const Icon(Icons.search_rounded, size: 19),
@@ -8726,7 +12404,7 @@ final markerColors = dayMatches
                     height: 36,
                     decoration: BoxDecoration(
                       color: _AppColors.softFor(_AppColors.cmrGreen),
-                      borderRadius: BorderRadius.circular(13),
+                      borderRadius: BorderRadius.circular(4),
                     ),
                     child: const Icon(Icons.history_rounded, color: _AppColors.cmrGreen, size: 19),
                   ),
@@ -8770,7 +12448,7 @@ final markerColors = dayMatches
                 height: 40,
                 decoration: BoxDecoration(
                   color: _primary.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 child: Icon(Icons.calendar_month_rounded, color: _primary),
               ),
@@ -8793,14 +12471,14 @@ final markerColors = dayMatches
             children: [
               Expanded(
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(4),
                   onTap: _pickCalendarRange,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
                       color: _primary.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(4),
                     ),
                     child: Row(
                       children: [
@@ -8840,7 +12518,7 @@ final markerColors = dayMatches
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(4),
             ),
             child: TextField(
               controller: _calendarSearchC,
@@ -8901,7 +12579,7 @@ final markerColors = dayMatches
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -8915,7 +12593,7 @@ final markerColors = dayMatches
                 height: 42,
                 decoration: BoxDecoration(
                   color: _AppColors.softFor(accent),
-                  borderRadius: BorderRadius.circular(15),
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 child: Icon(icon, color: accent, size: 21),
               ),
@@ -9000,7 +12678,6 @@ final markerColors = dayMatches
             onToggle: () => _safeSetState(() => _matchesCalendarExpanded = !_matchesCalendarExpanded),
           ),
         if (splitMode || _matchesCalendarExpanded) ...[
-          if (!splitMode) const SizedBox(height: 10),
           _buildMarkedCalendar(
             items: matches,
             dateOf: _matchDateOf,
@@ -9078,23 +12755,11 @@ final markerColors = dayMatches
   Widget _buildMatchesCardsList(List<Map<String, dynamic>> rows) {
     return LayoutBuilder(
       builder: (context, c) {
-        // Карточки матчей оставляем ниже календаря, но делаем их как «матч-центр»:
-        // одна аккуратная лента на обычной ширине и две колонки только на очень широком экране.
-        final twoColumns = c.maxWidth >= 1040;
-        final gap = twoColumns ? 12.0 : 10.0;
-        final itemWidth = twoColumns ? (c.maxWidth - gap) / 2 : c.maxWidth;
-
-        return Wrap(
-          spacing: gap,
-          runSpacing: gap,
-          children: rows
-              .map(
-                (m) => SizedBox(
-                  width: itemWidth,
-                  child: _buildMatchActivityCard(m, compact: c.maxWidth < 720),
-                ),
-              )
-              .toList(),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: List.generate(rows.length, (i) {
+            return _buildMatchActivityCard(rows[i], compact: c.maxWidth < 720);
+          }),
         );
       },
     );
@@ -9119,7 +12784,7 @@ final markerColors = dayMatches
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: BorderRadius.circular(0),
         onTap: () {
           final day = _matchDateOf(m);
           if (_usesCmrRightDetailsPane(context)) {
@@ -9137,10 +12802,13 @@ final markerColors = dayMatches
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          padding: EdgeInsets.all(compact ? 12 : 14),
+          padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 12, vertical: compact ? 9 : 10),
           decoration: BoxDecoration(
-            color: active ? _AppColors.cmrSoft : Colors.white,
-            borderRadius: BorderRadius.circular(26),
+            color: Colors.white,
+            border: Border(
+              left: BorderSide(color: active ? _AppColors.trackerGreen : Colors.transparent, width: active ? 3 : 0),
+              bottom: const BorderSide(color: _AppColors.trackerLine, width: .7),
+            ),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -9150,13 +12818,14 @@ final markerColors = dayMatches
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    width: compact ? 42 : 46,
-                    height: compact ? 42 : 46,
+                    width: compact ? 30 : 32,
+                    height: compact ? 30 : 32,
                     decoration: BoxDecoration(
-                      color: _AppColors.softFor(_AppColors.cmrGreen),
-                      borderRadius: BorderRadius.circular(17),
+                      color: _AppColors.trackerGreenSoft,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: _AppColors.trackerGreenBorder, width: .7),
                     ),
-                    child: const Icon(Icons.sports_soccer_rounded, color: _AppColors.cmrGreen, size: 22),
+                    child: const Icon(Icons.sports_soccer_rounded, color: _AppColors.cmrGreen, size: 17),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -9172,10 +12841,10 @@ final markerColors = dayMatches
                                 overflow: TextOverflow.ellipsis,
                                 style: _cmrTitleText(
                                   context,
-                                  mobile: compact ? 15.0 : 15.8,
-                                  wide: 16.6,
+                                  mobile: compact ? 13.2 : 13.6,
+                                  wide: 14.0,
                                   color: const Color(0xFF101828),
-                                  weight: FontWeight.w700,
+                                  weight: FontWeight.w600,
                                 ),
                               ),
                             ),
@@ -9288,9 +12957,9 @@ final markerColors = dayMatches
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
-      decoration: BoxDecoration(
-        color: _AppColors.cmrSoftPanel,
-        borderRadius: BorderRadius.circular(16),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: _AppColors.trackerLine, width: .7)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -9350,8 +13019,9 @@ final markerColors = dayMatches
       constraints: BoxConstraints(minWidth: compact ? 48 : 54),
       padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 12, vertical: compact ? 7 : 8),
       decoration: BoxDecoration(
-        color: _AppColors.softFor(color),
-        borderRadius: BorderRadius.circular(15),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color.withOpacity(.18), width: .7),
       ),
       child: Text(
         score,
@@ -9381,10 +13051,10 @@ final markerColors = dayMatches
   }) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _AppColors.cmrSoft,
-        borderRadius: BorderRadius.circular(26),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -9395,7 +13065,7 @@ final markerColors = dayMatches
               Container(
                 width: 48,
                 height: 48,
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4)),
                 child: const Icon(Icons.sports_soccer_rounded, color: _AppColors.cmrGreen, size: 24),
               ),
               const SizedBox(width: 12),
@@ -9462,10 +13132,10 @@ final markerColors = dayMatches
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _AppColors.cmrSoftPanel,
-        borderRadius: BorderRadius.circular(24),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: _AppColors.trackerLine, width: .7), bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -9482,7 +13152,7 @@ final markerColors = dayMatches
                   Container(
                     width: 34,
                     height: 34,
-                    decoration: BoxDecoration(color: _AppColors.softFor(color), borderRadius: BorderRadius.circular(13)),
+                    decoration: BoxDecoration(color: _AppColors.softFor(color), borderRadius: BorderRadius.circular(4)),
                     child: Icon(item['icon'] as IconData, size: 18, color: color),
                   ),
                   const SizedBox(width: 10),
@@ -9593,7 +13263,7 @@ final markerColors = dayMatches
                         height: 46,
                         decoration: BoxDecoration(
                           color: _primary.withOpacity(0.10),
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(4),
                         ),
                         child: Icon(Icons.sports_score_rounded, color: _primary, size: 23),
                       ),
@@ -9662,7 +13332,7 @@ final markerColors = dayMatches
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -9674,7 +13344,7 @@ final markerColors = dayMatches
                 height: 42,
                 decoration: BoxDecoration(
                   color: _primary.withOpacity(0.09),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 child: Icon(Icons.sports_soccer_rounded, color: _primary, size: 21),
               ),
@@ -9708,7 +13378,7 @@ final markerColors = dayMatches
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
                   color: _primary.withOpacity(0.09),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
                   score,
@@ -9794,10 +13464,11 @@ final markerColors = dayMatches
     final c = color ?? _primary;
     final wide = MediaQuery.of(context).size.width >= 720;
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: wide ? 13 : 9, vertical: wide ? 10 : 7),
+      padding: EdgeInsets.symmetric(horizontal: wide ? 9 : 7, vertical: wide ? 7 : 6),
       decoration: BoxDecoration(
-        color: c.withOpacity(0.09),
-        borderRadius: BorderRadius.circular(999),
+        color: _AppColors.softFor(c),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: c.withOpacity(.16), width: .7),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -9820,10 +13491,10 @@ final markerColors = dayMatches
   Widget _matchDetailTextBlock(IconData icon, String title, String text) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(11),
-      decoration: BoxDecoration(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        border: Border(top: BorderSide(color: _AppColors.trackerLine, width: .7), bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -9981,7 +13652,7 @@ final markerColors = dayMatches
               height: iconSize,
               decoration: BoxDecoration(
                 color: _primary.withOpacity(0.09),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(4),
               ),
               child: Icon(Icons.sports_soccer_rounded, color: _primary, size: compact ? 17 : 19),
             ),
@@ -10012,7 +13683,7 @@ final markerColors = dayMatches
               padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 10, vertical: compact ? 6 : 7),
               decoration: BoxDecoration(
                 color: _primary.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
                 score,
@@ -10076,7 +13747,7 @@ final markerColors = dayMatches
       padding: EdgeInsets.symmetric(horizontal: compact ? 9 : 10, vertical: compact ? 8 : 9),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -10138,15 +13809,16 @@ final markerColors = dayMatches
     final vertical = compact ? 7.0 : (wide ? 10.0 : 8.0);
     final fg = onTap == null ? _textTertiary : _primary;
     return Material(
-      color: onTap == null ? const Color(0xFFF1F5F9) : _primary.withOpacity(wide ? 0.10 : 0.08),
-      borderRadius: BorderRadius.circular(999),
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(4),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(4),
         child: Container(
           padding: EdgeInsets.symmetric(horizontal: horizontal, vertical: vertical),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: onTap == null ? _AppColors.trackerLine : _AppColors.trackerGreenBorder, width: .7),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -10179,7 +13851,7 @@ final markerColors = dayMatches
                 height: compact ? 36 : 40,
                 decoration: BoxDecoration(
                   color: _primary.withOpacity(0.10),
-                  borderRadius: BorderRadius.circular(13),
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 child: Icon(Icons.fact_check_outlined, color: _primary, size: compact ? 18 : 20),
               ),
@@ -10405,7 +14077,7 @@ final markerColors = dayMatches
       padding: EdgeInsets.symmetric(horizontal: compact ? 9 : 10, vertical: compact ? 8 : 9),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Row(
         children: [
@@ -10440,7 +14112,7 @@ final markerColors = dayMatches
       padding: EdgeInsets.all(compact ? 10 : 11),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -10523,7 +14195,7 @@ final markerColors = dayMatches
       padding: EdgeInsets.symmetric(horizontal: compact ? 9 : 10, vertical: compact ? 8 : 9),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -10849,7 +14521,6 @@ final markerColors = dayMatches
             onToggle: () => _safeSetState(() => _diaryCalendarExpanded = !_diaryCalendarExpanded),
           ),
         if (splitMode || _diaryCalendarExpanded) ...[
-          if (!splitMode) const SizedBox(height: 10),
           _buildMarkedCalendar(
             items: diaryItems,
             dateOf: _diaryDateOf,
@@ -10900,9 +14571,9 @@ final markerColors = dayMatches
 
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.circular(4),
       child: InkWell(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(4),
         onTap: () {
           setState(() => _selectedDiaryForDetails = Map<String, dynamic>.from(x));
           _rebuildOpenSectionSheet();
@@ -10911,7 +14582,7 @@ final markerColors = dayMatches
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: selected ? _AppColors.cmrSoft : Colors.white,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(4),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -10923,7 +14594,7 @@ final markerColors = dayMatches
                     height: 42,
                     decoration: BoxDecoration(
                       color: selected ? Colors.white : const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(4),
                     ),
                     child: const Icon(Icons.menu_book_rounded, color: Color(0xFF2563EB), size: 21),
                   ),
@@ -11059,7 +14730,7 @@ final markerColors = dayMatches
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -11069,7 +14740,7 @@ final markerColors = dayMatches
                       height: 36,
                       decoration: BoxDecoration(
                         color: const Color(0xFFEAF5EE),
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(4),
                       ),
                       child: const Icon(Icons.speed_rounded, color: Color(0xFF178A45), size: 18),
                     ),
@@ -11216,7 +14887,7 @@ final markerColors = dayMatches
                           style: OutlinedButton.styleFrom(
                             foregroundColor: const Color(0xFF178A45),
                             padding: const EdgeInsets.symmetric(vertical: 13),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                           ),
                         ),
                         const SizedBox(height: 14),
@@ -11228,7 +14899,7 @@ final markerColors = dayMatches
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: const Color(0xFF334155),
                                   padding: const EdgeInsets.symmetric(vertical: 14),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                                 ),
                                 child: const Text('Отмена', style: TextStyle(fontWeight: FontWeight.w700)),
                               ),
@@ -11246,7 +14917,7 @@ final markerColors = dayMatches
                                   foregroundColor: Colors.white,
                                   elevation: 0,
                                   padding: const EdgeInsets.symmetric(vertical: 14),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                                 ),
                               ),
                             ),
@@ -11312,14 +14983,14 @@ final markerColors = dayMatches
               final title = item['title'].toString();
               final selected = selectedType == title;
               return InkWell(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(4),
                 onTap: () => setModalState(() => selectedType = title),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
                     color: selected ? const Color(0xFFEAF5EE) : Colors.white,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(4),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -11350,7 +15021,7 @@ final markerColors = dayMatches
                         height: 42,
                         decoration: BoxDecoration(
                           color: const Color(0xFFEAF5EE),
-                          borderRadius: BorderRadius.circular(15),
+                          borderRadius: BorderRadius.circular(4),
                         ),
                         child: const Icon(Icons.military_tech_rounded, color: Color(0xFF178A45), size: 22),
                       ),
@@ -11632,6 +15303,7 @@ final markerColors = dayMatches
     return count;
   }
 
+
   Widget _buildInlineCalendarHeader({
     required String title,
     required String subtitle,
@@ -11639,45 +15311,41 @@ final markerColors = dayMatches
     required VoidCallback onToggle,
   }) {
     return Material(
-      color: Colors.transparent,
+      color: Colors.white,
       child: InkWell(
-        borderRadius: BorderRadius.circular(22),
         onTap: onToggle,
-        child: Ink(
-          padding: const EdgeInsets.all(13),
-          decoration: BoxDecoration(color: _AppColors.cmrSoftPanel, borderRadius: BorderRadius.circular(22)),
-          child: Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(color: _AppColors.cmrSoft, borderRadius: BorderRadius.circular(13)),
-                child: const Icon(Icons.calendar_month_rounded, color: _AppColors.cmrGreen, size: 19),
-              ),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _titleStyle(size: 14.2, color: const Color(0xFF101828))),
-                    const SizedBox(height: 3),
-                    Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 11.6, color: const Color(0xFF667085), weight: FontWeight.w700)),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-                child: Icon(expanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded, color: const Color(0xFF334155)),
-              ),
-            ],
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 42),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
           ),
+          child: Row(children: [
+            Container(
+              width: 28,
+              height: 28,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: _AppColors.trackerGreenSoft,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: _AppColors.trackerGreenBorder, width: .7),
+              ),
+              child: const Icon(Icons.calendar_month_rounded, color: _AppColors.trackerGreenDark, size: 15),
+            ),
+            const SizedBox(width: 9),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerText, fontSize: 11.4, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 1),
+              Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerDim, fontSize: 8.8, fontWeight: FontWeight.w600)),
+            ])),
+            const SizedBox(width: 8),
+            Icon(expanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded, color: _AppColors.trackerDim, size: 18),
+          ]),
         ),
       ),
     );
   }
+
 
   Widget _buildMarkedCalendar({
     required List<Map<String, dynamic>> items,
@@ -11688,251 +15356,507 @@ final markerColors = dayMatches
     ValueChanged<DateTime>? onMonthChanged,
     bool loading = false,
     Color Function(Map<String, dynamic> item)? markerColorOf,
-    void Function(DateTime day, List<Map<String, dynamic>> dayItems)? onDayWithItemsTap,
+    void Function(
+      DateTime day,
+      List<Map<String, dynamic>> dayItems,
+    )? onDayWithItemsTap,
   }) {
     final now = DateTime.now();
     final base = displayMonth ?? selectedDay ?? now;
     final month = DateTime(base.year, base.month, 1);
     final first = DateTime(month.year, month.month, 1);
     final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
-    final leading = (first.weekday + 6) % 7;
+    final previousDays = DateTime(month.year, month.month, 0).day;
+    final leading = first.weekday - 1;
     final total = ((leading + daysInMonth + 6) ~/ 7) * 7;
+    final activeDay = selectedDay ?? DateTime(now.year, now.month, now.day);
 
-    return _calendarLikeCmrPanelSize(
-      Container(
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(.028),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
+    List<Map<String, dynamic>> itemsForDay(DateTime day) {
+      return items.where((item) {
+        final d = dateOf(item);
+        return d != null && _sameDateOnly(d, day);
+      }).toList();
+    }
+
+    void moveMonth(int delta) {
+      final target = DateTime(month.year, month.month + delta, 1);
+      if (onMonthChanged != null) {
+        onMonthChanged(target);
+      } else {
+        onSelect(target);
+      }
+    }
+
+    Widget calendarGrid() {
+      return Column(
         children: [
-          Row(
-            children: [
-              _calendarArrow(
-                Icons.chevron_left_rounded,
-                () => onMonthChanged != null
-                    ? onMonthChanged(DateTime(month.year, month.month - 1, 1))
-                    : onSelect(DateTime(month.year, month.month - 1, 1)),
-              ),
-              Expanded(
-                child: Center(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        DateFormat('LLLL yyyy', 'ru').format(month),
-                        style: _titleStyle(size: 13.2, color: const Color(0xFF101828)),
-                      ),
-                      if (loading) ...[
-                        const SizedBox(width: 7),
-                        const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
-                      ],
-                    ],
+          SizedBox(
+            height: 44,
+            child: Row(
+              children: [
+                _calendarArrow(
+                  Icons.chevron_left_rounded,
+                  () => moveMonth(-1),
+                ),
+                const SizedBox(width: 5),
+                _calendarArrow(
+                  Icons.chevron_right_rounded,
+                  () => moveMonth(1),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    DateFormat('LLLL yyyy', 'ru').format(month),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: _fontFamily,
+                      color: _AppColors.trackerText,
+                      fontSize: 11.8,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-              ),
-              _calendarArrow(
-                Icons.chevron_right_rounded,
-                () => onMonthChanged != null
-                    ? onMonthChanged(DateTime(month.year, month.month + 1, 1))
-                    : onSelect(DateTime(month.year, month.month + 1, 1)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 7),
-          Row(
-            children: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
-                .map((d) => Expanded(
-                      child: Center(
-                        child: Text(
-                          d,
-                          style: _bodyStyle(size: 9.6, color: const Color(0xFF667085), weight: FontWeight.w700),
-                        ),
-                      ),
-                    ))
-                .toList(),
-          ),
-          const SizedBox(height: 5),
-          LayoutBuilder(
-            builder: (context, gridBox) {
-              final cellAspect = gridBox.maxWidth >= 680 ? 2.45 : (gridBox.maxWidth >= 520 ? 2.15 : 1.28);
-              return GridView.builder(
-                itemCount: total,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 7,
-                  mainAxisSpacing: 5,
-                  crossAxisSpacing: 5,
-                  childAspectRatio: cellAspect,
+                if (loading) ...[
+                  const SizedBox(width: 6),
+                  const SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: _AppColors.trackerGreen,
+                    ),
+                  ),
+                ],
+                const SizedBox(width: 8),
+                _calendarArrow(
+                  Icons.today_rounded,
+                  () {
+                    final today =
+                        DateTime(now.year, now.month, now.day);
+                    onMonthChanged?.call(
+                      DateTime(today.year, today.month, 1),
+                    );
+                    onSelect(today);
+                  },
                 ),
-                itemBuilder: (context, i) {
-                  final dayNum = i - leading + 1;
-                  if (dayNum < 1 || dayNum > daysInMonth) return const SizedBox.shrink();
-                  final day = DateTime(month.year, month.month, dayNum);
-                  final selected = selectedDay != null && _sameDateOnly(day, selectedDay);
-                  final today = _sameDateOnly(day, now);
-                  final dayItems = items.where((item) {
-                    final d = dateOf(item);
-                    return d != null && _sameDateOnly(d, day);
-                  }).toList();
-                  final count = dayItems.length;
-                  final has = count > 0;
-
-                  int coachSum = 0;
-                  int coachCnt = 0;
-                  int playerSum = 0;
-                  int playerCnt = 0;
-                  String status = '';
-
-                  final markerColors = <Color>[];
-                  for (final item in dayItems) {
-                    final st = _attendanceStatusOf(item);
-                    if (status.isEmpty || _attendanceStatusPriority(st) > _attendanceStatusPriority(status)) {
-                      status = st;
-                    }
-
-                    final markerColor = markerColorOf?.call(item) ?? _calendarItemAccent(item);
-                    markerColors.add(markerColor);
-
-                    final coach = _firstRatingValue(item, _coachRatingKeys);
-                    if (coach != null) {
-                      coachSum += _asInt(coach);
-                      coachCnt++;
-                    }
-
-                    final player = _firstRatingValue(item, _playerRatingKeys);
-                    if (player != null) {
-                      playerSum += _asInt(player);
-                      playerCnt++;
-                    }
-                  }
-
-                  final int coachAvg = coachCnt == 0
-                      ? 0
-                      : ((coachSum / coachCnt).round() < 1
-                          ? 1
-                          : ((coachSum / coachCnt).round() > 5 ? 5 : (coachSum / coachCnt).round()));
-                  final int playerAvg = playerCnt == 0
-                      ? 0
-                      : ((playerSum / playerCnt).round() < 1
-                          ? 1
-                          : ((playerSum / playerCnt).round() > 5 ? 5 : (playerSum / playerCnt).round()));
-                  final accent = markerColors.isNotEmpty ? markerColors.first : const Color(0xFFCBD5E1);
-
-                  return Material(
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(10),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(10),
-                      onTap: () {
-                        onSelect(day);
-                        if (has) onDayWithItemsTap?.call(day, dayItems);
-                      },
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 160),
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? Colors.white
-                              : has
-                                  ? _AppColors.softFor(accent)
-                                  : _AppColors.cmrSoftPanel,
-                          borderRadius: BorderRadius.circular(10),
-                          boxShadow: selected
-                              ? [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(.055),
-                                    blurRadius: 12,
-                                    offset: const Offset(0, 5),
-                                  ),
-                                ]
-                              : null,
-                        ),
-                        child: Stack(
-                          children: [
-                            if (selected)
-                              Positioned(
-                                left: 0,
-                                top: 5,
-                                bottom: 5,
-                                child: Container(
-                                  width: 3,
-                                  decoration: BoxDecoration(
-                                    color: _AppColors.cmrGreen,
-                                    borderRadius: BorderRadius.circular(99),
-                                  ),
-                                ),
-                              ),
-                            Center(
-                              child: Text(
-                                '$dayNum',
-                                style: TextStyle(
-                                  color: selected || today ? _AppColors.cmrGreen : const Color(0xFF101828),
-                                  fontSize: 10.4,
-                                  fontWeight: FontWeight.w700,
-                                  height: 1,
-                                ),
-                              ),
-                            ),
-                            if (has)
-                              Positioned(
-                                top: 2,
-                                right: 3,
-                                child: _buildCalendarSegmentMarker(markerColors, selected: selected),
-                              ),
-                            if (has && (coachAvg > 0 || playerAvg > 0))
-                              Positioned(
-                                left: 5,
-                                bottom: 2,
-                                child: Text(
-                                  [
-                                    if (coachAvg > 0) 'Т$coachAvg',
-                                    if (playerAvg > 0) 'И$playerAvg',
-                                  ].join(' '),
-                                  style: TextStyle(
-                                    color: selected ? _AppColors.cmrGreen : const Color(0xFF667085),
-                                    fontSize: 7.6,
-                                    fontWeight: FontWeight.w700,
-                                    height: 1,
-                                  ),
-                                ),
-                              ),
-                            if (has)
-                              Positioned(
-                                right: 4,
-                                bottom: 2,
-                                child: Text(
-                                  '$count',
-                                  style: TextStyle(
-                                    color: selected ? _AppColors.cmrGreen : const Color(0xFF667085),
-                                    fontSize: 8.2,
-                                    fontWeight: FontWeight.w700,
-                                    height: 1,
-                                  ),
-                                ),
-                              ),
-                          ],
+              ],
+            ),
+          ),
+          const Divider(
+            height: 1,
+            thickness: .7,
+            color: _AppColors.trackerLine,
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: const ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+                .map(
+                  (d) => Expanded(
+                    child: Center(
+                      child: Text(
+                        d,
+                        style: TextStyle(
+                          color: _AppColors.trackerDim,
+                          fontSize: 9.6,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
-                  );
-                },
-              );
-            },
+                  ),
+                )
+                .toList(),
+          ),
+          const SizedBox(height: 5),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, gridBox) {
+                const gap = 5.0;
+                final rows = total ~/ 7;
+                final cellWidth = (gridBox.maxWidth - gap * 6) / 7;
+                final cellHeight =
+                    (gridBox.maxHeight - gap * (rows - 1)) / rows;
+                final ratio = math.max(
+                  .86,
+                  math.min(2.4, cellWidth / math.max(34, cellHeight)),
+                );
+
+                return GridView.builder(
+                  itemCount: total,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate:
+                      SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 7,
+                    mainAxisSpacing: gap,
+                    crossAxisSpacing: gap,
+                    childAspectRatio: ratio,
+                  ),
+                  itemBuilder: (context, index) {
+                    final number = index - leading + 1;
+                    late DateTime day;
+                    var inMonth = true;
+
+                    if (number < 1) {
+                      day = DateTime(
+                        month.year,
+                        month.month - 1,
+                        previousDays + number,
+                      );
+                      inMonth = false;
+                    } else if (number > daysInMonth) {
+                      day = DateTime(
+                        month.year,
+                        month.month + 1,
+                        number - daysInMonth,
+                      );
+                      inMonth = false;
+                    } else {
+                      day = DateTime(month.year, month.month, number);
+                    }
+
+                    final dayItems = itemsForDay(day);
+                    final has = dayItems.isNotEmpty;
+                    final selected = _sameDateOnly(day, activeDay);
+                    final today = _sameDateOnly(day, now);
+                    final markerColors = dayItems
+                        .map(
+                          (item) =>
+                              markerColorOf?.call(item) ??
+                              _calendarItemAccent(item),
+                        )
+                        .toList(growable: false);
+                    final accent = markerColors.isNotEmpty
+                        ? markerColors.first
+                        : _AppColors.trackerGreen;
+
+                    return Material(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(10),
+                        onTap: () {
+                          WidgetsBinding.instance
+                              .addPostFrameCallback((_) {
+                            if (!mounted) return;
+                            if (!inMonth &&
+                                onMonthChanged != null) {
+                              onMonthChanged(
+                                DateTime(day.year, day.month, 1),
+                              );
+                            }
+                            onSelect(day);
+                            if (has) {
+                              onDayWithItemsTap?.call(day, dayItems);
+                            }
+                          });
+                        },
+                        child: AnimatedContainer(
+                          duration:
+                              const Duration(milliseconds: 150),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? Colors.white
+                                : has
+                                    ? Color.alphaBlend(
+                                        accent.withOpacity(.045),
+                                        Colors.white,
+                                      )
+                                    : _AppColors.trackerSoft2,
+                            borderRadius: BorderRadius.circular(10),
+                            border: selected
+                                ? Border.all(
+                                    color: _AppColors.trackerGreen
+                                        .withOpacity(.28),
+                                    width: 1.05,
+                                  )
+                                : today
+                                    ? Border.all(
+                                        color: _AppColors
+                                            .trackerGreenBorder,
+                                      )
+                                    : Border.all(
+                                        color: Colors.transparent,
+                                      ),
+                            boxShadow: selected
+                                ? const [
+                                    BoxShadow(
+                                      color: Color(0x06111827),
+                                      blurRadius: 12,
+                                      offset: Offset(0, 5),
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: Stack(
+                            children: [
+                              Center(
+                                child: Text(
+                                  '${day.day}',
+                                  style: TextStyle(
+                                    fontFamily: _fontFamily,
+                                    color: selected
+                                        ? _AppColors
+                                            .trackerGreenDark
+                                        : inMonth
+                                            ? _AppColors.trackerText
+                                            : _AppColors.trackerDim
+                                                .withOpacity(.58),
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              if (has)
+                                Positioned(
+                                  top: 2,
+                                  right: 2,
+                                  child: _buildCalendarSegmentMarker(
+                                    markerColors,
+                                    selected: selected,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
           ),
         ],
-      ),
-    ),
+      );
+    }
+
+    Widget dayDetails() {
+      final rows = itemsForDay(activeDay);
+      return Container(
+        color: Colors.white,
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: _AppColors.trackerGreenSoft,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.view_agenda_rounded,
+                    color: _AppColors.trackerGreenDark,
+                    size: 17,
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Данные за ${DateFormat('dd.MM.yyyy').format(activeDay)}',
+                        style: TextStyle(
+                          fontFamily: _fontFamily,
+                          color: _AppColors.trackerText,
+                          fontSize: 12.2,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${rows.length} ${rows.length == 1 ? 'запись' : 'записей'}',
+                        style: TextStyle(
+                          fontFamily: _fontFamily,
+                          color: _AppColors.trackerDim,
+                          fontSize: 9.0,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Expanded(
+              child: rows.isEmpty
+                  ? Center(
+                      child: Text(
+                        'На выбранную дату данных нет',
+                        style: TextStyle(
+                          fontFamily: _fontFamily,
+                          color: _AppColors.trackerDim,
+                          fontSize: 10.8,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: EdgeInsets.zero,
+                      itemCount: rows.length,
+                      separatorBuilder: (_, __) =>
+                          const SizedBox(height: 6),
+                      itemBuilder: (_, index) {
+                        final row = rows[index];
+                        final title = _firstNotEmpty([
+                          row['title'],
+                          row['event_title'],
+                          row['name'],
+                          row['type'],
+                          row['event_type'],
+                          'Запись',
+                        ]);
+                        final subtitle = _firstNotEmpty([
+                          row['status'],
+                          row['location'],
+                          row['description'],
+                          row['comment'],
+                          row['note'],
+                        ]);
+                        final color =
+                            markerColorOf?.call(row) ??
+                            _calendarItemAccent(row);
+
+                        return Material(
+                          color: Colors.transparent,
+                          borderRadius: BorderRadius.circular(10),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(10),
+                            onTap: () => onDayWithItemsTap?.call(
+                              activeDay,
+                              rows,
+                            ),
+                            child: Container(
+                              constraints:
+                                  const BoxConstraints(minHeight: 52),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Color.alphaBlend(
+                                  color.withOpacity(.045),
+                                  Colors.white,
+                                ),
+                                borderRadius:
+                                    BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: color.withOpacity(.12),
+                                  width: .8,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 4,
+                                    height: 30,
+                                    decoration: BoxDecoration(
+                                      color: color,
+                                      borderRadius:
+                                          BorderRadius.circular(99),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 9),
+                                  Expanded(
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          title,
+                                          maxLines: 1,
+                                          overflow:
+                                              TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontFamily: _fontFamily,
+                                            color: _AppColors
+                                                .trackerText,
+                                            fontSize: 10.8,
+                                            fontWeight:
+                                                FontWeight.w700,
+                                          ),
+                                        ),
+                                        if (subtitle.isNotEmpty) ...[
+                                          const SizedBox(height: 3),
+                                          Text(
+                                            subtitle,
+                                            maxLines: 1,
+                                            overflow:
+                                                TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontFamily:
+                                                  _fontFamily,
+                                              color: _AppColors
+                                                  .trackerDim,
+                                              fontSize: 8.8,
+                                              fontWeight:
+                                                  FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  const Icon(
+                                    Icons.chevron_right_rounded,
+                                    color: _AppColors.trackerDim,
+                                    size: 17,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final split = constraints.maxWidth >= 620;
+        if (!split) {
+          return Column(
+            children: [
+              SizedBox(height: 360, child: calendarGrid()),
+              const SizedBox(height: 8),
+              SizedBox(height: 250, child: dayDetails()),
+            ],
+          );
+        }
+
+        return SizedBox(
+          height: 430,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                width: math.min<double>(
+                  390,
+                  math.max<double>(320, constraints.maxWidth * .43),
+                ),
+                child: calendarGrid(),
+              ),
+              const SizedBox(
+                width: 1,
+                child: ColoredBox(color: _AppColors.trackerLine),
+              ),
+              Expanded(child: dayDetails()),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -12018,18 +15942,31 @@ final markerColors = dayMatches
 
 
 
+
   Widget _calendarArrow(IconData icon, VoidCallback onTap) {
-    return InkWell(
+    return Material(
+      color: const Color(0xFFF6F8FA),
       borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Container(
-        width: 34,
-        height: 34,
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-        child: Icon(icon, color: const Color(0xFF334155), size: 20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          width: 34,
+          height: 34,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            icon,
+            color: _AppColors.trackerGraphite,
+            size: 18,
+          ),
+        ),
       ),
     );
   }
+
 
   Widget _buildSelectedDayFilterChip({
     required DateTime date,
@@ -12037,18 +15974,18 @@ final markerColors = dayMatches
     required VoidCallback onClear,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
-      decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(999)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.filter_alt_rounded, color: Color(0xFF2563EB), size: 16),
-          const SizedBox(width: 7),
-          Text('$label: ${DateFormat('dd.MM.yyyy').format(date)}', style: _bodyStyle(size: 11.5, color: const Color(0xFF1D4ED8), weight: FontWeight.w700)),
-          const SizedBox(width: 7),
-          InkWell(borderRadius: BorderRadius.circular(99), onTap: onClear, child: const Icon(Icons.close_rounded, color: Color(0xFF1D4ED8), size: 16)),
-        ],
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
       ),
+      child: Row(children: [
+        const Icon(Icons.filter_alt_rounded, color: _AppColors.trackerGreenDark, size: 15),
+        const SizedBox(width: 7),
+        Expanded(child: Text('$label: ${DateFormat('dd.MM.yyyy').format(date)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerText, fontSize: 10.2, fontWeight: FontWeight.w700))),
+        InkWell(onTap: onClear, child: const Icon(Icons.close_rounded, color: _AppColors.trackerDim, size: 16)),
+      ]),
     );
   }
 
@@ -12298,7 +16235,6 @@ final markerColors = dayMatches
             },
           ),
         if (splitMode || _testingCalendarExpanded) ...[
-          if (!splitMode) const SizedBox(height: 10),
           _buildMarkedCalendar(
             items: playerTestingSessions,
             dateOf: _testingDateOf,
@@ -12344,7 +16280,7 @@ final markerColors = dayMatches
             height: 38,
             decoration: BoxDecoration(
               color: warningCount > 0 ? _AppColors.redSoft : _AppColors.blueSoft,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(4),
             ),
             child: Icon(
               warningCount > 0 ? Icons.warning_amber_rounded : Icons.fact_check_rounded,
@@ -12385,7 +16321,7 @@ final markerColors = dayMatches
               Container(
                 width: 38,
                 height: 38,
-                decoration: BoxDecoration(color: _AppColors.blueSoft, borderRadius: BorderRadius.circular(14)),
+                decoration: BoxDecoration(color: _AppColors.blueSoft, borderRadius: BorderRadius.circular(4)),
                 child: const Icon(Icons.speed_rounded, color: _AppColors.blue, size: 20),
               ),
               const SizedBox(width: 10),
@@ -12421,6 +16357,7 @@ final markerColors = dayMatches
     );
   }
 
+
   Widget _buildTestingResultTile(Map<String, dynamic> r) {
     final unit = _asStr(r['unit']);
     final baseValue = _testingValueText(r['value']);
@@ -12431,53 +16368,50 @@ final markerColors = dayMatches
             _asStr(_selectedTestingResultForDetails!['id']) == _asStr(r['id']) &&
             _asStr(r['id']).isNotEmpty);
     return Material(
-      color: selected ? Colors.white : _AppColors.cmrSoftPanel,
-      borderRadius: BorderRadius.circular(18),
+      color: selected ? _AppColors.trackerGreenSoft : Colors.white,
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
         onTap: () {
           setState(() => _selectedTestingResultForDetails = Map<String, dynamic>.from(r));
           _rebuildOpenSectionSheet();
         },
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(color: selected ? _AppColors.cmrSoft : _AppColors.blueSoft, borderRadius: BorderRadius.circular(13)),
-                child: const Icon(Icons.fact_check_rounded, color: _AppColors.blue, size: 18),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(_asStr(r['title']), maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 13.2, color: const Color(0xFF101828), weight: FontWeight.w700)),
-                    const SizedBox(height: 4),
-                    Text(category, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 11.2, color: const Color(0xFF667085), weight: FontWeight.w700)),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
-                child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _bodyStyle(size: 12.4, color: const Color(0xFF101828), weight: FontWeight.w700)),
-              ),
-            ],
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 48),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
           ),
+          child: Row(children: [
+            Container(
+              width: 28,
+              height: 28,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: selected ? _AppColors.trackerGreenSoft : _AppColors.blueSoft,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: selected ? _AppColors.trackerGreenBorder : _AppColors.trackerLine, width: .7),
+              ),
+              child: Icon(Icons.fact_check_rounded, color: selected ? _AppColors.trackerGreenDark : _AppColors.blue, size: 15),
+            ),
+            const SizedBox(width: 9),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+              Text(_asStr(r['title']), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerText, fontSize: 11.4, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 2),
+              Text(category, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerDim, fontSize: 9.2, fontWeight: FontWeight.w600)),
+            ])),
+            const SizedBox(width: 8),
+            Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerText, fontSize: 11.2, fontWeight: FontWeight.w700)),
+          ]),
         ),
       ),
     );
   }
 
+
   Widget _buildExportTab() {
     final playerName = _asStr(widget.player['fullName'] ?? widget.player['full_name'] ?? widget.player['name']).trim();
     return _buildCmrSectionShell(
       title: 'Экспорт данных игрока',
-      subtitle: 'PDF-карточка с отметкой «Спортотека»: профиль, метрики, медкарта, тренировки, матчи и дневник.',
+      subtitle: 'Официальный PDF/Excel по ученику: профиль, лого команды, аватар, тренировки, матчи, трекер и Polar.',
       icon: Icons.picture_as_pdf_rounded,
       stats: [
         _buildCmrMiniStat('Метрики', '${metrics.length}', Icons.query_stats_rounded),
@@ -12486,7 +16420,8 @@ final markerColors = dayMatches
         _buildCmrMiniStat('Дневник', '${diaryItems.length}', Icons.menu_book_outlined),
       ],
       actions: [
-        _buildCmrActionChip(icon: Icons.file_download_outlined, label: 'Выгрузить PDF', onTap: _exportPlayerPdf),
+        _buildCmrActionChip(icon: Icons.picture_as_pdf_rounded, label: 'PDF для отчёта', onTap: _exportPlayerPdf),
+        _buildCmrActionChip(icon: Icons.table_chart_rounded, label: 'Excel', onTap: _exportPlayerExcel, compact: true),
       ],
       children: [
         _buildCmrCard(
@@ -12500,7 +16435,7 @@ final markerColors = dayMatches
                     height: 52,
                     decoration: BoxDecoration(
                       color: const Color(0xFFEAF5EE),
-                      borderRadius: BorderRadius.circular(18),
+                      borderRadius: BorderRadius.circular(4),
                     ),
                     child: const Icon(Icons.verified_rounded, color: Color(0xFF178A45), size: 26),
                   ),
@@ -12539,17 +16474,28 @@ final markerColors = dayMatches
     );
   }
 
-  Future<void> _exportPlayerPdf() async {
+  Future<void> _exportPlayerPdf() async => _exportPlayerOfficialReport('pdf');
+
+  Future<void> _exportPlayerExcel() async => _exportPlayerOfficialReport('excel');
+
+  Future<void> _exportPlayerOfficialReport(String format) async {
     final playerId = await _resolvePlayerId();
     if (playerId <= 0) {
-      _showSnack('Не удалось определить игрока для PDF');
+      _showSnack(format == 'excel' ? 'Не удалось определить игрока для Excel' : 'Не удалось определить игрока для PDF');
       return;
     }
-    final uri = Uri.parse('$_apiBase/export_player_pdf.php').replace(queryParameters: {
+    final range = _loadAnalysisRange();
+    final endpoint = format == 'excel' ? 'export_player_report_excel.php' : 'export_player_report_pdf.php';
+    final uri = Uri.parse('$_apiBase/tracker/$endpoint').replace(queryParameters: {
       'player_id': '$playerId',
       'team_id': '$_teamId',
+      'date_from': DateFormat('yyyy-MM-dd').format(range.start),
+      'date_to': DateFormat('yyyy-MM-dd').format(range.end),
       'brand': 'Спортотека',
-      'format': 'pdf',
+      'target': 'ministry',
+      'include_polar': '1',
+      'include_tracker': '1',
+      'format': format,
     });
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
@@ -12645,7 +16591,7 @@ final markerColors = dayMatches
                   Container(
                     width: 46,
                     height: 46,
-                    decoration: BoxDecoration(color: const Color(0xFFEAF5EE), borderRadius: BorderRadius.circular(16)),
+                    decoration: BoxDecoration(color: const Color(0xFFEAF5EE), borderRadius: BorderRadius.circular(4)),
                     child: Icon(icon, color: const Color(0xFF178A45), size: 23),
                   ),
                   const SizedBox(width: 12),
@@ -12672,7 +16618,7 @@ final markerColors = dayMatches
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFF334155),
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                       ),
                       child: const Text('Отмена', style: TextStyle(fontWeight: FontWeight.w700)),
                     ),
@@ -12688,7 +16634,7 @@ final markerColors = dayMatches
                         foregroundColor: Colors.white,
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                       ),
                     ),
                   ),
@@ -12707,9 +16653,9 @@ final markerColors = dayMatches
       filled: true,
       fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide.none),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide.none),
     );
   }
 
@@ -12823,7 +16769,7 @@ final markerColors = dayMatches
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
     decoration: BoxDecoration(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(4),
     ),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -12925,7 +16871,7 @@ final markerColors = dayMatches
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4)),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Expanded(flex: 42, child: Text(label, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.2, color: _AppColors.textSecondary, height: 1.2, fontWeight: FontWeight.w600))),
         const SizedBox(width: 10),
@@ -13263,7 +17209,7 @@ final markerColors = dayMatches
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: _AppColors.textPrimary,
                                     minimumSize: const Size.fromHeight(50),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                                   ),
                                   child: const Text(
                                     'Отмена',
@@ -13292,7 +17238,7 @@ final markerColors = dayMatches
                                     foregroundColor: Colors.white,
                                     elevation: 0,
                                     minimumSize: const Size.fromHeight(50),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                                     textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11.7),
                                   ),
                                 ),
@@ -13321,7 +17267,7 @@ final markerColors = dayMatches
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Row(
         children: [
@@ -13330,7 +17276,7 @@ final markerColors = dayMatches
             height: 46,
             decoration: BoxDecoration(
               color: _AppColors.primaryGreen.withOpacity(.10),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(4),
             ),
             child: const Icon(
               Icons.health_and_safety_rounded,
@@ -13372,13 +17318,13 @@ final markerColors = dayMatches
           const SizedBox(width: 8),
           InkWell(
             onTap: onClose,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(4),
             child: Container(
               width: 38,
               height: 38,
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(4),
               ),
               child: const Icon(Icons.close_rounded, color: _AppColors.textSecondary, size: 20),
             ),
@@ -13397,7 +17343,7 @@ final markerColors = dayMatches
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -13480,15 +17426,15 @@ final markerColors = dayMatches
         fillColor: Colors.white,
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(4),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(4),
           borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(4),
           borderSide: BorderSide.none,
         ),
       ),
@@ -13501,12 +17447,12 @@ final markerColors = dayMatches
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(4),
       child: Container(
         padding: const EdgeInsets.all(13),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(4),
         ),
         child: Row(
           children: [
@@ -13515,7 +17461,7 @@ final markerColors = dayMatches
               height: 38,
               decoration: BoxDecoration(
                 color: _AppColors.primaryGreen.withOpacity(.10),
-                borderRadius: BorderRadius.circular(13),
+                borderRadius: BorderRadius.circular(4),
               ),
               child: const Icon(Icons.calendar_today_rounded, color: _AppColors.primaryGreen, size: 18),
             ),
@@ -13551,12 +17497,12 @@ final markerColors = dayMatches
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(4),
       child: Container(
         padding: const EdgeInsets.all(13),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(4),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -13590,7 +17536,7 @@ final markerColors = dayMatches
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: _AppColors.primaryGreen.withOpacity(.07),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Row(
         children: [
@@ -13635,30 +17581,50 @@ final markerColors = dayMatches
     }
   }
 
+  Future<void> _loadPlayerAnalyticsData({bool force = false}) async {
+    // Единая точка загрузки аналитики игрока. Раздел больше не ждёт, пока
+    // тренер отдельно откроет тренировки, матчи или тестирование: все источники
+    // подготавливаются сразу и связываются по текущему player_id/team_id.
+    await _loadTrainingSectionData(force: force);
+    await _loadMatches(force: force);
+    await _loadPlayerTestingHistory(force: force);
+  }
+
   Future<void> _refreshCmrProfile() async {
-  _loadMedicalRecords();
-  _parseSportData();
-  _parseMedia();
-  await _loadDesignFromServer();
+    _loadMedicalRecords();
+    _parseSportData();
+    _parseMedia();
+    await _loadDesignFromServer();
 
-
-  if (_selectedTabIndex == 4 || _selectedTabIndex == 54) {
-    await _loadTrainingSectionData(force: true);
-  }
-
-  if (_selectedTabIndex == 5) await _loadMatches(force: true);
-  if (_selectedTabIndex == 7) await _loadPlayerTestingHistory(force: true);
-  
-  // **ВАЖНО: Если есть выбранная тренировка, перезагружаем её данные**
-  if (selectedEvent != null) {
-    final eventId = _trainingRowEventId(selectedEvent!);
-    if (eventId > 0) {
-      await _loadPlayerInfoForEvent(eventId);
+    if (_selectedTabIndex == 51) {
+      await _loadPlayerAnalyticsData(force: true);
+    } else {
+      await _loadPlayerTrackerSessions(force: true);
     }
+
+    if (_selectedTabIndex == 4 ||
+        _selectedTabIndex == 52 ||
+        _selectedTabIndex == 54) {
+      await _loadTrainingSectionData(force: true);
+    }
+
+    if (_selectedTabIndex == 5 || _selectedTabIndex == 50) {
+      await _loadMatches(force: true);
+    }
+    if (_selectedTabIndex == 7) {
+      await _loadPlayerTestingHistory(force: true);
+    }
+
+    // Если есть выбранная тренировка, обновляем персональный отчёт игрока.
+    if (selectedEvent != null) {
+      final eventId = _trainingRowEventId(selectedEvent!);
+      if (eventId > 0) {
+        await _loadPlayerInfoForEvent(eventId);
+      }
+    }
+
+    _rebuildOpenSectionSheet();
   }
-  
-  _rebuildOpenSectionSheet();
-}
 
 
   Future<void> _selectCmrTab(int index) async {
@@ -13670,6 +17636,14 @@ final markerColors = dayMatches
 
     if (index == 7) {
       await _loadPlayerTestingHistory(force: false);
+    }
+
+    if (index == 0) {
+      await _loadPlayerTrackerSessions(force: false);
+    }
+
+    if (index == 51) {
+      await _loadPlayerAnalyticsData(force: false);
     }
 
     if (index == 4 || index == 52 || index == 54) {
@@ -13756,32 +17730,45 @@ final markerColors = dayMatches
   }
 
   void _closePlayerProfileScreen() {
-    _exitPlayerProfileToHome();
+    _closePlayerProfileRoute();
   }
 
-  void _exitPlayerProfileToHome() {
+  void _closePlayerProfileRoute() {
     if (!mounted) return;
 
-    // В CMR-окне кнопка X означает не закрыть внутренний блок,
-    // а выйти из профиля к начальному экрану приложения.
-    try {
-      Get.offAllNamed('/home_screen');
+    // Когда профиль встроен в правую панель состава, закрываем только эту
+    // панель и не трогаем Navigator всего приложения.
+    final closeEmbedded = widget.onClose;
+    if (closeEmbedded != null) {
+      closeEmbedded();
       return;
-    } catch (_) {
-      // Если в проекте используется другой route name — мягко возвращаемся
-      // к первому экрану текущего навигатора.
+    }
+
+    // Крестик должен закрывать именно открытый профиль и возвращать туда,
+    // откуда пользователь пришёл: CMR-состав, модальное окно или предыдущий экран.
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+      return;
     }
 
     final rootNavigator = Navigator.of(context, rootNavigator: true);
     if (rootNavigator.canPop()) {
-      rootNavigator.popUntil((route) => route.isFirst);
+      rootNavigator.pop();
       return;
     }
 
-    final navigator = Navigator.of(context);
-    if (navigator.canPop()) {
-      navigator.popUntil((route) => route.isFirst);
-    }
+    try {
+      if (Get.key.currentState?.canPop() ?? false) {
+        Get.back<void>();
+        return;
+      }
+    } catch (_) {}
+
+    // Фолбек только если профиль был открыт как стартовый экран без истории.
+    try {
+      Get.offNamed('/home_screen');
+    } catch (_) {}
   }
 
   Widget _buildCmrProfileExitButton({required bool compact}) {
@@ -13789,15 +17776,15 @@ final markerColors = dayMatches
       alignment: Alignment.centerRight,
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(4),
         child: InkWell(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(4),
           onTap: _closePlayerProfileScreen,
           child: Ink(
             padding: EdgeInsets.symmetric(horizontal: compact ? 11 : 14, vertical: compact ? 10 : 11),
             decoration: BoxDecoration(
               color: const Color(0xFFF6F8FA),
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(4),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -13805,7 +17792,7 @@ final markerColors = dayMatches
                 Container(
                   width: 30,
                   height: 30,
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4)),
                   child: const Icon(Icons.close_rounded, size: 18, color: Color(0xFF667085)),
                 ),
                 if (!compact) ...[
@@ -13821,10 +17808,7 @@ final markerColors = dayMatches
   }
 
   Widget _buildCmrShellSidebar({required bool compact}) {
-    // Меню профиля теперь повторяет визуальный принцип трекера:
-    // открытая рабочая панель слева, без кнопок свернуть/развернуть профиль внутри меню.
     final expanded = !compact;
-    final railWidth = compact ? 54.0 : 156.0;
     final photo = _normalizeImage(widget.player['photo']);
     final name = _cmrFullName();
     final team = _firstNotEmpty([
@@ -13835,9 +17819,13 @@ final markerColors = dayMatches
     ]);
 
     return Container(
-      width: railWidth,
-      color: Colors.transparent,
-      padding: EdgeInsets.fromLTRB(expanded ? 9 : 6, 12, expanded ? 8 : 6, 10),
+      color: const Color(0xFFFAFBFA),
+      padding: EdgeInsets.fromLTRB(
+        expanded ? 10 : 6,
+        10,
+        expanded ? 10 : 6,
+        10,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -13847,44 +17835,50 @@ final markerColors = dayMatches
             name: name,
             team: team,
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           Expanded(
             child: ListView.separated(
               padding: EdgeInsets.zero,
               physics: const BouncingScrollPhysics(),
               itemCount: _categoryTabs.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 6),
+              separatorBuilder: (_, __) => const SizedBox(height: 4),
               itemBuilder: (_, index) {
                 final tab = _categoryTabs[index];
                 final active = tab.index == _selectedTabIndex;
-                final tile = _buildPlayerSidebarTab(
-                  tab: tab,
-                  active: active,
-                  accent: _AppColors.cmrGreen,
-                  compact: !expanded,
-                );
                 return Tooltip(
                   message: expanded ? '' : tab.title,
                   waitDuration: const Duration(milliseconds: 250),
                   preferBelow: false,
-                  child: tile,
+                  child: _buildPlayerSidebarTab(
+                    tab: tab,
+                    active: active,
+                    accent: _AppColors.trackerGreen,
+                    compact: !expanded,
+                  ),
                 );
               },
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           _buildPlayerSidebarFooterAction(
             icon: Icons.refresh_rounded,
             label: 'Обновить',
             compact: !expanded,
             onTap: _refreshCmrProfile,
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 5),
           _buildPlayerSidebarFooterAction(
             icon: Icons.edit_rounded,
             label: 'Редактировать',
             compact: !expanded,
             onTap: _openPlayerEditorPanel,
+          ),
+          const SizedBox(height: 5),
+          _buildPlayerSidebarFooterAction(
+            icon: Icons.close_rounded,
+            label: 'Закрыть',
+            compact: !expanded,
+            onTap: _closePlayerProfileScreen,
           ),
         ],
       ),
@@ -13908,16 +17902,16 @@ final markerColors = dayMatches
       preferBelow: false,
       child: Material(
         color: const Color(0xFFF5F7FA),
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: BorderRadius.circular(4),
         child: InkWell(
-          borderRadius: BorderRadius.circular(13),
+          borderRadius: BorderRadius.circular(4),
           onTap: onTap,
           child: Container(
             width: 34,
             height: 34,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(13),
+              borderRadius: BorderRadius.circular(4),
               border: Border.all(color: const Color(0xFFF0F2F4), width: 1),
             ),
             child: Icon(icon, size: 17, color: const Color(0xFF6B7280)),
@@ -13997,7 +17991,7 @@ final markerColors = dayMatches
       height: size,
       decoration: BoxDecoration(
         color: const Color(0xFFF3F5F8),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(4),
         border: Border.all(color: const Color(0xFFF0F2F4), width: 1),
       ),
       clipBehavior: Clip.antiAlias,
@@ -14024,10 +18018,10 @@ final markerColors = dayMatches
     }
 
     return Material(
-      color: const Color(0xFFF6F7F9),
-      borderRadius: BorderRadius.circular(12),
+      color: _AppColors.trackerBg,
+      borderRadius: BorderRadius.circular(4),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(4),
         onTap: onTap,
         child: Container(
           height: 34,
@@ -14097,51 +18091,67 @@ final markerColors = dayMatches
     required Color accent,
     required bool compact,
   }) {
-    final bgColor = active ? const Color(0xFFF3FBF7) : Colors.transparent;
-    final iconColor = active ? _AppColors.cmrGreen : const Color(0xFF6B7280);
-    final textColor = active ? const Color(0xFF0B0F14) : const Color(0xFF344054);
+    final iconColor = active
+        ? _AppColors.trackerGreenDark
+        : const Color(0xFF6B7280);
 
     if (compact) {
       return Material(
-        color: active ? const Color(0xFFF3FBF7) : const Color(0xFFF6F7F9),
-        borderRadius: BorderRadius.circular(12),
+        color: active ? const Color(0xFFF3FAF6) : Colors.transparent,
+        borderRadius: BorderRadius.circular(11),
         child: InkWell(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(11),
           onTap: () => _handleCmrSidebarTabTap(tab),
-          child: Container(
-            width: 34,
-            height: 34,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            width: 40,
+            height: 40,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: active ? Border.all(color: const Color(0xFFDCEFE5), width: 1) : null,
+              borderRadius: BorderRadius.circular(11),
+              border: active
+                  ? Border.all(color: const Color(0xFFD7F0E2), width: .8)
+                  : null,
             ),
-            child: Icon(tab.icon, color: iconColor, size: 18),
+            child: Icon(tab.icon, color: iconColor, size: 19),
           ),
         ),
       );
     }
 
     return Material(
-      color: bgColor,
-      borderRadius: BorderRadius.circular(12),
+      color: active ? const Color(0xFFF3FAF6) : Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         onTap: () => _handleCmrSidebarTabTap(tab),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOut,
-          height: 34,
+          height: 38,
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: active ? Border.all(color: const Color(0xFFDCEFE5), width: 1) : null,
+            borderRadius: BorderRadius.circular(10),
+            border: active
+                ? Border.all(color: const Color(0xFFD7F0E2), width: .8)
+                : null,
           ),
           child: Row(
             children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                width: 3,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: active
+                      ? _AppColors.trackerGreen
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+              const SizedBox(width: 8),
               Icon(tab.icon, color: iconColor, size: 18),
-              const SizedBox(width: 10),
+              const SizedBox(width: 9),
               Expanded(
                 child: Text(
                   tab.title,
@@ -14149,20 +18159,16 @@ final markerColors = dayMatches
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontFamily: _fontFamily,
-                    color: textColor,
+                    color: active
+                        ? const Color(0xFF0B0F14)
+                        : const Color(0xFF475467),
                     fontSize: 10.8,
                     height: 1,
-                    fontWeight: active ? FontWeight.w700 : FontWeight.w600,
-                    letterSpacing: -.12,
+                    fontWeight:
+                        active ? FontWeight.w700 : FontWeight.w600,
                   ),
                 ),
               ),
-              if (active)
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: const BoxDecoration(color: _AppColors.cmrGreen, shape: BoxShape.circle),
-                ),
             ],
           ),
         ),
@@ -14181,16 +18187,16 @@ final markerColors = dayMatches
   }) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(4),
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(4),
         onTap: onTap,
         child: Ink(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             color: background,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(4),
             border: null,
           ),
           child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -14217,9 +18223,9 @@ final markerColors = dayMatches
       preferBelow: false,
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: BorderRadius.circular(4),
         child: InkWell(
-          borderRadius: BorderRadius.circular(13),
+          borderRadius: BorderRadius.circular(4),
           onTap: onTap,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
@@ -14228,7 +18234,7 @@ final markerColors = dayMatches
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: background,
-              borderRadius: BorderRadius.circular(13),
+              borderRadius: BorderRadius.circular(4),
               border: Border.all(color: const Color(0xFFF0F2F4), width: 1),
             ),
             child: Icon(icon, color: foreground, size: 18),
@@ -14256,45 +18262,166 @@ final markerColors = dayMatches
     );
   }
 
-  Widget _buildCmrWorkspaceContent({required _CategoryTab tab, required bool compact}) {
+  Widget _buildCmrWorkspaceContent({
+    required _CategoryTab tab,
+    required bool compact,
+  }) {
     if (tab.index == 0) {
       return _buildOverviewDashboardWorkspace(compact: compact);
     }
 
-    // Единая CMR-сетка: слева фиксированная рабочая колонка
-    // (список / календарь / выбор), справа — широкая область деталей.
-    if (!_usesCmrRightDetailsPane(context) || _showInlinePlayerEditor) {
-      final guideWidth = _cmrGuideCollapsed ? (compact ? 56.0 : 64.0) : (compact ? 300.0 : 340.0);
-      return Row(
-        key: ValueKey('player-workspace-tab-${tab.index}'),
+    return Container(
+      key: ValueKey('player-workspace-tab-${tab.index}'),
+      color: Colors.white,
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(width: guideWidth, child: _buildCmrCenterPane(tab)),
-          const VerticalDivider(width: 1, thickness: 1, color: Color(0xFFE8EDF2)),
-          Expanded(child: _buildCmrDetailsPane(tab)),
+          if (_cmrGroupTabsFor(tab.index).length > 1)
+            _buildCmrGroupedSectionTabs(
+              currentIndex: tab.index,
+              compact: compact,
+            ),
+          Expanded(
+            child: _buildCmrDetailsPane(tab),
+          ),
         ],
-      );
-    }
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final totalWidth = constraints.maxWidth.isFinite ? constraints.maxWidth : MediaQuery.of(context).size.width;
-        final targetLeftWidth = compact ? 470.0 : 500.0;
-        final leftWidth = math.min(targetLeftWidth, math.max(420.0, totalWidth * .42));
-
-        return Row(
-          key: ValueKey('player-workspace-split-tab-${tab.index}'),
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(width: leftWidth, child: _buildCmrDetailsPane(tab)),
-            const VerticalDivider(width: 1, thickness: 1, color: Color(0xFFE8EDF2)),
-            Expanded(child: _buildCmrSelectionDetailsPane(tab)),
-          ],
-        );
-      },
+      ),
     );
   }
 
+
+  List<_CategoryTab> _cmrGroupTabsFor(int index) {
+    const activity = <int>[4, 54, 52];
+    const matchesGroup = <int>[5, 50];
+    const formGroup = <int>[51, 1];
+
+    List<int> indexes;
+    if (activity.contains(index)) {
+      indexes = activity;
+    } else if (matchesGroup.contains(index)) {
+      indexes = matchesGroup;
+    } else if (formGroup.contains(index)) {
+      indexes = formGroup;
+    } else {
+      indexes = <int>[index];
+    }
+
+    return indexes
+        .map(
+          (tabIndex) => _categoryTabs.firstWhere(
+            (tab) => tab.index == tabIndex,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  int _cmrMainGroupIndex(int index) {
+    if (const <int>[4, 54, 52].contains(index)) return 4;
+    if (const <int>[5, 50].contains(index)) return 5;
+    if (const <int>[51, 1].contains(index)) return 51;
+    if (const <int>[2, 3, 8].contains(index)) return 90;
+    return index;
+  }
+
+  Widget _buildCmrGroupedSectionTabs({
+    required int currentIndex,
+    required bool compact,
+  }) {
+    final tabs = _cmrGroupTabsFor(currentIndex);
+
+    return Container(
+      height: compact ? 48 : 52,
+      padding: EdgeInsets.fromLTRB(
+        compact ? 8 : 12,
+        7,
+        compact ? 8 : 12,
+        7,
+      ),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(
+            color: _AppColors.trackerLine,
+            width: .7,
+          ),
+        ),
+      ),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        itemCount: tabs.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 7),
+        itemBuilder: (context, index) {
+          final tab = tabs[index];
+          final active = tab.index == currentIndex;
+          final label = switch (tab.index) {
+            4 => 'Командные',
+            54 => 'Назначенные',
+            52 => 'Посещаемость',
+            5 => 'Матчи',
+            50 => 'ТТД',
+            51 => 'Аналитика',
+            1 => 'Физика',
+            _ => tab.title,
+          };
+
+          return Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => _selectCmrTab(tab.index),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                padding: EdgeInsets.symmetric(
+                  horizontal: compact ? 10 : 12,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: active
+                      ? const Color(0xFFF3FAF6)
+                      : const Color(0xFFFAFBFA),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: active
+                        ? const Color(0xFFD7F0E2)
+                        : const Color(0xFFE9ECEA),
+                    width: .7,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      tab.icon,
+                      size: 16,
+                      color: active
+                          ? const Color(0xFF067A46)
+                          : const Color(0xFF667085),
+                    ),
+                    const SizedBox(width: 7),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontFamily: _fontFamily,
+                        color: active
+                            ? const Color(0xFF0B0F14)
+                            : const Color(0xFF667085),
+                        fontSize: compact ? 10.2 : 10.8,
+                        fontWeight:
+                            active ? FontWeight.w700 : FontWeight.w600,
+                        height: 1,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
 
   Future<void> _selectTrainingForDetails(Map<String, dynamic> raw, {bool loadInfo = true}) async {
   final e = _enrichTrainingRecord(Map<String, dynamic>.from(raw));
@@ -14418,9 +18545,10 @@ final markerColors = dayMatches
   Widget _buildCmrSelectionDetailsPane(_CategoryTab tab) {
     switch (tab.index) {
       case 1: // Физика
-      case 51: // Нагрузка
         if (_rightEditorMode == _CmrRightEditorMode.metrics) return _buildMetricEditorRightPane();
         return _buildMetricRightDetailsPane();
+      case 51: // Аналитика игрока
+        return _buildTrackerLoadRightDetailsPane();
       case 2: // Медиа / достижения
         if (_rightEditorMode == _CmrRightEditorMode.media) return _buildMediaEditorRightPane();
         return _buildAchievementRightDetailsPane();
@@ -14457,43 +18585,46 @@ final markerColors = dayMatches
   }) {
     final c = accent ?? _AppColors.accentForIcon(icon);
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(30),
-      ),
-      clipBehavior: Clip.antiAlias,
+      decoration: const BoxDecoration(color: Colors.white),
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.fromLTRB(16, 14, 10, 14),
-            decoration: const BoxDecoration(color: Colors.white),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            constraints: const BoxConstraints(minHeight: 44),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
+            ),
+            child: Row(
               children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(color: _AppColors.softFor(c), borderRadius: BorderRadius.circular(18)),
-                      child: Icon(icon, color: c, size: 23),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _cmrTitleText(context, mobile: 17.2, wide: 19.2, color: _AppColors.textPrimary, weight: FontWeight.w700)),
-                          const SizedBox(height: 3),
-                          Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: _cmrSubtitleText(context, mobile: 11.5, wide: 12.4, color: _AppColors.textSecondary, weight: FontWeight.w700)),
-                        ],
-                      ),
-                    ),
-                  ],
+                Container(
+                  width: 30,
+                  height: 30,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: _AppColors.softFor(c),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: c.withOpacity(.16), width: .7),
+                  ),
+                  child: Icon(icon, color: c, size: 16),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerText, fontSize: 12.4, fontWeight: FontWeight.w700, letterSpacing: -.18)),
+                      if (subtitle.trim().isNotEmpty) ...[
+                        const SizedBox(height: 1),
+                        Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerDim, fontSize: 9, fontWeight: FontWeight.w700)),
+                      ],
+                    ],
+                  ),
                 ),
                 if (actions.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Wrap(spacing: 8, runSpacing: 8, children: actions),
+                  const SizedBox(width: 8),
+                  Wrap(spacing: 6, runSpacing: 6, children: actions),
                 ],
               ],
             ),
@@ -14501,7 +18632,7 @@ final markerColors = dayMatches
           Expanded(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 18),
+              padding: EdgeInsets.zero,
               child: child,
             ),
           ),
@@ -14537,7 +18668,7 @@ final markerColors = dayMatches
             style: OutlinedButton.styleFrom(
               foregroundColor: _AppColors.textPrimary,
               minimumSize: const Size.fromHeight(48),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
             ),
             child: const Text('Отмена', style: TextStyle(fontWeight: FontWeight.w700)),
           ),
@@ -14560,7 +18691,7 @@ final markerColors = dayMatches
               foregroundColor: Colors.white,
               elevation: 0,
               minimumSize: const Size.fromHeight(48),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
               textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11.7),
             ),
           ),
@@ -14642,7 +18773,7 @@ final markerColors = dayMatches
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(4),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -14650,7 +18781,7 @@ final markerColors = dayMatches
                 Container(
                   width: 36,
                   height: 36,
-                  decoration: BoxDecoration(color: const Color(0xFFEAF5EE), borderRadius: BorderRadius.circular(14)),
+                  decoration: BoxDecoration(color: const Color(0xFFEAF5EE), borderRadius: BorderRadius.circular(4)),
                   child: const Icon(Icons.speed_rounded, color: Color(0xFF178A45), size: 18),
                 ),
                 const SizedBox(width: 10),
@@ -15188,6 +19319,45 @@ final markerColors = dayMatches
     );
   }
 
+  Widget _buildTrackerLoadRightDetailsPane() {
+    final rating = _footballPlayerRating();
+    final score = trackerSessions.isEmpty ? 0 : _trackerPerformanceScore();
+    final heart = _heartRateLoadScore();
+    return _buildCmrRightDetailsShell(
+      icon: Icons.monitor_heart_rounded,
+      title: 'Аналитика за период',
+      subtitle: _loadRangeLabel(),
+      accent: _AppColors.trackerGreen,
+      actions: [
+        _buildCmrActionChip(icon: Icons.picture_as_pdf_rounded, label: 'PDF', onTap: () => _exportPlayerOfficialReport('pdf'), compact: true),
+        _buildCmrActionChip(icon: Icons.table_chart_rounded, label: 'Excel', onTap: () => _exportPlayerOfficialReport('excel'), compact: true),
+      ],
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        LayoutBuilder(builder: (context, c) {
+          final compact = c.maxWidth < 680;
+          return Wrap(spacing: 0, runSpacing: 0, children: [
+            _buildTrackerStatCell('Футбольный рейтинг', '$rating / 100', Icons.workspace_premium_rounded, _footballRatingColor(rating), compact: compact),
+            _buildTrackerStatCell('Индекс трекера', score <= 0 ? '—' : '$score / 100', Icons.monitor_heart_rounded, _AppColors.trackerGreen, compact: compact),
+            _buildTrackerStatCell('Polar ЧСС', heart <= 0 ? '—' : '$heart / 100', Icons.favorite_rounded, _AppColors.trackerRed, compact: compact),
+            _buildTrackerStatCell('Сессии', '${trackerSessions.length}', Icons.sensors_rounded, _AppColors.trackerGreen, compact: compact),
+            _buildTrackerStatCell('Дистанция', _fmtDistance(_trackerTotalDistanceM()), Icons.route_rounded, _AppColors.trackerGreen, compact: compact),
+            _buildTrackerStatCell('Пульс средний', _fmtBpm(_hrAvgBpm()), Icons.favorite_border_rounded, _AppColors.trackerRed, compact: compact),
+          ]);
+        }),
+        _buildTrackerAssessmentLine(),
+        _buildTrackerCoachLine(),
+        Container(
+          decoration: const BoxDecoration(border: Border(top: BorderSide(color: _AppColors.trackerLine, width: .7))),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          child: Text(
+            'Все источники связаны с текущим player_id: GPS/BLE, Polar, посещаемость, матчи, ТТД, тестирование и заметки тренера. Рост и вес остаются во вкладке «Физика».',
+            style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerDim, fontSize: 9.6, height: 1.3, fontWeight: FontWeight.w700),
+          ),
+        ),
+      ]),
+    );
+  }
+
   Widget _buildMetricRightDetailsPane() {
     final metric = _metricDetailsSelection();
     if (metric == null) {
@@ -15228,7 +19398,6 @@ final markerColors = dayMatches
               ],
             ),
           ),
-          const SizedBox(height: 12),
           _matchDetailTextBlock(Icons.info_outline_rounded, 'Подсказка', 'Нажимайте на показатели слева, чтобы быстро сравнивать данные без открытия отдельного окна.'),
         ],
       ),
@@ -15289,7 +19458,7 @@ final markerColors = dayMatches
       height: 210,
       decoration: BoxDecoration(
         color: _AppColors.cmrSoftPanel,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(4),
         image: isImage ? DecorationImage(image: NetworkImage(norm), fit: BoxFit.cover) : null,
       ),
       child: Stack(
@@ -15416,9 +19585,9 @@ final markerColors = dayMatches
         final accent = _trainingRatingAccent(rating);
         return Material(
           color: Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(4),
           child: InkWell(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(4),
             onTap: enabled ? () => onChanged(rating) : null,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 160),
@@ -15426,7 +19595,7 @@ final markerColors = dayMatches
               height: 48,
               decoration: BoxDecoration(
                 color: active ? accent : _AppColors.softFor(accent),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(4),
               ),
               alignment: Alignment.center,
               child: Row(
@@ -15463,7 +19632,7 @@ final markerColors = dayMatches
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
         color: _AppColors.softFor(accent),
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -15473,7 +19642,7 @@ final markerColors = dayMatches
               Container(
                 width: 32,
                 height: 32,
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4)),
                 child: Icon(icon, color: accent, size: 18),
               ),
               const SizedBox(width: 9),
@@ -15557,7 +19726,7 @@ final markerColors = dayMatches
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: empty || subtleWhenEmpty ? _AppColors.cmrSoftPanel : _AppColors.softFor(accent),
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -15565,7 +19734,7 @@ final markerColors = dayMatches
           Container(
             width: 34,
             height: 34,
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(13)),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4)),
             child: Icon(icon, color: empty ? _AppColors.textTertiary : accent, size: 18),
           ),
           const SizedBox(width: 11),
@@ -15610,7 +19779,7 @@ final markerColors = dayMatches
               Container(
                 width: 48,
                 height: 48,
-                decoration: BoxDecoration(color: _AppColors.softFor(meta.color), borderRadius: BorderRadius.circular(18)),
+                decoration: BoxDecoration(color: _AppColors.softFor(meta.color), borderRadius: BorderRadius.circular(4)),
                 child: Icon(meta.icon, color: meta.color, size: 24),
               ),
               const SizedBox(width: 12),
@@ -16156,7 +20325,7 @@ final markerColors = dayMatches
               const SizedBox(width: 10),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                decoration: BoxDecoration(color: _AppColors.softFor(resultColor), borderRadius: BorderRadius.circular(15)),
+                decoration: BoxDecoration(color: _AppColors.softFor(resultColor), borderRadius: BorderRadius.circular(4)),
                 child: Text(score, style: _bodyStyle(size: 14.2, color: resultColor, weight: FontWeight.w700)),
               ),
             ],
@@ -16188,7 +20357,7 @@ final markerColors = dayMatches
   Widget _buildTtdReportInfoTile(IconData icon, String title, String value, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4), ),
       child: Row(
         children: [
           Container(
@@ -16299,7 +20468,7 @@ final markerColors = dayMatches
   Widget _buildTtdIndicatorCard({required String title, required String value, required String caption, required Color color, required bool lowerBetter}) {
     return Container(
       padding: const EdgeInsets.all(11),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4), ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -16324,7 +20493,7 @@ final markerColors = dayMatches
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(13),
-        decoration: BoxDecoration(color: _AppColors.cmrSoft, borderRadius: BorderRadius.circular(16), ),
+        decoration: BoxDecoration(color: _AppColors.cmrSoft, borderRadius: BorderRadius.circular(4), ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -16338,7 +20507,7 @@ final markerColors = dayMatches
 
     return Container(
       width: double.infinity,
-      decoration: BoxDecoration(color: _AppColors.redSoft, borderRadius: BorderRadius.circular(16), ),
+      decoration: BoxDecoration(color: _AppColors.redSoft, borderRadius: BorderRadius.circular(4), ),
       child: Column(
         children: problems.map((p) {
           final last = p == problems.last;
@@ -16372,7 +20541,7 @@ final markerColors = dayMatches
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(color: _AppColors.cmrSoftPanel, borderRadius: BorderRadius.circular(18)),
+      decoration: BoxDecoration(color: _AppColors.cmrSoftPanel, borderRadius: BorderRadius.circular(4)),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -16686,7 +20855,7 @@ final markerColors = dayMatches
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: danger ? _AppColors.redSoft : _AppColors.cmrSoft,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -16724,7 +20893,7 @@ final markerColors = dayMatches
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -16751,9 +20920,9 @@ final markerColors = dayMatches
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
         color: isPoor ? _AppColors.redSoft : Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(4),
         child: InkWell(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(4),
           onTap: () {
             setState(() => _selectedTestingResultForDetails = Map<String, dynamic>.from(r));
             _rebuildOpenSectionSheet();
@@ -16761,7 +20930,7 @@ final markerColors = dayMatches
           child: Container(
             padding: const EdgeInsets.all(11),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(4),
             ),
             child: Row(
               children: [
@@ -16770,7 +20939,7 @@ final markerColors = dayMatches
                   height: 38,
                   decoration: BoxDecoration(
                     color: isPoor ? Colors.white : _AppColors.blueSoft,
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(4),
                   ),
                   child: Icon(isPoor ? Icons.directions_run_rounded : Icons.speed_rounded, color: accent, size: 19),
                 ),
@@ -16790,7 +20959,7 @@ final markerColors = dayMatches
                 const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                  decoration: BoxDecoration(color: accent.withOpacity(.10), borderRadius: BorderRadius.circular(12)),
+                  decoration: BoxDecoration(color: accent.withOpacity(.10), borderRadius: BorderRadius.circular(4)),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -16939,7 +21108,7 @@ final markerColors = dayMatches
                   height: 42,
                   decoration: BoxDecoration(
                     color: _AppColors.cmrSoft,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(4),
                   ),
                   child: const Icon(Icons.edit_rounded, color: _AppColors.cmrGreen, size: 22),
                 ),
@@ -17012,23 +21181,46 @@ final markerColors = dayMatches
   // ОБЗОР ИГРОКА КАК РАБОЧИЙ ДАШБОРД
   // =============================
   Widget _buildOverviewDashboardWorkspace({required bool compact}) {
-    final width = MediaQuery.of(context).size.width;
-    final rightWidth = width >= 1500 ? 330.0 : (width >= 1280 ? 315.0 : 300.0);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final split = !compact && width >= 980;
 
-    return Row(
-      key: const ValueKey('player-overview-dashboard'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(child: _buildOverviewDashboardMainPane()),
-        const SizedBox(width: 12),
-        SizedBox(width: rightWidth, child: _buildOverviewDashboardRightPane()),
-      ],
+        if (!split) {
+          return ListView(
+            key: const ValueKey('player-overview-dashboard-compact'),
+            padding: EdgeInsets.zero,
+            physics: const BouncingScrollPhysics(),
+            children: [
+              ..._buildOverviewMainChildren(),
+              const SizedBox(height: 10),
+              ..._buildOverviewRightChildren(),
+              const SizedBox(height: 18),
+            ],
+          );
+        }
+
+        final rightWidth = math.min(320.0, width * .31);
+        return Row(
+          key: const ValueKey('player-overview-dashboard-wide'),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: _buildOverviewDashboardMainPane()),
+            const VerticalDivider(
+              width: 1,
+              thickness: 1,
+              color: _AppColors.trackerLine,
+            ),
+            SizedBox(width: rightWidth, child: _buildOverviewDashboardRightPane()),
+          ],
+        );
+      },
     );
   }
 
   Widget _buildOverviewDashboardMainPane() {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(0, 0, 0, 16),
+      padding: EdgeInsets.zero,
       physics: const BouncingScrollPhysics(),
       children: _buildOverviewMainChildren(),
     );
@@ -17036,7 +21228,7 @@ final markerColors = dayMatches
 
   Widget _buildOverviewDashboardRightPane() {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(0, 0, 0, 16),
+      padding: EdgeInsets.zero,
       physics: const BouncingScrollPhysics(),
       children: _buildOverviewRightChildren(),
     );
@@ -17045,11 +21237,9 @@ final markerColors = dayMatches
   List<Widget> _buildOverviewMainChildren() {
     return [
       _buildOverviewHeroCard(),
-      const SizedBox(height: 12),
+      _buildOverviewPlayerRatingCard(),
       _buildOverviewIndicatorsGrid(),
-      const SizedBox(height: 12),
       _buildOverviewTrainingLoadCard(),
-      const SizedBox(height: 12),
       LayoutBuilder(
         builder: (context, constraints) {
           if (constraints.maxWidth >= 820) {
@@ -17057,7 +21247,7 @@ final markerColors = dayMatches
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(child: _buildOverviewEventsCard()),
-                const SizedBox(width: 12),
+                const VerticalDivider(width: 1, thickness: 1, color: _AppColors.trackerLine),
                 Expanded(child: _buildOverviewDynamicsCard()),
               ],
             );
@@ -17065,7 +21255,6 @@ final markerColors = dayMatches
           return Column(
             children: [
               _buildOverviewEventsCard(),
-              const SizedBox(height: 12),
               _buildOverviewDynamicsCard(),
             ],
           );
@@ -17077,11 +21266,8 @@ final markerColors = dayMatches
   List<Widget> _buildOverviewRightChildren() {
     return [
       _buildOverviewQuickActionsCard(),
-      const SizedBox(height: 12),
       _buildOverviewWarningsCard(),
-      const SizedBox(height: 12),
       _buildOverviewCoachRecommendationCard(),
-      const SizedBox(height: 12),
       _buildOverviewPassportCard(),
     ];
   }
@@ -17105,7 +21291,7 @@ final markerColors = dayMatches
           final header = Row(
             children: [
               ClipRRect(
-                borderRadius: BorderRadius.circular(22),
+                borderRadius: BorderRadius.circular(4),
                 child: _buildPhotoPreviewTap(
                   imageUrl: photo,
                   child: _buildCircleNetworkImage(
@@ -17193,6 +21379,7 @@ final markerColors = dayMatches
         final items = <Widget>[
           _buildOverviewFormCard(),
           _buildOverviewGameIndicatorsCard(),
+          _buildOverviewTrackerCard(),
           _buildOverviewTestingCard(),
           _buildOverviewAttendanceCard(),
         ];
@@ -17202,6 +21389,144 @@ final markerColors = dayMatches
           children: items.map((child) => SizedBox(width: itemWidth, child: child)).toList(),
         );
       },
+    );
+  }
+
+  Widget _buildOverviewPlayerRatingCard() {
+    final rating = _footballPlayerRating();
+    final color = _footballRatingColor(rating);
+    final components = _footballRatingComponents();
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: _overviewCardDecoration(radius: 22),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 760;
+          final head = Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildOverviewIconBox(Icons.workspace_premium_rounded, color, size: 46),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Рейтинг игрока', style: _overviewSectionTitleStyle(size: 15.2)),
+                  const SizedBox(height: 5),
+                  Text('Футбольная оценка по тренировкам, трекеру, посещаемости, тестам и матчам', maxLines: 2, overflow: TextOverflow.ellipsis, style: _overviewLabelStyle()),
+                ]),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                decoration: BoxDecoration(color: _AppColors.trackerSoft, borderRadius: BorderRadius.circular(4), border: Border.all(color: _AppColors.trackerLine)),
+                child: Text(trackerSessions.isEmpty ? 'без GPS' : '${trackerSessions.length} GPS', style: TextStyle(fontFamily: _fontFamily, color: trackerSessions.isEmpty ? _AppColors.trackerDim : _AppColors.trackerGreenDark, fontSize: 10.2, fontWeight: FontWeight.w600)),
+              ),
+            ],
+          );
+
+          final score = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('$rating', style: TextStyle(fontFamily: _fontFamily, color: color, fontSize: compact ? 42 : 50, height: .95, fontWeight: FontWeight.w700, letterSpacing: -1.8)),
+            const SizedBox(height: 5),
+            Text(_footballRatingTier(rating), style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerText, fontSize: 12.8, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                value: rating / 100,
+                minHeight: 8,
+                backgroundColor: _AppColors.trackerLine,
+                valueColor: AlwaysStoppedAnimation<Color>(color),
+              ),
+            ),
+          ]);
+
+          final grid = Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: components.map((c) {
+              final w = compact ? (constraints.maxWidth - 8) / 2 : 132.0;
+              return SizedBox(width: w, child: _buildRatingComponentTile(c.label, c.value, c.icon, c.color));
+            }).toList(),
+          );
+
+          final recommendation = Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(13),
+            decoration: BoxDecoration(color: _AppColors.trackerSoft2, borderRadius: BorderRadius.circular(4), border: Border.all(color: _AppColors.trackerLine)),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(Icons.tips_and_updates_rounded, color: color, size: 20),
+              const SizedBox(width: 10),
+              Expanded(child: Text(_footballRatingRecommendation(rating), style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerGraphite, fontSize: 11.5, height: 1.35, fontWeight: FontWeight.w700))),
+            ]),
+          );
+
+          if (compact) {
+            return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [head, const SizedBox(height: 16), score, const SizedBox(height: 14), grid, const SizedBox(height: 12), recommendation]);
+          }
+          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            head,
+            const SizedBox(height: 16),
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              SizedBox(width: 158, child: score),
+              const SizedBox(width: 18),
+              Expanded(child: grid),
+            ]),
+            const SizedBox(height: 12),
+            recommendation,
+          ]);
+        },
+      ),
+    );
+  }
+
+  Widget _buildRatingComponentTile(String label, int value, IconData icon, Color color) {
+    final hasData = value > 0;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4), border: Border.all(color: _AppColors.trackerLine)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(icon, color: hasData ? color : _AppColors.trackerDim, size: 17),
+          const Spacer(),
+          Text(hasData ? '$value' : '—', style: TextStyle(fontFamily: _fontFamily, color: hasData ? _AppColors.trackerText : _AppColors.trackerDim, fontSize: 15.4, fontWeight: FontWeight.w700, height: 1)),
+        ]),
+        const SizedBox(height: 9),
+        Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerMuted, fontSize: 10.2, fontWeight: FontWeight.w700)),
+      ]),
+    );
+  }
+
+  Widget _buildOverviewTrackerCard() {
+    final distance = _trackerTotalDistanceM();
+    final maxSpeed = _trackerMaxSpeedKmh();
+    final sprints = _trackerSprintCount();
+    final score = _trackerPerformanceScore();
+    return _buildOverviewMetricCard(
+      icon: Icons.sensors_rounded,
+      title: 'Tracker Pro',
+      onTap: () async {
+        setState(() => _selectedTabIndex = 51);
+        await _loadPlayerTrackerSessions(force: false);
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Expanded(child: _buildOverviewBigValue(trackerSessions.isEmpty ? '—' : '$score', trackerSessions.isEmpty ? 'нет GPS-сессий' : 'индекс нагрузки')),
+            if (trackerSessionsLoading) const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: _AppColors.trackerGreen)),
+          ]),
+          const SizedBox(height: 13),
+          Container(height: 1, color: _AppColors.trackerLine),
+          const SizedBox(height: 13),
+          Row(children: [
+            Expanded(child: _buildOverviewSmallValue('Дистанция', _fmtDistance(distance))),
+            Expanded(child: _buildOverviewSmallValue('Макс. скорость', _fmtSpeed(maxSpeed))),
+          ]),
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(child: _buildOverviewSmallValue('Спринты', sprints > 0 ? '$sprints' : '—')),
+            Expanded(child: _buildOverviewSmallValue('Точки GPS', _trackerPointsCount() > 0 ? '${_trackerPointsCount()}' : '—')),
+          ]),
+        ],
+      ),
     );
   }
 
@@ -17334,6 +21659,9 @@ final markerColors = dayMatches
   Widget _buildOverviewTrainingLoadCard() {
     final minutes = _overviewTrainingMinutes();
     final intensity = _overviewTrainingIntensityText();
+    final trackerDistance = _trackerTotalDistanceM();
+    final trackerMaxSpeed = _trackerMaxSpeedKmh();
+    final trackerSprints = _trackerSprintCount();
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: _overviewCardDecoration(radius: 22),
@@ -17356,8 +21684,9 @@ final markerColors = dayMatches
           );
           final chart = SizedBox(height: 48, child: _buildOverviewBarStrip(_overviewLoadBars(), _AppColors.orange));
           final values = Row(children: [
-            Expanded(child: _buildOverviewSmallValue('Объём', minutes > 0 ? '$minutes мин' : '—')),
-            Expanded(child: _buildOverviewSmallValue('Интенсивность', intensity)),
+            Expanded(child: _buildOverviewSmallValue('Объём', trackerDistance > 0 ? _fmtDistance(trackerDistance) : (minutes > 0 ? '$minutes мин' : '—'))),
+            Expanded(child: _buildOverviewSmallValue('Интенсивность', trackerSprints > 0 ? '$trackerSprints спринт.' : intensity)),
+            if (!compact) Expanded(child: _buildOverviewSmallValue('Скорость', _fmtSpeed(trackerMaxSpeed))),
           ]);
           if (compact) {
             return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [left, const SizedBox(height: 14), chart, const SizedBox(height: 12), values]);
@@ -17406,7 +21735,7 @@ final markerColors = dayMatches
             Expanded(child: Text('Динамика игрока', style: _overviewSectionTitleStyle())),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-              decoration: BoxDecoration(color: const Color(0xFFF6F8FA), borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(color: const Color(0xFFF6F8FA), borderRadius: BorderRadius.circular(4)),
               child: Row(mainAxisSize: MainAxisSize.min, children: const [
                 Text('Последние 8 недель', style: TextStyle(color: _AppColors.textSecondary, fontSize: 10.1, fontWeight: FontWeight.w600)),
                 SizedBox(width: 4),
@@ -17517,9 +21846,9 @@ final markerColors = dayMatches
   Widget _buildOverviewMetricCard({required IconData icon, required String title, required Widget child, VoidCallback? onTap}) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(22),
+      borderRadius: BorderRadius.circular(4),
       child: InkWell(
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(4),
         onTap: onTap,
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 190),
@@ -17542,63 +21871,61 @@ final markerColors = dayMatches
     );
   }
 
+
   Widget _buildOverviewQuickAction(IconData icon, String title, String subtitle, Color color, VoidCallback onTap) {
     return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(18),
+      color: Colors.white,
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
         onTap: onTap,
-        child: Ink(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            border: null,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 48),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
           ),
           child: Row(children: [
-            _buildOverviewIconBox(icon, color == _AppColors.cmrGreen ? color : _AppColors.textPrimary, size: 44),
-            const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: color, fontSize: 11.9, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 4),
-              Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textSecondary, fontSize: 10.5, height: 1.2, fontWeight: FontWeight.w700)),
+            _buildOverviewIconBox(icon, color == _AppColors.cmrGreen ? color : _AppColors.textPrimary, size: 28),
+            const SizedBox(width: 9),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerText, fontSize: 10.8, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 2),
+              Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerDim, fontSize: 9, height: 1.1, fontWeight: FontWeight.w600)),
             ])),
-            const Icon(Icons.chevron_right_rounded, color: _AppColors.textTertiary, size: 22),
+            const Icon(Icons.chevron_right_rounded, color: _AppColors.trackerDim, size: 18),
           ]),
         ),
       ),
     );
   }
 
+
+
   Widget _buildOverviewWarningRow(IconData icon, String title, String subtitle, Color color, VoidCallback? onTap) {
     return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(16),
+      color: Colors.white,
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
         onTap: onTap,
-        child: Ink(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: null,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 46),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
           ),
           child: Row(children: [
-            Container(width: 26, height: 26, decoration: BoxDecoration(color: color == _AppColors.error ? _AppColors.error : const Color(0xFF111418), shape: BoxShape.circle), child: Icon(icon, color: Colors.white, size: 15)),
-            const SizedBox(width: 10),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: color, fontSize: 11.4, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 3),
-              Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textSecondary, fontSize: 10.4, height: 1.2, fontWeight: FontWeight.w700)),
+            Container(width: 26, height: 26, alignment: Alignment.center, decoration: BoxDecoration(color: _AppColors.softFor(color), borderRadius: BorderRadius.circular(4), border: Border.all(color: color.withOpacity(.16), width: .7)), child: Icon(icon, color: color, size: 14)),
+            const SizedBox(width: 9),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerText, fontSize: 10.8, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 2),
+              Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerDim, fontSize: 9, height: 1.1, fontWeight: FontWeight.w600)),
             ])),
-            if (onTap != null) const Icon(Icons.chevron_right_rounded, color: _AppColors.textTertiary, size: 22),
+            if (onTap != null) const Icon(Icons.chevron_right_rounded, color: _AppColors.trackerDim, size: 18),
           ]),
         ),
       ),
     );
   }
+
 
   Widget _buildOverviewEventRow(Map<String, dynamic> event, {required bool last}) {
     final color = event['color'] as Color;
@@ -17611,7 +21938,7 @@ final markerColors = dayMatches
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(4),
         child: Padding(
           padding: EdgeInsets.only(top: 10, bottom: last ? 10 : 12),
           child: Row(children: [
@@ -17683,8 +22010,8 @@ final markerColors = dayMatches
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(999),
-        border: null,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: _AppColors.trackerLine, width: .7),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(icon, color: color, size: 14),
@@ -17705,7 +22032,7 @@ final markerColors = dayMatches
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(color: _AppColors.softFor(color), borderRadius: BorderRadius.circular(size * .36)),
+      decoration: BoxDecoration(color: _AppColors.softFor(color), borderRadius: BorderRadius.circular(4), border: Border.all(color: color.withOpacity(.14), width: .7)),
       child: Icon(icon, color: color, size: size * .48),
     );
   }
@@ -17731,29 +22058,36 @@ final markerColors = dayMatches
   Widget _buildOverviewSegment(String label, bool active) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-      decoration: BoxDecoration(color: active ? _AppColors.cmrSoft : Colors.white, borderRadius: BorderRadius.circular(12), ),
+      decoration: BoxDecoration(color: active ? _AppColors.cmrSoft : Colors.white, borderRadius: BorderRadius.circular(4), ),
       child: Text(label, style: TextStyle(fontFamily: _fontFamily, color: active ? _AppColors.cmrGreen : _AppColors.textSecondary, fontSize: 10.5, fontWeight: FontWeight.w700)),
     );
   }
 
+
   Widget _buildOverviewListBox(String title, List<String> rows, Color color) {
     return Container(
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(color: _AppColors.softFor(color), borderRadius: BorderRadius.circular(18)),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
+      ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title, style: TextStyle(fontFamily: _fontFamily, color: color, fontSize: 11.2, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 9),
-        ...rows.take(3).map((e) => Padding(
-              padding: const EdgeInsets.only(bottom: 7),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: Text(title, style: TextStyle(fontFamily: _fontFamily, color: color, fontSize: 10.8, fontWeight: FontWeight.w700)),
+        ),
+        ...rows.take(3).map((e) => Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: const BoxDecoration(border: Border(top: BorderSide(color: _AppColors.trackerLine, width: .7))),
               child: Row(children: [
-                Icon(Icons.check_circle_rounded, color: color, size: 14),
+                Icon(Icons.check_rounded, color: color, size: 14),
                 const SizedBox(width: 7),
-                Expanded(child: Text(e, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textPrimary, fontSize: 10.7, fontWeight: FontWeight.w600))),
+                Expanded(child: Text(e, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerText, fontSize: 10.4, fontWeight: FontWeight.w600))),
               ]),
             )),
       ]),
     );
   }
+
 
   Widget _buildOverviewTextAction(String label, IconData icon, VoidCallback onTap) {
     return Center(
@@ -17765,14 +22099,19 @@ final markerColors = dayMatches
     );
   }
 
+
   Widget _buildOverviewEmpty(String text) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: const Color(0xFFF8FAF9), borderRadius: BorderRadius.circular(18)),
-      child: Text(text, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.textSecondary, fontSize: 11.4, height: 1.35, fontWeight: FontWeight.w700)),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
+      ),
+      child: Text(text, style: TextStyle(fontFamily: _fontFamily, color: _AppColors.trackerDim, fontSize: 10.6, height: 1.3, fontWeight: FontWeight.w600)),
     );
   }
+
 
   Widget _buildOverviewPassportRow(String label, String value) {
     return Padding(
@@ -17786,26 +22125,19 @@ final markerColors = dayMatches
   }
 
   BoxDecoration _overviewCardDecoration({double radius = 22}) {
-    return BoxDecoration(
+    return const BoxDecoration(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(radius),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(.028),
-          blurRadius: 18,
-          offset: const Offset(0, 8),
-        ),
-      ],
+      border: Border(bottom: BorderSide(color: _AppColors.trackerLine, width: .7)),
     );
   }
 
 
   TextStyle _overviewSectionTitleStyle({double size = 14.6}) {
-    return TextStyle(fontFamily: _fontFamily, color: _AppColors.textPrimary, fontSize: size, height: 1.1, fontWeight: FontWeight.w700, letterSpacing: -.1);
+    return TextStyle(fontFamily: _fontFamily, color: _AppColors.textPrimary, fontSize: size, height: 1.1, fontWeight: FontWeight.w600, letterSpacing: -.1);
   }
 
   TextStyle _overviewTitleStyle({required double size, required Color color}) {
-    return TextStyle(fontFamily: _fontFamily, color: color, fontSize: size, height: 1.05, fontWeight: FontWeight.w700, letterSpacing: -.25);
+    return TextStyle(fontFamily: _fontFamily, color: color, fontSize: size, height: 1.05, fontWeight: FontWeight.w600, letterSpacing: -.25);
   }
 
   TextStyle _overviewLabelStyle() {
@@ -17941,6 +22273,8 @@ final markerColors = dayMatches
   }
 
   int _overviewTrainingMinutes() {
+    final trackerMinutes = (_trackerTotalDurationSec() / 60).round();
+    if (trackerMinutes > 0) return trackerMinutes;
     var total = 0;
     final rows = _dedupeAndEnrichTrainingRows([...teamEvents, ...attendanceLog]);
     for (final row in rows) {
@@ -17957,6 +22291,12 @@ final markerColors = dayMatches
   }
 
   String _overviewTrainingIntensityText() {
+    if (trackerSessions.isNotEmpty) {
+      final score = _trackerPerformanceScore();
+      if (score >= 78) return 'Высокая';
+      if (score >= 55) return 'Средняя';
+      return 'Низкая';
+    }
     final value = _overviewFootballMetric(['интенсив', 'intensity'], fallback: '');
     if (value.isNotEmpty) return value.contains('/') ? value : '$value / 10';
     final avg = _overviewAverageScore();
@@ -17965,6 +22305,12 @@ final markerColors = dayMatches
   }
 
   String _overviewLoadLabel() {
+    if (trackerSessions.isNotEmpty) {
+      final score = _trackerPerformanceScore();
+      if (score >= 78) return 'Высокая GPS-нагрузка';
+      if (score >= 55) return 'Средняя GPS-нагрузка';
+      return 'Низкая GPS-нагрузка';
+    }
     final minutes = _overviewTrainingMinutes();
     if (minutes >= 720) return 'Высокая';
     if (minutes >= 360) return 'Средняя';
@@ -17973,6 +22319,16 @@ final markerColors = dayMatches
   }
 
   List<double> _overviewLoadBars() {
+    if (trackerSessions.length >= 3) {
+      final values = trackerSessions.take(12).map((row) {
+        final distance = _trackerNumber(row, const ['total_distance_m', 'distance_m', 'distance']);
+        final speed = _trackerNumber(row, const ['max_speed_kmh', 'max_speed']);
+        final sprint = _trackerNumber(row, const ['sprint_count', 'sprints']);
+        final raw = (distance / 5200) * .48 + (speed / 27) * .32 + (sprint / 14) * .20;
+        return raw.clamp(.18, 1.0).toDouble();
+      }).toList();
+      return values.isEmpty ? const [.24, .34, .46, .78, .56, .42, .62, .58] : values;
+    }
     final rows = _dedupeAndEnrichTrainingRows([...teamEvents, ...attendanceLog]);
     if (rows.length >= 8) {
       return rows.take(12).map((row) {
@@ -18028,6 +22384,18 @@ final markerColors = dayMatches
         'icon': missed ? Icons.close_rounded : Icons.check_rounded,
         'color': missed ? _AppColors.error : _AppColors.cmrGreen,
         'onTap': () { _selectTrainingForDetails(row); },
+      });
+    }
+    for (final session in trackerSessions.take(5)) {
+      rows.add({
+        'date': _trackerDateOf(session),
+        'title': 'GPS-сессия трекера',
+        'subtitle': '${_fmtDistance(_trackerNumber(session, const ['total_distance_m', 'distance_m', 'distance']))} • ${_fmtSpeed(_trackerNumber(session, const ['max_speed_kmh', 'max_speed']))}',
+        'icon': Icons.sensors_rounded,
+        'color': _AppColors.trackerGreen,
+        'onTap': () {
+          setState(() => _selectedTabIndex = 51);
+        },
       });
     }
     for (final match in matches.take(5)) {
@@ -18157,6 +22525,10 @@ final markerColors = dayMatches
       final d = _matchDateOf(row);
       if (d != null) dates.add(d);
     }
+    for (final row in trackerSessions) {
+      final d = _trackerDateOf(row);
+      if (d != null) dates.add(d);
+    }
     for (final row in playerTestingResults) {
       final d = _testingDateOf(row);
       if (d != null) dates.add(d);
@@ -18282,7 +22654,7 @@ final markerColors = dayMatches
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22)),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4)),
             child: Row(children: const [
               Icon(Icons.info_outline_rounded, color: _AppColors.cmrGreen, size: 20),
               SizedBox(width: 10),
@@ -18389,7 +22761,7 @@ final markerColors = dayMatches
         child: Tooltip(
           message: 'Открыть помощь',
           child: InkWell(
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(4),
             onTap: () => setState(() => _cmrGuideCollapsed = false),
             child: Container(
               width: double.infinity,
@@ -18397,7 +22769,7 @@ final markerColors = dayMatches
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(22),
+                borderRadius: BorderRadius.circular(4),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -18407,7 +22779,7 @@ final markerColors = dayMatches
                     height: 36,
                     decoration: BoxDecoration(
                       color: _cmrTabSoft(tab.index),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(4),
                     ),
                     child: Icon(Icons.question_mark_rounded, color: accent, size: 20),
                   ),
@@ -18457,7 +22829,7 @@ final markerColors = dayMatches
                     height: 42,
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(15),
+                      borderRadius: BorderRadius.circular(4),
                     ),
                     child: Icon(Icons.help_outline_rounded, color: accent, size: 22),
                   ),
@@ -18484,14 +22856,14 @@ final markerColors = dayMatches
                   Tooltip(
                     message: 'Свернуть помощь',
                     child: InkWell(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(4),
                       onTap: () => setState(() => _cmrGuideCollapsed = true),
                       child: Container(
                         width: 38,
                         height: 38,
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(4),
                         ),
                         child: const Icon(Icons.keyboard_arrow_left_rounded, color: Color(0xFF667085), size: 22),
                       ),
@@ -18641,21 +23013,21 @@ final markerColors = dayMatches
     return Container(
       width: 48,
       height: 48,
-      decoration: BoxDecoration(color: _AppColors.softFor(accent), borderRadius: BorderRadius.circular(18)),
+      decoration: BoxDecoration(color: _AppColors.softFor(accent), borderRadius: BorderRadius.circular(4)),
       child: Icon(tab.icon, color: accent, size: 22),
     );
   }
 
   Widget _buildCmrIconButton({required IconData icon, required VoidCallback onTap}) {
     return InkWell(
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(4),
       onTap: onTap,
       child: Container(
         width: 48,
         height: 48,
         decoration: BoxDecoration(
           color: const Color(0xFFEAF7F0),
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(4),
         ),
         child: Icon(icon, color: _AppColors.primaryGreen),
       ),
@@ -18717,7 +23089,7 @@ final markerColors = dayMatches
         ])),
         if (!compact) ...[
           const SizedBox(width: 12),
-          Container(width: 104, padding: const EdgeInsets.symmetric(vertical: 12), decoration: BoxDecoration(color: Colors.white.withOpacity(.82), borderRadius: BorderRadius.circular(22)), child: Column(children: [Text('$readiness%', style: const TextStyle(color: _AppColors.textPrimary, fontSize: 18.9, fontWeight: FontWeight.w700)), const Text('заполнено', style: TextStyle(color: _AppColors.textSecondary, fontSize: 10.6, fontWeight: FontWeight.w700))])),
+          Container(width: 104, padding: const EdgeInsets.symmetric(vertical: 12), decoration: BoxDecoration(color: Colors.white.withOpacity(.82), borderRadius: BorderRadius.circular(4)), child: Column(children: [Text('$readiness%', style: const TextStyle(color: _AppColors.textPrimary, fontSize: 18.9, fontWeight: FontWeight.w700)), const Text('заполнено', style: TextStyle(color: _AppColors.textSecondary, fontSize: 10.6, fontWeight: FontWeight.w700))])),
         ],
       ]),
     );
@@ -18727,6 +23099,25 @@ final markerColors = dayMatches
     return _buildTrainerLikePill(text, Icons.circle_rounded, _AppColors.textSecondary);
   }
 
+
+  Widget _buildCmrMobileCloseButton({required bool collapsed}) {
+    return Tooltip(
+      message: 'Закрыть профиль',
+      child: Material(
+        color: Colors.white.withOpacity(.92),
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: _closePlayerProfileScreen,
+          child: SizedBox(
+            width: collapsed ? 36 : 40,
+            height: collapsed ? 36 : 40,
+            child: const Icon(Icons.close_rounded, color: Color(0xFF667085), size: 20),
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _buildCmrMobileHero({Key? key, required bool collapsed}) {
     final photo = _normalizeImage(widget.player["photo"]);
@@ -18766,6 +23157,8 @@ final markerColors = dayMatches
             ]),
           ],
         ])),
+        const SizedBox(width: 8),
+        _buildCmrMobileCloseButton(collapsed: collapsed),
       ]),
     );
   }
@@ -18811,37 +23204,127 @@ final markerColors = dayMatches
   }
 
   Widget _buildCmrMobileBottomMenu() {
+    final width = MediaQuery.of(context).size.width;
+    final horizontal = width < 380 ? 14.0 : 22.0;
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    final bottomInset = bottom > 0
+        ? math.max(12.0, math.min(16.0, bottom * .45))
+        : 10.0;
+    final current = _cmrMobileBottomIndex();
+
+    Widget dockIcon({
+      required int index,
+      required IconData icon,
+      required VoidCallback onTap,
+    }) {
+      final active = current == index;
+
+      return Expanded(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Center(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 170),
+              curve: Curves.easeOutCubic,
+              width: active ? 44 : 34,
+              height: 36,
+              decoration: BoxDecoration(
+                color: active
+                    ? const Color(0xB8EAF8F0)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Icon(
+                icon,
+                size: active ? 22 : 21,
+                color: active
+                    ? const Color(0xFF111827)
+                    : const Color(0xFF344054),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return SafeArea(
       top: false,
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(4, 0, 4, 4),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          border: null,
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(.06), blurRadius: 22, offset: const Offset(0, 10))],
+      bottom: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          horizontal,
+          0,
+          horizontal,
+          bottomInset,
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(22),
-          child: BottomNavigationBar(
-            currentIndex: _cmrMobileBottomIndex(),
-            type: BottomNavigationBarType.fixed,
-            backgroundColor: Colors.white,
-            selectedItemColor: _AppColors.primaryGreen,
-            unselectedItemColor: _AppColors.textSecondary,
-            selectedFontSize: 10.8,
-            unselectedFontSize: 10.2,
-            selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
-            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
-            elevation: 0,
-            onTap: _handleCmrMobileBottomTap,
-            items: const [
-              BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'Обзор'),
-              BottomNavigationBarItem(icon: Icon(Icons.sports_soccer_rounded), label: 'Матчи'),
-              BottomNavigationBarItem(icon: Icon(Icons.terrain_rounded), label: 'Тренировки'),
-              BottomNavigationBarItem(icon: Icon(Icons.show_chart_rounded), label: 'Тесты'),
-              BottomNavigationBarItem(icon: Icon(Icons.more_horiz_rounded), label: 'Ещё'),
-            ],
+          borderRadius: BorderRadius.circular(30),
+          child: BackdropFilter(
+            filter: ui.ImageFilter.blur(
+              sigmaX: 26,
+              sigmaY: 26,
+            ),
+            child: Container(
+              height: 56,
+              padding: const EdgeInsets.symmetric(horizontal: 7),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(.72),
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(
+                  color: Colors.white.withOpacity(.92),
+                  width: .9,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(.10),
+                    blurRadius: 30,
+                    spreadRadius: -12,
+                    offset: const Offset(0, 14),
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withOpacity(.04),
+                    blurRadius: 8,
+                    spreadRadius: -5,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  dockIcon(
+                    index: 0,
+                    icon: Icons.home_rounded,
+                    onTap: () => _handleCmrMobileBottomTap(0),
+                  ),
+                  dockIcon(
+                    index: 1,
+                    icon: Icons.directions_run_outlined,
+                    onTap: () => _handleCmrMobileBottomTap(1),
+                  ),
+                  dockIcon(
+                    index: 2,
+                    icon: Icons.sports_soccer_outlined,
+                    onTap: () => _handleCmrMobileBottomTap(2),
+                  ),
+                  dockIcon(
+                    index: 3,
+                    icon: Icons.monitor_heart_outlined,
+                    onTap: () => _handleCmrMobileBottomTap(3),
+                  ),
+                  dockIcon(
+                    index: 4,
+                    icon: Icons.show_chart_rounded,
+                    onTap: () => _handleCmrMobileBottomTap(4),
+                  ),
+                  dockIcon(
+                    index: 5,
+                    icon: Icons.more_horiz_rounded,
+                    onTap: () => _handleCmrMobileBottomTap(5),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -18850,52 +23333,67 @@ final markerColors = dayMatches
 
 
   int _cmrMobileBottomIndex() {
-    switch (_selectedTabIndex) {
+    final group = _cmrMainGroupIndex(_selectedTabIndex);
+
+    switch (group) {
       case 0:
         return 0;
-      case 5:
-        return 1;
       case 4:
+        return 1;
+      case 5:
         return 2;
-      case 7:
+      case 51:
         return 3;
-      default:
+      case 7:
         return 4;
+      default:
+        return 5;
     }
   }
 
   Future<void> _handleCmrMobileBottomTap(int index) async {
-    final direct = <int, int>{0: 0, 1: 5, 2: 4, 3: 7};
-    if (direct.containsKey(index)) {
-      final tabIndex = direct[index]!;
-      if (tabIndex == 0) {
-        if (mounted) setState(() => _selectedTabIndex = 0);
+    switch (index) {
+      case 0:
+        await _selectCmrTab(0);
         return;
-      }
-      final tab = _categoryTabs.firstWhere((t) => t.index == tabIndex);
-      await _openCmrMobileTabSheet(tab);
-      return;
+      case 1:
+        await _selectCmrTab(4);
+        return;
+      case 2:
+        await _selectCmrTab(5);
+        return;
+      case 3:
+        await _selectCmrTab(51);
+        return;
+      case 4:
+        await _selectCmrTab(7);
+        return;
+      case 5:
+        await _openCmrMobileMoreSheet();
+        return;
     }
-
-    await _openCmrMobileMoreSheet();
   }
 
   Future<void> _openCmrMobileMoreSheet() async {
     _CategoryTab tabByIndex(int index) => _categoryTabs.firstWhere((t) => t.index == index);
     final items = <_PlayerMobileMoreSheetItem>[
-      _PlayerMobileMoreSheetItem.fromTab(tabByIndex(50), accent: _AppColors.cmrGreen),
-      _PlayerMobileMoreSheetItem.fromTab(tabByIndex(1), accent: _AppColors.cmrGreen),
-      _PlayerMobileMoreSheetItem.fromTab(tabByIndex(51), accent: _AppColors.blue),
-      _PlayerMobileMoreSheetItem.fromTab(tabByIndex(52), accent: _AppColors.cmrGreen),
-      _PlayerMobileMoreSheetItem.fromTab(tabByIndex(54), accent: _AppColors.blue),
-      _PlayerMobileMoreSheetItem.fromTab(tabByIndex(2), accent: _AppColors.orange),
-      _PlayerMobileMoreSheetItem.fromTab(tabByIndex(3), accent: _AppColors.cmrGreen),
-      _PlayerMobileMoreSheetItem.fromTab(tabByIndex(8), accent: _AppColors.blue),
+      _PlayerMobileMoreSheetItem.fromTab(
+        tabByIndex(2),
+        accent: _AppColors.orange,
+      ),
+      _PlayerMobileMoreSheetItem.fromTab(
+        tabByIndex(3),
+        accent: _AppColors.cmrGreen,
+      ),
+      _PlayerMobileMoreSheetItem.fromTab(
+        tabByIndex(8),
+        accent: _AppColors.blue,
+      ),
       const _PlayerMobileMoreSheetItem(
         index: -1,
         icon: Icons.edit_outlined,
         title: 'Редактировать',
-        subtitle: 'Изменить данные игрока',
+        subtitle: 'Изменить карточку игрока',
         accent: _AppColors.blue,
       ),
     ];
@@ -18948,7 +23446,7 @@ final markerColors = dayMatches
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(22),
+                    borderRadius: BorderRadius.circular(4),
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -19031,7 +23529,7 @@ final markerColors = dayMatches
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Row(
         children: [
@@ -19040,7 +23538,7 @@ final markerColors = dayMatches
             height: 46,
             decoration: BoxDecoration(
               color: _AppColors.primaryGreen.withOpacity(.10),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(4),
             ),
             child: const Icon(
               Icons.person_outline_rounded,
@@ -19093,9 +23591,9 @@ final markerColors = dayMatches
 
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(4),
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(4),
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
@@ -19103,7 +23601,7 @@ final markerColors = dayMatches
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
           decoration: BoxDecoration(
             color: active ? item.accent.withOpacity(.08) : _AppColors.cmrSoftPanel,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(4),
           ),
           child: Row(
             children: [
@@ -19112,7 +23610,7 @@ final markerColors = dayMatches
                 height: 44,
                 decoration: BoxDecoration(
                   color: active ? Colors.white : _AppColors.softFor(item.accent),
-                  borderRadius: BorderRadius.circular(15),
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 child: Icon(item.icon, color: item.accent, size: 22),
               ),
@@ -19153,7 +23651,7 @@ final markerColors = dayMatches
                 height: 30,
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(active ? 1 : .72),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 child: Icon(
                   active ? Icons.check_rounded : Icons.chevron_right_rounded,
@@ -19423,7 +23921,7 @@ final markerColors = dayMatches
                           height: 42,
                           decoration: BoxDecoration(
                             color: _cmrTabSoft(tab.index),
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(4),
                           ),
                           child: Icon(tab.icon, color: _cmrTabAccent(tab.index), size: 21),
                         ),
@@ -19512,8 +24010,8 @@ final markerColors = dayMatches
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: const Color(0xFFE8EDF2), width: 1),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: _AppColors.trackerLine, width: 1),
                 boxShadow: [BoxShadow(color: Colors.black.withOpacity(.08), blurRadius: 24, offset: const Offset(0, 12))],
               ),
               child: Row(
@@ -19531,7 +24029,7 @@ final markerColors = dayMatches
                       name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontFamily: _fontFamily, color: const Color(0xFF101828), fontSize: 14, fontWeight: FontWeight.w800, height: 1),
+                      style: TextStyle(fontFamily: _fontFamily, color: const Color(0xFF101828), fontSize: 14, fontWeight: FontWeight.w600, height: 1),
                     ),
                   ),
                 ],
@@ -19545,56 +24043,58 @@ final markerColors = dayMatches
 
   Widget _buildCmrPcWindow({required bool compact, required bool embedded}) {
     if (_playerProfileWindowMinimized) {
-      return _buildPlayerProfileMinimizedWindow(compact: compact, embedded: embedded);
+      return _buildPlayerProfileMinimizedWindow(
+        compact: compact,
+        embedded: embedded,
+      );
     }
 
     final media = MediaQuery.of(context);
-    // Встроенный профиль оставляем как аккуратное CMR-окно с отступами и радиусом,
-    // по аналогии с Tracker/Teams, а не растягиваем в край без формы.
     final fullWindow = _playerProfileWindowMaximized;
-    final windowPadding = fullWindow
-        ? EdgeInsets.zero
-        : EdgeInsets.fromLTRB(compact ? 10 : 14, compact ? 10 : 14, compact ? 10 : 14, compact ? 10 : 14);
 
     return Material(
-      color: const Color(0xFFF6F7F9),
+      color: const Color(0xFFF6F7F6),
       child: SafeArea(
         top: !embedded && !fullWindow,
         bottom: !embedded && !fullWindow,
         child: Padding(
-          padding: windowPadding,
+          padding: EdgeInsets.all(fullWindow || embedded ? 0 : 8),
           child: Container(
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(fullWindow ? 16 : 24),
-              border: Border.all(color: const Color(0xFFE8EDF2), width: 1),
-              boxShadow: fullWindow
-                  ? const []
-                  : [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(.045),
-                        blurRadius: 30,
-                        offset: const Offset(0, 16),
-                      ),
-                    ],
+              borderRadius: BorderRadius.circular(fullWindow ? 10 : 14),
+              border: Border.all(color: const Color(0xFFE9ECEA), width: .7),
             ),
-            child: Stack(
+            child: Column(
               children: [
-                Row(
-                  children: [
-                    _buildCmrShellSidebar(compact: compact),
-                    const VerticalDivider(width: 1, thickness: 1, color: Color(0xFFE8EDF2)),
-                    Expanded(
-                      child: MediaQuery(
-                        data: media.copyWith(textScaleFactor: compact ? 0.82 : 0.84),
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(compact ? 10 : 14, compact ? 10 : 14, compact ? 10 : 14, compact ? 10 : 14),
-                          child: _buildCmrTabletWorkspace(compact: compact),
+                _buildCmrPcWindowHeader(compact: compact),
+                _buildCmrEmbeddedTopTabs(compact: compact),
+                Expanded(
+                  child: _inlineAnalyticsOpen
+                      ? _buildInlineAnalyticsPane(compact: compact)
+                      : MediaQuery(
+                          data: media.copyWith(
+                            textScaler: TextScaler.linear(compact ? .88 : .94),
+                          ),
+                          child: Container(
+                            color: const Color(0xFFF6F7F6),
+                            padding: EdgeInsets.all(compact ? 8 : 10),
+                            child: Container(
+                              clipBehavior: Clip.antiAlias,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: const Color(0xFFE9ECEA),
+                                  width: .7,
+                                ),
+                              ),
+                              padding: EdgeInsets.all(compact ? 8 : 10),
+                              child: _buildCmrTabletWorkspace(compact: compact),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),
@@ -19603,6 +24103,7 @@ final markerColors = dayMatches
       ),
     );
   }
+
 
   Widget _buildCmrPcWindowHeader({required bool compact}) {
     final photo = _normalizeImage(widget.player['photo']);
@@ -19760,9 +24261,9 @@ final markerColors = dayMatches
   Widget _buildCmrWindowAction({required IconData icon, required String label, required VoidCallback onTap}) {
     return Material(
       color: const Color(0xFFF6F8FA),
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(4),
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(4),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
@@ -19860,24 +24361,43 @@ final markerColors = dayMatches
   }
 
   Widget _buildCmrPcTopTabs({required bool compact}) {
+    final currentGroup = _cmrMainGroupIndex(_selectedTabIndex);
+
     return Container(
-      height: compact ? 42 : 46,
-      padding: EdgeInsets.fromLTRB(compact ? 10 : 14, 4, compact ? 10 : 14, 6),
-      color: Colors.white,
+      height: compact ? 44 : 48,
+      padding: EdgeInsets.fromLTRB(
+        compact ? 10 : 14,
+        5,
+        compact ? 10 : 14,
+        6,
+      ),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(color: _AppColors.trackerLine),
+        ),
+      ),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
-        itemCount: _categoryTabs.length,
+        itemCount: _mainCategoryTabs.length,
         separatorBuilder: (_, __) => const SizedBox(width: 7),
         itemBuilder: (context, index) {
-          final tab = _categoryTabs[index];
-          final active = tab.index == _selectedTabIndex;
+          final tab = _mainCategoryTabs[index];
+          final active = tab.index == currentGroup;
+
           return _CmrPcTopTabButton(
             tab: tab,
             active: active,
             compact: compact,
             fontFamily: _fontFamily,
-            onTap: () => _selectCmrTab(tab.index),
+            onTap: () {
+              if (tab.index == 90) {
+                _openCmrMobileMoreSheet();
+                return;
+              }
+              _selectCmrTab(tab.index);
+            },
           );
         },
       ),
@@ -19895,18 +24415,26 @@ final markerColors = dayMatches
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
-    final isTablet = width >= 720;
-    final compact = width < 1080;
+    final usePcShell = widget.embeddedInWorkspace || _usesCmrPcProfileShell(context);
+    final compact = width < 1180 || widget.embeddedInWorkspace;
 
-    if (isTablet) {
+    if (usePcShell) {
       return Scaffold(
-        backgroundColor: Colors.white,
-        body: _buildCmrPcWindow(compact: compact, embedded: widget.embeddedInWorkspace),
+        backgroundColor: _AppColors.trackerBg,
+        body: SafeArea(
+          top: !widget.embeddedInWorkspace,
+          bottom: !widget.embeddedInWorkspace,
+          child: _buildCmrPcWindow(
+            compact: compact,
+            embedded: widget.embeddedInWorkspace,
+          ),
+        ),
       );
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      extendBody: true,
+      backgroundColor: _AppColors.trackerBg,
       body: SafeArea(
         top: true,
         bottom: false,
@@ -19927,7 +24455,28 @@ final markerColors = dayMatches
                 child: RefreshIndicator(
                   color: const Color(0xFF178A45),
                   onRefresh: _refreshCmrProfile,
-                  child: _buildGeneralTab(),
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    padding: EdgeInsets.fromLTRB(
+                      6,
+                      8,
+                      6,
+                      MediaQuery.paddingOf(context).bottom + 94,
+                    ),
+                    children: [
+                      KeyedSubtree(
+                        key: ValueKey('mobile-profile-tab-$_selectedTabIndex'),
+                        child: _selectedTabIndex == 0
+                            ? Column(children: _buildOverviewMainChildren() + [
+                                const SizedBox(height: 10),
+                                ..._buildOverviewRightChildren(),
+                              ])
+                            : _buildTabContentByIndex(_selectedTabIndex),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -20117,7 +24666,7 @@ class _CmrEmbeddedPanel extends StatelessWidget {
                     height: 46,
                     decoration: BoxDecoration(
                       color: _AppColors.cmrSoft,
-                      borderRadius: BorderRadius.circular(18),
+                      borderRadius: BorderRadius.circular(4),
                     ),
                     child: Icon(icon, color: _AppColors.cmrGreen, size: 22),
                   ),
@@ -20226,9 +24775,9 @@ class _CmrPlayerInlineEditorState extends State<_CmrPlayerInlineEditor> {
       filled: true,
       fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide.none),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide.none),
     );
   }
 
@@ -20284,7 +24833,7 @@ class _CmrPlayerInlineEditorState extends State<_CmrPlayerInlineEditor> {
       children: [
         Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: _AppColors.cmrSoftPanel, borderRadius: BorderRadius.circular(24)),
+          decoration: BoxDecoration(color: _AppColors.cmrSoftPanel, borderRadius: BorderRadius.circular(4)),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -20315,7 +24864,7 @@ class _CmrPlayerInlineEditorState extends State<_CmrPlayerInlineEditor> {
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: _AppColors.cmrSoftPanel, borderRadius: BorderRadius.circular(24)),
+          decoration: BoxDecoration(color: _AppColors.cmrSoftPanel, borderRadius: BorderRadius.circular(4)),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -20340,7 +24889,7 @@ class _CmrPlayerInlineEditorState extends State<_CmrPlayerInlineEditor> {
               backgroundColor: _AppColors.cmrGreen,
               foregroundColor: Colors.white,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
               textStyle: const TextStyle(fontSize: 12.6, fontWeight: FontWeight.w700),
             ),
           ),
@@ -20368,14 +24917,14 @@ class _TabletSectionActionButton extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(4),
         onTap: onTap,
         child: Container(
           height: 46,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
             color: const Color(0xFF101828),
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(4),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -20545,24 +25094,42 @@ class _CmrPcTopTabButton extends StatefulWidget {
 
 class _CmrPcTopTabButtonState extends State<_CmrPcTopTabButton> {
   bool _hovered = false;
+  bool _hoverUpdateQueued = false;
+  bool? _pendingHovered;
+
+  void _setHoveredSafely(bool value) {
+    if (!mounted || (_hovered == value && _pendingHovered == null)) return;
+    _pendingHovered = value;
+    if (_hoverUpdateQueued) return;
+
+    _hoverUpdateQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _hoverUpdateQueued = false;
+      if (!mounted) return;
+      final next = _pendingHovered;
+      _pendingHovered = null;
+      if (next == null || next == _hovered) return;
+      setState(() => _hovered = next);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final active = widget.active;
     final bg = active
-        ? const Color(0xFFF2F7F4)
-        : (_hovered ? const Color(0xFFF6F8FA) : Colors.transparent);
-    final fg = active ? _AppColors.cmrGreen : const Color(0xFF475467);
-    final iconColor = active ? _AppColors.cmrGreen : const Color(0xFF98A2B3);
+        ? _AppColors.trackerGreenSoft
+        : (_hovered ? _AppColors.trackerSoft : Colors.transparent);
+    final fg = active ? _AppColors.trackerGreenDark : _AppColors.trackerGraphiteSoft;
+    final iconColor = active ? _AppColors.trackerGreen : _AppColors.trackerDim;
 
     return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
+      onEnter: (_) => _setHoveredSafely(true),
+      onExit: (_) => _setHoveredSafely(false),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(4),
         child: InkWell(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(4),
           onTap: widget.onTap,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
@@ -20572,7 +25139,8 @@ class _CmrPcTopTabButtonState extends State<_CmrPcTopTabButton> {
             padding: EdgeInsets.symmetric(horizontal: widget.compact ? 8 : 10),
             decoration: BoxDecoration(
               color: bg,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: active ? _AppColors.trackerGreenBorder : _AppColors.trackerLine, width: 1),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,

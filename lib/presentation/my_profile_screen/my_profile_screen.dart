@@ -46,8 +46,11 @@ class ProfilePalette {
   static const text = Color(0xFF1A1A1A);
   static const textMuted = Color(0xFF666666);
   static const textLight = Color(0xFF999999);
-  static const background = Color(0xFFF8F9FA);
+  static const background = Color(0xFFFFFFFF);
   static const card = Color(0xFFFFFFFF);
+  static const softBackground = Color(0xFFF8F9F8);
+  static const softGreen = Color(0xFFF1FBF6);
+  static const border = Color(0xFFE9EEF3);
 }
 
 // =============================
@@ -323,7 +326,7 @@ class ProfileDesign {
     primaryColorValue: json['primaryColorValue'] ?? 0xFF00A750,
     secondaryColorValue: json['secondaryColorValue'] ?? 0xFF008C40,
     accentColorValue: json['accentColorValue'] ?? 0xFF7ED321,
-    backgroundColorValue: json['backgroundColorValue'] ?? 0xFFF8F9FA,
+    backgroundColorValue: json['backgroundColorValue'] ?? 0xFFF3F5F7,
     surfaceColorValue: json['surfaceColorValue'] ?? 0xFFE8F5E9,
     cardColorValue: json['cardColorValue'] ?? 0xFFFFFFFF,
     textPrimaryColorValue: json['textPrimaryColorValue'] ?? 0xFF1A1A1A,
@@ -532,7 +535,7 @@ class ProfileDesign {
       secondaryColorValue: 0xFF008C40,
       accentColorValue: 0xFF7ED321,
       backgroundColorValue: 0xFFFFFFFF,
-      surfaceColorValue: 0xFFF7F8FA,
+      surfaceColorValue: 0xFFF8F9F8,
       cardColorValue: 0xFFFFFFFF,
       textPrimaryColorValue: 0xFF111827,
       textSecondaryColorValue: 0xFF667085,
@@ -699,7 +702,11 @@ enum _ProfileFeedMode { posts, reels, feed }
 class MyProfileScreen extends StatefulWidget {
   final int? userId;
 
-  const MyProfileScreen({Key? key, this.userId}) : super(key: key);
+  /// true = экран открывается как публичная витрина другого пользователя:
+  /// без личного кабинета, рабочих зон, настроек и текста «Вы вошли как ...».
+  final bool publicView;
+
+  const MyProfileScreen({Key? key, this.userId, this.publicView = false}) : super(key: key);
 
   @override
   State<MyProfileScreen> createState() => _MyProfileScreenState();
@@ -791,6 +798,30 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     return r == 'coach' || r == 'trainer' || r == 'тренер' || r.contains('coach') || r.contains('trainer');
   }
 
+  bool get _isPublicProfileView => !isOwnProfile && (widget.publicView || widget.userId != null);
+
+  String get _publicProfileTitle {
+    if (isPlayer) return 'Публичный профиль игрока';
+    if (isCoachRole) return 'Публичный профиль тренера';
+    if (isClubRole) return 'Публичная страница клуба';
+    return 'Публичный профиль';
+  }
+
+  String get _publicProfileSubtitle {
+    final parts = <String>[];
+    final team = (playerTeamName ?? '').trim();
+    final club = (playerClubName ?? '').trim();
+    if (club.isNotEmpty) parts.add(club);
+    if (team.isNotEmpty) parts.add(team);
+    parts.add('фото и публикации');
+    return parts.join(' • ');
+  }
+
+  String get _profileContextLine {
+    if (_isPublicProfileView) return _publicProfileSubtitle;
+    return '${_enteredAsText} • ${_activeWorkspaceName.isEmpty ? 'Sportoteka' : _activeWorkspaceName}';
+  }
+
   String get _roleLabel {
     if (isClubRole) return 'клуб';
     if (isCoachRole) return 'тренер';
@@ -800,6 +831,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
   }
 
   String get _enteredAsText {
+    if (_isPublicProfileView) return _publicProfileTitle;
     final team = (playerTeamName ?? '').trim();
     final club = (playerClubName ?? '').trim();
     if (isClubRole) return 'Вы вошли как клуб';
@@ -953,8 +985,8 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
       height: 50,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFEFF2F5), width: 1)),
+        color: Color(0xFFF3F5F7),
+        border: Border(bottom: BorderSide(color: Color(0xFFE9EEF3), width: 1)),
       ),
       child: Row(
         children: [
@@ -967,7 +999,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
               _buildMacDot(const Color(0xFF28C840), () {}),
             ],
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 8),
           Container(
             width: 28,
             height: 28,
@@ -1019,6 +1051,13 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
   }
 
   Future<void> _openPrimaryArea() async {
+    if (_isPublicProfileView) {
+      if (mounted) {
+        setState(() => _mode = _ProfileFeedMode.posts);
+      }
+      return;
+    }
+
     if (isPlayer) {
       final myId = await PrefUtils.getUserId() ?? widget.userId ?? 0;
       if (!mounted) return;
@@ -1042,25 +1081,43 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
 
   Future<void> _openMainChat() async {
     final myId = await PrefUtils.getUserId() ?? 0;
-    if (!mounted) return;
-    _openCmrWindow(
-      title: 'Чат',
-      icon: Icons.forum_rounded,
-      maxWidth: 1080,
-      maxHeight: 760,
-      child: ChatScreen(userId: myId),
+    if (!mounted || myId <= 0) return;
+
+    // Чат из главной страницы открываем как самостоятельный экран.
+    // Не используем _openCmrWindow: иначе поверх чата остаётся нижний dock
+    // профиля и на планшетах появляется оконная macOS-шапка.
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ChatScreen(userId: myId),
+      ),
     );
+
+    if (!mounted) return;
+    setState(() {
+      _mobileWindowChild = null;
+      _mobileWindowTitle = '';
+      _mobileWindowIcon = Icons.apps_rounded;
+      _mobileDockKey = 'profile';
+    });
   }
 
-  void _openProPanel() {
+  Future<void> _openProPanel() async {
     // Панель клуба/тренера — это отдельный рабочий стол Workspace.
-    // На мобильной и ПК-версии открываем полноценный экран, а не CMR-окно поверх профиля.
-    // Так профильное меню исчезает, а внутри ClubWorkspace работает собственная навигация.
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        fullscreenDialog: false,
-        builder: (_) => const ClubWorkspaceScreen(),
-      ),
+    // Важно открывать через Get.to с arguments: ClubWorkspaceScreen читает
+    // Get.arguments и так получает режим, club_id/trainer_id и нужную команду.
+    final currentUserId = await PrefUtils.getUserId() ?? widget.userId ?? 0;
+    if (!mounted) return;
+
+    final args = <String, dynamic>{
+      'mode': isCoachRole ? 'trainer_workspace' : 'club_workspace',
+      if (isClubRole && currentUserId > 0) 'club_id': currentUserId,
+      if (isCoachRole && currentUserId > 0) 'trainer_id': currentUserId,
+      if (playerTeamId != null && playerTeamId! > 0) 'initial_team_id': playerTeamId,
+    };
+
+    Get.to<void>(
+      () => const ClubWorkspaceScreen(),
+      arguments: args,
     );
   }
 
@@ -1117,7 +1174,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
       maxWidth: 760,
       maxHeight: 760,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1732,7 +1789,15 @@ void initState() {
     final currentUserId = await PrefUtils.getUserId();
     final viewedUserId = widget.userId ?? currentUserId;
 
-    if (currentUserId == null || currentUserId <= 0) return;
+    if (currentUserId == null || currentUserId <= 0) {
+      if (widget.userId != null && mounted) {
+        setState(() {
+          isOwnProfile = false;
+          isFollowing = false;
+        });
+      }
+      return;
+    }
 
     if (viewedUserId == currentUserId || viewedUserId == null) {
       if (mounted) {
@@ -2494,7 +2559,7 @@ void initState() {
                                   Navigator.pop(context);
                                   Navigator.push(
                                     context,
-                                    MaterialPageRoute(builder: (_) => MyProfileScreen(userId: u.id)),
+                                    MaterialPageRoute(builder: (_) => MyProfileScreen(userId: u.id, publicView: true)),
                                   ).then((_) {
                                     _loadFollowersData();
                                     _checkIfFollowing();
@@ -2779,7 +2844,8 @@ void initState() {
     final showMobileDock = isOwnProfile && !isDesktop;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7F9),
+      extendBody: true,
+      backgroundColor: Colors.white,
       appBar: isDesktop || _mobileWindowChild != null ? null : _buildFlagshipMobileAppBar(isVisitor),
       bottomNavigationBar: showMobileDock ? _buildSocialBottomBar() : null,
       body: isLoadingProfile
@@ -2823,53 +2889,55 @@ void initState() {
       surfaceTintColor: Colors.white,
       automaticallyImplyLeading: false,
       centerTitle: false,
-      titleSpacing: 0,
-      title: Row(
+      titleSpacing: 14,
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          if (widget.userId != null)
-            IconButton(
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF111827), size: 18),
-              tooltip: 'Назад',
-            )
-          else
-            const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  fullName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _flagshipTitle(15.5),
-                ),
-                if (isOwnProfile)
-                  Text(
-                    _enteredAsText,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: _flagshipText(10.2, color: const Color(0xFF667085), weight: FontWeight.w700),
-                  ),
-              ],
-            ),
+          Text(
+            fullName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: _flagshipTitle(16.2, weight: FontWeight.w700),
           ),
+          if (isOwnProfile)
+            Text(
+              _activeWorkspaceName.isEmpty ? _roleLabel : _activeWorkspaceName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _flagshipText(
+                10.2,
+                color: const Color(0xFF667085),
+                weight: FontWeight.w500,
+              ),
+            ),
         ],
       ),
       actions: [
-        if (isOwnProfile) ...[
+        if (isOwnProfile)
           IconButton(
-            icon: const Icon(Icons.add_box_outlined, color: Color(0xFF111827), size: 22),
+            icon: const Text(
+              '+',
+              style: TextStyle(
+                color: Color(0xFF111827),
+                fontSize: 25,
+                fontWeight: FontWeight.w400,
+                height: 1,
+              ),
+            ),
             tooltip: 'Создать',
             onPressed: _openCreateMenuSheet,
           ),
+        if (isOwnProfile)
           IconButton(
-            icon: const Icon(Icons.grid_view_rounded, color: Color(0xFF111827), size: 23),
-            tooltip: 'Меню и настройки',
+            icon: const Icon(
+              Icons.more_horiz_rounded,
+              color: Color(0xFF111827),
+              size: 22,
+            ),
+            tooltip: 'Меню',
             onPressed: _openProfileSettingsSheet,
           ),
-        ],
       ],
     );
   }
@@ -2878,7 +2946,7 @@ void initState() {
     return Center(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-        decoration: _flagshipPanel(radius: 22),
+        decoration: _flagshipPanel(radius: 20),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -2924,47 +2992,44 @@ void initState() {
     );
   }
 
-  BoxDecoration _flagshipPanel({double radius = 24, bool elevated = true, Color color = Colors.white}) {
+  BoxDecoration _flagshipPanel({
+    double radius = 20,
+    bool elevated = true,
+    Color color = Colors.white,
+  }) {
     return BoxDecoration(
       color: color,
       borderRadius: BorderRadius.circular(radius),
-      boxShadow: elevated
-          ? [
-              BoxShadow(
-                color: Colors.black.withOpacity(.050),
-                blurRadius: 34,
-                spreadRadius: -16,
-                offset: const Offset(0, 20),
-              ),
-              BoxShadow(
-                color: Colors.black.withOpacity(.022),
-                blurRadius: 10,
-                spreadRadius: -7,
-                offset: const Offset(0, 4),
-              ),
-            ]
-          : null,
     );
   }
 
-  BoxDecoration _flagshipSoft({double radius = 18, bool active = false}) {
+  BoxDecoration _flagshipSoft({
+    double radius = 16,
+    bool active = false,
+  }) {
     return BoxDecoration(
-      color: active ? Colors.white : const Color(0xFFFAFBFC),
+      color: active ? const Color(0xFFF3FAF6) : Colors.transparent,
       borderRadius: BorderRadius.circular(radius),
-      boxShadow: active
-          ? [
-              BoxShadow(
-                color: Colors.black.withOpacity(.045),
-                blurRadius: 22,
-                spreadRadius: -13,
-                offset: const Offset(0, 13),
-              ),
-            ]
+      border: active
+          ? const Border(
+              left: BorderSide(color: Color(0xFF00A750), width: 3),
+            )
           : null,
     );
   }
 
-  List<_ProfileFlagshipAction> get _flagshipWorkspaceActions => [
+  List<_ProfileFlagshipAction> get _flagshipWorkspaceActions {
+    if (_isPublicProfileView) {
+      return [
+        _ProfileFlagshipAction('Публикации', 'фото и посты профиля', Icons.grid_on_rounded, () => setState(() => _mode = _ProfileFeedMode.posts), group: 'Профиль', primary: true),
+        _ProfileFlagshipAction('Reels профиля', 'короткие видео игрока', Icons.play_circle_fill_rounded, () => setState(() => _mode = _ProfileFeedMode.reels), group: 'Профиль'),
+        _ProfileFlagshipAction('Лента профиля', 'публикации списком', Icons.article_outlined, () => setState(() => _mode = _ProfileFeedMode.feed), group: 'Профиль'),
+        _ProfileFlagshipAction(isFollowing ? 'Вы подписаны' : 'Подписаться', 'следить за обновлениями', Icons.person_add_alt_1_rounded, () { _toggleFollow(); }, group: 'Действия'),
+        _ProfileFlagshipAction('Написать', 'личное сообщение', Icons.chat_bubble_outline_rounded, () { _openPrivateChat(); }, group: 'Действия'),
+      ];
+    }
+
+    return [
         _ProfileFlagshipAction(
           _primaryZoneTitle,
           _primaryZoneSubtitle,
@@ -3001,8 +3066,13 @@ void initState() {
         if (isOwnProfile)
           _ProfileFlagshipAction('Удалить профиль', 'безвозвратное удаление аккаунта', Icons.delete_forever_rounded, _deleteOwnProfileWithConfirmation, group: 'Аккаунт', danger: true),
       ];
+  }
 
   Widget _buildFlagshipDesktopProfile() {
+    if (_isPublicProfileView) {
+      return _buildFlagshipDesktopPublicProfile();
+    }
+
     return SafeArea(
       child: Center(
         child: ConstrainedBox(
@@ -3036,40 +3106,77 @@ void initState() {
   }
 
 
+  Widget _buildFlagshipDesktopPublicProfile() {
+    return SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 980),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(child: _buildFlagshipDesktopHeader()),
+                const SliverToBoxAdapter(child: SizedBox(height: 10)),
+                SliverToBoxAdapter(child: _buildFlagshipProfileCard()),
+                const SliverToBoxAdapter(child: SizedBox(height: 10)),
+                SliverToBoxAdapter(child: _buildFlagshipContentWindow()),
+                const SliverToBoxAdapter(child: SizedBox(height: 18)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+
   Widget _buildFlagshipDesktopHeader() {
     return Container(
       height: 54,
       padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: _flagshipPanel(radius: 20),
+      decoration: _flagshipPanel(radius: 0),
       child: Row(
         children: [
-          _buildWindowDots(),
-          const SizedBox(width: 12),
-          Container(width: 1, height: 22, color: const Color(0xFFEFF2F5)),
-          const SizedBox(width: 12),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Социальная страница Sportoteka', style: _flagshipTitle(13.6)),
+                Text(
+                  _isPublicProfileView
+                      ? _publicProfileTitle
+                      : 'Профиль Sportoteka',
+                  style: _flagshipTitle(13.8, weight: FontWeight.w700),
+                ),
                 const SizedBox(height: 3),
                 Text(
-                  '${_enteredAsText} • ${_activeWorkspaceName.isEmpty ? 'Sportoteka' : _activeWorkspaceName}',
+                  _profileContextLine,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: _flagshipText(10.5, color: const Color(0xFF6B7280), weight: FontWeight.w700),
+                  style: _flagshipText(
+                    10.5,
+                    color: const Color(0xFF6B7280),
+                    weight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),
           ),
+          if (isOwnProfile)
+            _buildTinyAction(
+              Icons.add_rounded,
+              'Создать',
+              _openCreateMenuSheet,
+            ),
           if (isOwnProfile) ...[
-            _buildTinyAction(Icons.add_a_photo_outlined, isClubRole ? 'Логотип' : 'Аватар', _openProfileMediaPickerSheet),
             const SizedBox(width: 8),
+            _buildTinyAction(
+              Icons.more_horiz_rounded,
+              'Меню',
+              _openProfileSettingsSheet,
+            ),
           ],
-          _buildTinyAction(Icons.add_rounded, 'Создать', _openCreateMenuSheet),
-          const SizedBox(width: 8),
-          _buildTinyAction(Icons.tune_rounded, 'Настройки', _openProfileSettingsSheet),
         ],
       ),
     );
@@ -3090,18 +3197,17 @@ void initState() {
 
   Widget _buildTinyAction(IconData icon, String label, VoidCallback onTap) {
     return InkWell(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(8),
       onTap: onTap,
-      child: Container(
-        height: 34,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: _flagshipSoft(radius: 14),
-        child: Row(
-          children: [
-            Icon(icon, size: 16, color: const Color(0xFF111827)),
-            const SizedBox(width: 6),
-            Text(label, style: _flagshipText(10.5, color: const Color(0xFF111827), weight: FontWeight.w800)),
-          ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        child: Text(
+          label,
+          style: _flagshipText(
+            10.5,
+            color: const Color(0xFF111827),
+            weight: FontWeight.w700,
+          ),
         ),
       ),
     );
@@ -3114,15 +3220,18 @@ void initState() {
     }
 
     return Container(
-      decoration: _flagshipPanel(radius: 22),
-      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildFlagshipAccountMini(),
-          const SizedBox(height: 10),
-          _buildWorkspaceLaunchButton(dense: true),
-          const SizedBox(height: 10),
+          if (isOwnProfile) ...[
+            const SizedBox(height: 10),
+            _buildWorkspaceLaunchButton(dense: true),
+            const SizedBox(height: 10),
+          ] else
+            const SizedBox(height: 10),
           Expanded(
             child: ListView(
               physics: const BouncingScrollPhysics(),
@@ -3148,62 +3257,76 @@ void initState() {
   Widget _buildDesktopMenuAction(_ProfileFlagshipAction action) {
     final active = action.primary;
     final danger = action.danger;
-    final iconBg = danger
-        ? const Color(0xFFFFE4E6)
-        : (active ? const Color(0xFF00A750) : const Color(0xFFF1F3F5));
-    final iconColor = danger
+    final titleColor = danger
         ? const Color(0xFFE11D48)
-        : (active ? Colors.white : const Color(0xFF111827));
-    final titleColor = danger ? const Color(0xFFE11D48) : const Color(0xFF111827);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(17),
-        onTap: action.onTap,
-        child: Container(
-          height: 46,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          decoration: _flagshipSoft(radius: 17, active: active),
-          child: Row(
-            children: [
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: iconBg,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(action.icon, color: iconColor, size: 16),
-              ),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            action.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: _flagshipText(11.2, color: titleColor, weight: FontWeight.w800),
+        : const Color(0xFF111827);
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: action.onTap,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 42),
+        margin: const EdgeInsets.only(bottom: 2),
+        padding: const EdgeInsets.fromLTRB(10, 7, 8, 7),
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFFF3FAF6) : Colors.transparent,
+          border: active
+              ? const Border(
+                  left: BorderSide(color: Color(0xFF00A750), width: 3),
+                )
+              : null,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          action.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: _flagshipText(
+                            11.2,
+                            color: titleColor,
+                            weight: active
+                                ? FontWeight.w700
+                                : FontWeight.w600,
                           ),
                         ),
-                        if (action.pro) ...[
-                          const SizedBox(width: 5),
-                          Text('PRO', style: _flagshipText(7.5, color: const Color(0xFF00A750), weight: FontWeight.w900)),
-                        ],
+                      ),
+                      if (action.pro) ...[
+                        const SizedBox(width: 5),
+                        Text(
+                          'PRO',
+                          style: _flagshipText(
+                            7.5,
+                            color: const Color(0xFF00A750),
+                            weight: FontWeight.w800,
+                          ),
+                        ),
                       ],
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    action.subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _flagshipText(
+                      9.1,
+                      color: const Color(0xFF8A94A6),
+                      weight: FontWeight.w500,
                     ),
-                    const SizedBox(height: 2),
-                    Text(action.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipText(9.2, color: const Color(0xFF8A94A6))),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -3211,9 +3334,8 @@ void initState() {
 
   Widget _buildFlagshipAccountMini() {
     final hasAvatar = photo != null && photo!.trim().isNotEmpty;
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: _flagshipSoft(radius: 20),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(6, 6, 6, 8),
       child: Row(
         children: [
           _buildFlagshipAvatar(size: 42, hasAvatar: hasAvatar),
@@ -3222,25 +3344,22 @@ void initState() {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(fullName, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipTitle(12.4)),
+                Text(
+                  fullName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _flagshipTitle(12.4, weight: FontWeight.w700),
+                ),
                 const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Container(
-                      width: 7,
-                      height: 7,
-                      decoration: const BoxDecoration(color: Color(0xFF00A750), shape: BoxShape.circle),
-                    ),
-                    const SizedBox(width: 5),
-                    Expanded(
-                      child: Text(
-                        _roleLabel.toUpperCase(),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: _flagshipText(9.5, color: const Color(0xFF6B7280), weight: FontWeight.w900),
-                      ),
-                    ),
-                  ],
+                Text(
+                  _roleLabel.toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _flagshipText(
+                    9.3,
+                    color: const Color(0xFF6B7280),
+                    weight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),
@@ -3283,60 +3402,74 @@ void initState() {
   Widget _buildFlagshipProfileCard() {
     final hasAvatar = photo != null && photo!.trim().isNotEmpty;
     final infoLine = [
-      if ((playerClubName ?? '').trim().isNotEmpty) (playerClubName ?? '').trim(),
-      if ((playerTeamName ?? '').trim().isNotEmpty) (playerTeamName ?? '').trim(),
-      if ((location ?? '').trim().isNotEmpty) (location ?? '').trim(),
-    ].join(' • ');
+      if ((playerClubName ?? '').trim().isNotEmpty)
+        (playerClubName ?? '').trim(),
+      if ((playerTeamName ?? '').trim().isNotEmpty)
+        (playerTeamName ?? '').trim(),
+      if ((location ?? '').trim().isNotEmpty)
+        (location ?? '').trim(),
+    ].join('  ·  ');
 
     return Container(
-      decoration: _flagshipPanel(radius: 26),
-      padding: const EdgeInsets.all(16),
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildFlagshipAvatar(size: 78, hasAvatar: hasAvatar),
-              const SizedBox(width: 16),
+              _buildFlagshipAvatar(size: 92, hasAvatar: hasAvatar),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(fullName, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipTitle(18.0, weight: FontWeight.w800)),
+                    if (isClubRole || isCoachRole || isPlayer)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Text(
+                          _roleLabel.toUpperCase(),
+                          style: _flagshipText(
+                            8.8,
+                            color: const Color(0xFF067A46),
+                            weight: FontWeight.w800,
+                          ).copyWith(letterSpacing: .35),
                         ),
-                        _buildRoleCapsule(),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _activeWorkspaceName.isEmpty ? 'Sportoteka' : _activeWorkspaceName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: _flagshipText(11.5, color: const Color(0xFF667085), weight: FontWeight.w800),
-                    ),
-                    if ((bio ?? '').trim().isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      Text(
-                        (bio ?? '').trim(),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: _flagshipText(11.5, color: const Color(0xFF1F2937), weight: FontWeight.w600, height: 1.28),
                       ),
-                    ],
+                    Text(
+                      fullName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: _flagshipTitle(
+                        20.5,
+                        weight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    Text(
+                      _activeWorkspaceName.isEmpty
+                          ? 'Sportoteka'
+                          : _activeWorkspaceName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: _flagshipText(
+                        11.5,
+                        color: const Color(0xFF667085),
+                        weight: FontWeight.w500,
+                      ),
+                    ),
                     if (infoLine.isNotEmpty) ...[
-                      const SizedBox(height: 9),
-                      Row(
-                        children: [
-                          const Icon(Icons.location_on_outlined, size: 14, color: Color(0xFF8A94A6)),
-                          const SizedBox(width: 5),
-                          Expanded(
-                            child: Text(infoLine, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipText(10.8, color: const Color(0xFF6B7280), weight: FontWeight.w700)),
-                          ),
-                        ],
+                      const SizedBox(height: 7),
+                      Text(
+                        infoLine,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: _flagshipText(
+                          10.6,
+                          color: const Color(0xFF8A94A6),
+                          weight: FontWeight.w500,
+                        ),
                       ),
                     ],
                   ],
@@ -3344,34 +3477,70 @@ void initState() {
               ),
             ],
           ),
+          if ((bio ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: 13),
+            Text(
+              (bio ?? '').trim(),
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+              style: _flagshipText(
+                11.6,
+                color: const Color(0xFF1F2937),
+                weight: FontWeight.w500,
+                height: 1.32,
+              ),
+            ),
+          ],
           const SizedBox(height: 15),
-          Row(
-            children: [
-              Expanded(child: _buildFlagshipStat(userPosts.length, 'Посты', Icons.grid_on_rounded)),
-              const SizedBox(width: 8),
-              Expanded(child: _buildFlagshipStat(userReels.length, 'Reels', Icons.play_circle_fill_rounded)),
-              const SizedBox(width: 8),
-              Expanded(child: GestureDetector(onTap: () => _openUsersModal(showFollowers: true), child: _buildFlagshipStat(followersCount, 'Подписчики', Icons.people_rounded))),
-              const SizedBox(width: 8),
-              Expanded(child: GestureDetector(onTap: () => _openUsersModal(showFollowers: false), child: _buildFlagshipStat(followingsCount, 'Подписки', Icons.person_add_alt_rounded))),
-            ],
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 11),
+            child: Row(
+              children: [
+                Expanded(child: _buildFlagshipStat(userPosts.length, 'Посты', Icons.grid_on_rounded)),
+                Expanded(child: _buildFlagshipStat(userReels.length, 'Reels', Icons.play_circle_fill_rounded)),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => _openUsersModal(showFollowers: true),
+                    child: _buildFlagshipStat(
+                      followersCount,
+                      'Подписчики',
+                      Icons.people_rounded,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => _openUsersModal(showFollowers: false),
+                    child: _buildFlagshipStat(
+                      followingsCount,
+                      'Подписки',
+                      Icons.person_add_alt_rounded,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 13),
           Row(
             children: [
               Expanded(
                 child: _buildFlagshipSmallButton(
-                  label: isOwnProfile ? 'Редактировать' : (isFollowing ? 'Вы подписаны' : 'Подписаться'),
-                  icon: isOwnProfile ? Icons.edit_note_rounded : Icons.person_add_alt_1_rounded,
-                  onTap: isOwnProfile ? _openProfileSettingsSheet : _toggleFollow,
+                  label: isOwnProfile
+                      ? 'Редактировать'
+                      : (isFollowing ? 'Вы подписаны' : 'Подписаться'),
+                  icon: Icons.edit_note_rounded,
+                  onTap: isOwnProfile
+                      ? _openProfileSettingsSheet
+                      : _toggleFollow,
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: _buildFlagshipSmallButton(
-                  label: isOwnProfile ? 'Создать' : 'Написать',
-                  icon: isOwnProfile ? Icons.add_rounded : Icons.chat_bubble_outline_rounded,
-                  onTap: isOwnProfile ? _openCreateMenuSheet : _openPrivateChat,
+                  label: isOwnProfile ? _primaryZoneTitle : 'Написать',
+                  icon: Icons.arrow_forward_rounded,
+                  onTap: isOwnProfile ? _openPrimaryArea : _openPrivateChat,
                 ),
               ),
             ],
@@ -3381,7 +3550,10 @@ void initState() {
     );
   }
 
-  Widget _buildFlagshipAvatar({required double size, required bool hasAvatar}) {
+  Widget _buildFlagshipAvatar({
+    required double size,
+    required bool hasAvatar,
+  }) {
     return GestureDetector(
       onTap: isOwnProfile ? _openProfileMediaPickerSheet : null,
       child: Stack(
@@ -3391,54 +3563,55 @@ void initState() {
             width: size,
             height: size,
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
               color: const Color(0xFFF3F4F6),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(.055),
-                  blurRadius: 20,
-                  spreadRadius: -10,
-                  offset: const Offset(0, 10),
-                ),
-              ],
+              borderRadius: BorderRadius.circular(size * .24),
             ),
-            child: ClipOval(
-              child: hasAvatar
-                  ? Image.network(
-                      photo!,
-                      width: size,
-                      height: size,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Icon(Icons.person_rounded, size: size * .44, color: const Color(0xFF00A750)),
-                    )
-                  : Icon(Icons.person_rounded, size: size * .44, color: const Color(0xFF00A750)),
-            ),
+            clipBehavior: Clip.antiAlias,
+            child: hasAvatar
+                ? Image.network(
+                    photo!,
+                    width: size,
+                    height: size,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Center(
+                      child: Text(
+                        fullName.isEmpty ? 'S' : fullName.characters.first.toUpperCase(),
+                        style: _flagshipTitle(size * .28),
+                      ),
+                    ),
+                  )
+                : Center(
+                    child: Text(
+                      fullName.isEmpty ? 'S' : fullName.characters.first.toUpperCase(),
+                      style: _flagshipTitle(size * .28),
+                    ),
+                  ),
           ),
           if (isOwnProfile)
             Positioned(
-              right: 0,
-              bottom: 0,
+              right: -2,
+              bottom: -2,
               child: Container(
-                width: size < 60 ? 18 : 26,
-                height: size < 60 ? 18 : 26,
+                width: size < 60 ? 18 : 24,
+                height: size < 60 ? 18 : 24,
                 decoration: BoxDecoration(
                   color: const Color(0xFF00A750),
-                  shape: BoxShape.circle,
+                  borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: Colors.white, width: 2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(.12),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
                 ),
                 child: _uploadingProfilePhoto
-                    ? Padding(
-                        padding: EdgeInsets.all(size < 60 ? 4 : 6),
-                        child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    ? const Padding(
+                        padding: EdgeInsets.all(4),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.8,
+                          color: Colors.white,
+                        ),
                       )
-                    : Icon(Icons.photo_camera_rounded, size: size < 60 ? 10 : 15, color: Colors.white),
+                    : const Icon(
+                        Icons.add_rounded,
+                        size: 14,
+                        color: Colors.white,
+                      ),
               ),
             ),
         ],
@@ -3465,88 +3638,93 @@ void initState() {
     );
   }
 
-  Widget _buildFlagshipStat(int value, String label, IconData icon) {
-    return Container(
-      height: 50,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: _flagshipSoft(radius: 15),
-      child: Row(
-        children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-            child: Icon(icon, size: 15, color: const Color(0xFF111827)),
+  Widget _buildFlagshipStat(
+    int value,
+    String label,
+    IconData icon,
+  ) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          value.toString(),
+          style: _flagshipTitle(14.6, weight: FontWeight.w700),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: _flagshipText(
+            9.3,
+            color: const Color(0xFF8A94A6),
+            weight: FontWeight.w500,
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(value.toString(), style: _flagshipTitle(14.2)),
-                const SizedBox(height: 2),
-                Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipText(9.5, color: const Color(0xFF8A94A6), weight: FontWeight.w700)),
-              ],
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  Widget _buildFlagshipSmallButton({required String label, required IconData icon, required VoidCallback onTap}) {
+  Widget _buildFlagshipSmallButton({
+    required String label,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    final primary = label == _primaryZoneTitle;
+
     return InkWell(
-      borderRadius: BorderRadius.circular(15),
+      borderRadius: BorderRadius.circular(10),
       onTap: onTap,
       child: Container(
-        height: 38,
-        decoration: _flagshipSoft(radius: 15, active: true),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 16, color: const Color(0xFF111827)),
-            const SizedBox(width: 7),
-            Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipText(11, color: const Color(0xFF111827), weight: FontWeight.w800))),
-          ],
+        height: 36,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: primary
+              ? const Color(0xFF00A750)
+              : const Color(0xFFF5F6F5),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: _flagshipText(
+            10.6,
+            color: primary ? Colors.white : const Color(0xFF111827),
+            weight: FontWeight.w700,
+          ),
         ),
       ),
     );
   }
 
   Widget _buildFlagshipWorkspaceSummary() {
-    final name = _activeWorkspaceName.isEmpty ? 'Sportoteka' : _activeWorkspaceName;
+    final name = _activeWorkspaceName.isEmpty
+        ? 'Sportoteka'
+        : _activeWorkspaceName;
+
     return Container(
-      decoration: _flagshipPanel(radius: 22),
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF3F5F7),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(_primaryZoneIcon, color: const Color(0xFF344054), size: 18),
-              ),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(_primaryZoneTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipTitle(13.4, weight: FontWeight.w800)),
-                    const SizedBox(height: 2),
-                    Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipText(9.8, color: const Color(0xFF667085), weight: FontWeight.w700)),
-                  ],
-                ),
-              ),
-            ],
+          Text(
+            _primaryZoneTitle,
+            style: _flagshipTitle(14.2, weight: FontWeight.w700),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 4),
+          Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: _flagshipText(
+              10.4,
+              color: const Color(0xFF667085),
+              weight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 12),
           _buildAccessStripe(
             icon: Icons.verified_user_outlined,
             title: _enteredAsText,
@@ -3563,14 +3741,8 @@ void initState() {
           _buildAccessStripe(
             icon: Icons.add_a_photo_outlined,
             title: _profileMediaEditTitle,
-            value: 'Загрузить',
-            onTap: _openProfileMediaPickerSheet,
-          ),
-          _buildAccessStripe(
-            icon: Icons.settings_outlined,
-            title: 'Настройки профиля',
             value: 'Изменить',
-            onTap: _openProfileSettingsSheet,
+            onTap: _openProfileMediaPickerSheet,
           ),
         ],
       ),
@@ -3585,34 +3757,44 @@ void initState() {
     bool strong = false,
   }) {
     return InkWell(
-      borderRadius: BorderRadius.circular(14),
       onTap: onTap,
       child: Container(
-        height: 38,
-        margin: const EdgeInsets.only(bottom: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 9),
-        decoration: BoxDecoration(
-          color: strong ? const Color(0xFFF5FBF7) : const Color(0xFFFAFBFC),
-          borderRadius: BorderRadius.circular(14),
-        ),
+        constraints: const BoxConstraints(minHeight: 38),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: strong
+            ? const BoxDecoration(
+                border: Border(
+                  left: BorderSide(color: Color(0xFF00A750), width: 3),
+                ),
+              )
+            : null,
         child: Row(
           children: [
-            Container(
-              width: 3,
-              height: 18,
-              decoration: BoxDecoration(
-                color: strong ? const Color(0xFF178A45) : const Color(0xFFE5E7EB),
-                borderRadius: BorderRadius.circular(99),
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: _flagshipText(
+                  10.6,
+                  color: const Color(0xFF344054),
+                  weight: strong ? FontWeight.w700 : FontWeight.w500,
+                ),
               ),
             ),
             const SizedBox(width: 8),
-            Icon(icon, size: 15, color: strong ? const Color(0xFF178A45) : const Color(0xFF667085)),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipText(10.2, color: const Color(0xFF344054), weight: FontWeight.w800)),
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _flagshipText(
+                9.5,
+                color: strong
+                    ? const Color(0xFF067A46)
+                    : const Color(0xFF98A2B3),
+                weight: FontWeight.w700,
+              ),
             ),
-            const SizedBox(width: 8),
-            Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipText(9.4, color: strong ? const Color(0xFF178A45) : const Color(0xFF98A2B3), weight: FontWeight.w900)),
           ],
         ),
       ),
@@ -3622,35 +3804,42 @@ void initState() {
 
   Widget _buildWorkspaceLaunchButton({bool dense = false}) {
     return InkWell(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(10),
       onTap: _openPrimaryArea,
       child: Container(
-        height: dense ? 44 : 50,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(16),
+        constraints: BoxConstraints(minHeight: dense ? 40 : 44),
+        padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+        decoration: const BoxDecoration(
+          color: Color(0xFFF3FAF6),
+          border: Border(
+            left: BorderSide(color: Color(0xFF00A750), width: 3),
+          ),
         ),
-        child: Row(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(color: const Color(0xFFEAF7EF), borderRadius: BorderRadius.circular(10)),
-              child: Icon(_primaryZoneIcon, size: 15, color: const Color(0xFF178A45)),
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(_primaryZoneTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipText(10.8, color: const Color(0xFF111827), weight: FontWeight.w900)),
-                  Text(_primaryZoneSubtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipText(8.8, color: const Color(0xFF667085), weight: FontWeight.w700)),
-                ],
+            Text(
+              _primaryZoneTitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _flagshipText(
+                10.8,
+                color: const Color(0xFF111827),
+                weight: FontWeight.w700,
               ),
             ),
-            const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Color(0xFF98A2B3)),
+            const SizedBox(height: 2),
+            Text(
+              _primaryZoneSubtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _flagshipText(
+                8.8,
+                color: const Color(0xFF667085),
+                weight: FontWeight.w500,
+              ),
+            ),
           ],
         ),
       ),
@@ -3675,7 +3864,7 @@ void initState() {
 
   Widget _buildFlagshipSettingsPanel() {
     return Container(
-      decoration: _flagshipPanel(radius: 22),
+      decoration: _flagshipPanel(radius: 20),
       padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3728,16 +3917,35 @@ void initState() {
 
   Widget _buildFlagshipContentWindow() {
     return Container(
-      decoration: _flagshipPanel(radius: 26),
-      clipBehavior: Clip.antiAlias,
+      color: Colors.white,
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+            padding: const EdgeInsets.fromLTRB(14, 13, 14, 7),
             child: Row(
               children: [
-                Expanded(child: Text(_profileContentTitle, style: _flagshipTitle(14.2))),
-                _buildTinyAction(Icons.add_photo_alternate_outlined, 'Пост', _openCreateMenuSheet),
+                Expanded(
+                  child: Text(
+                    _profileContentTitle,
+                    style: _flagshipTitle(14.2, weight: FontWeight.w700),
+                  ),
+                ),
+                if (isOwnProfile)
+                  InkWell(
+                    onTap: _openCreateMenuSheet,
+                    child: const Padding(
+                      padding: EdgeInsets.all(6),
+                      child: Text(
+                        '+',
+                        style: TextStyle(
+                          fontSize: 23,
+                          fontWeight: FontWeight.w400,
+                          height: 1,
+                          color: Color(0xFF111827),
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -3754,10 +3962,10 @@ void initState() {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isOwnProfile) _buildLoggedInClubStrip(),
-        Padding(padding: const EdgeInsets.fromLTRB(12, 10, 12, 0), child: _buildFlagshipProfileCard()),
-        if (isOwnProfile) Padding(padding: const EdgeInsets.fromLTRB(12, 10, 12, 0), child: _buildFlagshipWorkspaceSummary()),
-        Padding(padding: const EdgeInsets.fromLTRB(12, 10, 12, 0), child: _buildFlagshipContentWindow()),
-        const SizedBox(height: 84),
+        _buildFlagshipProfileCard(),
+        if (isOwnProfile) _buildFlagshipWorkspaceSummary(),
+        _buildFlagshipContentWindow(),
+        SizedBox(height: MediaQuery.paddingOf(context).bottom + 116),
       ],
     );
   }
@@ -3792,7 +4000,7 @@ void initState() {
             child: _buildModeSwitcher(),
           ),
         if (design.sectionVisibility['content'] != false) _buildContentGrid(),
-        const SizedBox(height: 84),
+        SizedBox(height: MediaQuery.paddingOf(context).bottom + 116),
       ],
     );
   }
@@ -3802,54 +4010,34 @@ void initState() {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(14, 7, 14, 8),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFEFF2F5), width: 1)),
-      ),
+      padding: const EdgeInsets.fromLTRB(14, 7, 14, 7),
+      color: Colors.white,
       child: Row(
         children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(
-              color: isWorkspaceRole ? const Color(0xFFECFDF3) : const Color(0xFFF7F8FA),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              isClubRole ? Icons.apartment_rounded : isCoachRole ? Icons.sports_soccer_rounded : Icons.person_outline_rounded,
-              size: 16,
-              color: isWorkspaceRole ? const Color(0xFF00A750) : const Color(0xFF667085),
-            ),
-          ),
-          const SizedBox(width: 9),
           Expanded(
-            child: RichText(
+            child: Text(
+              '${_roleLabel.toUpperCase()}  ·  ${_activeWorkspaceName.isEmpty ? 'Sportoteka' : _activeWorkspaceName}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              text: TextSpan(
-                style: const TextStyle(fontSize: 11.2, height: 1.1, color: Color(0xFF667085), fontWeight: FontWeight.w600),
-                children: [
-                  TextSpan(text: 'Аккаунт: ', style: TextStyle(color: Colors.black.withOpacity(.38))),
-                  TextSpan(text: _roleLabel.toUpperCase(), style: const TextStyle(color: Color(0xFF111827), fontWeight: FontWeight.w900)),
-                  const TextSpan(text: '  •  '),
-                  TextSpan(text: _activeWorkspaceName.isEmpty ? 'Спортотека' : _activeWorkspaceName),
-                ],
+              style: _flagshipText(
+                10.1,
+                color: const Color(0xFF667085),
+                weight: FontWeight.w600,
               ),
             ),
           ),
           if (isWorkspaceRole)
-            GestureDetector(
+            InkWell(
               onTap: _openProPanel,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF111827),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: const Text(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                child: Text(
                   'Кабинет',
-                  style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w900),
+                  style: _flagshipText(
+                    10.1,
+                    color: const Color(0xFF067A46),
+                    weight: FontWeight.w700,
+                  ),
                 ),
               ),
             ),
@@ -3940,7 +4128,7 @@ void initState() {
   Widget _buildSocialBottomBar() {
     final bottom = MediaQuery.of(context).padding.bottom;
     final width = MediaQuery.of(context).size.width;
-    final side = width < 380 ? 14.0 : 22.0;
+    final side = width < 380 ? 10.0 : 14.0;
     final bottomInset = bottom > 0 ? min(14.0, bottom * .40) : 6.0;
 
     Widget dockIcon({
@@ -3961,7 +4149,7 @@ void initState() {
               width: active ? 44 : 34,
               height: 36,
               decoration: BoxDecoration(
-                color: active ? const Color(0xFFF0F2F5) : Colors.transparent,
+                color: active ? const Color(0xFFECFDF3) : Colors.transparent,
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Stack(
@@ -3971,7 +4159,7 @@ void initState() {
                   Icon(
                     icon,
                     size: active ? 22 : 21,
-                    color: active ? const Color(0xFF111827) : const Color(0xFF344054),
+                    color: active ? const Color(0xFF00A750) : const Color(0xFF344054),
                   ),
                   if (badge > 0)
                     Positioned(
@@ -4007,30 +4195,16 @@ void initState() {
       child: Padding(
         padding: EdgeInsets.fromLTRB(side, 0, side, bottomInset),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(30),
+          borderRadius: BorderRadius.circular(24),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
             child: Container(
-              height: 56,
+              height: 52,
               padding: const EdgeInsets.symmetric(horizontal: 7),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(.94),
-                borderRadius: BorderRadius.circular(30),
-                border: Border.all(color: const Color(0xFFE3E8EF), width: 1),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(.12),
-                    blurRadius: 24,
-                    spreadRadius: -10,
-                    offset: const Offset(0, 12),
-                  ),
-                  BoxShadow(
-                    color: Colors.black.withOpacity(.04),
-                    blurRadius: 8,
-                    spreadRadius: -5,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: const [],
               ),
               child: Row(
                 children: [
@@ -4734,49 +4908,67 @@ void initState() {
     bool strong = false,
     bool danger = false,
   }) {
-    final bgColor = strong ? const Color(0xFF111827) : (danger ? const Color(0xFFFFF1F2) : const Color(0xFFF8F9FA));
-    final borderColor = strong ? const Color(0xFF111827) : (danger ? const Color(0xFFFFCCD5) : const Color(0xFFEFF2F5));
-    final iconColor = strong ? Colors.white : (danger ? const Color(0xFFE11D48) : const Color(0xFF111827));
-    final titleColor = strong ? Colors.white : (danger ? const Color(0xFFE11D48) : const Color(0xFF111827));
-    final subtitleColor = strong ? Colors.white.withOpacity(.68) : (danger ? const Color(0xFFBE123C) : const Color(0xFF667085));
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: borderColor),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: strong ? Colors.white.withOpacity(.12) : Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: strong ? Colors.white.withOpacity(.12) : const Color(0xFFE5E7EB)),
+    final titleColor = danger
+        ? const Color(0xFFE11D48)
+        : const Color(0xFF111827);
+    final subtitleColor = danger
+        ? const Color(0xFFBE123C)
+        : const Color(0xFF667085);
+
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 48),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: strong
+            ? const BoxDecoration(
+                color: Color(0xFFF3FAF6),
+                border: Border(
+                  left: BorderSide(color: Color(0xFF00A750), width: 3),
                 ),
-                child: Icon(icon, color: iconColor, size: 20),
+              )
+            : null,
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: titleColor,
+                      fontSize: 12.4,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: subtitleColor,
+                      fontSize: 10.7,
+                      fontWeight: FontWeight.w500,
+                      height: 1.15,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: titleColor, fontSize: 13, fontWeight: FontWeight.w900)),
-                    const SizedBox(height: 3),
-                    Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: subtitleColor, fontSize: 11, fontWeight: FontWeight.w600, height: 1.15)),
-                  ],
-                ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              strong ? 'Открыть' : '',
+              style: const TextStyle(
+                color: Color(0xFF067A46),
+                fontSize: 9.6,
+                fontWeight: FontWeight.w700,
               ),
-              Icon(Icons.chevron_right_rounded, color: strong ? Colors.white.withOpacity(.88) : const Color(0xFF98A2B3), size: 21),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -4926,31 +5118,30 @@ void initState() {
     );
   }
 
-  Widget _buildSlimProfileButton({required String label, required IconData icon, required VoidCallback onTap}) {
+  Widget _buildSlimProfileButton({
+    required String label,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
     return InkWell(
-      borderRadius: BorderRadius.circular(11),
+      borderRadius: BorderRadius.circular(10),
       onTap: onTap,
       child: Container(
         height: 34,
+        alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: const Color(0xFFF7F8FA),
-          borderRadius: BorderRadius.circular(11),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
+          color: const Color(0xFFF5F6F5),
+          borderRadius: BorderRadius.circular(10),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 16, color: const Color(0xFF111827)),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF111827)),
-              ),
-            ),
-          ],
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 10.8,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF111827),
+          ),
         ),
       ),
     );
@@ -5377,11 +5568,10 @@ void initState() {
 
   Widget _buildModeSwitcher() {
     return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: const BoxDecoration(
-        color: Colors.white,
         border: Border(
-          top: BorderSide(color: Color(0xFFEFF2F5), width: 1),
-          bottom: BorderSide(color: Color(0xFFEFF2F5), width: 1),
+          bottom: BorderSide(color: Color(0xFFE9ECEA), width: .7),
         ),
       ),
       child: Row(
@@ -5389,19 +5579,19 @@ void initState() {
           _buildModeButton(
             active: _mode == _ProfileFeedMode.posts,
             icon: Icons.grid_on_rounded,
-            label: "Посты",
+            label: 'Посты',
             onTap: () => setState(() => _mode = _ProfileFeedMode.posts),
           ),
           _buildModeButton(
             active: _mode == _ProfileFeedMode.feed,
             icon: Icons.article_outlined,
-            label: "Лента",
+            label: 'Лента',
             onTap: () => setState(() => _mode = _ProfileFeedMode.feed),
           ),
           _buildModeButton(
             active: _mode == _ProfileFeedMode.reels,
             icon: Icons.play_circle_outline_rounded,
-            label: "Мои Reels",
+            label: 'Reels',
             onTap: () => setState(() => _mode = _ProfileFeedMode.reels),
           ),
         ],
@@ -5409,31 +5599,38 @@ void initState() {
     );
   }
 
-  Widget _buildModeButton({required bool active, required IconData icon, required String label, required VoidCallback onTap}) {
+  Widget _buildModeButton({
+    required bool active,
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
     return Expanded(
       child: InkWell(
         onTap: onTap,
-        child: Container(
-          height: 44,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 170),
+          height: 42,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
             border: Border(
-              bottom: BorderSide(color: active ? const Color(0xFF111827) : Colors.transparent, width: 1.6),
+              bottom: BorderSide(
+                color: active
+                    ? const Color(0xFF00A750)
+                    : Colors.transparent,
+                width: 2.2,
+              ),
             ),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 17, color: active ? const Color(0xFF111827) : const Color(0xFF98A2B3)),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  color: active ? const Color(0xFF111827) : const Color(0xFF98A2B3),
-                  fontSize: 10.8,
-                ),
-              ),
-            ],
+          child: Text(
+            label,
+            style: _flagshipText(
+              10.9,
+              color: active
+                  ? const Color(0xFF111827)
+                  : const Color(0xFF98A2B3),
+              weight: active ? FontWeight.w700 : FontWeight.w500,
+            ),
           ),
         ),
       ),
@@ -5473,8 +5670,8 @@ void initState() {
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: _profileGridCrossAxisCount(),
-        crossAxisSpacing: 2,
-        mainAxisSpacing: 2,
+        crossAxisSpacing: 4,
+        mainAxisSpacing: 4,
         childAspectRatio: 1,
       ),
       itemCount: userPosts.length,
@@ -5558,8 +5755,8 @@ void initState() {
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: _profileGridCrossAxisCount(),
-        crossAxisSpacing: 2,
-        mainAxisSpacing: 2,
+        crossAxisSpacing: 4,
+        mainAxisSpacing: 4,
         childAspectRatio: 9 / 16,
       ),
       itemCount: userReels.length,

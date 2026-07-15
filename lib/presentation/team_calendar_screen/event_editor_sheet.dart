@@ -4,6 +4,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import 'package:sportoteka/core/theme/app_typography.dart';
+
 import 'team_calendar_models.dart';
 
 
@@ -315,7 +317,7 @@ class _EventEditorSheetState extends State<EventEditorSheet> {
           child: Stack(
             children: [
               Padding(
-                padding: EdgeInsets.fromLTRB(10, 8, 10, 76 + viewInsets),
+                padding: EdgeInsets.fromLTRB(14, 12, 14, 82 + viewInsets),
                 child: _buildAdaptiveFormContent(
                   scrollController: null,
                   viewInsets: viewInsets,
@@ -329,7 +331,7 @@ class _EventEditorSheetState extends State<EventEditorSheet> {
                 child: _BottomPodium(
                   bottomLift: viewInsets,
                   primary: widget.primary,
-                  buttonText: widget.initial == null ? 'Добавить' : 'Сохранить',
+                  buttonText: widget.initial == null ? 'Добавить событие' : 'Сохранить изменения',
                   onPressed: widget.initial == null
                       ? _submitAndClose
                       : () async {
@@ -431,14 +433,12 @@ class _EventEditorSheetState extends State<EventEditorSheet> {
     );
   }
 
-  TextStyle get _fieldTextStyle => const TextStyle(
-        fontFamily: 'Segoe UI',
-        fontFamilyFallback: ['SF Pro Text', 'Inter', 'Roboto', 'Arial'],
-        fontSize: 12.0,
+  TextStyle get _fieldTextStyle => AppTypography.custom(
+        size: 12.0,
+        weight: FontWeight.w600,
+        color: const Color(0xFF111827),
         height: 1.15,
-        fontWeight: FontWeight.w600,
-        color: Color(0xFF111827),
-        letterSpacing: -0.08,
+        letterSpacing: 0,
       );
 
   InputDecoration _fieldDecoration(String label, String hint) {
@@ -448,20 +448,16 @@ class _EventEditorSheetState extends State<EventEditorSheet> {
       contentPadding: EdgeInsets.zero,
       labelText: label,
       hintText: hint,
-      labelStyle: const TextStyle(
-        fontFamily: 'Segoe UI',
-        fontFamilyFallback: ['SF Pro Text', 'Inter', 'Roboto', 'Arial'],
-        fontSize: 10.8,
-        fontWeight: FontWeight.w700,
-        color: Color(0xFF6B7280),
+      labelStyle: AppTypography.custom(
+        size: 10.8,
+        weight: FontWeight.w600,
+        color: const Color(0xFF6B7280),
         height: 1.05,
       ),
-      hintStyle: const TextStyle(
-        fontFamily: 'Segoe UI',
-        fontFamilyFallback: ['SF Pro Text', 'Inter', 'Roboto', 'Arial'],
-        fontSize: 10.6,
-        fontWeight: FontWeight.w500,
-        color: Color(0xFF9CA3AF),
+      hintStyle: AppTypography.custom(
+        size: 10.6,
+        weight: FontWeight.w400,
+        color: const Color(0xFF9CA3AF),
       ),
     );
   }
@@ -651,35 +647,24 @@ class _EventEditorSheetState extends State<EventEditorSheet> {
   }
 
   Widget _eventTypeBlock({required bool compact}) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFAFAFA),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
+    return _sectionCard(
+      title: 'Тип события',
+      subtitle: 'Выберите формат занятия или матча',
+      icon: Icons.category_rounded,
       child: LayoutBuilder(
         builder: (context, c) {
-          final half = (c.maxWidth - 10) / 2;
+          final half = (c.maxWidth - 8) / 2;
           final full = c.maxWidth;
           return Wrap(
-            spacing: 10,
-            runSpacing: 10,
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              _chipSmart(TeamEventType.training, "Тренировка", maxWidth: half),
-              _chipSmart(TeamEventType.leagueMatch, "Чемпионат", maxWidth: half),
-              _chipSmart(
-                TeamEventType.friendlyMatch,
-                "Товарищеские игры",
-                maxWidth: compact ? full : half,
-              ),
-              _chipSmart(
-                TeamEventType.theory,
-                "Теоретические занятия",
-                maxWidth: compact ? full : half,
-              ),
-              _chipSmart(TeamEventType.gym, "ОФП / Зал", maxWidth: half),
-              _chipSmart(TeamEventType.dayOff, "Выходной", maxWidth: half),
+              _chipSmart(TeamEventType.training, 'Тренировка', maxWidth: half),
+              _chipSmart(TeamEventType.leagueMatch, 'Чемпионат', maxWidth: half),
+              _chipSmart(TeamEventType.friendlyMatch, 'Товарищеская игра', maxWidth: compact ? full : half),
+              _chipSmart(TeamEventType.theory, 'Теория', maxWidth: compact ? full : half),
+              _chipSmart(TeamEventType.gym, 'ОФП / Зал', maxWidth: half),
+              _chipSmart(TeamEventType.dayOff, 'Выходной', maxWidth: half),
             ],
           );
         },
@@ -688,24 +673,17 @@ class _EventEditorSheetState extends State<EventEditorSheet> {
   }
 
   Widget _timeBlock() {
-    return _card(
+    return _sectionCard(
+      title: 'Дата и время',
+      subtitle: 'Укажите начало и окончание события',
+      icon: Icons.schedule_rounded,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "Время",
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: 12.0,
-              color: Color(0xFF111827),
-            ),
-          ),
-          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
                 child: _pickTile(
-                  title: "Начало",
+                  title: 'Начало',
                   value: formatSqlDateTime(start),
                   icon: Icons.play_arrow_rounded,
                   onTap: _pickStart,
@@ -714,28 +692,20 @@ class _EventEditorSheetState extends State<EventEditorSheet> {
               const SizedBox(width: 8),
               Expanded(
                 child: _pickTile(
-                  title: "Конец",
-                  value: end == null ? "не задано" : formatSqlDateTime(end!),
+                  title: 'Окончание',
+                  value: end == null ? 'Не задано' : formatSqlDateTime(end!),
                   icon: Icons.stop_rounded,
                   onTap: _pickEnd,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          Wrap(
-            alignment: WrapAlignment.end,
-            spacing: 8,
-            runSpacing: 2,
+          const SizedBox(height: 8),
+          Row(
             children: [
-              TextButton(
-                onPressed: () => setState(() => end = null),
-                child: const Text("Без конца"),
-              ),
-              TextButton(
-                onPressed: _copyStartToEnd,
-                child: const Text("+90 минут"),
-              ),
+              _quickTimeAction('Без окончания', () => setState(() => end = null)),
+              const SizedBox(width: 8),
+              _quickTimeAction('+90 минут', _copyStartToEnd),
             ],
           ),
         ],
@@ -762,12 +732,15 @@ class _EventEditorSheetState extends State<EventEditorSheet> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
           decoration: BoxDecoration(
-            color: active ? c.withOpacity(0.18) : Colors.white,
-            borderRadius: BorderRadius.circular(999),
+            color: active ? Color.alphaBlend(c.withOpacity(.08), Colors.white) : Colors.white,
+            borderRadius: BorderRadius.circular(11),
             border: Border.all(
-              color: active ? c : const Color(0xFFE5E7EB),
-              width: 1.2,
+              color: active ? c.withOpacity(.30) : const Color(0xFFE9ECEA),
+              width: active ? 1 : .8,
             ),
+            boxShadow: active
+                ? [BoxShadow(color: c.withOpacity(.06), blurRadius: 12, offset: const Offset(0, 5))]
+                : null,
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -803,13 +776,87 @@ class _EventEditorSheetState extends State<EventEditorSheet> {
 
   Widget _card({required Widget child}) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        color: const Color(0xFFF8F9F8),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE9ECEA), width: .8),
       ),
       child: child,
+    );
+  }
+
+  Widget _sectionCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Widget child,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE9ECEA), width: .8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.018),
+            blurRadius: 14,
+            spreadRadius: -10,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3FAF6),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 15, color: const Color(0xFF067A46)),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(fontSize: 12.6, fontWeight: FontWeight.w700, color: Color(0xFF0B0F14))),
+                    const SizedBox(height: 2),
+                    Text(subtitle, style: const TextStyle(fontSize: 10.3, fontWeight: FontWeight.w500, color: Color(0xFF6B7280))),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 11),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _quickTimeAction(String text, VoidCallback onTap) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(9),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF3FAF6),
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Text(text, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF067A46))),
+        ),
+      ),
     );
   }
 
@@ -1128,7 +1175,7 @@ class _SportotekaDatePickerWindowState extends State<_SportotekaDatePickerWindow
                 Container(
                   height: 48,
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                  decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFE9EDF2), width: 1))),
+                  decoration: const BoxDecoration(color: Colors.white),
                   child: Row(
                     children: [
                       _RoundWindowButton(icon: Icons.close_rounded, onTap: () => widget.onClose(null)),
@@ -1200,7 +1247,7 @@ class _SportotekaDatePickerWindowState extends State<_SportotekaDatePickerWindow
                 ),
                 Container(
                   padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-                  decoration: const BoxDecoration(border: Border(top: BorderSide(color: Color(0xFFE9EDF2), width: 1))),
+                  decoration: const BoxDecoration(color: Colors.white),
                   child: Row(
                     children: [
                       Expanded(child: _OutlineSportButton(text: 'Сегодня', onTap: () => setState(() { final now = DateTime.now(); _selected = DateTime(now.year, now.month, now.day); _visibleMonth = DateTime(now.year, now.month); }), primary: widget.primary)),
@@ -1270,12 +1317,7 @@ class _CmrWindowFrame extends StatelessWidget {
               child: Container(
                 height: 50,
                 padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  border: Border(
-                    bottom: BorderSide(color: Color(0xFFE9EDF2), width: 1),
-                  ),
-                ),
+                decoration: const BoxDecoration(color: Colors.white),
                 child: Row(
                   children: [
                     _RoundWindowButton(icon: Icons.close_rounded, onTap: onClose),
@@ -1424,12 +1466,7 @@ class _BottomPodium extends StatelessWidget {
         top: false,
         child: Container(
           padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(
-              top: BorderSide(color: Color(0xFFE5E7EB), width: 1),
-            ),
-          ),
+          decoration: const BoxDecoration(color: Colors.white),
           child: Row(
             children: [
               if (onAddAnother != null) ...[
@@ -1694,10 +1731,7 @@ class _CompactTimeHeader extends StatelessWidget {
     return Container(
       height: 54,
       padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: const BoxDecoration(
-        color: Color(0xFFFAFBFC),
-        border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
-      ),
+      decoration: const BoxDecoration(color: Color(0xFFFAFBFC)),
       child: Row(
         children: [
           _CompactRoundButton(

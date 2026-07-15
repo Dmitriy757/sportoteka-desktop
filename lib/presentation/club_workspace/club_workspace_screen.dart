@@ -2,12 +2,15 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+
+import 'package:sportoteka/core/theme/app_typography.dart';
 
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/chat_screen/chat_screen.dart';
@@ -230,6 +233,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   _WorkspaceWallpaperStyle _workspaceWallpaperStyle = _WorkspaceWallpaperStyle.sportoteka;
   final List<_WorkspaceWindowState> _openWorkspaceWindows = <_WorkspaceWindowState>[];
   int _workspaceWindowZCounter = 0;
+  int _chatPanelRevision = 0;
 
   final Set<ClubSection> _desktopIconSections = <ClubSection>{
     ClubSection.teams,
@@ -338,29 +342,41 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     });
 
     if (trainerAssignedMode) {
+      // В режиме тренера сначала нужны команды: из первой назначенной команды
+      // workspace может восстановить clubId.
       await _safeLoad(_loadTeams);
       await _safeLoad(_loadClubProfile);
     } else {
-      await _safeLoad(_loadClubProfile);
-      await _safeLoad(_loadTeams);
+      // Для клуба профиль и команды не зависят друг от друга, поэтому грузим
+      // параллельно и не держим стартовый экран лишние секунды.
+      await Future.wait<void>([
+        _safeLoad(_loadClubProfile),
+        _safeLoad(_loadTeams),
+      ]);
     }
-    await _safeLoad(_loadTrainers);
-    await _safeLoad(_loadEvents);
-    await _safeLoad(_loadLatestPlans);
 
-    if (selectedTeamId == null && teams.isNotEmpty) {
-      final target = initialTeamId;
-      Map<String, dynamic>? initialTeam;
-      if (target != null && target > 0) {
-        for (final team in teams) {
-          final id = _asInt(team['id'] ?? team['team_id'] ?? team['teamId']);
-          if (id == target) {
-            initialTeam = team;
-            break;
-          }
+    final targetTeamId = initialTeamId ?? selectedTeamId;
+    Map<String, dynamic>? teamToSelect;
+
+    if (targetTeamId != null && targetTeamId > 0) {
+      for (final team in teams) {
+        final id = _asInt(team['id'] ?? team['team_id'] ?? team['teamId']);
+        if (id == targetTeamId) {
+          teamToSelect = team;
+          break;
         }
       }
-      await _selectTeam(initialTeam ?? teams.first, openTeam: false);
+    }
+
+    teamToSelect ??= teams.isNotEmpty ? teams.first : null;
+
+    if (teamToSelect != null) {
+      await _selectTeam(teamToSelect, openTeam: false);
+    } else {
+      await Future.wait<void>([
+        _safeLoad(_loadEvents),
+        _safeLoad(_loadLatestPlans),
+      ]);
     }
 
     if (!mounted) return;
@@ -369,6 +385,14 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       refreshing = false;
     });
 
+    // Тренеры — самый тяжёлый fallback: при 404/HTML endpoint'а клуба он
+    // обходит все команды. Не ждём его на стартовом экране, иначе loader
+    // визуально «зависает» на 94%.
+    Future<void>(() async {
+      await _safeLoad(_loadTrainers);
+      if (!mounted) return;
+      setState(() {});
+    });
   }
 
   Future<void> _safeLoad(Future<void> Function() loader) async {
@@ -505,7 +529,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
             Uri.parse(getClubTrainersUrl),
             body: {'club_id': clubId.toString()},
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 5));
 
       final data = _tryDecodeJson(resp.body);
       if (data != null) {
@@ -541,59 +565,77 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   Future<List<Map<String, dynamic>>> _loadTrainersFromTeams() async {
     if (teams.isEmpty) return [];
 
-    final result = <Map<String, dynamic>>[];
-
-    for (final team in teams) {
+    Future<List<Map<String, dynamic>>> loadForTeam(Map<String, dynamic> team) async {
       final teamId = _asInt(team['id'] ?? team['team_id'] ?? team['teamId']);
-      if (teamId <= 0) continue;
+      if (teamId <= 0) return [];
+
+      dynamic data;
 
       try {
-        final resp = await http
+        // В PHP-скриптах проекта чаще используется обычный form body,
+        // поэтому сначала пробуем его, а JSON оставляем fallback'ом.
+        final formResp = await http
             .post(
               Uri.parse(getTeamTrainersUrl),
-              headers: const {'Content-Type': 'application/json; charset=utf-8'},
-              body: jsonEncode({'team_id': teamId}),
+              body: {'team_id': teamId.toString()},
             )
-            .timeout(const Duration(seconds: 8));
+            .timeout(const Duration(seconds: 5));
 
-        dynamic data = _tryDecodeJson(resp.body);
-
-        // Если сервер принимает только form body, пробуем второй вариант.
-        if (data == null || _extractTrainersList(data).isEmpty) {
-          final formResp = await http
-              .post(
-                Uri.parse(getTeamTrainersUrl),
-                body: {'team_id': teamId.toString()},
-              )
-              .timeout(const Duration(seconds: 8));
-          data = _tryDecodeJson(formResp.body);
-          if (data == null) {
-            debugPrint(
-              'Club workspace team trainers non-json '
-              'team_id=$teamId status=${formResp.statusCode}: ${_shortBody(formResp.body)}',
-            );
-          }
-        }
-
-        final list = _extractTrainersList(data);
-        for (final t in list) {
-          final item = Map<String, dynamic>.from(t);
-          item['team_id'] = item['team_id'] ?? teamId;
-          item['teamId'] = item['teamId'] ?? teamId;
-          item['team_name'] = item['team_name'] ??
-              item['teamName'] ??
-              _asString(team['name']) ??
-              _asString(team['team_name']) ??
-              _asString(team['title']) ??
-              'Команда';
-          result.add(item);
+        data = _tryDecodeJson(formResp.body);
+        if (data == null) {
+          debugPrint(
+            'Club workspace team trainers form non-json '
+            'team_id=$teamId status=${formResp.statusCode}: ${_shortBody(formResp.body)}',
+          );
         }
       } catch (e) {
-        debugPrint('Club workspace team trainers error team_id=$teamId: $e');
+        debugPrint('Club workspace team trainers form error team_id=$teamId: $e');
       }
+
+      if (data == null || _extractTrainersList(data).isEmpty) {
+        try {
+          final jsonResp = await http
+              .post(
+                Uri.parse(getTeamTrainersUrl),
+                headers: const {'Content-Type': 'application/json; charset=utf-8'},
+                body: jsonEncode({'team_id': teamId}),
+              )
+              .timeout(const Duration(seconds: 5));
+
+          data = _tryDecodeJson(jsonResp.body);
+          if (data == null) {
+            debugPrint(
+              'Club workspace team trainers json non-json '
+              'team_id=$teamId status=${jsonResp.statusCode}: ${_shortBody(jsonResp.body)}',
+            );
+          }
+        } catch (e) {
+          debugPrint('Club workspace team trainers json error team_id=$teamId: $e');
+        }
+      }
+
+      final list = _extractTrainersList(data);
+      final result = <Map<String, dynamic>>[];
+      for (final t in list) {
+        final item = Map<String, dynamic>.from(t);
+        item['team_id'] = item['team_id'] ?? teamId;
+        item['teamId'] = item['teamId'] ?? teamId;
+        item['team_name'] = item['team_name'] ??
+            item['teamName'] ??
+            _asString(team['name']) ??
+            _asString(team['team_name']) ??
+            _asString(team['title']) ??
+            'Команда';
+        result.add(item);
+      }
+      return result;
     }
 
-    return result;
+    final chunks = await Future.wait<List<Map<String, dynamic>>>(
+      teams.map(loadForTeam),
+    );
+
+    return chunks.expand((chunk) => chunk).toList();
   }
 
   List<Map<String, dynamic>> _uniqueTrainers(List<Map<String, dynamic>> list) {
@@ -1522,8 +1564,13 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         Get.to(() => const CreateQuizScreen(), arguments: args);
         break;
       case ClubSection.manager:
+        final activeTeamId = _activeTeamIdOrNull;
+        if (activeTeamId == null) {
+          Get.snackbar('Команда', 'Сначала выберите команду');
+          return;
+        }
         Get.to(() => ManagerDashboardScreen(
-              teamId: selectedTeamId!,
+              teamId: activeTeamId,
               userId: currentUserId,
               teamName: selectedTeamName,
             ));
@@ -1545,9 +1592,13 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   }
 
   void _openFullTeamDashboard() {
-    if (!_hasTeam) return;
+    final activeTeamId = _activeTeamIdOrNull;
+    if (activeTeamId == null) {
+      Get.snackbar('Команда', 'Сначала выберите команду');
+      return;
+    }
     Get.to(() => TeamDashboardScreen(
-          teamId: selectedTeamId!,
+          teamId: activeTeamId,
           teamName: selectedTeamName,
           clubId: clubId,
           clubName: clubName,
@@ -1665,9 +1716,13 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
 
 
   void _openFullRosterScreen() {
-    if (!_hasTeam) return;
+    final activeTeamId = _activeTeamIdOrNull;
+    if (activeTeamId == null) {
+      Get.snackbar('Команда', 'Сначала выберите команду');
+      return;
+    }
     Get.to(() =>
-        TeamRosterScreen(teamId: selectedTeamId!, teamName: selectedTeamName));
+        TeamRosterScreen(teamId: activeTeamId, teamName: selectedTeamName));
   }
 
   void _openFullMatches() {
@@ -1679,9 +1734,13 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   }
 
   void _openFullCalendar() {
-    if (!_hasTeam) return;
+    final activeTeamId = _activeTeamIdOrNull;
+    if (activeTeamId == null) {
+      Get.snackbar('Календарь', 'Сначала выберите команду');
+      return;
+    }
     Get.to(() =>
-        TeamCalendarScreen(teamId: selectedTeamId!, teamName: selectedTeamName));
+        TeamCalendarScreen(teamId: activeTeamId, teamName: selectedTeamName));
   }
 
   void _openFullPlans() {
@@ -1704,9 +1763,13 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   }
 
   void _openFullVideoAnalysis() {
-    if (!_hasTeam) return;
+    final activeTeamId = _activeTeamIdOrNull;
+    if (activeTeamId == null) {
+      Get.snackbar('Команда', 'Сначала выберите команду');
+      return;
+    }
     Get.to(() => TeamVideoAnalysisScreen(
-          teamId: selectedTeamId!,
+          teamId: activeTeamId,
           teamName: selectedTeamName,
           clubId: clubId,
           clubName: clubName,
@@ -1750,7 +1813,13 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         ));
   }
 
-  bool get _hasTeam => selectedTeamId != null && selectedTeamId! > 0;
+  int? get _activeTeamIdOrNull {
+    final id = selectedTeamId;
+    if (id == null || id <= 0) return null;
+    return id;
+  }
+
+  bool get _hasTeam => _activeTeamIdOrNull != null;
 
   dynamic _decode(String body) {
     final data = _tryDecodeJson(body);
@@ -1921,10 +1990,10 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
 
   double _getResponsivePadding(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
-    if (width < 360) return 10.0;
-    if (width < 400) return 12.0;
-    if (width < 600) return 14.0;
-    return 16.0;
+    if (width < 360) return 6.0;
+    if (width < 400) return 7.0;
+    if (width < 600) return 8.0;
+    return 14.0;
   }
 
   void _handleWorkspaceBack() {
@@ -1955,6 +2024,10 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   }
 
   void _selectWorkspaceSection(ClubSection section) {
+    if (section == ClubSection.chat) {
+      _chatPanelRevision++;
+    }
+
     // Только настоящий ПК открывает модули отдельными окнами.
     // На Android/iPad планшетах разделы переключаются внутри планшетного shell.
     if (_isDesktopWide(context)) {
@@ -1968,7 +2041,16 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   void _activateInlineSection(ClubSection section) {
     if (!_canOpenWorkspaceSection(section)) return;
 
-    if (selectedSection == section) return;
+    // Повторное нажатие на «Чаты» всегда возвращает к общему списку.
+    if (selectedSection == section) {
+      if (section == ClubSection.chat) {
+        setState(() {
+          _chatPanelRevision++;
+          panelLoading = false;
+        });
+      }
+      return;
+    }
 
     setState(() {
       selectedSection = section;
@@ -2177,15 +2259,23 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         secondary: _C.blue,
         surface: _C.card,
       ),
-      textTheme: base.textTheme.apply(
+      textTheme: base.textTheme
+          .apply(
+            fontFamily: AppTypography.fontFamily,
+            bodyColor: _C.text,
+            displayColor: _C.text,
+          )
+          .copyWith(
+            titleLarge: _WorkspaceText.title,
+            titleMedium: _WorkspaceText.section,
+            bodyLarge: _WorkspaceText.rowTitle,
+            bodyMedium: _WorkspaceText.caption.copyWith(fontSize: 13),
+            bodySmall: _WorkspaceText.caption,
+          ),
+      primaryTextTheme: base.primaryTextTheme.apply(
+        fontFamily: AppTypography.fontFamily,
         bodyColor: _C.text,
         displayColor: _C.text,
-      ).copyWith(
-        titleLarge: _WorkspaceText.title,
-        titleMedium: _WorkspaceText.section,
-        bodyLarge: _WorkspaceText.rowTitle,
-        bodyMedium: _WorkspaceText.caption.copyWith(fontSize: 13),
-        bodySmall: _WorkspaceText.caption,
       ),
     );
   }
@@ -2211,11 +2301,15 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     _scheduleMobileGestureHint();
 
     return Scaffold(
-      backgroundColor: _C.bg,
-      body: SafeArea(
-        top: true,
-        bottom: false,
-        child: _buildMobileSwipeShell(),
+      backgroundColor: const Color(0xFFF6F7F6),
+      extendBody: true,
+      body: ColoredBox(
+        color: const Color(0xFFF6F7F6),
+        child: SafeArea(
+          top: true,
+          bottom: false,
+          child: _buildMobileSwipeShell(),
+        ),
       ),
       bottomNavigationBar: _buildMobileBottomNav(),
     );
@@ -2315,40 +2409,41 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
 
 
   Widget _buildCmrGameZone({CmrGameZoneMode mode = CmrGameZoneMode.all}) {
-    return _TeamGuard(
-      hasTeam: _hasTeam,
-      child: CmrGameZonePanel(
-        clubId: clubId,
-        clubName: clubName,
-        teamId: selectedTeamId!,
-        teamName: selectedTeamName,
-        userId: currentUserId,
-        initialMode: mode,
-      ),
+    final activeTeamId = _activeTeamIdOrNull;
+    if (activeTeamId == null) return const _NeedTeam();
+    return CmrGameZonePanel(
+      clubId: clubId,
+      clubName: clubName,
+      teamId: activeTeamId,
+      teamName: selectedTeamName,
+      userId: currentUserId,
+      initialMode: mode,
     );
   }
 
   Widget _buildMobileContent() {
-    return Container(
-      color: _C.bg,
-      child: Stack(
-        children: [
-          AnimatedSwitcher(
+    // Контент остаётся на всю высоту и проходит под плавающим Dock.
+    // Дополнительный запас прокрутки должен задаваться внутри списков панелей,
+    // а не сплошной подложкой под нижним меню.
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 180),
             switchInCurve: Curves.easeOutCubic,
             switchOutCurve: Curves.easeOutCubic,
             child: Padding(
               key: ValueKey('mobile-${selectedSection.name}-${selectedTeamId ?? 0}'),
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+              padding: const EdgeInsets.fromLTRB(0, 4, 0, 6),
               child: _buildContent(),
             ),
           ),
-          if (panelLoading || refreshing)
-            const Positioned.fill(
-              child: _WorkspacePanelLoadingOverlay(),
-            ),
-        ],
-      ),
+        ),
+        if (panelLoading || refreshing)
+          const Positioned.fill(
+            child: _WorkspacePanelLoadingOverlay(),
+          ),
+      ],
     );
   }
 
@@ -3435,8 +3530,20 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     );
   }
 
+  double _mobileBottomDockInset(BuildContext context) {
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    return bottom > 0
+        ? math.max(12.0, math.min(16.0, bottom * .45))
+        : 10.0;
+  }
+
+  double _mobileBottomDockReservedHeight(BuildContext context) {
+    const dockHeight = 56.0;
+    const breathingRoom = 10.0;
+    return dockHeight + _mobileBottomDockInset(context) + breathingRoom;
+  }
+
   Widget _buildMobileBottomNav() {
-    final bottom = MediaQuery.of(context).padding.bottom;
     final width = MediaQuery.of(context).size.width;
     final horizontal = width < 380 ? 14.0 : 22.0;
     final activeIndex = _mobileBottomMenuIndex();
@@ -3459,7 +3566,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
               width: active ? 44 : 34,
               height: 36,
               decoration: BoxDecoration(
-                color: active ? const Color(0xFFF0F2F5) : Colors.transparent,
+                color: active ? const Color(0xB8EAF8F0) : Colors.transparent,
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Stack(
@@ -3506,46 +3613,50 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
 
     // В Workspace панель должна быть чуть выше края, иначе выглядит прилипшей к низу.
     // Держим её ниже, чем старый вариант, но выше текущего слишком низкого положения.
-    final bottomInset = bottom > 0
-        ? math.max(12.0, math.min(16.0, bottom * .45))
-        : 10.0;
+    final bottomInset = _mobileBottomDockInset(context);
 
     return SafeArea(
       top: false,
       bottom: false,
       child: Padding(
         padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, bottomInset),
-        child: Container(
-          height: 56,
-          padding: const EdgeInsets.symmetric(horizontal: 7),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(.96),
-            borderRadius: BorderRadius.circular(30),
-            border: Border.all(color: const Color(0xFFE3E8EF), width: 1),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(.12),
-                blurRadius: 24,
-                spreadRadius: -10,
-                offset: const Offset(0, 12),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(30),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 26, sigmaY: 26),
+            child: Container(
+              height: 56,
+              padding: const EdgeInsets.symmetric(horizontal: 7),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(.72),
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(color: Colors.white.withOpacity(.92), width: .9),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(.10),
+                    blurRadius: 30,
+                    spreadRadius: -12,
+                    offset: const Offset(0, 14),
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withOpacity(.04),
+                    blurRadius: 8,
+                    spreadRadius: -5,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
               ),
-              BoxShadow(
-                color: Colors.black.withOpacity(.04),
-                blurRadius: 8,
-                spreadRadius: -5,
-                offset: const Offset(0, 3),
+              child: Row(
+                children: [
+                  dockIcon(index: 0, icon: Icons.home_rounded, onTap: () => _activateInlineSection(ClubSection.teams)),
+                  dockIcon(index: 1, icon: Icons.groups_2_outlined, onTap: () => _activateInlineSection(ClubSection.roster)),
+                  dockIcon(index: 2, icon: Icons.sports_soccer_outlined, onTap: () => _activateInlineSection(ClubSection.matches)),
+                  dockIcon(index: 3, icon: Icons.calendar_month_outlined, onTap: () => _activateInlineSection(ClubSection.calendar)),
+                  dockIcon(index: 4, icon: Icons.near_me_outlined, badge: 1, onTap: () => _activateInlineSection(ClubSection.chat)),
+                  dockIcon(index: 5, icon: Icons.more_horiz_rounded, onTap: _openMobileMoreMenu),
+                ],
               ),
-            ],
-          ),
-          child: Row(
-            children: [
-              dockIcon(index: 0, icon: Icons.home_rounded, onTap: () => _activateInlineSection(ClubSection.teams)),
-              dockIcon(index: 1, icon: Icons.groups_2_outlined, onTap: () => _activateInlineSection(ClubSection.roster)),
-              dockIcon(index: 2, icon: Icons.sports_soccer_outlined, onTap: () => _activateInlineSection(ClubSection.matches)),
-              dockIcon(index: 3, icon: Icons.calendar_month_outlined, onTap: () => _activateInlineSection(ClubSection.calendar)),
-              dockIcon(index: 4, icon: Icons.near_me_outlined, badge: 1, onTap: () => _activateInlineSection(ClubSection.chat)),
-              dockIcon(index: 5, icon: Icons.more_horiz_rounded, onTap: _openMobileMoreMenu),
-            ],
+            ),
           ),
         ),
       ),
@@ -4278,21 +4389,27 @@ Widget _buildNavItem({
           ),
         );
       case ClubSection.matches:
-        return _TeamGuard(
-            hasTeam: _hasTeam,
-            child: CmrTeamMatchesPanel(
-                teamId: selectedTeamId!,
-                teamName: selectedTeamName,
-                clubId: clubId,
-                clubName: clubName));
+        {
+          final matchesTeamId = _activeTeamIdOrNull;
+          if (matchesTeamId == null) return const _NeedTeam();
+          return CmrTeamMatchesPanel(
+            teamId: matchesTeamId,
+            teamName: selectedTeamName,
+            clubId: clubId,
+            clubName: clubName,
+          );
+        }
       case ClubSection.calendar:
-        return _TeamGuard(
-            hasTeam: _hasTeam,
-            child: CmrCalendarPanel(
-                teamId: selectedTeamId!,
-                teamName: selectedTeamName,
-                clubId: clubId,
-                clubName: clubName));
+        {
+          final calendarTeamId = _activeTeamIdOrNull;
+          if (calendarTeamId == null) return const _NeedTeam();
+          return CmrCalendarPanel(
+            teamId: calendarTeamId,
+            teamName: selectedTeamName,
+            clubId: clubId,
+            clubName: clubName,
+          );
+        }
       case ClubSection.trainings:
         return _TrainingsPanel(
           hasTeam: _hasTeam,
@@ -4367,15 +4484,16 @@ Widget _buildNavItem({
           embeddedInClubWorkspace: true,
         );
       case ClubSection.videoAnalysis:
-        return _TeamGuard(
-          hasTeam: _hasTeam,
-          child: CmrVideoAnalysisPanel(
-            teamId: selectedTeamId!,
+        {
+          final videoTeamId = _activeTeamIdOrNull;
+          if (videoTeamId == null) return const _NeedTeam();
+          return CmrVideoAnalysisPanel(
+            teamId: videoTeamId,
             teamName: selectedTeamName,
             clubId: clubId,
             clubName: clubName,
-          ),
-        );
+          );
+        }
       case ClubSection.description:
         return _TeamModulePanel(
           hasTeam: _hasTeam,
@@ -4396,6 +4514,7 @@ Widget _buildNavItem({
         final userId = currentUserId > 0 ? currentUserId : clubId;
 
         return CmrChatsPanel(
+          key: ValueKey('cmr-chats-$_chatPanelRevision'),
           userId: userId,
           clubName: clubName,
           teamId: selectedTeamId,
@@ -4420,25 +4539,29 @@ Widget _buildNavItem({
           ],
         );
       case ClubSection.attendance:
-        return _TeamGuard(
-            hasTeam: _hasTeam,
-            child: CmrAttendancePanel(
-                teamId: selectedTeamId!,
-                teamName: selectedTeamName,
-                clubId: clubId,
-                clubName: clubName));
-      case ClubSection.testing:
-        return _TeamGuard(
-          hasTeam: _hasTeam,
-          child: CmrTestingPanel(
+        {
+          final attendanceTeamId = _activeTeamIdOrNull;
+          if (attendanceTeamId == null) return const _NeedTeam();
+          return CmrAttendancePanel(
+            teamId: attendanceTeamId,
+            teamName: selectedTeamName,
             clubId: clubId,
-            teamId: selectedTeamId!,
+            clubName: clubName,
+          );
+        }
+      case ClubSection.testing:
+        {
+          final testingTeamId = _activeTeamIdOrNull;
+          if (testingTeamId == null) return const _NeedTeam();
+          return CmrTestingPanel(
+            clubId: clubId,
+            teamId: testingTeamId,
             clubName: clubName,
             teamName: selectedTeamName,
             initialStage: _selectedTeamStage(),
             userId: currentUserId,
-          ),
-        );
+          );
+        }
 
       case ClubSection.challenges:
         return _buildCmrGameZone(mode: CmrGameZoneMode.challenges);
@@ -4532,9 +4655,37 @@ class _SmallActionChip extends StatelessWidget {
   }
 }
 
+
+class _WorkspaceGlassGlow extends StatelessWidget {
+  final double size;
+  final Color color;
+
+  const _WorkspaceGlassGlow({
+    required this.size,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: ImageFiltered(
+        imageFilter: ImageFilter.blur(sigmaX: 34, sigmaY: 34),
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: color,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _C {
   // Единая палитра с profile_screen.dart
-  static const Color bg = Color(0xFFF4F5F6);
+  static const Color bg = Color(0xFFF7F9F8);
   static const Color card = Color(0xFFFFFFFF);
   static const Color text = Color(0xFF111827);
   static const Color muted = Color(0xFF667085);
@@ -4545,15 +4696,15 @@ class _C {
   static const Color black = Color(0xFF111315);
   static const Color graphite = Color(0xFF252A31);
   static const Color active = Color(0xFFE9ECEF);
-  static const Color soft = Color(0xFFF1F3F5);
+  static const Color soft = Color(0xFFF7F9F8);
   static const Color soft2 = Color(0xFFFFFFFF);
   static const Color accent = Color(0xFF6B7280);
 
   // Меню клуба синхронизировано с home_screen.dart:
   // белая рейка, мягкая подложка, графитовый активный пункт.
   static const Color rail = Color(0xFFFFFFFF);
-  static const Color railPanel = Color(0xFFF7F8FA);
-  static const Color railHover = Color(0xFFF0F2F5);
+  static const Color railPanel = Color(0xFFF7F9F8);
+  static const Color railHover = Color(0xFFF1F6F3);
   static const Color railText = Color(0xFF344054);
   static const Color railMuted = Color(0xFF667085);
 
@@ -4662,36 +4813,54 @@ class _C {
 }
 
 class _WorkspaceText {
+  static const List<String> fallback = <String>[
+    'SF Pro Text',
+    'SF Pro Display',
+    'Roboto',
+    'Segoe UI',
+    'Arial',
+  ];
+
   static const TextStyle title = TextStyle(
+    fontFamily: 'Inter',
+    fontFamilyFallback: fallback,
     fontSize: 20,
     fontWeight: FontWeight.w600,
-    letterSpacing: -0.6,
-    height: 1.08,
+    letterSpacing: 0,
+    height: 1.18,
     color: _C.text,
   );
 
   static const TextStyle section = TextStyle(
+    fontFamily: 'Inter',
+    fontFamilyFallback: fallback,
     fontSize: 14,
     fontWeight: FontWeight.w600,
-    letterSpacing: -0.2,
+    letterSpacing: 0,
+    height: 1.18,
     color: _C.text,
   );
 
   static const TextStyle rowTitle = TextStyle(
+    fontFamily: 'Inter',
+    fontFamilyFallback: fallback,
     fontSize: 13.6,
-    fontWeight: FontWeight.w500,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0,
     color: _C.text,
-    height: 1.15,
+    height: 1.20,
   );
 
   static const TextStyle caption = TextStyle(
-    fontSize: 11.4,
-    fontWeight: FontWeight.w500,
+    fontFamily: 'Inter',
+    fontFamilyFallback: fallback,
+    fontSize: 11.6,
+    fontWeight: FontWeight.w400,
+    letterSpacing: 0,
     color: _C.muted,
-    height: 1.25,
+    height: 1.30,
   );
 }
-
 
 class _WorkspaceLoadingScreen extends StatefulWidget {
   const _WorkspaceLoadingScreen();
@@ -4764,7 +4933,7 @@ class _WorkspaceLoadingScreenState extends State<_WorkspaceLoadingScreen>
                       color: _C.text,
                       fontSize: 17,
                       fontWeight: FontWeight.w600,
-                      letterSpacing: -.2,
+                      letterSpacing: 0,
                     ),
                   ),
                   const SizedBox(height: 7),
@@ -4829,7 +4998,7 @@ class _WorkspaceProgressBar extends StatelessWidget {
                 color: _C.text,
                 fontSize: largePercent ? 16 : 13,
                 fontWeight: FontWeight.w600,
-                letterSpacing: -.2,
+                letterSpacing: 0,
               ),
             ),
           ],
@@ -4883,7 +5052,7 @@ class _WorkspacePanelLoadingOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     return IgnorePointer(
       child: Container(
-        margin: const EdgeInsets.fromLTRB(0, 10, 12, 12),
+        margin: const EdgeInsets.fromLTRB(0, 8, 0, 8),
         decoration: BoxDecoration(
           color: _C.bg.withOpacity(.72),
           borderRadius: BorderRadius.circular(18),
@@ -16291,54 +16460,11 @@ class _WorkspaceWallpaper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final gradient = _gradientForStyle(style);
-    final showPitch = style == _WorkspaceWallpaperStyle.pitch;
-    final showLogo = style == _WorkspaceWallpaperStyle.club && (clubLogo ?? '').trim().isNotEmpty;
-
-    return Container(
-      decoration: BoxDecoration(gradient: gradient),
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: CustomPaint(
-              painter: _WorkspaceWallpaperPatternPainter(
-                dark: style == _WorkspaceWallpaperStyle.graphite,
-                pitch: showPitch,
-              ),
-            ),
-          ),
-          if (showLogo)
-            Positioned(
-              right: 60,
-              top: 42,
-              child: Opacity(
-                opacity: .10,
-                child: _LogoBox(url: clubLogo, size: 220, bgColor: Colors.white),
-              ),
-            ),
-          Positioned(
-            left: 28,
-            bottom: 116,
-            child: IgnorePointer(
-              child: Opacity(
-                opacity: style == _WorkspaceWallpaperStyle.graphite ? .10 : .13,
-                child: Text(
-                  clubName.trim().isEmpty ? 'SPORTOTEKA' : clubName.trim().toUpperCase(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: style == _WorkspaceWallpaperStyle.graphite ? Colors.white : _C.text,
-                    fontSize: 46,
-                    height: 1,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -2.2,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+    // Sportoteka Pro 2.0: нейтральный однотонный холст без градиентов,
+    // сетки, свечения и декоративных логотипов за рабочими окнами.
+    final dark = style == _WorkspaceWallpaperStyle.graphite;
+    return ColoredBox(
+      color: dark ? const Color(0xFF15181C) : const Color(0xFFF6F7F6),
     );
   }
 
@@ -16595,7 +16721,7 @@ class _WorkspaceFloatingWindow extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(maximized ? 22 : 24),
-          border: Border.all(color: active ? _C.border.withOpacity(.85) : Colors.white.withOpacity(.86)),
+          border: Border.all(color: Colors.transparent, width: 0),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(active ? .14 : .09),
@@ -16691,7 +16817,7 @@ class _WorkspaceWindowTitleBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
         color: active ? Colors.white : const Color(0xFFF8F9FA),
-        border: const Border(bottom: BorderSide(color: _C.borderSoft)),
+        border: const Border(bottom: BorderSide(color: Color(0x00FFFFFF), width: 0)),
       ),
       child: Row(
         children: [
@@ -17010,7 +17136,7 @@ class _WorkspaceDockButtonState extends State<_WorkspaceDockButton> {
     final bg = widget.active
         ? const Color(0xFFF0F2F5)
         : _hovered
-            ? const Color(0xFFF7F8FA)
+            ? const Color(0xFFF3F5F7)
             : Colors.transparent;
     final iconColor = widget.active ? const Color(0xFF111827) : const Color(0xFF344054);
 

@@ -1,7 +1,9 @@
 // lib/presentation/chat_screen/chat_room_screen.dart
+// Windows 11 / Fluent refresh based on CMR workspace typography.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' show FontFeature;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -16,6 +18,115 @@ import 'package:shimmer/shimmer.dart';
 import 'package:sportoteka/presentation/my_profile_screen/my_profile_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/edit_group_chat_screen.dart';
 import 'package:sportoteka/call/audio_call_screen.dart';
+
+
+class _WinChatColors {
+  static const Color bg = Color(0xFFF6F7F9);
+  static const Color panel = Colors.white;
+  static const Color glass = Color(0xF7FFFFFF);
+  static const Color soft = Color(0xFFFAFBFC);
+  static const Color soft2 = Color(0xFFF6F7F9);
+  static const Color text = Color(0xFF0B0F14);
+  static const Color muted = Color(0xFF6B7280);
+  static const Color graphite = Color(0xFF111827);
+  static const Color graphite2 = Color(0xFF1F2937);
+  static const Color green = Color(0xFF00A750);
+  static const Color greenSoft = Color(0xFFF3FBF7);
+  static const Color blue = Color(0xFF2563EB);
+  static const Color blueSoft = Color(0xFFF4F7FF);
+  static const Color cyan = Color(0xFF06B6D4);
+  static const Color cyanSoft = Color(0xFFEFFBFF);
+  static const Color violet = Color(0xFF7C3AED);
+  static const Color violetSoft = Color(0xFFF5F0FF);
+  static const Color pink = Color(0xFFEC4899);
+  static const Color pinkSoft = Color(0xFFFFF1F8);
+  static const Color amber = Color(0xFFF59E0B);
+  static const Color amberSoft = Color(0xFFFFFBEB);
+  static const Color red = Color(0xFFD92D20);
+  static const Color greenDark = Color(0xFF067A46);
+  static const Color greenBorder = Color(0xFFD7F0E2);
+  static const Color line = Color(0xFFEFF1F4);
+}
+
+Color _messageAccent(int index) {
+  const colors = <Color>[
+    _WinChatColors.green,
+    _WinChatColors.blue,
+    _WinChatColors.cyan,
+    _WinChatColors.violet,
+    _WinChatColors.pink,
+    _WinChatColors.amber,
+  ];
+  return colors[index.abs() % colors.length];
+}
+
+Color _messageAccentSoft(int index) {
+  const colors = <Color>[
+    _WinChatColors.greenSoft,
+    _WinChatColors.blueSoft,
+    _WinChatColors.cyanSoft,
+    _WinChatColors.violetSoft,
+    _WinChatColors.pinkSoft,
+    _WinChatColors.amberSoft,
+  ];
+  return colors[index.abs() % colors.length];
+}
+
+
+class _WinChatText {
+  static const String family = 'Segoe UI';
+  static const List<String> fallback = <String>[
+    'SF Pro Display',
+    'SF Pro Text',
+    'Inter',
+    'Roboto',
+    'Arial',
+  ];
+
+  static double compact(double size) => size <= 10 ? size + .8 : size + .65;
+
+  static TextStyle title(double size) => TextStyle(
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        color: _WinChatColors.text,
+        fontSize: compact(size),
+        fontWeight: FontWeight.w600,
+        letterSpacing: -.25,
+        height: 1.08,
+      );
+
+  static TextStyle body(double size, {Color color = _WinChatColors.text, FontWeight weight = FontWeight.w500}) => TextStyle(
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        color: color,
+        fontSize: compact(size),
+        fontWeight: weight,
+        letterSpacing: -.05,
+        height: 1.32,
+      );
+
+  static TextStyle caption({Color color = _WinChatColors.muted}) => const TextStyle(
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        color: _WinChatColors.muted,
+        fontSize: 11.8,
+        fontWeight: FontWeight.w600,
+        letterSpacing: .05,
+        height: 1.12,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      ).copyWith(color: color);
+}
+
+class _WinChatDecor {
+  static BoxDecoration workspaceBg() => const BoxDecoration(
+        color: Color(0xFFF1F3F5),
+      );
+
+  static BoxDecoration inputBar() => const BoxDecoration(
+        color: Colors.white,
+      );
+}
+
 
 class ChatRoomScreen extends StatefulWidget {
   final int chatId;
@@ -46,6 +157,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
   final TextEditingController _controller = TextEditingController();
   final FocusNode _inputFocus = FocusNode();
   final ScrollController _scrollController = ScrollController();
+
+  late String _chatTitle;
 
   // Сообщения/участники
   List<Map<String, dynamic>> messages = [];
@@ -96,6 +209,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
     WidgetsBinding.instance.addObserver(this);
 
     initializeDateFormatting('ru_RU');
+    _chatTitle = _normalizeChatTitle(widget.chatName);
 
     // ✅ ВАЖНО: помечаем чат как прочитанный на сервере при входе
     _markThisChatRead();
@@ -285,6 +399,64 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
     return t.length > 80 ? '${t.substring(0, 80)}…' : t;
   }
 
+  String _normalizeChatTitle(String raw) {
+    final title = raw.trim();
+    if (title.isEmpty || title.toLowerCase() == 'null') return 'Чат';
+    return title;
+  }
+
+  bool _isGenericChatTitle(String raw) {
+    final title = raw.trim().toLowerCase();
+    return title.isEmpty ||
+        title == 'чат' ||
+        title == 'личный чат' ||
+        title == 'групповой чат' ||
+        title == 'новый чат' ||
+        title == 'null';
+  }
+
+  String _memberDisplayName(Map<String, dynamic> member) {
+    final name = [
+      member['first_name'],
+      member['last_name'],
+    ]
+        .where((v) => v != null && v.toString().trim().isNotEmpty)
+        .map((v) => v.toString().trim())
+        .join(' ')
+        .trim();
+
+    if (name.isNotEmpty) return name;
+
+    for (final key in const ['name', 'full_name', 'username', 'email', 'phone']) {
+      final value = (member[key] ?? '').toString().trim();
+      if (value.isNotEmpty && value.toLowerCase() != 'null') return value;
+    }
+    return '';
+  }
+
+  void _refreshTitleFromMembers() {
+    if (!_isGenericChatTitle(_chatTitle)) return;
+
+    final otherMembers = members.where((member) {
+      final id = int.tryParse('${member['id'] ?? member['user_id'] ?? member['userId'] ?? 0}') ?? 0;
+      return id != widget.userId;
+    }).toList();
+
+    final names = otherMembers
+        .map(_memberDisplayName)
+        .where((name) => name.trim().isNotEmpty)
+        .toList();
+
+    if (names.isEmpty) return;
+
+    final nextTitle = names.length == 1
+        ? names.first
+        : names.take(3).join(', ') + (names.length > 3 ? ' +' : '');
+
+    if (nextTitle.trim().isEmpty || nextTitle == _chatTitle) return;
+    if (mounted) setState(() => _chatTitle = nextTitle);
+  }
+
   // ====================== API ======================
 
   Future<void> _loadMessages({bool initial = false, bool fromPoll = false}) async {
@@ -422,8 +594,12 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
             : (decoded is Map ? (decoded['members'] ?? decoded['data'] ?? []) : []);
 
         if (!mounted) return;
-        setState(() => members = List<Map<String, dynamic>>.from(
-            list.map((e) => Map<String, dynamic>.from(e))));
+        setState(() {
+          members = List<Map<String, dynamic>>.from(
+            list.map((e) => Map<String, dynamic>.from(e)),
+          );
+        });
+        _refreshTitleFromMembers();
       } else {
         debugPrint('get_chat_members HTTP ${res.statusCode}: ${res.body}');
       }
@@ -923,7 +1099,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 4, 16, 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
         color: Colors.grey.shade100,
         border: Border(left: BorderSide(color: Colors.blue.shade300, width: 3)),
@@ -938,9 +1114,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Ответ на $author',
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.35)),
                   const SizedBox(height: 2),
-                  Text(preview, style: const TextStyle(color: Colors.black54, fontSize: 12)),
+                  Text(preview, style: const TextStyle(color: _WinChatColors.muted, fontSize: 11.1)),
                 ],
               ),
             ),
@@ -951,7 +1127,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
               replyingToId = null;
               replyingToMessage = null;
             }),
-            icon: const Icon(Icons.close, size: 18),
+            icon: const Icon(Icons.close, size: 16),
           ),
         ],
       ),
@@ -967,7 +1143,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
     final preview = msg.isNotEmpty ? _excerptFromMsg(msg) : '';
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 4, 16, 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
         color: Colors.amber.shade50,
         border: Border(left: BorderSide(color: Colors.amber.shade400, width: 3)),
@@ -975,18 +1151,18 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
       ),
       child: Row(
         children: [
-          const Icon(Icons.edit, size: 16),
+          const Icon(Icons.edit, size: 15),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               preview.isEmpty ? 'Редактирование сообщения' : 'Редактирование: $preview',
-              style: const TextStyle(fontSize: 13),
+              style: const TextStyle(fontSize: 12.35),
             ),
           ),
           IconButton(
             tooltip: 'Отменить',
             onPressed: () => setState(() => editingMessageId = null),
-            icon: const Icon(Icons.close, size: 18),
+            icon: const Icon(Icons.close, size: 16),
           ),
         ],
       ),
@@ -1086,7 +1262,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
           if (!isMine)
             CircleAvatar(
               backgroundColor: Colors.grey.shade300,
-              radius: 18,
+              radius: 16,
             ),
           const SizedBox(width: 8),
           Container(
@@ -1094,7 +1270,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
             height: 30 + (index % 2) * 18,
             decoration: BoxDecoration(
               color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
             ),
           ),
         ],
@@ -1129,9 +1305,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
         margin: const EdgeInsets.only(bottom: 6),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.grey.shade100,
-          border: Border(left: BorderSide(color: Colors.blue.shade300, width: 3)),
-          borderRadius: BorderRadius.circular(8),
+          color: _WinChatColors.greenSoft,
+          border: const Border(left: BorderSide(color: _WinChatColors.green, width: 3)),
+          borderRadius: BorderRadius.circular(10),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1139,12 +1315,12 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
             if ((replyAuthor ?? '').toString().isNotEmpty)
               Text(
                 (replyAuthor ?? '').toString(),
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11.1),
               ),
             const SizedBox(height: 2),
             Text(
               preview,
-              style: const TextStyle(color: Colors.black54, fontSize: 12),
+              style: const TextStyle(color: _WinChatColors.muted, fontSize: 11.1),
             ),
           ],
         ),
@@ -1165,34 +1341,39 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
     final heroTag = 'img_$id';
 
     final isLocalSending = msg['_local'] == true && (msg['_status'] == 'sending');
+    final bubbleAccent = isMine ? _WinChatColors.green : _messageAccent(senderName.hashCode);
+    final bubbleSoft = isMine ? _WinChatColors.greenSoft : _messageAccentSoft(senderName.hashCode);
 
     return Container(
       key: key,
       child: InkWell(
         onLongPress: () => _showMessageMenu(context, msg),
         splashColor: isMine ? Colors.blue.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
+          padding: const EdgeInsets.symmetric(vertical: 2.5),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
             children: [
               if (!isMine && showAvatarAndName)
                 Padding(
-                  padding: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.only(right: 6),
                   child: GestureDetector(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => MyProfileScreen(userId: msg['sender_id']),
-                      ),
-                    ),
+                    onTap: () {
+                      final senderId = int.tryParse((msg['sender_id'] ?? '').toString());
+                      if (senderId == null || senderId <= 0) return;
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => MyProfileScreen(userId: senderId),
+                        ),
+                      );
+                    },
                     child: CircleAvatar(
-                      radius: 18,
+                      radius: 16,
                       backgroundImage:
                           msg['avatar_url'] != null ? NetworkImage(msg['avatar_url']) : null,
-                      backgroundColor: const Color(0xFF1E74C4),
+                      backgroundColor: bubbleAccent,
                       child: msg['avatar_url'] == null
                           ? Text(
                               (msg['first_name'] ?? 'U').toString().substring(0, 1),
@@ -1211,10 +1392,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                         padding: const EdgeInsets.only(bottom: 4),
                         child: Text(
                           senderName,
-                          style: const TextStyle(
-                            fontSize: 13,
+                          style: TextStyle(
+                            fontSize: 11.4,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF1E74C4),
+                            color: bubbleAccent,
                           ),
                         ),
                       ),
@@ -1222,19 +1403,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                       children: [
                         Container(
                           constraints: BoxConstraints(
-                            maxWidth: MediaQuery.of(context).size.width * 0.75,
+                            maxWidth: MediaQuery.of(context).size.width * (MediaQuery.of(context).size.width < 420 ? 0.80 : 0.70),
                           ),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
                           decoration: BoxDecoration(
-                            color: isMine ? const Color(0xFFE3F2FD) : Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
+                            color: isMine ? const Color(0xFFE2F7EA) : Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: null,
+                            boxShadow: null,
                           ),
                           child: Column(
                             crossAxisAlignment:
@@ -1344,7 +1520,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                                             fit: BoxFit.cover,
                                             errorBuilder: (_, __, ___) => Text(
                                               text,
-                                              style: const TextStyle(fontSize: 16),
+                                              style: const TextStyle(fontSize: 14),
                                             ),
                                           ),
                                         ),
@@ -1352,7 +1528,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                                     )
                                   ];
                                 } else {
-                                  final style = const TextStyle(fontSize: 16);
+                                  final style = TextStyle(
+                                    fontFamily: _WinChatText.family,
+                                    fontFamilyFallback: _WinChatText.fallback,
+                                    fontSize: 13.4,
+                                    fontWeight: FontWeight.w500,
+                                    height: 1.25,
+                                    color: _WinChatColors.text,
+                                  );
                                   if (searchQuery.isNotEmpty &&
                                       text.toLowerCase().contains(searchQuery.toLowerCase())) {
                                     return [_highlightedText(text, searchQuery, style)];
@@ -1360,17 +1543,15 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                                   return [Text(text, style: style)];
                                 }
                               }(),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 3),
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
                                     DateFormat.Hm().format(messageDate),
                                     style: TextStyle(
-                                      fontSize: 12,
-                                      color: isMine
-                                          ? Colors.blueGrey.shade300
-                                          : Colors.grey.shade600,
+                                      fontSize: 10.2,
+                                      color: Colors.grey.shade600,
                                     ),
                                   ),
                                   if (isEdited)
@@ -1378,7 +1559,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                                       padding: EdgeInsets.only(left: 6),
                                       child: Text(
                                         '· изменено',
-                                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                                        style: TextStyle(fontSize: 10, color: Colors.grey),
                                       ),
                                     ),
                                   if (isMine)
@@ -1386,8 +1567,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                                       padding: const EdgeInsets.only(left: 4),
                                       child: Icon(
                                         Icons.done_all,
-                                        size: 16,
-                                        color: msg['is_read'] == 1 ? Colors.blue : Colors.grey,
+                                        size: 15,
+                                        color: msg['is_read'] == 1 ? _WinChatColors.green : Colors.grey.shade500,
                                       ),
                                     ),
                                 ],
@@ -1401,7 +1582,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                             child: Container(
                               decoration: BoxDecoration(
                                 color: Colors.white.withOpacity(0.25),
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(16),
                               ),
                               child: const Center(
                                 child: SizedBox(
@@ -1428,105 +1609,188 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final compact = width < 520;
+    final messagePadding = EdgeInsets.fromLTRB(compact ? 7 : 12, compact ? 6 : 10, compact ? 7 : 12, compact ? 8 : 12);
+
     return Scaffold(
+      extendBody: true,
       resizeToAvoidBottomInset: true,
-      backgroundColor: const Color(0xFFF5F5F5),
-      appBar: AppBar(
-        automaticallyImplyLeading: !widget.embedded,
+      backgroundColor: const Color(0xFFF1F3F5),
+      appBar: widget.embedded ? null : AppBar(
+        toolbarHeight: compact ? 54 : 60,
+        automaticallyImplyLeading: false,
         elevation: 0,
-        backgroundColor: Colors.white,
-        leading: widget.embedded
-            ? null
-            : IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.black),
-                onPressed: () => Navigator.pop(context),
-              ),
+        scrolledUnderElevation: 0,
+        backgroundColor: const Color(0xFFF1F3F5),
+        surfaceTintColor: Colors.transparent,
+        systemOverlayStyle: SystemUiOverlayStyle.dark,
+        leadingWidth: 48,
+        leading: IconButton(
+          tooltip: 'Назад',
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+          icon: Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0B0F14), size: 19),
+          ),
+          onPressed: () => Navigator.pop(context),
+        ),
+        titleSpacing: 0,
         title: searchMode
-            ? TextField(
-                controller: _searchController,
-                autofocus: true,
-                textInputAction: TextInputAction.search,
-                onChanged: _onSearchChanged,
-                onSubmitted: _onSearchChanged,
-                decoration: const InputDecoration(
-                  hintText: 'Поиск по чату…',
-                  border: InputBorder.none,
+            ? Container(
+                height: 34,
+                margin: const EdgeInsets.only(right: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(13),
+                  border: null,
+                ),
+                alignment: Alignment.center,
+                child: TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  textInputAction: TextInputAction.search,
+                  onChanged: _onSearchChanged,
+                  onSubmitted: _onSearchChanged,
+                  style: const TextStyle(fontSize: 13.2, fontWeight: FontWeight.w500, height: 1.15),
+                  decoration: const InputDecoration(
+                    hintText: 'Поиск',
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
                 ),
               )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            : Row(
                 children: [
-                  Text(
-                    widget.chatName,
-                    style: const TextStyle(
-                      color: Colors.black,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                  Container(
+                    width: 38,
+                    height: 38,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: _WinChatColors.greenSoft,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      members.length > 2 ? Icons.groups_rounded : Icons.person_rounded,
+                      color: _WinChatColors.greenDark,
+                      size: 17,
                     ),
                   ),
-                  if (members.isNotEmpty)
-                    Text(
-                      '${members.length} участников',
-                      style: const TextStyle(color: Colors.grey, fontSize: 12),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _chatTitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: _WinChatText.family,
+                            fontFamilyFallback: _WinChatText.fallback,
+                            color: _WinChatColors.text,
+                            fontSize: 16.4,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -.25,
+                            height: 1.05,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          members.isEmpty ? 'чат' : (members.length == 1 ? '1 участник' : '${members.length} участников'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: _WinChatText.family,
+                            fontFamilyFallback: _WinChatText.fallback,
+                            color: _WinChatColors.muted,
+                            fontSize: 10.2,
+                            fontWeight: FontWeight.w600,
+                            height: 1.0,
+                          ),
+                        ),
+                      ],
                     ),
+                  ),
                 ],
               ),
-        actions: [
-          if (searchMode) ...[
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: Text(
-                  searchHits.isEmpty
-                      ? '0/0'
-                      : '${(currentHit >= 0 ? currentHit + 1 : 0)}/${searchHits.length}',
-                  style: const TextStyle(color: Colors.black87, fontSize: 13),
-                ),
-              ),
-            ),
-            IconButton(
-              tooltip: 'Предыдущее',
-              icon: const Icon(Icons.keyboard_arrow_up, color: Colors.black),
-              onPressed: searchHits.isEmpty ? null : _prevHit,
-            ),
-            IconButton(
-              tooltip: 'Следующее',
-              icon: const Icon(Icons.keyboard_arrow_down, color: Colors.black),
-              onPressed: searchHits.isEmpty ? null : _nextHit,
-            ),
-            IconButton(
-              tooltip: 'Закрыть поиск',
-              icon: const Icon(Icons.close, color: Colors.black),
-              onPressed: _toggleSearch,
-            ),
-          ] else ...[
-            IconButton(
-              tooltip: 'Поиск',
-              icon: const Icon(Icons.search, color: Colors.black),
-              onPressed: _toggleSearch,
-            ),
-            IconButton(
-              tooltip: 'Аудиозвонок',
-              icon: const Icon(Icons.call, color: Colors.black),
-              onPressed: _startAudioCall,
-            ),
-            IconButton(
-              icon: const Icon(Icons.group, color: Colors.black),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => EditGroupChatScreen(
-                      chatId: widget.chatId,
-                      currentUserId: widget.userId,
-                      chatName: widget.chatName,
+        actions: searchMode
+            ? [
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Text(
+                      searchHits.isEmpty
+                          ? '0/0'
+                          : '${(currentHit >= 0 ? currentHit + 1 : 0)}/${searchHits.length}',
+                      style: const TextStyle(color: _WinChatColors.graphite, fontSize: 12, fontWeight: FontWeight.w700),
                     ),
                   ),
-                ).then((_) => _loadMembers());
-              },
-            ),
-          ],
-        ],
+                ),
+                IconButton(
+                  tooltip: 'Предыдущее',
+                  constraints: const BoxConstraints.tightFor(width: 36, height: 52),
+                  icon: const Icon(Icons.keyboard_arrow_up_rounded, color: _WinChatColors.graphite, size: 22),
+                  onPressed: searchHits.isEmpty ? null : _prevHit,
+                ),
+                IconButton(
+                  tooltip: 'Следующее',
+                  constraints: const BoxConstraints.tightFor(width: 36, height: 52),
+                  icon: const Icon(Icons.keyboard_arrow_down_rounded, color: _WinChatColors.graphite, size: 22),
+                  onPressed: searchHits.isEmpty ? null : _nextHit,
+                ),
+                IconButton(
+                  tooltip: 'Закрыть поиск',
+                  constraints: const BoxConstraints.tightFor(width: 36, height: 46),
+                  icon: const Icon(Icons.close_rounded, color: _WinChatColors.graphite, size: 21),
+                  onPressed: _toggleSearch,
+                ),
+              ]
+            : [
+                IconButton(
+                  tooltip: 'Поиск',
+                  constraints: const BoxConstraints.tightFor(width: 36, height: 46),
+                  icon: const Icon(Icons.search_rounded, color: Color(0xFF0B0F14), size: 22),
+                  onPressed: _toggleSearch,
+                ),
+                IconButton(
+                  tooltip: 'Аудиозвонок',
+                  constraints: const BoxConstraints.tightFor(width: 36, height: 46),
+                  icon: const Icon(Icons.call_rounded, color: Color(0xFF0B0F14), size: 21),
+                  onPressed: _startAudioCall,
+                ),
+                IconButton(
+                  tooltip: 'Участники',
+                  constraints: const BoxConstraints.tightFor(width: 38, height: 46),
+                  icon: const Icon(Icons.group_rounded, color: Color(0xFF0B0F14), size: 22),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => EditGroupChatScreen(
+                          chatId: widget.chatId,
+                          currentUserId: widget.userId,
+                          chatName: _chatTitle,
+                        ),
+                      ),
+                    ).then((_) => _loadMembers());
+                  },
+                ),
+                const SizedBox(width: 4),
+              ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: const SizedBox(height: 1),
+        ),
       ),
       body: Column(
         children: [
@@ -1536,61 +1800,52 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
             child: Stack(
               children: [
                 Container(
-                  color: Colors.white,
+                  decoration: _WinChatDecor.workspaceBg(),
                   child: isLoading
                       ? Shimmer.fromColors(
                           baseColor: Colors.grey.shade300,
                           highlightColor: Colors.grey.shade100,
                           child: ListView.builder(
-                            padding: const EdgeInsets.all(16),
+                            padding: messagePadding,
                             itemCount: 10,
                             itemBuilder: (context, index) => _buildSkeletonMessage(index),
                           ),
                         )
                       : ListView.builder(
-                          physics: const BouncingScrollPhysics(
-                            parent: AlwaysScrollableScrollPhysics(),
-                          ),
+                          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                           controller: _scrollController,
-                          padding: const EdgeInsets.all(16),
+                          padding: messagePadding,
                           itemCount: messages.length,
                           addAutomaticKeepAlives: true,
                           addRepaintBoundaries: true,
                           cacheExtent: 1000,
                           itemBuilder: (context, index) {
                             final currentMessage = messages[index];
-
-                            final currentDate =
-                                _safeParseDate(currentMessage['created_at']).toLocal();
-                            final previousMessage =
-                                index > 0 ? messages[index - 1] : null;
+                            final currentDate = _safeParseDate(currentMessage['created_at']).toLocal();
+                            final previousMessage = index > 0 ? messages[index - 1] : null;
                             final prevDate = previousMessage != null
                                 ? _safeParseDate(previousMessage['created_at']).toLocal()
                                 : null;
-
                             final isSameUser = previousMessage != null &&
                                 previousMessage['sender_id'] == currentMessage['sender_id'];
-
                             final messageWidget = _buildMessage(
                               currentMessage,
                               showAvatarAndName: !isSameUser,
                             );
 
-                            if (prevDate == null ||
-                                !DateUtils.isSameDay(currentDate, prevDate)) {
+                            if (prevDate == null || !DateUtils.isSameDay(currentDate, prevDate)) {
                               return Column(
                                 children: [
                                   Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 8, horizontal: 16),
+                                    margin: const EdgeInsets.only(bottom: 5, top: 2),
+                                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 11),
                                     decoration: BoxDecoration(
-                                      color: Colors.grey.shade200,
-                                      borderRadius: BorderRadius.circular(12),
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(16),
                                     ),
                                     child: Text(
                                       DateFormat.yMMMMd('ru_RU').format(currentDate),
-                                      style: TextStyle(
-                                          color: Colors.grey.shade600, fontSize: 12),
+                                      style: const TextStyle(color: Color(0xFF6B7280), fontSize: 10.6, fontWeight: FontWeight.w600),
                                     ),
                                   ),
                                   messageWidget,
@@ -1602,18 +1857,21 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                         ),
                 ),
                 Positioned(
-                  bottom: 20,
-                  right: 20,
+                  bottom: compact ? 10 : 16,
+                  right: compact ? 10 : 16,
                   child: ValueListenableBuilder<bool>(
                     valueListenable: _showScrollToBottomVN,
                     builder: (_, visible, __) {
-                      return AnimatedOpacity(
-                        opacity: visible ? 1.0 : 0.0,
-                        duration: const Duration(milliseconds: 200),
-                        child: FloatingActionButton.small(
-                          backgroundColor: Colors.blue,
-                          onPressed: _scrollToBottom,
-                          child: const Icon(Icons.arrow_downward, size: 20),
+                      return IgnorePointer(
+                        ignoring: !visible,
+                        child: AnimatedOpacity(
+                          opacity: visible ? 1.0 : 0.0,
+                          duration: const Duration(milliseconds: 200),
+                          child: FloatingActionButton.small(
+                            backgroundColor: _WinChatColors.green,
+                            onPressed: _scrollToBottom,
+                            child: const Icon(Icons.arrow_downward, size: 18),
+                          ),
                         ),
                       );
                     },
@@ -1625,43 +1883,48 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
           SafeArea(
             top: false,
             child: Container(
-              color: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: _WinChatDecor.inputBar(),
+              padding: EdgeInsets.fromLTRB(compact ? 6 : 10, compact ? 4 : 6, compact ? 6 : 10, compact ? 4 : 6),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.attach_file, color: Colors.grey),
+                    visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+                    icon: const Icon(Icons.attach_file, color: _WinChatColors.muted),
                     onPressed: _pickImage,
                   ),
                   Expanded(
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(20),
+                        color: const Color(0xFFF1F3F5),
+                        borderRadius: BorderRadius.circular(22),
                       ),
                       child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: TextField(
                               focusNode: _inputFocus,
                               controller: _controller,
+                              minLines: 1,
+                              maxLines: 4,
                               decoration: InputDecoration(
                                 hintText: editingMessageId != null
                                     ? 'Изменить сообщение…'
                                     : (replyingToId != null ? 'Ответить…' : 'Написать сообщение…'),
                                 border: InputBorder.none,
-                                contentPadding:
-                                    const EdgeInsets.symmetric(vertical: 12),
+                                contentPadding: EdgeInsets.symmetric(vertical: compact ? 6 : 8),
                               ),
-                              onChanged: (v) =>
-                                  setState(() => isTyping = v.trim().isNotEmpty),
+                              style: const TextStyle(fontSize: 13.2, height: 1.2, fontWeight: FontWeight.w500),
+                              onChanged: (v) => setState(() => isTyping = v.trim().isNotEmpty),
                               onSubmitted: (_) => _sendMessage(),
                             ),
                           ),
                           if (isTyping)
                             IconButton(
-                              icon: const Icon(Icons.send, color: Colors.blue),
+                              visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+                              icon: const Icon(Icons.send, color: _WinChatColors.green),
                               onPressed: _sendMessage,
                             ),
                         ],
@@ -1673,8 +1936,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                       onLongPressStart: (_) => _startRecording(),
                       onLongPressEnd: (_) => _stopRecording(),
                       child: IconButton(
+                        visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
                         icon: Icon(isRecording ? Icons.mic_off : Icons.mic),
-                        color: isRecording ? Colors.red : Colors.grey,
+                        color: isRecording ? _WinChatColors.red : _WinChatColors.muted,
                         onPressed: () {},
                       ),
                     ),

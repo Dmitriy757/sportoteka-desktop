@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'game_zone_api.dart';
+import 'game_zone_cmr_style.dart';
 
 class CreateQuizScreen extends StatefulWidget {
   const CreateQuizScreen({super.key});
@@ -169,45 +170,10 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
   }
 
   Widget _headerCard() {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF7C3AED), Color(0xFF9F67FF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Новый квиз для команды',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-              fontSize: 20,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            teamName.isEmpty ? 'Командный квиз' : teamName,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            'Создай викторину, добавь вопросы и правильные ответы. Игроки смогут проходить её в игровой зоне.',
-            style: TextStyle(
-              color: Colors.white,
-              height: 1.35,
-            ),
-          ),
-        ],
-      ),
+    return GameZoneCmr.header(
+      title: 'Новый квиз для команды',
+      subtitle: '${teamName.isEmpty ? 'Командный квиз' : teamName}\nСоздай викторину, добавь вопросы и правильные ответы. Игроки смогут проходить её в игровой зоне.',
+      icon: Icons.quiz_rounded,
     );
   }
 
@@ -217,13 +183,7 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0D000000),
-            blurRadius: 12,
-            offset: Offset(0, 4),
-          ),
-        ],
+      border: Border.all(color: GzColors.divider),
       ),
       child: Form(
         key: _quizFormKey,
@@ -312,7 +272,7 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
                       : (_creatingQuiz ? 'Создаём...' : 'Создать квиз'),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF7C3AED),
+                  backgroundColor: GzColors.green,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
@@ -358,13 +318,13 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   decoration: BoxDecoration(
                     color: selected
-                        ? const Color(0xFFF6EEFF)
-                        : const Color(0xFFF8F9FA),
+                        ? GzColors.greenSoft
+                        : GzColors.soft,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                       color: selected
-                          ? const Color(0xFF7C3AED)
-                          : const Color(0xFFE5E7EB),
+                          ? GzColors.green
+                          : GzColors.divider,
                     ),
                   ),
                   child: Center(
@@ -373,8 +333,8 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
                       style: TextStyle(
                         fontWeight: FontWeight.w900,
                         color: selected
-                            ? const Color(0xFF7C3AED)
-                            : Colors.black87,
+                            ? GzColors.green
+                            : GzColors.text,
                       ),
                     ),
                   ),
@@ -393,13 +353,7 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0D000000),
-            blurRadius: 12,
-            offset: Offset(0, 4),
-          ),
-        ],
+      border: Border.all(color: GzColors.divider),
       ),
       child: Form(
         key: _questionFormKey,
@@ -516,7 +470,7 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
                       : (_addingQuestion ? 'Добавляем...' : 'Добавить вопрос'),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF7C3AED),
+                  backgroundColor: GzColors.green,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
@@ -536,9 +490,9 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
+        color: GzColors.soft,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: GzColors.divider),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -547,7 +501,7 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
             'Вопрос ${index + 1}',
             style: const TextStyle(
               fontWeight: FontWeight.w900,
-              color: Color(0xFF7C3AED),
+              color: GzColors.green,
             ),
           ),
           const SizedBox(height: 8),
@@ -567,14 +521,14 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: const Color(0xFFF6EEFF),
+              color: GzColors.greenSoft,
               borderRadius: BorderRadius.circular(999),
             ),
             child: Text(
               'Правильный ответ: ${q['correct_option']}',
               style: const TextStyle(
                 fontWeight: FontWeight.w900,
-                color: Color(0xFF7C3AED),
+                color: GzColors.green,
               ),
             ),
           ),
@@ -588,16 +542,16 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
       return Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: const Color(0xFFF9FAFB),
+          color: GzColors.soft,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
+          border: Border.all(color: GzColors.divider),
         ),
         child: const Center(
           child: Text(
             'Пока нет добавленных вопросов',
             style: TextStyle(
               fontWeight: FontWeight.w700,
-              color: Color(0xFF6B7280),
+              color: GzColors.subtle,
             ),
           ),
         ),
@@ -627,10 +581,13 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
     final validTeam = teamId > 0;
 
     return Scaffold(
-      appBar: AppBar(
+      backgroundColor: GzColors.bg,
+      appBar: GameZoneCmr.appBar(
         title: const Text('Создать квиз'),
       ),
-      body: !validTeam
+      body: GameZoneCmr.page(
+        context,
+        child: !validTeam
           ? const Center(
               child: Padding(
                 padding: EdgeInsets.all(24),
@@ -645,7 +602,7 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
               ),
             )
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: GameZoneCmr.listPadding(context),
               children: [
                 _headerCard(),
                 const SizedBox(height: 16),
@@ -657,6 +614,7 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
                 const SizedBox(height: 30),
               ],
             ),
+      ),
     );
   }
 }

@@ -12,6 +12,7 @@ class TrackerLiveSessionModel {
   final int? fieldId;
   final String status;
   final String source;
+  final String activityType;
   final double totalDistanceM;
   final double maxSpeedKmh;
   final double avgSpeedKmh;
@@ -51,6 +52,7 @@ class TrackerLiveSessionModel {
     this.fieldId,
     required this.status,
     required this.source,
+    this.activityType = '',
     required this.totalDistanceM,
     required this.maxSpeedKmh,
     required this.avgSpeedKmh,
@@ -161,6 +163,7 @@ class TrackerLiveSessionModel {
       fieldId: _inull(json['field_id']),
       status: '${json['status'] ?? 'active'}',
       source: '${json['source'] ?? 'tracker'}',
+      activityType: '${json['activity_type'] ?? ''}',
       totalDistanceM: distance,
       maxSpeedKmh: maxSpeed <= 0 ? speed : maxSpeed,
       avgSpeedKmh: avgSpeed,
@@ -331,6 +334,7 @@ class TrackerLivePointPayload {
   final double? metabolicPowerProxy;
   final int? durationSec;
   final Map<String, dynamic>? analysisJson;
+  final String? rawHex;
 
   const TrackerLivePointPayload({
     required this.liveSessionId,
@@ -367,6 +371,7 @@ class TrackerLivePointPayload {
     this.metabolicPowerProxy,
     this.durationSec,
     this.analysisJson,
+    this.rawHex,
   });
 
   Map<String, dynamic> toJson() => _withoutNulls({
@@ -406,6 +411,7 @@ class TrackerLivePointPayload {
         'metabolic_power_proxy': metabolicPowerProxy,
         'duration_sec': durationSec,
         'analysis_json': analysisJson,
+        'raw_hex': rawHex,
       });
 
   static Map<String, dynamic> _withoutNulls(Map<String, dynamic> input) {

@@ -2,6 +2,21 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+
+class _EditGroupUi {
+  static const Color bg = Color(0xFFF6F7F9);
+  static const Color card = Colors.white;
+  static const Color green = Color(0xFF00A750);
+  static const Color greenDark = Color(0xFF067A46);
+  static const Color greenSoft = Color(0xFFF3FBF7);
+  static const Color border = Color(0xFFEFF1F4);
+  static const Color text = Color(0xFF0B0F14);
+  static const Color muted = Color(0xFF6B7280);
+  static const Color red = Color(0xFFEF4444);
+  static TextStyle title(double size) => TextStyle(color: text, fontSize: size, fontWeight: FontWeight.w700, height: 1.08, letterSpacing: -0.3);
+  static TextStyle mutedText(double size) => TextStyle(color: muted, fontSize: size, fontWeight: FontWeight.w500, height: 1.24);
+}
+
 class EditGroupChatScreen extends StatefulWidget {
   final int chatId;
   final int currentUserId;
@@ -284,156 +299,180 @@ class _EditGroupChatScreenState extends State<EditGroupChatScreen> {
 
   // ---------- UI ----------
 
+  Widget _avatar(({int? id, String first, String last, String email, String avatar}) data) {
+    final initials = (data.first.isNotEmpty ? data.first[0] : '?').toUpperCase();
+    return Container(
+      width: 38,
+      height: 38,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(color: _EditGroupUi.greenSoft, borderRadius: BorderRadius.circular(12), border: Border.all(color: _EditGroupUi.border)),
+      child: data.avatar.isNotEmpty ? Image.network(data.avatar, fit: BoxFit.cover) : Center(child: Text(initials, style: const TextStyle(color: _EditGroupUi.greenDark, fontWeight: FontWeight.w700))),
+    );
+  }
+
   Widget _buildMembersBlock() {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      color: const Color(0xFFF6F8FB),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.group, size: 20),
-                const SizedBox(width: 8),
-                const Text('Текущие участники', style: TextStyle(fontWeight: FontWeight.w700)),
-                const Spacer(),
-                if (isLoadingMembers)
-                  const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-              ],
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Container(width: 34, height: 34, decoration: BoxDecoration(color: _EditGroupUi.greenSoft, borderRadius: BorderRadius.circular(11)), child: const Icon(Icons.groups_rounded, color: _EditGroupUi.greenDark, size: 17)),
+            const SizedBox(width: 9),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Текущие участники', style: _EditGroupUi.title(13.6)),
+              const SizedBox(height: 2),
+              Text('${members.length} участников', style: _EditGroupUi.mutedText(10.8)),
+            ])),
+            if (isLoadingMembers) const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: _EditGroupUi.green)),
+          ]),
+          const SizedBox(height: 10),
+          if (members.isEmpty && !isLoadingMembers)
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Center(child: Text('Пока никого нет', style: _EditGroupUi.mutedText(12))),
+            )
+          else
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 260),
+              child: ListView.separated(
+                itemCount: members.length,
+                shrinkWrap: true,
+                itemBuilder: (context, i) {
+                  final data = _u(members[i]);
+                  final title = '${data.first.isEmpty ? "Без имени" : data.first} ${data.last}'.trim();
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(color: _EditGroupUi.bg, borderRadius: BorderRadius.circular(13)),
+                    child: Row(children: [
+                      _avatar(data),
+                      const SizedBox(width: 9),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _EditGroupUi.title(13.0)),
+                        if (data.email.isNotEmpty) ...[
+                          const SizedBox(height: 3),
+                          Text(data.email, maxLines: 1, overflow: TextOverflow.ellipsis, style: _EditGroupUi.mutedText(10.6)),
+                        ],
+                      ])),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        icon: const Icon(Icons.remove_circle_rounded, color: _EditGroupUi.red, size: 20),
+                        onPressed: (data.id == null) ? null : () => _confirmAndRemoveUserFromChat(data.id!, title),
+                      ),
+                    ]),
+                  );
+                },
+                separatorBuilder: (_, __) => const SizedBox(height: 7),
+              ),
             ),
+          if (lastError != null) ...[
             const SizedBox(height: 8),
-
-            if (members.isEmpty && !isLoadingMembers)
-              const ListTile(
-                leading: Icon(Icons.group_outlined),
-                title: Text('Пока никого нет'),
-                subtitle: Text('Добавьте участников через поиск ниже'),
-              )
-            else
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 260),
-                child: ListView.separated(
-                  itemCount: members.length,
-                  shrinkWrap: true,
-                  itemBuilder: (context, i) {
-                    final data = _u(members[i]);
-                    final initials = (data.first.isNotEmpty ? data.first[0] : '?');
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundImage: data.avatar.isNotEmpty ? NetworkImage(data.avatar) : null,
-                        child: data.avatar.isEmpty ? Text(initials) : null,
-                      ),
-                      title: Text(
-                        '${data.first.isEmpty ? "Без имени" : data.first} ${data.last}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.remove_circle, color: Colors.red),
-                        onPressed: (data.id == null)
-                            ? null
-                            : () => _confirmAndRemoveUserFromChat(data.id!, '${data.first} ${data.last}'),
-                      ),
-                    );
-                  },
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                ),
-              ),
-
-            if (lastError != null) ...[
-              const SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(.08),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  lastError!,
-                  style: const TextStyle(fontSize: 12, color: Colors.red),
-                ),
-              ),
-            ],
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: _EditGroupUi.red.withOpacity(.08), borderRadius: BorderRadius.circular(12)),
+              child: Text(lastError!, style: const TextStyle(fontSize: 11.5, color: _EditGroupUi.red, fontWeight: FontWeight.w500)),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
 
   Widget _buildSearchBlock() {
-    return TextField(
-      controller: _searchController,
-      decoration: InputDecoration(
-        labelText: 'Поиск пользователя',
-        prefixIcon: const Icon(Icons.search),
-        filled: true,
-        fillColor: const Color(0xFFF6F8FB),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
-        ),
+    return Container(
+      height: 42,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: _EditGroupUi.border)),
+      child: TextField(
+        controller: _searchController,
+        decoration: const InputDecoration(labelText: null, hintText: 'Поиск пользователя', prefixIcon: Icon(Icons.search_rounded, size: 18, color: _EditGroupUi.muted), border: InputBorder.none, isDense: true),
+        style: const TextStyle(fontSize: 13.2, fontWeight: FontWeight.w500),
+        onChanged: _searchUsers,
       ),
-      onChanged: _searchUsers,
     );
   }
 
   Widget _buildSearchResults() {
-    if (isSearching) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    if (isSearching) return const Center(child: CircularProgressIndicator(color: _EditGroupUi.green));
     if (searchResults.isEmpty) {
-      return const Center(
-        child: Text('Введите имя/фамилию/почту для поиска', style: TextStyle(color: Colors.black54)),
-      );
+      return Center(child: Text('Введите имя, фамилию или почту для поиска', style: _EditGroupUi.mutedText(12), textAlign: TextAlign.center));
     }
     return ListView.separated(
+      padding: EdgeInsets.fromLTRB(0, 0, 0, MediaQuery.paddingOf(context).bottom + 16),
       itemCount: searchResults.length,
       itemBuilder: (context, index) {
         final data = _u(searchResults[index]);
-        final initials = (data.first.isNotEmpty ? data.first[0] : '?');
-        return ListTile(
-          leading: CircleAvatar(
-            backgroundImage: data.avatar.isNotEmpty ? NetworkImage(data.avatar) : null,
-            child: data.avatar.isEmpty ? Text(initials) : null,
-          ),
-          title: Text(
-            '${data.first.isNotEmpty ? data.first : 'Без имени'} ${data.last}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          subtitle: data.email.isEmpty ? null : Text(data.email),
-          trailing: IconButton(
-            icon: const Icon(Icons.person_add, color: Color(0xFF1E74C4)),
-            onPressed: data.id == null ? null : () => _addUserToChat(data.id!),
-          ),
+        final title = '${data.first.isNotEmpty ? data.first : 'Без имени'} ${data.last}'.trim();
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
+          child: Row(children: [
+            _avatar(data),
+            const SizedBox(width: 9),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _EditGroupUi.title(13.0)),
+              if (data.email.isNotEmpty) ...[
+                const SizedBox(height: 3),
+                Text(data.email, maxLines: 1, overflow: TextOverflow.ellipsis, style: _EditGroupUi.mutedText(10.6)),
+              ],
+            ])),
+            IconButton(visualDensity: VisualDensity.compact, icon: const Icon(Icons.person_add_alt_1_rounded, color: _EditGroupUi.greenDark, size: 20), onPressed: data.id == null ? null : () => _addUserToChat(data.id!)),
+          ]),
         );
       },
-      separatorBuilder: (_, __) => const Divider(height: 1),
+      separatorBuilder: (_, __) => const SizedBox(height: 7),
+    );
+  }
+
+  Widget _header() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+      child: Row(children: [
+        IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.arrow_back_rounded), style: IconButton.styleFrom(backgroundColor: Colors.white, fixedSize: const Size(40, 40), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)))),
+        const SizedBox(width: 8),
+        Container(width: 40, height: 40, decoration: BoxDecoration(color: _EditGroupUi.greenSoft, borderRadius: BorderRadius.circular(13)), child: const Icon(Icons.manage_accounts_rounded, color: _EditGroupUi.greenDark, size: 19)),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Участники', style: _EditGroupUi.title(17.0), maxLines: 1, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 3),
+          Text(widget.chatName, style: _EditGroupUi.mutedText(11.2), maxLines: 1, overflow: TextOverflow.ellipsis),
+        ])),
+      ]),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Участники: ${widget.chatName}'),
-        backgroundColor: const Color(0xFF1E74C4),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
+    final media = MediaQuery.of(context);
+    return MediaQuery(
+      data: media.copyWith(textScaler: const TextScaler.linear(1.08)),
+      child: Scaffold(
+      backgroundColor: _EditGroupUi.bg,
+      body: SafeArea(
         child: Column(
           children: [
-            _buildMembersBlock(),
-            const SizedBox(height: 12),
-            _buildSearchBlock(),
-            const SizedBox(height: 12),
-            Expanded(child: _buildSearchResults()),
+            _header(),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
+                child: Column(
+                  children: [
+                    _buildMembersBlock(),
+                    const SizedBox(height: 9),
+                    _buildSearchBlock(),
+                    const SizedBox(height: 9),
+                    Expanded(child: _buildSearchResults()),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
+    ),
     );
   }
+
 }

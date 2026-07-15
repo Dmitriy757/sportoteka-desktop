@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:sportoteka/routes/app_routes.dart';
 import 'game_zone_api.dart';
 import 'create_quiz_screen.dart';
+import 'game_zone_cmr_style.dart';
 
 class TeamQuizzesScreen extends StatefulWidget {
   const TeamQuizzesScreen({super.key});
@@ -148,44 +149,17 @@ class _TeamQuizzesScreenState extends State<TeamQuizzesScreen> {
   }
 
   Widget _topCard() {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF7C3AED), Color(0xFF9F67FF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Квизы команды',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-              fontSize: 20,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            teamName.isEmpty ? 'Команда' : teamName,
-            style: const TextStyle(color: Colors.white70),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(child: _miniStat('Активные', '$activeCount')),
-              const SizedBox(width: 10),
-              Expanded(child: _miniStat('Отключённые', '$inactiveCount')),
-              const SizedBox(width: 10),
-              Expanded(child: _miniStat('Всего', '${allItems.length}')),
-            ],
-          ),
-        ],
-      ),
+    return GameZoneCmr.header(
+      title: 'Квизы команды',
+      subtitle: teamName.isEmpty ? 'Команда' : teamName,
+      icon: Icons.quiz_rounded,
+      stats: [
+        GameZoneCmr.stat('Активные', '$activeCount'),
+        const SizedBox(width: 10),
+        GameZoneCmr.stat('Отключённые', '$inactiveCount', color: GzColors.subtle),
+        const SizedBox(width: 10),
+        GameZoneCmr.stat('Всего', '${allItems.length}', color: GzColors.blue),
+      ],
     );
   }
 
@@ -222,26 +196,10 @@ class _TeamQuizzesScreenState extends State<TeamQuizzesScreen> {
 
   Widget _filterChip(String value, String label) {
     final selected = filter == value;
-
-    return GestureDetector(
+    return GameZoneCmr.chip(
+      label: label,
+      selected: selected,
       onTap: () => setState(() => filter = value),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFF7C3AED) : Colors.white,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: selected ? const Color(0xFF7C3AED) : const Color(0xFFE5E7EB),
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontWeight: FontWeight.w800,
-            color: selected ? Colors.white : Colors.black87,
-          ),
-        ),
-      ),
     );
   }
 
@@ -267,14 +225,14 @@ class _TeamQuizzesScreenState extends State<TeamQuizzesScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: GzColors.divider),
       ),
       child: Column(
         children: [
           const Icon(
             Icons.quiz_outlined,
             size: 44,
-            color: Color(0xFF7C3AED),
+            color: GzColors.green,
           ),
           const SizedBox(height: 12),
           const Text(
@@ -289,7 +247,7 @@ class _TeamQuizzesScreenState extends State<TeamQuizzesScreen> {
             'Создай первый квиз для команды, и он появится здесь.',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: Color(0xFF6B7280),
+              color: GzColors.subtle,
               height: 1.4,
             ),
           ),
@@ -311,9 +269,9 @@ class _TeamQuizzesScreenState extends State<TeamQuizzesScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
+        color: GzColors.soft,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: GzColors.divider),
       ),
       child: Text(
         text,
@@ -346,13 +304,7 @@ class _TeamQuizzesScreenState extends State<TeamQuizzesScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x0D000000),
-              blurRadius: 10,
-              offset: Offset(0, 4),
-            ),
-          ],
+        border: Border.all(color: GzColors.divider),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -364,12 +316,12 @@ class _TeamQuizzesScreenState extends State<TeamQuizzesScreen> {
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: isActive
-                        ? const Color(0xFFF6EEFF)
-                        : const Color(0xFFF3F4F6),
+                        ? GzColors.greenSoft
+                        : GzColors.soft2,
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
-                    isActive ? 'ACTIVE' : 'OFF',
+                    isActive ? 'Активен' : 'Отключён',
                     style: const TextStyle(
                       fontWeight: FontWeight.w900,
                       fontSize: 11,
@@ -403,7 +355,7 @@ class _TeamQuizzesScreenState extends State<TeamQuizzesScreen> {
             Text(
               item['description'] ?? '',
               style: const TextStyle(
-                color: Color(0xFF6B7280),
+                color: GzColors.subtle,
                 height: 1.4,
               ),
             ),
@@ -448,7 +400,8 @@ class _TeamQuizzesScreenState extends State<TeamQuizzesScreen> {
     final items = filteredItems;
 
     return Scaffold(
-      appBar: AppBar(
+      backgroundColor: GzColors.bg,
+      appBar: GameZoneCmr.appBar(
         title: const Text('Мои квизы'),
         actions: [
           IconButton(
@@ -459,16 +412,21 @@ class _TeamQuizzesScreenState extends State<TeamQuizzesScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: GzColors.graphite,
+        foregroundColor: Colors.white,
+        elevation: 0,
         onPressed: _openCreateQuiz,
         icon: const Icon(Icons.add),
         label: const Text('Новый квиз'),
       ),
-      body: loading
+      body: GameZoneCmr.page(
+        context,
+        child: loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _load,
               child: ListView(
-                padding: const EdgeInsets.all(16),
+                padding: GameZoneCmr.listPadding(context),
                 children: [
                   _topCard(),
                   const SizedBox(height: 16),
@@ -482,6 +440,7 @@ class _TeamQuizzesScreenState extends State<TeamQuizzesScreen> {
                 ],
               ),
             ),
+      ),
     );
   }
 } 

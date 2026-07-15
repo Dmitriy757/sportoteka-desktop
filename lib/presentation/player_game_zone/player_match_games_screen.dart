@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'game_zone_api.dart';
+import 'game_zone_cmr_style.dart';
 
 class PlayerMatchGamesScreen extends StatefulWidget {
   const PlayerMatchGamesScreen({super.key});
@@ -148,13 +149,7 @@ class _PlayerMatchGamesScreenState extends State<PlayerMatchGamesScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0D000000),
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
+      border: Border.all(color: GzColors.divider),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -169,14 +164,14 @@ class _PlayerMatchGamesScreenState extends State<PlayerMatchGamesScreen> {
           const SizedBox(height: 8),
           Text(
             'Дата: ${m['match_date'] ?? '-'}',
-            style: const TextStyle(color: Color(0xFF6B7280)),
+            style: const TextStyle(color: GzColors.subtle),
           ),
           const SizedBox(height: 12),
           if (hasPrediction)
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFEAFBF1),
+                color: GzColors.greenSoft,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Text(
@@ -200,17 +195,21 @@ class _PlayerMatchGamesScreenState extends State<PlayerMatchGamesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      backgroundColor: GzColors.bg,
+      appBar: GameZoneCmr.appBar(
         title: const Text('Мини-игры к матчам'),
       ),
-      body: loading
+      body: GameZoneCmr.page(
+        context,
+        child: loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: GameZoneCmr.listPadding(context),
               children: [
                 ...items.map((e) => _matchCard(Map<String, dynamic>.from(e))),
               ],
             ),
+      ),
     );
   }
 }
