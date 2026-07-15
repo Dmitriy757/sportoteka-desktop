@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'game_zone_api.dart';
+import 'game_zone_cmr_style.dart';
 
 class TeamRatingScreen extends StatefulWidget {
   const TeamRatingScreen({super.key});
@@ -51,45 +52,15 @@ class _TeamRatingScreenState extends State<TeamRatingScreen> {
   }
 
   Widget _topCard() {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF00A750), Color(0xFF2BC56B)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Твоё место в рейтинге',
-            style: TextStyle(
-              color: Colors.white70,
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '#$myRank',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 34,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              _miniStat('Очки', '$myPoints'),
-              const SizedBox(width: 10),
-              _miniStat('Команда', teamName.isEmpty ? '—' : teamName),
-            ],
-          ),
-        ],
-      ),
+    return GameZoneCmr.header(
+      title: 'Твоё место в рейтинге',
+      subtitle: teamName.isEmpty ? 'Команда' : teamName,
+      icon: Icons.leaderboard_rounded,
+      stats: [
+        GameZoneCmr.stat('Место', '#$myRank'),
+        const SizedBox(width: 10),
+        GameZoneCmr.stat('Очки', '$myPoints', color: GzColors.amber),
+      ],
     );
   }
 
@@ -137,29 +108,22 @@ class _TeamRatingScreenState extends State<TeamRatingScreen> {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: isMe ? const Color(0xFFEAFBF1) : Colors.white,
+        color: isMe ? GzColors.greenSoft : Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: isMe ? const Color(0xFF00A750) : const Color(0xFFE5E7EB),
+          color: isMe ? GzColors.green : GzColors.divider,
         ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0D000000),
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
       ),
       child: Row(
         children: [
           CircleAvatar(
             radius: 22,
             backgroundColor:
-                isMe ? const Color(0xFF00A750) : const Color(0xFFF3F4F6),
+                isMe ? GzColors.green : GzColors.soft2,
             child: Text(
               '$rank',
               style: TextStyle(
-                color: isMe ? Colors.white : Colors.black87,
+                color: isMe ? Colors.white : GzColors.text,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -196,15 +160,18 @@ class _TeamRatingScreenState extends State<TeamRatingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      backgroundColor: GzColors.bg,
+      appBar: GameZoneCmr.appBar(
         title: const Text('Рейтинг команды'),
       ),
-      body: loading
+      body: GameZoneCmr.page(
+        context,
+        child: loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _load,
               child: ListView(
-                padding: const EdgeInsets.all(16),
+                padding: GameZoneCmr.listPadding(context),
                 children: [
                   _topCard(),
                   const SizedBox(height: 18),
@@ -220,6 +187,7 @@ class _TeamRatingScreenState extends State<TeamRatingScreen> {
                 ],
               ),
             ),
+      ),
     );
   }
 }

@@ -28,6 +28,96 @@ Widget _stampThumb(String asset) {
   );
 }
 
+
+String _defaultPlayerStamp(List<String> stamps, Map<String, dynamic> player) {
+  final pos = '${player['position'] ?? player['role'] ?? player['amplua'] ?? player['player_position'] ?? ''}'.toLowerCase();
+
+  String preferred = '';
+  if (pos.contains('вр') || pos.contains('врат') || pos.contains('gk') || pos.contains('goal')) {
+    preferred = stamps.firstWhere(
+      (e) => e.contains('/vrat_svg/') || e.toLowerCase().contains('goalkeeper'),
+      orElse: () => '',
+    );
+  }
+
+  if (preferred.isEmpty) {
+    preferred = stamps.firstWhere(
+      (e) => e.contains('/stand_svg/front_left') || e.contains('/player_m/stand') || e.contains('/player_m/'),
+      orElse: () => '',
+    );
+  }
+
+  return preferred.isNotEmpty ? preferred : (stamps.isNotEmpty ? stamps.first : '');
+}
+
+String _playerName(Map<String, dynamic> p) {
+  final full = (p['full_name'] ??
+          p['fullName'] ??
+          p['player_name'] ??
+          p['playerName'] ??
+          p['fio'] ??
+          p['name'] ??
+          '')
+      .toString()
+      .trim();
+
+  if (full.isNotEmpty) return full;
+
+  final last = (p['last_name'] ?? p['lastName'] ?? p['surname'] ?? '').toString().trim();
+  final first = (p['first_name'] ?? p['firstName'] ?? '').toString().trim();
+  final joined = [last, first].where((e) => e.isNotEmpty).join(' ').trim();
+
+  return joined.isNotEmpty ? joined : 'Игрок';
+}
+
+int _playerNumber(Map<String, dynamic> p) {
+  final v = p['number'] ??
+      p['player_number'] ??
+      p['playerNumber'] ??
+      p['shirt_number'] ??
+      p['shirtNumber'] ??
+      p['jersey_number'] ??
+      p['jersey'];
+
+  if (v is int) return v;
+  if (v is num) return v.toInt();
+
+  return int.tryParse((v ?? '').toString().replaceAll(RegExp(r'[^0-9-]'), '')) ?? 0;
+}
+
+String _playerPosition(Map<String, dynamic> p) {
+  return (p['position'] ??
+          p['role'] ??
+          p['amplua'] ??
+          p['player_position'] ??
+          p['playerPosition'] ??
+          p['position_name'] ??
+          'Игрок')
+      .toString()
+      .trim();
+}
+
+String _playerAvatar(Map<String, dynamic> p) {
+  final raw = (p['photo'] ??
+          p['photo_url'] ??
+          p['photoUrl'] ??
+          p['avatar'] ??
+          p['avatar_url'] ??
+          p['avatarUrl'] ??
+          p['image'] ??
+          p['image_url'] ??
+          p['imageUrl'] ??
+          '')
+      .toString()
+      .trim();
+
+  if (raw.isEmpty) return '';
+  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+  if (raw.startsWith('/')) return 'https://sportotekaapp.ru$raw';
+
+  return 'https://sportotekaapp.ru/$raw';
+}
+
 // ==================== БАЗОВЫЕ ВИДЖЕТЫ ====================
 class _Section extends StatelessWidget {
   const _Section({
@@ -279,122 +369,188 @@ class _PillType extends StatelessWidget {
 }
 
 // ==================== КРУЖОЧКИ ДЛЯ БЫСТРОГО ВЫБОРА ====================
+
 class _QuickActionCircles extends StatelessWidget {
   final TgState state;
   final VoidCallback onObjectSelected;
+  final VoidCallback onTemplatesSelected;
+  final VoidCallback onLayersSelected;
+  final VoidCallback on3DObjectsSelected;
+  final VoidCallback onExportSelected;
   final VoidCallback onEditSelected;
   final VoidCallback on3DSelected;
-  final bool showEdit;
-  final bool is3DActive;
   final bool isObjectActive;
+  final bool isTemplatesActive;
+  final bool isLayersActive;
+  final bool is3DObjectsActive;
+  final bool isExportActive;
   final bool isEditActive;
+  final bool is3DActive;
 
   const _QuickActionCircles({
     required this.state,
     required this.onObjectSelected,
+    required this.onTemplatesSelected,
+    required this.onLayersSelected,
+    required this.on3DObjectsSelected,
+    required this.onExportSelected,
     required this.onEditSelected,
     required this.on3DSelected,
-    required this.showEdit,
-    required this.is3DActive,
     required this.isObjectActive,
+    required this.isTemplatesActive,
+    required this.isLayersActive,
+    required this.is3DObjectsActive,
+    required this.isExportActive,
     required this.isEditActive,
+    required this.is3DActive,
   });
 
   static const _green = Color(0xFF00A750);
-  static const _bg = Color(0xFFF7F8FA);
-  static const _border = Color(0xFFE5E7EB);
+  static const _greenSoft = Color(0xFFF3FBF7);
+  static const _panel = Color(0xFFFFFFFF);
+  static const _surface = Color(0xFFFAFBFC);
+  static const _border = Color(0xFFF0F2F4);
+  static const _muted = Color(0xFF6B7280);
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.of(context).size.width < 1280 || MediaQuery.of(context).size.height < 820;
+    final dockWidth = compact ? 54.0 : 62.0;
+    final radius = compact ? 16.0 : 20.0;
     return Positioned(
-      right: 16,
-      bottom: 80,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildCircle(
-            icon: Icons.category,
-            label: 'Объекты',
-            isActive: isObjectActive,
-            onTap: onObjectSelected,
-          ),
-          const SizedBox(height: 12),
-          if (state.selected != null)
-            _buildCircle(
-              icon: Icons.edit,
-              label: 'Правка',
-              isActive: isEditActive,
-              onTap: onEditSelected,
+      right: compact ? 8 : 12,
+      top: compact ? 10 : 16,
+      child: Container(
+        width: dockWidth,
+        padding: EdgeInsets.symmetric(vertical: compact ? 6 : 8),
+        decoration: BoxDecoration(
+          color: _panel,
+          borderRadius: BorderRadius.circular(radius),
+          border: Border.all(color: _border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(.045),
+              blurRadius: 26,
+              spreadRadius: -14,
+              offset: const Offset(0, 14),
             ),
-          const SizedBox(height: 12),
-          _buildCircle(
-            icon: Icons.threed_rotation,
-            label: '3D',
-            isActive: is3DActive,
-            onTap: on3DSelected,
-          ),
-        ],
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildDockButton(
+              context: context,
+              icon: Icons.dashboard_customize,
+              label: 'Шаблоны',
+              isActive: isTemplatesActive,
+              onTap: onTemplatesSelected,
+            ),
+            const SizedBox(height: 6),
+            _buildDockButton(
+              context: context,
+              icon: Icons.category,
+              label: 'Объекты',
+              isActive: isObjectActive,
+              onTap: onObjectSelected,
+            ),
+            const SizedBox(height: 6),
+            _buildDockButton(
+              context: context,
+              icon: Icons.layers,
+              label: 'Слои',
+              isActive: isLayersActive,
+              onTap: onLayersSelected,
+            ),
+            const SizedBox(height: 6),
+            _buildDockButton(
+              context: context,
+              icon: Icons.view_in_ar_rounded,
+              label: '3D объекты',
+              isActive: is3DObjectsActive,
+              onTap: on3DObjectsSelected,
+            ),
+            const SizedBox(height: 6),
+            _buildDockButton(
+              context: context,
+              icon: Icons.tune,
+              label: 'Свойства',
+              isActive: isEditActive,
+              enabled: state.selected != null,
+              onTap: state.selected == null ? null : onEditSelected,
+            ),
+            const SizedBox(height: 6),
+            _buildDockButton(
+              context: context,
+              icon: Icons.view_in_ar,
+              label: 'Камера',
+              isActive: is3DActive,
+              onTap: on3DSelected,
+            ),
+            const SizedBox(height: 6),
+            _buildDockButton(
+              context: context,
+              icon: Icons.file_download,
+              label: 'Экспорт',
+              isActive: isExportActive,
+              onTap: onExportSelected,
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildCircle({
+  Widget _buildDockButton({
+    required BuildContext context,
     required IconData icon,
     required String label,
     required bool isActive,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
+    bool enabled = true,
   }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(40),
-        child: Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            gradient: isActive
-                ? LinearGradient(
-                    colors: [_green, _green.withOpacity(0.8)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  )
-                : LinearGradient(
-                    colors: [Colors.white, _bg],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-            borderRadius: BorderRadius.circular(30),
-            border: Border.all(
-              color: isActive ? _green : _border,
-              width: isActive ? 2 : 1,
+    final mq = MediaQuery.of(context).size;
+    final compact = mq.width < 1280 || mq.height < 820;
+    final buttonW = compact ? 40.0 : 46.0;
+    final buttonH = compact ? 38.0 : 42.0;
+    final color = !enabled ? _muted.withOpacity(.35) : (isActive ? _green : _muted);
+    return Tooltip(
+      message: label,
+      waitDuration: const Duration(milliseconds: 350),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 7),
+        child: Material(
+          color: isActive ? _greenSoft : _surface,
+          borderRadius: BorderRadius.circular(15),
+          child: InkWell(
+            onTap: enabled ? onTap : null,
+            borderRadius: BorderRadius.circular(15),
+            child: Container(
+              width: buttonW,
+              height: buttonH,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(color: isActive ? _green.withOpacity(.25) : _border),
+              ),
+              child: Stack(
+                children: [
+                  if (isActive)
+                    Positioned(
+                      left: 4,
+                      top: 12,
+                      bottom: 12,
+                      child: Container(
+                        width: 3,
+                        decoration: BoxDecoration(
+                          color: _green,
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                      ),
+                    ),
+                  Center(child: Icon(icon, size: 19, color: color)),
+                ],
+              ),
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                color: isActive ? Colors.white : _green,
-                size: 24,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                style: TextStyle(
-                  color: isActive ? Colors.white : _green,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
           ),
         ),
       ),
@@ -417,23 +573,27 @@ class _BasePanel extends StatelessWidget {
   });
 
   static const _green = Color(0xFF00A750);
+  static const _panel = Color(0xFFFFFFFF);
+  static const _surface = Color(0xFFFAFBFC);
+  static const _border = Color(0xFFF0F2F4);
+  static const _text = Color(0xFF0B0F14);
+  static const _muted = Color(0xFF6B7280);
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 320,
+      width: double.infinity,
       height: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(24),
-          bottomLeft: Radius.circular(24),
-        ),
+        color: _panel,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(-2, 0),
+            color: Colors.black.withOpacity(.055),
+            blurRadius: 38,
+            spreadRadius: -18,
+            offset: const Offset(0, 22),
           ),
         ],
       ),
@@ -443,7 +603,12 @@ class _BasePanel extends StatelessWidget {
           Expanded(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.fromLTRB(
+                MediaQuery.of(context).size.width < 900 ? 10 : 14,
+                MediaQuery.of(context).size.width < 900 ? 9 : 12,
+                MediaQuery.of(context).size.width < 900 ? 10 : 14,
+                16,
+              ),
               child: child,
             ),
           ),
@@ -453,47 +618,109 @@ class _BasePanel extends StatelessWidget {
   }
 
   Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [_green, _green.withOpacity(0.8)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(24),
-        ),
+    return LayoutBuilder(
+      builder: (context, c) {
+        final narrow = c.maxWidth < 250;
+        return Container(
+      height: narrow ? 50 : 58,
+      padding: EdgeInsets.symmetric(horizontal: narrow ? 8 : 12),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: _border, width: 1)),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(4),
+            width: narrow ? 30 : 34,
+            height: narrow ? 30 : 34,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(8),
+              color: _surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _border),
             ),
-            child: Icon(icon, size: 16, color: Colors.white),
+            child: Icon(icon, size: narrow ? 15 : 17, color: _text),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: narrow ? 7 : 10),
           Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-              ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: _text,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                const Text(
+                  'панель редактора',
+                  style: TextStyle(
+                    color: _muted,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 10.5,
+                  ),
+                ),
+              ],
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.close, color: Colors.white, size: 16),
-            onPressed: onClose,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints.tightFor(width: 28, height: 28),
-          ),
+          _PanelCloseButton(onTap: onClose),
         ],
       ),
+    );
+      },
+    );
+  }
+}
+
+
+class _PanelCloseButton extends StatelessWidget {
+  const _PanelCloseButton({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, c) {
+        final narrow = MediaQuery.of(context).size.width < 900 || c.maxWidth < 90;
+        return Tooltip(
+      message: 'Закрыть панель',
+      child: Material(
+        color: const Color(0xFFFFF1F2),
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            height: narrow ? 32 : 34,
+            padding: EdgeInsets.symmetric(horizontal: narrow ? 8 : 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFFFCDD2)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.close_rounded, size: 16, color: Color(0xFFE11D48)),
+                if (!narrow) ...const [
+                  SizedBox(width: 4),
+                  Text(
+                  'Закрыть',
+                  style: TextStyle(
+                    color: Color(0xFFE11D48),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+      },
     );
   }
 }
@@ -503,11 +730,23 @@ class _ObjectPanel extends _BasePanel {
   final TgState state;
   final List<String> stamps;
   final ValueChanged<String> onObjectSelected;
+  final ValueChanged<Map<String, dynamic>> onPlayerSelected;
+  final String teamName;
+  final List<Map<String, dynamic>> teamPlayers;
+  final bool teamPlayersLoading;
+  final String? teamPlayersError;
+  final VoidCallback? onOpen3DPro;
 
   _ObjectPanel({
     required this.state,
     required this.stamps,
     required this.onObjectSelected,
+    required this.onPlayerSelected,
+    required this.teamName,
+    required this.teamPlayers,
+    required this.teamPlayersLoading,
+    required this.teamPlayersError,
+    required this.onOpen3DPro,
     required super.onClose,
   }) : super(
           title: 'Объекты',
@@ -516,6 +755,12 @@ class _ObjectPanel extends _BasePanel {
             state: state,
             stamps: stamps,
             onObjectSelected: onObjectSelected,
+            onPlayerSelected: onPlayerSelected,
+            teamName: teamName,
+            teamPlayers: teamPlayers,
+            teamPlayersLoading: teamPlayersLoading,
+            teamPlayersError: teamPlayersError,
+            onOpen3DPro: onOpen3DPro,
           ),
         );
 }
@@ -524,11 +769,23 @@ class _ObjectPanelContent extends StatefulWidget {
   final TgState state;
   final List<String> stamps;
   final ValueChanged<String> onObjectSelected;
+  final ValueChanged<Map<String, dynamic>> onPlayerSelected;
+  final String teamName;
+  final List<Map<String, dynamic>> teamPlayers;
+  final bool teamPlayersLoading;
+  final String? teamPlayersError;
+  final VoidCallback? onOpen3DPro;
 
   const _ObjectPanelContent({
     required this.state,
     required this.stamps,
     required this.onObjectSelected,
+    required this.onPlayerSelected,
+    required this.teamName,
+    required this.teamPlayers,
+    required this.teamPlayersLoading,
+    required this.teamPlayersError,
+    required this.onOpen3DPro,
   });
 
   @override
@@ -541,22 +798,22 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
   static const _txt = Color(0xFF111827);
   static const _txtDim = Color(0xFF6B7280);
   static const _green = Color(0xFF00A750);
+  static const _greenSoft = Color(0xFFF3FBF7);
 
   final List<CategoryInfo> categories = const [
-    CategoryInfo(name: 'Мужчины', path: '/player_m/'),
-    CategoryInfo(name: 'Женщины', path: '/player_f/'),
+    CategoryInfo(name: 'Игроки · мужчины', path: '/player_m/'),
+    CategoryInfo(name: 'Игроки · женщины', path: '/player_f/'),
     CategoryInfo(name: 'Тренеры', path: '/coach/'),
     CategoryInfo(name: 'Инвентарь', path: '/props/'),
-    CategoryInfo(name: 'Бег', path: '/run_svg/'),
-    CategoryInfo(name: 'Пас', path: '/pass_svg/'),
-    CategoryInfo(name: 'Стоя', path: '/stand_svg/'),
+    CategoryInfo(name: 'Беговые действия', path: '/run_svg/'),
+    CategoryInfo(name: 'Пас / передача', path: '/pass_svg/'),
+    CategoryInfo(name: 'Статика / позиция', path: '/stand_svg/'),
     CategoryInfo(name: 'Прыжок', path: '/jump_svg/'),
     CategoryInfo(name: 'Вратарь', path: '/vrat_svg/'),
     CategoryInfo(name: 'Ворота', path: '/vorota1/'),
   ];
 
   int _selectedCategoryIndex = 0;
-  final ScrollController _horizontalController = ScrollController();
 
   String get _activeGroup => categories[_selectedCategoryIndex].name;
 
@@ -574,123 +831,708 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
     final items = _groupAssets(_activeGroup);
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildCategories(),
+        _Section(
+          title: 'Тактические схемы',
+          trailing: 'TacticalPad',
+          child: Column(
+            children: [
+              _tacticalPresetRow([
+                _TacticalPreset('4-3-3', 'расстановка', Icons.grid_view_rounded, '433'),
+                _TacticalPreset('4-4-2', 'расстановка', Icons.grid_view_rounded, '442'),
+              ], context),
+              const SizedBox(height: 8),
+              _tacticalPresetRow([
+                _TacticalPreset('3-5-2', 'расстановка', Icons.grid_view_rounded, '352'),
+                _TacticalPreset('4-2-3-1', 'расстановка', Icons.grid_view_rounded, '4231'),
+              ], context),
+              const SizedBox(height: 8),
+              _tacticalPresetRow([
+                _TacticalPreset('5-3-2', 'расстановка', Icons.grid_view_rounded, '532'),
+                _TacticalPreset('Билдап', 'выход из обороны', Icons.account_tree_rounded, 'build_up'),
+              ], context),
+              const SizedBox(height: 8),
+              _tacticalPresetRow([
+                _TacticalPreset('От ворот', 'розыгрыш GK', Icons.sports_soccer_rounded, 'goal_kick'),
+                _TacticalPreset('Контратака', 'быстрый выход', Icons.flash_on_rounded, 'counter'),
+              ], context),
+              const SizedBox(height: 8),
+              _tacticalPresetRow([
+                _TacticalPreset('Прессинг', 'зона давления', Icons.radar_rounded, 'pressing'),
+                _TacticalPreset('Низкий блок', '5-4-1', Icons.shield_outlined, 'low_block'),
+              ], context),
+              const SizedBox(height: 8),
+              _tacticalPresetRow([
+                _TacticalPreset('Рондо', '5v2', Icons.radio_button_checked_rounded, 'rondo'),
+                _TacticalPreset('Скорость', 'станции', Icons.speed_rounded, 'speed'),
+              ], context),
+              const SizedBox(height: 8),
+              _tacticalPresetRow([
+                _TacticalPreset('Офсайд', 'линия защиты', Icons.align_vertical_center_rounded, 'offside'),
+                _TacticalPreset('Забегание', 'overlap', Icons.trending_up_rounded, 'overlap'),
+              ], context),
+              const SizedBox(height: 8),
+              _tacticalPresetRow([
+                _TacticalPreset('3-й игрок', 'комбинация', Icons.hub_rounded, 'third_man'),
+                _TacticalPreset('Угловой', 'стандарт', Icons.flag_rounded, 'corner'),
+              ], context),
+              const SizedBox(height: 8),
+              _tacticalPresetRow([
+                _TacticalPreset('Штрафной', 'стандарт', Icons.sports_rounded, 'free_kick'),
+                _TacticalPreset('Атака 1–4', 'шаги/кадры', Icons.play_circle_outline_rounded, 'animation_attack'),
+              ], context),
+              const SizedBox(height: 8),
+              _tacticalPresetRow([
+                _TacticalPreset('Полный пакет', 'всё сразу', Icons.auto_awesome_rounded, 'full_pack'),
+                _TacticalPreset('Пусто', 'очистить tactical', Icons.cleaning_services_rounded, 'clear_tactical'),
+              ], context),
+            ],
+          ),
+        ),
         const SizedBox(height: 12),
-        if (items.isEmpty) _buildEmptyState() else _buildGrid(items),
+        _buildTeamPlayersSection(),
+        const SizedBox(height: 12),
+        _buildBroadcastPresets(),
+        const SizedBox(height: 12),
+        _buildCategoryDropdown(items.length),
+        const SizedBox(height: 10),
+        if (items.isEmpty) _buildEmptyState() else _buildObjectList(items),
         const SizedBox(height: 12),
         _buildInfo(),
       ],
     );
   }
 
-  Widget _buildCategories() {
-    return SizedBox(
-      height: 40,
-      child: ListView.builder(
-        controller: _horizontalController,
-        scrollDirection: Axis.horizontal,
-        itemCount: categories.length,
-        itemBuilder: (context, index) {
-          final category = categories[index];
-          final isSelected = _selectedCategoryIndex == index;
 
-          return GestureDetector(
-            onTap: () {
-              setState(() {
-                _selectedCategoryIndex = index;
-              });
-            },
-            child: Container(
-              margin: const EdgeInsets.only(right: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: isSelected ? _green : Colors.transparent,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: isSelected ? _green : _border,
-                  width: 1,
-                ),
-              ),
-              child: Text(
-                category.name,
-                style: TextStyle(
-                  color: isSelected ? Colors.white : _txt,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                  fontSize: 12,
-                ),
-              ),
-            ),
+  Widget _tacticalPresetRow(List<_TacticalPreset> items, BuildContext context) {
+    return Row(
+      children: [
+        Expanded(child: _tacticalPresetCard(items[0], context)),
+        const SizedBox(width: 8),
+        Expanded(child: _tacticalPresetCard(items[1], context)),
+      ],
+    );
+  }
+
+  Widget _tacticalPresetCard(_TacticalPreset t, BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () {
+          widget.state.applyTacticalPreset(t.key);
+          _showObjectHint(
+            context,
+            t.key == 'clear_tactical'
+                ? 'Тактический слой очищен.'
+                : 'Добавлен TacticalPad пресет «${t.title}». Откройте «Слои» или «Свойства» для редактирования.',
           );
         },
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(color: _greenSoft, borderRadius: BorderRadius.circular(11)),
+                child: Icon(t.icon, size: 17, color: _green),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                t.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: _txt, fontSize: 12, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                t.subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: _txtDim, fontSize: 10, height: 1.2, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildGrid(List<String> items) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 6,
-        mainAxisSpacing: 6,
-        childAspectRatio: 1,
+  void _showObjectHint(BuildContext context, String text) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(text),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
       ),
-      itemCount: items.length,
-      itemBuilder: (_, i) {
-        final asset = items[i];
-        final active = widget.state.activeStampAsset == asset &&
-            widget.state.tool == TgTool.stamp;
+    );
+  }
 
-        return InkWell(
-          onTap: () => widget.onObjectSelected(asset),
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            decoration: BoxDecoration(
-              color: _surface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: active ? _green : _border,
-                width: active ? 2 : 1,
+
+  Widget _buildTeamPlayersSection() {
+    final players = widget.teamPlayers;
+
+    return _Section(
+      title: widget.teamName.trim().isEmpty ? 'Состав команды' : widget.teamName,
+      trailing: widget.teamPlayersLoading ? 'загрузка' : '${players.length}',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (widget.teamPlayersLoading)
+            _playersLoading()
+          else if (players.isEmpty)
+            _playersEmpty()
+          else
+            ...players.take(14).map(_playerCard).toList(),
+          if (widget.onOpen3DPro != null) ...[
+            const SizedBox(height: 8),
+            Material(
+              color: _txt,
+              borderRadius: BorderRadius.circular(14),
+              child: InkWell(
+                onTap: widget.onOpen3DPro,
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  width: double.infinity,
+                  height: 42,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.view_in_ar_rounded, color: Colors.white, size: 18),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Открыть 3D Pro с этим составом',
+                          style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                      Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 17),
+                    ],
+                  ),
+                ),
               ),
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(6),
-              child: _stampThumb(asset),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _playersLoading() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _border),
+      ),
+      child: const Row(
+        children: [
+          SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: _green)),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Загружаю игроков команды...',
+              style: TextStyle(color: _txtDim, fontSize: 11.5, fontWeight: FontWeight.w700),
             ),
           ),
-        );
-      },
+        ],
+      ),
     );
+  }
+
+  Widget _playersEmpty() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _border),
+      ),
+      child: Text(
+        widget.teamPlayersError?.trim().isNotEmpty == true
+            ? 'Игроки не загрузились: ${widget.teamPlayersError}'
+            : 'Игроки команды пока не загружены. Открой редактор из команды или проверь team_id.',
+        style: const TextStyle(color: _txtDim, fontSize: 11.5, height: 1.25, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+
+  Widget _playerCard(Map<String, dynamic> player) {
+    final name = _playerName(player);
+    final number = _playerNumber(player);
+    final pos = _playerPosition(player);
+    final avatar = _playerAvatar(player);
+    final asset = _defaultPlayerStamp(widget.stamps, player);
+    final active = widget.state.activeStampAsset == asset && widget.state.tool == TgTool.stamp;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: active ? _greenSoft : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: () => widget.onPlayerSelected(player),
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: active ? _green : _border,
+                width: active ? 1.5 : 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    color: _surface,
+                    borderRadius: BorderRadius.circular(13),
+                    border: Border.all(color: _border),
+                  ),
+                  child: avatar.isEmpty
+                      ? Center(
+                          child: Text(
+                            number > 0 ? '$number' : _initials(name),
+                            style: const TextStyle(color: _green, fontSize: 13, fontWeight: FontWeight.w900),
+                          ),
+                        )
+                      : Image.network(
+                          avatar,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Center(
+                            child: Text(
+                              number > 0 ? '$number' : _initials(name),
+                              style: const TextStyle(color: _green, fontSize: 13, fontWeight: FontWeight.w900),
+                            ),
+                          ),
+                        ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        number > 0 ? '№$number  $name' : name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: active ? _green : _txt,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        pos.isEmpty ? 'Игрок команды' : pos,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: _txtDim,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 10.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  active ? Icons.check_circle_rounded : Icons.add_circle_outline_rounded,
+                  size: 20,
+                  color: active ? _green : _txtDim,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
+    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    if (parts.length == 1 && parts.first.length >= 2) return parts.first.substring(0, 2).toUpperCase();
+    return 'ИГ';
+  }
+
+  Widget _buildBroadcastPresets() {
+    return _Section(
+      title: 'FIFA / TV графика',
+      trailing: 'пресеты',
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _presetCard(
+                  icon: Icons.arrow_forward_rounded,
+                  title: 'Атака',
+                  subtitle: 'стрелка / рывок',
+                  onTap: () => widget.state.setTool(TgTool.line),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _presetCard(
+                  icon: Icons.timeline_rounded,
+                  title: 'Маршрут',
+                  subtitle: 'волна / дриблинг',
+                  onTap: () => widget.state.setTool(TgTool.wavy),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _presetCard(
+                  icon: Icons.grid_view_rounded,
+                  title: 'Зона',
+                  subtitle: 'блок / зона',
+                  onTap: () => widget.state.setTool(TgTool.rect),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _presetCard(
+                  icon: Icons.center_focus_strong_rounded,
+                  title: 'Эпизод',
+                  subtitle: 'акцент / круг',
+                  onTap: () => widget.state.setTool(TgTool.circle),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _presetCard(
+                  icon: Icons.text_fields_rounded,
+                  title: 'Подпись',
+                  subtitle: 'номер / роль',
+                  onTap: () => widget.state.setTool(TgTool.text),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _presetCard(
+                  icon: Icons.view_in_ar_rounded,
+                  title: '3D поле',
+                  subtitle: 'трансляция',
+                  onTap: () {
+                    if (!widget.state.is3DMode) widget.state.toggle3DMode();
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _presetCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _border),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: _greenSoft,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 16, color: _green),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _txt,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _txtDim,
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryDropdown(int count) {
+    return Container(
+      height: 46,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _border),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.layers_rounded, color: _green, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                value: _selectedCategoryIndex,
+                isExpanded: true,
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: _txtDim),
+                dropdownColor: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                style: const TextStyle(
+                  color: _txt,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+                items: List.generate(categories.length, (index) {
+                  final c = categories[index];
+                  return DropdownMenuItem<int>(
+                    value: index,
+                    child: Row(
+                      children: [
+                        Icon(_categoryIcon(c.path), size: 16, color: _txtDim),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(c.name, overflow: TextOverflow.ellipsis)),
+                      ],
+                    ),
+                  );
+                }),
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() => _selectedCategoryIndex = value);
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            decoration: BoxDecoration(
+              color: _greenSoft,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              '$count',
+              style: const TextStyle(
+                color: _green,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildObjectList(List<String> items) {
+    return Column(
+      children: items.map(_buildObjectRow).toList(),
+    );
+  }
+
+  Widget _buildObjectRow(String asset) {
+    final active = widget.state.activeStampAsset == asset &&
+        widget.state.tool == TgTool.stamp;
+    final category = categories[_selectedCategoryIndex];
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: active ? _greenSoft : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: () => widget.onObjectSelected(asset),
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: active ? _green : _border,
+                width: active ? 1.5 : 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    color: _surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _border),
+                  ),
+                  child: _stampThumb(asset),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _assetTitle(asset),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: active ? _green : _txt,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        category.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: _txtDim,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 10.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  active ? Icons.check_circle_rounded : Icons.add_circle_outline_rounded,
+                  size: 20,
+                  color: active ? _green : _txtDim,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  IconData _categoryIcon(String path) {
+    if (path.contains('coach')) return Icons.sports_rounded;
+    if (path.contains('props')) return Icons.construction_rounded;
+    if (path.contains('run')) return Icons.directions_run_rounded;
+    if (path.contains('pass')) return Icons.trending_flat_rounded;
+    if (path.contains('stand')) return Icons.accessibility_new_rounded;
+    if (path.contains('jump')) return Icons.keyboard_arrow_up_rounded;
+    if (path.contains('vrat')) return Icons.sports_soccer_rounded;
+    if (path.contains('vorota')) return Icons.crop_16_9_rounded;
+    return Icons.person_rounded;
+  }
+
+  String _assetTitle(String asset) {
+    final file = asset.split('/').where((p) => p.trim().isNotEmpty).last;
+    final raw = file
+        .replaceAll('.svg', '')
+        .replaceAll('.png', '')
+        .replaceAll('.jpg', '')
+        .replaceAll('.jpeg', '')
+        .replaceAll('_', ' ')
+        .replaceAll('-', ' ');
+    if (raw.trim().isEmpty) return 'Объект';
+    return raw
+        .split(' ')
+        .where((p) => p.trim().isNotEmpty)
+        .map((p) => p.length <= 1 ? p.toUpperCase() : '${p[0].toUpperCase()}${p.substring(1)}')
+        .join(' ');
   }
 
   Widget _buildEmptyState() {
-    return Center(
-      child: Text(
-        'Нет объектов',
-        style: TextStyle(color: _txtDim, fontSize: 12),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _border),
+      ),
+      child: const Column(
+        children: [
+          Icon(Icons.inventory_2_outlined, color: _txtDim, size: 24),
+          SizedBox(height: 8),
+          Text(
+            'В этой категории пока нет объектов',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: _txtDim, fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildInfo() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
       decoration: BoxDecoration(
         color: _surface,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: _border),
       ),
       child: const Row(
         children: [
-          Icon(Icons.info_outline, size: 12, color: _green),
-          SizedBox(width: 4),
+          Icon(Icons.info_outline, size: 14, color: _green),
+          SizedBox(width: 6),
           Expanded(
             child: Text(
-              'Нажмите на объект, затем на поле',
-              style: TextStyle(color: _txtDim, fontSize: 10),
-              maxLines: 1,
+              'Выберите элемент из списка вниз, затем нажмите на поле. Для ТВ-графики сначала выберите пресет.',
+              style: TextStyle(color: _txtDim, fontSize: 10.5, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -761,6 +1603,8 @@ class _EditorPanelContent extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        _buildSceneElementsList(),
+        const SizedBox(height: 12),
         if (sel is TgLine) _LineEditor(state: state, sel: sel, colors: _colors),
         if (sel is TgStamp)
           _StampEditor(
@@ -828,6 +1672,98 @@ class _EditorPanelContent extends StatelessWidget {
     );
   }
 
+  Widget _buildSceneElementsList() {
+    final elements = state.elements;
+    if (elements.isEmpty) return const SizedBox.shrink();
+
+    final selectedId = state.selectedId;
+    final safeSelectedId = elements.any((e) => e.id == selectedId)
+        ? selectedId
+        : elements.last.id;
+
+    return _Section(
+      title: 'Элементы на схеме',
+      trailing: '${elements.length}',
+      child: Container(
+        height: 46,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: safeSelectedId,
+            isExpanded: true,
+            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF6B7280)),
+            dropdownColor: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            style: const TextStyle(
+              color: Color(0xFF111827),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+            items: elements.reversed.map((element) {
+              return DropdownMenuItem<String>(
+                value: element.id,
+                child: Row(
+                  children: [
+                    Icon(_elementIcon(element), size: 16, color: const Color(0xFF6B7280)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _elementTitle(element),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+            onChanged: (id) {
+              if (id == null) return;
+              state.selectById(id);
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  IconData _elementIcon(TgElement element) {
+    if (element is TgStamp) return Icons.person_rounded;
+    if (element is TgLine) return Icons.trending_flat_rounded;
+    if (element is TgRect) return Icons.crop_square_rounded;
+    if (element is TgCircle) return Icons.circle_outlined;
+    if (element is TgText) return Icons.text_fields_rounded;
+    if (element is TgWavy || element is TgEditableWavy) return Icons.timeline_rounded;
+    if (element is TgZigzag || element is TgEditableZigzag) return Icons.show_chart_rounded;
+    if (element is TgSpring || element is TgEditableSpring) return Icons.all_inclusive_rounded;
+    if (element is TgSpiral || element is TgEditableSpiral) return Icons.gesture_rounded;
+    return Icons.layers_rounded;
+  }
+
+  String _elementTitle(TgElement element) {
+    final custom = element.name?.trim();
+    if (custom != null && custom.isNotEmpty) return custom;
+
+    String type;
+    if (element is TgStamp) type = 'Игрок / объект';
+    else if (element is TgLine) type = 'Линия / стрелка';
+    else if (element is TgRect) type = 'Зона';
+    else if (element is TgCircle) type = 'Акцент / круг';
+    else if (element is TgText) type = 'Текст';
+    else if (element is TgWavy || element is TgEditableWavy) type = 'Маршрут / волна';
+    else if (element is TgZigzag || element is TgEditableZigzag) type = 'Зигзаг';
+    else if (element is TgSpring || element is TgEditableSpring) type = 'Пружина';
+    else if (element is TgSpiral || element is TgEditableSpiral) type = 'Спираль';
+    else type = 'Элемент';
+
+    final shortId = element.id.length > 5 ? element.id.substring(element.id.length - 5) : element.id;
+    return '$type · $shortId';
+  }
+
   Widget _buildActionButton({
     required IconData icon,
     required String label,
@@ -886,7 +1822,7 @@ class _ThreeDPanel extends _BasePanel {
     required this.canvasKey,
     required super.onClose,
   }) : super(
-          title: '3D Управление',
+          title: '3D камера',
           icon: Icons.threed_rotation,
           child: _ThreeDPanelContent(
             state: state,
@@ -911,6 +1847,8 @@ class _ThreeDPanelContent extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        _buildCameraPresets(),
+        const SizedBox(height: 16),
         _build3DSlider(
           icon: Icons.arrow_downward,
           label: 'Наклон',
@@ -1008,6 +1946,72 @@ class _ThreeDPanelContent extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildCameraPresets() {
+    return _Section(
+      title: 'FIFA камера',
+      trailing: 'presets',
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(child: _cameraPreset('TV', Icons.live_tv, -0.78, 0.0)),
+              const SizedBox(width: 8),
+              Expanded(child: _cameraPreset('Тактика', Icons.map, -1.18, 0.0)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(child: _cameraPreset('Диагональ', Icons.threed_rotation, -0.92, -0.36)),
+              const SizedBox(width: 8),
+              Expanded(child: _cameraPreset('Сверху', Icons.grid_on, -1.55, 0.0)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _cameraPreset(String title, IconData icon, double rx, double rz) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          canvasKey.currentState?.setRotationX(rx);
+          canvasKey.currentState?.setRotationZ(rz);
+          canvasKey.currentState?.centerView();
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 16, color: _green),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _txt,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -3443,8 +4447,894 @@ class CategoryInfo {
   });
 }
 
+// ==================== ПРОФЕССИОНАЛЬНЫЕ FIFA/TV ПАНЕЛИ ====================
+class _TemplatesPanel extends _BasePanel {
+  final TgState state;
+
+  _TemplatesPanel({
+    required this.state,
+    required super.onClose,
+  }) : super(
+          title: 'Шаблоны эфира',
+          icon: Icons.dashboard_customize,
+          child: _TemplatesPanelContent(state: state),
+        );
+}
+
+class _TemplatesPanelContent extends StatelessWidget {
+  const _TemplatesPanelContent({required this.state});
+  final TgState state;
+
+  static const _green = Color(0xFF00A750);
+  static const _greenSoft = Color(0xFFF3FBF7);
+  static const _border = Color(0xFFE5E7EB);
+  static const _txt = Color(0xFF111827);
+  static const _muted = Color(0xFF6B7280);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _Section(
+          title: 'FIFA / Broadcast пресеты',
+          trailing: 'быстрый старт',
+          child: Column(
+            children: [
+              _templateRow([
+                _BroadcastTemplate('Гол', 'титр + акцент игрока', Icons.sports_soccer, TgTool.text),
+                _BroadcastTemplate('Замена', 'номер / игрок / минута', Icons.swap_horiz, TgTool.text),
+              ], context),
+              const SizedBox(height: 8),
+              _templateRow([
+                _BroadcastTemplate('Опасная атака', 'стрелка + зона', Icons.local_fire_department, TgTool.line),
+                _BroadcastTemplate('Прессинг', 'зона давления', Icons.radar, TgTool.circle),
+              ], context),
+              const SizedBox(height: 8),
+              _templateRow([
+                _BroadcastTemplate('Тепловая зона', 'полупрозрачный круг', Icons.blur_circular, TgTool.circle),
+                _BroadcastTemplate('Передача', 'линия паса', Icons.trending_flat, TgTool.line),
+              ], context),
+              const SizedBox(height: 8),
+              _templateRow([
+                _BroadcastTemplate('Рывок', 'стрелка движения', Icons.directions_run, TgTool.line),
+                _BroadcastTemplate('Дриблинг', 'волнистый маршрут', Icons.timeline, TgTool.wavy),
+              ], context),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        _Section(
+          title: 'Пакеты оформления',
+          trailing: 'стиль',
+          child: Column(
+            children: [
+              _stylePreset(
+                icon: Icons.live_tv,
+                title: 'TV Replay',
+                subtitle: 'минимум лишнего, крупные акценты, чистые подписи',
+              ),
+              const SizedBox(height: 8),
+              _stylePreset(
+                icon: Icons.analytics,
+                title: 'Tactical Board',
+                subtitle: 'строгая тактика: зоны, линии, маршруты и номера',
+              ),
+              const SizedBox(height: 8),
+              _stylePreset(
+                icon: Icons.view_in_ar,
+                title: '3D Match View',
+                subtitle: 'вид как в трансляции: камера, перспектива, глубина',
+                onTap: () {
+                  if (!state.is3DMode) state.toggle3DMode();
+                  _hint(context, 'Включён 3D-вид поля. Камеру настройте в панели 3D.');
+                },
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        _Section(
+          title: 'Как пользоваться',
+          child: const Text(
+            'Выберите шаблон, затем поставьте элемент на поле. После выбора элемента откройте «Свойства» или «Слои» для точной настройки.',
+            style: TextStyle(color: _muted, fontSize: 11.5, height: 1.35, fontWeight: FontWeight.w500),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _tacticalPresetRow(List<_TacticalPreset> items, BuildContext context) {
+    return Row(
+      children: [
+        Expanded(child: _tacticalPresetCard(items[0], context)),
+        const SizedBox(width: 8),
+        Expanded(child: _tacticalPresetCard(items[1], context)),
+      ],
+    );
+  }
+
+  Widget _tacticalPresetCard(_TacticalPreset t, BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () {
+          state.applyTacticalPreset(t.key);
+          _hint(context, t.key == 'clear_tactical'
+              ? 'Тактический слой очищен.'
+              : 'Добавлен TacticalPad пресет «${t.title}». Откройте «Слои» или «Свойства» для редактирования.');
+        },
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(color: _greenSoft, borderRadius: BorderRadius.circular(11)),
+                child: Icon(t.icon, size: 17, color: _green),
+              ),
+              const SizedBox(height: 8),
+              Text(t.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _txt, fontSize: 12, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 3),
+              Text(t.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontSize: 10, height: 1.2, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _templateRow(List<_BroadcastTemplate> items, BuildContext context) {
+    return Row(
+      children: [
+        Expanded(child: _templateCard(items[0], context)),
+        const SizedBox(width: 8),
+        Expanded(child: _templateCard(items[1], context)),
+      ],
+    );
+  }
+
+  Widget _templateCard(_BroadcastTemplate t, BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () {
+          state.setTool(t.tool);
+          _hint(context, 'Шаблон «${t.title}» выбран. Нажмите/проведите на поле, чтобы добавить графику.');
+        },
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(color: _greenSoft, borderRadius: BorderRadius.circular(11)),
+                child: Icon(t.icon, size: 17, color: _green),
+              ),
+              const SizedBox(height: 8),
+              Text(t.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _txt, fontSize: 12, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 3),
+              Text(t.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontSize: 10, height: 1.2, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _stylePreset({required IconData icon, required String title, required String subtitle, VoidCallback? onTap}) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _border),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 18, color: _green),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(color: _txt, fontSize: 12, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 2),
+                    Text(subtitle, style: const TextStyle(color: _muted, fontSize: 10.5, height: 1.2, fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _hint(BuildContext context, String text) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(text),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+}
+
+class _TacticalPreset {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final String key;
+  const _TacticalPreset(this.title, this.subtitle, this.icon, this.key);
+}
+
+class _BroadcastTemplate {
+  const _BroadcastTemplate(this.title, this.subtitle, this.icon, this.tool);
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final TgTool tool;
+}
+
+class _LayersPanel extends _BasePanel {
+  final TgState state;
+  final VoidCallback onOpenProperties;
+
+  _LayersPanel({
+    required this.state,
+    required this.onOpenProperties,
+    required super.onClose,
+  }) : super(
+          title: 'Слои',
+          icon: Icons.layers,
+          child: _LayersPanelContent(state: state, onOpenProperties: onOpenProperties),
+        );
+}
+
+class _LayersPanelContent extends StatelessWidget {
+  const _LayersPanelContent({required this.state, required this.onOpenProperties});
+  final TgState state;
+  final VoidCallback onOpenProperties;
+
+  static const _green = Color(0xFF00A750);
+  static const _border = Color(0xFFE5E7EB);
+  static const _txt = Color(0xFF111827);
+  static const _muted = Color(0xFF6B7280);
+
+  @override
+  Widget build(BuildContext context) {
+    final elements = state.elements.reversed.toList();
+    if (elements.isEmpty) {
+      return _Section(
+        title: 'Слои схемы',
+        child: const Text('Пока нет объектов. Добавьте игроков, стрелки, зоны или подписи.', style: TextStyle(color: _muted, fontSize: 12)),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _Section(
+          title: 'Слои схемы',
+          trailing: '${elements.length}',
+          child: Column(
+            children: elements.map((e) => _layerTile(context, e)).toList(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _Section(
+          title: 'Группы слоёв',
+          trailing: 'логика',
+          child: Column(
+            children: [
+              for (final layer in state.layerNames)
+                _layerGroup(_layerTitle(layer), layer, elements.where((e) => e.layer == layer).length),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _layerTitle(String layer) {
+    if (layer == 'default') return 'Основной слой';
+    if (layer == 'players') return 'Игроки';
+    if (layer == 'actions') return 'Маршруты / передачи';
+    if (layer == 'zones') return 'Зоны / акценты';
+    if (layer == 'titles') return 'Титры';
+    if (layer.startsWith('tactical_')) return 'TacticalPad · ${layer.substring(9)}';
+    if (layer == 'tactical') return 'TacticalPad';
+    return layer;
+  }
+
+  Widget _layerTile(BuildContext context, TgElement e) {
+    final selected = state.selectedId == e.id;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: selected ? const Color(0xFFF3FBF7) : Colors.white,
+        borderRadius: BorderRadius.circular(13),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(13),
+          onTap: () {
+            state.selectLayerItem(e.id);
+            onOpenProperties();
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(color: selected ? _green : _border, width: selected ? 1.4 : 1),
+            ),
+            child: Row(
+              children: [
+                Icon(_elementIcon(e), size: 17, color: selected ? _green : _muted),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_elementTitle(e), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _txt, fontSize: 12, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 2),
+                      Text(e.layer == 'default' ? 'основной слой' : e.layer, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontSize: 10.2, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+                _miniIcon(e.hidden ? Icons.visibility_off : Icons.visibility, () => state.updateElementMetaById(e.id, hidden: !e.hidden)),
+                _miniIcon(e.locked ? Icons.lock : Icons.lock_open, () => state.updateElementMetaById(e.id, locked: !e.locked)),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_horiz, size: 18, color: _muted),
+                  tooltip: 'Действия слоя',
+                  onSelected: (v) {
+                    state.selectLayerItem(e.id);
+                    if (v == 'front') state.bringToFront();
+                    if (v == 'back') state.sendToBack();
+                    if (v == 'up') state.moveSelectedForward();
+                    if (v == 'down') state.moveSelectedBackward();
+                    if (v == 'duplicate') state.duplicateSelected();
+                    if (v == 'delete') state.deleteElementById(e.id);
+                    if (v == 'rename') _rename(context, e);
+                    if (v.startsWith('layer:')) state.updateElementMetaById(e.id, layer: v.substring(6));
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'rename', child: Text('Переименовать')),
+                    PopupMenuItem(value: 'front', child: Text('Самый верх')),
+                    PopupMenuItem(value: 'back', child: Text('Самый низ')),
+                    PopupMenuItem(value: 'up', child: Text('На слой выше')),
+                    PopupMenuItem(value: 'down', child: Text('На слой ниже')),
+                    PopupMenuItem(value: 'duplicate', child: Text('Дублировать')),
+                    PopupMenuDivider(),
+                    PopupMenuItem(value: 'layer:players', child: Text('Группа: Игроки')),
+                    PopupMenuItem(value: 'layer:actions', child: Text('Группа: Действия')),
+                    PopupMenuItem(value: 'layer:zones', child: Text('Группа: Зоны')),
+                    PopupMenuItem(value: 'layer:titles', child: Text('Группа: Титры')),
+                    PopupMenuDivider(),
+                    PopupMenuItem(value: 'delete', child: Text('Удалить')),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _miniIcon(IconData icon, VoidCallback onTap) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(5),
+        child: Icon(icon, size: 16, color: _muted),
+      ),
+    );
+  }
+
+  Widget _layerGroup(String title, String layer, int count) {
+    final groupItems = state.elements.where((e) => e.layer == layer).toList();
+    final hasItems = groupItems.isNotEmpty;
+    final allHidden = hasItems && groupItems.every((e) => e.hidden);
+    final allLocked = hasItems && groupItems.every((e) => e.locked);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: _border)),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(color: _txt, fontSize: 11.5, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 2),
+                Text(layer, style: const TextStyle(color: _muted, fontSize: 9.8, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+          Text('$count', style: const TextStyle(color: _green, fontSize: 11.5, fontWeight: FontWeight.w900)),
+          const SizedBox(width: 6),
+          _miniIcon(allHidden ? Icons.visibility_off : Icons.visibility, () => state.setLayerGroupHidden(layer, !allHidden)),
+          _miniIcon(allLocked ? Icons.lock : Icons.lock_open, () => state.setLayerGroupLocked(layer, !allLocked)),
+          _miniIcon(Icons.copy_rounded, () => state.duplicateLayerGroup(layer)),
+          _miniIcon(Icons.delete_outline_rounded, () => state.deleteLayerGroup(layer)),
+        ],
+      ),
+    );
+  }
+
+  void _toggleMeta(TgElement e, {bool? hidden, bool? locked, String? layer, String? name}) {
+    state.updateElementMetaById(e.id, hidden: hidden, locked: locked, layer: layer, name: name);
+  }
+
+  Future<void> _rename(BuildContext context, TgElement e) async {
+    final c = TextEditingController(text: e.name ?? _elementTitle(e));
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Название слоя'),
+        content: TextField(controller: c, autofocus: true, decoration: const InputDecoration(hintText: 'Например: Прессинг 67 мин')),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
+          ElevatedButton(onPressed: () => Navigator.of(ctx).pop(c.text.trim()), child: const Text('Сохранить')),
+        ],
+      ),
+    );
+    if (name == null || name.isEmpty) return;
+    _toggleMeta(e, name: name);
+  }
+}
+
+
+class _ThreeDObjectsPanel extends _BasePanel {
+  final TgState state;
+
+  _ThreeDObjectsPanel({
+    required this.state,
+    required super.onClose,
+  }) : super(
+          title: '3D объекты',
+          icon: Icons.view_in_ar_rounded,
+          child: _ThreeDObjectsPanelContent(state: state),
+        );
+}
+
+class _ThreeDObjectsPanelContent extends StatelessWidget {
+  const _ThreeDObjectsPanelContent({required this.state});
+  final TgState state;
+
+  static const _green = Color(0xFF00A750);
+  static const _border = Color(0xFFE5E7EB);
+  static const _txt = Color(0xFF111827);
+  static const _muted = Color(0xFF6B7280);
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = state.selected;
+    final elements = state.elements.reversed.toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _Section(
+          title: 'Логика 3D',
+          trailing: 'без тайминга',
+          child: const Text(
+            'Тайминг убран из основного редактора. Здесь настраивается сцена: поле, камера, глубина, 3D-объекты и формат для Unity/GLB.',
+            style: TextStyle(color: _muted, fontSize: 11.5, height: 1.35, fontWeight: FontWeight.w600),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _Section(
+          title: 'Формат сцены',
+          trailing: 'pipeline',
+          child: Column(
+            children: [
+              _modeTile(context, Icons.layers_rounded, 'Flutter 2.5D', 'быстро: поле с перспективой, тени, глубина объектов'),
+              _modeTile(context, Icons.view_in_ar_rounded, 'GLB / glTF сцена', 'универсальный формат моделей и материалов'),
+              _modeTile(context, Icons.memory_rounded, 'Unity Scene JSON', 'координаты, камера, слои и объекты для Unity-модуля'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        _Section(
+          title: 'Профессиональные 3D объекты',
+          trailing: 'FIFA style',
+          child: Column(
+            children: [
+              _assetTile(context, Icons.person_rounded, '3D футболист', 'силуэт/манекен игрока с номером'),
+              _assetTile(context, Icons.sports_soccer_rounded, 'Мяч', 'объект с тенью и масштабом'),
+              _assetTile(context, Icons.traffic_rounded, 'Конус / маркер', 'тренировочные точки на поле'),
+              _assetTile(context, Icons.height_rounded, '3D стрелка', 'стрелка с толщиной, высотой и тенью'),
+              _assetTile(context, Icons.blur_circular_rounded, 'Объёмная зона', 'полупрозрачная зона с мягким свечением'),
+              _assetTile(context, Icons.videocam_rounded, 'Камера трансляции', 'точка камеры для вида TV/тактика'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (selected != null)
+          _Section(
+            title: 'Выбранный объект',
+            trailing: '3D props',
+            child: Column(
+              children: [
+                _selectedObjectRow(selected),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(child: _smallAction(context, 'В 3D слой', Icons.view_in_ar_rounded, () => _markElement(selected, layer: '3d'))),
+                    const SizedBox(width: 8),
+                    Expanded(child: _smallAction(context, 'Заблокировать', Icons.lock_rounded, () => _markElement(selected, locked: true))),
+                  ],
+                ),
+              ],
+            ),
+          )
+        else
+          _Section(
+            title: 'Выбранный объект',
+            child: const Text('Выберите элемент на поле или в списке ниже, чтобы назначить ему 3D-слой и свойства.', style: TextStyle(color: _muted, fontSize: 11.5, height: 1.35, fontWeight: FontWeight.w600)),
+          ),
+        const SizedBox(height: 12),
+        _Section(
+          title: 'Объекты на схеме',
+          trailing: '${elements.length}',
+          child: elements.isEmpty
+              ? const Text('Пока нет объектов. Добавьте игрока, стрелку, зону или подпись.', style: TextStyle(color: _muted, fontSize: 11.5, fontWeight: FontWeight.w600))
+              : Column(children: elements.map((e) => _sceneObjectTile(e)).toList()),
+        ),
+      ],
+    );
+  }
+
+  Widget _modeTile(BuildContext context, IconData icon, String title, String subtitle) {
+    return _cleanTile(
+      icon: icon,
+      title: title,
+      subtitle: subtitle,
+      onTap: () => _hint(context, 'Выбран формат «$title». Реальный экспорт подключается отдельным шагом через JSON/GLB pipeline.'),
+    );
+  }
+
+  Widget _assetTile(BuildContext context, IconData icon, String title, String subtitle) {
+    return _cleanTile(
+      icon: icon,
+      title: title,
+      subtitle: subtitle,
+      onTap: () => _hint(context, 'Объект «$title» добавлен как профессиональный 3D-пресет интерфейса. Следующий шаг — связать его с GLB-моделью/Unity prefab.'),
+    );
+  }
+
+  Widget _cleanTile({required IconData icon, required String title, required String subtitle, required VoidCallback onTap}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: _border),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(color: const Color(0xFFF3FBF7), borderRadius: BorderRadius.circular(12)),
+                  child: Icon(icon, size: 18, color: _green),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: const TextStyle(color: _txt, fontSize: 12, fontWeight: FontWeight.w900)),
+                      const SizedBox(height: 2),
+                      Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontSize: 10.5, height: 1.2, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right_rounded, size: 18, color: _muted),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _selectedObjectRow(TgElement e) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: _green.withOpacity(.35))),
+      child: Row(
+        children: [
+          Icon(_elementIcon(e), size: 18, color: _green),
+          const SizedBox(width: 8),
+          Expanded(child: Text(_elementTitle(e), style: const TextStyle(color: _txt, fontSize: 12, fontWeight: FontWeight.w900))),
+          Text(e.layer == '3d' ? '3D' : '2D', style: TextStyle(color: e.layer == '3d' ? _green : _muted, fontSize: 11, fontWeight: FontWeight.w900)),
+        ],
+      ),
+    );
+  }
+
+  Widget _sceneObjectTile(TgElement e) {
+    final selected = state.selectedId == e.id;
+    final is3d = e.layer == '3d';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: selected ? const Color(0xFFF3FBF7) : Colors.white,
+        borderRadius: BorderRadius.circular(13),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(13),
+          onTap: () => state.selectById(e.id),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(color: selected ? _green : _border, width: selected ? 1.4 : 1),
+            ),
+            child: Row(
+              children: [
+                Icon(_elementIcon(e), size: 17, color: selected ? _green : _muted),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_elementTitle(e), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _txt, fontSize: 12, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 2),
+                      Text(is3d ? '3D слой / экспортируемый объект' : '2D слой / схема', style: const TextStyle(color: _muted, fontSize: 10.2, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+                InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () => _markElement(e, layer: is3d ? 'default' : '3d'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: is3d ? _green.withOpacity(.10) : const Color(0xFFF9FAFB),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: is3d ? _green.withOpacity(.45) : _border),
+                    ),
+                    child: Text(is3d ? '3D' : '+3D', style: TextStyle(color: is3d ? _green : _muted, fontSize: 10.5, fontWeight: FontWeight.w900)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _smallAction(BuildContext context, String text, IconData icon, VoidCallback onTap) {
+    return TextButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, size: 15),
+      label: Text(text),
+      style: TextButton.styleFrom(
+        foregroundColor: _green,
+        textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: _green.withOpacity(.28))),
+      ),
+    );
+  }
+
+  void _markElement(TgElement e, {bool? locked, String? layer}) {
+    final json = Map<String, dynamic>.from(e.toJson());
+    if (locked != null) json['locked'] = locked;
+    if (layer != null) json['layer'] = layer;
+    state.replaceElement(TgElement.fromJson(json));
+  }
+
+  void _hint(BuildContext context, String text) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text), behavior: SnackBarBehavior.floating, duration: const Duration(seconds: 2)));
+  }
+}
+
+class _ExportPanel extends _BasePanel {
+  final TgState state;
+  final VoidCallback? onExportPng;
+
+  _ExportPanel({
+    required this.state,
+    this.onExportPng,
+    required super.onClose,
+  }) : super(
+          title: 'Экспорт',
+          icon: Icons.file_download,
+          child: _ExportPanelContent(state: state, onExportPng: onExportPng),
+        );
+}
+
+class _ExportPanelContent extends StatelessWidget {
+  const _ExportPanelContent({required this.state, required this.onExportPng});
+  final TgState state;
+  final VoidCallback? onExportPng;
+
+  static const _green = Color(0xFF00A750);
+  static const _border = Color(0xFFE5E7EB);
+  static const _txt = Color(0xFF111827);
+  static const _muted = Color(0xFF6B7280);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _Section(
+          title: 'Форматы',
+          trailing: 'pro',
+          child: Column(
+            children: [
+              _exportTile(context, Icons.image, 'PNG 4K кадр', 'для отчёта, презентации, Telegram', onExportPng),
+              _exportTile(context, Icons.view_in_ar_rounded, 'GLB / Unity сцена', 'поле + объекты + камера для 3D пайплайна', null),
+              _exportTile(context, Icons.picture_as_pdf, 'PDF разбор', 'схема + список элементов + заметки', null),
+              _exportTile(context, Icons.sports_soccer_rounded, 'FIFA overlay', 'прозрачные слои поверх видео/кадра', null),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        _Section(
+          title: 'Качество',
+          trailing: 'broadcast',
+          child: Column(
+            children: const [
+              _QualityRow('Разрешение', '3840 × 2160'),
+              _QualityRow('FPS анимации', '30'),
+              _QualityRow('Фон', 'поле + прозрачные слои'),
+              _QualityRow('Стиль', 'FIFA / CMR'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        _Section(
+          title: 'Состояние сцены',
+          child: Row(
+            children: [
+              Expanded(child: _stat('Объекты', '${state.elements.length}')),
+              const SizedBox(width: 8),
+              Expanded(child: _stat('3D', state.is3DMode ? 'ON' : 'OFF')),
+              const SizedBox(width: 8),
+              Expanded(child: _stat('Выбор', state.selected == null ? '—' : '1')),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _exportTile(BuildContext context, IconData icon, String title, String subtitle, VoidCallback? onTap) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap ?? () => _hint(context, 'Формат «$title» добавлен как pro-раздел интерфейса. Для реального файла нужен следующий шаг: backend/export или desktop file saver.'),
+          child: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: _border)),
+            child: Row(
+              children: [
+                Container(width: 34, height: 34, decoration: BoxDecoration(color: const Color(0xFFF3FBF7), borderRadius: BorderRadius.circular(11)), child: Icon(icon, color: _green, size: 18)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(title, style: const TextStyle(color: _txt, fontSize: 12, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 2),
+                    Text(subtitle, style: const TextStyle(color: _muted, fontSize: 10.5, height: 1.2, fontWeight: FontWeight.w600)),
+                  ]),
+                ),
+                const Icon(Icons.chevron_right, color: _muted, size: 18),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _stat(String title, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: _border)),
+      child: Column(children: [
+        Text(value, style: const TextStyle(color: _txt, fontSize: 13, fontWeight: FontWeight.w900)),
+        const SizedBox(height: 2),
+        Text(title, style: const TextStyle(color: _muted, fontSize: 9.5, fontWeight: FontWeight.w700)),
+      ]),
+    );
+  }
+
+  void _hint(BuildContext context, String text) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text), behavior: SnackBarBehavior.floating));
+  }
+}
+
+class _QualityRow extends StatelessWidget {
+  const _QualityRow(this.title, this.value);
+  final String title;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 7),
+      child: Row(
+        children: [
+          Expanded(child: Text(title, style: const TextStyle(color: Color(0xFF6B7280), fontSize: 11, fontWeight: FontWeight.w600))),
+          Text(value, style: const TextStyle(color: Color(0xFF111827), fontSize: 11, fontWeight: FontWeight.w800)),
+        ],
+      ),
+    );
+  }
+}
+
+IconData _elementIcon(TgElement element) {
+  if (element is TgStamp) return Icons.person;
+  if (element is TgLine) return Icons.trending_flat;
+  if (element is TgRect) return Icons.crop_square;
+  if (element is TgCircle) return Icons.circle_outlined;
+  if (element is TgText) return Icons.text_fields;
+  if (element is TgWavy || element is TgEditableWavy) return Icons.timeline;
+  if (element is TgZigzag || element is TgEditableZigzag) return Icons.show_chart;
+  if (element is TgSpring || element is TgEditableSpring) return Icons.all_inclusive;
+  if (element is TgSpiral || element is TgEditableSpiral) return Icons.gesture;
+  return Icons.layers;
+}
+
+String _elementTitle(TgElement element) {
+  final custom = element.name?.trim();
+  if (custom != null && custom.isNotEmpty) return custom;
+  if (element is TgStamp) return 'Игрок / объект';
+  if (element is TgLine) return 'Линия / стрелка';
+  if (element is TgRect) return 'Зона';
+  if (element is TgCircle) return 'Акцент / круг';
+  if (element is TgText) return 'Титр / подпись';
+  if (element is TgWavy || element is TgEditableWavy) return 'Маршрут / волна';
+  if (element is TgZigzag || element is TgEditableZigzag) return 'Зигзаг';
+  if (element is TgSpring || element is TgEditableSpring) return 'Пружина';
+  if (element is TgSpiral || element is TgEditableSpiral) return 'Спираль';
+  return 'Элемент';
+}
+
+
 // ==================== ОСНОВНАЯ ПАНЕЛЬ ====================
-enum TgPanel { none, objects, editor, threeD }
+enum TgPanel { none, objects, templates, layers, assets3d, export, editor, threeD }
 
 class TgRightPanel extends StatefulWidget {
   const TgRightPanel({
@@ -3453,29 +5343,56 @@ class TgRightPanel extends StatefulWidget {
     required this.stamps,
     this.onRefreshSvg,
     required this.canvasKey,
+    this.onExportPng,
+    this.teamName = '',
+    this.teamPlayers = const <Map<String, dynamic>>[],
+    this.teamPlayersLoading = false,
+    this.teamPlayersError,
+    this.onOpen3DPro,
+    this.initialPanel = TgPanel.objects,
   });
 
   final TgState state;
   final List<String> stamps;
   final void Function(String asset, PlayerColors colors)? onRefreshSvg;
   final GlobalKey<TgCanvasState> canvasKey;
+  final VoidCallback? onExportPng;
+  final String teamName;
+  final List<Map<String, dynamic>> teamPlayers;
+  final bool teamPlayersLoading;
+  final String? teamPlayersError;
+  final VoidCallback? onOpen3DPro;
+  final TgPanel initialPanel;
 
   @override
   State<TgRightPanel> createState() => _TgRightPanelState();
 }
 
 class _TgRightPanelState extends State<TgRightPanel> {
-  TgPanel _activePanel = TgPanel.none;
+  TgPanel _activePanel = TgPanel.objects;
 
   bool get _panelOpen => _activePanel != TgPanel.none;
   bool get _is3DActive => _activePanel == TgPanel.threeD;
   bool get _isObjectActive => _activePanel == TgPanel.objects;
+  bool get _isTemplatesActive => _activePanel == TgPanel.templates;
+  bool get _isLayersActive => _activePanel == TgPanel.layers;
+  bool get _is3DObjectsActive => _activePanel == TgPanel.assets3d;
+  bool get _isExportActive => _activePanel == TgPanel.export;
   bool get _isEditActive => _activePanel == TgPanel.editor;
 
   @override
   void initState() {
     super.initState();
+    _activePanel = widget.initialPanel;
     widget.state.addListener(_onStateChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant TgRightPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialPanel != widget.initialPanel) {
+      setState(() => _activePanel = widget.initialPanel);
+    }
   }
 
   @override
@@ -3485,13 +5402,8 @@ class _TgRightPanelState extends State<TgRightPanel> {
   }
 
   void _onStateChanged() {
-    if (widget.state.selected != null &&
-        _activePanel != TgPanel.threeD &&
-        _activePanel != TgPanel.editor) {
-      setState(() {
-        _activePanel = TgPanel.editor;
-      });
-    }
+    if (!mounted) return;
+    setState(() {});
   }
 
   void _closeAllPanels() {
@@ -3500,54 +5412,36 @@ class _TgRightPanelState extends State<TgRightPanel> {
     });
   }
 
-  void _openObjectPanel() {
+  void _openPanel(TgPanel panel, {bool enable3D = false}) {
     setState(() {
-      if (_activePanel == TgPanel.objects) {
+      if (_activePanel == panel) {
         _activePanel = TgPanel.none;
-        if (widget.state.is3DMode) {
+        if (widget.state.is3DMode && !enable3D) {
           widget.state.toggle3DMode();
         }
       } else {
-        _activePanel = TgPanel.objects;
-        if (widget.state.is3DMode) {
+        _activePanel = panel;
+        if (enable3D) {
+          if (!widget.state.is3DMode) widget.state.toggle3DMode();
+        } else if (widget.state.is3DMode) {
           widget.state.toggle3DMode();
         }
       }
     });
   }
+
+  void _openObjectPanel() => _openPanel(TgPanel.objects);
+  void _openTemplatesPanel() => _openPanel(TgPanel.templates);
+  void _openLayersPanel() => _openPanel(TgPanel.layers);
+  void _open3DObjectsPanel() => _openPanel(TgPanel.assets3d);
+  void _openExportPanel() => _openPanel(TgPanel.export);
 
   void _openEditorPanel() {
     if (widget.state.selected == null) return;
-    setState(() {
-      if (_activePanel == TgPanel.editor) {
-        _activePanel = TgPanel.none;
-        if (widget.state.is3DMode) {
-          widget.state.toggle3DMode();
-        }
-      } else {
-        _activePanel = TgPanel.editor;
-        if (widget.state.is3DMode) {
-          widget.state.toggle3DMode();
-        }
-      }
-    });
+    _openPanel(TgPanel.editor);
   }
 
-  void _open3DPanel() {
-    setState(() {
-      if (_activePanel == TgPanel.threeD) {
-        _activePanel = TgPanel.none;
-        if (widget.state.is3DMode) {
-          widget.state.toggle3DMode();
-        }
-      } else {
-        _activePanel = TgPanel.threeD;
-        if (!widget.state.is3DMode) {
-          widget.state.toggle3DMode();
-        }
-      }
-    });
-  }
+  void _open3DPanel() => _openPanel(TgPanel.threeD, enable3D: true);
 
   EdgeInsets _panelInsets(BuildContext context) {
     final mq = MediaQuery.of(context);
@@ -3560,18 +5454,22 @@ class _TgRightPanelState extends State<TgRightPanel> {
   Widget build(BuildContext context) {
     final safe = _panelInsets(context);
 
-    return Stack(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 430 || MediaQuery.of(context).size.width < 1280 || MediaQuery.of(context).size.height < 820;
+        final micro = constraints.maxWidth < 340 || MediaQuery.of(context).size.width < 900 || MediaQuery.of(context).size.height < 620;
+        final dockRight = micro ? 4.0 : (compact ? 8.0 : 12.0);
+        final dockWidth = micro ? 48.0 : (compact ? 54.0 : 62.0);
+        final gap = micro ? 6.0 : (compact ? 8.0 : 14.0);
+        final panelRight = dockRight + dockWidth + gap;
+        final availablePanelWidth = constraints.maxWidth - panelRight - (micro ? 2.0 : 4.0);
+        final panelWidth = math.min(
+          micro ? 286.0 : 340.0,
+          math.max(micro ? 172.0 : 220.0, availablePanelWidth),
+        );
+
+        return Stack(
       children: [
-        _QuickActionCircles(
-          state: widget.state,
-          onObjectSelected: _openObjectPanel,
-          onEditSelected: _openEditorPanel,
-          on3DSelected: _open3DPanel,
-          showEdit: _isEditActive,
-          is3DActive: _is3DActive,
-          isObjectActive: _isObjectActive,
-          isEditActive: _isEditActive,
-        ),
         if (_panelOpen)
           Positioned.fill(
             child: GestureDetector(
@@ -3582,24 +5480,84 @@ class _TgRightPanelState extends State<TgRightPanel> {
           ),
         if (_activePanel == TgPanel.objects)
           Positioned(
-            right: 88,
+            right: panelRight,
             top: safe.top,
             bottom: safe.bottom,
+            width: panelWidth,
             child: _ObjectPanel(
               state: widget.state,
               stamps: widget.stamps,
               onObjectSelected: (asset) {
                 widget.state.setActiveStamp(asset);
-                _closeAllPanels();
+                widget.state.setTool(TgTool.stamp);
               },
+              onPlayerSelected: (player) {
+                final asset = _defaultPlayerStamp(widget.stamps, player);
+                if (asset.isNotEmpty) {
+                  widget.state.setActiveStamp(asset);
+                  widget.state.setTool(TgTool.stamp);
+                }
+              },
+              teamName: widget.teamName,
+              teamPlayers: widget.teamPlayers,
+              teamPlayersLoading: widget.teamPlayersLoading,
+              teamPlayersError: widget.teamPlayersError,
+              onOpen3DPro: widget.onOpen3DPro,
+              onClose: _closeAllPanels,
+            ),
+          ),
+        if (_activePanel == TgPanel.templates)
+          Positioned(
+            right: panelRight,
+            top: safe.top,
+            bottom: safe.bottom,
+            width: panelWidth,
+            child: _TemplatesPanel(
+              state: widget.state,
+              onClose: _closeAllPanels,
+            ),
+          ),
+        if (_activePanel == TgPanel.layers)
+          Positioned(
+            right: panelRight,
+            top: safe.top,
+            bottom: safe.bottom,
+            width: panelWidth,
+            child: _LayersPanel(
+              state: widget.state,
+              onOpenProperties: _openEditorPanel,
+              onClose: _closeAllPanels,
+            ),
+          ),
+        if (_activePanel == TgPanel.assets3d)
+          Positioned(
+            right: panelRight,
+            top: safe.top,
+            bottom: safe.bottom,
+            width: panelWidth,
+            child: _ThreeDObjectsPanel(
+              state: widget.state,
+              onClose: _closeAllPanels,
+            ),
+          ),
+        if (_activePanel == TgPanel.export)
+          Positioned(
+            right: panelRight,
+            top: safe.top,
+            bottom: safe.bottom,
+            width: panelWidth,
+            child: _ExportPanel(
+              state: widget.state,
+              onExportPng: widget.onExportPng,
               onClose: _closeAllPanels,
             ),
           ),
         if (_activePanel == TgPanel.editor && widget.state.selected != null)
           Positioned(
-            right: 88,
+            right: panelRight,
             top: safe.top,
             bottom: safe.bottom,
+            width: panelWidth,
             child: _EditorPanel(
               state: widget.state,
               onRefreshSvg: widget.onRefreshSvg,
@@ -3608,16 +5566,36 @@ class _TgRightPanelState extends State<TgRightPanel> {
           ),
         if (_activePanel == TgPanel.threeD)
           Positioned(
-            right: 88,
+            right: panelRight,
             top: safe.top,
             bottom: safe.bottom,
+            width: panelWidth,
             child: _ThreeDPanel(
               state: widget.state,
               canvasKey: widget.canvasKey,
               onClose: _closeAllPanels,
             ),
           ),
+        _QuickActionCircles(
+          state: widget.state,
+          onObjectSelected: _openObjectPanel,
+          onTemplatesSelected: _openTemplatesPanel,
+          onLayersSelected: _openLayersPanel,
+          on3DObjectsSelected: _open3DObjectsPanel,
+          onExportSelected: _openExportPanel,
+          onEditSelected: _openEditorPanel,
+          on3DSelected: _open3DPanel,
+          isObjectActive: _isObjectActive,
+          isTemplatesActive: _isTemplatesActive,
+          isLayersActive: _isLayersActive,
+          is3DObjectsActive: _is3DObjectsActive,
+          isExportActive: _isExportActive,
+          isEditActive: _isEditActive,
+          is3DActive: _is3DActive,
+        ),
       ],
+    );
+      },
     );
   }
 }

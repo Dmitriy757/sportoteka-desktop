@@ -2,6 +2,7 @@
 // lib/presentation/team_matches_screen/cmr_match_analytics_panel.dart
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:ui' show FontFeature;
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -133,10 +134,10 @@ class _CmrMatchAnalyticsPanelState extends State<CmrMatchAnalyticsPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final compact = MediaQuery.of(context).size.width < 1050;
-
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: CircularProgressIndicator(color: _A.green),
+      );
     }
 
     if (_error != null) {
@@ -144,69 +145,106 @@ class _CmrMatchAnalyticsPanelState extends State<CmrMatchAnalyticsPanel> {
     }
 
     return Container(
-      color: _A.canvas,
-      padding: EdgeInsets.all(compact ? 6 : 8),
-      child: compact ? _buildCompact() : _buildDesktop(),
+      decoration: const BoxDecoration(color: _A.canvas),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final mobile = constraints.maxWidth < 640;
+          final compact = constraints.maxWidth < 980;
+
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+              mobile ? 2 : 10,
+              mobile ? 8 : 10,
+              mobile ? 2 : 10,
+              mobile ? 0 : 12,
+            ),
+            child: mobile
+                ? _buildMobile()
+                : _buildWorkspace(compact: compact),
+          );
+        },
+      ),
     );
   }
 
-  Widget _buildDesktop() {
+  Widget _buildWorkspace({required bool compact}) {
     final match = _selectedMatch;
-    return Row(
-      children: [
-        SizedBox(
-          width: 302,
-          child: _MatchesRail(
-            teamName: widget.teamName,
-            matches: _visibleMatches,
-            selectedIndex: math.min(_selectedIndex, math.max(0, _visibleMatches.length - 1)),
-            searchCtrl: _searchCtrl,
-            filter: _filter,
-            refreshing: _refreshing,
-            onFilter: (v) => setState(() => _filter = v),
-            onSearchChanged: (_) => setState(() => _selectedIndex = 0),
-            onRefresh: () => _loadMatches(refresh: true),
-            onSelect: (i) => setState(() => _selectedIndex = i),
-            resultStatus: _resultStatus,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: DecoratedBox(
-              decoration: _A.workspaceDecoration,
-              child: match == null
-                  ? const _EmptyAnalytics()
-                  : _AnalyticsWorkspace(
-                      match: match,
-                      teamName: widget.teamName,
-                      clubName: widget.clubName,
-                      teamId: widget.teamId,
-                      clubId: widget.clubId,
-                    ),
+    final listWidth = math.min(
+      compact ? 430.0 : 480.0,
+      MediaQuery.sizeOf(context).width * (compact ? .43 : .45),
+    );
+
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: _A.workspaceDecoration,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: listWidth,
+            child: _MatchesRail(
+              teamName: widget.teamName,
+              matches: _visibleMatches,
+              selectedIndex: math.min(
+                _selectedIndex,
+                math.max(0, _visibleMatches.length - 1),
+              ),
+              searchCtrl: _searchCtrl,
+              filter: _filter,
+              refreshing: _refreshing,
+              onFilter: (v) => setState(() {
+                _filter = v;
+                _selectedIndex = 0;
+              }),
+              onSearchChanged: (_) => setState(() => _selectedIndex = 0),
+              onRefresh: () => _loadMatches(refresh: true),
+              onSelect: (i) => setState(() => _selectedIndex = i),
+              resultStatus: _resultStatus,
             ),
           ),
-        ),
-      ],
+          const SizedBox(
+            width: 1,
+            child: ColoredBox(color: _A.border),
+          ),
+          Expanded(
+            child: match == null
+                ? const _EmptyAnalytics()
+                : _AnalyticsWorkspace(
+                    match: match,
+                    teamName: widget.teamName,
+                    clubName: widget.clubName,
+                    teamId: widget.teamId,
+                    clubId: widget.clubId,
+                    compact: compact,
+                  ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildCompact() {
+  Widget _buildMobile() {
     final match = _selectedMatch;
+
     return Column(
       children: [
         SizedBox(
-          height: 222,
+          height: 238,
           child: _MatchesRail(
             horizontal: true,
             teamName: widget.teamName,
             matches: _visibleMatches,
-            selectedIndex: math.min(_selectedIndex, math.max(0, _visibleMatches.length - 1)),
+            selectedIndex: math.min(
+              _selectedIndex,
+              math.max(0, _visibleMatches.length - 1),
+            ),
             searchCtrl: _searchCtrl,
             filter: _filter,
             refreshing: _refreshing,
-            onFilter: (v) => setState(() => _filter = v),
+            onFilter: (v) => setState(() {
+              _filter = v;
+              _selectedIndex = 0;
+            }),
             onSearchChanged: (_) => setState(() => _selectedIndex = 0),
             onRefresh: () => _loadMatches(refresh: true),
             onSelect: (i) => setState(() => _selectedIndex = i),
@@ -215,21 +253,19 @@ class _CmrMatchAnalyticsPanelState extends State<CmrMatchAnalyticsPanel> {
         ),
         const SizedBox(height: 8),
         Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: DecoratedBox(
-              decoration: _A.workspaceDecoration,
-              child: match == null
-                  ? const _EmptyAnalytics()
-                  : _AnalyticsWorkspace(
-                      match: match,
-                      teamName: widget.teamName,
-                      clubName: widget.clubName,
-                      teamId: widget.teamId,
-                      clubId: widget.clubId,
-                      compact: true,
-                    ),
-            ),
+          child: Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: _A.mobileWorkspaceDecoration,
+            child: match == null
+                ? const _EmptyAnalytics()
+                : _AnalyticsWorkspace(
+                    match: match,
+                    teamName: widget.teamName,
+                    clubName: widget.clubName,
+                    teamId: widget.teamId,
+                    clubId: widget.clubId,
+                    compact: true,
+                  ),
           ),
         ),
       ],
@@ -343,7 +379,7 @@ class _OverviewTab extends StatelessWidget {
     ];
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 14),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 18),
       child: LayoutBuilder(
         builder: (_, c) {
           final rightPanel = c.maxWidth >= 980;
@@ -433,7 +469,7 @@ class _AnalyticsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 18),
       child: Wrap(
         spacing: 8,
         runSpacing: 8,
@@ -481,7 +517,7 @@ class _VideoTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 18),
       child: _Panel(
         title: 'Видео матча',
         child: Container(
@@ -551,11 +587,11 @@ class _MatchesRail extends StatelessWidget {
   Widget build(BuildContext context) {
     final list = ListView.separated(
       scrollDirection: horizontal ? Axis.horizontal : Axis.vertical,
-      padding: EdgeInsets.fromLTRB(horizontal ? 12 : 14, 8, horizontal ? 12 : 14, 12),
+      padding: EdgeInsets.fromLTRB(horizontal ? 10 : 12, 8, horizontal ? 10 : 12, horizontal ? 16 : 12),
       itemCount: matches.length,
-      separatorBuilder: (_, __) => SizedBox(width: horizontal ? 8 : 0, height: horizontal ? 0 : 8),
+      separatorBuilder: (_, __) => SizedBox(width: horizontal ? 10 : 0, height: horizontal ? 0 : 2),
       itemBuilder: (_, i) => SizedBox(
-        width: horizontal ? 238 : null,
+        width: horizontal ? 248 : null,
         child: _MatchTile(
           match: matches[i],
           selected: i == selectedIndex,
@@ -566,24 +602,24 @@ class _MatchesRail extends StatelessWidget {
     );
 
     return DecoratedBox(
-      decoration: _A.workspaceDecoration,
+      decoration: const BoxDecoration(color: _A.panel),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            height: 54,
-            padding: EdgeInsets.fromLTRB(horizontal ? 12 : 14, 7, 10, 7),
+            height: 58,
+            padding: EdgeInsets.fromLTRB(horizontal ? 10 : 12, 9, 10, 9),
             decoration: const BoxDecoration(
               border: Border(bottom: BorderSide(color: _A.border)),
             ),
             child: Row(
               children: [
                 Container(
-                  width: 34,
-                  height: 34,
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
                     color: _A.accentSoft,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: _A.accentBorder),
                   ),
                   child: const Icon(Icons.analytics_outlined, color: _A.green, size: 19),
@@ -594,9 +630,9 @@ class _MatchesRail extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Аналитика матчей', style: _A.title(14.5), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text('Аналитика матчей', style: _A.title(16.5), maxLines: 1, overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 2),
-                      Text(teamName, style: _A.muted(10.5), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text(teamName, style: _A.muted(11.5), maxLines: 1, overflow: TextOverflow.ellipsis),
                     ],
                   ),
                 ),
@@ -608,9 +644,9 @@ class _MatchesRail extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: EdgeInsets.fromLTRB(horizontal ? 12 : 14, 8, horizontal ? 12 : 14, 0),
+            padding: EdgeInsets.fromLTRB(horizontal ? 10 : 12, 8, horizontal ? 10 : 12, 0),
             child: SizedBox(
-              height: 38,
+              height: 46,
               child: TextField(
                 controller: searchCtrl,
                 onChanged: onSearchChanged,
@@ -622,9 +658,9 @@ class _MatchesRail extends StatelessWidget {
                   prefixIconConstraints: const BoxConstraints(minWidth: 34),
                   isDense: true,
                   filled: true,
-                  fillColor: _A.cardSoft,
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _A.border)),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _A.green)),
+                  fillColor: _A.soft,
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _A.border)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _A.greenBorder)),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
                 ),
               ),
@@ -635,7 +671,7 @@ class _MatchesRail extends StatelessWidget {
             height: 30,
             child: ListView(
               scrollDirection: Axis.horizontal,
-              padding: EdgeInsets.symmetric(horizontal: horizontal ? 12 : 14),
+              padding: EdgeInsets.symmetric(horizontal: horizontal ? 10 : 12),
               children: [
                 _FilterChip(text: 'Все', selected: filter == 'all', onTap: () => onFilter('all')),
                 _FilterChip(text: 'Победы', selected: filter == 'win', onTap: () => onFilter('win')),
@@ -675,12 +711,12 @@ class _TopMatchHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 62,
+      height: 68,
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: _A.border)),
       ),
-      padding: const EdgeInsets.fromLTRB(10, 7, 8, 7),
+      padding: const EdgeInsets.fromLTRB(14, 10, 12, 10),
       child: LayoutBuilder(
         builder: (context, c) {
           final narrow = c.maxWidth < 640;
@@ -706,7 +742,7 @@ class _TopMatchHeader extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('$teamName — $opponent', maxLines: 1, overflow: TextOverflow.ellipsis, style: _A.title(14.6)),
+                    Text('$teamName — $opponent', maxLines: 1, overflow: TextOverflow.ellipsis, style: _A.title(16.0)),
                     const SizedBox(height: 4),
                     Text('$matchType · $date', maxLines: 1, overflow: TextOverflow.ellipsis, style: _A.muted(10.5)),
                   ],
@@ -747,7 +783,7 @@ class _AnalyticsTabs extends StatelessWidget {
         color: Colors.white,
         border: Border(bottom: BorderSide(color: _A.border)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
       child: Row(
         children: List.generate(tabs.length, (i) {
           final active = i == selected;
@@ -770,8 +806,8 @@ class _AnalyticsTabs extends StatelessWidget {
                   tabs[i],
                   style: TextStyle(
                     color: active ? _A.green : _A.mutedColor,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 11.5,
                   ),
                 ),
               ),
@@ -786,33 +822,57 @@ class _AnalyticsTabs extends StatelessWidget {
 class _Panel extends StatelessWidget {
   final String title;
   final Widget child;
-  const _Panel({required this.title, required this.child});
+
+  const _Panel({
+    required this.title,
+    required this.child,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _A.panel,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _A.border),
+        border: Border.all(color: _A.border, width: .7),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 4,
-                height: 16,
-                decoration: BoxDecoration(color: _A.green, borderRadius: BorderRadius.circular(8)),
-              ),
-              const SizedBox(width: 8),
-              Expanded(child: Text(title, style: _A.title(14.2), maxLines: 1, overflow: TextOverflow.ellipsis)),
-            ],
+          Container(
+            height: 38,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            alignment: Alignment.centerLeft,
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: _A.border, width: .7)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 3,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    color: _A.green,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: _A.section(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
-          child,
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: child,
+          ),
         ],
       ),
     );
@@ -839,9 +899,9 @@ class _StatPairCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: _A.cardSoft,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _A.border),
+        color: _A.soft,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _A.border, width: .7),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1157,56 +1217,135 @@ class _MatchTile extends StatelessWidget {
   final String status;
   final VoidCallback onTap;
 
-  const _MatchTile({required this.match, required this.selected, required this.status, required this.onTap});
+  const _MatchTile({
+    required this.match,
+    required this.selected,
+    required this.status,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     final opponent = _opponent(match);
     final date = _dateOf(match);
-    final scoreFor = _toInt(_value(match, ['goals_for', 'score_for', 'home_score', 'team_score', 'goals']));
-    final scoreAgainst = _toInt(_value(match, ['goals_against', 'score_against', 'away_score', 'opponent_score', 'missed']));
-    final color = status == 'win' ? _A.green : status == 'loss' ? _A.red : _A.gray;
-    final statusText = status == 'win' ? 'Победа' : status == 'loss' ? 'Поражение' : 'Ничья';
+    final scoreFor = _toInt(
+      _value(match, ['goals_for', 'score_for', 'home_score', 'team_score', 'goals']),
+    );
+    final scoreAgainst = _toInt(
+      _value(match, ['goals_against', 'score_against', 'away_score', 'opponent_score', 'missed']),
+    );
+    final resultColor = status == 'win'
+        ? _A.green
+        : status == 'loss'
+            ? _A.red
+            : _A.gray;
+    final resultText = status == 'win'
+        ? 'Победа'
+        : status == 'loss'
+            ? 'Поражение'
+            : 'Ничья';
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(11),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: selected ? _A.accentSoft : Colors.white,
-          borderRadius: BorderRadius.circular(11),
-          border: Border.all(color: selected ? _A.accentBorder : _A.border),
-        ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 38,
-              child: Column(
-                children: [
-                  Text('${date.day}'.padLeft(2, '0'), style: _A.title(15)),
-                  Text(_monthShort(date), style: _A.muted(11)),
-                ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            constraints: const BoxConstraints(minHeight: 64),
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+            decoration: BoxDecoration(
+              color: selected ? _A.greenSoft : _A.panel,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: selected ? _A.greenBorder : _A.border,
+                width: .8,
               ),
+              boxShadow: selected
+                  ? [
+                      BoxShadow(
+                        color: _A.green.withOpacity(.07),
+                        blurRadius: 18,
+                        spreadRadius: -10,
+                        offset: const Offset(0, 8),
+                      ),
+                    ]
+                  : null,
             ),
-            const SizedBox(width: 10),
-            CircleAvatar(radius: 16, backgroundColor: _A.cardSoft, child: Text(opponent.isEmpty ? '?' : opponent.characters.first, style: const TextStyle(fontWeight: FontWeight.w700, color: _A.green))),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(opponent, style: _A.title(13), maxLines: 1, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 3),
-                Text(_s(match, ['match_type', 'type', 'kind'], fallback: 'Матч'), style: _A.muted(11), maxLines: 1, overflow: TextOverflow.ellipsis),
-              ]),
+            child: Row(
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  width: 3,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: selected ? _A.green : Colors.transparent,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Container(
+                  width: 40,
+                  height: 40,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: _A.soft,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text('${date.day}'.padLeft(2, '0'), style: _A.title(13.5)),
+                      const SizedBox(height: 1),
+                      Text(_monthShort(date), style: _A.caption()),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        opponent,
+                        style: _A.title(13.4),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${_s(match, ['match_type', 'type', 'kind'], fallback: 'Матч')}  •  $resultText',
+                        style: _A.muted(10.6).copyWith(color: resultColor),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '$scoreFor:$scoreAgainst',
+                      style: _A.title(15.5).copyWith(color: resultColor),
+                    ),
+                    const SizedBox(height: 3),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 18,
+                      color: selected ? _A.green : _A.mutedColor,
+                    ),
+                  ],
+                ),
+              ],
             ),
-            const SizedBox(width: 10),
-            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text('$scoreFor:$scoreAgainst', style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 15)),
-              const SizedBox(height: 4),
-              Text(statusText, style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 10)),
-            ]),
-          ],
+          ),
         ),
       ),
     );
@@ -1367,7 +1506,7 @@ class _EmptyAnalytics extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(child: Text('Выберите матч для аналитики'));
+    return Center(child: Text('Выберите матч для аналитики', style: _A.muted(13)));
   }
 }
 
@@ -1376,7 +1515,7 @@ class _EmptyList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(child: Text('Матчи не найдены'));
+    return Center(child: Text('Матчи не найдены', style: _A.muted(12)));
   }
 }
 
@@ -1399,26 +1538,100 @@ class _ErrorState extends StatelessWidget {
 }
 
 class _A {
-  static const green = Color(0xFF008F5A);
-  static const red = Color(0xFFE11D48);
-  static const gray = Color(0xFF667085);
-  static const text = Color(0xFF101828);
-  static const mutedColor = Color(0xFF667085);
-  static const canvas = Color(0xFFFFFFFF);
-  static const cardSoft = Color(0xFFFAFBFC);
-  static const border = Color(0xFFE6EBF1);
-  static const accentSoft = Color(0xFFEFFAF4);
-  static const accentBorder = Color(0xFFCDEDDD);
+  static const String family = 'Segoe UI';
+  static const List<String> fallback = <String>[
+    'SF Pro Display',
+    'SF Pro Text',
+    'Inter',
+    'Roboto',
+    'Arial',
+  ];
+
+  static const Color green = Color(0xFF00A750);
+  static const Color greenDark = Color(0xFF067A46);
+  static const Color greenSoft = Color(0xFFF3FAF6);
+  static const Color greenBorder = Color(0xFFD7F0E2);
+
+  static const Color red = Color(0xFFD92D20);
+  static const Color gray = Color(0xFF6B7280);
+  static const Color text = Color(0xFF0B0F14);
+  static const Color mutedColor = Color(0xFF6B7280);
+
+  static const Color canvas = Color(0xFFF6F7F6);
+  static const Color panel = Colors.white;
+  static const Color soft = Color(0xFFFAFBFA);
+  static const Color cardSoft = Color(0xFFFAFBFA);
+  static const Color border = Color(0xFFE9ECEA);
+  static const Color accentSoft = greenSoft;
+  static const Color accentBorder = greenBorder;
 
   static BoxDecoration get workspaceDecoration => BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: border),
+        color: panel,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.transparent, width: 0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.035),
+            blurRadius: 28,
+            spreadRadius: -18,
+            offset: const Offset(0, 16),
+          ),
+        ],
       );
 
-  static TextStyle title(double size) => TextStyle(fontSize: size, fontWeight: FontWeight.w700, color: text, height: 1.12);
-  static TextStyle body(double size) => TextStyle(fontSize: size, fontWeight: FontWeight.w700, color: text, height: 1.22);
-  static TextStyle muted(double size) => TextStyle(fontSize: size, fontWeight: FontWeight.w700, color: mutedColor, height: 1.2);
+  static BoxDecoration get mobileWorkspaceDecoration => BoxDecoration(
+        color: panel,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: border, width: .7),
+      );
+
+  static TextStyle title(double size) => TextStyle(
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        fontSize: size,
+        fontWeight: FontWeight.w600,
+        color: text,
+        height: 1.08,
+        letterSpacing: -.16,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      );
+
+  static TextStyle body(double size) => TextStyle(
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        fontSize: size,
+        fontWeight: FontWeight.w500,
+        color: text,
+        height: 1.24,
+      );
+
+  static TextStyle muted(double size) => TextStyle(
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        fontSize: size,
+        fontWeight: FontWeight.w500,
+        color: mutedColor,
+        height: 1.26,
+      );
+
+  static TextStyle caption() => const TextStyle(
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        fontSize: 9.2,
+        fontWeight: FontWeight.w500,
+        color: mutedColor,
+        height: 1.08,
+      );
+
+  static TextStyle section() => const TextStyle(
+        fontFamily: family,
+        fontFamilyFallback: fallback,
+        fontSize: 11.2,
+        fontWeight: FontWeight.w600,
+        color: text,
+        height: 1.12,
+        letterSpacing: -.08,
+      );
 }
 
 dynamic _value(Map<String, dynamic> m, List<String> keys) {

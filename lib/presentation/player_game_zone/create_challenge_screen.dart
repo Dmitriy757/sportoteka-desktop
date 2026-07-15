@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'game_zone_api.dart';
+import 'game_zone_cmr_style.dart';
 
 class CreateChallengeScreen extends StatefulWidget {
   const CreateChallengeScreen({super.key});
@@ -128,45 +129,10 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
   }
 
   Widget _headerCard() {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF00A750), Color(0xFF2BC56B)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Новый челлендж команды',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-              fontSize: 20,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            teamName.isEmpty ? 'Командный челлендж' : teamName,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            'Создай задание дня или недели, укажи очки и срок выполнения. Игроки увидят его в игровой зоне.',
-            style: TextStyle(
-              color: Colors.white,
-              height: 1.35,
-            ),
-          ),
-        ],
-      ),
+    return GameZoneCmr.header(
+      title: 'Новый челлендж команды',
+      subtitle: '${teamName.isEmpty ? 'Командный челлендж' : teamName}\nСоздай задание дня или недели, укажи очки и срок выполнения. Игроки увидят его в игровой зоне.',
+      icon: Icons.flag_rounded,
     );
   }
 
@@ -205,13 +171,13 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   decoration: BoxDecoration(
                     color: selected
-                        ? const Color(0xFFEAFBF1)
-                        : const Color(0xFFF8F9FA),
+                        ? GzColors.greenSoft
+                        : GzColors.soft,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                       color: selected
-                          ? const Color(0xFF00A750)
-                          : const Color(0xFFE5E7EB),
+                          ? GzColors.green
+                          : GzColors.divider,
                     ),
                   ),
                   child: Center(
@@ -220,8 +186,8 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
                       style: TextStyle(
                         fontWeight: FontWeight.w800,
                         color: selected
-                            ? const Color(0xFF00A750)
-                            : Colors.black87,
+                            ? GzColors.green
+                            : GzColors.text,
                       ),
                     ),
                   ),
@@ -240,13 +206,7 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0D000000),
-            blurRadius: 12,
-            offset: Offset(0, 4),
-          ),
-        ],
+      border: Border.all(color: GzColors.divider),
       ),
       child: Form(
         key: _formKey,
@@ -353,7 +313,7 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18),
                   ),
-                  backgroundColor: const Color(0xFF00A750),
+                  backgroundColor: GzColors.green,
                   foregroundColor: Colors.white,
                 ),
               ),
@@ -368,9 +328,9 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
+        color: GzColors.soft,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: GzColors.divider),
       ),
       child: Row(
         children: [
@@ -378,10 +338,10 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: const Color(0xFFEAFBF1),
+              color: GzColors.greenSoft,
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(icon, color: const Color(0xFF00A750)),
+            child: Icon(icon, color: GzColors.green),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -399,7 +359,7 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
                 Text(
                   subtitle,
                   style: const TextStyle(
-                    color: Color(0xFF6B7280),
+                    color: GzColors.subtle,
                     fontSize: 12,
                     height: 1.35,
                   ),
@@ -450,10 +410,13 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
     final validTeam = teamId > 0;
 
     return Scaffold(
-      appBar: AppBar(
+      backgroundColor: GzColors.bg,
+      appBar: GameZoneCmr.appBar(
         title: const Text('Создать челлендж'),
       ),
-      body: !validTeam
+      body: GameZoneCmr.page(
+        context,
+        child: !validTeam
           ? const Center(
               child: Padding(
                 padding: EdgeInsets.all(24),
@@ -468,7 +431,7 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
               ),
             )
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: GameZoneCmr.listPadding(context),
               children: [
                 _headerCard(),
                 const SizedBox(height: 16),
@@ -477,6 +440,7 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
                 _ideasBlock(),
               ],
             ),
+      ),
     );
   }
 }

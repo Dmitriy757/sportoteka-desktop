@@ -302,12 +302,12 @@ class _SummaryGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = report.summary;
     final tiles = [
-      _Metric('Training time', report.durationLabel, 'длительность'),
-      _Metric('Average distance', s.averageDistanceM.toStringAsFixed(0), 'м'),
-      _Metric('Number of players', '${report.playersCount}', 'игроков'),
-      _Metric('High speed distance', s.highSpeedDistanceM.toStringAsFixed(0), 'м'),
-      _Metric('Player load', s.playerLoad.toStringAsFixed(0), 'усл. ед.'),
-      _Metric('ACC/DEC', s.accDecPerMin.toStringAsFixed(1), 'в мин'),
+      _Metric('Время тренировки', report.durationLabel, 'длительность'),
+      _Metric('Средняя дистанция', s.averageDistanceM.toStringAsFixed(0), 'м'),
+      _Metric('Количество игроков', '${report.playersCount}', 'игроков'),
+      _Metric('Высокоскоростная дистанция', s.highSpeedDistanceM.toStringAsFixed(0), 'м'),
+      _Metric('Нагрузка игрока', s.playerLoad.toStringAsFixed(0), 'усл. ед.'),
+      _Metric('Ускор./торм.', s.accDecPerMin.toStringAsFixed(1), 'в мин'),
     ];
     return GridView.builder(
       shrinkWrap: true,
@@ -365,7 +365,7 @@ class _InternalLoadTab extends StatelessWidget {
         a: _ChartCard(title: 'ВРЕМЯ В ЗОНАХ ЧСС', child: _StackedHrChart(players: report.players, distanceMode: false)),
         b: _ChartCard(title: 'ДИСТАНЦИЯ В РАЗЛИЧНЫХ ЗОНАХ ЧСС', child: _StackedHrChart(players: report.players, distanceMode: true)),
         c: _ChartCard(title: 'СРЕДНИЙ % ОТ ЧСС МАКС', child: _BarChart(players: report.players, value: (p) => p.heartRateMaxPercent, label: '% ЧСС')),
-        d: _ChartCard(title: 'HR EXERTION + PLAYER LOAD', child: _DualBarChart(players: report.players, first: (p) => p.hrExertion, second: (p) => p.playerLoad, firstLabel: 'HR exertion', secondLabel: 'Player load')),
+        d: _ChartCard(title: 'НАПРЯЖЕНИЕ ПО ЧСС + НАГРУЗКА ИГРОКА', child: _DualBarChart(players: report.players, first: (p) => p.hrExertion, second: (p) => p.playerLoad, firstLabel: 'Напряжение по ЧСС', secondLabel: 'Нагрузка игрока')),
       ),
     ]);
   }
@@ -379,7 +379,7 @@ class _MicrocycleTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return _ScrollPage(children: [
       _SectionTitle('ДИНАМИКА МИКРОЦИКЛА'),
-      _Card(title: 'Дистанция / HSR / ACC-DEC', child: SizedBox(height: 440, child: _MicrocycleChart(points: report.microcycle))),
+      _Card(title: 'Дистанция / высокоинтенсивный бег / ускорения-торможения', child: SizedBox(height: 440, child: _MicrocycleChart(points: report.microcycle))),
       const SizedBox(height: 12),
       _Card(title: 'СРАВНЕНИЕ MD-5', child: SizedBox(height: 360, child: _PercentBarChart(values: _mdComparison(report)))),
     ]);
@@ -513,7 +513,7 @@ class _LocomotorTable extends StatelessWidget {
               14: FlexColumnWidth(.8),
             },
             children: [
-              _tableRow(['Фамилия', 'Время', 'Дист. м', 'м/мин', 'Max', 'Уск.', 'Торм.', 'УСК+ТОР', 'Взрыв.', 'V3 бег', 'V4 ВСБ', 'V5 спринт', 'Спр.', 'V4+V5', 'Действ.'], header: true),
+              _tableRow(['Фамилия', 'Время', 'Дист. м', 'м/мин', 'Макс.', 'Уск.', 'Торм.', 'УСК+ТОР', 'Взрыв.', 'V3 бег', 'V4 ВСБ', 'V5 спринт', 'Спр.', 'V4+V5', 'Действ.'], header: true),
               ...rows.map((p) => _playerRow(p, p.name == 'СРЕДНЕЕ')),
             ],
           ),
@@ -778,7 +778,7 @@ class _MicrocyclePainter extends _BaseChartPainter {
     }
     canvas.drawPath(hsrPath, Paint()..color = const Color(0xFFE11D48)..strokeWidth = 2..style = PaintingStyle.stroke);
     canvas.drawPath(accPath, Paint()..color = const Color(0xFF3B82F6)..strokeWidth = 2..style = PaintingStyle.stroke);
-    text(canvas, 'Total Distance / HSR / ACC-DEC', Offset(rect.left, 0), size: 11, color: _R.darkGreen, weight: FontWeight.w900);
+    text(canvas, 'Дистанция / высокоинтенсивный бег / ускорения-торможения', Offset(rect.left, 0), size: 11, color: _R.darkGreen, weight: FontWeight.w900);
   }
 
   List<TrackerMicrocyclePoint> _demoMicrocycle() => const [
@@ -933,14 +933,14 @@ class _ErrorView extends StatelessWidget {
 }
 
 class _R {
-  static const bg = Color(0xFFF4F6F3);
-  static const panel = Color(0xFFF8FAF8);
-  static const border = Color(0xFFD9E2DC);
+  static const bg = Color(0xFFF6F8FA);
+  static const panel = Color(0xFFFFFFFF);
+  static const border = Color(0xFFEEF2F5);
   static const text = Color(0xFF111827);
   static const muted = Color(0xFF667085);
   static const darkGreen = Color(0xFF0B4F2D);
   static const green = Color(0xFF22C55E);
-  static const lightGreen = Color(0xFFE8F7E8);
+  static const lightGreen = Color(0xFFF1FBF6);
   static const lime = Color(0xFFA3E635);
   static const red = Color(0xFFEF4444);
 }

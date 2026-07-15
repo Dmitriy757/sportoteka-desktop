@@ -1,5 +1,5 @@
 // lib/presentation/club_workspace/cmr_club_trainers_panel.dart
-// Windows 11 / Fluent refresh based on CmrClubTeamsPanel typography and glass cards.
+// Inter typography aligned with CmrClubTeamsPanel and CmrClubRosterPanel.
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -9,6 +9,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+
+import 'package:sportoteka/core/theme/app_typography.dart';
 
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/chat_screen/chat_room_screen.dart';
@@ -119,18 +121,18 @@ String _teamsText(Map<String, dynamic> trainer) {
 // ==================== Цветовая схема ====================
 
 class _CmrColors {
-  static const Color bg = Color(0xFFFFFFFF);
+  static const Color bg = Colors.white;
   static const Color panel = Colors.white;
-  static const Color glass = Color(0xF7FFFFFF);
-  static const Color soft = Color(0xFFFAFBFC);
-  static const Color soft2 = Color(0xFFF6F7F9);
+  static const Color glass = Colors.white;
+  static const Color soft = Color(0xFFFAFBFA);
+  static const Color soft2 = Color(0xFFF4F6F4);
   static const Color active = Colors.white;
 
   static const Color text = Color(0xFF0B0F14);
   static const Color muted = Color(0xFF374151);
   static const Color muted2 = Color(0xFF6B7280);
   static const Color subtle = Color(0xFF6B7280);
-  static const Color line = Color(0xFFEFF1F4);
+  static const Color line = Color(0xFFE9ECEA);
   static const Color graphite = Color(0xFF111827);
   static const Color graphite2 = Color(0xFF1F2937);
   static const Color graphiteButton = Color(0xFF111827);
@@ -138,7 +140,7 @@ class _CmrColors {
 
   static const Color green = Color(0xFF00A750);
   static const Color greenDark = Color(0xFF067A46);
-  static const Color greenSoft = Color(0xFFF3FBF7);
+  static const Color greenSoft = Color(0xFFF3FAF6);
   static const Color greenSoft2 = Color(0xFFF8FEFA);
   static const Color greenBorder = Color(0xFFD7F0E2);
 
@@ -158,186 +160,147 @@ class _CmrColors {
 }
 
 
-Color _cmrAccent(int index) {
-  const colors = <Color>[
-    _CmrColors.green,
-    _CmrColors.blue,
-    _CmrColors.cyan,
-    _CmrColors.violet,
-    _CmrColors.pink,
-    _CmrColors.amber,
-  ];
-  return colors[index.abs() % colors.length];
-}
+Color _cmrAccent(int index) => _CmrColors.green;
 
-Color _cmrAccentSoft(int index) {
-  const colors = <Color>[
-    _CmrColors.greenSoft,
-    _CmrColors.blueSoft,
-    _CmrColors.cyanSoft,
-    _CmrColors.violetSoft,
-    _CmrColors.pinkSoft,
-    _CmrColors.amberSoft,
-  ];
-  return colors[index.abs() % colors.length];
-}
+Color _cmrAccentSoft(int index) => _CmrColors.greenSoft;
 
 // ==================== Текстовые стили ====================
 
+
 class _CmrText {
-  static const String family = 'Segoe UI';
-  static const List<String> fallback = <String>[
-    'SF Pro Display',
-    'SF Pro Text',
-    'Inter',
-    'Roboto',
-    'Arial',
-  ];
-
-  static TextStyle title(double size) => TextStyle(
+  static TextStyle title(double size) => AppTypography.custom(
+        size: size,
+        weight: FontWeight.w600,
         color: _CmrColors.text,
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: size,
-        fontWeight: FontWeight.w700,
-        height: 1.08,
-        letterSpacing: -.40,
-        fontFeatures: const [FontFeature.tabularFigures()],
+        height: 1.18,
+        letterSpacing: 0,
+        features: const <FontFeature>[
+          FontFeature.tabularFigures(),
+        ],
       );
 
-  static TextStyle section() => const TextStyle(
+  static TextStyle section() => AppTypography.custom(
+        size: 12.2,
+        weight: FontWeight.w600,
         color: _CmrColors.text,
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: 12.75,
-        fontWeight: FontWeight.w700,
-        height: 1.12,
-        letterSpacing: -.22,
+        height: 1.18,
+        letterSpacing: 0,
       );
 
-  static TextStyle value(double size) => TextStyle(
+  static TextStyle value(double size) => AppTypography.custom(
+        size: size,
+        weight: FontWeight.w600,
         color: _CmrColors.text,
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: size,
-        fontWeight: FontWeight.w700,
-        height: 1.08,
-        letterSpacing: -.28,
-        fontFeatures: const [FontFeature.tabularFigures()],
+        height: 1.16,
+        letterSpacing: 0,
+        features: const <FontFeature>[
+          FontFeature.tabularFigures(),
+        ],
       );
 
-  static TextStyle muted(double size) => TextStyle(
-        color: _CmrColors.muted,
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: size,
-        fontWeight: FontWeight.w500,
-        height: 1.34,
-        letterSpacing: -.06,
-      );
-
-  static TextStyle caption() => const TextStyle(
+  static TextStyle muted(double size) => AppTypography.custom(
+        size: size,
+        weight: FontWeight.w400,
         color: _CmrColors.muted2,
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: 10.15,
-        fontWeight: FontWeight.w600,
-        height: 1.08,
-        letterSpacing: .08,
+        height: 1.32,
+        letterSpacing: 0,
       );
 
-  static TextStyle pill() => const TextStyle(
+  static TextStyle caption() => AppTypography.custom(
+        size: 10.8,
+        weight: FontWeight.w500,
+        color: _CmrColors.muted2,
+        height: 1.18,
+        letterSpacing: 0,
+      );
+
+  static TextStyle pill() => AppTypography.custom(
+        size: 11.2,
+        weight: FontWeight.w500,
         color: _CmrColors.text,
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: 10.45,
-        fontWeight: FontWeight.w600,
-        letterSpacing: -.02,
+        height: 1.16,
+        letterSpacing: 0,
       );
 
-  static TextStyle tab() => const TextStyle(
+  static TextStyle tab() => AppTypography.custom(
+        size: 11.4,
+        weight: FontWeight.w500,
         color: _CmrColors.text,
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: 11.35,
-        fontWeight: FontWeight.w600,
-        letterSpacing: -.04,
+        height: 1.16,
+        letterSpacing: 0,
       );
 
-  static TextStyle tabSelected() => const TextStyle(
+  static TextStyle tabSelected() => AppTypography.custom(
+        size: 11.4,
+        weight: FontWeight.w700,
         color: _CmrColors.text,
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: 11.35,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -.04,
+        height: 1.16,
+        letterSpacing: 0,
       );
 
-  static TextStyle action() => const TextStyle(
+  static TextStyle action() => AppTypography.custom(
+        size: 11.8,
+        weight: FontWeight.w600,
         color: _CmrColors.text,
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: 11.35,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -.08,
+        height: 1.16,
+        letterSpacing: 0,
       );
 
-  static TextStyle danger() => const TextStyle(
+  static TextStyle danger() => AppTypography.custom(
+        size: 11.8,
+        weight: FontWeight.w600,
         color: _CmrColors.red,
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: 11.35,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -.08,
+        height: 1.16,
+        letterSpacing: 0,
       );
 }
 
-// ==================== Декораторы ====================
-
 class _CmrDecor {
+  // Общая геометрия приведена к мобильному/планшетному стилю Tracker Workspace.
+  static const double mobilePagePadding = 2.0;
+  static const double mobileWindowRadius = 18.0;
+  static const double tabletWindowRadius = 16.0;
+  static const double mobileCardRadius = 18.0;
+  static const double tabletCardRadius = 16.0;
+  static const double mobileInnerRadius = 12.0;
+  static const double tabletInnerRadius = 12.0;
+  static const double sheetRadius = 18.0;
+  static const double mobileDockScrollInset = 132.0;
+
+  static List<BoxShadow> get windowShadow => [
+        BoxShadow(
+          color: Colors.black.withOpacity(.035),
+          blurRadius: 28,
+          spreadRadius: -18,
+          offset: const Offset(0, 16),
+        ),
+      ];
+
+  static List<BoxShadow> get cardShadow => [
+        BoxShadow(
+          color: Colors.black.withOpacity(.015),
+          blurRadius: 16,
+          spreadRadius: -11,
+          offset: const Offset(0, 9),
+        ),
+      ];
+
   static BoxDecoration workspaceBg() => const BoxDecoration(
-        color: Color(0xFFF6F7F9),
+        color: _CmrColors.bg,
       );
 
-  static BoxDecoration panel({double radius = 22, bool elevated = true}) => BoxDecoration(
+  static BoxDecoration panel({double radius = tabletCardRadius, bool elevated = true}) => BoxDecoration(
         color: _CmrColors.panel,
         borderRadius: BorderRadius.circular(radius),
-        boxShadow: elevated
-            ? [
-                BoxShadow(
-                  color: Colors.black.withOpacity(.045),
-                  blurRadius: 34,
-                  spreadRadius: -14,
-                  offset: const Offset(0, 20),
-                ),
-                BoxShadow(
-                  color: Colors.black.withOpacity(.025),
-                  blurRadius: 10,
-                  spreadRadius: -7,
-                  offset: const Offset(0, 4),
-                ),
-              ]
-            : null,
+        border: Border.all(color: _CmrColors.line.withOpacity(.55), width: .7),
+        boxShadow: elevated ? cardShadow : null,
       );
 
-  static BoxDecoration unifiedWindow({double radius = 24}) => BoxDecoration(
+  static BoxDecoration unifiedWindow({double radius = tabletWindowRadius}) => BoxDecoration(
         color: _CmrColors.glass,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: Colors.white.withOpacity(.86), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(.055),
-            blurRadius: 38,
-            spreadRadius: -18,
-            offset: const Offset(0, 22),
-          ),
-          BoxShadow(
-            color: _CmrColors.blue.withOpacity(.035),
-            blurRadius: 24,
-            spreadRadius: -18,
-            offset: const Offset(0, 10),
-          ),
-        ],
+        border: Border.all(color: Colors.transparent, width: 0),
+        boxShadow: windowShadow,
       );
 
   static BoxDecoration seamlessPane({double radius = 0}) => BoxDecoration(
@@ -345,58 +308,30 @@ class _CmrDecor {
         borderRadius: BorderRadius.circular(radius),
       );
 
-  static BoxDecoration softCard({double radius = 18, bool active = false}) => BoxDecoration(
-        color: active ? Colors.white.withOpacity(.96) : Colors.white.withOpacity(.78),
+  static BoxDecoration softCard({double radius = mobileInnerRadius, bool active = false}) => BoxDecoration(
+        color: active ? _CmrColors.greenSoft : _CmrColors.panel,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: active ? _CmrColors.green.withOpacity(.18) : Colors.white.withOpacity(.72)),
-        boxShadow: active
-            ? [
-                BoxShadow(
-                  color: Colors.black.withOpacity(.050),
-                  blurRadius: 24,
-                  spreadRadius: -12,
-                  offset: const Offset(0, 14),
-                ),
-              ]
-            : null,
+        border: Border.all(color: active ? _CmrColors.greenBorder : _CmrColors.line.withOpacity(.78), width: .85),
+        boxShadow: cardShadow,
       );
 
   static BoxDecoration fluentSurface({
-    double radius = 16,
+    double radius = mobileInnerRadius,
     Color accent = _CmrColors.green,
     bool active = false,
     bool compact = false,
   }) => BoxDecoration(
-        color: active ? Colors.white.withOpacity(.96) : Colors.white.withOpacity(.82),
+        color: active ? _CmrColors.greenSoft : _CmrColors.panel,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(
-          color: active ? accent.withOpacity(.20) : Colors.white.withOpacity(.78),
-          width: active ? 1.05 : 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(active ? .070 : .040),
-            blurRadius: compact ? 14 : 22,
-            spreadRadius: compact ? -9 : -12,
-            offset: Offset(0, compact ? 7 : 12),
-          ),
-          BoxShadow(
-            color: accent.withOpacity(active ? .055 : .025),
-            blurRadius: compact ? 10 : 16,
-            spreadRadius: compact ? -9 : -11,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: active ? accent.withOpacity(.22) : _CmrColors.line.withOpacity(.78), width: .85),
       );
 
-  static BoxDecoration greenCard({double radius = 18}) => fluentSurface(
+  static BoxDecoration greenCard({double radius = mobileInnerRadius}) => fluentSurface(
         radius: radius,
         accent: _CmrColors.green,
         active: true,
-      );
+      ).copyWith(boxShadow: cardShadow);
 }
-
-// ==================== Диалог для полноэкранного просмотра фото ====================
 
 class _FullscreenPhotoDialog extends StatelessWidget {
   final String photoUrl;
@@ -449,10 +384,11 @@ class _FullscreenPhotoDialog extends StatelessWidget {
             child: Text(
               name,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: AppTypography.custom(
+                size: 16.75,
+                weight: FontWeight.w600,
                 color: Colors.white,
-                fontSize: 16.75,
-                fontWeight: FontWeight.w500,
+                height: 1.18,
               ),
             ),
           ),
@@ -752,7 +688,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
       builder: (context, constraints) {
         final mobile = constraints.maxWidth < 640;
         final compact = constraints.maxWidth < 980;
-        final listWidth = math.min(480.0, constraints.maxWidth * .45);
+        final listWidth = math.min(compact ? 430.0 : 480.0, constraints.maxWidth * (compact ? .43 : .45));
 
         final list = _TrainerListPanel(
           clubName: widget.clubName,
@@ -781,34 +717,51 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
         final content = mobile
             ? Container(
                 width: double.infinity,
-                decoration: _CmrDecor.workspaceBg(),
-                child: list,
+                color: const Color(0xFFF6F7F6),
+                padding: const EdgeInsets.all(6),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.all(Radius.circular(18)),
+                    ),
+                    child: list,
+                  ),
+                ),
               )
             : Container(
-                decoration: _CmrDecor.workspaceBg(),
-                padding: const EdgeInsets.all(10),
-                child: Container(
-                  clipBehavior: Clip.antiAlias,
-                  decoration: _CmrDecor.unifiedWindow(radius: 24),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      SizedBox(width: listWidth, child: list),
-                      Container(width: 1, color: _CmrColors.line),
-                      Expanded(
-                        child: _TrainerDetailPanel(
-                          trainer: selected,
-                          clubName: widget.clubName,
-                          selectedTeamName: widget.selectedTeamName,
-                          onMessage: selected == null ? null : () => _messageTrainer(selected),
-                          onEdit: selected == null ? null : () => _editTrainer(selected),
-                          onAssign: selected == null ? null : () => _assignTrainer(selected),
-                          onUnlinkTeam: selected == null ? null : () => _unlinkTrainerFromTeam(selected),
-                          onRemoveClub: selected == null ? null : () => _removeFromClub(selected),
-                          onAddTrainer: _saving ? null : _searchAndAddTrainer,
+                width: double.infinity,
+                color: const Color(0xFFF6F7F6),
+                padding: EdgeInsets.all(compact ? 8 : 10),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(compact ? 18 : 20),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(compact ? 18 : 20),
+                      boxShadow: _CmrDecor.windowShadow,
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SizedBox(width: listWidth, child: list),
+                        Container(width: 1, color: _CmrColors.line),
+                        Expanded(
+                          child: _TrainerDetailPanel(
+                            trainer: selected,
+                            clubName: widget.clubName,
+                            selectedTeamName: widget.selectedTeamName,
+                            onMessage: selected == null ? null : () => _messageTrainer(selected),
+                            onEdit: selected == null ? null : () => _editTrainer(selected),
+                            onAssign: selected == null ? null : () => _assignTrainer(selected),
+                            onUnlinkTeam: selected == null ? null : () => _unlinkTrainerFromTeam(selected),
+                            onRemoveClub: selected == null ? null : () => _removeFromClub(selected),
+                            onAddTrainer: _saving ? null : _searchAndAddTrainer,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               );
@@ -1460,6 +1413,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
 
 // ==================== Панель тренеров в стиле раздела «Состав» ====================
 
+
 class _TrainerListPanel extends StatelessWidget {
   final String clubName;
   final int trainersCount;
@@ -1505,31 +1459,44 @@ class _TrainerListPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final padding = mobile ? 10.0 : 12.0;
-
     return Container(
-      decoration: mobile ? _CmrDecor.panel(radius: 14) : _CmrDecor.seamlessPane(),
-      padding: EdgeInsets.all(padding),
+      clipBehavior: Clip.antiAlias,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _TrainerHeader(
-            clubName: clubName,
-            trainersCount: trainersCount,
-            visibleCount: visibleCount,
-            assignedCount: assignedCount,
-            mainCount: mainCount,
-            doctorsCount: doctorsCount,
-            onAddTrainer: onAddTrainer,
-            onAssignTrainer: onAssignTrainer,
-            onRefresh: onRefresh,
-            mobile: mobile,
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 12, vertical: 10),
+            decoration: const BoxDecoration(
+              color: Colors.transparent,
+              border: Border(bottom: BorderSide(color: _CmrColors.line, width: .55)),
+            ),
+            child: _TrainerHeader(
+              clubName: clubName,
+              trainersCount: trainersCount,
+              visibleCount: visibleCount,
+              assignedCount: assignedCount,
+              mainCount: mainCount,
+              doctorsCount: doctorsCount,
+              onAddTrainer: onAddTrainer,
+              onAssignTrainer: onAssignTrainer,
+              onRefresh: onRefresh,
+              mobile: mobile,
+            ),
           ),
-          SizedBox(height: mobile ? 10 : 12),
-          _TrainerSearch(controller: searchController, mobile: mobile),
-          const SizedBox(height: 8),
-          _TrainerFilterBar(value: filter, onChanged: onFilterChanged, mobile: mobile),
-          SizedBox(height: mobile ? 9 : 10),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 12, vertical: 8),
+            color: Colors.transparent,
+            child: _TrainerSearch(controller: searchController, mobile: mobile),
+          ),
+          Container(
+            height: 46,
+            padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 12, vertical: 6),
+            color: Colors.transparent,
+            child: _TrainerFilterBar(value: filter, onChanged: onFilterChanged, mobile: mobile),
+          ),
           Expanded(
             child: trainers.isEmpty
                 ? _TrainerEmptyState(
@@ -1542,12 +1509,14 @@ class _TrainerListPanel extends StatelessWidget {
                 : RefreshIndicator(
                     color: _CmrColors.green,
                     onRefresh: onRefresh ?? () async {},
-                    child: ListView.separated(
+                    child: ListView.builder(
                       controller: scrollController,
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: EdgeInsets.only(bottom: mobile ? 20 : 8),
+                      padding: EdgeInsets.only(
+                        top: 0,
+                        bottom: mobile ? _CmrDecor.mobileDockScrollInset : 12,
+                      ),
                       itemCount: trainers.length,
-                      separatorBuilder: (_, __) => SizedBox(height: mobile ? 6 : 7),
                       itemBuilder: (_, index) {
                         final trainer = trainers[index];
                         final active = selectedKey.isNotEmpty && selectedKey == trainerIdentity(trainer);
@@ -1598,13 +1567,6 @@ class _TrainerHeader extends StatelessWidget {
 
     return Row(
       children: [
-        Container(
-          width: mobile ? 34 : 36,
-          height: mobile ? 34 : 36,
-          decoration: _CmrDecor.fluentSurface(radius: 10, accent: _CmrColors.green, active: true, compact: true),
-          child: const Icon(Icons.badge_rounded, color: _CmrColors.green, size: 16),
-        ),
-        const SizedBox(width: 10),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1636,15 +1598,7 @@ class _TrainerHeader extends StatelessWidget {
           emphasized: true,
           compact: true,
         ),
-        if (onAssignTrainer != null) ...[
-          const SizedBox(width: 6),
-          _TrainerIconButton(
-            icon: Icons.add_link_rounded,
-            tooltip: 'Назначить в команду',
-            onTap: onAssignTrainer,
-            compact: true,
-          ),
-        ],
+
       ],
     );
   }
@@ -1689,17 +1643,17 @@ class _TrainerStatChip extends StatelessWidget {
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: _CmrColors.panel,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
         border: Border.all(color: _CmrColors.line),
       ),
       child: Row(
         children: [
           Container(
             width: 32,
-            height: 32,
+            height: 38,
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(9),
+              borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
             ),
             child: Icon(icon, size: 15, color: _CmrColors.green),
           ),
@@ -1742,11 +1696,11 @@ class _TrainerIconButton extends StatelessWidget {
       message: tooltip,
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
         child: Ink(
           decoration: _CmrDecor.fluentSurface(radius: 10, accent: _CmrColors.green, active: emphasized, compact: true),
           child: InkWell(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
           onTap: onTap,
           child: Opacity(
             opacity: onTap == null ? .45 : 1,
@@ -1772,31 +1726,41 @@ class _TrainerSearch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: mobile ? 40 : 42,
-      decoration: _CmrDecor.softCard(radius: mobile ? 10 : 11),
-      padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 12),
+      height: 42,
+      decoration: const BoxDecoration(
+        color: Colors.transparent,
+        border: Border(
+          bottom: BorderSide(color: _CmrColors.line, width: .8),
+        ),
+      ),
+      padding: EdgeInsets.symmetric(horizontal: mobile ? 2 : 4),
       child: Row(
         children: [
-          const Icon(Icons.search_rounded, color: _CmrColors.muted, size: 18),
-          const SizedBox(width: 8),
           Expanded(
             child: TextField(
               controller: controller,
               decoration: const InputDecoration(
-                hintText: 'Поиск тренера, роли или команды...',
+                hintText: 'Поиск тренера',
                 border: InputBorder.none,
                 isDense: true,
               ),
-              style: _CmrText.value(mobile ? 12.5 : 13),
+              style: _CmrText.value(mobile ? 12.4 : 12.9),
             ),
           ),
           if (controller.text.trim().isNotEmpty)
             InkWell(
-              borderRadius: BorderRadius.circular(99),
               onTap: controller.clear,
+              borderRadius: BorderRadius.circular(99),
               child: const Padding(
-                padding: EdgeInsets.all(4),
-                child: Icon(Icons.close_rounded, color: _CmrColors.muted, size: 16),
+                padding: EdgeInsets.all(5),
+                child: Text(
+                  '×',
+                  style: TextStyle(
+                    color: _CmrColors.muted2,
+                    fontSize: 19,
+                    height: 1,
+                  ),
+                ),
               ),
             ),
         ],
@@ -1869,40 +1833,80 @@ class _StaffFilterPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = _cmrAccent(icon.codePoint);
-    final accentSoft = _cmrAccentSoft(icon.codePoint);
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(9),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
         onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          padding: EdgeInsets.symmetric(horizontal: dense ? 9 : 11, vertical: dense ? 7 : 8),
-          decoration: _CmrDecor.fluentSurface(radius: 9, accent: accent, active: active, compact: true),
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          constraints: BoxConstraints(
+            minHeight: dense ? 34 : 36,
+          ),
+          padding: EdgeInsets.symmetric(
+            horizontal: dense ? 9 : 11,
+            vertical: dense ? 7 : 8,
+          ),
+          decoration: BoxDecoration(
+            color: active
+                ? _CmrColors.greenSoft
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+            border: Border.all(
+              color: active
+                  ? _CmrColors.greenBorder
+                  : Colors.transparent,
+              width: .8,
+            ),
+            boxShadow: active
+                ? [
+                    BoxShadow(
+                      color: _CmrColors.green.withOpacity(.055),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
+          ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: dense ? 18 : 20,
-                height: dense ? 18 : 20,
-                decoration: BoxDecoration(
-                  color: active ? accent.withOpacity(.10) : Colors.white.withOpacity(.86),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Icon(icon, color: accent, size: dense ? 13 : 14),
+              Icon(
+                icon,
+                size: dense ? 13.5 : 14,
+                color: active
+                    ? _CmrColors.greenDark
+                    : _CmrColors.subtle,
               ),
-              const SizedBox(width: 7),
+              SizedBox(width: dense ? 5 : 6),
               Text(
                 label,
-                style: TextStyle(
-                  color: active ? _CmrColors.text : _CmrColors.text,
-                  fontSize: dense ? 11.5 : 12,
-                  fontWeight: FontWeight.w500,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _CmrText.action().copyWith(
+                  color: active
+                      ? _CmrColors.greenDark
+                      : _CmrColors.muted2,
+                  fontSize: dense ? 11.0 : 11.4,
+                  fontWeight: active
+                      ? FontWeight.w700
+                      : FontWeight.w500,
                   height: 1,
                 ),
               ),
+              if (active) ...[
+                const SizedBox(width: 6),
+                Container(
+                  width: 5,
+                  height: 5,
+                  decoration: const BoxDecoration(
+                    color: _CmrColors.green,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -1931,84 +1935,139 @@ class _TrainerTile extends StatelessWidget {
     final team = _teamsText(trainer);
     final photo = _trainerPhoto(trainer);
     final main = _isMain(trainer);
-    final phone = _trainerPhone(trainer);
-    final email = _trainerEmail(trainer);
-    final contact = phone.isNotEmpty ? phone : email;
-    final meta = [role, team, if (contact.isNotEmpty) contact].where((e) => e.trim().isNotEmpty).join('  •  ');
-    final accent = _cmrAccent(name.hashCode + role.hashCode);
-    final accentSoft = _cmrAccentSoft(name.hashCode + role.hashCode);
+    final experience = _trainerExperience(trainer);
+
+    final meta = [
+      role,
+      team,
+      if (experience.isNotEmpty && !mobile) experience,
+    ].where((e) => e.trim().isNotEmpty).join('  ·  ');
 
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(11),
       child: InkWell(
-        borderRadius: BorderRadius.circular(11),
         onTap: onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 170),
-          padding: EdgeInsets.symmetric(horizontal: mobile ? 9 : 10, vertical: mobile ? 8 : 9),
+          duration: const Duration(milliseconds: 180),
+          constraints: BoxConstraints(minHeight: mobile ? 80 : 76),
+          padding: EdgeInsets.fromLTRB(
+            mobile ? 10 : 12,
+            9,
+            mobile ? 10 : 12,
+            9,
+          ),
           decoration: BoxDecoration(
-            color: active ? Colors.white.withOpacity(.96) : Colors.white.withOpacity(.72),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: active ? accent.withOpacity(.20) : Colors.white.withOpacity(.66)),
-            boxShadow: active
-                ? [
-                    BoxShadow(color: Colors.black.withOpacity(.050), blurRadius: 22, spreadRadius: -10, offset: const Offset(0, 12)),
-                    BoxShadow(color: accent.withOpacity(.045), blurRadius: 16, spreadRadius: -11, offset: const Offset(0, 5)),
-                  ]
-                : null,
+            color: active ? _CmrColors.greenSoft2 : Colors.white,
+            border: const Border(
+              bottom: BorderSide(color: _CmrColors.line, width: .65),
+            ),
           ),
           child: Row(
             children: [
               AnimatedContainer(
-                duration: const Duration(milliseconds: 170),
+                duration: const Duration(milliseconds: 180),
                 width: 3,
-                height: mobile ? 42 : 46,
+                height: mobile ? 50 : 48,
                 decoration: BoxDecoration(
-                  color: active ? accent : Colors.transparent,
+                  color: active ? _CmrColors.green : Colors.transparent,
                   borderRadius: BorderRadius.circular(99),
                 ),
               ),
-              SizedBox(width: active ? 8 : 6),
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  _CmrAvatar(photo: photo, name: name, size: mobile ? 40 : 44),
-                  Positioned(
-                    right: -3,
-                    bottom: -3,
-                    child: _TrainerStatusBadge(main: main, active: active),
-                  ),
-                ],
+              const SizedBox(width: 9),
+              _CmrAvatar(
+                photo: photo,
+                name: name,
+                size: mobile ? 52 : 50,
               ),
-              SizedBox(width: mobile ? 9 : 10),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _CmrText.title(mobile ? 13.4 : 14.2),
+                      style: _CmrText.title(mobile ? 14.0 : 14.3),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 5),
                     Text(
-                      meta.isEmpty ? 'Данные не заполнены' : meta,
+                      meta,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _CmrText.muted(mobile ? 10.8 : 11.2),
+                      style: _CmrText.muted(10.8),
                     ),
+                    if (main) ...[
+                      const SizedBox(height: 5),
+                      Text(
+                        'ГЛАВНЫЙ ТРЕНЕР',
+                        style: TextStyle(
+                          color: _CmrColors.greenDark,
+                          fontSize: 8.6,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: .35,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
-              if (!mobile) ...[
-                const SizedBox(width: 8),
-                _ChevronBadge(active: active),
-              ],
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _TrainerListBadge extends StatelessWidget {
+  final String text;
+  final IconData icon;
+  final bool active;
+
+  const _TrainerListBadge({
+    required this.text,
+    required this.icon,
+    this.active = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 180),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+      decoration: BoxDecoration(
+        color: active ? _CmrColors.greenSoft : _CmrColors.soft,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: active ? _CmrColors.greenBorder : _CmrColors.line.withOpacity(.65),
+          width: .7,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 12,
+            color: active ? _CmrColors.green : _CmrColors.muted2,
+          ),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: active ? _CmrColors.greenDark : _CmrColors.muted,
+                fontSize: 10.3,
+                fontWeight: FontWeight.w600,
+                height: 1,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2027,7 +2086,7 @@ class _TrainerStatusBadge extends StatelessWidget {
       height: 19,
       decoration: BoxDecoration(
         color: main || active ? _CmrColors.green.withOpacity(.10) : _CmrColors.panel,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
         border: Border.all(color: main || active ? _CmrColors.green.withOpacity(.18) : _CmrColors.line),
       ),
       child: Icon(
@@ -2051,7 +2110,7 @@ class _ChevronBadge extends StatelessWidget {
       height: 26,
       decoration: BoxDecoration(
         color: active ? _CmrColors.green.withOpacity(.10) : _CmrColors.soft,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
         border: Border.all(color: active ? _CmrColors.green.withOpacity(.18) : _CmrColors.line),
       ),
       child: Icon(Icons.chevron_right_rounded, size: 16, color: active ? _CmrColors.green : _CmrColors.muted2),
@@ -2143,7 +2202,14 @@ class _TrainerDetailPanel extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
+            _TrainerMetricsStrip(
+              teams: teams.length,
+              experience: experience.isEmpty ? '—' : experience,
+              main: main,
+              contacts: [email, phone].where((e) => e.trim().isNotEmpty).length,
+            ),
+            const SizedBox(height: 18),
             _TrainerDetailSection(
               title: 'Данные тренера',
               children: [
@@ -2204,34 +2270,54 @@ class _TrainerDetailHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            GestureDetector(
-              onTap: () {
-                if (photo.isNotEmpty) {
-                  showDialog(context: context, builder: (_) => _FullscreenPhotoDialog(photoUrl: photo, name: name));
-                }
-              },
-              child: _CmrAvatar(photo: photo, name: name, size: 52),
-            ),
-            Positioned(right: -4, bottom: -4, child: _TrainerStatusBadge(main: main, active: true)),
-          ],
+        GestureDetector(
+          onTap: () {
+            if (photo.isNotEmpty) {
+              showDialog(
+                context: context,
+                builder: (_) => _FullscreenPhotoDialog(
+                  photoUrl: photo,
+                  name: name,
+                ),
+              );
+            }
+          },
+          child: _CmrAvatar(
+            photo: photo,
+            name: name,
+            size: 82,
+          ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 14),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(name, style: _CmrText.title(17.5), maxLines: 2, overflow: TextOverflow.ellipsis),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  _CmrPill(text: role, icon: Icons.badge_rounded, color: _CmrColors.green),
-                  _CmrPill(text: clubName, icon: Icons.apartment_rounded),
-                ],
+              if (main)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(
+                    'ГЛАВНЫЙ ТРЕНЕР',
+                    style: TextStyle(
+                      color: _CmrColors.greenDark,
+                      fontSize: 8.6,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: .35,
+                    ),
+                  ),
+                ),
+              Text(
+                name,
+                style: _CmrText.title(22),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 7),
+              Text(
+                '$role  ·  $clubName',
+                style: _CmrText.muted(11.8),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
@@ -2273,7 +2359,7 @@ class _TrainerSummaryCard extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
                   ),
             child: Text(teamsCount == 0 ? 'Без команды' : '$teamsCount ком.', style: _CmrText.title(15)),
           ),
@@ -2315,6 +2401,73 @@ class _TrainerMiniMetric extends StatelessWidget {
   }
 }
 
+
+class _TrainerMetricsStrip extends StatelessWidget {
+  final int teams;
+  final String experience;
+  final bool main;
+  final int contacts;
+
+  const _TrainerMetricsStrip({
+    required this.teams,
+    required this.experience,
+    required this.main,
+    required this.contacts,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final items = <({String value, String label})>[
+      (value: '$teams', label: 'Команды'),
+      (value: experience, label: 'Опыт'),
+      (value: main ? 'Да' : 'Нет', label: 'Главный'),
+      (value: '$contacts/2', label: 'Контакты'),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: const BoxDecoration(
+        border: Border(
+          top: BorderSide(color: _CmrColors.line, width: .65),
+          bottom: BorderSide(color: _CmrColors.line, width: .65),
+        ),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < items.length; i++) ...[
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    items[i].value.trim().isEmpty ? '—' : items[i].value,
+                    style: _CmrText.title(15),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    items[i].label,
+                    style: _CmrText.caption(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            if (i != items.length - 1)
+              Container(
+                width: 1,
+                height: 28,
+                color: _CmrColors.line,
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _TrainerDetailSection extends StatelessWidget {
   final String title;
   final List<Widget> children;
@@ -2323,51 +2476,68 @@ class _TrainerDetailSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: _CmrDecor.softCard(radius: 11),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(width: 3, height: 16, decoration: BoxDecoration(color: _CmrColors.green, borderRadius: BorderRadius.circular(99))),
-              const SizedBox(width: 8),
-              Expanded(child: Text(title, style: _CmrText.section())),
-            ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(2, 0, 2, 10),
+          child: Text(title, style: _CmrText.section()),
+        ),
+        Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: _CmrColors.panel,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _CmrColors.line.withOpacity(.65), width: .7),
           ),
-          const SizedBox(height: 9),
-          ...children,
-        ],
-      ),
+          child: Column(children: children),
+        ),
+      ],
     );
   }
 }
+
 
 class _TrainerDetailRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
 
-  const _TrainerDetailRow({required this.icon, required this.label, required this.value});
+  const _TrainerDetailRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+    return Container(
+      constraints: const BoxConstraints(minHeight: 44),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: const BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: _CmrColors.line, width: .55),
+        ),
+      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _CmrRoundIcon(icon: icon, color: _CmrColors.green, size: 25),
-          const SizedBox(width: 8),
+          SizedBox(
+            width: 110,
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _CmrText.caption(),
+            ),
+          ),
+          const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: _CmrText.caption()),
-                const SizedBox(height: 3),
-                Text(value, style: _CmrText.value(12.8), maxLines: 3, overflow: TextOverflow.ellipsis),
-              ],
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: _CmrText.value(11.8),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -2375,6 +2545,7 @@ class _TrainerDetailRow extends StatelessWidget {
     );
   }
 }
+
 
 class _TrainerCommentBox extends StatelessWidget {
   final String title;
@@ -2385,25 +2556,27 @@ class _TrainerCommentBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: _CmrDecor.softCard(radius: 11),
+      clipBehavior: Clip.antiAlias,
+      decoration: _CmrDecor.softCard(radius: _CmrDecor.mobileInnerRadius),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              _CmrRoundIcon(icon: Icons.notes_rounded, color: _CmrColors.green, size: 26),
-              const SizedBox(width: 10),
-              Expanded(child: Text(title, style: _CmrText.section())),
-            ],
+          Container(
+            height: 38,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            alignment: Alignment.centerLeft,
+            child: Text(title, style: _CmrText.section()),
           ),
-          const SizedBox(height: 10),
-          Text(text, style: _CmrText.muted(12.5)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            child: Text(text, style: _CmrText.muted(11.4)),
+          ),
         ],
       ),
     );
   }
 }
+
 
 class _TrainerPrimaryActionButton extends StatelessWidget {
   final IconData icon;
@@ -2415,39 +2588,31 @@ class _TrainerPrimaryActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(10),
+      color: _CmrColors.green,
+      borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
         onTap: onTap,
         child: Opacity(
           opacity: onTap == null ? .55 : 1,
           child: Container(
-            height: 34,
+            height: 38,
             alignment: Alignment.center,
             padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: _CmrDecor.fluentSurface(radius: 10, accent: _CmrColors.green, active: true, compact: true),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, color: _CmrColors.green, size: 15),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    text,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: _CmrColors.green, fontSize: 11.55, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ],
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
+              border: Border.all(color: _CmrColors.green, width: .7),
             ),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 10.8, fontWeight: FontWeight.w600))),
+            ]),
           ),
         ),
       ),
     );
   }
 }
+
 
 class _TrainerSecondaryActionButton extends StatelessWidget {
   final IconData icon;
@@ -2459,32 +2624,31 @@ class _TrainerSecondaryActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(10),
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
         onTap: onTap,
         child: Opacity(
           opacity: onTap == null ? .55 : 1,
           child: Container(
-            height: 34,
+            height: 38,
             alignment: Alignment.center,
             padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: _CmrDecor.fluentSurface(radius: 10, accent: _CmrColors.blue, active: false, compact: true),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, color: _CmrColors.blue, size: 15),
-                const SizedBox(width: 6),
-                Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.action())),
-              ],
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
+              border: Border.all(color: _CmrColors.line, width: .7),
             ),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.action())),
+            ]),
           ),
         ),
       ),
     );
   }
 }
+
 
 class _TrainerDangerActionButton extends StatelessWidget {
   final IconData icon;
@@ -2497,38 +2661,31 @@ class _TrainerDangerActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: color.withOpacity(.08),
-      borderRadius: BorderRadius.circular(10),
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
         onTap: onTap,
         child: Opacity(
           opacity: onTap == null ? .55 : 1,
           child: Container(
-            height: 44,
+            height: 34,
             alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, color: color, size: 16),
-                const SizedBox(width: 7),
-                Flexible(
-                  child: Text(
-                    text,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: color, fontSize: 12.35, fontWeight: FontWeight.w500),
-                  ),
-                ),
-              ],
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
+              border: Border.all(color: color.withOpacity(.35), width: .7),
             ),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontSize: 10.8, fontWeight: FontWeight.w600))),
+            ]),
           ),
         ),
       ),
     );
   }
 }
+
 
 class _TrainerEmptyState extends StatelessWidget {
   final String title;
@@ -2541,28 +2698,28 @@ class _TrainerEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Container(
-        padding: const EdgeInsets.all(22),
-        decoration: _CmrDecor.softCard(radius: 28),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
+        decoration: const BoxDecoration(
+          color: _CmrColors.panel,
+          border: Border(bottom: BorderSide(color: _CmrColors.line, width: .7)),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _CmrRoundIcon(icon: Icons.badge_rounded, color: _CmrColors.muted, size: 52),
+            _CmrRoundIcon(icon: Icons.badge_rounded, color: _CmrColors.muted, size: 42),
+            const SizedBox(height: 10),
+            Text(title, textAlign: TextAlign.center, style: _CmrText.title(14.2)),
+            const SizedBox(height: 5),
+            Text(text, textAlign: TextAlign.center, style: _CmrText.muted(11.2)),
             const SizedBox(height: 12),
-            Text(title, textAlign: TextAlign.center, style: _CmrText.title(16)),
-            const SizedBox(height: 6),
-            Text(text, textAlign: TextAlign.center, style: _CmrText.muted(12.5)),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: 190,
-              child: _CmrPrimaryButton(icon: Icons.person_add_alt_1_rounded, title: 'Добавить тренера', onTap: onTap),
-            ),
+            SizedBox(width: 190, child: _CmrPrimaryButton(icon: Icons.person_add_alt_1_rounded, title: 'Добавить тренера', onTap: onTap)),
           ],
         ),
       ),
     );
   }
 }
-
 
 class _TrainerEditSidePanel extends StatefulWidget {
   final Map<String, dynamic> trainer;
@@ -2729,12 +2886,8 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
               margin: EdgeInsets.fromLTRB(mobile ? 8 : 0, mobile ? 8 : 0, mobile ? 8 : 0, mobile ? 8 : 0),
               decoration: BoxDecoration(
                 color: _CmrColors.glass,
-                borderRadius: BorderRadius.horizontal(left: Radius.circular(radius), right: Radius.circular(mobile ? radius : 0)),
-                border: Border.all(color: Colors.white.withOpacity(.86)),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(.055), blurRadius: 30, spreadRadius: -14, offset: const Offset(-10, 0)),
-                  BoxShadow(color: _CmrColors.green.withOpacity(.030), blurRadius: 18, spreadRadius: -12, offset: const Offset(-6, 8)),
-                ],
+                borderRadius: BorderRadius.horizontal(left: Radius.circular(4), right: Radius.circular(mobile ? 4 : 0)),
+                border: Border.all(color: Colors.white.withOpacity(.86))
               ),
               clipBehavior: Clip.antiAlias,
               child: Column(
@@ -2753,13 +2906,13 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
                               Center(
                                 child: InkWell(
                                   onTap: _pickPhoto,
-                                  borderRadius: BorderRadius.circular(18),
+                                  borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
                                   child: Stack(
                                     clipBehavior: Clip.none,
                                     children: [
                                       _pickedPhoto != null
                                           ? ClipRRect(
-                                              borderRadius: BorderRadius.circular(18),
+                                              borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
                                               child: Image.file(File(_pickedPhoto!.path), width: 106, height: 106, fit: BoxFit.cover),
                                             )
                                           : _CmrAvatar(photo: _currentPhoto, name: name, size: 106),
@@ -2771,7 +2924,7 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
                                           height: 30,
                                           decoration: BoxDecoration(
                                             color: _CmrColors.green,
-                                            borderRadius: BorderRadius.circular(9),
+                                            borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
                                             border: Border.all(color: Colors.white, width: 2),
                                           ),
                                           child: const Icon(Icons.photo_camera_rounded, color: Colors.white, size: 14),
@@ -2849,9 +3002,9 @@ class _TrainerEditSideHeader extends StatelessWidget {
           ),
           Material(
             color: _CmrColors.soft,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
             child: InkWell(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
               onTap: onClose,
               child: const SizedBox(
                 width: 34,
@@ -2915,9 +3068,9 @@ class _TrainerPanelSoftButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: _CmrColors.soft,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
         onTap: onTap,
         child: Opacity(
           opacity: onTap == null ? .55 : 1,
@@ -2950,9 +3103,9 @@ class _TrainerPanelGraphiteButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
         onTap: onTap,
         child: Opacity(
           opacity: onTap == null ? .55 : 1,
@@ -3078,9 +3231,9 @@ class _TrainerModalSheetState extends State<_TrainerModalSheet> with SingleTicke
           constraints: const BoxConstraints(maxWidth: 720),
           decoration: BoxDecoration(
             color: _CmrColors.panel,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _CmrColors.line),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(.045), blurRadius: 24, offset: const Offset(0, 14))],
+            borderRadius: BorderRadius.circular(_CmrDecor.sheetRadius),
+            border: Border.all(color: _CmrColors.line.withOpacity(.55), width: .7),
+            boxShadow: _CmrDecor.windowShadow,
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(
@@ -3145,8 +3298,6 @@ class _ModalTopBar extends StatelessWidget {
           const _CmrSheetHandle(),
           Row(
             children: [
-              _CmrRoundIcon(icon: Icons.badge_rounded, color: _CmrColors.green, size: 36),
-              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -3159,9 +3310,9 @@ class _ModalTopBar extends StatelessWidget {
               ),
               Material(
                 color: _CmrColors.soft,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
                   onTap: () => Navigator.of(context).pop(),
                   child: const SizedBox(
                     width: 38,
@@ -3195,70 +3346,58 @@ class _ModalHeaderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _CmrColors.panel,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _CmrColors.green.withOpacity(.14)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(.018), blurRadius: 12, offset: const Offset(0, 7))],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+    final teamsText = teamsCount == 0
+        ? 'Без команды'
+        : '$teamsCount ${_modalTeamWord(teamsCount)}';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 2, 16, 16),
+      child: Column(
         children: [
           GestureDetector(
             onTap: () {
               if (photo.isNotEmpty) {
                 showDialog(
                   context: context,
-                  builder: (_) => _FullscreenPhotoDialog(photoUrl: photo, name: name),
+                  builder: (_) => _FullscreenPhotoDialog(
+                    photoUrl: photo,
+                    name: name,
+                  ),
                 );
               }
             },
-            child: Stack(
-              children: [
-                _CmrAvatar(photo: photo, name: name, size: 76),
-                if (isMain)
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: const BorderRadius.all(Radius.circular(7)),
-                        border: Border.all(color: _CmrColors.green.withOpacity(.16)),
-                      ),
-                      child: const Icon(Icons.check_rounded, color: _CmrColors.green, size: 14),
-                    ),
-                  ),
-              ],
+            child: _CmrAvatar(
+              photo: photo,
+              name: name,
+              size: 94,
             ),
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, style: _CmrText.title(20)),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 7,
-                  runSpacing: 7,
-                  children: [
-                    _ModalPill(text: role, icon: Icons.badge_rounded, color: _CmrColors.green),
-                    if (isMain) const _ModalPill(text: 'Главный', icon: Icons.verified_rounded, color: _CmrColors.green),
-                    _ModalPill(
-                      text: teamsCount == 0 ? 'Без команды' : '$teamsCount ${_modalTeamWord(teamsCount)}',
-                      icon: Icons.groups_2_rounded,
-                    ),
-                  ],
-                ),
-              ],
-            ),
+          const SizedBox(height: 14),
+          Text(
+            name,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: _CmrText.title(21),
           ),
+          const SizedBox(height: 7),
+          Text(
+            '$role  ·  $teamsText',
+            textAlign: TextAlign.center,
+            style: _CmrText.muted(11.8),
+          ),
+          if (isMain) ...[
+            const SizedBox(height: 7),
+            Text(
+              'ГЛАВНЫЙ ТРЕНЕР',
+              style: TextStyle(
+                color: _CmrColors.greenDark,
+                fontSize: 8.7,
+                fontWeight: FontWeight.w700,
+                letterSpacing: .35,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -3266,7 +3405,11 @@ class _ModalHeaderCard extends StatelessWidget {
 
   String _modalTeamWord(int count) {
     if (count % 10 == 1 && count % 100 != 11) return 'команда';
-    if (count % 10 >= 2 && count % 10 <= 4 && (count % 100 < 10 || count % 100 >= 20)) return 'команды';
+    if (count % 10 >= 2 &&
+        count % 10 <= 4 &&
+        (count % 100 < 10 || count % 100 >= 20)) {
+      return 'команды';
+    }
     return 'команд';
   }
 }
@@ -3288,27 +3431,72 @@ class _ModalQuickActions extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          _ModalActionButton(
-            icon: Icons.chat_bubble_rounded,
-            label: 'Сообщение',
-            color: _CmrColors.green,
-            onTap: onMessage,
+          Expanded(
+            child: _ModalTextAction(
+              label: 'Сообщение',
+              onTap: onMessage,
+              primary: true,
+            ),
           ),
           const SizedBox(width: 8),
-          _ModalActionButton(
-            icon: Icons.edit_rounded,
-            label: 'Редактировать',
-            color: _CmrColors.green,
-            onTap: onEdit,
+          Expanded(
+            child: _ModalTextAction(
+              label: 'Редактировать',
+              onTap: onEdit,
+            ),
           ),
           const SizedBox(width: 8),
-          _ModalActionButton(
-            icon: Icons.add_link_rounded,
-            label: 'Назначить',
-            color: _CmrColors.amber,
-            onTap: onAssign,
+          Expanded(
+            child: _ModalTextAction(
+              label: 'Назначить',
+              onTap: onAssign,
+            ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ModalTextAction extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  final bool primary;
+
+  const _ModalTextAction({
+    required this.label,
+    required this.onTap,
+    this.primary = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: primary ? _CmrColors.green : Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          height: 38,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: primary ? _CmrColors.green : _CmrColors.line,
+              width: .7,
+            ),
+          ),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: _CmrText.action().copyWith(
+              color: primary ? Colors.white : _CmrColors.text,
+              fontSize: 10.6,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -3318,30 +3506,36 @@ class _ModalTabBar extends StatelessWidget {
   final TabController controller;
   final int selectedTab;
 
-  const _ModalTabBar({required this.controller, required this.selectedTab});
+  const _ModalTabBar({
+    required this.controller,
+    required this.selectedTab,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: _CmrColors.soft,
-        borderRadius: BorderRadius.circular(12),
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      decoration: const BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: _CmrColors.line, width: .7),
+        ),
       ),
       child: TabBar(
         controller: controller,
-        indicator: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: _CmrColors.green.withOpacity(.14)),
-        ),
+        indicatorColor: _CmrColors.green,
+        indicatorWeight: 2.2,
+        indicatorSize: TabBarIndicatorSize.label,
         dividerColor: Colors.transparent,
-        indicatorSize: TabBarIndicatorSize.tab,
         labelColor: _CmrColors.text,
-        unselectedLabelColor: _CmrColors.muted,
-        labelStyle: const TextStyle(fontSize: 12.35, fontWeight: FontWeight.w500),
-        unselectedLabelStyle: const TextStyle(fontSize: 12.35, fontWeight: FontWeight.w500),
+        unselectedLabelColor: _CmrColors.muted2,
+        labelStyle: const TextStyle(
+          fontSize: 11.8,
+          fontWeight: FontWeight.w700,
+        ),
+        unselectedLabelStyle: const TextStyle(
+          fontSize: 11.8,
+          fontWeight: FontWeight.w500,
+        ),
         tabs: const [
           Tab(text: 'Обзор'),
           Tab(text: 'Команды'),
@@ -3370,7 +3564,7 @@ class _ModalPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(.94),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
         border: Border.all(color: _CmrColors.line),
       ),
       child: Row(
@@ -3381,7 +3575,7 @@ class _ModalPill extends StatelessWidget {
             height: 20,
             decoration: BoxDecoration(
               color: accent.withOpacity(.08),
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
             ),
             child: Icon(icon, size: 12, color: accent),
           ),
@@ -3411,9 +3605,9 @@ class _ModalActionButton extends StatelessWidget {
     return Expanded(
       child: Material(
         color: _CmrColors.soft,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
         child: InkWell(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
@@ -3441,33 +3635,82 @@ class _ModalBottomDangerActions extends StatelessWidget {
   final VoidCallback onUnlinkTeam;
   final VoidCallback onRemoveClub;
 
-  const _ModalBottomDangerActions({required this.onUnlinkTeam, required this.onRemoveClub});
+  const _ModalBottomDangerActions({
+    required this.onUnlinkTeam,
+    required this.onRemoveClub,
+  });
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
       top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+        decoration: const BoxDecoration(
+          border: Border(
+            top: BorderSide(color: _CmrColors.line, width: .7),
+          ),
+        ),
         child: Row(
           children: [
             Expanded(
-              child: _ModalDangerButton(
-                icon: Icons.link_off_rounded,
-                label: 'Отвязать от команды',
+              child: _ModalDangerTextButton(
+                label: 'Отвязать',
+                color: _CmrColors.amber,
                 onTap: onUnlinkTeam,
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: _ModalDangerButton(
-                icon: Icons.delete_outline_rounded,
+              child: _ModalDangerTextButton(
                 label: 'Удалить из клуба',
+                color: _CmrColors.red,
                 onTap: onRemoveClub,
-                isRed: true,
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ModalDangerTextButton extends StatelessWidget {
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ModalDangerTextButton({
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          height: 36,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: color.withOpacity(.45),
+                width: .8,
+              ),
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 10.6,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
       ),
     );
@@ -3492,9 +3735,9 @@ class _ModalDangerButton extends StatelessWidget {
     final color = isRed ? _CmrColors.red : _CmrColors.amber;
     return Material(
       color: color.withOpacity(.09),
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
@@ -3576,13 +3819,7 @@ class _ModalOverviewTab extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    _CmrRoundIcon(icon: Icons.notes_rounded, color: _CmrColors.green, size: 26),
-                    const SizedBox(width: 10),
-                    Text('О тренере', style: _CmrText.title(15)),
-                  ],
-                ),
+                Text('О тренере', style: _CmrText.title(15)),
                 const SizedBox(height: 10),
                 Text(
                   bio.isEmpty ? 'Описание пока не заполнено. Можно добавить опыт, задачи тренера и направление работы с командой.' : bio,
@@ -3643,19 +3880,6 @@ class _ModalAssignmentsTab extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(profile, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.muted(12.5)),
                   ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-                decoration: BoxDecoration(
-                  color: isHead ? _CmrColors.greenSoft : Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(
-                  isHead ? Icons.workspace_premium_rounded : Icons.sports_rounded,
-                  size: 17,
-                  color: isHead ? _CmrColors.green : _CmrColors.muted,
                 ),
               ),
             ],
@@ -3720,20 +3944,32 @@ class _ModalInfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(13),
-      decoration: _CmrDecor.softCard(radius: 20),
+      constraints: const BoxConstraints(minHeight: 44),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: const BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: _CmrColors.line, width: .55),
+        ),
+      ),
       child: Row(
         children: [
-          _CmrRoundIcon(icon: icon, color: _CmrColors.green, size: 34),
-          const SizedBox(width: 11),
+          SizedBox(
+            width: 116,
+            child: Text(
+              label,
+              style: _CmrText.caption(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.caption()),
-                const SizedBox(height: 3),
-                Text(value, maxLines: 2, overflow: TextOverflow.ellipsis, style: _CmrText.value(13.5)),
-              ],
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: _CmrText.value(12.2),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -3758,33 +3994,30 @@ class _ModalContactCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(15),
-      decoration: _CmrDecor.softCard(radius: 22),
+      constraints: const BoxConstraints(minHeight: 52),
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: const BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: _CmrColors.line, width: .55),
+        ),
+      ),
       child: Row(
         children: [
-          Container(
-            width: 46,
-            height: 40,
-            decoration: BoxDecoration(
-              color: color.withOpacity(.1),
-              borderRadius: BorderRadius.circular(16),
+          SizedBox(
+            width: 92,
+            child: Text(
+              label,
+              style: _CmrText.caption(),
             ),
-            child: Icon(icon, size: 19, color: color),
           ),
-          const SizedBox(width: 13),
+          const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: _CmrText.caption()),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 13.55, fontWeight: FontWeight.w500, color: _CmrColors.text),
-                ),
-              ],
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: _CmrText.value(12.6),
             ),
           ),
         ],
@@ -3904,9 +4137,9 @@ class _CompactActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: _CmrColors.soft,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
         onTap: onTap,
         child: Container(padding: const EdgeInsets.all(10), child: Icon(icon, size: 18, color: _CmrColors.green)),
       ),
@@ -3925,7 +4158,7 @@ class _CompactStatChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(color: _CmrColors.soft, borderRadius: BorderRadius.circular(10)),
+      decoration: BoxDecoration(color: _CmrColors.soft, borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -3957,9 +4190,9 @@ class _CompactSearchBar extends StatelessWidget {
         filled: true,
         fillColor: _CmrColors.soft,
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius), borderSide: BorderSide.none),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius), borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius), borderSide: BorderSide.none),
       ),
     );
   }
@@ -3991,15 +4224,15 @@ class _CompactFilters extends StatelessWidget {
             padding: const EdgeInsets.only(right: 6),
             child: Material(
               color: Colors.transparent,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
               child: InkWell(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
                 onTap: () => onFilterChanged(item.$1),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: active ? _CmrColors.panel : _CmrColors.soft,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
                     border: Border.all(color: active ? _CmrColors.green.withOpacity(.16) : _CmrColors.line),
                   ),
                   child: Text(
@@ -4037,15 +4270,15 @@ class _CmrTrainerTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: _CmrColors.soft,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
           ),
           child: Row(
             children: [
@@ -4099,7 +4332,7 @@ class _CmrPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
         border: Border.all(color: _CmrColors.line),
       ),
       child: Row(
@@ -4110,7 +4343,7 @@ class _CmrPill extends StatelessWidget {
             height: 18,
             decoration: BoxDecoration(
               color: accent.withOpacity(.08),
-              borderRadius: BorderRadius.circular(5),
+              borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
             ),
             child: Icon(icon, size: 12, color: accent),
           ),
@@ -4176,8 +4409,7 @@ class _CmrAvatarState extends State<_CmrAvatar> {
       height: widget.size,
       decoration: BoxDecoration(
         color: _CmrColors.soft,
-        borderRadius: BorderRadius.circular(math.min(widget.size * .18, 12)),
-        border: Border.all(color: _CmrColors.line),
+        borderRadius: BorderRadius.circular(math.min(widget.size * .22, 14)),
       ),
       clipBehavior: Clip.antiAlias,
       child: _hasError || widget.photo.isEmpty
@@ -4253,9 +4485,9 @@ class _CmrPrimaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
         onTap: onTap,
         child: Opacity(
           opacity: onTap == null ? .55 : 1,
@@ -4264,7 +4496,7 @@ class _CmrPrimaryButton extends StatelessWidget {
                 ? _CmrDecor.fluentSurface(radius: 10, accent: _CmrColors.green, active: true, compact: true)
                 : BoxDecoration(
                     color: color,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
                     border: Border.all(color: color.withOpacity(.25)),
                   ),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -4294,14 +4526,14 @@ class _CmrSecondaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
         onTap: onTap,
         child: Opacity(
           opacity: onTap == null ? .55 : 1,
           child: Container(
-            decoration: BoxDecoration(color: _CmrColors.soft, borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(color: _CmrColors.soft, borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius)),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             child: Center(child: Text(title, style: _CmrText.tab())),
           ),
@@ -4346,9 +4578,9 @@ class _CmrInput extends StatelessWidget {
         filled: true,
         fillColor: _CmrColors.soft,
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius), borderSide: BorderSide.none),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius), borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius), borderSide: BorderSide.none),
       ),
     );
   }
@@ -4460,7 +4692,7 @@ class _CmrBottomPanel extends StatelessWidget {
         constraints: BoxConstraints(maxHeight: h * maxHeightFactor),
         margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
-        decoration: _CmrDecor.panel(),
+        decoration: _CmrDecor.panel(radius: _CmrDecor.sheetRadius),
         child: SingleChildScrollView(child: child),
       ),
     );
@@ -4574,9 +4806,9 @@ class _CmrTeamPickTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.all(12),
@@ -4612,9 +4844,9 @@ class _CmrRolePickTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.all(13),
@@ -4697,7 +4929,7 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen>
     final bio = _trainerBio(widget.trainer);
 
     return Scaffold(
-      backgroundColor: _CmrColors.panel,
+      backgroundColor: _CmrColors.bg,
       body: Column(
         children: [
           // Кастомный AppBar
@@ -4788,9 +5020,9 @@ class _ProfileAppBar extends StatelessWidget implements PreferredSizeWidget {
         children: [
           Material(
             color: _CmrColors.soft,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
             child: InkWell(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
               onTap: onBack,
               child: const Padding(
                 padding: EdgeInsets.all(10),
@@ -4914,7 +5146,7 @@ class _ProfilePill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: _CmrColors.soft,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
         border: Border.all(color: _CmrColors.line),
       ),
       child: Row(
@@ -4925,7 +5157,7 @@ class _ProfilePill extends StatelessWidget {
             height: 22,
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
             ),
             child: Icon(icon, size: 14, color: accent),
           ),
@@ -5003,9 +5235,9 @@ class _ProfileActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: _CmrColors.soft,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 10),
@@ -5133,7 +5365,7 @@ class _ProfileOverviewTab extends StatelessWidget {
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
                         color: _CmrColors.soft,
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
                         border: Border.all(color: _CmrColors.green.withOpacity(.12)),
                       ),
                       child: Icon(Icons.notes_rounded, size: 18, color: _CmrColors.green),
@@ -5180,7 +5412,7 @@ class _ProfileInfoCard extends StatelessWidget {
             height: 42,
             decoration: BoxDecoration(
               color: _CmrColors.soft,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
               border: Border.all(color: _CmrColors.green.withOpacity(.12)),
             ),
             child: Icon(icon, size: 21, color: _CmrColors.green),
@@ -5270,7 +5502,7 @@ class _ProfileAssignmentsTab extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
                     color: _CmrColors.panel,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
                     border: Border.all(color: _CmrColors.green.withOpacity(.14)),
                   ),
                   child: Row(
@@ -5356,9 +5588,9 @@ class _ProfileContactCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.all(20),
@@ -5370,7 +5602,7 @@ class _ProfileContactCard extends StatelessWidget {
                 height: 56,
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
                 ),
                 child: Icon(icon, size: 25, color: color),
               ),
@@ -5461,9 +5693,9 @@ class _ProfileDangerButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: _CmrColors.soft,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 14),

@@ -16,14 +16,16 @@
   <key>UIBackgroundModes</key>
 <array>
     <string>remote-notification</string>
+    <string>bluetooth-central</string>
+    <string>location</string>
 </array>
   
 
   <!-- Геолокация -->
   <key>NSLocationWhenInUseUsageDescription</key>
-  <string>Ваше местоположение используется для отображения ближайших спортивных площадок и школ на карте.</string>
+  <string>Геолокация нужна для записи GPS-точек тренировки, построения маршрута игрока и отображения ближайших спортивных площадок.</string>
   <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-  <string>Мы используем вашу геопозицию для показа ближайших площадок и событий и улучшения маршрутов тренировок даже при свернутом приложении.</string>
+  <string>Геопозиция нужна для записи тренировки и маршрута игрока при активной трекинг-сессии, в том числе когда приложение свернуто.</string>
   <!-- Не обязателен на современных iOS, но можно оставить для совместимости -->
   <key>NSLocationAlwaysUsageDescription</key>
   <string>Геопозиция нужна для корректной работы функций, связанных с локацией.</string>
@@ -60,9 +62,9 @@
 
 
   <key>NSBluetoothAlwaysUsageDescription</key>
-  <string>Приложению нужен Bluetooth для подключения спортивного трекера.</string>
+  <string>Спортотеке нужен Bluetooth для поиска и подключения футбольных GPS-трекеров.</string>
   <key>NSBluetoothPeripheralUsageDescription</key>
-  <string>Приложению нужен Bluetooth для подключения спортивного трекера.</string>
+  <string>Спортотеке нужен Bluetooth для подключения трекеров игроков.</string>
   <key>UILaunchStoryboardName</key>
   <string>LaunchScreen</string>
   <key>UIMainStoryboardFile</key>

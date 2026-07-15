@@ -1,0 +1,12 @@
+<!-- Проверьте android/app/src/main/AndroidManifest.xml. Для Android 12+ обязательно: -->
+<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+<uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
+<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+<!-- Для Android 11 и ниже BLE scan часто требует геолокацию: -->
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+<!-- Старые Bluetooth-разрешения для совместимости: -->
+<uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />

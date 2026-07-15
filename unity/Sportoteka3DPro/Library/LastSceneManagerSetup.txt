@@ -1,0 +1,5 @@
+sceneSetups:
+- path: Assets/Sportoteka3DPro/Scenes/SportotekaFootballBoard.unity
+  isLoaded: 1
+  isActive: 1
+  isSubScene: 0

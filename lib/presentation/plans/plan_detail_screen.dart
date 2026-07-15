@@ -437,6 +437,7 @@ class PlanDetailScreen extends StatefulWidget {
   final bool embedded;
   final Map<String, dynamic>? initialArgs;
   final VoidCallback? onOpenFullscreen;
+  final VoidCallback? onClose;
   final ValueChanged<Map<String, dynamic>>? onSaved;
 
   const PlanDetailScreen({
@@ -444,6 +445,7 @@ class PlanDetailScreen extends StatefulWidget {
     this.embedded = false,
     this.initialArgs,
     this.onOpenFullscreen,
+    this.onClose,
     this.onSaved,
   });
 
@@ -1853,8 +1855,8 @@ Future<void> _pickSchemesForExercise(int exerciseIndex) async {
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        height: compact ? 38 : 42,
-        padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 12),
+        height: compact ? 34 : 36,
+        padding: EdgeInsets.symmetric(horizontal: compact ? 9 : 11),
         decoration: BoxDecoration(
           color: primary ? ClubDashboardPalette.primaryGreen : Colors.white,
           borderRadius: BorderRadius.circular(12),
@@ -1874,14 +1876,14 @@ Future<void> _pickSchemesForExercise(int exerciseIndex) async {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: compact ? 17 : 18, color: primary ? Colors.white : ClubDashboardPalette.text),
-            const SizedBox(width: 7),
+            Icon(icon, size: compact ? 16 : 17, color: primary ? Colors.white : ClubDashboardPalette.text),
+            const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
                 color: primary ? Colors.white : ClubDashboardPalette.text,
                 fontWeight: FontWeight.w900,
-                fontSize: compact ? 12 : 12.5,
+                fontSize: compact ? 11.2 : 11.7,
               ),
             ),
           ],
@@ -1901,22 +1903,28 @@ Future<void> _pickSchemesForExercise(int exerciseIndex) async {
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Container(
-          width: 40,
-          height: 40,
+          width: 34,
+          height: 34,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: ClubDashboardPalette.border),
           ),
-          child: Icon(icon, size: 19, color: ClubDashboardPalette.text),
+          child: Icon(icon, size: 17, color: ClubDashboardPalette.text),
         ),
       ),
     );
   }
 
   Widget _buildCmrTopBar({required bool embedded, required bool compact}) {
+    final embeddedCompact = embedded;
     return Container(
-      padding: EdgeInsets.fromLTRB(compact ? 12 : 16, compact ? 10 : 12, compact ? 12 : 16, compact ? 10 : 12),
+      padding: EdgeInsets.fromLTRB(
+        embeddedCompact ? 10 : (compact ? 12 : 16),
+        embeddedCompact ? 7 : (compact ? 10 : 12),
+        embeddedCompact ? 8 : (compact ? 12 : 16),
+        embeddedCompact ? 7 : (compact ? 10 : 12),
+      ),
       decoration: const BoxDecoration(
         color: Colors.white,
       ),
@@ -1931,16 +1939,16 @@ Future<void> _pickSchemesForExercise(int exerciseIndex) async {
             const SizedBox(width: 10),
           ],
           Container(
-            width: compact ? 38 : 44,
-            height: compact ? 38 : 44,
+            width: embeddedCompact ? 32 : (compact ? 38 : 44),
+            height: embeddedCompact ? 32 : (compact ? 38 : 44),
             decoration: BoxDecoration(
               color: ClubDashboardPalette.lightGreen,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(embeddedCompact ? 11 : 14),
               border: Border.all(color: ClubDashboardPalette.primaryGreen.withOpacity(0.18)),
             ),
             child: const Icon(Icons.article_outlined, color: ClubDashboardPalette.primaryGreen),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: embeddedCompact ? 9 : 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1952,18 +1960,18 @@ Future<void> _pickSchemesForExercise(int exerciseIndex) async {
                   style: TextStyle(
                     color: ClubDashboardPalette.text,
                     fontWeight: FontWeight.w900,
-                    fontSize: compact ? 15 : 18,
+                    fontSize: embeddedCompact ? 13.6 : (compact ? 15 : 18),
                   ),
                 ),
-                const SizedBox(height: 3),
+                SizedBox(height: embeddedCompact ? 1 : 3),
                 Text(
                   '${clubName.isEmpty ? 'Клуб' : clubName} • ${teamName.isEmpty ? 'Команда' : teamName}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: ClubDashboardPalette.textMuted,
                     fontWeight: FontWeight.w700,
-                    fontSize: 11.5,
+                    fontSize: embeddedCompact ? 10.2 : 11.5,
                   ),
                 ),
               ],
@@ -1991,6 +1999,14 @@ Future<void> _pickSchemesForExercise(int exerciseIndex) async {
               onTap: saving ? null : _save,
               primary: true,
             ),
+            if (embedded && widget.onClose != null) ...[
+              const SizedBox(width: 6),
+              _cmrIconButton(
+                icon: Icons.close_rounded,
+                tooltip: 'Закрыть план',
+                onTap: widget.onClose,
+              ),
+            ],
           ] else ...[
             if (embedded && widget.onOpenFullscreen != null)
               _cmrIconButton(
@@ -2010,6 +2026,14 @@ Future<void> _pickSchemesForExercise(int exerciseIndex) async {
               tooltip: 'Сохранить',
               onTap: saving ? null : _save,
             ),
+            if (embedded && widget.onClose != null) ...[
+              const SizedBox(width: 6),
+              _cmrIconButton(
+                icon: Icons.close_rounded,
+                tooltip: 'Закрыть план',
+                onTap: widget.onClose,
+              ),
+            ],
           ],
         ],
       ),

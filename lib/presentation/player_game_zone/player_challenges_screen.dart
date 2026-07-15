@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'game_zone_api.dart';
 import 'create_challenge_screen.dart';
+import 'game_zone_cmr_style.dart';
 
 class PlayerChallengesScreen extends StatefulWidget {
   const PlayerChallengesScreen({super.key});
@@ -59,11 +60,11 @@ class _PlayerChallengesScreenState extends State<PlayerChallengesScreen> {
   Color _typeColor(String type) {
     switch (type) {
       case 'daily':
-        return const Color(0xFFEAFBF1);
+        return GzColors.greenSoft;
       case 'weekly':
         return const Color(0xFFEAF2FF);
       default:
-        return const Color(0xFFF3F4F6);
+        return GzColors.soft2;
     }
   }
 
@@ -157,32 +158,10 @@ class _PlayerChallengesScreenState extends State<PlayerChallengesScreen> {
   }
 
   Widget _header() {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF00A750), Color(0xFF33C46E)],
-        ),
-      ),
-      child: const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Задания дня и недели',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-              fontSize: 18,
-            ),
-          ),
-          SizedBox(height: 6),
-          Text(
-            'Выполняй задания, отправляй результат и набирай очки для рейтинга команды.',
-            style: TextStyle(color: Colors.white70),
-          ),
-        ],
-      ),
+    return GameZoneCmr.header(
+      title: 'Задания дня и недели',
+      subtitle: 'Выполняй задания, отправляй результат и набирай очки для рейтинга команды.',
+      icon: Icons.flag_rounded,
     );
   }
 
@@ -193,7 +172,7 @@ class _PlayerChallengesScreenState extends State<PlayerChallengesScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: GzColors.divider),
       ),
       child: Column(
         children: [
@@ -215,7 +194,7 @@ class _PlayerChallengesScreenState extends State<PlayerChallengesScreen> {
             'Создай первый челлендж для команды, чтобы игроки начали соревноваться.',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: Color(0xFF6B7280),
+              color: GzColors.subtle,
               height: 1.4,
             ),
           ),
@@ -242,13 +221,7 @@ class _PlayerChallengesScreenState extends State<PlayerChallengesScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0D000000),
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
+      border: Border.all(color: GzColors.divider),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -298,7 +271,7 @@ class _PlayerChallengesScreenState extends State<PlayerChallengesScreen> {
           Text(
             item['description'] ?? '',
             style: const TextStyle(
-              color: Color(0xFF6B7280),
+              color: GzColors.subtle,
               height: 1.4,
             ),
           ),
@@ -328,7 +301,8 @@ class _PlayerChallengesScreenState extends State<PlayerChallengesScreen> {
     final canCreate = userId > 0;
 
     return Scaffold(
-      appBar: AppBar(
+      backgroundColor: GzColors.bg,
+      appBar: GameZoneCmr.appBar(
         title: const Text('Челленджи'),
         actions: [
           if (canCreate)
@@ -339,12 +313,14 @@ class _PlayerChallengesScreenState extends State<PlayerChallengesScreen> {
             ),
         ],
       ),
-      body: loading
+      body: GameZoneCmr.page(
+        context,
+        child: loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _load,
               child: ListView(
-                padding: const EdgeInsets.all(16),
+                padding: GameZoneCmr.listPadding(context),
                 children: [
                   _header(),
                   const SizedBox(height: 16),
@@ -357,6 +333,7 @@ class _PlayerChallengesScreenState extends State<PlayerChallengesScreen> {
                 ],
               ),
             ),
+      ),
     );
   }
 }

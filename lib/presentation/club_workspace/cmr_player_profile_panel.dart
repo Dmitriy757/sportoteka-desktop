@@ -1566,8 +1566,8 @@ class _RoundIcon extends StatelessWidget {
 class _ProfileColors {
   static const Color panel = Colors.white;
   static const Color glass = Color(0xF7FFFFFF);
-  static const Color soft = Color(0xFFFAFBFC);
-  static const Color soft2 = Color(0xFFF6F7F9);
+  static const Color soft = Color(0xFFFAFBFA);
+  static const Color soft2 = Color(0xFFF4F6F4);
   static const Color text = Color(0xFF0B0F14);
   static const Color muted = Color(0xFF6B7280);
   static const Color green = Color(0xFF00A750);
@@ -1588,78 +1588,32 @@ class _ProfileColors {
 }
 
 
-Color _profileAccent(int index) {
-  const colors = <Color>[
-    _ProfileColors.green,
-    _ProfileColors.blue,
-    _ProfileColors.cyan,
-    _ProfileColors.violet,
-    _ProfileColors.pink,
-    _ProfileColors.amber,
-  ];
-  return colors[index.abs() % colors.length];
-}
+Color _profileAccent(int index) => _ProfileColors.green;
 
-Color _profileAccentSoft(int index) {
-  const colors = <Color>[
-    _ProfileColors.greenSoft,
-    _ProfileColors.blueSoft,
-    _ProfileColors.cyanSoft,
-    _ProfileColors.violetSoft,
-    _ProfileColors.pinkSoft,
-    _ProfileColors.amberSoft,
-  ];
-  return colors[index.abs() % colors.length];
-}
+Color _profileAccentSoft(int index) => _ProfileColors.greenSoft;
 
 class _ProfileDecor {
   static BoxDecoration panel() => BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFFFFFFFF),
-            Color(0xFFF6FFF9),
-            Color(0xFFF4F7FF),
-            Color(0xFFFFF7FB),
-          ],
-          stops: [0.0, .38, .72, 1.0],
-        ),
-        borderRadius: BorderRadius.circular(30),
+        color: _ProfileColors.panel,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE7EBE8), width: .8),
         boxShadow: [
           BoxShadow(
-            color: _ProfileColors.blue.withOpacity(.055),
-            blurRadius: 34,
-            spreadRadius: -16,
-            offset: const Offset(0, 18),
-          ),
-          BoxShadow(
-            color: Colors.black.withOpacity(.025),
-            blurRadius: 10,
-            spreadRadius: -7,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(.035),
+            blurRadius: 26,
+            spreadRadius: -14,
+            offset: const Offset(0, 14),
           ),
         ],
       );
 
-  static BoxDecoration softCard({double radius = 22}) => BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [_ProfileColors.glass, _ProfileColors.blueSoft.withOpacity(.45)],
-        ),
+  static BoxDecoration softCard({double radius = 14}) => BoxDecoration(
+        color: _ProfileColors.soft,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: Colors.white.withOpacity(.78)),
-        boxShadow: [
-          BoxShadow(
-            color: _ProfileColors.blue.withOpacity(.06),
-            blurRadius: 22,
-            spreadRadius: -14,
-            offset: const Offset(0, 12),
-          ),
-        ],
+        border: Border.all(color: const Color(0xFFE7EBE8), width: .7),
       );
 }
+
 
 class _ProfileText {
   static const String family = 'Segoe UI';

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../models/tracker_live_models.dart';
+import 'polar_heart_rate_ble_service.dart';
 
 class TrackerLiveApi {
   TrackerLiveApi({this.apiBaseUrl = 'https://sportotekaapp.ru/api/tracker'});
@@ -18,6 +19,8 @@ class TrackerLiveApi {
     required String deviceName,
     String source = 'tracker',
     int? batteryPercent,
+    String? activityType,
+    bool? fieldRequired,
   }) async {
     final json = await _post('$apiBaseUrl/start_tracker_live_session.php', {
       'club_id': clubId,
@@ -28,6 +31,8 @@ class TrackerLiveApi {
       'device_name': deviceName,
       'source': source,
       'battery_percent': batteryPercent,
+      'activity_type': activityType,
+      'field_required': fieldRequired == null ? null : (fieldRequired ? 1 : 0),
     });
 
     return int.tryParse('${json['live_session_id'] ?? json['id'] ?? 0}') ?? 0;
@@ -35,6 +40,30 @@ class TrackerLiveApi {
 
   Future<Map<String, dynamic>> saveLivePoint(TrackerLivePointPayload payload) {
     return _post('$apiBaseUrl/save_tracker_live_point.php', payload.toJson());
+  }
+
+  Future<Map<String, dynamic>> saveHeartRateSample({
+    required int clubId,
+    required int teamId,
+    required int playerId,
+    int? liveSessionId,
+    int? sessionId,
+    required HeartRateSample sample,
+  }) {
+    return _post('$apiBaseUrl/save_tracker_heart_rate_sample.php', {
+      'club_id': clubId,
+      'team_id': teamId,
+      'player_id': playerId,
+      'live_session_id': liveSessionId,
+      'session_id': sessionId,
+      'device_uuid': sample.deviceId,
+      'device_name': sample.deviceName,
+      'bpm': sample.bpm,
+      'battery_percent': sample.batteryPercent,
+      'sensor_contact': sample.sensorContactDetected == null ? null : (sample.sensorContactDetected! ? 1 : 0),
+      'rr_intervals_ms': sample.rrIntervalsMs,
+      'measured_at': sample.measuredAt.toIso8601String(),
+    });
   }
 
   Future<List<TrackerLiveSessionModel>> loadTeamLiveState({
@@ -122,20 +151,42 @@ class TrackerLiveApi {
     required String source,
     required String message,
     String? rawHex,
+    String? platform,
+    String? appVersion,
+    String? deviceUuid,
+    String? deviceName,
+    Map<String, dynamic>? context,
   }) async {
-    try {
-      await _post('$apiBaseUrl/save_tracker_debug_log.php', {
-        'team_id': teamId,
-        'player_id': playerId,
-        'live_session_id': liveSessionId,
-        'level': level,
-        'source': source,
-        'message': message,
-        'raw_hex': rawHex,
-      });
-    } catch (_) {
-      // Логи не должны ломать Live.
-    }
+    await _post('$apiBaseUrl/save_tracker_debug_log.php', {
+      'team_id': teamId,
+      'player_id': playerId,
+      'live_session_id': liveSessionId,
+      'level': level,
+      'source': source,
+      'platform': platform ?? 'flutter',
+      'app_version': appVersion,
+      'device_uuid': deviceUuid,
+      'device_name': deviceName,
+      'message': message,
+      'raw_hex': rawHex,
+      'context': context,
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> loadDebugLogs({
+    required int teamId,
+    int? liveSessionId,
+    String? source,
+    int limit = 150,
+  }) async {
+    final safeLimit = limit.clamp(20, 500);
+    final url = '$apiBaseUrl/get_tracker_debug_logs.php?team_id=$teamId'
+        '${liveSessionId == null ? '' : '&live_session_id=$liveSessionId'}'
+        '${source == null || source.trim().isEmpty ? '' : '&source=${Uri.encodeQueryComponent(source.trim())}'}'
+        '&limit=$safeLimit';
+    final json = await _get(url);
+    final list = (json['logs'] as List? ?? const []);
+    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
 
 
@@ -169,7 +220,13 @@ class TrackerLiveApi {
   }
 
   Future<Map<String, dynamic>> _get(String url) async {
-    final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 20));
+    final response = await http.get(
+      Uri.parse(url),
+      headers: const {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+      },
+    ).timeout(const Duration(seconds: 8));
     return _decode(response.body);
   }
 

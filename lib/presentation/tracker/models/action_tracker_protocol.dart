@@ -17,7 +17,6 @@ class ActionTrackerBleProfile {
   /// будет сохранять и отображать точки.
   static const List<List<int>> commandCurrentGpsCandidates = [
     [0x3A], // Live GPS: TX 3A -> RX 3B / 44
-    [0x20], // Battery/GPS ready: RX 21
 
     [0x22],
     [0x23],
@@ -103,16 +102,44 @@ class ActionTrackerGpsPoint {
   final double latitude;
   final double longitude;
 
+  /// Дополнительные поля приходят с сервера и нужны, чтобы аналитика, фильтры
+  /// карты и PDF считали один и тот же маршрут. Старые BLE-парсеры могут
+  /// создавать точку только с GPS/time — все поля ниже опциональные.
+  final double? speedKmh;
+  final double? distanceDeltaM;
+  final double? totalDistanceM;
+  final int? pointIndex;
+  final int? liveSessionId;
+  final int? sessionId;
+  final int? playerId;
+  final bool breakBefore;
+
   const ActionTrackerGpsPoint({
     required this.timeMs,
     required this.latitude,
     required this.longitude,
+    this.speedKmh,
+    this.distanceDeltaM,
+    this.totalDistanceM,
+    this.pointIndex,
+    this.liveSessionId,
+    this.sessionId,
+    this.playerId,
+    this.breakBefore = false,
   });
 
   Map<String, dynamic> toJson() => {
         'time_ms': timeMs,
         'latitude': latitude,
         'longitude': longitude,
+        if (speedKmh != null) 'speed_kmh': speedKmh,
+        if (distanceDeltaM != null) 'distance_delta_m': distanceDeltaM,
+        if (totalDistanceM != null) 'total_distance_m': totalDistanceM,
+        if (pointIndex != null) 'point_index': pointIndex,
+        if (liveSessionId != null) 'live_session_id': liveSessionId,
+        if (sessionId != null) 'session_id': sessionId,
+        if (playerId != null) 'player_id': playerId,
+        if (breakBefore) 'break_before': true,
       };
 }
 
@@ -281,71 +308,49 @@ class ActionTrackerProtocolParser {
 
 
   ActionTrackerGpsChunk _parseCurrentGps3B(List<int> bytes) {
-    if (bytes.length < 14) {
-      return ActionTrackerGpsChunk(packetType: bytes.first, points: const []);
-    }
-
-    final rawLat = _i32(bytes, 2);
-    final rawLon = _i32(bytes, 6);
-
-    // 3B 00 00 00... means the tracker answered but has no current coordinate.
-    if (rawLat == 0 || rawLon == 0) {
-      return ActionTrackerGpsChunk(packetType: bytes.first, points: const []);
-    }
-
-    final lat = rawLat / 6000000.0;
-    final lon = rawLon / 6000000.0;
-    final time = DateTime.now().millisecondsSinceEpoch;
-
-    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
-      return ActionTrackerGpsChunk(packetType: bytes.first, points: const []);
-    }
-
+    // На разных прошивках после 3B может идти service/flag byte, поэтому
+    // координаты не всегда начинаются строго с offset=2. Пробуем несколько
+    // безопасных вариантов и несколько масштабов, чтобы не терять реальный RX.
+    final point = _tryParseLivePoint(bytes, preferredOffsets: const [2, 3, 1, 4]);
     return ActionTrackerGpsChunk(
       packetType: bytes.first,
-      points: [
-        ActionTrackerGpsPoint(
-          timeMs: time,
-          latitude: lat,
-          longitude: lon,
-        ),
-      ],
+      points: point == null ? const [] : [point],
     );
   }
 
 
   ActionTrackerGpsChunk _parseLiveAbsoluteFromCompressedPacket(List<int> bytes) {
-    // Live packet observed from ActionTracer:
-    // RX 44 xx xx [lat i32 little-endian] [lon i32 little-endian] ...
-    if (bytes.length < 11) {
-      return ActionTrackerGpsChunk(packetType: bytes.first, points: const []);
-    }
-
-    final rawLat = _i32(bytes, 3);
-    final rawLon = _i32(bytes, 7);
-
-    if (rawLat == 0 || rawLon == 0) {
-      return ActionTrackerGpsChunk(packetType: bytes.first, points: const []);
-    }
-
-    final lat = rawLat / 6000000.0;
-    final lon = rawLon / 6000000.0;
-    final time = DateTime.now().millisecondsSinceEpoch;
-
-    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
-      return ActionTrackerGpsChunk(packetType: bytes.first, points: const []);
-    }
-
+    // Live packet observed from GPS-трекер:
+    // RX 44/45 xx xx [lat i32 little-endian] [lon i32 little-endian] ...
+    // После добавления режимов активности важно не завязаться на один offset:
+    // если пакет реально пришёл, но offset другой, UI будет вечным «ждём GPS».
+    final point = _tryParseLivePoint(bytes, preferredOffsets: const [3, 2, 4, 1, 5]);
     return ActionTrackerGpsChunk(
       packetType: bytes.first,
-      points: [
-        ActionTrackerGpsPoint(
-          timeMs: time,
+      points: point == null ? const [] : [point],
+    );
+  }
+
+  ActionTrackerGpsPoint? _tryParseLivePoint(List<int> bytes, {required List<int> preferredOffsets}) {
+    const scales = <double>[6000000.0, 10000000.0, 1000000.0];
+    for (final offset in preferredOffsets) {
+      if (offset < 0 || offset + 7 >= bytes.length) continue;
+      final rawLat = _i32(bytes, offset);
+      final rawLon = _i32(bytes, offset + 4);
+      if (rawLat == 0 || rawLon == 0) continue;
+
+      for (final scale in scales) {
+        final lat = rawLat / scale;
+        final lon = rawLon / scale;
+        if (lat < -90 || lat > 90 || lon < -180 || lon > 180) continue;
+        return ActionTrackerGpsPoint(
+          timeMs: DateTime.now().millisecondsSinceEpoch,
           latitude: lat,
           longitude: lon,
-        ),
-      ],
-    );
+        );
+      }
+    }
+    return null;
   }
 
   ActionTrackerGpsChunk _parseAbsoluteGpsChunk(List<int> bytes, {required ActionTrackerRecord? selectedRecord}) {

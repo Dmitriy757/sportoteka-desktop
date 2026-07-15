@@ -113,15 +113,15 @@ class TrackerProAnalyticsPanel extends StatelessWidget {
 }
 
 class _AD {
-  static const bg = Color(0xFFF4F5F6);
+  static const bg = Color(0xFFFFFFFF);
   static const panel = Color(0xFFFFFFFF);
   static const card = Color(0xFFFFFFFF);
-  static const card2 = Color(0xFFF8F9FA);
-  static const border = Color(0xFFE5E7EB);
-  static const grid = Color(0xFFD8DEE6);
-  static const text = Color(0xFF111827);
-  static const muted = Color(0xFF475467);
-  static const dim = Color(0xFF6B7280);
+  static const card2 = Color(0xFFFFFFFF);
+  static const border = Color(0xFFE9ECEA);
+  static const grid = Color(0xFFDDE2DF);
+  static const text = Color(0xFF111512);
+  static const muted = Color(0xFF4F5B54);
+  static const dim = Color(0xFF737B76);
   static const green = Color(0xFF00A750);
   static const yellow = Color(0xFFB7791F);
   static const orange = Color(0xFFB7791F);
@@ -151,11 +151,10 @@ class _DarkPage extends StatelessWidget {
         children: [
           Container(
             height: 54,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 9),
             decoration: BoxDecoration(
               color: _AD.card,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _AD.border.withOpacity(.85)),
+              border: const Border(bottom: BorderSide(color: _AD.border, width: .7)),
             ),
             child: Row(
               children: [
@@ -230,8 +229,10 @@ class _DarkCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: _AD.card,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _AD.border.withOpacity(.94), width: 1),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(color: Color(0x07111827), blurRadius: 18, spreadRadius: -12, offset: Offset(0, 10)),
+        ],
       ),
       child: Column(
         children: [
@@ -239,12 +240,7 @@ class _DarkCard extends StatelessWidget {
             Container(
               height: 34,
               padding: const EdgeInsets.symmetric(horizontal: 10),
-              decoration: BoxDecoration(
-                color: _AD.card2,
-                border: Border(
-                  bottom: BorderSide(color: _AD.border.withOpacity(.9)),
-                ),
-              ),
+              decoration: const BoxDecoration(color: _AD.card),
               child: Row(
                 children: [
                   Expanded(
@@ -289,43 +285,28 @@ class _DarkCard extends StatelessWidget {
   }
 }
 
-class _DarkActionButton extends StatefulWidget {
+class _DarkActionButton extends StatelessWidget {
   const _DarkActionButton({required this.icon, required this.label, required this.onTap});
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  @override
-  State<_DarkActionButton> createState() => _DarkActionButtonState();
-}
 
-class _DarkActionButtonState extends State<_DarkActionButton> {
-  bool _pressed = false;
   @override
   Widget build(BuildContext context) {
-    return Listener(
-      onPointerDown: (_) => setState(() => _pressed = true),
-      onPointerUp: (_) => setState(() => _pressed = false),
-      onPointerCancel: (_) => setState(() => _pressed = false),
-      child: AnimatedScale(
-        duration: const Duration(milliseconds: 110),
-        scale: _pressed ? .96 : 1,
-        child: Material(
-          color: _AD.card,
-          borderRadius: BorderRadius.circular(9),
-          child: InkWell(
-            onTap: widget.onTap,
-            borderRadius: BorderRadius.circular(9),
-            child: Container(
-              height: 36,
-              padding: const EdgeInsets.symmetric(horizontal: 11),
-              decoration: BoxDecoration(borderRadius: BorderRadius.circular(9), border: Border.all(color: _AD.border)),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(widget.icon, color: _AD.text, size: 17),
-                const SizedBox(width: 6),
-                Text(widget.label, style: const TextStyle(color: _AD.text, fontSize: 11, fontWeight: FontWeight.w900)),
-              ]),
-            ),
-          ),
+    return Material(
+      color: _AD.card,
+      borderRadius: BorderRadius.circular(9),
+      child: _NoHoverTap(
+        onTap: onTap,
+        child: Container(
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 11),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(9), border: Border.all(color: _AD.border)),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, color: _AD.text, size: 17),
+            const SizedBox(width: 6),
+            Text(label, style: const TextStyle(color: _AD.text, fontSize: 11, fontWeight: FontWeight.w900)),
+          ]),
         ),
       ),
     );
@@ -343,7 +324,11 @@ class _GaugeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = progress > .72 ? _AD.red : progress > .52 ? _AD.yellow : _AD.green;
     return Container(
-      decoration: BoxDecoration(color: _AD.card, borderRadius: BorderRadius.circular(10), border: Border.all(color: _AD.border)),
+      decoration: BoxDecoration(
+        color: _AD.card,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [BoxShadow(color: Color(0x06111827), blurRadius: 16, spreadRadius: -11, offset: Offset(0, 8))],
+      ),
       padding: const EdgeInsets.all(9),
       child: Row(children: [
         SizedBox(width: 48, height: 48, child: CustomPaint(painter: _GaugePainter(progress: progress, color: color), child: Center(child: Icon(icon, color: color, size: 18)))),
@@ -401,8 +386,8 @@ class _PerformanceMatrix extends StatelessWidget {
             final distanceKm = p.distanceM / 1000;
             final distMin = p.distanceM > 0 ? (p.distanceM / 60).clamp(0, 999) : 0;
             final selected = selectedPlayerId == p.playerId;
-            return TableRow(decoration: BoxDecoration(color: selected ? _AD.green.withOpacity(.12) : Colors.transparent), children: [
-              InkWell(
+            return TableRow(decoration: BoxDecoration(color: selected ? _AD.green.withOpacity(.06) : Colors.transparent), children: [
+              _NoHoverTap(
                 onTap: p.playerId == null
                     ? null
                     : () {
@@ -621,7 +606,7 @@ class _DarkError extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Center(child: Container(
     constraints: const BoxConstraints(maxWidth: 560),
-    padding: const EdgeInsets.all(14),
+    padding: const EdgeInsets.all(9),
     decoration: BoxDecoration(color: Color(0xFFFFF1F1), borderRadius: BorderRadius.circular(10), border: Border.all(color: Color(0xFFF7C8C4))),
     child: Column(mainAxisSize: MainAxisSize.min, children: [
       const Icon(Icons.warning_amber_rounded, color: _AD.red),
@@ -631,4 +616,43 @@ class _DarkError extends StatelessWidget {
       _DarkActionButton(icon: Icons.refresh_rounded, label: 'Повторить', onTap: onRetry),
     ]),
   ));
+}
+
+class _NoHoverTap extends StatelessWidget {
+  const _NoHoverTap({
+    super.key,
+    required this.child,
+    this.onTap,
+    this.onLongPress,
+    this.borderRadius,
+    this.hoverColor,
+    this.splashColor,
+  });
+
+  final Widget child;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final BorderRadiusGeometry? borderRadius;
+  final Color? hoverColor;
+  final Color? splashColor;
+
+  void _runAfterPointerSettled(BuildContext context, VoidCallback? callback) {
+    if (callback == null) return;
+    Future<void>.delayed(const Duration(milliseconds: 70), () async {
+      if (!context.mounted) return;
+      await WidgetsBinding.instance.endOfFrame;
+      if (!context.mounted) return;
+      callback();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap == null ? null : () => _runAfterPointerSettled(context, onTap),
+      onLongPress: onLongPress == null ? null : () => _runAfterPointerSettled(context, onLongPress),
+      child: child,
+    );
+  }
 }

@@ -3,6 +3,7 @@ import 'dart:ui' show FontFeature;
 
 import 'package:flutter/material.dart';
 
+import 'models/action_tracker_protocol.dart';
 import 'models/tracker_pro_models.dart';
 import 'services/tracker_pro_api.dart';
 
@@ -54,16 +55,24 @@ class _TrackerPlayerActivityScreenState extends State<TrackerPlayerActivityScree
   }
 
   Future<_ActivityBundle> _load() async {
-    final result = await Future.wait<dynamic>([
-      _api.loadDashboard(teamId: widget.teamId),
-      _api.loadSessions(teamId: widget.teamId, playerId: _selectedPlayer?.id),
-      _api.loadHeatmap(teamId: widget.teamId, playerId: _selectedPlayer?.id, sessionId: null, fieldId: widget.fieldId),
-    ]);
+    final dashboard = await _api.loadDashboard(teamId: widget.teamId);
+    final sessions = await _api.loadSessions(teamId: widget.teamId, playerId: _selectedPlayer?.id, limit: 100);
+    final selectedSession = sessions.isNotEmpty ? sessions.first : null;
+    final heatmap = await _api.loadHeatmap(
+      teamId: widget.teamId,
+      playerId: _selectedPlayer?.id,
+      sessionId: selectedSession?.id,
+      fieldId: selectedSession == null ? widget.fieldId : null,
+    );
+    final points = selectedSession == null
+        ? const <ActionTrackerGpsPoint>[]
+        : await _api.loadSessionPoints(teamId: widget.teamId, playerId: _selectedPlayer?.id, sessionId: selectedSession.id);
 
     return _ActivityBundle(
-      dashboard: result[0] as TrackerDashboardModel,
-      sessions: result[1] as List<TrackerSessionModel>,
-      heatmap: result[2] as List<TrackerHeatPoint>,
+      dashboard: dashboard,
+      sessions: sessions,
+      heatmap: heatmap.isNotEmpty ? heatmap : _heatmapFromGps(points),
+      points: points,
     );
   }
 
@@ -99,9 +108,16 @@ class _TrackerPlayerActivityScreenState extends State<TrackerPlayerActivityScree
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<_ActivityBundle>(
-      future: _future,
-      builder: (context, snapshot) {
+    // Внутри окна трекера уже есть собственная прокрутка/меню.
+    // На desktop/tablet Flutter может автоматически добавлять Scrollbar к
+    // вложенным ListView и брать не тот PrimaryScrollController. Из-за этого
+    // появлялась ошибка: "Scrollbar's ScrollController has no ScrollPosition attached".
+    // В этом экране отключаем авто-scrollbar, а сами списки оставляем рабочими.
+    return ScrollConfiguration(
+      behavior: const ScrollBehavior().copyWith(scrollbars: false),
+      child: FutureBuilder<_ActivityBundle>(
+        future: _future,
+        builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting && snapshot.data == null) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -110,8 +126,8 @@ class _TrackerPlayerActivityScreenState extends State<TrackerPlayerActivityScree
         }
 
         final bundle = snapshot.data ?? const _ActivityBundle.empty();
-        final stats = _resolveStats(bundle.dashboard, bundle.sessions);
-        final speedPoints = _buildSpeedPoints(stats, bundle.sessions);
+        final stats = _resolveStats(bundle.dashboard, bundle.sessions, bundle.points);
+        final speedPoints = _buildSpeedPoints(stats, bundle.sessions, bundle.points);
         final radar = _buildRadar(stats);
 
         return _ActivityPage(
@@ -137,7 +153,6 @@ class _TrackerPlayerActivityScreenState extends State<TrackerPlayerActivityScree
                         onChanged: _selectPlayer,
                       ),
                     ),
-                    Container(width: 1, color: _AA.border.withOpacity(.75)),
                     Expanded(
                       child: LayoutBuilder(
                         builder: (context, right) {
@@ -147,12 +162,13 @@ class _TrackerPlayerActivityScreenState extends State<TrackerPlayerActivityScree
 
                           if (profileMinHeight < 170) {
                             return ListView(
+                              primary: false,
                               padding: EdgeInsets.zero,
                               children: [
                                 SizedBox(height: 250, child: _RadarAndFieldCard(radar: radar, heatmap: bundle.heatmap)),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 6),
                                 SizedBox(height: 190, child: _SpeedChartCard(points: speedPoints, maxSpeed: stats.maxSpeedKmh)),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 6),
                                 SizedBox(height: kpiHeight, child: _StatsGrid(stats: stats, compact: false)),
                               ],
                             );
@@ -163,12 +179,10 @@ class _TrackerPlayerActivityScreenState extends State<TrackerPlayerActivityScree
                               Expanded(
                                 child: _RadarAndFieldCard(radar: radar, heatmap: bundle.heatmap),
                               ),
-                              Container(height: 1, color: _AA.border.withOpacity(.75)),
                               SizedBox(
                                 height: speedHeight,
                                 child: _SpeedChartCard(points: speedPoints, maxSpeed: stats.maxSpeedKmh),
                               ),
-                              Container(height: 1, color: _AA.border.withOpacity(.75)),
                               SizedBox(
                                 height: kpiHeight,
                                 child: _StatsGrid(stats: stats, compact: false),
@@ -189,25 +203,43 @@ class _TrackerPlayerActivityScreenState extends State<TrackerPlayerActivityScree
               );
 
               return ListView(
+                primary: false,
                 padding: EdgeInsets.zero,
                 children: [
                   selector,
-                  Container(height: 1, color: _AA.border.withOpacity(.75)),
                   SizedBox(height: 286, child: _RadarAndFieldCard(radar: radar, heatmap: bundle.heatmap)),
-                  Container(height: 1, color: _AA.border.withOpacity(.75)),
                   SizedBox(height: 208, child: _SpeedChartCard(points: speedPoints, maxSpeed: stats.maxSpeedKmh)),
-                  Container(height: 1, color: _AA.border.withOpacity(.75)),
                   SizedBox(height: 92, child: _StatsGrid(stats: stats, compact: true)),
                 ],
               );
             },
           ),
         );
-      },
+        },
+      ),
     );
   }
 
-  _ActivityStats _resolveStats(TrackerDashboardModel dashboard, List<TrackerSessionModel> sessions) {
+  _ActivityStats _resolveStats(TrackerDashboardModel dashboard, List<TrackerSessionModel> sessions, [List<ActionTrackerGpsPoint> points = const <ActionTrackerGpsPoint>[]]) {
+    if (points.length >= 2) {
+      final fromPoints = _statsFromPoints(points);
+      if (fromPoints.distanceM > 0 || fromPoints.maxSpeedKmh > 0 || fromPoints.sprintCount > 0 || fromPoints.accelerationCount > 0 || fromPoints.decelerationCount > 0) {
+        final sessionName = sessions.isNotEmpty ? sessions.first.playerName : null;
+        return _ActivityStats(
+          playerName: _selectedPlayer?.name ?? sessionName ?? fromPoints.playerName,
+          distanceM: fromPoints.distanceM,
+          sprintDistanceM: fromPoints.sprintDistanceM,
+          hirDistanceM: fromPoints.hirDistanceM,
+          vhirDistanceM: fromPoints.vhirDistanceM,
+          avgSpeedKmh: fromPoints.avgSpeedKmh,
+          maxSpeedKmh: fromPoints.maxSpeedKmh,
+          sprintCount: fromPoints.sprintCount,
+          accelerationCount: fromPoints.accelerationCount,
+          decelerationCount: fromPoints.decelerationCount,
+          loadScore: fromPoints.loadScore,
+        );
+      }
+    }
     final selectedId = _selectedPlayer?.id;
     TrackerPlayerLoadRow? row;
     if (selectedId != null) {
@@ -274,7 +306,9 @@ class _TrackerPlayerActivityScreenState extends State<TrackerPlayerActivityScree
     );
   }
 
-  List<_SpeedPoint> _buildSpeedPoints(_ActivityStats stats, List<TrackerSessionModel> sessions) {
+  List<_SpeedPoint> _buildSpeedPoints(_ActivityStats stats, List<TrackerSessionModel> sessions, List<ActionTrackerGpsPoint> points) {
+    final pointSpeeds = _speedPointsFromGps(points);
+    if (pointSpeeds.length >= 2) return pointSpeeds;
     final selectedId = _selectedPlayer?.id;
     final filtered = sessions.where((s) => selectedId == null || s.playerId == null || s.playerId == selectedId).toList(growable: false);
 
@@ -296,6 +330,104 @@ class _TrackerPlayerActivityScreenState extends State<TrackerPlayerActivityScree
       final value = (avg * .78 + wave + spike).clamp(0.0, max.clamp(4.0, 44.0).toDouble());
       return _SpeedPoint(t, value);
     });
+  }
+
+
+  _ActivityStats _statsFromPoints(List<ActionTrackerGpsPoint> points) {
+    double distance = 0, maxSpeed = 0, sprintDistance = 0, hir = 0, vhir = 0;
+    int sprintCount = 0, accel = 0, decel = 0;
+    double? prevSpeed;
+    bool inSprint = false;
+    for (var i = 1; i < points.length; i++) {
+      final a = points[i - 1], b = points[i];
+      final rawDtMs = (b.timeMs - a.timeMs).abs();
+      final dtMs = rawDtMs <= 0 ? 1000 : rawDtMs;
+      final d = _gpsDistanceMeters(a.latitude, a.longitude, b.latitude, b.longitude);
+      if (d <= 0 || d > 80) continue;
+      final speed = (d / (dtMs / 1000.0)) * 3.6;
+      if (!speed.isFinite || speed > 44) continue;
+      distance += d;
+      maxSpeed = math.max(maxSpeed, speed);
+      if (speed >= 14.0) hir += d;
+      if (speed >= 18.0) vhir += d;
+      if (speed >= 18.0) {
+        sprintDistance += d;
+        if (!inSprint) sprintCount++;
+        inSprint = true;
+      } else if (speed < 20) {
+        inSprint = false;
+      }
+      if (prevSpeed != null) {
+        final aMps = ((speed - prevSpeed!) / 3.6) / (dtMs / 1000.0);
+        if (aMps >= 1.0) accel++;
+        if (aMps <= -1.0) decel++;
+      }
+      prevSpeed = speed;
+    }
+    final rawDuration = points.length < 2 ? 0 : ((points.last.timeMs - points.first.timeMs).abs() / 1000).round();
+    final duration = rawDuration <= 0 ? math.max(1, points.length - 1) : rawDuration;
+    final avg = duration <= 0 ? 0.0 : (distance / duration) * 3.6;
+    final load = distance / 10.0 + sprintDistance * .35 + (hir + vhir) * .18 + (accel + decel) * 2.5;
+    return _ActivityStats(
+      playerName: _selectedPlayer?.name ?? 'Игрок',
+      distanceM: distance,
+      sprintDistanceM: sprintDistance,
+      hirDistanceM: hir,
+      vhirDistanceM: vhir,
+      avgSpeedKmh: avg,
+      maxSpeedKmh: maxSpeed,
+      sprintCount: sprintCount,
+      accelerationCount: accel,
+      decelerationCount: decel,
+      loadScore: load,
+    );
+  }
+
+  List<_SpeedPoint> _speedPointsFromGps(List<ActionTrackerGpsPoint> points) {
+    if (points.length < 2) return const <_SpeedPoint>[];
+    final out = <_SpeedPoint>[];
+    for (var i = 1; i < points.length; i++) {
+      final a = points[i - 1], b = points[i];
+      final rawDtMs = (b.timeMs - a.timeMs).abs();
+      final dtMs = rawDtMs <= 0 ? 1000 : rawDtMs;
+      final d = _gpsDistanceMeters(a.latitude, a.longitude, b.latitude, b.longitude);
+      if (d <= 0 || d > 80) continue;
+      final speed = (d / (dtMs / 1000.0)) * 3.6;
+      if (speed.isFinite && speed <= 44) out.add(_SpeedPoint(out.length.toDouble(), speed));
+    }
+    return out;
+  }
+
+  List<TrackerHeatPoint> _heatmapFromGps(List<ActionTrackerGpsPoint> points) {
+    if (points.length < 2) return const <TrackerHeatPoint>[];
+    var minLat = points.first.latitude, maxLat = points.first.latitude, minLng = points.first.longitude, maxLng = points.first.longitude;
+    for (final p in points) {
+      minLat = math.min(minLat, p.latitude); maxLat = math.max(maxLat, p.latitude);
+      minLng = math.min(minLng, p.longitude); maxLng = math.max(maxLng, p.longitude);
+    }
+    if ((maxLat - minLat).abs() < .00001) maxLat += .00001;
+    if ((maxLng - minLng).abs() < .00001) maxLng += .00001;
+    final buckets = <String, double>{};
+    for (final p in points) {
+      final x = (((p.longitude - minLng) / (maxLng - minLng)).clamp(0.0, 1.0) * 105.0).toDouble();
+      final y = ((1 - ((p.latitude - minLat) / (maxLat - minLat)).clamp(0.0, 1.0)) * 68.0).toDouble();
+      final key = '${x.toStringAsFixed(1)}:${y.toStringAsFixed(1)}';
+      buckets[key] = (buckets[key] ?? 0) + 1;
+    }
+    return buckets.entries.map((e) {
+      final parts = e.key.split(':');
+      return TrackerHeatPoint(x: double.tryParse(parts[0]) ?? 0, y: double.tryParse(parts[1]) ?? 0, value: e.value);
+    }).toList(growable: false);
+  }
+
+  double _gpsDistanceMeters(double lat1, double lon1, double lat2, double lon2) {
+    const r = 6371000.0;
+    final p1 = lat1 * math.pi / 180;
+    final p2 = lat2 * math.pi / 180;
+    final dp = (lat2 - lat1) * math.pi / 180;
+    final dl = (lon2 - lon1) * math.pi / 180;
+    final a = math.sin(dp / 2) * math.sin(dp / 2) + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) * math.sin(dl / 2);
+    return r * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
   }
 
   List<_RadarAxis> _buildRadar(_ActivityStats stats) {
@@ -322,15 +454,17 @@ class _TrackerPlayerActivityScreenState extends State<TrackerPlayerActivityScree
 }
 
 class _ActivityBundle {
-  const _ActivityBundle({required this.dashboard, required this.sessions, required this.heatmap});
+  const _ActivityBundle({required this.dashboard, required this.sessions, required this.heatmap, required this.points});
   const _ActivityBundle.empty()
       : dashboard = const TrackerDashboardModel(summary: <String, dynamic>{}, players: <TrackerPlayerLoadRow>[], alerts: <Map<String, dynamic>>[]),
         sessions = const <TrackerSessionModel>[],
-        heatmap = const <TrackerHeatPoint>[];
+        heatmap = const <TrackerHeatPoint>[],
+        points = const <ActionTrackerGpsPoint>[];
 
   final TrackerDashboardModel dashboard;
   final List<TrackerSessionModel> sessions;
   final List<TrackerHeatPoint> heatmap;
+  final List<ActionTrackerGpsPoint> points;
 }
 
 class _ActivityStats {
@@ -374,13 +508,13 @@ class _RadarAxis {
 }
 
 class _AA {
-  static const bg = Color(0xFFF4F5F6);
+  static const bg = Color(0xFFFFFFFF);
   static const card = Color(0xFFFFFFFF);
-  static const card2 = Color(0xFFF8F9FA);
-  static const border = Color(0xFFE5E7EB);
-  static const text = Color(0xFF111827);
-  static const muted = Color(0xFF475467);
-  static const dim = Color(0xFF667085);
+  static const card2 = Color(0xFFFFFFFF);
+  static const border = Color(0xFFE9ECEA);
+  static const text = Color(0xFF111512);
+  static const muted = Color(0xFF4F5B54);
+  static const dim = Color(0xFF6B746E);
   static const green = Color(0xFF00A750);
   static const yellow = Color(0xFFFACC15);
   static const orange = Color(0xFFF97316);
@@ -424,13 +558,37 @@ class _PlayerActivitySidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     final selectedId = selectedPlayer?.id;
 
-    return _ActivityCard(
-      title: 'Игроки',
-      subtitle: players.isEmpty ? 'состав не загружен' : '${players.length} в составе',
+    return Container(
+      color: Colors.white,
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Игроки',
+                    style: TextStyle(
+                      color: _AA.text,
+                      fontSize: 13.4,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Text(
+                  players.isEmpty ? 'нет состава' : '${players.length}',
+                  style: const TextStyle(
+                    color: _AA.muted,
+                    fontSize: 10.2,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
             child: _PlayerListTile(
               title: 'Вся команда',
               subtitle: 'суммарная активность',
@@ -442,31 +600,41 @@ class _PlayerActivitySidebar extends StatelessWidget {
               onTap: () => onChanged(null),
             ),
           ),
-          Container(height: 1, color: _AA.border.withOpacity(.75)),
           Expanded(
             child: players.isEmpty
                 ? const Center(
                     child: Padding(
-                      padding: EdgeInsets.all(18),
+                      padding: EdgeInsets.all(16),
                       child: Text(
-                        'Игроки появятся здесь после загрузки состава команды.',
+                        'Игроки появятся после загрузки состава команды.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: _AA.muted, fontSize: 12, fontWeight: FontWeight.w500),
+                        style: TextStyle(
+                          color: _AA.muted,
+                          fontSize: 11.4,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   )
-                : ListView.separated(
-                    padding: const EdgeInsets.all(8),
+                : ListView.builder(
+                    primary: false,
+                    padding: const EdgeInsets.fromLTRB(6, 4, 6, 6),
                     itemCount: players.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 6),
                     itemBuilder: (context, index) {
                       final p = players[index];
                       final row = _rowForPlayer(p.id);
-                      final distance = row == null ? '—' : _formatMeters(row.distanceM);
-                      final speed = row == null || row.maxSpeedKmh <= 0 ? 'нет сессий' : '${row.maxSpeedKmh.toStringAsFixed(1)} км/ч макс.';
+                      final distance =
+                          row == null ? '—' : _formatMeters(row.distanceM);
+                      final speed = row == null || row.maxSpeedKmh <= 0
+                          ? 'нет сессий'
+                          : '${row.maxSpeedKmh.toStringAsFixed(1)} км/ч макс.';
                       return _PlayerListTile(
                         title: p.name,
-                        subtitle: [if (p.number != null) '#${p.number}', if (p.position != null) p.position, speed].join(' · '),
+                        subtitle: [
+                          if (p.number != null) '#${p.number}',
+                          if (p.position != null) p.position,
+                          speed,
+                        ].join(' · '),
                         avatarUrl: p.avatar ?? row?.avatar,
                         initials: _activityInitials(p.name),
                         active: selectedId == p.id,
@@ -482,7 +650,8 @@ class _PlayerActivitySidebar extends StatelessWidget {
   }
 
   TrackerPlayerLoadRow? _rowForPlayer(int id) {
-    final matches = dashboard.players.where((r) => r.playerId == id).toList(growable: false);
+    final matches =
+        dashboard.players.where((r) => r.playerId == id).toList(growable: false);
     return matches.isEmpty ? null : matches.first;
   }
 
@@ -517,24 +686,29 @@ class _PlayerListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: active ? _AA.green.withOpacity(.10) : _AA.card2,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
+      color: active ? _AA.green.withOpacity(.06) : Colors.transparent,
+      child: _ActivityNoHoverTap(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
         child: Container(
-          padding: const EdgeInsets.all(9),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: active ? _AA.green.withOpacity(.55) : _AA.border.withOpacity(.85)),
-          ),
+          constraints: const BoxConstraints(minHeight: 54),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
           child: Row(
             children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                width: 3,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: active ? _AA.green : Colors.transparent,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+              const SizedBox(width: 8),
               _ActivityAvatar(
                 url: avatarUrl,
                 initials: initials,
                 icon: icon,
-                size: 42,
+                size: 38,
                 active: active,
               ),
               const SizedBox(width: 9),
@@ -547,37 +721,38 @@ class _PlayerListTile extends StatelessWidget {
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: _AA.text, fontSize: 12.6, fontWeight: FontWeight.w500, letterSpacing: -.15),
+                      style: TextStyle(
+                        color: _AA.text,
+                        fontSize: 12.2,
+                        fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+                        letterSpacing: -.12,
+                      ),
                     ),
                     const SizedBox(height: 3),
                     Text(
                       subtitle.isEmpty ? 'активность игрока' : subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: _AA.muted, fontSize: 10.4, fontWeight: FontWeight.w500),
+                      style: const TextStyle(
+                        color: _AA.muted,
+                        fontSize: 9.8,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 8),
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: active ? _AA.green : _AA.text,
-                      fontSize: 12.4,
-                      fontWeight: FontWeight.w500,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Icon(Icons.chevron_right_rounded, color: active ? _AA.green : _AA.dim, size: 17),
-                ],
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: active ? _AA.green : _AA.text,
+                  fontSize: 11.6,
+                  fontWeight: FontWeight.w700,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
               ),
             ],
           ),
@@ -608,10 +783,7 @@ class _ActivityAvatar extends StatelessWidget {
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: active ? _AA.green : _AA.border, width: active ? 2 : 1),
-      ),
+      decoration: const BoxDecoration(shape: BoxShape.circle),
       child: ClipOval(
         child: imageUrl == null
             ? _ActivityAvatarFallback(initials: initials, size: size, icon: icon)
@@ -665,52 +837,67 @@ class _PlayerSelectorBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selectedId = selectedPlayer?.id;
-    final hasSelected = selectedId != null && players.any((p) => p.id == selectedId);
+    final hasSelected =
+        selectedId != null && players.any((p) => p.id == selectedId);
 
     return Container(
-      height: 58,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: _AA.card,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _AA.border.withOpacity(.95)),
-      ),
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      color: Colors.white,
       child: Row(
         children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(color: _AA.green.withOpacity(.10), borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.person_search_rounded, color: _AA.green, size: 19),
+          const Text(
+            'Игрок',
+            style: TextStyle(
+              color: _AA.text,
+              fontSize: 12.2,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-          Container(width: 1, color: _AA.border.withOpacity(.75)),
-          const Text('Игрок', style: TextStyle(color: _AA.text, fontSize: 12.5, fontWeight: FontWeight.w500)),
-          Container(width: 1, color: _AA.border.withOpacity(.75)),
+          const SizedBox(width: 12),
           Expanded(
             child: DropdownButtonHideUnderline(
               child: DropdownButton<int?>(
                 value: hasSelected ? selectedId : null,
                 isExpanded: true,
-                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: _AA.green),
+                icon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: _AA.green,
+                  size: 18,
+                ),
                 dropdownColor: _AA.card,
-                style: const TextStyle(color: _AA.text, fontSize: 12.2, fontWeight: FontWeight.w500),
+                style: const TextStyle(
+                  color: _AA.text,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
                 items: [
-                  const DropdownMenuItem<int?>(value: null, child: Text('Вся команда')),
-                  ...players.map((p) => DropdownMenuItem<int?>(
-                        value: p.id,
-                        child: Text(
-                          [if (p.number != null) '#${p.number}', p.name, if (p.position != null) '· ${p.position}'].join(' '),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      )),
+                  const DropdownMenuItem<int?>(
+                    value: null,
+                    child: Text('Вся команда'),
+                  ),
+                  ...players.map(
+                    (p) => DropdownMenuItem<int?>(
+                      value: p.id,
+                      child: Text(
+                        [
+                          if (p.number != null) '#${p.number}',
+                          p.name,
+                          if (p.position != null) '· ${p.position}',
+                        ].join(' '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
                 ],
                 onChanged: (id) {
                   if (id == null) {
                     onChanged(null);
                     return;
                   }
-                  final matches = players.where((p) => p.id == id).toList(growable: false);
+                  final matches =
+                      players.where((p) => p.id == id).toList(growable: false);
                   onChanged(matches.isEmpty ? null : matches.first);
                 },
               ),
@@ -722,26 +909,46 @@ class _PlayerSelectorBar extends StatelessWidget {
   }
 }
 
+
 String _activityInitials(String name) {
-  final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+  final parts = name
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .toList();
+
   if (parts.isEmpty) return 'И';
+
   if (parts.length == 1) {
-    final s = parts.first;
-    return s.length <= 2 ? s.toUpperCase() : s.substring(0, 2).toUpperCase();
+    final value = parts.first;
+    return value.length <= 2
+        ? value.toUpperCase()
+        : value.substring(0, 2).toUpperCase();
   }
-  return '${parts[0].substring(0, 1)}${parts[1].substring(0, 1)}'.toUpperCase();
+
+  return '${parts[0].substring(0, 1)}${parts[1].substring(0, 1)}'
+      .toUpperCase();
 }
 
 String? _normalizeActivityAvatarUrl(String? raw) {
   final value = (raw ?? '').trim();
   if (value.isEmpty || value == 'null') return null;
-  if (value.startsWith('http://') || value.startsWith('https://')) return value;
+
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    return value;
+  }
+
   final cleaned = value.startsWith('/') ? value.substring(1) : value;
   return 'https://sportotekaapp.ru/$cleaned';
 }
 
 class _ActivityCard extends StatelessWidget {
-  const _ActivityCard({required this.title, required this.subtitle, required this.child, this.trailing});
+  const _ActivityCard({
+    required this.title,
+    required this.subtitle,
+    required this.child,
+    this.trailing,
+  });
 
   final String title;
   final String subtitle;
@@ -751,16 +958,12 @@ class _ActivityCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: const BoxDecoration(
-        color: Colors.transparent,
-      ),
+      color: Colors.white,
       child: Column(
         children: [
           Container(
-            height: 38,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(color: Colors.transparent, border: Border(bottom: BorderSide(color: _AA.border.withOpacity(.85)))),
+            constraints: const BoxConstraints(minHeight: 42),
+            padding: const EdgeInsets.fromLTRB(10, 7, 10, 5),
             child: Row(
               children: [
                 Expanded(
@@ -768,8 +971,29 @@ class _ActivityCard extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.text, fontSize: 12.8, fontWeight: FontWeight.w500)),
-                      if (subtitle.isNotEmpty) Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.muted, fontSize: 10.5, fontWeight: FontWeight.w500)),
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: _AA.text,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (subtitle.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _AA.muted,
+                            fontSize: 9.8,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -829,7 +1053,6 @@ class _RadarAndFieldCard extends StatelessWidget {
           return Row(
             children: [
               Expanded(flex: 6, child: CustomPaint(painter: _RadarActivityPainter(axes: radar), child: const SizedBox.expand())),
-              Container(width: 1, color: _AA.border.withOpacity(.7)),
               Expanded(flex: 5, child: CustomPaint(painter: _MiniPitchActivityPainter(points: heatmap), child: const SizedBox.expand())),
             ],
           );
@@ -862,15 +1085,17 @@ class _StatsGrid extends StatelessWidget {
     return _ActivityCard(
       title: 'Онлайн обзор KPI',
       subtitle: 'маленькие показатели по выбранному игроку',
-      trailing: TextButton.icon(
+      trailing: TextButton(
         onPressed: () => _showExpandedKpi(context, cards),
         style: TextButton.styleFrom(
           foregroundColor: _AA.green,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          minimumSize: const Size(0, 30),
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          minimumSize: const Size(0, 28),
         ),
-        icon: const Icon(Icons.open_in_full_rounded, size: 14),
-        label: const Text('Развернуть', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w500)),
+        child: const Text(
+          'Развернуть',
+          style: TextStyle(fontSize: 10.2, fontWeight: FontWeight.w700),
+        ),
       ),
       child: LayoutBuilder(
         builder: (context, c) {
@@ -904,29 +1129,23 @@ class _StatsGrid extends StatelessWidget {
           insetPadding: EdgeInsets.symmetric(horizontal: narrow ? 10 : 36, vertical: narrow ? 16 : 36),
           child: Container(
             constraints: BoxConstraints(maxWidth: narrow ? size.width : 760, maxHeight: size.height * .82),
-            decoration: BoxDecoration(
-              color: _AA.bg,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: _AA.border.withOpacity(.95)),
-            ),
+            decoration: const BoxDecoration(color: _AA.bg),
             child: Column(
               children: [
                 Container(
                   height: 52,
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  decoration: BoxDecoration(color: _AA.card, borderRadius: const BorderRadius.vertical(top: Radius.circular(14)), border: Border(bottom: BorderSide(color: _AA.border.withOpacity(.9)))),
-                  child: Row(
+                  padding: const EdgeInsets.symmetric(horizontal: 9),
+                  decoration: const BoxDecoration(color: _AA.card),
+                  child: const Row(
                     children: [
-                      const Icon(Icons.dashboard_rounded, color: _AA.green, size: 20),
-                      const SizedBox(width: 8),
-                      const Expanded(child: Text('Онлайн обзор KPI', style: TextStyle(color: _AA.text, fontSize: 15, fontWeight: FontWeight.w500))),
-                      IconButton(onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.close_rounded, color: _AA.text)),
+                      Expanded(child: Text('Онлайн обзор KPI', style: TextStyle(color: _AA.text, fontSize: 15, fontWeight: FontWeight.w700))),
+                      _DialogCloseButton(),
                     ],
                   ),
                 ),
                 Expanded(
                   child: GridView.builder(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(8),
                     itemCount: cards.length,
                     gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
                       maxCrossAxisExtent: narrow ? 210 : 240,
@@ -960,87 +1179,82 @@ class _MetricData {
 }
 
 class _MetricTile extends StatelessWidget {
-  const _MetricTile({required this.data, this.expanded = false});
+  const _MetricTile({
+    required this.data,
+    this.expanded = false,
+  });
 
   final _MetricData data;
   final bool expanded;
 
   @override
   Widget build(BuildContext context) {
-    final iconSize = expanded ? 34.0 : 28.0;
-    final valueSize = expanded ? 18.0 : 14.0;
-    final titleSize = expanded ? 11.2 : 9.3;
+    final valueSize = expanded ? 20.0 : 14.2;
+    final titleSize = expanded ? 11.2 : 9.4;
 
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: expanded ? 12 : 7, vertical: expanded ? 9 : 5),
-      decoration: BoxDecoration(
-        color: _AA.card2,
-        borderRadius: BorderRadius.circular(11),
-        border: Border.all(color: _AA.border.withOpacity(.9)),
+      padding: EdgeInsets.symmetric(
+        horizontal: expanded ? 12 : 8,
+        vertical: expanded ? 10 : 6,
       ),
-      child: Row(
+      color: Colors.white,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: iconSize,
-            height: iconSize,
-            decoration: BoxDecoration(
-              color: _AA.green.withOpacity(.10),
-              borderRadius: BorderRadius.circular(9),
+          Text(
+            data.value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: _AA.text,
+              fontSize: valueSize,
+              height: 1,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -.25,
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
-            child: Icon(data.icon, color: _AA.green, size: expanded ? 18 : 16),
           ),
-          SizedBox(width: expanded ? 10 : 7),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  data.value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: _AA.text,
-                    fontSize: valueSize,
-                    height: 1.0,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: -.25,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  data.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: _AA.muted,
-                    fontSize: titleSize,
-                    height: 1.0,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
+          const SizedBox(height: 4),
+          Text(
+            data.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: _AA.muted,
+              fontSize: titleSize,
+              height: 1,
+              fontWeight: FontWeight.w600,
             ),
           ),
           if (expanded) ...[
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                data.subtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.right,
-                style: const TextStyle(
-                  color: _AA.dim,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                ),
+            const SizedBox(height: 4),
+            Text(
+              data.subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _AA.dim,
+                fontSize: 9.8,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ],
         ],
       ),
+    );
+  }
+}
+
+
+class _DialogCloseButton extends StatelessWidget {
+  const _DialogCloseButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      onPressed: () => Navigator.of(context).pop(),
+      icon: const Icon(Icons.close_rounded, color: _AA.text),
     );
   }
 }
@@ -1139,8 +1353,40 @@ class _MiniPitchActivityPainter extends CustomPainter {
   bool shouldRepaint(covariant _MiniPitchActivityPainter oldDelegate) => oldDelegate.points != points;
 }
 
+
+class _ActivityNoHoverTap extends StatelessWidget {
+  const _ActivityNoHoverTap({required this.child, required this.onTap});
+
+  final Widget child;
+  final VoidCallback? onTap;
+
+  void _runAfterPointerSettled(BuildContext context) {
+    final callback = onTap;
+    if (callback == null) return;
+    Future<void>.delayed(const Duration(milliseconds: 70), () async {
+      if (!context.mounted) return;
+      await WidgetsBinding.instance.endOfFrame;
+      if (!context.mounted) return;
+      callback();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap == null ? null : () => _runAfterPointerSettled(context),
+      child: child,
+    );
+  }
+}
+
 class _MiniButton extends StatelessWidget {
-  const _MiniButton({required this.icon, required this.label, required this.onTap});
+  const _MiniButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   final IconData icon;
   final String label;
@@ -1151,16 +1397,18 @@ class _MiniButton extends StatelessWidget {
     return Material(
       color: _AA.green,
       borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+      child: _ActivityNoHoverTap(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon, color: Colors.white, size: 16),
-            const SizedBox(width: 6),
-            Text(label, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500)),
-          ]),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ),
       ),
     );
@@ -1178,8 +1426,8 @@ class _ActivityError extends StatelessWidget {
     return Center(
       child: Container(
         width: 520,
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: _AA.border)),
+        padding: const EdgeInsets.all(10),
+        decoration: const BoxDecoration(color: Colors.white),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1188,7 +1436,7 @@ class _ActivityError extends StatelessWidget {
             const Text('Не удалось загрузить активность', style: TextStyle(color: _AA.text, fontSize: 15, fontWeight: FontWeight.w500)),
             const SizedBox(height: 6),
             Text(error, textAlign: TextAlign.center, style: const TextStyle(color: _AA.muted, fontSize: 12, fontWeight: FontWeight.w500)),
-            const SizedBox(height: 12),
+            const SizedBox(height: 6),
             _MiniButton(icon: Icons.refresh_rounded, label: 'Повторить', onTap: onRetry),
           ],
         ),
@@ -1333,7 +1581,7 @@ class _RadarActivityPainter extends CustomPainter {
     canvas.drawPath(
       valuePath,
       Paint()
-        ..color = _AA.green.withOpacity(.18)
+        ..color = _AA.green.withOpacity(.08)
         ..style = PaintingStyle.fill,
     );
     canvas.drawPath(

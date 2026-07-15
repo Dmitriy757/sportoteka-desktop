@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'game_zone_api.dart';
+import 'game_zone_cmr_style.dart';
 
 class QuizDetailScreen extends StatefulWidget {
   const QuizDetailScreen({super.key});
@@ -301,47 +302,17 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
     final q = quiz ?? {};
     final st = stats ?? {};
 
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF7C3AED), Color(0xFF9F67FF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            (q['title'] ?? 'Квиз').toString(),
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-              fontSize: 20,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            (q['description'] ?? '').toString(),
-            style: const TextStyle(
-              color: Colors.white70,
-              height: 1.35,
-            ),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(child: _statCard('Вопросов', '${questions.length}')),
-              const SizedBox(width: 10),
-              Expanded(child: _statCard('Попыток', '${st['attempts_count'] ?? 0}')),
-              const SizedBox(width: 10),
-              Expanded(child: _statCard('Средний %', '${st['average_score'] ?? 0}')),
-            ],
-          ),
-        ],
-      ),
+    return GameZoneCmr.header(
+      title: (q['title'] ?? 'Квиз').toString(),
+      subtitle: (q['description'] ?? '').toString(),
+      icon: Icons.quiz_rounded,
+      stats: [
+        GameZoneCmr.stat('Вопросов', '${questions.length}'),
+        const SizedBox(width: 10),
+        GameZoneCmr.stat('Попыток', '${st['attempts_count'] ?? 0}', color: GzColors.blue),
+        const SizedBox(width: 10),
+        GameZoneCmr.stat('Очков', '${q['points_reward'] ?? 0}', color: GzColors.amber),
+      ],
     );
   }
 
@@ -383,13 +354,7 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0D000000),
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
+      border: Border.all(color: GzColors.divider),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -402,7 +367,7 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w900,
-                    color: Color(0xFF7C3AED),
+                    color: GzColors.green,
                   ),
                 ),
               ),
@@ -439,21 +404,21 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isCorrect ? const Color(0xFFF6EEFF) : const Color(0xFFF9FAFB),
+        color: isCorrect ? GzColors.greenSoft : GzColors.soft,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isCorrect ? const Color(0xFF7C3AED) : const Color(0xFFE5E7EB),
+          color: isCorrect ? GzColors.green : GzColors.divider,
         ),
       ),
       child: Row(
         children: [
           CircleAvatar(
             radius: 13,
-            backgroundColor: isCorrect ? const Color(0xFF7C3AED) : const Color(0xFFE5E7EB),
+            backgroundColor: isCorrect ? GzColors.green : GzColors.divider,
             child: Text(
               label,
               style: TextStyle(
-                color: isCorrect ? Colors.white : Colors.black87,
+                color: isCorrect ? Colors.white : GzColors.text,
                 fontWeight: FontWeight.w900,
                 fontSize: 11,
               ),
@@ -466,7 +431,7 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
           if (isCorrect)
             const Icon(
               Icons.check_circle,
-              color: Color(0xFF7C3AED),
+              color: GzColors.green,
               size: 18,
             ),
         ],
@@ -481,14 +446,14 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: GzColors.divider),
       ),
       child: Column(
         children: [
           const Icon(
             Icons.quiz_outlined,
             size: 44,
-            color: Color(0xFF7C3AED),
+            color: GzColors.green,
           ),
           const SizedBox(height: 12),
           const Text(
@@ -503,7 +468,7 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
             'Добавь первый вопрос в этот квиз.',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: Color(0xFF6B7280),
+              color: GzColors.subtle,
               height: 1.4,
             ),
           ),
@@ -526,7 +491,8 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
     final title = (quiz?['title'] ?? 'Детали квиза').toString();
 
     return Scaffold(
-      appBar: AppBar(
+      backgroundColor: GzColors.bg,
+      appBar: GameZoneCmr.appBar(
         title: Text(title),
         actions: [
           IconButton(
@@ -542,16 +508,21 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: GzColors.graphite,
+        foregroundColor: Colors.white,
+        elevation: 0,
         onPressed: _openAddQuestionSheet,
         icon: const Icon(Icons.add),
         label: const Text('Новый вопрос'),
       ),
-      body: loading
+      body: GameZoneCmr.page(
+        context,
+        child: loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _load,
               child: ListView(
-                padding: const EdgeInsets.all(16),
+                padding: GameZoneCmr.listPadding(context),
                 children: [
                   _heroCard(),
                   const SizedBox(height: 18),
@@ -576,6 +547,7 @@ class _QuizDetailScreenState extends State<QuizDetailScreen> {
                 ],
               ),
             ),
+      ),
     );
   }
 }

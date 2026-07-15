@@ -1,35 +1,49 @@
 // lib/presentation/club_workspace/cmr_chats_panel.dart
-// Windows 11 / Fluent refresh based on CmrClubTeamsPanel typography and glass cards.
+// Inter typography aligned with Club Workspace, Teams, Roster and Trainers.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' show FontFeature;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
+
+import 'package:sportoteka/core/theme/app_typography.dart';
 
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/chat_screen/chat_room_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/chat_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/create_group_chat_screen.dart';
+import 'package:sportoteka/presentation/club_workspace/cmr_club_ai_assistant_panel.dart';
 
 enum _CmrChatMode { privateChats, groups, users }
 
 class CmrChatsPanel extends StatefulWidget {
   final int userId;
+  /// Нужен для ИИ-клуба: поиск отчетов, игроков и сессий внутри клуба.
+  /// Оставлен nullable, чтобы старые вызовы CmrChatsPanel не сломались.
+  final int? clubId;
   final String? clubName;
   final int? teamId;
   final String? teamName;
   final ValueChanged<int>? onUnreadChanged;
+  /// Переходы из карточек ИИ: player_profile / tracker / report / calendar / match / testing / plans / attendance.
+  final void Function(String target, Map<String, dynamic> payload)? onAiNavigate;
+  /// Открытие PDF из карточки ИИ. Можно подключить url_launcher или свой PDF-viewer.
+  final void Function(String url)? onAiOpenPdf;
 
   const CmrChatsPanel({
     super.key,
     required this.userId,
+    this.clubId,
     this.clubName,
     this.teamId,
     this.teamName,
     this.onUnreadChanged,
+    this.onAiNavigate,
+    this.onAiOpenPdf,
   });
 
   @override
@@ -50,6 +64,10 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
   final TextEditingController _search = TextEditingController();
 
   _CmrChatMode _mode = _CmrChatMode.privateChats;
+
+  // ИИ клуба открываем первым: для клуба это рабочий поиск по отчетам/игрокам/сессиям.
+  bool _aiSelected = false;
+  bool _openingAiRoute = false;
 
   List<Map<String, dynamic>> _privateChats = <Map<String, dynamic>>[];
   List<Map<String, dynamic>> _groups = <Map<String, dynamic>>[];
@@ -144,7 +162,6 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
     ]);
     if (!mounted) return;
     setState(() => _loading = false);
-    _autoSelectFirstChat();
   }
 
   Future<void> _refresh() async {
@@ -238,6 +255,7 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
   }
 
   void _autoSelectFirstChat() {
+    if (_aiSelected) return;
     if (_selectedChatId != null) return;
     final chats = _visibleChatsRaw();
     if (chats.isEmpty) return;
@@ -471,12 +489,123 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
     }).toList();
   }
 
+
+  bool get _phoneMessengerLayout {
+    final media = MediaQuery.maybeOf(context);
+    final w = media?.size.width ?? 9999;
+    return w < 700;
+  }
+
+  Future<void> _openAiFullscreen() async {
+    if (_openingAiRoute) return;
+    if (!mounted) return;
+    setState(() => _openingAiRoute = true);
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (_) => Scaffold(
+          backgroundColor: const Color(0xFFF6F8FA),
+          resizeToAvoidBottomInset: true,
+          body: CmrClubAiAssistantPanel(
+            clubId: widget.clubId ?? 0,
+            userId: widget.userId,
+            teamId: widget.teamId,
+            clubName: widget.clubName,
+            teamName: widget.teamName,
+            onNavigate: widget.onAiNavigate ?? _fallbackAiNavigate,
+            onOpenPdf: widget.onAiOpenPdf,
+            onBack: () => Navigator.of(context).maybePop(),
+          ),
+        ),
+      ),
+    );
+    if (!mounted) return;
+    setState(() {
+      _openingAiRoute = false;
+      _aiSelected = false;
+      _selectedChatName = '';
+    });
+  }
+
+  void _selectAiClub() {
+    // На телефоне ИИ открываем отдельным маршрутом: нижний dock Club Workspace
+    // исчезает, а поле ввода остаётся в самом низу как в обычном мессенджере.
+    if (_phoneMessengerLayout) {
+      _openAiFullscreen();
+      return;
+    }
+    // На планшете/ПК оставляем ИИ справа внутри рабочей области чатов.
+    setState(() {
+      _aiSelected = true;
+      _selectedChat = null;
+      _selectedChatId = null;
+      _selectedChatName = 'ИИ клуба';
+    });
+  }
+
+  void _fallbackAiNavigate(String target, Map<String, dynamic> payload) {
+    // Без внешнего роутера не показываем тренеру технический payload.
+    // Для полноценного открытия экранов передайте onAiNavigate из ClubWorkspaceScreen.
+    if (target == 'report') {
+      final url = (payload['open_url'] ?? payload['pdf_url'] ?? '').toString().trim();
+      if (url.isNotEmpty) {
+        Clipboard.setData(ClipboardData(text: url));
+        _toast('Отчет найден: ссылка скопирована. Подключите onAiNavigate, чтобы открывать экран отчета сразу.');
+        return;
+      }
+      final sessionId = _asInt(payload['session_id']);
+      _toast(sessionId > 0 ? 'Отчет найден: сессия #$sessionId. Подключите переход в экран отчета.' : 'Отчет найден. Подключите переход в экран отчета.');
+      return;
+    }
+    if (target == 'player_profile') {
+      final playerId = _asInt(payload['player_id']);
+      _toast(playerId > 0 ? 'Игрок найден: #$playerId. Подключите переход в профиль игрока.' : 'Игрок найден. Подключите переход в профиль.');
+      return;
+    }
+    _toast('Результат найден. Подключите onAiNavigate, чтобы открывать нужный экран из ИИ.');
+  }
+
+  Future<void> _openChatFullscreen({
+    required int chatId,
+    required String title,
+    Map<String, dynamic>? chat,
+  }) async {
+    if (chatId <= 0) return;
+    final unread = _asInt(chat?['unread_count']);
+    if (chat != null) chat['unread_count'] = 0;
+    if (mounted) setState(() {});
+    if (unread > 0) {
+      _markReadServer(chatId);
+      _fetchUnreadTotal();
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ChatRoomScreen(
+          chatId: chatId,
+          userId: widget.userId,
+          chatName: title,
+          embedded: false,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    await _loadPrivateChats();
+    await _loadGroups();
+    _fetchUnreadTotal();
+  }
+
   void _selectChat(Map<String, dynamic> chat) {
     final id = _asInt(chat['id'] ?? chat['chat_id']);
     if (id <= 0) return;
     final title = _chatTitle(chat);
+    _aiSelected = false;
+    if (_phoneMessengerLayout) {
+      unawaited(_openChatFullscreen(chatId: id, title: title, chat: chat));
+      return;
+    }
     final unread = _asInt(chat['unread_count']);
     setState(() {
+      _aiSelected = false;
       _selectedChat = chat;
       _selectedChatId = id;
       _selectedChatName = title;
@@ -513,7 +642,25 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
           await _loadPrivateChats();
           final title = _userTitle(user);
           if (!mounted) return;
+          if (_phoneMessengerLayout) {
+            setState(() {
+            _aiSelected = false;
+            _mode = _CmrChatMode.privateChats;
+          });
+            unawaited(_openChatFullscreen(
+              chatId: chatId,
+              title: title,
+              chat: {
+                'id': chatId,
+                'name': title,
+                'is_private': 1,
+                'peer_name': title,
+              },
+            ));
+            return;
+          }
           setState(() {
+            _aiSelected = false;
             _mode = _CmrChatMode.privateChats;
             _selectedChatId = chatId;
             _selectedChatName = title;
@@ -565,8 +712,7 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
       await _loadGroups();
       if (!mounted) return;
       setState(() => _mode = _CmrChatMode.groups);
-      _autoSelectFirstChat();
-    }
+      }
   }
 
   void _openFullChat() {
@@ -583,60 +729,147 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.userId <= 0) {
-      return Container(
-        decoration: _CmrChatDecor.workspaceBg(),
-        child: const _CmrChatEmpty(
-          icon: Icons.forum_rounded,
-          title: 'Чаты недоступны',
-          subtitle: 'Не удалось определить пользователя для загрузки сообщений.',
-        ),
-      );
-    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final media = MediaQuery.sizeOf(context);
+        final width = constraints.maxWidth.isFinite && constraints.maxWidth > 0
+            ? constraints.maxWidth
+            : media.width;
+        final safeHeight = constraints.maxHeight.isFinite && constraints.maxHeight > 120
+            ? constraints.maxHeight
+            : math.max(
+                620.0,
+                media.height - MediaQuery.paddingOf(context).vertical - 18,
+              );
 
-    final items = _visibleItems();
-
-    return Container(
-      decoration: _CmrChatDecor.workspaceBg(),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final mobile = constraints.maxWidth < 640;
-          final compact = constraints.maxWidth < 980;
-          final listWidth = math.min(480.0, constraints.maxWidth * .45);
-
-          if (mobile) {
-            return _buildCompact(items);
-          }
-
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(
-                width: listWidth,
-                child: _buildLeft(items, mobile: mobile, compact: compact),
+        if (widget.userId <= 0) {
+          return SizedBox(
+            width: double.infinity,
+            height: safeHeight,
+            child: Container(
+              decoration: _CmrChatDecor.workspaceBg(),
+              padding: const EdgeInsets.all(8),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  decoration: _CmrChatDecor.unifiedWindow(radius: 16),
+                  child: const _CmrChatEmpty(
+                    icon: Icons.forum_rounded,
+                    title: 'Чаты недоступны',
+                    subtitle: 'Не удалось определить пользователя для загрузки сообщений.',
+                  ),
+                ),
               ),
-              const SizedBox(width: 12),
-              Expanded(child: _buildRight()),
-            ],
+            ),
           );
-        },
-      ),
+        }
+
+        final items = _visibleItems();
+        final phone = width < 700;
+        final tablet = width >= 700 && width < 1120;
+        final compact = width < 920;
+        final showInfoRail = width >= 1280 && _selectedChatId != null;
+        final listWidth = phone
+            ? width
+            : tablet
+                ? math.min(360.0, math.max(300.0, width * .36))
+                : math.min(390.0, math.max(335.0, width * .28));
+
+        if (phone) {
+          return SizedBox(
+            width: double.infinity,
+            height: safeHeight,
+            child: Container(
+              decoration: _CmrChatDecor.workspaceBg(),
+              padding: const EdgeInsets.all(6),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  decoration: _CmrChatDecor.unifiedWindow(radius: 16),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    switchInCurve: Curves.easeOut,
+                    switchOutCurve: Curves.easeIn,
+                    child: _buildCompact(items),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
+        return SizedBox(
+          width: double.infinity,
+          height: safeHeight,
+          child: Container(
+            decoration: _CmrChatDecor.workspaceBg(),
+            padding: EdgeInsets.all(tablet ? 8 : 10),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(tablet ? 16 : 18),
+              child: Container(
+                decoration: _CmrChatDecor.unifiedWindow(radius: tablet ? 16 : 18),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(width: listWidth, child: _buildLeft(items, mobile: false, compact: compact)),
+                    Container(width: 1, color: _CmrChatColors.line.withOpacity(.90)),
+                    Expanded(child: _buildRight()),
+                    if (showInfoRail) ...[
+                      Container(width: 1, color: _CmrChatColors.line.withOpacity(.90)),
+                      SizedBox(width: 250, child: _ChatInfoRail(
+                        title: _selectedChatName.isEmpty ? 'Чат' : _selectedChatName,
+                        subtitle: _selectedChat == null
+                            ? 'Рабочая переписка'
+                            : (_isPrivate(_selectedChat!) ? 'Личный диалог' : _subtitle(_selectedChat!)),
+                        avatarUrl: _selectedChat == null ? '' : _photo(_selectedChat!),
+                        initials: _initials(_selectedChatName),
+                        isGroup: _selectedChat == null ? false : !_isPrivate(_selectedChat!),
+                        unreadTotal: _unreadTotal,
+                        onOpenFull: _openFullChat,
+                        onRefresh: _refresh,
+                      )),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
   Widget _buildCompact(List<Map<String, dynamic>> items) {
-    if (_selectedChatId != null) return _buildRight(showBack: true);
-    return _buildLeft(items, mobile: true, compact: true);
+    if (_aiSelected) {
+      // Если раздел «Чаты» открылся сразу с выбранным ИИ, на телефоне не
+      // встраиваем его под нижний dock, а открываем полноценным экраном.
+      if (!_openingAiRoute) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !_aiSelected || !_phoneMessengerLayout || _openingAiRoute) return;
+          _openAiFullscreen();
+        });
+      }
+      return _buildLeft(items, mobile: true, compact: true, key: const ValueKey('chat-list-phone-ai-bg'));
+    }
+    if (_selectedChatId != null) {
+      return _buildRight(
+        showBack: true,
+        key: ValueKey('chat-room-phone-${_selectedChatId ?? 0}'),
+      );
+    }
+    return _buildLeft(items, mobile: true, compact: true, key: const ValueKey('chat-list-phone'));
   }
 
   Widget _buildLeft(
     List<Map<String, dynamic>> items, {
     required bool mobile,
     required bool compact,
+    Key? key,
   }) {
     return Container(
-      decoration: _CmrChatDecor.panel(radius: mobile ? 14 : 16, elevated: true),
-      padding: EdgeInsets.all(mobile ? 10 : 12),
+      key: key,
+      decoration: _CmrChatDecor.seamlessPane(),
+      padding: EdgeInsets.all(mobile ? 8 : (compact ? 10 : 12)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -649,7 +882,13 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
             onOpenFull: _openFullChat,
             mobile: mobile,
           ),
-          SizedBox(height: mobile ? 10 : 12),
+          SizedBox(height: mobile ? 9 : 10),
+          _AiPinnedChatRow(
+            selected: _aiSelected,
+            mobile: mobile,
+            onTap: _selectAiClub,
+          ),
+          SizedBox(height: mobile ? 9 : 10),
           _ChatSearch(
             controller: _search,
             hintText: _mode == _CmrChatMode.users ? 'Найти пользователя...' : 'Поиск по чатам...',
@@ -754,16 +993,35 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
     }
   }
 
-  Widget _buildRight({bool showBack = false}) {
+  Widget _buildRight({bool showBack = false, Key? key}) {
+    if (_aiSelected) {
+      return CmrClubAiAssistantPanel(
+        key: const ValueKey('cmr-club-ai-chat'),
+        clubId: widget.clubId ?? 0,
+        userId: widget.userId,
+        teamId: widget.teamId,
+        clubName: widget.clubName,
+        teamName: widget.teamName,
+        onNavigate: widget.onAiNavigate ?? _fallbackAiNavigate,
+        onOpenPdf: widget.onAiOpenPdf,
+        onBack: showBack
+            ? () => setState(() {
+                  _aiSelected = false;
+                  _selectedChatName = '';
+                })
+            : null,
+      );
+    }
     final chatId = _selectedChatId;
     if (chatId == null || chatId <= 0) {
       return Container(
-        decoration: _CmrChatDecor.panel(radius: 14, elevated: true),
+        key: key,
+        decoration: _CmrChatDecor.seamlessPane(),
         padding: const EdgeInsets.all(18),
         child: const _CmrChatEmpty(
           icon: Icons.forum_rounded,
           title: 'Выберите чат',
-          subtitle: 'Слева выберите личный диалог, группу или пользователя. Переписка откроется здесь же, без ухода из workspace.',
+          subtitle: 'Слева выберите личный диалог, группу или пользователя. На планшете и ПК переписка откроется здесь, на телефоне — отдельным полноэкранным окном.',
         ),
       );
     }
@@ -775,9 +1033,10 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
         : (_isPrivate(chat) ? _subtitle(chat) : '${_subtitle(chat)} · группа');
 
     return Container(
-      decoration: _CmrChatDecor.panel(radius: 14, elevated: true),
+      key: key,
+      decoration: _CmrChatDecor.seamlessPane(),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(0),
         child: Column(
           children: [
             _EmbeddedChatHeader(
@@ -808,6 +1067,211 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
     );
   }
 
+}
+
+
+
+class _AiPinnedChatRow extends StatelessWidget {
+  final bool selected;
+  final bool mobile;
+  final VoidCallback onTap;
+
+  const _AiPinnedChatRow({required this.selected, required this.mobile, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 170),
+          padding: EdgeInsets.symmetric(horizontal: mobile ? 9 : 10, vertical: mobile ? 8 : 9),
+          decoration: BoxDecoration(
+            color: selected ? const Color(0xFFE2F7EA) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 170),
+                width: 3,
+                height: mobile ? 42 : 44,
+                decoration: BoxDecoration(
+                  color: selected ? _CmrChatColors.green : Colors.transparent,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                width: mobile ? 38 : 40,
+                height: mobile ? 38 : 40,
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [_CmrChatColors.green, _CmrChatColors.blue],
+                  ),
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                ),
+                child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 19),
+              ),
+              SizedBox(width: mobile ? 9 : 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: Text('ИИ клуба', maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrChatText.title(mobile ? 13.2 : 13.8))),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(color: _CmrChatColors.graphite, borderRadius: BorderRadius.circular(8)),
+                          child: const Text('beta', style: TextStyle(color: Colors.white, fontSize: 9.6, fontWeight: FontWeight.w600, height: 1)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text('Найду отчет, игрока, тренировку, PDF и аналитику', maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrChatText.muted(mobile ? 10.8 : 11.2)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(color: _CmrChatColors.greenSoft, borderRadius: BorderRadius.circular(9), border: Border.all(color: _CmrChatColors.greenBorder)),
+                child: const Icon(Icons.arrow_forward_rounded, color: _CmrChatColors.greenDark, size: 16),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatInfoRail extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final String avatarUrl;
+  final String initials;
+  final bool isGroup;
+  final int unreadTotal;
+  final VoidCallback onOpenFull;
+  final VoidCallback onRefresh;
+
+  const _ChatInfoRail({
+    required this.title,
+    required this.subtitle,
+    required this.avatarUrl,
+    required this.initials,
+    required this.isGroup,
+    required this.unreadTotal,
+    required this.onOpenFull,
+    required this.onRefresh,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.transparent,
+      padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: _Avatar(
+              url: avatarUrl,
+              initials: initials,
+              icon: isGroup ? Icons.groups_2_rounded : Icons.person_rounded,
+              size: 62,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(title, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis, style: _CmrChatText.title(14.4)),
+          const SizedBox(height: 5),
+          Text(subtitle, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis, style: _CmrChatText.muted(11.0)),
+          const SizedBox(height: 14),
+          _InfoRailTile(icon: Icons.notifications_rounded, title: 'Непрочитанные', value: unreadTotal > 0 ? unreadTotal.toString() : 'нет'),
+          const SizedBox(height: 8),
+          _InfoRailTile(icon: isGroup ? Icons.groups_rounded : Icons.lock_outline_rounded, title: isGroup ? 'Тип чата' : 'Диалог', value: isGroup ? 'группа' : 'личный'),
+          const Spacer(),
+          Row(
+            children: [
+              Expanded(child: _InfoRailButton(icon: Icons.refresh_rounded, text: 'Обновить', onTap: onRefresh)),
+              const SizedBox(width: 8),
+              Expanded(child: _InfoRailButton(icon: Icons.open_in_new_rounded, text: 'Открыть', onTap: onOpenFull)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoRailTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String value;
+
+  const _InfoRailTile({required this.icon, required this.title, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: _CmrChatColors.soft,
+        borderRadius: BorderRadius.circular(11),
+      ),
+      child: Row(children: [
+        Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(color: _CmrChatColors.greenSoft, borderRadius: BorderRadius.circular(9)),
+          child: Icon(icon, color: _CmrChatColors.greenDark, size: 15),
+        ),
+        const SizedBox(width: 9),
+        Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrChatText.muted(10.8))),
+        Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrChatText.value(11.2)),
+      ]),
+    );
+  }
+}
+
+class _InfoRailButton extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final VoidCallback onTap;
+
+  const _InfoRailButton({required this.icon, required this.text, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          height: 34,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(icon, size: 14, color: _CmrChatColors.greenDark),
+            const SizedBox(width: 5),
+            Text(text, style: _CmrChatText.action(color: _CmrChatColors.text2).copyWith(fontSize: 10.8)),
+          ]),
+        ),
+      ),
+    );
+  }
 }
 
 class _ChatsToolbar extends StatelessWidget {
@@ -842,23 +1306,18 @@ class _ChatsToolbar extends StatelessWidget {
           width: mobile ? 34 : 36,
           height: mobile ? 34 : 36,
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [_CmrChatColors.graphite, _CmrChatColors.graphiteSoft],
-            ),
+            color: _CmrChatColors.greenSoft,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.white.withOpacity(.24), width: 1),
             boxShadow: [
               BoxShadow(
-                color: _CmrChatColors.green.withOpacity(.18),
-                blurRadius: 16,
-                spreadRadius: -8,
-                offset: const Offset(0, 8),
+                color: _CmrChatColors.green.withOpacity(.07),
+                blurRadius: 18,
+                spreadRadius: -11,
+                offset: const Offset(0, 10),
               ),
             ],
           ),
-          child: const Icon(Icons.forum_rounded, color: _CmrChatColors.green, size: 16),
+          child: Icon(Icons.forum_rounded, color: _CmrChatColors.greenDark, size: mobile ? 18 : 19),
         ),
         SizedBox(width: mobile ? 9 : 10),
         Expanded(
@@ -872,7 +1331,7 @@ class _ChatsToolbar extends StatelessWidget {
                       'Чаты',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _CmrChatText.title(mobile ? 15.5 : 16.5),
+                      style: _CmrChatText.title(mobile ? 15.0 : 15.4),
                     ),
                   ),
                   if (unreadTotal > 0) ...[
@@ -882,13 +1341,12 @@ class _ChatsToolbar extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: _CmrChatColors.graphite,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: _CmrChatColors.graphite.withOpacity(.14), width: 1),
                       ),
                       child: Text(
                         unreadTotal > 99 ? '99+' : unreadTotal.toString(),
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 9.85,
+                          fontSize: 10.2,
                           fontWeight: FontWeight.w500,
                           height: 1,
                         ),
@@ -902,7 +1360,7 @@ class _ChatsToolbar extends StatelessWidget {
                 scope.isEmpty ? 'Диалоги, группы и пользователи' : scope,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: _CmrChatText.muted(mobile ? 11.2 : 12),
+                style: _CmrChatText.muted(mobile ? 10.8 : 11.2),
               ),
             ],
           ),
@@ -934,8 +1392,11 @@ class _ChatSearch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: mobile ? 40 : 42,
-      decoration: _CmrChatDecor.softCard(radius: mobile ? 10 : 11),
+      height: mobile ? 38 : 38,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+      ),
       padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 12),
       child: Row(
         children: [
@@ -993,7 +1454,7 @@ class _ChatModeBar extends StatelessWidget {
     };
 
     return SizedBox(
-      height: mobile ? 33 : 35,
+      height: mobile ? 31 : 32,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: items.length,
@@ -1041,75 +1502,61 @@ class _ChatModePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = _chatAccent(icon.codePoint);
-    final accentSoft = _chatAccentSoft(icon.codePoint);
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(999),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(999),
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
-          padding: EdgeInsets.symmetric(horizontal: dense ? 9 : 11, vertical: dense ? 7 : 8),
-          decoration: BoxDecoration(
-            gradient: active
-                ? LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [accent, _CmrChatColors.blue],
-                  )
-                : LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Colors.white, accentSoft.withOpacity(.72)],
-                  ),
-            borderRadius: BorderRadius.circular(9),
-            border: Border.all(color: Colors.white.withOpacity(active ? .42 : .80), width: 1),
-            boxShadow: active
-                ? [
-                    BoxShadow(
-                      color: accent.withOpacity(.18),
-                      blurRadius: 18,
-                      spreadRadius: -9,
-                      offset: const Offset(0, 9),
-                    ),
-                  ]
-                : null,
+          padding: EdgeInsets.symmetric(
+            horizontal: dense ? 9 : 10,
+            vertical: dense ? 5 : 6,
           ),
+          decoration: active
+              ? _CmrChatDecor.fluentSurface(
+                  radius: 999,
+                  accent: _CmrChatColors.green,
+                  active: true,
+                  compact: true,
+                )
+              : BoxDecoration(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(999),
+                ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: dense ? 18 : 20,
-                height: dense ? 18 : 20,
-                decoration: BoxDecoration(
-                  color: active ? Colors.white.withOpacity(.18) : Colors.white.withOpacity(.85),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: Colors.white.withOpacity(active ? .26 : .70), width: 1),
-                ),
-                child: Icon(icon, color: active ? Colors.white : accent, size: dense ? 13 : 14),
-              ),
-              const SizedBox(width: 7),
-              Text(label, style: _CmrChatText.tab(active: active)),
-              const SizedBox(width: 7),
-              Text(
-                count.toString(),
-                style: TextStyle(
-                  color: active ? Colors.white.withOpacity(.72) : _CmrChatColors.muted2,
-                  fontSize: 9.85,
-                  fontWeight: FontWeight.w500,
-                  height: 1,
-                ),
-              ),
               if (active) ...[
-                const SizedBox(width: 7),
                 Container(
                   width: 5,
                   height: 5,
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(.92), shape: BoxShape.circle),
+                  decoration: const BoxDecoration(
+                    color: _CmrChatColors.green,
+                    shape: BoxShape.circle,
+                  ),
                 ),
+                const SizedBox(width: 6),
               ],
+              Icon(
+                icon,
+                color: active ? _CmrChatColors.greenDark : _CmrChatColors.muted,
+                size: dense ? 13 : 14,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: _CmrChatText.tab(active: active, dense: dense),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                count.toString(),
+                style: _CmrChatText.chip(
+                  size: dense ? 10.2 : 10.8,
+                  color: active ? _CmrChatColors.greenDark : _CmrChatColors.muted2,
+                ),
+              ),
             ],
           ),
         ),
@@ -1138,47 +1585,42 @@ class _EmbeddedChatHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Colors.white, _CmrChatColors.blueSoft.withOpacity(.62), _CmrChatColors.greenSoft.withOpacity(.58)],
-        ),
-        border: Border(bottom: BorderSide(color: Colors.white.withOpacity(.75), width: 1)),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      decoration: const BoxDecoration(
+        color: Colors.white,
       ),
       child: Row(
         children: [
           if (onBack != null) ...[
             _CircleAction(icon: Icons.arrow_back_rounded, onTap: onBack!, tooltip: 'К списку чатов'),
-            const SizedBox(width: 9),
+            const SizedBox(width: 8),
           ],
           _Avatar(
             url: avatarUrl,
             initials: initials,
             icon: isGroup ? Icons.groups_2_rounded : Icons.person_rounded,
-            size: 42,
+            size: 34,
           ),
-          const SizedBox(width: 11),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrChatText.title(15.5)),
-                const SizedBox(height: 4),
-                Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrChatText.muted(11.5)),
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrChatText.title(14.4)),
+                const SizedBox(height: 3),
+                Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrChatText.subtle(10.6)),
               ],
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-            decoration: BoxDecoration(
-              color: _CmrChatColors.greenSoft,
-              borderRadius: BorderRadius.circular(9),
-              border: Border.all(color: _CmrChatColors.line, width: 1),
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              color: _CmrChatColors.green,
+              shape: BoxShape.circle,
             ),
-            child: Text(isGroup ? 'Группа' : 'Диалог', style: _CmrChatText.pill(color: _CmrChatColors.greenDark)),
           ),
         ],
       ),
@@ -1220,60 +1662,28 @@ class _ChatRow extends StatelessWidget {
     final active = selected;
     final meta = canOpen ? subtitle : 'Нажмите, чтобы вступить в группу';
     final accent = _chatAccent(title.hashCode + (isGroup ? 7 : 0));
-    final accentSoft = _chatAccentSoft(title.hashCode + (isGroup ? 7 : 0));
 
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(11),
+      borderRadius: BorderRadius.circular(10),
       child: InkWell(
-        borderRadius: BorderRadius.circular(11),
+        borderRadius: BorderRadius.circular(10),
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 170),
-          padding: EdgeInsets.symmetric(horizontal: mobile ? 9 : 10, vertical: mobile ? 8 : 9),
+          padding: EdgeInsets.symmetric(horizontal: mobile ? 8 : 9, vertical: mobile ? 7 : 7),
           decoration: BoxDecoration(
-            color: active ? null : Colors.white.withOpacity(.76),
-            gradient: active
-                ? LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Colors.white, accentSoft.withOpacity(.98), _CmrChatColors.blueSoft.withOpacity(.68)],
-                  )
-                : null,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.white.withOpacity(active ? .92 : .66), width: 1),
-            boxShadow: active
-                ? [
-                    BoxShadow(
-                      color: accent.withOpacity(.16),
-                      blurRadius: 22,
-                      spreadRadius: -10,
-                      offset: const Offset(0, 12),
-                    ),
-                    BoxShadow(
-                      color: Colors.black.withOpacity(.028),
-                      blurRadius: 13,
-                      spreadRadius: -9,
-                      offset: const Offset(0, 6),
-                    ),
-                  ]
-                : null,
+            color: active ? const Color(0xFFE2F7EA) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
             children: [
               AnimatedContainer(
                 duration: const Duration(milliseconds: 170),
                 width: 3,
-                height: mobile ? 42 : 46,
+                height: mobile ? 38 : 40,
                 decoration: BoxDecoration(
-                  gradient: active
-                      ? LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [accent, _CmrChatColors.blue],
-                        )
-                      : null,
-                  color: active ? null : Colors.transparent,
+                  color: active ? accent : Colors.transparent,
                   borderRadius: BorderRadius.circular(99),
                 ),
               ),
@@ -1285,7 +1695,7 @@ class _ChatRow extends StatelessWidget {
                     url: avatarUrl,
                     initials: initials,
                     icon: isGroup ? Icons.groups_2_rounded : Icons.person_rounded,
-                    size: mobile ? 40 : 44,
+                    size: mobile ? 36 : 38,
                   ),
                   Positioned(
                     right: -3,
@@ -1310,7 +1720,7 @@ class _ChatRow extends StatelessWidget {
                             title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: _CmrChatText.title(mobile ? 13.4 : 14.2),
+                            style: _CmrChatText.title(mobile ? 12.8 : 13.2),
                           ),
                         ),
                         if (lastTime.isNotEmpty) ...[
@@ -1378,10 +1788,6 @@ class _ChatStatusBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: hasUnread || active ? _CmrChatColors.graphite : _CmrChatColors.panel,
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: active || hasUnread ? _CmrChatColors.graphite.withOpacity(.18) : _CmrChatColors.line,
-          width: 1,
-        ),
       ),
       alignment: Alignment.center,
       child: hasUnread
@@ -1431,22 +1837,30 @@ class _UserRow extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(11),
         child: Container(
-          padding: EdgeInsets.symmetric(horizontal: mobile ? 9 : 10, vertical: mobile ? 8 : 9),
+          padding: EdgeInsets.symmetric(horizontal: mobile ? 8 : 9, vertical: mobile ? 7 : 7),
           decoration: BoxDecoration(
-            color: _CmrChatColors.panel,
-            borderRadius: BorderRadius.circular(11),
-            border: Border.all(color: _CmrChatColors.line, width: 1),
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
             children: [
-              const SizedBox(width: 9),
-              _Avatar(url: avatarUrl, initials: initials, icon: Icons.person_rounded, size: mobile ? 40 : 44),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 170),
+                width: 3,
+                height: mobile ? 38 : 40,
+                decoration: BoxDecoration(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+              SizedBox(width: mobile ? 6 : 6),
+              _Avatar(url: avatarUrl, initials: initials, icon: Icons.person_rounded, size: mobile ? 36 : 38),
               SizedBox(width: mobile ? 9 : 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrChatText.title(mobile ? 13.4 : 14.2)),
+                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrChatText.title(mobile ? 12.8 : 13.2)),
                     const SizedBox(height: 4),
                     Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrChatText.muted(mobile ? 10.8 : 11.2)),
                   ],
@@ -1454,12 +1868,11 @@ class _UserRow extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Container(
-                width: 32,
-                height: 32,
+                width: 30,
+                height: 30,
                 decoration: BoxDecoration(
                   color: _CmrChatColors.greenSoft,
                   borderRadius: BorderRadius.circular(9),
-                  border: Border.all(color: _CmrChatColors.line),
                 ),
                 child: const Icon(Icons.arrow_forward_rounded, size: 16, color: _CmrChatColors.greenDark),
               ),
@@ -1486,7 +1899,7 @@ class _Avatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final radius = math.min(12.0, size * .28);
+    final radius = size / 2;
     if (url.isNotEmpty) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(radius),
@@ -1507,13 +1920,8 @@ class _Avatar extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [_CmrChatColors.greenSoft, _CmrChatColors.blueSoft.withOpacity(.82)],
-        ),
+        color: _CmrChatColors.greenSoft,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: Colors.white.withOpacity(.82), width: 1),
       ),
       child: Center(
         child: initials.isNotEmpty
@@ -1537,13 +1945,12 @@ class _TinyBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: blue ? const Color(0xFFEFF6FF) : Colors.white,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: blue ? const Color(0xFFD8EAFE) : _CmrChatColors.line),
       ),
       child: Text(
         text,
         style: TextStyle(
           color: blue ? const Color(0xFF1D4ED8) : _CmrChatColors.muted,
-          fontSize: 9.85,
+          fontSize: 10.2,
           fontWeight: FontWeight.w500,
         ),
       ),
@@ -1570,11 +1977,7 @@ class _HeaderButton extends StatelessWidget {
           height: 38,
           padding: const EdgeInsets.symmetric(horizontal: 13),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [_CmrChatColors.green, _CmrChatColors.blue],
-            ),
+            color: _CmrChatColors.green,
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(color: _CmrChatColors.green.withOpacity(.18), blurRadius: 18, spreadRadius: -10, offset: const Offset(0, 9)),
@@ -1608,39 +2011,29 @@ class _CircleAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(15);
+    final radius = BorderRadius.circular(10);
 
     return Tooltip(
       message: tooltip,
-      child: Container(
-        width: 38,
-        height: 38,
-        decoration: BoxDecoration(
-          gradient: emphasized
-              ? const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [_CmrChatColors.green, _CmrChatColors.blue])
-              : LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Colors.white, _CmrChatColors.blueSoft.withOpacity(.72)]),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: radius,
+        child: InkWell(
+          onTap: onTap,
           borderRadius: radius,
-          border: Border.all(color: Colors.white.withOpacity(emphasized ? .38 : .76), width: 1),
-          boxShadow: emphasized
-              ? [
-                  BoxShadow(
-                    color: _CmrChatColors.graphite.withOpacity(.08),
-                    blurRadius: 14,
-                    offset: const Offset(0, 7),
-                  ),
-                ]
-              : null,
-        ),
-        child: Material(
-          color: Colors.transparent,
-          borderRadius: radius,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: radius,
+          child: Container(
+            width: 34,
+            height: 34,
+            decoration: _CmrChatDecor.fluentSurface(
+              radius: 10,
+              accent: emphasized ? _CmrChatColors.green : _CmrChatColors.blue,
+              active: emphasized,
+              compact: true,
+            ),
             child: Icon(
               icon,
-              color: emphasized ? Colors.white : _CmrChatColors.text,
-              size: 20,
+              color: emphasized ? _CmrChatColors.greenDark : _CmrChatColors.blue,
+              size: 16,
             ),
           ),
         ),
@@ -1662,7 +2055,6 @@ class _InlineError extends StatelessWidget {
       decoration: BoxDecoration(
         color: _CmrChatColors.orangeSoft,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFFED7AA)),
       ),
       child: Row(
         children: [
@@ -1714,7 +2106,6 @@ class _CmrChatEmpty extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: _CmrChatColors.panel,
                   borderRadius: BorderRadius.circular(13),
-                  border: Border.all(color: _CmrChatColors.graphite.withOpacity(.12), width: 1),
                 ),
                 child: Icon(icon, color: _CmrChatColors.green, size: 25),
               ),
@@ -1752,100 +2143,110 @@ class _ChatListSkeleton extends StatelessWidget {
 }
 
 class _CmrChatText {
-  // Windows 11 / Fluent typography.
-  static const String _family = 'Segoe UI';
-  static const List<String> _fallback = <String>[
-    'SF Pro Display',
-    'SF Pro Text',
-    'Inter',
-    'Roboto',
-    'Arial',
-  ];
-
-  static double _compact(double size) => size <= 10 ? size : size - .75;
-
   static TextStyle _base({
     required double size,
     required FontWeight weight,
     required Color color,
-    double height = 1.18,
-    double letterSpacing = -0.08,
+    double height = 1.20,
+    double letterSpacing = 0,
     List<FontFeature>? features,
   }) {
-    return TextStyle(
-      fontFamily: _family,
-      fontFamilyFallback: _fallback,
+    return AppTypography.custom(
+      size: size,
+      weight: weight,
       color: color,
-      fontSize: _compact(size),
-      fontWeight: weight,
       height: height,
       letterSpacing: letterSpacing,
-      fontFeatures: features,
+      features: features,
     );
   }
 
   static TextStyle title(double size) => _base(
         size: size,
-        weight: FontWeight.w700,
+        weight: FontWeight.w600,
         color: _CmrChatColors.text,
-        height: 1.08,
-        letterSpacing: -0.38,
+        height: 1.18,
       );
 
   static TextStyle value(double size) => _base(
         size: size,
-        weight: FontWeight.w700,
+        weight: FontWeight.w600,
         color: _CmrChatColors.text2,
-        height: 1.08,
-        letterSpacing: -0.25,
-        features: const [FontFeature.tabularFigures()],
+        height: 1.16,
+        features: const <FontFeature>[
+          FontFeature.tabularFigures(),
+        ],
       );
 
   static TextStyle muted(double size) => _base(
         size: size,
-        weight: FontWeight.w500,
+        weight: FontWeight.w400,
         color: _CmrChatColors.muted,
-        height: 1.34,
-        letterSpacing: -0.05,
+        height: 1.32,
+      );
+
+  static TextStyle subtle(double size) => _base(
+        size: size,
+        weight: FontWeight.w400,
+        color: _CmrChatColors.muted2,
+        height: 1.30,
+      );
+
+  static TextStyle chip({
+    double size = 10.8,
+    Color? color,
+  }) =>
+      _base(
+        size: size,
+        weight: FontWeight.w600,
+        color: color ?? _CmrChatColors.text,
+        height: 1.16,
       );
 
   static TextStyle caption() => _base(
-        size: 10.6,
-        weight: FontWeight.w600,
+        size: 10.8,
+        weight: FontWeight.w500,
         color: _CmrChatColors.muted2,
-        height: 1.12,
-        letterSpacing: .08,
+        height: 1.18,
       );
 
   static TextStyle pill({Color? color}) => _base(
         size: 11.8,
         weight: FontWeight.w600,
         color: color ?? _CmrChatColors.text2,
-        height: 1,
+        height: 1.10,
       );
 
-  static TextStyle tab({bool active = false}) => _base(
-        size: 11.8,
-        weight: FontWeight.w700,
-        color: active ? Colors.white : _CmrChatColors.text2,
-        height: 1,
-        letterSpacing: -0.04,
+  static TextStyle tab({
+    bool active = false,
+    bool dense = false,
+  }) =>
+      _base(
+        size: dense ? 11.0 : 11.4,
+        weight: active ? FontWeight.w700 : FontWeight.w500,
+        color: active
+            ? _CmrChatColors.greenDark
+            : _CmrChatColors.muted,
+        height: 1.12,
       );
 
-  static TextStyle action({Color color = _CmrChatColors.text}) => _base(
+  static TextStyle action({
+    Color color = _CmrChatColors.text,
+  }) =>
+      _base(
         size: 11.8,
-        weight: FontWeight.w700,
+        weight: FontWeight.w600,
         color: color,
-        height: 1.1,
+        height: 1.16,
       );
 }
 
 class _CmrChatColors {
-  static const Color bg = Color(0xFFFFFFFF);
+  static const Color bg = Color(0xFFF6F7F6);
   static const Color panel = Colors.white;
   static const Color glass = Color(0xF7FFFFFF);
-  static const Color soft = Color(0xFFFAFBFC);
-  static const Color soft2 = Color(0xFFF6F7F9);
+  static const Color soft = Color(0xFFFAFBFA);
+  static const Color soft2 = Color(0xFFF4F6F4);
 
   static const Color text = Color(0xFF0B0F14);
   static const Color text2 = Color(0xFF182230);
@@ -1873,62 +2274,32 @@ class _CmrChatColors {
   static const Color orangeSoft = Color(0xFFFFF7ED);
   static const Color amber = Color(0xFFF59E0B);
   static const Color amberSoft = Color(0xFFFFFBEB);
-  static const Color line = Color(0xFFEFF1F4);
+  static const Color line = Color(0xFFE7EBE8);
 }
 
 
-Color _chatAccent(int index) {
-  const colors = <Color>[
-    _CmrChatColors.green,
-    _CmrChatColors.blue,
-    _CmrChatColors.cyan,
-    _CmrChatColors.violet,
-    _CmrChatColors.pink,
-    _CmrChatColors.amber,
-  ];
-  return colors[index.abs() % colors.length];
-}
+Color _chatAccent(int index) => _CmrChatColors.green;
 
-Color _chatAccentSoft(int index) {
-  const colors = <Color>[
-    _CmrChatColors.greenSoft,
-    _CmrChatColors.blueSoft,
-    _CmrChatColors.cyanSoft,
-    _CmrChatColors.violetSoft,
-    _CmrChatColors.pinkSoft,
-    _CmrChatColors.amberSoft,
-  ];
-  return colors[index.abs() % colors.length];
-}
+Color _chatAccentSoft(int index) => _CmrChatColors.greenSoft;
 
 class _CmrChatDecor {
   static BoxDecoration workspaceBg() => const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFFFFFFFF),
-            Color(0xFFF6FFF9),
-            Color(0xFFF4F7FF),
-            Color(0xFFFFF7FB),
-          ],
-          stops: [0.0, .38, .72, 1.0],
-        ),
+        color: Color(0xFFF6F7F6),
       );
 
-  static BoxDecoration panel({double radius = 22, bool elevated = false}) => BoxDecoration(
-        color: _CmrChatColors.glass,
+  static BoxDecoration panel({double radius = 22, bool elevated = true}) => BoxDecoration(
+        color: _CmrChatColors.panel,
         borderRadius: BorderRadius.circular(radius),
         boxShadow: elevated
             ? [
                 BoxShadow(
-                  color: _CmrChatColors.blue.withOpacity(0.055),
-                  blurRadius: 32,
-                  spreadRadius: -16,
-                  offset: const Offset(0, 18),
+                  color: Colors.black.withOpacity(0.045),
+                  blurRadius: 34,
+                  spreadRadius: -14,
+                  offset: const Offset(0, 20),
                 ),
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.026),
+                  color: Colors.black.withOpacity(0.025),
                   blurRadius: 10,
                   spreadRadius: -7,
                   offset: const Offset(0, 4),
@@ -1937,41 +2308,54 @@ class _CmrChatDecor {
             : null,
       );
 
-  static BoxDecoration softCard({double radius = 16, bool active = false}) => BoxDecoration(
+  static BoxDecoration softCard({double radius = 18, bool active = false}) => BoxDecoration(
         color: active ? _CmrChatColors.panel : _CmrChatColors.soft,
         borderRadius: BorderRadius.circular(radius),
         boxShadow: active
             ? [
                 BoxShadow(
-                  color: _CmrChatColors.green.withOpacity(.085),
+                  color: Colors.black.withOpacity(0.045),
                   blurRadius: 24,
                   spreadRadius: -12,
                   offset: const Offset(0, 14),
-                ),
-                BoxShadow(
-                  color: Colors.black.withOpacity(.03),
-                  blurRadius: 12,
-                  spreadRadius: -8,
-                  offset: const Offset(0, 4),
                 ),
               ]
             : null,
       );
 
+  static BoxDecoration unifiedWindow({double radius = 18}) => BoxDecoration(
+        color: _CmrChatColors.panel,
+        borderRadius: BorderRadius.circular(radius),
+      );
+
+  static BoxDecoration seamlessPane({double radius = 0}) => BoxDecoration(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(radius),
+      );
+
+  static BoxDecoration fluentSurface({
+    double radius = 16,
+    Color accent = _CmrChatColors.blue,
+    bool active = false,
+    bool compact = false,
+  }) {
+    return BoxDecoration(
+      color: active ? const Color(0xFFE2F7EA) : Colors.transparent,
+      borderRadius: BorderRadius.circular(radius),
+    );
+  }
+
   static BoxDecoration greenCard({double radius = 16}) => BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [_CmrChatColors.green, _CmrChatColors.blue],
-        ),
+        color: _CmrChatColors.green,
         borderRadius: BorderRadius.circular(radius),
         boxShadow: [
           BoxShadow(
-            color: _CmrChatColors.green.withOpacity(.20),
-            blurRadius: 26,
-            spreadRadius: -13,
-            offset: const Offset(0, 14),
+            color: _CmrChatColors.green.withOpacity(.14),
+            blurRadius: 18,
+            spreadRadius: -10,
+            offset: const Offset(0, 10),
           ),
         ],
       );
 }
+

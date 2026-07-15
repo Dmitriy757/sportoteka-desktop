@@ -2,6 +2,32 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+class _CreateChatUi {
+  static const Color bg = Color(0xFFF6F7F9);
+  static const Color card = Colors.white;
+  static const Color green = Color(0xFF00A750);
+  static const Color greenDark = Color(0xFF067A46);
+  static const Color greenSoft = Color(0xFFF3FBF7);
+  static const Color border = Color(0xFFEFF1F4);
+  static const Color text = Color(0xFF0B0F14);
+  static const Color muted = Color(0xFF6B7280);
+
+  static TextStyle title(double size) => TextStyle(
+        color: text,
+        fontSize: size,
+        fontWeight: FontWeight.w700,
+        height: 1.08,
+        letterSpacing: -0.3,
+      );
+
+  static TextStyle mutedText(double size) => TextStyle(
+        color: muted,
+        fontSize: size,
+        fontWeight: FontWeight.w500,
+        height: 1.22,
+      );
+}
+
 Future<int?> showCreatePrivateChatModal(
   BuildContext context, {
   required int me,
@@ -9,9 +35,9 @@ Future<int?> showCreatePrivateChatModal(
   return showModalBottomSheet<int?>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: Colors.white,
+    backgroundColor: _CreateChatUi.bg,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
     ),
     builder: (_) => _CreatePrivateChatSheet(me: me),
   );
@@ -65,9 +91,6 @@ class _CreatePrivateChatSheetState extends State<_CreatePrivateChatSheet> {
   Future<void> _loadUsers() async {
     setState(() => _loading = true);
     try {
-      // ⚠️ Поставь сюда свой эндпоинт получения пользователей
-      // Например: get_users.php или search_users.php
-      // Он должен возвращать массив пользователей: [{id, first_name, last_name, photo, email}, ...]
       final uri = Uri.parse('https://sportotekaapp.ru/api/get_users.php?me=${widget.me}');
       final res = await http.get(uri);
 
@@ -75,7 +98,6 @@ class _CreatePrivateChatSheetState extends State<_CreatePrivateChatSheet> {
         final raw = res.body.trimLeft();
         final data = json.decode(raw);
         final list = (data is List) ? List<Map<String, dynamic>>.from(data) : <Map<String, dynamic>>[];
-        // исключаем самого себя
         final cleaned = list.where((u) => int.tryParse(u['id'].toString()) != widget.me).toList();
 
         setState(() {
@@ -123,13 +145,10 @@ class _CreatePrivateChatSheetState extends State<_CreatePrivateChatSheet> {
       final raw = res.body.trimLeft();
       final data = json.decode(raw);
 
-      // ignore: avoid_print
-      print('GET_OR_CREATE_PRIVATE status=${res.statusCode}, body=$raw');
-
       if (res.statusCode == 200 && data is Map && data['success'] == true) {
         final chatId = int.tryParse(data['chat_id'].toString());
         if (chatId != null) {
-          Navigator.pop(context, chatId); // ✅ вернём chatId наружу
+          Navigator.pop(context, chatId);
           return;
         }
       }
@@ -143,64 +162,116 @@ class _CreatePrivateChatSheetState extends State<_CreatePrivateChatSheet> {
     }
   }
 
+  Widget _avatar(String photo, String title) {
+    final initials = title.trim().isEmpty ? 'П' : title.trim().substring(0, 1).toUpperCase();
+    return Container(
+      width: 38,
+      height: 38,
+      decoration: BoxDecoration(
+        color: _CreateChatUi.greenSoft,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _CreateChatUi.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: photo.isNotEmpty
+          ? Image.network(photo, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Center(child: Text(initials, style: const TextStyle(color: _CreateChatUi.greenDark, fontWeight: FontWeight.w700))))
+          : Center(child: Text(initials, style: const TextStyle(color: _CreateChatUi.greenDark, fontWeight: FontWeight.w700))),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
+    final media = MediaQuery.of(context);
+    return MediaQuery(
+      data: media.copyWith(textScaler: const TextScaler.linear(1.08)),
+      child: SafeArea(
+      top: false,
       child: Padding(
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 18,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Личный чат', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _search,
-              decoration: const InputDecoration(
-                hintText: 'Поиск пользователя...',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.search),
-              ),
-            ),
-            const SizedBox(height: 12),
-            if (_loading)
-              const Padding(
-                padding: EdgeInsets.all(24),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else
-              SizedBox(
-                height: 420,
-                child: _filtered.isEmpty
-                    ? const Center(child: Text('Пользователи не найдены'))
-                    : ListView.separated(
-                        itemCount: _filtered.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (_, i) {
-                          final u = _filtered[i];
-                          final id = int.tryParse(u['id'].toString()) ?? 0;
-                          final photo = _photo(u);
-
-                          return ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: const Color(0xFFE3F2FD),
-                              backgroundImage: photo.isNotEmpty ? NetworkImage(photo) : null,
-                              child: photo.isEmpty ? const Icon(Icons.person, color: Color(0xFF1E74C4)) : null,
-                            ),
-                            title: Text(_title(u), maxLines: 1, overflow: TextOverflow.ellipsis),
-                            subtitle: Text((u['email'] ?? '').toString(), maxLines: 1, overflow: TextOverflow.ellipsis),
-                            onTap: () => _createPrivate(id),
-                          );
-                        },
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * .76,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 6, 14, 10),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(color: _CreateChatUi.greenSoft, borderRadius: BorderRadius.circular(12)),
+                      child: const Icon(Icons.person_add_alt_1_rounded, color: _CreateChatUi.greenDark, size: 18),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Личный чат', style: _CreateChatUi.title(15.2)),
+                          const SizedBox(height: 3),
+                          Text('Выберите пользователя для диалога', style: _CreateChatUi.mutedText(11.2)),
+                        ],
                       ),
+                    ),
+                  ],
+                ),
               ),
-          ],
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+                child: Container(
+                  height: 38,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(13), border: Border.all(color: _CreateChatUi.border)),
+                  child: TextField(
+                    controller: _search,
+                    decoration: const InputDecoration(hintText: 'Поиск пользователя...', border: InputBorder.none, isDense: true, prefixIcon: Icon(Icons.search_rounded, size: 18)),
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator(color: _CreateChatUi.green))
+                    : _filtered.isEmpty
+                        ? Center(child: Text('Пользователи не найдены', style: _CreateChatUi.mutedText(12)))
+                        : ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(14, 0, 14, 18),
+                            itemCount: _filtered.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 7),
+                            itemBuilder: (_, i) {
+                              final u = _filtered[i];
+                              final id = int.tryParse(u['id'].toString()) ?? 0;
+                              final title = _title(u);
+                              final photo = _photo(u);
+                              return Material(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(14),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(14),
+                                  onTap: () => _createPrivate(id),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    child: Row(children: [
+                                      _avatar(photo, title),
+                                      const SizedBox(width: 9),
+                                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                        Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CreateChatUi.title(13.2)),
+                                        const SizedBox(height: 3),
+                                        Text((u['email'] ?? '').toString(), maxLines: 1, overflow: TextOverflow.ellipsis, style: _CreateChatUi.mutedText(11)),
+                                      ])),
+                                      const Icon(Icons.chevron_right_rounded, size: 18, color: _CreateChatUi.muted),
+                                    ]),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+              ),
+            ],
+          ),
         ),
       ),
+    ),
     );
   }
 }

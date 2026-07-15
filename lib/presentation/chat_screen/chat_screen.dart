@@ -11,6 +11,34 @@ import 'package:sportoteka/presentation/chat_screen/chat_room_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/create_group_chat_screen.dart';
 
 
+
+class _ChatStyle {
+  static const Color bg = Color(0xFFF1F3F5);
+  static const Color card = Colors.white;
+  static const Color soft = Color(0xFFF1F3F5);
+  static const Color green = Color(0xFF00A750);
+  static const Color greenDark = Color(0xFF067A46);
+  static const Color greenSoft = Color(0xFFF3FBF7);
+  static const Color greenBorder = Color(0xFFD7F0E2);
+  static const Color border = Color(0xFFEFF1F4);
+  static const Color text = Color(0xFF0B0F14);
+  static const Color text2 = Color(0xFF182230);
+  static const Color muted = Color(0xFF6B7280);
+  static const Color blue = Color(0xFF2563EB);
+  static const Color blueSoft = Color(0xFFF4F7FF);
+  static const Color orange = Color(0xFFF59E0B);
+
+  static const String fontFamily = 'Segoe UI';
+  static const List<String> fontFallback = <String>[
+    'SF Pro Display',
+    'SF Pro Text',
+    'Inter',
+    'Roboto',
+    'Arial',
+  ];
+}
+
+
 class ChatScreen extends StatefulWidget {
   final int userId;
 
@@ -522,7 +550,7 @@ widget.onUnreadChanged?.call(newTotal);
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1E74C4),
+              backgroundColor: _ChatStyle.green,
             ),
             onPressed: () => Navigator.pop(context, true),
             child: const Text("Вступить"),
@@ -972,9 +1000,9 @@ widget.onUnreadChanged?.call(newTotal);
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      backgroundColor: Colors.white,
+      backgroundColor: _ChatStyle.bg,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
       builder: (_) => _NewPrivateChatSheet(
         apiUrl: _searchUsersUrl,
@@ -1006,12 +1034,12 @@ widget.onUnreadChanged?.call(newTotal);
         child: const Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            Icon(Icons.more_horiz_rounded, color: Color(0xFF1E74C4)),
+            Icon(Icons.more_horiz_rounded, color: _ChatStyle.green),
             SizedBox(width: 8),
             Text(
               "Действие",
               style: TextStyle(
-                color: Color(0xFF1E74C4),
+                color: _ChatStyle.green,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -1138,74 +1166,140 @@ widget.onUnreadChanged?.call(newTotal);
   // ===== UI =====
   @override
   Widget build(BuildContext context) {
-    final bg = const Color(0xFFF3F5F8);
+    final title = _tab == _ChatTab.privateChats ? 'Личные чаты' : 'Группы';
+    final subtitle = _tab == _ChatTab.privateChats
+        ? '${_filtered.length} диалогов'
+        : '${_filtered.length} групп';
 
-    return Scaffold(
-      backgroundColor: bg,
+    final media = MediaQuery.of(context);
+    return MediaQuery(
+      data: media.copyWith(textScaler: const TextScaler.linear(1.08)),
+      child: Scaffold(
+      extendBody: true,
+      backgroundColor: _ChatStyle.bg,
       appBar: AppBar(
+        toolbarHeight: 66,
         elevation: 0,
-        backgroundColor: bg,
+        scrolledUnderElevation: 0,
+        backgroundColor: _ChatStyle.bg,
         surfaceTintColor: Colors.transparent,
-        centerTitle: true,
-        title: Text(
-          _tab == _ChatTab.privateChats ? 'Личные чаты' : 'Группы',
-          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+        automaticallyImplyLeading: false,
+        titleSpacing: 10,
+        title: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                _tab == _ChatTab.privateChats
+                    ? Icons.chat_bubble_rounded
+                    : Icons.groups_rounded,
+                color: _ChatStyle.green,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _ChatStyle.text,
+                      fontSize: 17.2,
+                      fontWeight: FontWeight.w700,
+                      height: 1.0,
+                      letterSpacing: -.4,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _ChatStyle.muted,
+                      fontSize: 11.2,
+                      fontWeight: FontWeight.w500,
+                      height: 1.05,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
         actions: [
-          IconButton(
-            icon: Icon(isSearching ? Icons.close_rounded : Icons.search_rounded),
-            onPressed: () {
-              setState(() {
-                isSearching = !isSearching;
-                if (!isSearching) _searchController.clear();
-              });
-              _applyFiltersAndSorting();
-            },
+          Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: _HeaderCircleButton(
+              icon: isSearching ? Icons.close_rounded : Icons.search_rounded,
+              onTap: () {
+                setState(() {
+                  isSearching = !isSearching;
+                  if (!isSearching) _searchController.clear();
+                });
+                _applyFiltersAndSorting();
+              },
+            ),
           ),
-          const SizedBox(width: 4),
         ],
       ),
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _tabChip(
-                    label: "Личные",
-                    icon: Icons.chat_bubble_rounded,
-                    selected: _tab == _ChatTab.privateChats,
-                    onTap: () async {
-                      if (_tab == _ChatTab.privateChats) return;
-                      setState(() => _tab = _ChatTab.privateChats);
-                      await _reloadCurrentTab();
-                    },
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 7),
+            child: Container(
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _tabChip(
+                      label: "Личные",
+                      icon: Icons.chat_bubble_rounded,
+                      selected: _tab == _ChatTab.privateChats,
+                      onTap: () async {
+                        if (_tab == _ChatTab.privateChats) return;
+                        setState(() => _tab = _ChatTab.privateChats);
+                        await _reloadCurrentTab();
+                      },
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _tabChip(
-                    label: "Группы",
-                    icon: Icons.groups_rounded,
-                    selected: _tab == _ChatTab.groups,
-                    onTap: () async {
-                      if (_tab == _ChatTab.groups) return;
-                      setState(() => _tab = _ChatTab.groups);
-                      await _reloadCurrentTab();
-                    },
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: _tabChip(
+                      label: "Группы",
+                      icon: Icons.groups_rounded,
+                      selected: _tab == _ChatTab.groups,
+                      onTap: () async {
+                        if (_tab == _ChatTab.groups) return;
+                        setState(() => _tab = _ChatTab.groups);
+                        await _reloadCurrentTab();
+                      },
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           if (isSearching)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 7),
               child: _MatteSurface(
-                radius: 14,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                radius: 13,
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 0),
                 child: TextField(
                   controller: _searchController,
                   decoration: InputDecoration(
@@ -1213,7 +1307,8 @@ widget.onUnreadChanged?.call(newTotal);
                         ? 'Поиск личных чатов...'
                         : 'Поиск групп...',
                     border: InputBorder.none,
-                    prefixIcon: const Icon(Icons.search_rounded),
+                    prefixIcon: const Icon(Icons.search_rounded, color: _ChatStyle.muted, size: 18),
+                    isDense: true,
                   ),
                   autofocus: true,
                 ),
@@ -1221,14 +1316,14 @@ widget.onUnreadChanged?.call(newTotal);
             ),
           Expanded(
             child: isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: CircularProgressIndicator(color: _ChatStyle.green))
                 : _filtered.isEmpty
                     ? _emptyState()
                     : RefreshIndicator(
+                        color: _ChatStyle.green,
                         onRefresh: _reloadCurrentTab,
                         child: _TelegramList(
-                          children:
-                              List<Widget>.generate(_filtered.length, (i) {
+                          children: List<Widget>.generate(_filtered.length, (i) {
                             final item = _filtered[i];
                             return _buildDismissibleCard(item);
                           }),
@@ -1238,7 +1333,9 @@ widget.onUnreadChanged?.call(newTotal);
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF1E74C4),
+        elevation: 0,
+        backgroundColor: _ChatStyle.green,
+        shape: const CircleBorder(),
         onPressed: () async {
           if (_tab == _ChatTab.groups) {
             final ok = await Navigator.push(
@@ -1254,13 +1351,14 @@ widget.onUnreadChanged?.call(newTotal);
         },
         child: const Icon(Icons.add, color: Colors.white),
       ),
+    ),
     );
   }
 
   Widget _emptyState() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1268,13 +1366,13 @@ widget.onUnreadChanged?.call(newTotal);
               isSearching
                   ? Icons.search_off_rounded
                   : Icons.chat_bubble_outline_rounded,
-              size: 64,
+              size: 52,
               color: Colors.grey.shade400,
             ),
             const SizedBox(height: 16),
             Text(
               isSearching ? 'Ничего не найдено' : 'Пока пусто',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 6),
             Text(
@@ -1299,9 +1397,7 @@ widget.onUnreadChanged?.call(newTotal);
     final isGroup = !isPrivate;
 
     final rightTime = _chatRightTime(chat);
-
     final unread = int.tryParse((chat['unread_count'] ?? '0').toString()) ?? 0;
-
     final id = _asInt(chat['id']);
     final pinned = _pinned.contains(id);
 
@@ -1310,180 +1406,166 @@ widget.onUnreadChanged?.call(newTotal);
 
     final rawLast = (chat['last_message'] ?? '').toString().trim();
     final hasLast = rawLast.isNotEmpty;
-
     final secondLine = hasLast
         ? rawLast
         : (isGroup
             ? _groupStatusLine(isPublic: isPublic, iAmMember: iAmMember)
             : "Напишите первым");
 
-    return Material(
-      color: Colors.white,
-      child: InkWell(
-        onTap: () {
-          if (isGroup && isPublic && !iAmMember) {
-            _showJoinDialog(chat);
-            return;
-          }
-          _openChat(chat);
-        },
-        onLongPress: isPrivate ? () => _showPrivateActions(chat) : null,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          child: Row(
-            children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: isPrivate
-                          ? const Color(0xFFE8F5E9)
-                          : const Color(0xFFE3F2FD),
-                      shape: BoxShape.circle,
-                    ),
-                    child: ClipOval(
-                      child: (isPrivate && peerPhoto.isNotEmpty)
-                          ? Image.network(
-                              peerPhoto,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const Center(
-                                child: Icon(Icons.person,
-                                    color: Color(0xFF00C853)),
-                              ),
-                            )
-                          : Center(
-                              child: Icon(
-                                isPrivate
-                                    ? Icons.lock
-                                    : (isPublic
-                                        ? Icons.public
-                                        : Icons.lock_outline),
-                                color: isPrivate
-                                    ? const Color(0xFF00C853)
-                                    : const Color(0xFF1E74C4),
-                              ),
-                            ),
-                    ),
-                  ),
-
-                  // ✅ dot on avatar when unread
-                  if (unread > 0)
-                    Positioned(
-                      right: -1,
-                      top: -1,
-                      child: Container(
-                        width: 12,
-                        height: 12,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1E74C4),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                        ),
-                      ),
-                    ),
-
-                  if (isPrivate && pinned)
-                    Positioned(
-                      right: -2,
-                      bottom: -2,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1E74C4),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white, width: 2),
-                        ),
-                        child: const Icon(Icons.push_pin_rounded,
-                            size: 14, color: Colors.white),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      margin: EdgeInsets.zero,
+      color: Colors.transparent,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            if (isGroup && isPublic && !iAmMember) {
+              _showJoinDialog(chat);
+              return;
+            }
+            _openChat(chat);
+          },
+          onLongPress: isPrivate ? () => _showPrivateActions(chat) : null,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Row(
+              children: [
+                Stack(
+                  clipBehavior: Clip.none,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            title,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                              height: 1.1,
-                              color: Color(0xFF0F172A),
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: isPrivate ? _ChatStyle.greenSoft : const Color(0xFFF4F7FF),
+                        shape: BoxShape.circle,
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: (isPrivate && peerPhoto.isNotEmpty)
+                            ? Image.network(
+                                peerPhoto,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const Center(
+                                  child: Icon(Icons.person_rounded, color: _ChatStyle.green),
+                                ),
+                              )
+                            : Center(
+                                child: Icon(
+                                  isPrivate
+                                      ? Icons.person_rounded
+                                      : (isPublic ? Icons.public_rounded : Icons.lock_outline_rounded),
+                                  color: isPrivate ? _ChatStyle.green : _ChatStyle.blue,
+                                ),
+                              ),
+                      ),
+                    ),
+                    if (unread > 0)
+                      Positioned(
+                        right: -2,
+                        top: -2,
+                        child: Container(
+                          width: 13,
+                          height: 13,
+                          decoration: const BoxDecoration(
+                            color: _ChatStyle.green,
+                            shape: BoxShape.circle,
                           ),
                         ),
-                        if (isGroup) ...[
-                          const SizedBox(width: 8),
-                          _MiniChip(
-                            text: isPublic ? "Открытая" : "Закрытая",
-                            tone: isPublic ? _ChipTone.blue : _ChipTone.orange,
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      secondLine,
-                      style: TextStyle(
-                        fontSize: 13,
-                        height: 1.1,
-                        color: hasLast
-                            ? const Color(0xFF64748B)
-                            : const Color(0xFF94A3B8),
-                        fontWeight:
-                            hasLast ? FontWeight.w400 : FontWeight.w600,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    if (isPrivate && pinned)
+                      Positioned(
+                        right: -4,
+                        bottom: -4,
+                        child: Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: _ChatStyle.green,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.push_pin_rounded, size: 13, color: Colors.white),
+                        ),
+                      ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    rightTime,
-                    style: const TextStyle(
-                        fontSize: 12, color: Color(0xFF94A3B8)),
-                  ),
-                  if (unread > 0)
-                    Container(
-                      margin: const EdgeInsets.only(top: 6),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1E74C4),
-                        borderRadius: BorderRadius.circular(999),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              style: const TextStyle(
+                                fontSize: 13.4,
+                                fontWeight: FontWeight.w700,
+                                height: 1.1,
+                                color: _ChatStyle.text,
+                                letterSpacing: -.25,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (isGroup) ...[
+                            const SizedBox(width: 8),
+                            _MiniChip(
+                              text: isPublic ? "Открытая" : "Закрытая",
+                              tone: isPublic ? _ChipTone.blue : _ChipTone.orange,
+                            ),
+                          ],
+                        ],
                       ),
-                      child: Text(
-                        unread.toString(),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
+                      const SizedBox(height: 5),
+                      Text(
+                        secondLine,
+                        style: TextStyle(
+                          fontSize: 11.2,
+                          height: 1.15,
+                          color: hasLast ? _ChatStyle.muted : const Color(0xFF98A2B3),
+                          fontWeight: hasLast ? FontWeight.w500 : FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      rightTime,
+                      style: const TextStyle(fontSize: 10.3, color: Color(0xFF98A2B3), fontWeight: FontWeight.w600),
+                    ),
+                    if (unread > 0)
+                      Container(
+                        margin: const EdgeInsets.only(top: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: _ChatStyle.green,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          unread > 99 ? '99+' : '$unread',
+                          style: const TextStyle(color: Colors.white, fontSize: 9.8, fontWeight: FontWeight.w700, height: 1.0),
                         ),
                       ),
-                    ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
+
 
   Widget _tabChip({
     required String label,
@@ -1494,39 +1576,38 @@ widget.onUnreadChanged?.call(newTotal);
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      borderRadius: BorderRadius.circular(999),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 9),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF1E74C4) : Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
-          boxShadow: const [
-            BoxShadow(
-                color: Color(0x11000000),
-                blurRadius: 16,
-                offset: Offset(0, 6)),
-          ],
+          color: selected ? const Color(0xFFE2F7EA) : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: selected ? Colors.white : const Color(0xFF1E74C4)),
+            Icon(icon, color: selected ? _ChatStyle.green : _ChatStyle.muted, size: 17),
             const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: selected ? Colors.white : const Color(0xFF111827),
-                fontWeight: FontWeight.w900,
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: selected ? _ChatStyle.green : const Color(0xFF344054),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12.4,
+                  height: 1.0,
+                ),
               ),
             ),
             if (badge > 0) ...[
               const SizedBox(width: 8),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: selected ? Colors.white : const Color(0xFF1E74C4),
+                  color: selected ? _ChatStyle.green : const Color(0xFFEFF2F5),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
@@ -1534,7 +1615,7 @@ widget.onUnreadChanged?.call(newTotal);
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w900,
-                    color: selected ? const Color(0xFF1E74C4) : Colors.white,
+                    color: selected ? Colors.white : _ChatStyle.muted,
                   ),
                 ),
               ),
@@ -1545,6 +1626,33 @@ widget.onUnreadChanged?.call(newTotal);
     );
   }
 } // ✅ _ChatScreenState
+
+
+class _HeaderCircleButton extends StatelessWidget {
+  const _HeaderCircleButton({required this.icon, required this.onTap});
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: _ChatStyle.text, size: 19),
+        ),
+      ),
+    );
+  }
+}
 
 /// ====== New private chat sheet ======
 class _NewPrivateChatSheet extends StatefulWidget {
@@ -1670,64 +1778,85 @@ class _NewPrivateChatSheetState extends State<_NewPrivateChatSheet> {
     }
   }
 
-  @override
+    @override
   Widget build(BuildContext context) {
     final viewInsets = MediaQuery.of(context).viewInsets.bottom;
 
     return Padding(
       padding: EdgeInsets.only(bottom: viewInsets),
       child: SizedBox(
-        height: MediaQuery.of(context).size.height * 0.78,
+        height: MediaQuery.of(context).size.height * 0.76,
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
+              padding: const EdgeInsets.fromLTRB(14, 6, 14, 10),
               child: Row(
                 children: [
                   Container(
-                    width: 42,
-                    height: 42,
+                    width: 38,
+                    height: 38,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE3F2FD),
-                      borderRadius: BorderRadius.circular(14),
+                      color: _ChatStyle.greenSoft,
+                      borderRadius: BorderRadius.circular(12),
+                      
                     ),
-                    child:
-                        const Icon(Icons.edit_rounded, color: Color(0xFF1E74C4)),
+                    child: const Icon(Icons.person_add_alt_1_rounded, color: _ChatStyle.greenDark, size: 18),
                   ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      "Новый чат",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF0F172A),
-                      ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text(
+                          'Новый чат',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: _ChatStyle.text,
+                            fontSize: 15.2,
+                            fontWeight: FontWeight.w700,
+                            height: 1.05,
+                            letterSpacing: -.22,
+                          ),
+                        ),
+                        SizedBox(height: 3),
+                        Text(
+                          'Выберите пользователя для диалога',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: _ChatStyle.muted,
+                            fontSize: 11.0,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
               child: _MatteSurface(
-                radius: 14,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                radius: 13,
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 0),
                 child: TextField(
                   controller: _q,
                   decoration: const InputDecoration(
                     border: InputBorder.none,
-                    prefixIcon: Icon(Icons.search_rounded),
-                    hintText: "Поиск: имя, фамилия или email",
+                    prefixIcon: Icon(Icons.search_rounded, size: 18, color: _ChatStyle.muted),
+                    hintText: 'Поиск: имя, фамилия или email',
+                    isDense: true,
                   ),
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                   autofocus: true,
                 ),
               ),
             ),
             Expanded(
               child: _loading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(child: CircularProgressIndicator(color: _ChatStyle.green))
                   : _error != null
                       ? Center(
                           child: Padding(
@@ -1735,8 +1864,10 @@ class _NewPrivateChatSheetState extends State<_NewPrivateChatSheet> {
                             child: Text(
                               _error!,
                               style: const TextStyle(
-                                  color: Color(0xFFEF4444),
-                                  fontWeight: FontWeight.w700),
+                                color: Color(0xFFEF4444),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12.5,
+                              ),
                               textAlign: TextAlign.center,
                             ),
                           ),
@@ -1744,37 +1875,64 @@ class _NewPrivateChatSheetState extends State<_NewPrivateChatSheet> {
                       : _items.isEmpty
                           ? const Center(
                               child: Text(
-                                "Никого не нашли",
-                                style: TextStyle(color: Color(0xFF64748B)),
+                                'Никого не нашли',
+                                style: TextStyle(color: _ChatStyle.muted, fontSize: 12.2, fontWeight: FontWeight.w500),
                               ),
                             )
                           : ListView.separated(
+                              padding: const EdgeInsets.fromLTRB(14, 0, 14, 18),
                               itemCount: _items.length,
-                              separatorBuilder: (_, __) => const Divider(
-                                  height: 1, color: Color(0xFFE5E7EB)),
+                              separatorBuilder: (_, __) => const SizedBox(height: 1),
                               itemBuilder: (_, i) {
                                 final u = _items[i];
-                                return ListTile(
-                                  leading: _UserAvatar(
-                                      photo: u.photo, title: u.title),
-                                  title: Text(
-                                    u.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w800),
+                                return Material(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(14),
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(14),
+                                    onTap: () => Navigator.pop(context, u),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                      child: Row(
+                                        children: [
+                                          _UserAvatar(photo: u.photo, title: u.title),
+                                          const SizedBox(width: 9),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  u.title,
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    fontSize: 13.0,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: _ChatStyle.text,
+                                                    height: 1.1,
+                                                  ),
+                                                ),
+                                                if (u.subtitle?.trim().isNotEmpty ?? false) ...[
+                                                  const SizedBox(height: 3),
+                                                  Text(
+                                                    u.subtitle!,
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: const TextStyle(
+                                                      fontSize: 11.0,
+                                                      color: _ChatStyle.muted,
+                                                      fontWeight: FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                          ),
+                                          const Icon(Icons.chevron_right_rounded, size: 18, color: _ChatStyle.muted),
+                                        ],
+                                      ),
+                                    ),
                                   ),
-                                  subtitle: (u.subtitle?.trim().isNotEmpty ??
-                                          false)
-                                      ? Text(
-                                          u.subtitle!,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        )
-                                      : null,
-                                  trailing:
-                                      const Icon(Icons.chevron_right_rounded),
-                                  onTap: () => Navigator.pop(context, u),
                                 );
                               },
                             ),
@@ -1784,6 +1942,7 @@ class _NewPrivateChatSheetState extends State<_NewPrivateChatSheet> {
       ),
     );
   }
+
 }
 
 class _UserPick {
@@ -1821,13 +1980,15 @@ class _UserAvatar extends StatelessWidget {
             .join();
 
     return Container(
-      width: 44,
-      height: 44,
-      decoration: const BoxDecoration(
-        shape: BoxShape.circle,
-        color: Color(0xFFE3F2FD),
+      width: 38,
+      height: 38,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: _ChatStyle.greenSoft,
+        
       ),
-      child: ClipOval(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
         child: (photo.isNotEmpty)
             ? Image.network(
                 photo,
@@ -1837,7 +1998,7 @@ class _UserAvatar extends StatelessWidget {
                     initials,
                     style: const TextStyle(
                         fontWeight: FontWeight.w900,
-                        color: Color(0xFF1E74C4)),
+                        color: _ChatStyle.green),
                   ),
                 ),
               )
@@ -1845,7 +2006,7 @@ class _UserAvatar extends StatelessWidget {
                 child: Text(
                   initials,
                   style: const TextStyle(
-                      fontWeight: FontWeight.w900, color: Color(0xFF1E74C4)),
+                      fontWeight: FontWeight.w900, color: _ChatStyle.green),
                 ),
               ),
       ),
@@ -1861,10 +2022,10 @@ class _TelegramList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView.separated(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(0, 10, 0, 16),
+      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      padding: EdgeInsets.fromLTRB(6, 4, 6, MediaQuery.paddingOf(context).bottom + 112),
       itemCount: children.length,
-      separatorBuilder: (_, __) => const _TelegramDivider(),
+      separatorBuilder: (_, __) => const SizedBox(height: 1),
       itemBuilder: (_, i) => children[i],
     );
   }
@@ -1874,17 +2035,7 @@ class _TelegramDivider extends StatelessWidget {
   const _TelegramDivider();
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.only(left: 78),
-      child: const Divider(
-        height: 1,
-        thickness: 1,
-        color: Color(0xFFE5E7EB),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const SizedBox(height: 8);
 }
 
 enum _ChipTone { blue, orange }
@@ -1900,7 +2051,7 @@ class _MiniChip extends StatelessWidget {
         ? const Color(0xFFE3F2FD)
         : const Color(0xFFFFF3E0);
     final fg = tone == _ChipTone.blue
-        ? const Color(0xFF1E74C4)
+        ? _ChatStyle.green
         : const Color(0xFFB45309);
 
     return Container(
@@ -1908,13 +2059,13 @@ class _MiniChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        
       ),
       child: Text(
         text,
         style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w800,
+          fontSize: 9.2,
+          fontWeight: FontWeight.w700,
           height: 1.0,
           color: fg,
         ),
@@ -1946,13 +2097,6 @@ class _MatteSurface extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: const [
-          BoxShadow(
-              color: Color(0x11000000),
-              blurRadius: 16,
-              offset: Offset(0, 6)),
-        ],
       ),
       child: child,
     );
@@ -2025,7 +2169,7 @@ class _DangerActionButtonState extends State<_DangerActionButton>
             borderRadius: BorderRadius.circular(16),
             onTap: _press,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: const Color(0xFFFFE1E1)),
