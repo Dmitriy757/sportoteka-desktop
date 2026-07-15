@@ -46,3 +46,9 @@ app.*.map.json
 dist/
 build/
 windows.zip
+
+# Unity generated builds
+unity_builds/
+android/unityLibrary/src/main/jniLibs/
+android/unityLibrary/build/
+android/unityLibrary/.gradle/
