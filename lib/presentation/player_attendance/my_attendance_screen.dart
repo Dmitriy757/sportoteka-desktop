@@ -6,7 +6,7 @@ import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import 'package:sportoteka/core/utils/pref_utils.dart';
 
@@ -284,12 +284,12 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
         actions: [
           IconButton(
             onPressed: _load,
-            icon: Icon(PhosphorIcons.arrowClockwise(PhosphorIconsStyle.bold)),
+            icon: Icon(PhosphorIcons.arrowClockwise),
             tooltip: "Обновить",
           ),
           IconButton(
             onPressed: _exportCsv,
-            icon: Icon(PhosphorIcons.fileCsv(PhosphorIconsStyle.bold)),
+            icon: Icon(PhosphorIcons.fileCsv),
             tooltip: "Экспорт CSV",
           ),
         ],
@@ -303,7 +303,7 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(PhosphorIcons.warningCircle(PhosphorIconsStyle.bold), size: 64, color: const Color(0xFFEF4444)),
+                        Icon(PhosphorIcons.warningCircle, size: 64, color: const Color(0xFFEF4444)),
                         const SizedBox(height: 16),
                         Text(error!, textAlign: TextAlign.center, style: TextStyle(color: _muted, fontWeight: FontWeight.w700)),
                         const SizedBox(height: 16),
@@ -326,7 +326,7 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
                       _cardBox(
                         child: Row(
                           children: [
-                            Icon(PhosphorIcons.calendar(PhosphorIconsStyle.bold), color: Theme.of(context).colorScheme.primary),
+                            Icon(PhosphorIcons.calendar, color: Theme.of(context).colorScheme.primary),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(_monthTitle(), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: _text)),
@@ -336,14 +336,14 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
                                 setState(() => selectedMonth = DateTime(selectedMonth.year, selectedMonth.month - 1, 1));
                                 _load();
                               },
-                              icon: Icon(PhosphorIcons.caretLeft(PhosphorIconsStyle.bold)),
+                              icon: Icon(PhosphorIcons.caretLeft),
                             ),
                             IconButton(
                               onPressed: () {
                                 setState(() => selectedMonth = DateTime(selectedMonth.year, selectedMonth.month + 1, 1));
                                 _load();
                               },
-                              icon: Icon(PhosphorIcons.caretRight(PhosphorIconsStyle.bold)),
+                              icon: Icon(PhosphorIcons.caretRight),
                             ),
                           ],
                         ),
@@ -364,7 +364,7 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
                                 decoration: InputDecoration(
                                   border: InputBorder.none,
                                   hintText: "Поиск по событию/типу/локации...",
-                                  prefixIcon: Icon(PhosphorIcons.magnifyingGlass(PhosphorIconsStyle.bold)),
+                                  prefixIcon: Icon(PhosphorIcons.magnifyingGlass),
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                                 ),
                               ),
@@ -390,7 +390,7 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(color: _stroke),
                               ),
-                              child: Icon(PhosphorIcons.funnel(PhosphorIconsStyle.bold),
+                              child: Icon(PhosphorIcons.funnel,
                                   color: filter == "all" ? _muted : _getStatusColor(filter)),
                             ),
                           ),
@@ -404,7 +404,7 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
                           padding: const EdgeInsets.all(30),
                           child: Column(
                             children: [
-                              Icon(PhosphorIcons.info(PhosphorIconsStyle.bold), size: 64, color: const Color(0xFFD1D5DB)),
+                              Icon(PhosphorIcons.info, size: 64, color: const Color(0xFFD1D5DB)),
                               const SizedBox(height: 12),
                               Text("Нет событий по фильтру", style: TextStyle(color: _muted, fontWeight: FontWeight.w800)),
                               const SizedBox(height: 6),

@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
-import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
@@ -750,9 +750,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       photoUrl,
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) =>
-                          Center(child: Icon(PhosphorIcons.user(PhosphorIconsStyle.bold), size: size * 0.45, color: accent)),
+                          Center(child: Icon(PhosphorIcons.user, size: size * 0.45, color: accent)),
                     )
-                  : Center(child: Icon(PhosphorIcons.user(PhosphorIconsStyle.bold), size: size * 0.45, color: accent)),
+                  : Center(child: Icon(PhosphorIcons.user, size: size * 0.45, color: accent)),
             ),
           ),
           if (number.isNotEmpty)
@@ -793,7 +793,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.18)),
             ),
-            child: Icon(PhosphorIcons.usersThree(PhosphorIconsStyle.bold), color: Theme.of(context).colorScheme.primary),
+            child: Icon(PhosphorIcons.usersThree, color: Theme.of(context).colorScheme.primary),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -817,7 +817,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           else
             IconButton(
               onPressed: _openTeamPicker,
-              icon: Icon(PhosphorIcons.caretDown(PhosphorIconsStyle.bold)),
+              icon: Icon(PhosphorIcons.caretDown),
               style: IconButton.styleFrom(
                 backgroundColor: _chip,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -857,7 +857,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                           name,
                           style: TextStyle(fontWeight: FontWeight.w800, color: isSel ? Theme.of(context).colorScheme.primary : _text),
                         ),
-                        trailing: isSel ? Icon(PhosphorIcons.check(PhosphorIconsStyle.bold), color: Theme.of(context).colorScheme.primary) : null,
+                        trailing: isSel ? Icon(PhosphorIcons.check, color: Theme.of(context).colorScheme.primary) : null,
                         onTap: () {
                           Navigator.pop(context);
                           if (id <= 0) return;
@@ -896,7 +896,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               });
               _loadAll();
             },
-            icon: Icon(PhosphorIcons.caretLeft(PhosphorIconsStyle.bold)),
+            icon: Icon(PhosphorIcons.caretLeft),
             style: IconButton.styleFrom(
               backgroundColor: _chip,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -920,7 +920,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               });
               _loadAll();
             },
-            icon: Icon(PhosphorIcons.caretRight(PhosphorIconsStyle.bold)),
+            icon: Icon(PhosphorIcons.caretRight),
             style: IconButton.styleFrom(
               backgroundColor: _chip,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -942,7 +942,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         children: [
           Row(
             children: [
-              Icon(PhosphorIcons.calendar(PhosphorIconsStyle.bold), size: 20, color: eventColor),
+              Icon(PhosphorIcons.calendar, size: 20, color: eventColor),
               const SizedBox(width: 8),
               Text("Мероприятие", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: eventColor)),
             ],
@@ -964,8 +964,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   children: [
                     Icon(
                       selectedEventId == null
-                          ? PhosphorIcons.calendarBlank(PhosphorIconsStyle.bold)
-                          : PhosphorIcons.calendarCheck(PhosphorIconsStyle.bold),
+                          ? PhosphorIcons.calendarBlank
+                          : PhosphorIcons.calendarCheck,
                       color: eventColor,
                     ),
                     const SizedBox(width: 12),
@@ -989,7 +989,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         ],
                       ),
                     ),
-                    Icon(PhosphorIcons.caretDown(PhosphorIconsStyle.bold), color: eventColor),
+                    Icon(PhosphorIcons.caretDown, color: eventColor),
                   ],
                 ),
               ),
@@ -1017,12 +1017,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 const SizedBox(height: 16),
                 ListTile(
                   leading: Icon(
-                    PhosphorIcons.calendarBlank(PhosphorIconsStyle.bold),
+                    PhosphorIcons.calendarBlank,
                     color: selectedEventId == null ? Theme.of(context).colorScheme.primary : _muted,
                   ),
                   title: const Text("Все мероприятия месяца", style: TextStyle(fontWeight: FontWeight.w800)),
                   trailing: selectedEventId == null
-                      ? Icon(PhosphorIcons.check(PhosphorIconsStyle.bold), color: Theme.of(context).colorScheme.primary)
+                      ? Icon(PhosphorIcons.check, color: Theme.of(context).colorScheme.primary)
                       : null,
                   onTap: () {
                     Navigator.pop(context);
@@ -1047,7 +1047,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
                       return ListTile(
                         leading: Icon(
-                          PhosphorIcons.calendarCheck(PhosphorIconsStyle.bold),
+                          PhosphorIcons.calendarCheck,
                           color: isSel ? Theme.of(context).colorScheme.primary : _muted,
                         ),
                         title: Text(
@@ -1057,7 +1057,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                           style: TextStyle(fontWeight: FontWeight.w800, color: isSel ? Theme.of(context).colorScheme.primary : _text),
                         ),
                         subtitle: Text("$date ${time.isNotEmpty ? '· $time' : ''}", style: TextStyle(fontWeight: FontWeight.w700, color: _muted)),
-                        trailing: isSel ? Icon(PhosphorIcons.check(PhosphorIconsStyle.bold), color: Theme.of(context).colorScheme.primary) : null,
+                        trailing: isSel ? Icon(PhosphorIcons.check, color: Theme.of(context).colorScheme.primary) : null,
                         onTap: () {
                           Navigator.pop(context);
                           setState(() {
@@ -1142,11 +1142,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Widget _buildSearchAndFilters() {
     IconData viewIcon;
     if (viewMode == "list") {
-      viewIcon = PhosphorIcons.squaresFour(PhosphorIconsStyle.bold);
+      viewIcon = PhosphorIcons.squaresFour;
     } else if (viewMode == "grid") {
-      viewIcon = PhosphorIcons.table(PhosphorIconsStyle.bold);
+      viewIcon = PhosphorIcons.table;
     } else {
-      viewIcon = PhosphorIcons.list(PhosphorIconsStyle.bold);
+      viewIcon = PhosphorIcons.list;
     }
 
     return Row(
@@ -1164,7 +1164,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               decoration: InputDecoration(
                 border: InputBorder.none,
                 hintText: "Поиск игрока...",
-                prefixIcon: Icon(PhosphorIcons.magnifyingGlass(PhosphorIconsStyle.bold)),
+                prefixIcon: Icon(PhosphorIcons.magnifyingGlass),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               ),
             ),
@@ -1195,7 +1195,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 12, offset: const Offset(0, 6))],
               ),
               child: Icon(
-                PhosphorIcons.funnel(PhosphorIconsStyle.bold),
+                PhosphorIcons.funnel,
                 color: filter == "all" ? _muted : _getStatusColor(filter),
               ),
             ),
@@ -1243,7 +1243,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         padding: const EdgeInsets.all(40),
         child: Column(
           children: [
-            Icon(PhosphorIcons.users(PhosphorIconsStyle.bold), size: 72, color: const Color(0xFFD1D5DB)),
+            Icon(PhosphorIcons.users, size: 72, color: const Color(0xFFD1D5DB)),
             const SizedBox(height: 16),
             Text("Игроки не найдены", style: TextStyle(color: _muted, fontWeight: FontWeight.w800, fontSize: 16)),
             const SizedBox(height: 8),
@@ -1522,7 +1522,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         padding: const EdgeInsets.all(18),
         child: Row(
           children: [
-            Icon(PhosphorIcons.info(PhosphorIconsStyle.bold), color: _muted),
+            Icon(PhosphorIcons.info, color: _muted),
             const SizedBox(width: 10),
             Expanded(
               child: Text("В этом месяце нет мероприятий — таблица пустая.", style: TextStyle(color: _muted, fontWeight: FontWeight.w700)),
@@ -1768,12 +1768,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             ),
           IconButton(
             onPressed: _loadAll,
-            icon: Icon(PhosphorIcons.arrowClockwise(PhosphorIconsStyle.bold)),
+            icon: Icon(PhosphorIcons.arrowClockwise),
             tooltip: "Обновить",
           ),
           IconButton(
             onPressed: _exportCsv,
-            icon: Icon(PhosphorIcons.fileCsv(PhosphorIconsStyle.bold)),
+            icon: Icon(PhosphorIcons.fileCsv),
             tooltip: "Экспорт CSV",
           ),
         ],
@@ -1796,7 +1796,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(PhosphorIcons.warningCircle(PhosphorIconsStyle.bold), size: 64, color: const Color(0xFFEF4444)),
+                        Icon(PhosphorIcons.warningCircle, size: 64, color: const Color(0xFFEF4444)),
                         const SizedBox(height: 16),
                         Text(error!, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF6B7280), fontWeight: FontWeight.w700)),
                         const SizedBox(height: 16),
@@ -1838,7 +1838,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                           ),
                           child: Row(
                             children: [
-                              Icon(PhosphorIcons.info(PhosphorIconsStyle.bold), color: const Color(0xFFF59E0B)),
+                              Icon(PhosphorIcons.info, color: const Color(0xFFF59E0B)),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
@@ -1873,10 +1873,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                               children: [
                                 Icon(
                                   viewMode == "list"
-                                      ? PhosphorIcons.list(PhosphorIconsStyle.bold)
+                                      ? PhosphorIcons.list
                                       : viewMode == "grid"
-                                          ? PhosphorIcons.squaresFour(PhosphorIconsStyle.bold)
-                                          : PhosphorIcons.table(PhosphorIconsStyle.bold),
+                                          ? PhosphorIcons.squaresFour
+                                          : PhosphorIcons.table,
                                   size: 14,
                                   color: _muted,
                                 ),

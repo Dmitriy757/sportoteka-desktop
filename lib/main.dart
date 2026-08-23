@@ -52,7 +52,6 @@ Future<void> main() async {
   await initializeDateFormatting('ru_RU', null);
   await PrefUtils().init();
 
-  final bool isIntro = await PrefUtils.getIsIntro();
   final bool isSignedIn = await PrefUtils.getIsSignIn();
 
   final view = WidgetsBinding.instance.platformDispatcher.views.first;
@@ -79,18 +78,15 @@ Future<void> main() async {
   Logger.init(kReleaseMode ? LogMode.live : LogMode.debug);
 
   runApp(MyApp(
-    isIntro: isIntro,
     isSignedIn: isSignedIn,
   ));
 }
 
 class MyApp extends StatelessWidget {
-  final bool isIntro;
   final bool isSignedIn;
 
   const MyApp({
     super.key,
-    required this.isIntro,
     required this.isSignedIn,
   });
 
@@ -98,7 +94,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final String initialRoute = isSignedIn
         ? AppRoutes.homeContainerScreen
-        : (isIntro ? AppRoutes.onboardingOneScreen : AppRoutes.loginScreen);
+        : AppRoutes.loginScreen;
 
     return GetMaterialApp(
       debugShowCheckedModeBanner: false,

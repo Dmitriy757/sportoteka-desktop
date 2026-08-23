@@ -7,6 +7,7 @@ import 'player_label_widget.dart';
 class AnalysisOverlayWidget extends StatelessWidget {
   final List<PlayerDetection> players;
   final Map<String, dynamic> stats;
+  final Map<String, dynamic>? ball;
 
   /// Оставлено для совместимости со старым вызовом из AdvancedVideoAnalysisScreen.
   /// Реальный размер overlay берётся через LayoutBuilder.
@@ -17,6 +18,7 @@ class AnalysisOverlayWidget extends StatelessWidget {
     required this.players,
     required this.stats,
     required this.videoSize,
+    this.ball,
   }) : super(key: key);
 
   @override
@@ -33,6 +35,12 @@ class AnalysisOverlayWidget extends StatelessWidget {
               for (final player in players)
                 PlayerLabelWidget(
                   player: player,
+                  overlaySize: overlaySize,
+                  sourceVideoSize: sourceVideoSize,
+                ),
+              if (ball != null)
+                _BallMarker(
+                  ball: ball!,
                   overlaySize: overlaySize,
                   sourceVideoSize: sourceVideoSize,
                 ),
@@ -66,5 +74,62 @@ class AnalysisOverlayWidget extends StatelessWidget {
     if (value == null) return 0.0;
     if (value is num) return value.toDouble();
     return double.tryParse(value.toString().replaceAll(',', '.')) ?? 0.0;
+  }
+}
+
+class _BallMarker extends StatelessWidget {
+  final Map<String, dynamic> ball;
+  final Size overlaySize;
+  final Size sourceVideoSize;
+
+  const _BallMarker({
+    required this.ball,
+    required this.overlaySize,
+    required this.sourceVideoSize,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final center = ball['center'];
+    final bbox = ball['bbox'];
+    var x = center is Map ? _number(center['x']) : 0.0;
+    var y = center is Map ? _number(center['y']) : 0.0;
+    if ((x <= 0 || y <= 0) && bbox is List && bbox.length >= 4) {
+      x = (_number(bbox[0]) + _number(bbox[2])) / 2;
+      y = (_number(bbox[1]) + _number(bbox[3])) / 2;
+    }
+    if (x <= 0 || y <= 0) return const SizedBox.shrink();
+
+    final sourceW = sourceVideoSize.width <= 0 ? 1920.0 : sourceVideoSize.width;
+    final sourceH = sourceVideoSize.height <= 0 ? 1080.0 : sourceVideoSize.height;
+    if (x <= 1.5 && y <= 1.5) {
+      x *= sourceW;
+      y *= sourceH;
+    }
+    final scale = (overlaySize.width / sourceW) < (overlaySize.height / sourceH)
+        ? overlaySize.width / sourceW
+        : overlaySize.height / sourceH;
+    final dx = (overlaySize.width - sourceW * scale) / 2 + x * scale;
+    final dy = (overlaySize.height - sourceH * scale) / 2 + y * scale;
+    const marker = 17.0;
+    return Positioned(
+      left: dx - marker / 2,
+      top: dy - marker / 2,
+      child: Container(
+        width: marker,
+        height: marker,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(color: const Color(0xFF00A750), width: 3),
+          boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 5)],
+        ),
+      ),
+    );
+  }
+
+  static double _number(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0.0;
   }
 }

@@ -11,7 +11,7 @@ android {
 
     // Лучше держать версию NDK, которую использует Unity 6000.5.
     // Если Gradle начнет ругаться, можно вернуть 27.0.12077973.
-    ndkVersion = "27.2.12479018"
+    ndkVersion = "28.2.13676358"
 
     externalNativeBuild {
         cmake {
@@ -74,7 +74,6 @@ android {
 }
 
 dependencies {
-    implementation(project(":unityLibrary"))
 
     // Play Services
     implementation("com.google.android.gms:play-services-auth:20.7.0")
@@ -88,7 +87,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
 
     // Desugaring
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }
 
 flutter {

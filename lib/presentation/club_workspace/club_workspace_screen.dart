@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
-
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
@@ -29,6 +29,7 @@ import 'package:sportoteka/presentation/video_lessons/video_lessons_screen.dart'
 import 'package:sportoteka/routes/app_routes.dart';
 import 'package:sportoteka/presentation/player_profile_screen/cmr_player_profile_screen.dart';
 import 'package:sportoteka/presentation/my_profile_screen/my_profile_screen.dart';
+import 'package:sportoteka/presentation/workspace_hub/workspace_hub_screen.dart';
 import 'package:sportoteka/presentation/plans/cmr_plans_panel.dart';
 import 'package:sportoteka/presentation/team_calendar_screen/cmr_calendar_panel.dart';
 import 'package:sportoteka/presentation/team_video_analysis/cmr_video_analysis_panel.dart';
@@ -41,6 +42,9 @@ import 'package:sportoteka/presentation/club_workspace/cmr_club_roster_panel.dar
 import 'package:sportoteka/presentation/club_workspace/cmr_chats_panel.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_game_zone_panel.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_club_overview_panel.dart';
+import 'package:sportoteka/presentation/club_workspace/cmr_club_parents_panel.dart';
+import 'package:sportoteka/presentation/club_workspace/cmr_medical_cabinet_panel.dart';
+import 'package:sportoteka/presentation/club_workspace/cmr_context_ai_layer.dart';
 import 'package:sportoteka/presentation/tracker/screens/tracker_match_workspace_screen.dart';
 
 enum ClubSection {
@@ -109,7 +113,6 @@ class _WorkspaceWindowState {
     this.maximized = false,
   });
 }
-
 
 String _sportotekaWebImageProxy(String url) {
   final clean = url.trim();
@@ -186,12 +189,14 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     with SingleTickerProviderStateMixin {
   static const String apiBase = 'https://sportotekaapp.ru/api';
   static const String getClubProfileUrl = '$apiBase/get_club_profile.php';
+  static const String getMySubscriptionUrl = '$apiBase/get_my_subscription.php';
   static const String getClubTeamsUrl = '$apiBase/get_club_teams.php';
   static const String getClubTrainersUrl = '$apiBase/get_club_trainers.php';
   static const String getTeamTrainersUrl = '$apiBase/get_team_trainers.php';
   static const String getTrainerTeamsUrl = '$apiBase/get_team_by_coach.php';
   static const String getClubEventsUrl = '$apiBase/get_club_events.php';
-  static const String getLatestTrainingPlansUrl = '$apiBase/get_latest_training_plans.php';
+  static const String getLatestTrainingPlansUrl =
+      '$apiBase/get_latest_training_plans.php';
   static const String getPlayersUrl = '$apiBase/get_players.php';
   static const String deletePlayerUrl = '$apiBase/delete_player.php';
   static const String updateClubProfileUrl = '$apiBase/update_club_profile.php';
@@ -213,6 +218,9 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   String clubDescription = '';
   bool savingProfile = false;
   bool hasActiveSubscription = false;
+  String subscriptionPlanCode = '';
+
+  bool get _isClubBasic => subscriptionPlanCode.trim().toLowerCase() == 'club_basic';
 
   List<Map<String, dynamic>> teams = [];
   List<Map<String, dynamic>> trainers = [];
@@ -230,10 +238,15 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
 
   bool _showDesktopIcons = true;
   _WorkspaceDockSize _workspaceDockSize = _WorkspaceDockSize.normal;
-  _WorkspaceWallpaperStyle _workspaceWallpaperStyle = _WorkspaceWallpaperStyle.sportoteka;
-  final List<_WorkspaceWindowState> _openWorkspaceWindows = <_WorkspaceWindowState>[];
+  _WorkspaceWallpaperStyle _workspaceWallpaperStyle =
+      _WorkspaceWallpaperStyle.sportoteka;
+  final List<_WorkspaceWindowState> _openWorkspaceWindows =
+      <_WorkspaceWindowState>[];
   int _workspaceWindowZCounter = 0;
   int _chatPanelRevision = 0;
+  bool _openCreateTeamInline = false;
+  bool? _contextAiExpanded;
+  int _contextAiRevision = 0;
 
   final Set<ClubSection> _desktopIconSections = <ClubSection>{
     ClubSection.teams,
@@ -245,6 +258,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     ClubSection.testing,
     ClubSection.tracker,
     ClubSection.chat,
+    ClubSection.parents,
   };
 
   final Set<ClubSection> _dockSections = <ClubSection>{
@@ -257,9 +271,11 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     ClubSection.testing,
     ClubSection.tracker,
     ClubSection.chat,
+    ClubSection.parents,
   };
 
-  final Map<ClubSection, Offset> _desktopIconPositions = <ClubSection, Offset>{};
+  final Map<ClubSection, Offset> _desktopIconPositions =
+      <ClubSection, Offset>{};
 
   late final AnimationController _introController;
   bool _introStarted = true;
@@ -277,6 +293,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     ClubSection.testing,
     ClubSection.tracker,
     ClubSection.chat,
+    ClubSection.parents,
     ClubSection.graphics,
     ClubSection.manager,
   ];
@@ -310,18 +327,27 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
 
     final args = Get.arguments;
     if (args is Map) {
-      final mode = '${args['mode'] ?? args['workspace_mode'] ?? ''}'.toLowerCase();
-      trainerAssignedMode = mode == 'trainer_assigned' || mode == 'trainer_workspace';
-      trainerWorkspaceId = _asInt(args['trainer_id'] ?? args['trainerId'] ?? args['coach_id'] ?? args['coachId']);
+      final mode =
+          '${args['mode'] ?? args['workspace_mode'] ?? ''}'.toLowerCase();
+      trainerAssignedMode =
+          mode == 'trainer_assigned' || mode == 'trainer_workspace';
+      trainerWorkspaceId = _asInt(args['trainer_id'] ??
+          args['trainerId'] ??
+          args['coach_id'] ??
+          args['coachId']);
       clubId = _asInt(args['club_id'] ?? args['clubId']);
-      final targetTeamId = _asInt(args['initial_team_id'] ?? args['selected_team_id'] ?? args['team_id'] ?? args['teamId']);
+      final targetTeamId = _asInt(args['initial_team_id'] ??
+          args['selected_team_id'] ??
+          args['team_id'] ??
+          args['teamId']);
       if (targetTeamId > 0) initialTeamId = targetTeamId;
     }
 
     final pref = PrefUtils();
     await pref.init();
     final role = pref.getUserRole().trim().toLowerCase();
-    if (!trainerAssignedMode && (role == 'coach' || role == 'trainer' || role == 'тренер')) {
+    if (!trainerAssignedMode &&
+        (role == 'coach' || role == 'trainer' || role == 'тренер')) {
       trainerAssignedMode = true;
     }
 
@@ -341,6 +367,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       error = null;
     });
 
+    final subscriptionFuture = _safeLoad(_loadSubscriptionPlan);
+
     if (trainerAssignedMode) {
       // В режиме тренера сначала нужны команды: из первой назначенной команды
       // workspace может восстановить clubId.
@@ -354,6 +382,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         _safeLoad(_loadTeams),
       ]);
     }
+
+    await subscriptionFuture;
 
     final targetTeamId = initialTeamId ?? selectedTeamId;
     Map<String, dynamic>? teamToSelect;
@@ -401,14 +431,59 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     } catch (_) {}
   }
 
+  Future<void> _loadSubscriptionPlan() async {
+    if (currentUserId <= 0) return;
+    try {
+      final response = await http.post(
+        Uri.parse(getMySubscriptionUrl),
+        body: {'user_id': '$currentUserId'},
+      ).timeout(const Duration(seconds: 10));
+      final data = _decode(response.body);
+      if (data is! Map || data['success'] != true) return;
+      final raw = data['subscription'];
+      if (raw is! Map) return;
+      final plan = _asString(raw['plan_code']) ?? '';
+      final status = (_asString(raw['status']) ?? '').toLowerCase().trim();
+      if (!mounted) return;
+      subscriptionPlanCode = plan;
+
+      // У базового тарифа календарь/расписание и остальные базовые модули
+      // должны открываться даже если backend вернул status=paid/current/trial
+      // вместо старого строго `active`. Явно закрываем только реально
+      // неактивные состояния.
+      final normalizedPlan = plan.trim().toLowerCase();
+      final explicitlyInactive = <String>{
+        'inactive',
+        'expired',
+        'cancelled',
+        'canceled',
+        'blocked',
+        'disabled',
+      }.contains(status);
+      final knownActive = <String>{
+        'active',
+        'paid',
+        'current',
+        'trial',
+        'trialing',
+        'enabled',
+      }.contains(status);
+
+      if (knownActive ||
+          (normalizedPlan == 'club_basic' && !explicitlyInactive)) {
+        hasActiveSubscription = true;
+      }
+    } catch (_) {}
+  }
+
   Future<void> _loadClubProfile() async {
     // Важно: этот экран должен работать с тем же club_id, что и старый
     // ClubDashboardScreen. Поэтому профиль клуба грузим через POST club_id
     // и НЕ перезаписываем clubId из ответа: в некоторых ответах поле id
     // может быть id записи/пользователя, из-за чего тренеры считались как 0.
-    final response = await http
-        .post(Uri.parse(getClubProfileUrl), body: {'club_id': clubId.toString()})
-        .timeout(const Duration(seconds: 10));
+    final response = await http.post(Uri.parse(getClubProfileUrl), body: {
+      'club_id': clubId.toString()
+    }).timeout(const Duration(seconds: 10));
 
     final data = _decode(response.body);
     if (data is Map && data['success'] == true) {
@@ -450,9 +525,9 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       return;
     }
 
-    final response = await http
-        .post(Uri.parse(getClubTeamsUrl), body: {'club_id': clubId.toString()})
-        .timeout(const Duration(seconds: 10));
+    final response = await http.post(Uri.parse(getClubTeamsUrl), body: {
+      'club_id': clubId.toString()
+    }).timeout(const Duration(seconds: 10));
 
     final data = _decode(response.body);
 
@@ -469,18 +544,18 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     teams = [];
     if (trainerWorkspaceId <= 0) return;
 
-    final response = await http
-        .post(
-          Uri.parse('$getTrainerTeamsUrl?coach_id=$trainerWorkspaceId&trainer_id=$trainerWorkspaceId'),
-          body: {
-            'coach_id': trainerWorkspaceId.toString(),
-            'trainer_id': trainerWorkspaceId.toString(),
-          },
-        )
-        .timeout(const Duration(seconds: 12));
+    final response = await http.post(
+      Uri.parse(
+          '$getTrainerTeamsUrl?coach_id=$trainerWorkspaceId&trainer_id=$trainerWorkspaceId'),
+      body: {
+        'coach_id': trainerWorkspaceId.toString(),
+        'trainer_id': trainerWorkspaceId.toString(),
+      },
+    ).timeout(const Duration(seconds: 12));
 
     final data = _decode(response.body);
-    debugPrint('Club workspace assigned teams response trainer=$trainerWorkspaceId status=${response.statusCode}: ${_shortBody(response.body)}');
+    debugPrint(
+        'Club workspace assigned teams response trainer=$trainerWorkspaceId status=${response.statusCode}: ${_shortBody(response.body)}');
     final raw = _extractList(
       data,
       keys: const ['teams', 'assigned_teams', 'data', 'items', 'result'],
@@ -496,9 +571,17 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       seen.add(id);
       team['id'] = id;
       team['team_id'] = id;
-      team['name'] = _asString(team['name'] ?? team['team_name'] ?? team['teamName'] ?? team['title']) ?? 'Команда #$id';
+      team['name'] = _asString(team['name'] ??
+              team['team_name'] ??
+              team['teamName'] ??
+              team['title']) ??
+          'Команда #$id';
       team['team_name'] = team['name'];
-      team['logo'] = _asString(team['logo'] ?? team['logo_url'] ?? team['team_logo'] ?? team['teamLogo']) ?? '';
+      team['logo'] = _asString(team['logo'] ??
+              team['logo_url'] ??
+              team['team_logo'] ??
+              team['teamLogo']) ??
+          '';
       normalized.add(team);
     }
 
@@ -508,7 +591,9 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       clubId = _asInt(teams.first['club_id'] ?? teams.first['clubId']);
     }
     if ((clubName.trim().isEmpty || clubName == 'Клуб') && teams.isNotEmpty) {
-      clubName = _asString(teams.first['club_name'] ?? teams.first['clubName']) ?? 'Панель тренера';
+      clubName =
+          _asString(teams.first['club_name'] ?? teams.first['clubName']) ??
+              'Панель тренера';
     }
   }
 
@@ -524,12 +609,10 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     }
 
     try {
-      final resp = await http
-          .post(
-            Uri.parse(getClubTrainersUrl),
-            body: {'club_id': clubId.toString()},
-          )
-          .timeout(const Duration(seconds: 5));
+      final resp = await http.post(
+        Uri.parse(getClubTrainersUrl),
+        body: {'club_id': clubId.toString()},
+      ).timeout(const Duration(seconds: 5));
 
       final data = _tryDecodeJson(resp.body);
       if (data != null) {
@@ -549,7 +632,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         );
       }
     } catch (e) {
-      debugPrint('Club workspace trainers club endpoint error club_id=$clubId: $e');
+      debugPrint(
+          'Club workspace trainers club endpoint error club_id=$clubId: $e');
     }
 
     // Fallback: в team_roster_screen.dart тренеры команды грузятся именно так:
@@ -565,7 +649,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   Future<List<Map<String, dynamic>>> _loadTrainersFromTeams() async {
     if (teams.isEmpty) return [];
 
-    Future<List<Map<String, dynamic>>> loadForTeam(Map<String, dynamic> team) async {
+    Future<List<Map<String, dynamic>>> loadForTeam(
+        Map<String, dynamic> team) async {
       final teamId = _asInt(team['id'] ?? team['team_id'] ?? team['teamId']);
       if (teamId <= 0) return [];
 
@@ -574,12 +659,10 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       try {
         // В PHP-скриптах проекта чаще используется обычный form body,
         // поэтому сначала пробуем его, а JSON оставляем fallback'ом.
-        final formResp = await http
-            .post(
-              Uri.parse(getTeamTrainersUrl),
-              body: {'team_id': teamId.toString()},
-            )
-            .timeout(const Duration(seconds: 5));
+        final formResp = await http.post(
+          Uri.parse(getTeamTrainersUrl),
+          body: {'team_id': teamId.toString()},
+        ).timeout(const Duration(seconds: 5));
 
         data = _tryDecodeJson(formResp.body);
         if (data == null) {
@@ -589,7 +672,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
           );
         }
       } catch (e) {
-        debugPrint('Club workspace team trainers form error team_id=$teamId: $e');
+        debugPrint(
+            'Club workspace team trainers form error team_id=$teamId: $e');
       }
 
       if (data == null || _extractTrainersList(data).isEmpty) {
@@ -597,7 +681,9 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
           final jsonResp = await http
               .post(
                 Uri.parse(getTeamTrainersUrl),
-                headers: const {'Content-Type': 'application/json; charset=utf-8'},
+                headers: const {
+                  'Content-Type': 'application/json; charset=utf-8'
+                },
                 body: jsonEncode({'team_id': teamId}),
               )
               .timeout(const Duration(seconds: 5));
@@ -610,7 +696,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
             );
           }
         } catch (e) {
-          debugPrint('Club workspace team trainers json error team_id=$teamId: $e');
+          debugPrint(
+              'Club workspace team trainers json error team_id=$teamId: $e');
         }
       }
 
@@ -705,7 +792,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       return;
     }
 
-    final uri = Uri.parse(getLatestTrainingPlansUrl).replace(queryParameters: params);
+    final uri =
+        Uri.parse(getLatestTrainingPlansUrl).replace(queryParameters: params);
     final response = await http.get(uri).timeout(const Duration(seconds: 10));
     final decoded = _decode(response.body);
     latestPlans = _extractList(
@@ -769,7 +857,6 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     }
   }
 
-
   Future<void> _deletePlayerFromRoster(Map<String, dynamic> player) async {
     final playerId = _asInt(
       player['id'] ??
@@ -779,9 +866,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     );
 
     final teamId = _asInt(
-      player['team_id'] ??
-          player['teamId'] ??
-          selectedTeamId,
+      player['team_id'] ?? player['teamId'] ?? selectedTeamId,
     );
 
     if (playerId <= 0) {
@@ -804,8 +889,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         .timeout(const Duration(seconds: 12));
 
     final data = _decode(response.body);
-    final success = data is Map &&
-        (data['success'] == true || data['status'] == 'success');
+    final success =
+        data is Map && (data['success'] == true || data['status'] == 'success');
 
     if (!success) {
       final message = data is Map
@@ -861,7 +946,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       // После выбора активной команды автоматически возвращаемся
       // в основную панель клуба. Если где-то явно нужен полный экран
       // команды, передавай openTeam: true.
-      selectedSection = openTeam ? ClubSection.teamDashboard : ClubSection.teams;
+      selectedSection =
+          openTeam ? ClubSection.teamDashboard : ClubSection.teams;
     });
 
     if (id > 0) {
@@ -877,9 +963,9 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     }
   }
 
-
   String _selectedTeamStage() {
-    return _stageFromTeam(selectedTeam, fallbackName: selectedTeamName) ?? 'U13';
+    return _stageFromTeam(selectedTeam, fallbackName: selectedTeamName) ??
+        'U13';
   }
 
   String? _stageFromTeam(Map<String, dynamic>? team, {String? fallbackName}) {
@@ -904,7 +990,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         if (v != null && v.trim().isNotEmpty) values.add(v);
       }
     }
-    if (fallbackName != null && fallbackName.trim().isNotEmpty) values.add(fallbackName);
+    if (fallbackName != null && fallbackName.trim().isNotEmpty)
+      values.add(fallbackName);
 
     for (final raw in values) {
       final stage = _normalizeStage(raw);
@@ -983,20 +1070,28 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
 
     final first = '${player['first_name'] ?? player['firstname'] ?? ''}'.trim();
     final last = '${player['last_name'] ?? player['lastname'] ?? ''}'.trim();
-    final full = '${player['fullName'] ?? player['full_name'] ?? player['name'] ?? ''}'.trim();
-    final birth = '${player['birth_date'] ?? player['birthDate'] ?? player['birthday'] ?? ''}'.trim();
+    final full =
+        '${player['fullName'] ?? player['full_name'] ?? player['name'] ?? ''}'
+            .trim();
+    final birth =
+        '${player['birth_date'] ?? player['birthDate'] ?? player['birthday'] ?? ''}'
+            .trim();
 
     final fallback = [first, last, full, birth]
         .where((value) => value.isNotEmpty && value != 'null')
         .join('|');
 
-    return fallback.isEmpty ? 'player:${DateTime.now().microsecondsSinceEpoch}' : 'fallback:$fallback';
+    return fallback.isEmpty
+        ? 'player:${DateTime.now().microsecondsSinceEpoch}'
+        : 'fallback:$fallback';
   }
 
   String _playerWindowTitle(Map<String, dynamic> player) {
     final first = '${player['first_name'] ?? player['firstname'] ?? ''}'.trim();
     final last = '${player['last_name'] ?? player['lastname'] ?? ''}'.trim();
-    final full = '${player['fullName'] ?? player['full_name'] ?? player['name'] ?? ''}'.trim();
+    final full =
+        '${player['fullName'] ?? player['full_name'] ?? player['name'] ?? ''}'
+            .trim();
     final name = [last, first]
         .where((value) => value.isNotEmpty && value != 'null')
         .join(' ');
@@ -1006,7 +1101,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
 
   _WorkspaceWindowState? _playerProfileWorkspaceWindow(String entityKey) {
     for (final window in _openWorkspaceWindows) {
-      if (window.section == ClubSection.playerProfile && window.entityKey == entityKey) {
+      if (window.section == ClubSection.playerProfile &&
+          window.entityKey == entityKey) {
         return window;
       }
     }
@@ -1071,7 +1167,6 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       );
     });
   }
-
 
   Future<void> _openEditClubDialog() async {
     final nameCtrl = TextEditingController(text: clubName);
@@ -1173,7 +1268,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                                 ],
                               ),
                             ),
-                            const Icon(Icons.edit_rounded, color: _C.primaryGreen),
+                            const Icon(Icons.edit_rounded,
+                                color: _C.primaryGreen),
                           ],
                         ),
                       ),
@@ -1251,19 +1347,22 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     if (!mounted) return;
     setState(() => savingProfile = true);
     try {
-      final req = http.MultipartRequest('POST', Uri.parse(updateClubProfileUrl));
+      final req =
+          http.MultipartRequest('POST', Uri.parse(updateClubProfileUrl));
       req.fields['club_id'] = clubId.toString();
       req.fields['club_name'] = name;
       req.fields['name'] = name;
       req.fields['club_description'] = description;
       req.fields['description'] = description;
       if (logo != null) {
-        req.files.add(await http.MultipartFile.fromPath('club_logo', logo.path));
+        req.files
+            .add(await http.MultipartFile.fromPath('club_logo', logo.path));
       }
       final streamed = await req.send().timeout(const Duration(seconds: 20));
       final resp = await http.Response.fromStream(streamed);
       final data = _decode(resp.body);
-      final ok = data is Map && (data['success'] == true || data['status'] == 'success');
+      final ok = data is Map &&
+          (data['success'] == true || data['status'] == 'success');
       if (ok) {
         final raw = data is Map ? (data['club'] ?? data['data']) : null;
         setState(() {
@@ -1280,7 +1379,11 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         await _loadClubProfile();
         Get.snackbar('Готово', 'Данные клуба обновлены');
       } else {
-        Get.snackbar('Ошибка', data is Map ? '${data['message'] ?? data['error'] ?? 'Не удалось сохранить'}' : 'Не удалось сохранить');
+        Get.snackbar(
+            'Ошибка',
+            data is Map
+                ? '${data['message'] ?? data['error'] ?? 'Не удалось сохранить'}'
+                : 'Не удалось сохранить');
       }
     } catch (e) {
       Get.snackbar('Сеть', 'Ошибка сохранения: $e');
@@ -1297,9 +1400,14 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
 
     final nameCtrl = TextEditingController(text: selectedTeamName);
     final categoryCtrl = TextEditingController(
-      text: _asString(selectedTeam?['category'] ?? selectedTeam?['sport'] ?? selectedTeam?['age_group']) ?? 'Футбол',
+      text: _asString(selectedTeam?['category'] ??
+              selectedTeam?['sport'] ??
+              selectedTeam?['age_group']) ??
+          'Футбол',
     );
-    final oldLogo = _asString(selectedTeam?['logo'] ?? selectedTeam?['logo_url'] ?? selectedTeam?['photo']);
+    final oldLogo = _asString(selectedTeam?['logo'] ??
+        selectedTeam?['logo_url'] ??
+        selectedTeam?['photo']);
     XFile? pickedLogo;
     final picker = ImagePicker();
 
@@ -1339,7 +1447,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                     const SizedBox(height: 16),
                     Row(
                       children: const [
-                        _IconBadge(icon: Icons.tune_rounded, size: 46, iconSize: 23),
+                        _IconBadge(
+                            icon: Icons.tune_rounded, size: 46, iconSize: 23),
                         SizedBox(width: 12),
                         Expanded(
                           child: Column(
@@ -1417,7 +1526,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                                 ],
                               ),
                             ),
-                            const Icon(Icons.edit_rounded, color: _C.primaryGreen),
+                            const Icon(Icons.edit_rounded,
+                                color: _C.primaryGreen),
                           ],
                         ),
                       ),
@@ -1495,7 +1605,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     if (!mounted) return;
     setState(() => savingProfile = true);
     try {
-      final req = http.MultipartRequest('POST', Uri.parse(updateTeamProfileUrl));
+      final req =
+          http.MultipartRequest('POST', Uri.parse(updateTeamProfileUrl));
       req.fields['team_id'] = selectedTeamId.toString();
       req.fields['team_name'] = name;
       req.fields['name'] = name;
@@ -1506,7 +1617,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       final streamed = await req.send().timeout(const Duration(seconds: 20));
       final resp = await http.Response.fromStream(streamed);
       final data = _decode(resp.body);
-      final ok = data is Map && (data['success'] == true || data['status'] == 'success');
+      final ok = data is Map &&
+          (data['success'] == true || data['status'] == 'success');
       if (ok) {
         setState(() {
           selectedTeamName = name;
@@ -1523,7 +1635,11 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         }
         Get.snackbar('Готово', 'Данные команды обновлены');
       } else {
-        Get.snackbar('Ошибка', data is Map ? '${data['message'] ?? data['error'] ?? 'Не удалось сохранить'}' : 'Не удалось сохранить');
+        Get.snackbar(
+            'Ошибка',
+            data is Map
+                ? '${data['message'] ?? data['error'] ?? 'Не удалось сохранить'}'
+                : 'Не удалось сохранить');
       }
     } catch (e) {
       Get.snackbar('Сеть', 'Ошибка сохранения: $e');
@@ -1554,6 +1670,9 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     };
 
     switch (section) {
+      case ClubSection.graphics:
+        _openFullGraphics();
+        break;
       case ClubSection.tracker:
         _selectWorkspaceSection(ClubSection.tracker);
         break;
@@ -1586,9 +1705,21 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     }
   }
 
-  void _openCreateTeam() async {
-    await Get.toNamed(AppRoutes.createTeamScreen);
-    _loadAll();
+  void _openCreateTeam() {
+    if (_isClubBasic && teams.length >= 20) {
+      Get.snackbar(
+        'Лимит базовой подписки',
+        'В базовом тарифе доступно до 20 команд.',
+      );
+      return;
+    }
+
+    // Создание команды открывается прямо справа в CMR.
+    setState(() {
+      selectedSection = ClubSection.teams;
+      panelLoading = false;
+      _openCreateTeamInline = true;
+    });
   }
 
   void _openFullTeamDashboard() {
@@ -1644,7 +1775,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
 
     if (section == null || !mounted) return;
 
-    if (section == ClubSection.challengeCreate || section == ClubSection.quizCreate) {
+    if (section == ClubSection.challengeCreate ||
+        section == ClubSection.quizCreate) {
       _openGameModule(section);
       return;
     }
@@ -1687,7 +1819,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
 
     if (section == null || !mounted) return;
 
-    if (section == ClubSection.challengeCreate || section == ClubSection.quizCreate) {
+    if (section == ClubSection.challengeCreate ||
+        section == ClubSection.quizCreate) {
       _openGameModule(section);
       return;
     }
@@ -1696,24 +1829,46 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   }
 
   List<_FullMenuItem> get _fullMenuItems => const [
-        _FullMenuItem(ClubSection.teams, Icons.account_tree_rounded, 'Команды', 'Список команд клуба'),
-        _FullMenuItem(ClubSection.trainers, Icons.badge_rounded, 'Тренеры', 'Специалисты и назначения'),
-        _FullMenuItem(ClubSection.roster, Icons.groups_2_rounded, 'Состав', 'Игроки и профили'),
-        _FullMenuItem(ClubSection.matches, Icons.sports_soccer_rounded, 'Матчи', 'Игры, счет и календарь'),
-        _FullMenuItem(ClubSection.calendar, Icons.calendar_month_rounded, 'Календарь', 'Тренировки и события'),
-        _FullMenuItem(ClubSection.plans, Icons.folder_copy_rounded, 'Планы-конспекты', 'Материалы тренера', pro: true),
-        _FullMenuItem(ClubSection.graphics, Icons.draw_rounded, 'Редактор схем', 'Упражнения и разметка', pro: true),
-        _FullMenuItem(ClubSection.attendance, Icons.fact_check_rounded, 'Посещаемость', 'Журнал занятий', pro: true),
-        _FullMenuItem(ClubSection.testing, Icons.science_rounded, 'Тестирование', 'Физика, техника, тактика', pro: true),
-        _FullMenuItem(ClubSection.medical, Icons.medical_information_rounded, 'Медкарта', 'Состояние игроков'),
-        _FullMenuItem(ClubSection.tracker, Icons.sensors_rounded, 'Трекер', 'GPS, нагрузка и тепловые карты', pro: true),
-        _FullMenuItem(ClubSection.manager, Icons.psychology_alt_rounded, 'Менеджер команды', 'Тактика и состав', pro: true),
-        _FullMenuItem(ClubSection.chat, Icons.forum_rounded, 'Чаты', 'Общение команды'),
-        _FullMenuItem(ClubSection.parents, Icons.family_restroom_rounded, 'Родители', 'Доступы и связь'),
-        _FullMenuItem(ClubSection.miniGames, Icons.videogame_asset_rounded, 'Игровая зона', 'Задания, квизы, рейтинг'),
-        _FullMenuItem(ClubSection.settings, Icons.tune_rounded, 'Настройки', 'Права и модули'),
+        _FullMenuItem(ClubSection.teams, Icons.account_tree_rounded, 'Команды',
+            'Список команд клуба'),
+        _FullMenuItem(ClubSection.trainers, Icons.badge_rounded, 'Тренеры',
+            'Специалисты и назначения'),
+        _FullMenuItem(ClubSection.roster, Icons.groups_2_rounded, 'Состав',
+            'Игроки и профили'),
+        _FullMenuItem(ClubSection.matches, Icons.sports_soccer_rounded, 'Матчи',
+            'Игры, счет и календарь'),
+        // Календарь/расписание входит в базовую подписку: без PRO-замка.
+        _FullMenuItem(ClubSection.calendar, Icons.calendar_month_rounded,
+            'Календарь', 'Тренировки и события'),
+        _FullMenuItem(ClubSection.plans, Icons.folder_copy_rounded,
+            'Планы-конспекты', 'Материалы тренера',
+            pro: true),
+        _FullMenuItem(ClubSection.graphics, Icons.draw_rounded, 'Редактор схем',
+            'Упражнения и разметка',
+            pro: true),
+        _FullMenuItem(ClubSection.attendance, Icons.fact_check_rounded,
+            'Посещаемость', 'Журнал занятий',
+            pro: true),
+        _FullMenuItem(ClubSection.testing, Icons.science_rounded,
+            'Тестирование', 'Физика, техника, тактика',
+            pro: true),
+        _FullMenuItem(ClubSection.medical, Icons.medical_information_rounded,
+            'Медкарта', 'Состояние игроков'),
+        _FullMenuItem(ClubSection.tracker, Icons.sensors_rounded, 'Трекер',
+            'GPS, нагрузка и тепловые карты',
+            pro: true),
+        _FullMenuItem(ClubSection.manager, Icons.psychology_alt_rounded,
+            'Менеджер команды', 'Тактика и состав',
+            pro: true),
+        _FullMenuItem(
+            ClubSection.chat, Icons.forum_rounded, 'Чаты', 'Общение команды'),
+        _FullMenuItem(ClubSection.parents, Icons.family_restroom_rounded,
+            'Родители', 'Доступы и связь'),
+        _FullMenuItem(ClubSection.miniGames, Icons.videogame_asset_rounded,
+            'Игровая зона', 'Задания, квизы, рейтинг'),
+        _FullMenuItem(ClubSection.settings, Icons.tune_rounded, 'Настройки',
+            'Права и модули'),
       ];
-
 
   void _openFullRosterScreen() {
     final activeTeamId = _activeTeamIdOrNull;
@@ -1754,8 +1909,14 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   }
 
   void _openFullGraphics() {
+    final activeTeamId = _activeTeamIdOrNull;
+    if (activeTeamId == null) {
+      Get.snackbar('Команда', 'Сначала выберите команду');
+      return;
+    }
+
     Get.to(() => TrainingGraphicsScreen(
-          teamId: selectedTeamId,
+          teamId: activeTeamId,
           teamName: selectedTeamName,
           clubId: clubId,
           clubName: clubName,
@@ -1832,7 +1993,9 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     if (raw.isEmpty) return null;
 
     // Быстрый отсев HTML-ответов: 404, PHP warning page, редирект и т.п.
-    final lower = raw.length > 80 ? raw.substring(0, 80).toLowerCase() : raw.toLowerCase();
+    final lower = raw.length > 80
+        ? raw.substring(0, 80).toLowerCase()
+        : raw.toLowerCase();
     if (lower.startsWith('<!doctype') || lower.startsWith('<html')) {
       return null;
     }
@@ -1848,7 +2011,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
 
       final start = starts.reduce(math.min);
       final startedWithObject = start == startObj || startArr < 0;
-      final end = startedWithObject ? raw.lastIndexOf('}') : raw.lastIndexOf(']');
+      final end =
+          startedWithObject ? raw.lastIndexOf('}') : raw.lastIndexOf(']');
       if (end <= start) return null;
 
       final sliced = raw.substring(start, end + 1).trim();
@@ -2016,14 +2180,18 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     final profileUserId = await PrefUtils.getUserId();
     if (!mounted) return;
 
-    Get.offAll(
-      () => MyProfileScreen(
-        userId: (profileUserId != null && profileUserId > 0) ? profileUserId : null,
-      ),
-    );
+    Get.offAll<void>(() => const WorkspaceHubScreen());
   }
 
   void _selectWorkspaceSection(ClubSection section) {
+    if (section == ClubSection.graphics) {
+      _openFullGraphics();
+      return;
+    }
+
+    if (section != ClubSection.teams && _openCreateTeamInline) {
+      _openCreateTeamInline = false;
+    }
     if (section == ClubSection.chat) {
       _chatPanelRevision++;
     }
@@ -2039,6 +2207,11 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   }
 
   void _activateInlineSection(ClubSection section) {
+    if (section == ClubSection.graphics) {
+      _openFullGraphics();
+      return;
+    }
+
     if (!_canOpenWorkspaceSection(section)) return;
 
     // Повторное нажатие на «Чаты» всегда возвращает к общему списку.
@@ -2064,6 +2237,30 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   }
 
   bool _canOpenWorkspaceSection(ClubSection section) {
+    // Календарь = рабочее расписание клуба/команды и входит в club_basic.
+    // Держим явное правило, чтобы никакой старый PRO-флаг в меню не
+    // мог закрыть переход на CmrCalendarPanel.
+    if (_isClubBasic && section == ClubSection.calendar) {
+      return true;
+    }
+
+    if (_isClubBasic) {
+      const excludedFromBasic = <ClubSection>{
+        ClubSection.coachDashboard,
+        ClubSection.tracker,
+        ClubSection.videoAnalysis,
+        ClubSection.videoLessons,
+        ClubSection.manager,
+      };
+      if (excludedFromBasic.contains(section)) {
+        Get.snackbar(
+          'Базовая подписка',
+          'Раздел «${_titleFor(section)}» не входит в базовый тариф.',
+        );
+        return false;
+      }
+    }
+
     if (section == ClubSection.tracker && !_hasTeam) {
       Get.snackbar('Команда', 'Сначала выберите команду');
       return false;
@@ -2087,7 +2284,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     for (final item in _fullMenuItems) {
       if (item.section == section) return item;
     }
-    return _FullMenuItem(section, Icons.widgets_rounded, _titleFor(section), _subtitleFor(section));
+    return _FullMenuItem(section, Icons.widgets_rounded, _titleFor(section),
+        _subtitleFor(section));
   }
 
   _WorkspaceWindowState? _workspaceWindowFor(
@@ -2104,6 +2302,11 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   }
 
   void _openModuleWindow(ClubSection section) {
+    if (section == ClubSection.graphics) {
+      _openFullGraphics();
+      return;
+    }
+
     if (section == ClubSection.settings) {
       _openWorkspaceSettings();
       return;
@@ -2146,7 +2349,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     setState(() {
       _openWorkspaceWindows.removeWhere((item) => item.id == window.id);
       if (_openWorkspaceWindows.isNotEmpty) {
-        final sorted = [..._openWorkspaceWindows]..sort((a, b) => b.zIndex.compareTo(a.zIndex));
+        final sorted = [..._openWorkspaceWindows]
+          ..sort((a, b) => b.zIndex.compareTo(a.zIndex));
         selectedSection = sorted.first.section;
       }
     });
@@ -2167,7 +2371,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     });
   }
 
-  void _moveWorkspaceWindow(_WorkspaceWindowState window, Offset delta, Size desktopSize) {
+  void _moveWorkspaceWindow(
+      _WorkspaceWindowState window, Offset delta, Size desktopSize) {
     setState(() {
       window.maximized = false;
       final maxX = math.max(8.0, desktopSize.width - window.size.width - 8);
@@ -2179,11 +2384,14 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     });
   }
 
-  void _resizeWorkspaceWindow(_WorkspaceWindowState window, Offset delta, Size desktopSize) {
+  void _resizeWorkspaceWindow(
+      _WorkspaceWindowState window, Offset delta, Size desktopSize) {
     setState(() {
       window.maximized = false;
-      final maxWidth = math.max(520.0, desktopSize.width - window.position.dx - 12);
-      final maxHeight = math.max(420.0, desktopSize.height - window.position.dy - 102);
+      final maxWidth =
+          math.max(520.0, desktopSize.width - window.position.dx - 12);
+      final maxHeight =
+          math.max(420.0, desktopSize.height - window.position.dy - 102);
       window.size = Size(
         (window.size.width + delta.dx).clamp(520.0, maxWidth).toDouble(),
         (window.size.height + delta.dy).clamp(420.0, maxHeight).toDouble(),
@@ -2191,11 +2399,16 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     });
   }
 
-  void _setDesktopIconPosition(ClubSection section, Offset position, Size desktopSize) {
+  void _setDesktopIconPosition(
+      ClubSection section, Offset position, Size desktopSize) {
     setState(() {
       _desktopIconPositions[section] = Offset(
-        position.dx.clamp(12.0, math.max(12.0, desktopSize.width - 112)).toDouble(),
-        position.dy.clamp(12.0, math.max(12.0, desktopSize.height - 190)).toDouble(),
+        position.dx
+            .clamp(12.0, math.max(12.0, desktopSize.width - 112))
+            .toDouble(),
+        position.dy
+            .clamp(12.0, math.max(12.0, desktopSize.height - 190))
+            .toDouble(),
       );
     });
   }
@@ -2250,7 +2463,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     final professional = _useProfessionalWorkspace(context);
     return base.copyWith(
       scaffoldBackgroundColor: _C.bg,
-      visualDensity: professional ? VisualDensity.compact : VisualDensity.standard,
+      visualDensity:
+          professional ? VisualDensity.compact : VisualDensity.standard,
       materialTapTargetSize: professional
           ? MaterialTapTargetSize.shrinkWrap
           : MaterialTapTargetSize.padded,
@@ -2339,7 +2553,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       return;
     }
 
-    final nextIndex = (index + 1).clamp(0, _mobileSwipeSections.length - 1).toInt();
+    final nextIndex =
+        (index + 1).clamp(0, _mobileSwipeSections.length - 1).toInt();
     if (nextIndex == index) return;
     setState(() => selectedSection = _mobileSwipeSections[nextIndex]);
   }
@@ -2351,7 +2566,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       return;
     }
 
-    final previousIndex = (index - 1).clamp(0, _mobileSwipeSections.length - 1).toInt();
+    final previousIndex =
+        (index - 1).clamp(0, _mobileSwipeSections.length - 1).toInt();
     if (previousIndex == index) return;
     setState(() => selectedSection = _mobileSwipeSections[previousIndex]);
   }
@@ -2407,7 +2623,6 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     );
   }
 
-
   Widget _buildCmrGameZone({CmrGameZoneMode mode = CmrGameZoneMode.all}) {
     final activeTeamId = _activeTeamIdOrNull;
     if (activeTeamId == null) return const _NeedTeam();
@@ -2433,7 +2648,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
             switchInCurve: Curves.easeOutCubic,
             switchOutCurve: Curves.easeOutCubic,
             child: Padding(
-              key: ValueKey('mobile-${selectedSection.name}-${selectedTeamId ?? 0}'),
+              key: ValueKey(
+                  'mobile-${selectedSection.name}-${selectedTeamId ?? 0}'),
               padding: const EdgeInsets.fromLTRB(0, 4, 0, 6),
               child: _buildContent(),
             ),
@@ -2567,10 +2783,12 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     final items = <String>[];
 
     if (clubDescription.trim().isEmpty) items.add('Описание клуба');
-    if (clubLogo == null || clubLogo!.trim().isEmpty) items.add('Логотип клуба');
+    if (clubLogo == null || clubLogo!.trim().isEmpty)
+      items.add('Логотип клуба');
     if (teams.isEmpty) items.add('Команды');
     if (trainers.isEmpty) items.add('Тренеры');
-    if (selectedTeamId == null || selectedTeamId! <= 0) items.add('Активная команда');
+    if (selectedTeamId == null || selectedTeamId! <= 0)
+      items.add('Активная команда');
     if (players.isEmpty) items.add('Игроки активной команды');
     if (events.isEmpty) items.add('События клуба');
 
@@ -2587,7 +2805,9 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
               SizedBox(width: fontSize * 0.5),
               Expanded(
                 child: Text(
-                  items.isEmpty ? 'Профиль клуба заполнен' : 'Что желательно заполнить',
+                  items.isEmpty
+                      ? 'Профиль клуба заполнен'
+                      : 'Что желательно заполнить',
                   style: TextStyle(
                     fontSize: fontSize * 1.02,
                     fontWeight: FontWeight.w700,
@@ -2620,10 +2840,14 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                   vertical: fontSize * 0.42,
                 ),
                 decoration: BoxDecoration(
-                  color: items.isEmpty ? _C.primaryGreen.withOpacity(0.1) : _C.soft2,
+                  color: items.isEmpty
+                      ? _C.primaryGreen.withOpacity(0.1)
+                      : _C.soft2,
                   borderRadius: BorderRadius.circular(99),
                   border: Border.all(
-                    color: items.isEmpty ? _C.primaryGreen.withOpacity(0.25) : _C.border,
+                    color: items.isEmpty
+                        ? _C.primaryGreen.withOpacity(0.25)
+                        : _C.border,
                   ),
                 ),
                 child: Text(
@@ -2649,28 +2873,32 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          Expanded(child: _buildMobileStat(
+          Expanded(
+              child: _buildMobileStat(
             value: '${teams.length}',
             label: 'Команды',
             icon: Icons.account_tree_rounded,
             color: _C.blue,
             fontSize: fontSize,
           )),
-          Expanded(child: _buildMobileStat(
+          Expanded(
+              child: _buildMobileStat(
             value: '${players.length}',
             label: 'Игроки',
             icon: Icons.groups_2_rounded,
             color: _C.primaryGreen,
             fontSize: fontSize,
           )),
-          Expanded(child: _buildMobileStat(
+          Expanded(
+              child: _buildMobileStat(
             value: '${trainers.length}',
             label: 'Тренеры',
             icon: Icons.badge_rounded,
             color: _C.purple,
             fontSize: fontSize,
           )),
-          Expanded(child: _buildMobileStat(
+          Expanded(
+              child: _buildMobileStat(
             value: '${events.length}',
             label: 'События',
             icon: Icons.event_available_rounded,
@@ -2751,8 +2979,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
             decoration: BoxDecoration(
               color: _C.footballGreenSoft,
               borderRadius: BorderRadius.circular(12),
-              border:
-                  Border.all(color: _C.footballGreen.withOpacity(0.2)),
+              border: Border.all(color: _C.footballGreen.withOpacity(0.2)),
             ),
             child: Row(
               children: [
@@ -3001,8 +3228,9 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
           ...events.take(3).map((event) {
             final title =
                 _asString(event['title'] ?? event['name']) ?? 'Событие';
-            final date = _asString(
-                    event['date'] ?? event['event_date'] ?? event['start_date']) ??
+            final date = _asString(event['date'] ??
+                    event['event_date'] ??
+                    event['start_date']) ??
                 'Дата не указана';
             return Container(
               margin: EdgeInsets.only(bottom: fontSize * 0.5),
@@ -3093,8 +3321,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                       SizedBox(height: padding),
                       Text(
                         'Нет команд',
-                        style:
-                            TextStyle(fontSize: fontSize, color: _C.muted),
+                        style: TextStyle(fontSize: fontSize, color: _C.muted),
                       ),
                       SizedBox(height: padding),
                       ElevatedButton.icon(
@@ -3120,22 +3347,16 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                     itemCount: teams.length,
                     itemBuilder: (context, index) {
                       final team = teams[index];
-                      final id =
-                          _asInt(team['id'] ?? team['team_id']);
-                      final name =
-                          _asString(team['name']) ?? 'Команда';
-                      final subtitle =
-                          _asString(team['age_group']) ??
-                              'Футбол';
+                      final id = _asInt(team['id'] ?? team['team_id']);
+                      final name = _asString(team['name']) ?? 'Команда';
+                      final subtitle = _asString(team['age_group']) ?? 'Футбол';
                       final logo = _asString(team['logo']);
                       final isActive = id == selectedTeamId;
 
                       return Card(
-                        margin:
-                            EdgeInsets.only(bottom: padding * 0.75),
+                        margin: EdgeInsets.only(bottom: padding * 0.75),
                         shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(16),
                           side: BorderSide(
                             color: isActive
                                 ? _C.primaryGreen.withOpacity(0.3)
@@ -3145,20 +3366,16 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                         ),
                         elevation: isActive ? 4 : 1,
                         child: ListTile(
-                          contentPadding: EdgeInsets.all(
-                              padding * 0.75),
+                          contentPadding: EdgeInsets.all(padding * 0.75),
                           leading: CircleAvatar(
                             radius: 28,
                             backgroundColor: _C.soft,
-                            backgroundImage:
-                                logo != null && logo.isNotEmpty
-                                    ? NetworkImage(logo)
-                                    : null,
-                            child: logo == null ||
-                                    logo.isEmpty
+                            backgroundImage: logo != null && logo.isNotEmpty
+                                ? NetworkImage(logo)
+                                : null,
+                            child: logo == null || logo.isEmpty
                                 ? Icon(Icons.shield_rounded,
-                                    color: _C.primaryGreen,
-                                    size: 28)
+                                    color: _C.primaryGreen, size: 28)
                                 : null,
                           ),
                           title: Text(
@@ -3166,15 +3383,12 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                             style: TextStyle(
                               fontWeight: FontWeight.w600,
                               fontSize: fontSize,
-                              color: isActive
-                                  ? _C.primaryGreen
-                                  : _C.text,
+                              color: isActive ? _C.primaryGreen : _C.text,
                             ),
                           ),
                           subtitle: Text(
                             subtitle,
-                            style: TextStyle(
-                                fontSize: fontSize * 0.8),
+                            style: TextStyle(fontSize: fontSize * 0.8),
                           ),
                           trailing: isActive
                               ? Container(
@@ -3183,20 +3397,15 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                                     vertical: padding * 0.25,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: _C.primaryGreen
-                                        .withOpacity(0.1),
-                                    borderRadius:
-                                        BorderRadius.circular(
-                                            20),
+                                    color: _C.primaryGreen.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: Text(
                                     'Активна',
                                     style: TextStyle(
                                       color: _C.primaryGreen,
-                                      fontSize:
-                                          fontSize * 0.7,
-                                      fontWeight:
-                                          FontWeight.w700,
+                                      fontSize: fontSize * 0.7,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
                                 )
@@ -3258,8 +3467,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                 children: [
                   IconButton(
                     onPressed: () {
-                      if (selectedTeamId != null &&
-                          selectedTeamId! > 0) {
+                      if (selectedTeamId != null && selectedTeamId! > 0) {
                         Get.toNamed(
                           AppRoutes.addPlayerScreen,
                           arguments: {
@@ -3272,25 +3480,21 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                           },
                         )?.then((_) {
                           if (selectedTeamId != null) {
-                            _loadPlayersForTeam(
-                                selectedTeamId!);
+                            _loadPlayersForTeam(selectedTeamId!);
                           }
                         });
                       } else {
-                        Get.snackbar('Команда',
-                            'Сначала выберите команду');
+                        Get.snackbar('Команда', 'Сначала выберите команду');
                       }
                     },
                     icon: Icon(Icons.person_add_alt_1_rounded,
-                        color: _C.primaryGreen,
-                        size: fontSize * 1.4),
+                        color: _C.primaryGreen, size: fontSize * 1.4),
                   ),
                   SizedBox(width: padding * 0.25),
                   IconButton(
                     onPressed: _openFullRosterScreen,
                     icon: Icon(Icons.open_in_new_rounded,
-                        color: _C.primaryGreen,
-                        size: fontSize * 1.4),
+                        color: _C.primaryGreen, size: fontSize * 1.4),
                   ),
                 ],
               ),
@@ -3308,70 +3512,52 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                       SizedBox(height: padding),
                       Text(
                         'Игроки не найдены',
-                        style: TextStyle(
-                            fontSize: fontSize,
-                            color: _C.muted),
+                        style: TextStyle(fontSize: fontSize, color: _C.muted),
                       ),
                     ],
                   ),
                 )
               : RefreshIndicator(
-                  onRefresh: () =>
-                      selectedTeamId != null
-                          ? _loadPlayersForTeam(selectedTeamId!)
-                          : Future.value(),
+                  onRefresh: () => selectedTeamId != null
+                      ? _loadPlayersForTeam(selectedTeamId!)
+                      : Future.value(),
                   child: ListView.builder(
-                    padding: EdgeInsets.symmetric(
-                        horizontal: padding),
+                    padding: EdgeInsets.symmetric(horizontal: padding),
                     itemCount: players.length,
                     itemBuilder: (context, index) {
                       final player = players[index];
-                      final first =
-                          _asString(player['first_name']) ?? '';
-                      final last =
-                          _asString(player['last_name']) ?? '';
+                      final first = _asString(player['first_name']) ?? '';
+                      final last = _asString(player['last_name']) ?? '';
                       final name = '$first $last'.trim().isEmpty
                           ? 'Игрок'
                           : '$first $last';
                       final position =
-                          _asString(player['position']) ??
-                              'Амплуа';
-                      final photo =
-                          _asString(player['photo']);
-                      final isActive =
-                          selectedPlayer?['id'] ==
-                              player['id'];
+                          _asString(player['position']) ?? 'Амплуа';
+                      final photo = _asString(player['photo']);
+                      final isActive = selectedPlayer?['id'] == player['id'];
 
                       return Card(
-                        margin: EdgeInsets.only(
-                            bottom: padding * 0.5),
+                        margin: EdgeInsets.only(bottom: padding * 0.5),
                         shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(14),
                           side: BorderSide(
-                            color: isActive
-                                ? _C.blue.withOpacity(0.3)
-                                : _C.border,
+                            color:
+                                isActive ? _C.blue.withOpacity(0.3) : _C.border,
                           ),
                         ),
                         child: ListTile(
-                          contentPadding:
-                              EdgeInsets.symmetric(
+                          contentPadding: EdgeInsets.symmetric(
                             horizontal: padding * 0.75,
                             vertical: padding * 0.3,
                           ),
                           leading: CircleAvatar(
                             radius: 22,
                             backgroundColor: _C.soft,
-                            backgroundImage: photo != null &&
-                                    photo.isNotEmpty
+                            backgroundImage: photo != null && photo.isNotEmpty
                                 ? NetworkImage(photo)
                                 : null,
-                            child: photo == null ||
-                                    photo.isEmpty
-                                ? Icon(Icons.person,
-                                    color: _C.muted,
-                                    size: 22)
+                            child: photo == null || photo.isEmpty
+                                ? Icon(Icons.person, color: _C.muted, size: 22)
                                 : null,
                           ),
                           title: Text(
@@ -3379,15 +3565,12 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                             style: TextStyle(
                               fontWeight: FontWeight.w600,
                               fontSize: fontSize * 0.95,
-                              color: isActive
-                                  ? _C.blue
-                                  : _C.text,
+                              color: isActive ? _C.blue : _C.text,
                             ),
                           ),
                           subtitle: Text(
                             position,
-                            style: TextStyle(
-                                fontSize: fontSize * 0.8),
+                            style: TextStyle(fontSize: fontSize * 0.8),
                           ),
                           trailing: isActive
                               ? const Icon(
@@ -3495,7 +3678,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     required double fontSize,
   }) {
     return InkWell(
-      onTap: () => setState(() => selectedSection = section),
+      onTap: () => _selectWorkspaceSection(section),
       borderRadius: BorderRadius.circular(18),
       child: Container(
         decoration: _mobileCardDecoration(radius: 18),
@@ -3532,9 +3715,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
 
   double _mobileBottomDockInset(BuildContext context) {
     final bottom = MediaQuery.paddingOf(context).bottom;
-    return bottom > 0
-        ? math.max(12.0, math.min(16.0, bottom * .45))
-        : 10.0;
+    return bottom > 0 ? math.max(12.0, math.min(16.0, bottom * .45)) : 10.0;
   }
 
   double _mobileBottomDockReservedHeight(BuildContext context) {
@@ -3576,14 +3757,17 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                   Icon(
                     icon,
                     size: active ? 22 : 21,
-                    color: active ? const Color(0xFF111827) : const Color(0xFF344054),
+                    color: active
+                        ? const Color(0xFF111827)
+                        : const Color(0xFF344054),
                   ),
                   if (badge > 0)
                     Positioned(
                       top: 1,
                       right: active ? 6 : 0,
                       child: Container(
-                        constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                        constraints:
+                            const BoxConstraints(minWidth: 16, minHeight: 16),
                         padding: const EdgeInsets.symmetric(horizontal: 4),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFF0050),
@@ -3630,7 +3814,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(.72),
                 borderRadius: BorderRadius.circular(30),
-                border: Border.all(color: Colors.white.withOpacity(.92), width: .9),
+                border:
+                    Border.all(color: Colors.white.withOpacity(.92), width: .9),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(.10),
@@ -3648,12 +3833,32 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
               ),
               child: Row(
                 children: [
-                  dockIcon(index: 0, icon: Icons.home_rounded, onTap: () => _activateInlineSection(ClubSection.teams)),
-                  dockIcon(index: 1, icon: Icons.groups_2_outlined, onTap: () => _activateInlineSection(ClubSection.roster)),
-                  dockIcon(index: 2, icon: Icons.sports_soccer_outlined, onTap: () => _activateInlineSection(ClubSection.matches)),
-                  dockIcon(index: 3, icon: Icons.calendar_month_outlined, onTap: () => _activateInlineSection(ClubSection.calendar)),
-                  dockIcon(index: 4, icon: Icons.near_me_outlined, badge: 1, onTap: () => _activateInlineSection(ClubSection.chat)),
-                  dockIcon(index: 5, icon: Icons.more_horiz_rounded, onTap: _openMobileMoreMenu),
+                  dockIcon(
+                      index: 0,
+                      icon: Icons.home_rounded,
+                      onTap: () => _activateInlineSection(ClubSection.teams)),
+                  dockIcon(
+                      index: 1,
+                      icon: Icons.groups_2_outlined,
+                      onTap: () => _activateInlineSection(ClubSection.roster)),
+                  dockIcon(
+                      index: 2,
+                      icon: Icons.sports_soccer_outlined,
+                      onTap: () => _activateInlineSection(ClubSection.matches)),
+                  dockIcon(
+                      index: 3,
+                      icon: Icons.calendar_month_outlined,
+                      onTap: () =>
+                          _activateInlineSection(ClubSection.calendar)),
+                  dockIcon(
+                      index: 4,
+                      icon: Icons.near_me_outlined,
+                      badge: 1,
+                      onTap: () => _activateInlineSection(ClubSection.chat)),
+                  dockIcon(
+                      index: 5,
+                      icon: Icons.more_horiz_rounded,
+                      onTap: _openMobileMoreMenu),
                 ],
               ),
             ),
@@ -3714,7 +3919,6 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     }
   }
 
-
   void _openMobileMoreMenu() {
     showModalBottomSheet<void>(
       context: context,
@@ -3763,9 +3967,10 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                   width: 38,
                   height: 32,
                   decoration: BoxDecoration(
-                    color: isActive ? _C.primaryGreen.withOpacity(.10) : Colors.transparent,
+                    color: isActive
+                        ? _C.primaryGreen.withOpacity(.10)
+                        : Colors.transparent,
                     borderRadius: BorderRadius.circular(13),
-
                   ),
                   child: Icon(
                     Icons.grid_view_rounded,
@@ -3793,9 +3998,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     );
   }
 
-
-
-    bool _isSectionVisibleActive(ClubSection section) {
+  bool _isSectionVisibleActive(ClubSection section) {
     if (selectedSection == section) return true;
 
     if (section == ClubSection.roster &&
@@ -3811,7 +4014,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     return false;
   }
 
-Widget _buildNavItem({
+  Widget _buildNavItem({
     required IconData icon,
     required String label,
     required ClubSection section,
@@ -3835,9 +4038,10 @@ Widget _buildNavItem({
                   width: 38,
                   height: 32,
                   decoration: BoxDecoration(
-                    color: isActive ? _C.primaryGreen.withOpacity(.10) : Colors.transparent,
+                    color: isActive
+                        ? _C.primaryGreen.withOpacity(.10)
+                        : Colors.transparent,
                     borderRadius: BorderRadius.circular(13),
-
                   ),
                   child: Icon(
                     icon,
@@ -3866,8 +4070,6 @@ Widget _buildNavItem({
     );
   }
 
-
-
   BoxDecoration _mobileCardDecoration({double radius = 16}) {
     return BoxDecoration(
       color: Colors.white,
@@ -3879,6 +4081,139 @@ Widget _buildNavItem({
           offset: const Offset(0, 8),
         ),
       ],
+    );
+  }
+
+  bool _clubContextAiSupported(ClubSection section) {
+    if (clubId <= 0 || currentUserId <= 0) return false;
+    return section != ClubSection.chat &&
+        section != ClubSection.tracker &&
+        section != ClubSection.settings &&
+        section != ClubSection.coachDashboard;
+  }
+
+  int? _contextAiPlayerId() {
+    final raw = selectedPlayer?['id'] ??
+        selectedPlayer?['player_id'] ??
+        selectedPlayer?['playerId'];
+    final value = raw is int ? raw : int.tryParse('${raw ?? ''}');
+    return value != null && value > 0 ? value : null;
+  }
+
+  String? _contextAiPlayerName() {
+    final value =
+        '${selectedPlayer?['name'] ?? selectedPlayer?['full_name'] ?? selectedPlayer?['player_name'] ?? ''}'
+            .trim();
+    return value.isEmpty ? null : value;
+  }
+
+  String _clubContextAiPrompt(ClubSection section) {
+    final playerName = _contextAiPlayerName();
+    final sectionName = _titleFor(section);
+    switch (section) {
+      case ClubSection.overview:
+        return 'Сделай ИИ-сводку дня по клубу «$clubName» и команде «$selectedTeamName». '
+            'Покажи три блока: «Что происходит», «Почему это важно» и «Что сделать тренеру сегодня». '
+            'Учитывай календарь, матчи, тренировки, состав, тестирование и GPS/Polar. Используй только проверенные данные.';
+      case ClubSection.teams:
+      case ClubSection.teamDashboard:
+        return 'Проанализируй текущую команду «$selectedTeamName»: готовность, динамику нагрузки, ближайшие события и риски. '
+            'Дай три приоритетных действия тренеру и объясни каждое только по проверенным данным.';
+      case ClubSection.roster:
+      case ClubSection.playerProfile:
+        return playerName == null
+            ? 'Проанализируй состав команды «$selectedTeamName». Выдели игроков с риском перегрузки, недостатком данных или отрицательной динамикой и предложи действия тренеру.'
+            : 'Сделай контекстный ИИ-профиль игрока $playerName: текущая динамика, нагрузка, восстановление, риски и конкретная рекомендация тренеру. Используй только данные этого игрока.';
+      case ClubSection.matches:
+      case ClubSection.videoAnalysis:
+        return 'Проанализируй контекст раздела «$sectionName» команды «$selectedTeamName»: последние результаты, нагрузку, доступные ТТД/видео и подготовку к следующему матчу. Дай наблюдения, причины и действия.';
+      case ClubSection.calendar:
+      case ClubSection.trainings:
+      case ClubSection.attendance:
+        return 'Проанализируй расписание и тренировочный контекст команды «$selectedTeamName». Найди конфликты нагрузки, посещаемости и восстановления, затем предложи безопасные действия. Ничего не изменяй без отдельного подтверждения.';
+      case ClubSection.testing:
+        return 'Проанализируй тестирование команды «$selectedTeamName»: динамику, лидеров, отстающих и связь результатов с последними тренировками. Дай конкретные рекомендации тренеру.';
+      case ClubSection.plans:
+      case ClubSection.graphics:
+        return 'Предложи следующий тренировочный план для команды «$selectedTeamName» с учётом проверенных данных нагрузки, календаря и выявленных рисков. Объясни цель каждого блока.';
+      default:
+        return 'Проанализируй текущий раздел «$sectionName» команды «$selectedTeamName». Дай три коротких блока: «Что происходит», «Почему» и «Что делать тренеру». Используй только проверенные данные.';
+    }
+  }
+
+  Map<String, dynamic> _clubContextAiPayload(ClubSection section) {
+    final playerId = _contextAiPlayerId();
+    final playerName = _contextAiPlayerName();
+    final playerFocused = playerId != null &&
+        (section == ClubSection.roster || section == ClubSection.playerProfile);
+    return <String, dynamic>{
+      'source': 'club_workspace_context_layer',
+      'workspace_section': section.name,
+      'workspace_section_title': _titleFor(section),
+      'club_id': clubId,
+      'club_name': clubName,
+      if ((selectedTeamId ?? 0) > 0) 'team_id': selectedTeamId,
+      'team_name': selectedTeamName,
+      if (playerFocused) 'player_id': playerId,
+      if (playerFocused && playerName != null) 'player_name': playerName,
+      'selection_mode': playerFocused ? 'single_player' : 'team',
+      'visible_counts': <String, dynamic>{
+        'teams': teams.length,
+        'players': players.length,
+        'trainers': trainers.length,
+        'events': events.length,
+        'plans': latestPlans.length,
+      },
+      'response_contract': const <String>[
+        'what_happens',
+        'why',
+        'coach_action',
+      ],
+    };
+  }
+
+  Widget _withClubContextAiLayer(
+    Widget child, {
+    required double bottomInset,
+  }) {
+    final section = selectedSection;
+    if (!_clubContextAiSupported(section)) return child;
+
+    final expanded = _contextAiExpanded ?? false;
+    final playerId = _contextAiPlayerId();
+    final playerName = _contextAiPlayerName();
+    final playerOnly = playerId != null &&
+        (section == ClubSection.roster || section == ClubSection.playerProfile);
+
+    return CmrContextAiLayer(
+      child: child,
+      expanded: expanded,
+      onToggle: () {
+        setState(() {
+          final next = !expanded;
+          _contextAiExpanded = next;
+          if (next) _contextAiRevision++;
+        });
+      },
+      clubId: clubId,
+      userId: currentUserId,
+      teamId: selectedTeamId,
+      clubName: clubName,
+      teamName: selectedTeamName,
+      contextTitle: _titleFor(section),
+      contextSubtitle:
+          playerOnly && playerName != null ? playerName : selectedTeamName,
+      initialPrompt: _clubContextAiPrompt(section),
+      initialPayload: _clubContextAiPayload(section),
+      panelKey: ValueKey<String>(
+        'club_context_ai_${section.name}_${selectedTeamId ?? 0}_${playerId ?? 0}_$_contextAiRevision',
+      ),
+      bottomInset: bottomInset,
+      playerOnlyMode: playerOnly,
+      playerId: playerOnly ? playerId : null,
+      playerName: playerOnly ? playerName : null,
+      onNavigate: _handleAiNavigate,
+      onOpenPdf: _handleAiOpenDocument,
     );
   }
 
@@ -3896,7 +4231,8 @@ Widget _buildNavItem({
               sidePadding,
               wide ? 98 : 92,
             );
-            final desktopSize = Size(constraints.maxWidth, constraints.maxHeight);
+            final desktopSize =
+                Size(constraints.maxWidth, constraints.maxHeight);
 
             return AnimatedBuilder(
               animation: _introController,
@@ -3935,41 +4271,44 @@ Widget _buildNavItem({
   }
 
   Widget _buildInlineWorkspace(EdgeInsets contentPadding, bool wide) {
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            child: Padding(
-              key: ValueKey(selectedSection.name),
-              padding: contentPadding,
-              child: _buildContent(),
+    return _withClubContextAiLayer(
+      Stack(
+        children: [
+          Positioned.fill(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              child: Padding(
+                key: ValueKey(selectedSection.name),
+                padding: contentPadding,
+                child: _buildContent(),
+              ),
             ),
           ),
-        ),
-        if (panelLoading || refreshing)
-          const Positioned.fill(
-            bottom: 84,
-            child: _WorkspacePanelLoadingOverlay(),
+          if (panelLoading || refreshing)
+            const Positioned.fill(
+              bottom: 84,
+              child: _WorkspacePanelLoadingOverlay(),
+            ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: wide ? 14 : 10,
+            child: _DesktopWorkspaceTaskbar(
+              clubName: clubName,
+              clubLogo: clubLogo,
+              selectedTeamName: selectedTeamName,
+              selectedSection: selectedSection,
+              hasActiveSubscription: hasActiveSubscription,
+              onStart: _openFullModulesMenu,
+              onSearch: _openDesktopCommandMenu,
+              onSelect: _activateInlineSection,
+              onHome: _goHomeFromWorkspace,
+              onRefresh: () => _loadAll(),
+            ),
           ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: wide ? 14 : 10,
-          child: _DesktopWorkspaceTaskbar(
-            clubName: clubName,
-            clubLogo: clubLogo,
-            selectedTeamName: selectedTeamName,
-            selectedSection: selectedSection,
-            hasActiveSubscription: hasActiveSubscription,
-            onStart: _openFullModulesMenu,
-            onSearch: _openDesktopCommandMenu,
-            onSelect: _activateInlineSection,
-            onHome: _goHomeFromWorkspace,
-            onRefresh: () => _loadAll(),
-          ),
-        ),
-      ],
+        ],
+      ),
+      bottomInset: wide ? 94 : 82,
     );
   }
 
@@ -3979,59 +4318,63 @@ Widget _buildNavItem({
         .toList(growable: false)
       ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
 
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Positioned.fill(
-          child: _WorkspaceWallpaper(
-            style: _workspaceWallpaperStyle,
-            clubName: clubName,
-            clubLogo: clubLogo,
-          ),
-        ),
-        if (_showDesktopIcons)
+    return _withClubContextAiLayer(
+      Stack(
+        clipBehavior: Clip.none,
+        children: [
           Positioned.fill(
-            child: _WorkspaceDesktopIconsLayer(
-              desktopSize: desktopSize,
-              items: _workspaceDesktopIcons,
-              iconPositions: _desktopIconPositions,
-              onOpen: _openModuleWindow,
-              onMoved: _setDesktopIconPosition,
+            child: _WorkspaceWallpaper(
+              style: _workspaceWallpaperStyle,
+              clubName: clubName,
+              clubLogo: clubLogo,
             ),
           ),
-        for (final window in visibleWindows)
-          _buildPositionedWorkspaceWindow(window, desktopSize),
-        if (panelLoading || refreshing)
-          const Positioned.fill(
-            bottom: 84,
-            child: _WorkspacePanelLoadingOverlay(),
+          if (_showDesktopIcons)
+            Positioned.fill(
+              child: _WorkspaceDesktopIconsLayer(
+                desktopSize: desktopSize,
+                items: _workspaceDesktopIcons,
+                iconPositions: _desktopIconPositions,
+                onOpen: _openModuleWindow,
+                onMoved: _setDesktopIconPosition,
+              ),
+            ),
+          for (final window in visibleWindows)
+            _buildPositionedWorkspaceWindow(window, desktopSize),
+          if (panelLoading || refreshing)
+            const Positioned.fill(
+              bottom: 84,
+              child: _WorkspacePanelLoadingOverlay(),
+            ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 14,
+            child: _WorkspaceDock(
+              clubName: clubName,
+              clubLogo: clubLogo,
+              selectedTeamName: selectedTeamName,
+              dockSize: _workspaceDockSize,
+              pinnedItems: _workspaceDockItems,
+              openWindows: _openWorkspaceWindows,
+              activeSection: selectedSection,
+              onOpenStart: _openFullModulesMenu,
+              onOpenSearch: _openDesktopCommandMenu,
+              onOpenSettings: _openWorkspaceSettings,
+              onOpenHome: _goHomeFromWorkspace,
+              onRefresh: () => _loadAll(),
+              onOpenSection: _openModuleWindow,
+            ),
           ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 14,
-          child: _WorkspaceDock(
-            clubName: clubName,
-            clubLogo: clubLogo,
-            selectedTeamName: selectedTeamName,
-            dockSize: _workspaceDockSize,
-            pinnedItems: _workspaceDockItems,
-            openWindows: _openWorkspaceWindows,
-            activeSection: selectedSection,
-            onOpenStart: _openFullModulesMenu,
-            onOpenSearch: _openDesktopCommandMenu,
-            onOpenSettings: _openWorkspaceSettings,
-            onOpenHome: _goHomeFromWorkspace,
-            onRefresh: () => _loadAll(),
-            onOpenSection: _openModuleWindow,
-          ),
-        ),
-      ],
+        ],
+      ),
+      bottomInset: 94,
     );
   }
 
   Widget _buildWorkspaceWindowContent(_WorkspaceWindowState window) {
-    if (window.section == ClubSection.playerProfile && window.playerPayload != null) {
+    if (window.section == ClubSection.playerProfile &&
+        window.playerPayload != null) {
       return CmrPlayerProfileScreen(
         player: window.playerPayload!,
         embeddedInWorkspace: true,
@@ -4047,9 +4390,14 @@ Widget _buildNavItem({
   ) {
     final active = selectedSection == window.section;
     final minWidth = math.min(520.0, math.max(360.0, desktopSize.width - 24));
-    final minHeight = math.min(420.0, math.max(300.0, desktopSize.height - 112));
-    final safeWidth = window.size.width.clamp(minWidth, math.max(minWidth, desktopSize.width - 24)).toDouble();
-    final safeHeight = window.size.height.clamp(minHeight, math.max(minHeight, desktopSize.height - 106)).toDouble();
+    final minHeight =
+        math.min(420.0, math.max(300.0, desktopSize.height - 112));
+    final safeWidth = window.size.width
+        .clamp(minWidth, math.max(minWidth, desktopSize.width - 24))
+        .toDouble();
+    final safeHeight = window.size.height
+        .clamp(minHeight, math.max(minHeight, desktopSize.height - 106))
+        .toDouble();
     final maxLeft = math.max(8.0, desktopSize.width - safeWidth - 8);
     final maxTop = math.max(8.0, desktopSize.height - safeHeight - 96);
     final left = window.position.dx.clamp(8.0, maxLeft).toDouble();
@@ -4070,7 +4418,8 @@ Widget _buildNavItem({
       onMinimize: () => _minimizeWorkspaceWindow(window),
       onMaximize: () => _toggleMaximizeWorkspaceWindow(window),
       onDragUpdate: (delta) => _moveWorkspaceWindow(window, delta, desktopSize),
-      onResizeUpdate: (delta) => _resizeWorkspaceWindow(window, delta, desktopSize),
+      onResizeUpdate: (delta) =>
+          _resizeWorkspaceWindow(window, delta, desktopSize),
       child: _buildWorkspaceWindowContent(window),
     );
 
@@ -4225,13 +4574,148 @@ Widget _buildNavItem({
 
   Widget _buildContent() => _buildSectionContent(selectedSection);
 
+  void _handleAiNavigate(
+    String target,
+    Map<String, dynamic> payload,
+  ) {
+    final normalized = target.trim().toLowerCase();
+
+    switch (normalized) {
+      case 'player_profile':
+      case 'player':
+        final rawId =
+            payload['player_id'] ?? payload['id'] ?? payload['playerId'];
+        final playerId = rawId is int ? rawId : int.tryParse('$rawId');
+
+        Map<String, dynamic>? player;
+        if (playerId != null) {
+          for (final item in players) {
+            final map = Map<String, dynamic>.from(item);
+            final id = map['id'] ?? map['player_id'] ?? map['playerId'];
+            if ('$id' == '$playerId') {
+              player = map;
+              break;
+            }
+          }
+        }
+
+        player ??= Map<String, dynamic>.from(payload);
+
+        if ((player['id'] == null && player['player_id'] == null) &&
+            playerId != null) {
+          player['id'] = playerId;
+          player['player_id'] = playerId;
+        }
+
+        _openPlayerProfileWindow(player);
+        return;
+
+      case 'tracker':
+      case 'session':
+      case 'analytics':
+        setState(() {
+          selectedSection = ClubSection.tracker;
+        });
+        return;
+
+      case 'report':
+      case 'reports':
+        // Отчёты по сессиям находятся внутри модуля трекера.
+        setState(() {
+          selectedSection = ClubSection.tracker;
+        });
+        return;
+
+      case 'training_graphics':
+      case 'graphics':
+      case 'tactical_board':
+        _openFullGraphics();
+        return;
+
+      case 'calendar':
+      case 'training':
+      case 'event':
+        setState(() {
+          selectedSection = ClubSection.calendar;
+        });
+        return;
+
+      case 'match':
+      case 'matches':
+        setState(() {
+          selectedSection = ClubSection.matches;
+        });
+        return;
+
+      case 'attendance':
+        setState(() {
+          selectedSection = ClubSection.attendance;
+        });
+        return;
+
+      case 'testing':
+      case 'tests':
+        setState(() {
+          selectedSection = ClubSection.testing;
+        });
+        return;
+
+      case 'plans':
+      case 'plan':
+        setState(() {
+          selectedSection = ClubSection.plans;
+        });
+        return;
+
+      case 'roster':
+      case 'players':
+        setState(() {
+          selectedSection = ClubSection.roster;
+        });
+        return;
+
+      case 'teams':
+        setState(() {
+          selectedSection = ClubSection.teams;
+        });
+        return;
+
+      default:
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Переход «$target» пока не подключён.',
+            ),
+          ),
+        );
+    }
+  }
+
+  Future<void> _handleAiOpenDocument(String url) async {
+    await Clipboard.setData(
+      ClipboardData(text: url),
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Ссылка на документ скопирована.',
+        ),
+      ),
+    );
+  }
+
   Widget _buildSectionContent(ClubSection section) {
     switch (section) {
       case ClubSection.coachDashboard:
         return _TeamModulePanel(
           hasTeam: _hasTeam,
           title: 'Панель трекера',
-          subtitle: 'Откройте центр GPS-трекинга команды: онлайн, подключение трекеров, активность и отчёты.',
+          subtitle:
+              'Откройте центр GPS-трекинга команды: онлайн, подключение трекеров, активность и отчёты.',
           icon: Icons.sensors_rounded,
           primaryText: 'Открыть центр трекинга',
           onPrimary: _openFullTracker,
@@ -4268,27 +4752,62 @@ Widget _buildNavItem({
           onCreateTeam: _openCreateTeam,
           onEditClub: _openEditClubDialog,
           onEditTeam: _openEditTeamDialog,
-          onOpenTeams: () => setState(() => selectedSection = ClubSection.teams),
-          onOpenRoster: () => setState(() => selectedSection = ClubSection.roster),
-          onOpenTrainers: () => setState(() => selectedSection = ClubSection.trainers),
-          onOpenMatches: () => setState(() => selectedSection = ClubSection.matches),
-          onOpenCalendar: () => setState(() => selectedSection = ClubSection.calendar),
-          onOpenPlans: () => setState(() => selectedSection = ClubSection.plans),
+          onOpenTeams: () =>
+              setState(() => selectedSection = ClubSection.teams),
+          onOpenRoster: () =>
+              setState(() => selectedSection = ClubSection.roster),
+          onOpenTrainers: () =>
+              setState(() => selectedSection = ClubSection.trainers),
+          onOpenMatches: () =>
+              setState(() => selectedSection = ClubSection.matches),
+          onOpenCalendar: () =>
+              setState(() => selectedSection = ClubSection.calendar),
+          onOpenPlans: () =>
+              setState(() => selectedSection = ClubSection.plans),
           onOpenChats: () => setState(() => selectedSection = ClubSection.chat),
         );
       case ClubSection.teams:
         return CmrClubTeamsPanel(
           clubId: clubId,
           clubName: clubName,
+          currentUserId: currentUserId,
+          openCreateTeam: _openCreateTeamInline,
+          onCreateModeChanged: (open) {
+            if (!mounted || _openCreateTeamInline == open) return;
+            setState(() => _openCreateTeamInline = open);
+          },
           teams: teams,
           selectedTeamId: selectedTeamId,
           selectedTeamName: selectedTeamName,
-          onSelectTeam: (team) => _selectTeam(team, openTeam: false),
-          onOpenTeam: (team) => _selectTeam(team, openTeam: true),
+          maxTeams: _isClubBasic ? 20 : null,
+          maxPlayersPerTeam: _isClubBasic ? 20 : null,
+          onSelectTeam: (team) {
+            if (_openCreateTeamInline) {
+              setState(() => _openCreateTeamInline = false);
+            }
+            _selectTeam(team, openTeam: false);
+          },
+
+          // «Обзор» больше не ведёт в старый TeamDashboardScreen:
+          // остаёмся в CMR и показываем описание/новости справа.
+          onOpenTeam: (team) {
+            if (_openCreateTeamInline) {
+              setState(() => _openCreateTeamInline = false);
+            }
+            _selectTeam(team, openTeam: false);
+          },
           onCreateTeam: _openCreateTeam,
           onRefresh: () => _loadAll(),
-          onOpenRoster: () => setState(() => selectedSection = ClubSection.roster),
-          onOpenTrainers: () => setState(() => selectedSection = ClubSection.trainers),
+          onOpenRoster: () => _selectWorkspaceSection(ClubSection.roster),
+          onOpenTrainers: () => _selectWorkspaceSection(ClubSection.trainers),
+          onOpenCalendar: () => _selectWorkspaceSection(ClubSection.calendar),
+          onOpenPlans: () => _selectWorkspaceSection(ClubSection.plans),
+          onOpenTrainings: () => _selectWorkspaceSection(ClubSection.calendar),
+          onOpenTesting: () => _selectWorkspaceSection(ClubSection.testing),
+          onOpenChats: null,
+          events: events,
+          latestPlans: latestPlans,
+          players: players,
         );
       case ClubSection.teamDashboard:
         return _TeamModulePanel(
@@ -4318,12 +4837,14 @@ Widget _buildNavItem({
             players: players,
             loading: loadingPlayers,
             selectedPlayer: selectedPlayer,
+            maxPlayers: _isClubBasic ? 20 : null,
             onRefresh: selectedTeamId == null
                 ? null
                 : () => _loadPlayersForTeam(selectedTeamId!),
             onOpenPlayer: _openPlayer,
             onOpenFullPlayer: _openPlayerProfileWindow,
             onOpenFullRoster: _openFullRosterScreen,
+            onDeletePlayer: _deletePlayerFromRoster,
             onAddPlayer: () {
               if (selectedTeamId == null || selectedTeamId! <= 0) {
                 Get.snackbar('Команда', 'Сначала выберите команду');
@@ -4360,8 +4881,10 @@ Widget _buildNavItem({
             await _safeLoad(_loadTrainers);
             if (mounted) setState(() {});
           },
-          onOpenTeams: () => setState(() => selectedSection = ClubSection.teams),
-          onOpenRoster: () => setState(() => selectedSection = ClubSection.roster),
+          onOpenTeams: () =>
+              setState(() => selectedSection = ClubSection.teams),
+          onOpenRoster: () =>
+              setState(() => selectedSection = ClubSection.roster),
         );
       case ClubSection.playerProfile:
         return _TeamGuard(
@@ -4369,13 +4892,11 @@ Widget _buildNavItem({
           child: _PlayerPanel(
             player: selectedPlayer,
             teamName: selectedTeamName,
-            onBack: () =>
-                setState(() => selectedSection = ClubSection.roster),
+            onBack: () => setState(() => selectedSection = ClubSection.roster),
             onOpenFull: selectedPlayer == null
                 ? null
                 : () {
-                    final mp =
-                        Map<String, dynamic>.from(selectedPlayer!);
+                    final mp = Map<String, dynamic>.from(selectedPlayer!);
 
                     mp['team_id'] = selectedTeamId;
                     mp['teamId'] = selectedTeamId;
@@ -4415,8 +4936,7 @@ Widget _buildNavItem({
           hasTeam: _hasTeam,
           onOpenPlans: () =>
               setState(() => selectedSection = ClubSection.plans),
-          onOpenGraphics: () =>
-              setState(() => selectedSection = ClubSection.graphics),
+          onOpenGraphics: _openFullGraphics,
           onOpenCalendar: () =>
               setState(() => selectedSection = ClubSection.calendar),
           onOpenFullTeam: _openFullTeamDashboard,
@@ -4430,18 +4950,13 @@ Widget _buildNavItem({
                 teamId: selectedTeamId,
                 teamName: selectedTeamName));
       case ClubSection.graphics:
-        return _TeamModulePanel(
-          hasTeam: _hasTeam,
-          title: 'Графический редактор',
-          subtitle:
-              'Тактические схемы, упражнения и визуальные конспекты.',
-          icon: Icons.draw_rounded,
-          primaryText: 'Открыть редактор',
-          onPrimary: _openFullGraphics,
-          quickActions: [
-            _ModuleQuickAction('Планы', Icons.folder_copy_rounded,
-                () => setState(() => selectedSection = ClubSection.plans)),
-          ],
+        final graphicsTeamId = _activeTeamIdOrNull;
+        if (graphicsTeamId == null) return const _NeedTeam();
+        return TrainingGraphicsScreen(
+          teamId: graphicsTeamId,
+          teamName: selectedTeamName,
+          clubId: clubId,
+          clubName: clubName,
         );
       case ClubSection.tracker:
         if (!_hasTeam || selectedTeamId == null || selectedTeamId! <= 0) {
@@ -4516,9 +5031,12 @@ Widget _buildNavItem({
         return CmrChatsPanel(
           key: ValueKey('cmr-chats-$_chatPanelRevision'),
           userId: userId,
+          clubId: clubId,
           clubName: clubName,
           teamId: selectedTeamId,
           teamName: selectedTeamName,
+          onAiNavigate: _handleAiNavigate,
+          onAiOpenPdf: _handleAiOpenDocument,
         );
       case ClubSection.videoLessons:
         return _TeamModulePanel(
@@ -4532,8 +5050,7 @@ Widget _buildNavItem({
           quickActions: [
             _ModuleQuickAction('Планы', Icons.folder_copy_rounded,
                 () => setState(() => selectedSection = ClubSection.plans)),
-            _ModuleQuickAction('Графика', Icons.draw_rounded,
-                () => setState(() => selectedSection = ClubSection.graphics)),
+            _ModuleQuickAction('Графика', Icons.draw_rounded, _openFullGraphics),
             _ModuleQuickAction('Состав', Icons.groups_2_rounded,
                 () => setState(() => selectedSection = ClubSection.roster)),
           ],
@@ -4587,19 +5104,32 @@ Widget _buildNavItem({
       case ClubSection.miniGames:
         return _buildCmrGameZone();
       case ClubSection.medical:
-        return const _SolidPlaceholder(
-            icon: Icons.medical_information_rounded,
-            title: 'Медкарта игроков',
-            subtitle:
-                'Здесь можно подключить медицинские записи, травмы, осмотры, вакцинации и документы по игрокам.',
-            chips: ['Осмотры', 'Травмы', 'Вакцинация', 'Документы', 'История']);
+        {
+          final medicalTeamId = _activeTeamIdOrNull;
+          if (medicalTeamId == null) return const _NeedTeam();
+          return CmrMedicalCabinetPanel(
+            clubId: clubId,
+            clubName: clubName,
+            teamId: medicalTeamId,
+            teamName: selectedTeamName,
+            players: players,
+          );
+        }
       case ClubSection.parents:
-        return const _SolidPlaceholder(
-            icon: Icons.family_restroom_rounded,
-            title: 'Родители и доступы',
-            subtitle:
-                'Раздел для доступа родителей к данным ребёнка, уведомлений, согласований и общения.',
-            chips: ['Доступы', 'Уведомления', 'Чат', 'Карточки детей']);
+        {
+          final parentsTeamId = _activeTeamIdOrNull;
+          if (parentsTeamId == null) return const _NeedTeam();
+          return CmrClubParentsPanel(
+            clubId: clubId,
+            clubName: clubName,
+            selectedTeamId: parentsTeamId,
+            selectedTeamName: selectedTeamName,
+            players: players,
+            currentUserId: currentUserId,
+            maxParents: _isClubBasic ? 20 : null,
+            onOpenPlayer: (player) => _openPlayerProfileWindow(player),
+          );
+        }
       case ClubSection.settings:
         return const _SolidPlaceholder(
             icon: Icons.tune_rounded,
@@ -4610,7 +5140,6 @@ Widget _buildNavItem({
     }
   }
 }
-
 
 class _SmallActionChip extends StatelessWidget {
   final IconData icon;
@@ -4654,7 +5183,6 @@ class _SmallActionChip extends StatelessWidget {
     );
   }
 }
-
 
 class _WorkspaceGlassGlow extends StatelessWidget {
   final double size;
@@ -4866,7 +5394,8 @@ class _WorkspaceLoadingScreen extends StatefulWidget {
   const _WorkspaceLoadingScreen();
 
   @override
-  State<_WorkspaceLoadingScreen> createState() => _WorkspaceLoadingScreenState();
+  State<_WorkspaceLoadingScreen> createState() =>
+      _WorkspaceLoadingScreenState();
 }
 
 class _WorkspaceLoadingScreenState extends State<_WorkspaceLoadingScreen>
@@ -4906,7 +5435,8 @@ class _WorkspaceLoadingScreenState extends State<_WorkspaceLoadingScreen>
             animation: _controller,
             builder: (context, _) {
               final eased = Curves.easeOutCubic.transform(_controller.value);
-              final progress = (0.08 + eased * 0.86).clamp(0.0, 0.94).toDouble();
+              final progress =
+                  (0.08 + eased * 0.86).clamp(0.0, 0.94).toDouble();
 
               return Column(
                 mainAxisSize: MainAxisSize.min,
@@ -4917,7 +5447,8 @@ class _WorkspaceLoadingScreenState extends State<_WorkspaceLoadingScreen>
                     decoration: BoxDecoration(
                       color: _C.primaryGreen.withOpacity(.10),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: _C.primaryGreen.withOpacity(.20)),
+                      border:
+                          Border.all(color: _C.primaryGreen.withOpacity(.20)),
                     ),
                     child: const Icon(
                       Icons.dashboard_customize_rounded,
@@ -5094,8 +5625,6 @@ class _WorkspacePanelLoadingOverlay extends StatelessWidget {
   }
 }
 
-
-
 const List<_NavGroup> _clubWorkspaceNavGroups = [
   _NavGroup('Клуб', [
     _NavItem(
@@ -5246,23 +5775,36 @@ class _DesktopWorkspaceTaskbar extends StatelessWidget {
   });
 
   static const List<_NavItem> _taskbarItems = [
-    _NavItem(ClubSection.teams, Icons.account_tree_rounded, 'Команды', subtitle: 'Команды клуба'),
-    _NavItem(ClubSection.roster, Icons.groups_2_rounded, 'Состав', subtitle: 'Игроки команды'),
-    _NavItem(ClubSection.trainers, Icons.badge_rounded, 'Тренеры', subtitle: 'Тренеры клуба'),
-    _NavItem(ClubSection.matches, Icons.sports_soccer_rounded, 'Матчи', subtitle: 'Матчи и отчёты'),
-    _NavItem(ClubSection.calendar, Icons.calendar_month_rounded, 'Календарь', subtitle: 'Расписание'),
-    _NavItem(ClubSection.plans, Icons.folder_copy_rounded, 'Планы', subtitle: 'Планы-конспекты', pro: true),
-    _NavItem(ClubSection.testing, Icons.science_rounded, 'Тесты', subtitle: 'Тестирование', pro: true),
-    _NavItem(ClubSection.tracker, Icons.sensors_rounded, 'Трекер', subtitle: 'GPS-трекинг', pro: true),
-    _NavItem(ClubSection.chat, Icons.forum_rounded, 'Чаты', subtitle: 'Командное общение'),
-    _NavItem(ClubSection.manager, Icons.psychology_alt_rounded, 'Тактика', subtitle: 'Менеджер команды', pro: true),
+    _NavItem(ClubSection.teams, Icons.account_tree_rounded, 'Команды',
+        subtitle: 'Команды клуба'),
+    _NavItem(ClubSection.roster, Icons.groups_2_rounded, 'Состав',
+        subtitle: 'Игроки команды'),
+    _NavItem(ClubSection.trainers, Icons.badge_rounded, 'Тренеры',
+        subtitle: 'Тренеры клуба'),
+    _NavItem(ClubSection.matches, Icons.sports_soccer_rounded, 'Матчи',
+        subtitle: 'Матчи и отчёты'),
+    _NavItem(ClubSection.calendar, Icons.calendar_month_rounded, 'Календарь',
+        subtitle: 'Расписание'),
+    _NavItem(ClubSection.plans, Icons.folder_copy_rounded, 'Планы',
+        subtitle: 'Планы-конспекты', pro: true),
+    _NavItem(ClubSection.testing, Icons.science_rounded, 'Тесты',
+        subtitle: 'Тестирование', pro: true),
+    _NavItem(ClubSection.tracker, Icons.sensors_rounded, 'Трекер',
+        subtitle: 'GPS-трекинг', pro: true),
+    _NavItem(ClubSection.chat, Icons.forum_rounded, 'Чаты',
+        subtitle: 'Командное общение'),
+    _NavItem(ClubSection.manager, Icons.psychology_alt_rounded, 'Тактика',
+        subtitle: 'Менеджер команды', pro: true),
   ];
 
   bool _isActive(ClubSection section) {
     if (selectedSection == section) return true;
-    if (section == ClubSection.teams && selectedSection == ClubSection.teamDashboard) return true;
-    if (section == ClubSection.roster && selectedSection == ClubSection.playerProfile) return true;
-    if (section == ClubSection.trainers && selectedSection == ClubSection.teamTrainers) return true;
+    if (section == ClubSection.teams &&
+        selectedSection == ClubSection.teamDashboard) return true;
+    if (section == ClubSection.roster &&
+        selectedSection == ClubSection.playerProfile) return true;
+    if (section == ClubSection.trainers &&
+        selectedSection == ClubSection.teamTrainers) return true;
     return false;
   }
 
@@ -5281,7 +5823,8 @@ class _DesktopWorkspaceTaskbar extends StatelessWidget {
           child: Container(
             height: veryCompact ? 58 : 62,
             margin: const EdgeInsets.symmetric(horizontal: 8),
-            padding: EdgeInsets.symmetric(horizontal: compact ? 7 : 10, vertical: 7),
+            padding:
+                EdgeInsets.symmetric(horizontal: compact ? 7 : 10, vertical: 7),
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(.97),
               borderRadius: BorderRadius.circular(21),
@@ -5410,7 +5953,8 @@ class _TaskbarSearchButton extends StatelessWidget {
               border: Border.all(color: _C.borderSoft),
             ),
             child: Row(
-              mainAxisAlignment: compact ? MainAxisAlignment.center : MainAxisAlignment.start,
+              mainAxisAlignment:
+                  compact ? MainAxisAlignment.center : MainAxisAlignment.start,
               children: [
                 const Icon(Icons.search_rounded, color: _C.railText, size: 21),
                 if (!compact) ...[
@@ -5559,7 +6103,8 @@ class _TaskbarAppButtonState extends State<_TaskbarAppButton> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(widget.item.icon, color: iconColor, size: widget.showLabel ? 20 : 22),
+                      Icon(widget.item.icon,
+                          color: iconColor, size: widget.showLabel ? 20 : 22),
                       if (widget.showLabel) ...[
                         const SizedBox(height: 4),
                         Text(
@@ -5645,7 +6190,9 @@ class _TaskbarTeamPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final safeTeam = selectedTeamName.trim().isEmpty ? 'Команда не выбрана' : selectedTeamName.trim();
+    final safeTeam = selectedTeamName.trim().isEmpty
+        ? 'Команда не выбрана'
+        : selectedTeamName.trim();
 
     return Tooltip(
       message: 'Активная команда: $safeTeam',
@@ -5728,10 +6275,12 @@ class _DesktopCommandMenuOverlay extends StatefulWidget {
   });
 
   @override
-  State<_DesktopCommandMenuOverlay> createState() => _DesktopCommandMenuOverlayState();
+  State<_DesktopCommandMenuOverlay> createState() =>
+      _DesktopCommandMenuOverlayState();
 }
 
-class _DesktopCommandMenuOverlayState extends State<_DesktopCommandMenuOverlay> {
+class _DesktopCommandMenuOverlayState
+    extends State<_DesktopCommandMenuOverlay> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   String _query = '';
@@ -5753,9 +6302,12 @@ class _DesktopCommandMenuOverlayState extends State<_DesktopCommandMenuOverlay> 
 
   bool _isActive(ClubSection section) {
     if (widget.selectedSection == section) return true;
-    if (section == ClubSection.teams && widget.selectedSection == ClubSection.teamDashboard) return true;
-    if (section == ClubSection.roster && widget.selectedSection == ClubSection.playerProfile) return true;
-    if (section == ClubSection.trainers && widget.selectedSection == ClubSection.teamTrainers) return true;
+    if (section == ClubSection.teams &&
+        widget.selectedSection == ClubSection.teamDashboard) return true;
+    if (section == ClubSection.roster &&
+        widget.selectedSection == ClubSection.playerProfile) return true;
+    if (section == ClubSection.trainers &&
+        widget.selectedSection == ClubSection.teamTrainers) return true;
     return false;
   }
 
@@ -5780,7 +6332,8 @@ class _DesktopCommandMenuOverlayState extends State<_DesktopCommandMenuOverlay> 
         child: Center(
           child: Container(
             width: math.min(760.0, width - 24),
-            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * .78),
+            constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * .78),
             padding: EdgeInsets.all(compact ? 12 : 14),
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(.98),
@@ -5799,14 +6352,17 @@ class _DesktopCommandMenuOverlayState extends State<_DesktopCommandMenuOverlay> 
               children: [
                 Row(
                   children: [
-                    _LogoBox(url: widget.clubLogo, size: 42, bgColor: _C.railPanel),
+                    _LogoBox(
+                        url: widget.clubLogo, size: 42, bgColor: _C.railPanel),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            widget.clubName.trim().isEmpty ? 'Кабинет клуба' : widget.clubName.trim(),
+                            widget.clubName.trim().isEmpty
+                                ? 'Кабинет клуба'
+                                : widget.clubName.trim(),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -5818,7 +6374,9 @@ class _DesktopCommandMenuOverlayState extends State<_DesktopCommandMenuOverlay> 
                           ),
                           const SizedBox(height: 5),
                           Text(
-                            widget.selectedTeamName.trim().isEmpty ? 'Команда не выбрана' : widget.selectedTeamName.trim(),
+                            widget.selectedTeamName.trim().isEmpty
+                                ? 'Команда не выбрана'
+                                : widget.selectedTeamName.trim(),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -5846,7 +6404,8 @@ class _DesktopCommandMenuOverlayState extends State<_DesktopCommandMenuOverlay> 
                   textInputAction: TextInputAction.search,
                   decoration: InputDecoration(
                     hintText: 'Найти модуль: матчи, календарь, тестирование…',
-                    prefixIcon: const Icon(Icons.search_rounded, color: _C.railMuted),
+                    prefixIcon:
+                        const Icon(Icons.search_rounded, color: _C.railMuted),
                     suffixIcon: _query.isEmpty
                         ? null
                         : IconButton(
@@ -5858,7 +6417,8 @@ class _DesktopCommandMenuOverlayState extends State<_DesktopCommandMenuOverlay> 
                           ),
                     filled: true,
                     fillColor: _C.railPanel,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 15),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(18),
                       borderSide: BorderSide.none,
@@ -5878,14 +6438,17 @@ class _DesktopCommandMenuOverlayState extends State<_DesktopCommandMenuOverlay> 
                           shrinkWrap: true,
                           physics: const BouncingScrollPhysics(),
                           itemCount: items.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 8),
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 8),
                           itemBuilder: (context, index) {
                             final item = items[index];
                             return _CommandMenuTile(
                               item: item,
                               active: _isActive(item.section),
-                              proLocked: item.pro && !widget.hasActiveSubscription,
-                              onTap: () => Navigator.of(context).pop(item.section),
+                              proLocked:
+                                  item.pro && !widget.hasActiveSubscription,
+                              onTap: () =>
+                                  Navigator.of(context).pop(item.section),
                             );
                           },
                         ),
@@ -5928,7 +6491,8 @@ class _CommandMenuTile extends StatelessWidget {
           decoration: BoxDecoration(
             color: active ? _C.softFor(accent) : _C.railPanel,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: active ? accent.withOpacity(.22) : _C.borderSoft),
+            border: Border.all(
+                color: active ? accent.withOpacity(.22) : _C.borderSoft),
           ),
           child: Row(
             children: [
@@ -5939,7 +6503,8 @@ class _CommandMenuTile extends StatelessWidget {
                   color: active ? accent : Colors.white,
                   borderRadius: BorderRadius.circular(15),
                 ),
-                child: Icon(item.icon, color: active ? Colors.white : accent, size: 21),
+                child: Icon(item.icon,
+                    color: active ? Colors.white : accent, size: 21),
               ),
               const SizedBox(width: 11),
               Expanded(
@@ -5964,7 +6529,8 @@ class _CommandMenuTile extends StatelessWidget {
                         if (proLocked)
                           Container(
                             margin: const EdgeInsets.only(left: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 7, vertical: 3),
                             decoration: BoxDecoration(
                               color: _C.orangeSoft,
                               borderRadius: BorderRadius.circular(999),
@@ -6049,7 +6615,6 @@ class _CommandMenuEmptyState extends StatelessWidget {
     );
   }
 }
-
 
 class _Sidebar extends StatelessWidget {
   final String clubName;
@@ -6160,25 +6725,35 @@ class _Sidebar extends StatelessWidget {
   }
 
   int _teamId(Map<String, dynamic> team) {
-    final raw = team['id'] ?? team['team_id'] ?? team['teamId'] ?? team['teamID'];
+    final raw =
+        team['id'] ?? team['team_id'] ?? team['teamId'] ?? team['teamID'];
     if (raw is int) return raw;
     return int.tryParse(raw?.toString() ?? '') ?? 0;
   }
 
   String _teamName(Map<String, dynamic> team) {
-    final raw = team['name'] ?? team['team_name'] ?? team['teamName'] ?? team['title'];
+    final raw =
+        team['name'] ?? team['team_name'] ?? team['teamName'] ?? team['title'];
     final value = raw?.toString().trim() ?? '';
     return value.isEmpty || value == 'null' ? 'Команда' : value;
   }
 
   String _teamSubtitle(Map<String, dynamic> team) {
-    final raw = team['age_group'] ?? team['team_age'] ?? team['sport'] ?? team['category'];
+    final raw = team['age_group'] ??
+        team['team_age'] ??
+        team['sport'] ??
+        team['category'];
     final value = raw?.toString().trim() ?? '';
     return value.isEmpty || value == 'null' ? 'Команда клуба' : value;
   }
 
   String? _teamLogo(Map<String, dynamic> team) {
-    final raw = team['logo'] ?? team['logo_url'] ?? team['team_logo'] ?? team['teamLogo'] ?? team['photo'] ?? team['image'];
+    final raw = team['logo'] ??
+        team['logo_url'] ??
+        team['team_logo'] ??
+        team['teamLogo'] ??
+        team['photo'] ??
+        team['image'];
     final value = raw?.toString().trim() ?? '';
     return value.isEmpty || value == 'null' ? null : value;
   }
@@ -6208,7 +6783,8 @@ class _Sidebar extends StatelessWidget {
         final isWide = size.width >= 760;
 
         return Padding(
-          padding: EdgeInsets.fromLTRB(isWide ? 24 : 12, 0, isWide ? 24 : 12, 14),
+          padding:
+              EdgeInsets.fromLTRB(isWide ? 24 : 12, 0, isWide ? 24 : 12, 14),
           child: Center(
             child: Container(
               constraints: BoxConstraints(
@@ -6333,7 +6909,9 @@ class _Sidebar extends StatelessWidget {
     final safeClubName = clubName.trim().isEmpty ? 'Клуб' : clubName.trim();
     final activeTeam = _activeTeam();
     final safeTeamName = activeTeam == null
-        ? (selectedTeamName.trim().isEmpty ? 'Команда' : selectedTeamName.trim())
+        ? (selectedTeamName.trim().isEmpty
+            ? 'Команда'
+            : selectedTeamName.trim())
         : _teamName(activeTeam);
     final teamLogo = activeTeam == null ? null : _teamLogo(activeTeam);
     final navItems = _flatNavItems;
@@ -6398,7 +6976,8 @@ class _Sidebar extends StatelessWidget {
           const SizedBox(height: 6),
           Expanded(
             child: ListView.separated(
-              padding: EdgeInsets.symmetric(horizontal: screenWidth >= 1280 ? 10 : 8, vertical: 8),
+              padding: EdgeInsets.symmetric(
+                  horizontal: screenWidth >= 1280 ? 10 : 8, vertical: 8),
               physics: const BouncingScrollPhysics(),
               itemCount: navItems.length,
               separatorBuilder: (_, __) => const SizedBox(height: 6),
@@ -6418,7 +6997,8 @@ class _Sidebar extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: screenWidth >= 1280 ? 10 : 8),
+            padding:
+                EdgeInsets.symmetric(horizontal: screenWidth >= 1280 ? 10 : 8),
             child: Column(
               children: [
                 _ClubRailUtilityButton(
@@ -6630,7 +7210,6 @@ class _SidebarSectionTitle extends StatelessWidget {
   }
 }
 
-
 class _CompactSidebarActionButton extends StatefulWidget {
   final IconData icon;
   final String label;
@@ -6645,16 +7224,20 @@ class _CompactSidebarActionButton extends StatefulWidget {
   });
 
   @override
-  State<_CompactSidebarActionButton> createState() => _CompactSidebarActionButtonState();
+  State<_CompactSidebarActionButton> createState() =>
+      _CompactSidebarActionButtonState();
 }
 
-class _CompactSidebarActionButtonState extends State<_CompactSidebarActionButton> {
+class _CompactSidebarActionButtonState
+    extends State<_CompactSidebarActionButton> {
   bool _hovered = false;
 
   @override
   Widget build(BuildContext context) {
-    final bgColor = _hovered ? widget.accent.withOpacity(.06) : Colors.transparent;
-    final borderColor = _hovered ? widget.accent.withOpacity(.10) : Colors.transparent;
+    final bgColor =
+        _hovered ? widget.accent.withOpacity(.06) : Colors.transparent;
+    final borderColor =
+        _hovered ? widget.accent.withOpacity(.10) : Colors.transparent;
     final iconBgColor = _hovered ? Colors.white : _C.soft2;
 
     return MouseRegion(
@@ -6795,35 +7378,40 @@ class _ClubRailUtilityButtonState extends State<_ClubRailUtilityButton> {
                 SizedBox(
                   width: double.infinity,
                   child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: Center(
-                      child: widget.imageUrl != null && widget.imageUrl!.trim().isNotEmpty
-                          ? _LogoBox(url: widget.imageUrl, size: 24, bgColor: Colors.white)
-                          : Icon(widget.icon, color: iconColor, size: 21),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  SizedBox(
-                    width: double.infinity,
-                    child: Text(
-                      widget.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: textColor,
-                        fontSize: 9.1,
-                        height: 1.0,
-                        fontWeight: selected ? FontWeight.w600 : FontWeight.w600,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: Center(
+                          child: widget.imageUrl != null &&
+                                  widget.imageUrl!.trim().isNotEmpty
+                              ? _LogoBox(
+                                  url: widget.imageUrl,
+                                  size: 24,
+                                  bgColor: Colors.white)
+                              : Icon(widget.icon, color: iconColor, size: 21),
+                        ),
                       ),
-                    ),
-                  ),
+                      const SizedBox(height: 4),
+                      SizedBox(
+                        width: double.infinity,
+                        child: Text(
+                          widget.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: textColor,
+                            fontSize: 9.1,
+                            height: 1.0,
+                            fontWeight:
+                                selected ? FontWeight.w600 : FontWeight.w600,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -6943,7 +7531,9 @@ class _ClubSideRailButtonState extends State<_ClubSideRailButton> {
                               color: textColor,
                               fontSize: 9.05,
                               height: 1.0,
-                              fontWeight: widget.active ? FontWeight.w600 : FontWeight.w600,
+                              fontWeight: widget.active
+                                  ? FontWeight.w600
+                                  : FontWeight.w600,
                             ),
                           ),
                         ),
@@ -7007,7 +7597,8 @@ class _ClubSideRailActionButton extends StatefulWidget {
   });
 
   @override
-  State<_ClubSideRailActionButton> createState() => _ClubSideRailActionButtonState();
+  State<_ClubSideRailActionButton> createState() =>
+      _ClubSideRailActionButtonState();
 }
 
 class _ClubSideRailActionButtonState extends State<_ClubSideRailActionButton> {
@@ -7081,7 +7672,8 @@ class _ClubSideRailActionButtonState extends State<_ClubSideRailActionButton> {
                             boxShadow: widget.active || _hovered
                                 ? [
                                     BoxShadow(
-                                      color: effectiveAccent.withOpacity(widget.active ? .10 : .055),
+                                      color: effectiveAccent.withOpacity(
+                                          widget.active ? .10 : .055),
                                       blurRadius: widget.active ? 12 : 9,
                                       offset: const Offset(0, 4),
                                     ),
@@ -7101,7 +7693,9 @@ class _ClubSideRailActionButtonState extends State<_ClubSideRailActionButton> {
                                 style: TextStyle(
                                   fontSize: 12.4,
                                   height: 1.05,
-                                  fontWeight: widget.active ? FontWeight.w600 : FontWeight.w600,
+                                  fontWeight: widget.active
+                                      ? FontWeight.w600
+                                      : FontWeight.w600,
                                   color: labelColor,
                                 ),
                               ),
@@ -7134,25 +7728,35 @@ class _SidebarTeamPickerButton extends StatelessWidget {
   });
 
   int _teamId(Map<String, dynamic> team) {
-    final raw = team['id'] ?? team['team_id'] ?? team['teamId'] ?? team['teamID'];
+    final raw =
+        team['id'] ?? team['team_id'] ?? team['teamId'] ?? team['teamID'];
     if (raw is int) return raw;
     return int.tryParse(raw?.toString() ?? '') ?? 0;
   }
 
   String _teamName(Map<String, dynamic> team) {
-    final raw = team['name'] ?? team['team_name'] ?? team['teamName'] ?? team['title'];
+    final raw =
+        team['name'] ?? team['team_name'] ?? team['teamName'] ?? team['title'];
     final value = raw?.toString().trim() ?? '';
     return value.isEmpty || value == 'null' ? 'Команда' : value;
   }
 
   String _teamSubtitle(Map<String, dynamic> team) {
-    final raw = team['age_group'] ?? team['team_age'] ?? team['sport'] ?? team['category'];
+    final raw = team['age_group'] ??
+        team['team_age'] ??
+        team['sport'] ??
+        team['category'];
     final value = raw?.toString().trim() ?? '';
     return value.isEmpty || value == 'null' ? 'Команда клуба' : value;
   }
 
   String? _teamLogo(Map<String, dynamic> team) {
-    final raw = team['logo'] ?? team['logo_url'] ?? team['team_logo'] ?? team['teamLogo'] ?? team['photo'] ?? team['image'];
+    final raw = team['logo'] ??
+        team['logo_url'] ??
+        team['team_logo'] ??
+        team['teamLogo'] ??
+        team['photo'] ??
+        team['image'];
     final value = raw?.toString().trim() ?? '';
     return value.isEmpty || value == 'null' ? null : value;
   }
@@ -7182,7 +7786,8 @@ class _SidebarTeamPickerButton extends StatelessWidget {
         final isWide = size.width >= 760;
 
         return Padding(
-          padding: EdgeInsets.fromLTRB(isWide ? 24 : 12, 0, isWide ? 24 : 12, 14),
+          padding:
+              EdgeInsets.fromLTRB(isWide ? 24 : 12, 0, isWide ? 24 : 12, 14),
           child: Center(
             child: Container(
               constraints: BoxConstraints(
@@ -7192,7 +7797,7 @@ class _SidebarTeamPickerButton extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(18),
-                        boxShadow: [
+                boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(.14),
                     blurRadius: 38,
@@ -7223,7 +7828,8 @@ class _SidebarTeamPickerButton extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: _C.primaryGreen.withOpacity(.10),
                             borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: _C.primaryGreen.withOpacity(.16)),
+                            border: Border.all(
+                                color: _C.primaryGreen.withOpacity(.16)),
                           ),
                           child: const Icon(
                             Icons.account_tree_rounded,
@@ -7303,9 +7909,12 @@ class _SidebarTeamPickerButton extends StatelessWidget {
     final activeTeam = _activeTeam();
     final logo = activeTeam == null ? null : _teamLogo(activeTeam);
     final teamName = activeTeam == null
-        ? (selectedTeamName.trim().isEmpty ? 'Выбрать команду' : selectedTeamName.trim())
+        ? (selectedTeamName.trim().isEmpty
+            ? 'Выбрать команду'
+            : selectedTeamName.trim())
         : _teamName(activeTeam);
-    final subtitle = activeTeam == null ? 'Команды клуба' : _teamSubtitle(activeTeam);
+    final subtitle =
+        activeTeam == null ? 'Команды клуба' : _teamSubtitle(activeTeam);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -7324,7 +7933,9 @@ class _SidebarTeamPickerButton extends StatelessWidget {
               color: Colors.white,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: teams.isEmpty ? _C.border : _C.footballGreen.withOpacity(.22),
+                color: teams.isEmpty
+                    ? _C.border
+                    : _C.footballGreen.withOpacity(.22),
               ),
               boxShadow: [
                 BoxShadow(
@@ -7390,8 +8001,6 @@ class _SidebarTeamPickerButton extends StatelessWidget {
     );
   }
 }
-
-
 
 class _SidebarHomeButton extends StatelessWidget {
   final VoidCallback onTap;
@@ -7498,7 +8107,8 @@ class _FullMenuItem {
   final String subtitle;
   final bool pro;
 
-  const _FullMenuItem(this.section, this.icon, this.title, this.subtitle, {this.pro = false});
+  const _FullMenuItem(this.section, this.icon, this.title, this.subtitle,
+      {this.pro = false});
 }
 
 class _FullModulesMenuOverlay extends StatelessWidget {
@@ -7520,9 +8130,12 @@ class _FullModulesMenuOverlay extends StatelessWidget {
 
   bool _sectionIsActive(ClubSection itemSection) {
     if (itemSection == selectedSection) return true;
-    if (itemSection == ClubSection.teams && selectedSection == ClubSection.teamDashboard) return true;
-    if (itemSection == ClubSection.roster && selectedSection == ClubSection.playerProfile) return true;
-    if (itemSection == ClubSection.trainers && selectedSection == ClubSection.teamTrainers) return true;
+    if (itemSection == ClubSection.teams &&
+        selectedSection == ClubSection.teamDashboard) return true;
+    if (itemSection == ClubSection.roster &&
+        selectedSection == ClubSection.playerProfile) return true;
+    if (itemSection == ClubSection.trainers &&
+        selectedSection == ClubSection.teamTrainers) return true;
     return false;
   }
 
@@ -7532,10 +8145,17 @@ class _FullModulesMenuOverlay extends StatelessWidget {
     final width = media.size.width;
     final height = media.size.height;
     final compact = width < 720;
-    final columns = compact ? 4 : width >= 1180 ? 7 : 6;
+    final columns = compact
+        ? 4
+        : width >= 1180
+            ? 7
+            : 6;
     final menuWidth = math.min(compact ? width - 22 : 760.0, width - 32);
-    final maxHeight = math.max(320.0, math.min(height - 118, compact ? 560.0 : 600.0));
-    final safeTeam = selectedTeamName.trim().isEmpty ? 'Команда не выбрана' : selectedTeamName.trim();
+    final maxHeight =
+        math.max(320.0, math.min(height - 118, compact ? 560.0 : 600.0));
+    final safeTeam = selectedTeamName.trim().isEmpty
+        ? 'Команда не выбрана'
+        : selectedTeamName.trim();
 
     return Material(
       color: Colors.transparent,
@@ -7570,17 +8190,23 @@ class _FullModulesMenuOverlay extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Padding(
-                      padding: EdgeInsets.fromLTRB(compact ? 14 : 18, compact ? 13 : 16, compact ? 10 : 14, 10),
+                      padding: EdgeInsets.fromLTRB(compact ? 14 : 18,
+                          compact ? 13 : 16, compact ? 10 : 14, 10),
                       child: Row(
                         children: [
-                          _LogoBox(url: clubLogo, size: compact ? 38 : 44, bgColor: _C.railPanel),
+                          _LogoBox(
+                              url: clubLogo,
+                              size: compact ? 38 : 44,
+                              bgColor: _C.railPanel),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  clubName.trim().isEmpty ? 'Панель клуба' : clubName.trim(),
+                                  clubName.trim().isEmpty
+                                      ? 'Панель клуба'
+                                      : clubName.trim(),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
@@ -7606,7 +8232,8 @@ class _FullModulesMenuOverlay extends StatelessWidget {
                             ),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 7),
                             decoration: BoxDecoration(
                               color: _C.railPanel,
                               borderRadius: BorderRadius.circular(999),
@@ -7615,7 +8242,9 @@ class _FullModulesMenuOverlay extends StatelessWidget {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.apps_rounded, color: _C.railText, size: compact ? 16 : 17),
+                                Icon(Icons.apps_rounded,
+                                    color: _C.railText,
+                                    size: compact ? 16 : 17),
                                 const SizedBox(width: 4),
                                 Text(
                                   '${items.length} разделов',
@@ -7631,14 +8260,16 @@ class _FullModulesMenuOverlay extends StatelessWidget {
                           const SizedBox(width: 4),
                           IconButton(
                             onPressed: () => Navigator.of(context).pop(),
-                            icon: const Icon(Icons.close_rounded, color: _C.railText),
+                            icon: const Icon(Icons.close_rounded,
+                                color: _C.railText),
                             tooltip: 'Закрыть',
                           ),
                         ],
                       ),
                     ),
                     Padding(
-                      padding: EdgeInsets.symmetric(horizontal: compact ? 14 : 18),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: compact ? 14 : 18),
                       child: Container(
                         height: 1,
                         color: _C.borderSoft,
@@ -7646,12 +8277,14 @@ class _FullModulesMenuOverlay extends StatelessWidget {
                     ),
                     Flexible(
                       child: Padding(
-                        padding: EdgeInsets.fromLTRB(compact ? 12 : 16, 14, compact ? 12 : 16, compact ? 12 : 16),
+                        padding: EdgeInsets.fromLTRB(compact ? 12 : 16, 14,
+                            compact ? 12 : 16, compact ? 12 : 16),
                         child: GridView.builder(
                           shrinkWrap: true,
                           physics: const BouncingScrollPhysics(),
                           itemCount: items.length,
-                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: columns,
                             mainAxisSpacing: compact ? 8 : 10,
                             crossAxisSpacing: compact ? 6 : 8,
@@ -7663,16 +8296,19 @@ class _FullModulesMenuOverlay extends StatelessWidget {
                               item: item,
                               active: _sectionIsActive(item.section),
                               proLocked: item.pro && !hasActiveSubscription,
-                              onTap: () => Navigator.of(context).pop(item.section),
+                              onTap: () =>
+                                  Navigator.of(context).pop(item.section),
                             );
                           },
                         ),
                       ),
                     ),
                     Padding(
-                      padding: EdgeInsets.fromLTRB(compact ? 14 : 18, 0, compact ? 14 : 18, compact ? 12 : 14),
+                      padding: EdgeInsets.fromLTRB(compact ? 14 : 18, 0,
+                          compact ? 14 : 18, compact ? 12 : 14),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 9),
                         decoration: BoxDecoration(
                           color: _C.railPanel,
                           borderRadius: BorderRadius.circular(18),
@@ -7680,7 +8316,8 @@ class _FullModulesMenuOverlay extends StatelessWidget {
                         ),
                         child: Row(
                           children: const [
-                            Icon(Icons.search_rounded, color: _C.railMuted, size: 18),
+                            Icon(Icons.search_rounded,
+                                color: _C.railMuted, size: 18),
                             SizedBox(width: 8),
                             Expanded(
                               child: Text(
@@ -7758,7 +8395,9 @@ class _FullModuleTileState extends State<_FullModuleTile> {
                 color: bg,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color: widget.active ? accent.withOpacity(.20) : Colors.transparent,
+                  color: widget.active
+                      ? accent.withOpacity(.20)
+                      : Colors.transparent,
                 ),
               ),
               child: Column(
@@ -7772,14 +8411,19 @@ class _FullModuleTileState extends State<_FullModuleTile> {
                         width: 48,
                         height: 48,
                         decoration: BoxDecoration(
-                          color: widget.active ? accent.withOpacity(.13) : Colors.white,
+                          color: widget.active
+                              ? accent.withOpacity(.13)
+                              : Colors.white,
                           borderRadius: BorderRadius.circular(17),
                           border: Border.all(
-                            color: widget.active ? accent.withOpacity(.20) : _C.borderSoft,
+                            color: widget.active
+                                ? accent.withOpacity(.20)
+                                : _C.borderSoft,
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(widget.active ? .075 : .045),
+                              color: Colors.black
+                                  .withOpacity(widget.active ? .075 : .045),
                               blurRadius: widget.active ? 16 : 10,
                               offset: const Offset(0, 7),
                             ),
@@ -7799,13 +8443,20 @@ class _FullModuleTileState extends State<_FullModuleTile> {
                             width: 17,
                             height: 17,
                             decoration: BoxDecoration(
-                              color: widget.proLocked ? _C.orangeSoft : _C.softFor(_C.primaryGreen),
+                              color: widget.proLocked
+                                  ? _C.orangeSoft
+                                  : _C.softFor(_C.primaryGreen),
                               shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 1.6),
+                              border:
+                                  Border.all(color: Colors.white, width: 1.6),
                             ),
                             child: Icon(
-                              widget.proLocked ? Icons.lock_rounded : Icons.workspace_premium_rounded,
-                              color: widget.proLocked ? _C.orange : _C.primaryGreen,
+                              widget.proLocked
+                                  ? Icons.lock_rounded
+                                  : Icons.workspace_premium_rounded,
+                              color: widget.proLocked
+                                  ? _C.orange
+                                  : _C.primaryGreen,
                               size: 10,
                             ),
                           ),
@@ -7835,7 +8486,8 @@ class _FullModuleTileState extends State<_FullModuleTile> {
                       color: widget.active ? _C.text : _C.railText,
                       fontSize: 11.2,
                       height: 1.08,
-                      fontWeight: widget.active ? FontWeight.w600 : FontWeight.w600,
+                      fontWeight:
+                          widget.active ? FontWeight.w600 : FontWeight.w600,
                     ),
                   ),
                 ],
@@ -7891,7 +8543,6 @@ class _MiniCountPill extends StatelessWidget {
   }
 }
 
-
 class _MobileGestureHintSheet extends StatelessWidget {
   const _MobileGestureHintSheet();
 
@@ -7937,7 +8588,8 @@ class _MobileGestureHintSheet extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: _C.primaryGreen.withOpacity(.10),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: _C.primaryGreen.withOpacity(.16)),
+                      border:
+                          Border.all(color: _C.primaryGreen.withOpacity(.16)),
                     ),
                     child: const Icon(
                       Icons.swipe_rounded,
@@ -7978,13 +8630,15 @@ class _MobileGestureHintSheet extends StatelessWidget {
               const _GestureTipRow(
                 icon: Icons.keyboard_arrow_left_rounded,
                 title: 'Листайте экран влево или вправо',
-                text: 'Так можно быстро переходить между разделами панели клуба.',
+                text:
+                    'Так можно быстро переходить между разделами панели клуба.',
               ),
               const SizedBox(height: 10),
               const _GestureTipRow(
                 icon: Icons.keyboard_arrow_down_rounded,
                 title: 'Потяните экран вниз',
-                text: 'Так обновляются данные клуба, команд, событий и состава.',
+                text:
+                    'Так обновляются данные клуба, команд, событий и состава.',
               ),
               const SizedBox(height: 16),
               SizedBox(
@@ -8190,31 +8844,30 @@ class _TopBar extends StatelessWidget {
                 color: _C.softFor(accent),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: accent.withOpacity(.18))),
-            child:
-                Icon(Icons.dashboard_customize_rounded, color: accent, size: 22)),
+            child: Icon(Icons.dashboard_customize_rounded,
+                color: accent, size: 22)),
         const SizedBox(width: 10),
         Expanded(
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-              Text(title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: 16,
-                      height: 1.05,
-                      fontWeight: FontWeight.w600,
-                      color: _C.text)),
-              const SizedBox(height: 3),
-              Text(subtitle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      color: _C.muted,
-                      height: 1.15,
-                      fontSize: 10.8,
-                      fontWeight: FontWeight.w600)),
-            ])),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  fontSize: 16,
+                  height: 1.05,
+                  fontWeight: FontWeight.w600,
+                  color: _C.text)),
+          const SizedBox(height: 3),
+          Text(subtitle,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  color: _C.muted,
+                  height: 1.15,
+                  fontSize: 10.8,
+                  fontWeight: FontWeight.w600)),
+        ])),
         const SizedBox(width: 12),
         _TeamChooser(
             teams: teams,
@@ -8223,30 +8876,21 @@ class _TopBar extends StatelessWidget {
             onTeamChanged: onTeamChanged),
         const SizedBox(width: 8),
         _TopToolButton(
-            icon: Icons.edit_rounded,
-            text: 'Клуб',
-            onTap: onEditClub),
+            icon: Icons.edit_rounded, text: 'Клуб', onTap: onEditClub),
         const SizedBox(width: 8),
         _TopToolButton(
-            icon: Icons.tune_rounded,
-            text: 'Команда',
-            onTap: onEditTeam),
+            icon: Icons.tune_rounded, text: 'Команда', onTap: onEditTeam),
         const SizedBox(width: 8),
         _TopToolButton(
-            icon: Icons.add_rounded,
-            text: 'Новая',
-            onTap: onCreateTeam),
+            icon: Icons.add_rounded, text: 'Новая', onTap: onCreateTeam),
         const SizedBox(width: 8),
         _IconCircleButton(
-            icon: refreshing
-                ? Icons.sync_rounded
-                : Icons.refresh_rounded,
+            icon: refreshing ? Icons.sync_rounded : Icons.refresh_rounded,
             onTap: onRefresh),
       ]),
     );
   }
 }
-
 
 class _TopToolButton extends StatelessWidget {
   final IconData icon;
@@ -8289,7 +8933,6 @@ class _TopToolButton extends StatelessWidget {
   }
 }
 
-
 class _TeamChooser extends StatelessWidget {
   final List<Map<String, dynamic>> teams;
   final String selectedTeamName;
@@ -8308,12 +8951,15 @@ class _TeamChooser extends StatelessWidget {
   }
 
   String _teamSubtitle(Map<String, dynamic> team) {
-    final value = '${team['age_group'] ?? team['category'] ?? team['sport'] ?? ''}'.trim();
+    final value =
+        '${team['age_group'] ?? team['category'] ?? team['sport'] ?? ''}'
+            .trim();
     return value.isEmpty ? 'Рабочая команда клуба' : value;
   }
 
   String? _teamLogo(Map<String, dynamic> team) {
-    final value = '${team['logo'] ?? team['logo_url'] ?? team['photo'] ?? ''}'.trim();
+    final value =
+        '${team['logo'] ?? team['logo_url'] ?? team['photo'] ?? ''}'.trim();
     return value.isEmpty ? null : value;
   }
 
@@ -8503,7 +9149,7 @@ class _TeamChooser extends StatelessWidget {
         ),
         child: Row(
           children: [
-                                   _LogoBox(url: logo, size: 54, bgColor: Colors.white),
+            _LogoBox(url: logo, size: 54, bgColor: Colors.white),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -8637,7 +9283,9 @@ class _TeamPickerTile extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Icon(
-                active ? Icons.check_circle_rounded : Icons.chevron_right_rounded,
+                active
+                    ? Icons.check_circle_rounded
+                    : Icons.chevron_right_rounded,
                 color: active ? _C.primaryGreen : _C.muted,
               ),
             ],
@@ -8647,7 +9295,6 @@ class _TeamPickerTile extends StatelessWidget {
     );
   }
 }
-
 
 class _OverviewControlCenter extends StatelessWidget {
   final List<Map<String, dynamic>> teams;
@@ -8787,7 +9434,8 @@ class _OverviewControlTitle extends StatelessWidget {
         const SizedBox(width: 8),
         const _HelpCircle(
           title: 'Как работать с обзором клуба',
-          text: 'Обзор — это стартовый рабочий экран. Здесь выбирается активная команда, проверяется состояние клуба и выполняются быстрые действия без лишних переходов.',
+          text:
+              'Обзор — это стартовый рабочий экран. Здесь выбирается активная команда, проверяется состояние клуба и выполняются быстрые действия без лишних переходов.',
           steps: [
             'Сначала выберите активную команду — от неё зависят состав, тренеры, матчи и календарь.',
             'Через быстрые действия добавляйте игроков, открывайте тренеров, матчи и видеоанализ.',
@@ -8894,8 +9542,6 @@ class _OverviewActionButton extends StatelessWidget {
   }
 }
 
-
-
 class _OverviewPanel extends StatelessWidget {
   final String clubName;
   final String? clubLogo;
@@ -8954,22 +9600,27 @@ class _OverviewPanel extends StatelessWidget {
   }
 
   String _teamName(Map<String, dynamic> team) {
-    return _clean(team['name'] ?? team['team_name'] ?? team['title'], 'Команда');
+    return _clean(
+        team['name'] ?? team['team_name'] ?? team['title'], 'Команда');
   }
 
   String _teamSubtitle(Map<String, dynamic> team) {
-    return _clean(team['age_group'] ?? team['category'] ?? team['sport'], 'Футбол');
+    return _clean(
+        team['age_group'] ?? team['category'] ?? team['sport'], 'Футбол');
   }
 
   String? _teamLogo(Map<String, dynamic>? team) {
     if (team == null) return null;
-    final raw = '${team['logo'] ?? team['logo_url'] ?? team['photo'] ?? ''}'.trim();
+    final raw =
+        '${team['logo'] ?? team['logo_url'] ?? team['photo'] ?? ''}'.trim();
     return raw.isEmpty || raw == 'null' ? null : raw;
   }
 
   bool _isSelectedTeam(Map<String, dynamic> team) {
     final id = _teamId(team);
-    return selectedTeamId != null && selectedTeamId! > 0 && id == selectedTeamId;
+    return selectedTeamId != null &&
+        selectedTeamId! > 0 &&
+        id == selectedTeamId;
   }
 
   Map<String, dynamic>? _activeTeam() {
@@ -8984,7 +9635,9 @@ class _OverviewPanel extends StatelessWidget {
     final activeTeam = _activeTeam();
     final title = clubName.trim().isEmpty ? 'Клуб' : clubName.trim();
     final activeTeamName = activeTeam == null
-        ? (selectedTeamName.trim().isEmpty ? 'Команда не выбрана' : selectedTeamName.trim())
+        ? (selectedTeamName.trim().isEmpty
+            ? 'Команда не выбрана'
+            : selectedTeamName.trim())
         : _teamName(activeTeam);
     final recentEvents = events.take(3).toList();
 
@@ -9205,7 +9858,8 @@ class _OverviewPanel extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right_rounded, color: _C.primaryGreen, size: 21),
+            const Icon(Icons.chevron_right_rounded,
+                color: _C.primaryGreen, size: 21),
           ],
         ),
       ),
@@ -9256,7 +9910,9 @@ class _OverviewPanel extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        activeTeam == null ? 'Выберите команду для работы' : _teamSubtitle(activeTeam),
+                        activeTeam == null
+                            ? 'Выберите команду для работы'
+                            : _teamSubtitle(activeTeam),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -9350,7 +10006,8 @@ class _OverviewPanel extends StatelessWidget {
             ),
           ],
         ),
-        child: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 24),
+        child: const Icon(Icons.keyboard_arrow_down_rounded,
+            color: Colors.white, size: 24),
       ),
     );
   }
@@ -9373,7 +10030,8 @@ class _OverviewPanel extends StatelessWidget {
             builder: (context, c) {
               final compact = c.maxWidth < 560;
               final modules = [
-                _moduleCard(Icons.sports_soccer_rounded, 'Матчи', onOpenMatches),
+                _moduleCard(
+                    Icons.sports_soccer_rounded, 'Матчи', onOpenMatches),
                 _moduleCard(Icons.badge_rounded, 'Тренеры', onOpenTeamTrainers),
                 _moduleCard(Icons.folder_copy_rounded, 'Планы', onOpenPlans),
                 _moduleCard(Icons.play_circle_rounded, 'Видео', onOpenVideo),
@@ -9394,7 +10052,8 @@ class _OverviewPanel extends StatelessWidget {
                 spacing: 10,
                 runSpacing: 10,
                 children: modules
-                    .map((item) => SizedBox(width: (c.maxWidth - 10) / 2, child: item))
+                    .map((item) =>
+                        SizedBox(width: (c.maxWidth - 10) / 2, child: item))
                     .toList(),
               );
             },
@@ -9563,8 +10222,10 @@ class _OverviewPanel extends StatelessWidget {
   }
 
   Widget _eventTile(Map<String, dynamic> event) {
-    final title = _clean(event['title'] ?? event['name'] ?? event['event_title'], 'Событие');
-    final date = _clean(event['date'] ?? event['event_date'] ?? event['start_at'], '');
+    final title = _clean(
+        event['title'] ?? event['name'] ?? event['event_title'], 'Событие');
+    final date =
+        _clean(event['date'] ?? event['event_date'] ?? event['start_at'], '');
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -9581,7 +10242,8 @@ class _OverviewPanel extends StatelessWidget {
               color: Colors.white,
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(Icons.event_rounded, color: _C.primaryGreen, size: 19),
+            child: const Icon(Icons.event_rounded,
+                color: _C.primaryGreen, size: 19),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -9776,11 +10438,13 @@ class _OverviewWorkHero extends StatelessWidget {
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
                             color: _C.greenSoft,
                             borderRadius: BorderRadius.circular(99),
-                            border: Border.all(color: _C.primaryGreen.withOpacity(.18)),
+                            border: Border.all(
+                                color: _C.primaryGreen.withOpacity(.18)),
                           ),
                           child: const Text(
                             'Рабочий центр',
@@ -9974,7 +10638,9 @@ class _OverviewStatsStrip extends StatelessWidget {
         return Wrap(
           spacing: 10,
           runSpacing: 10,
-          children: items.map((item) => SizedBox(width: itemWidth, child: item)).toList(),
+          children: items
+              .map((item) => SizedBox(width: itemWidth, child: item))
+              .toList(),
         );
       },
     );
@@ -10144,7 +10810,8 @@ class _OverviewQuickActionsGrid extends StatelessWidget {
               ),
               _HelpCircle(
                 title: 'Быстрые действия',
-                text: 'Это рабочие карточки для быстрых переходов. Они не дублируют левое меню, а помогают тренеру сразу открыть нужное действие из обзора.',
+                text:
+                    'Это рабочие карточки для быстрых переходов. Они не дублируют левое меню, а помогают тренеру сразу открыть нужное действие из обзора.',
                 steps: [
                   'Откройте состав, если нужно быстро проверить игрока.',
                   'Откройте тренеров, если нужно посмотреть штаб или назначение.',
@@ -10156,12 +10823,15 @@ class _OverviewQuickActionsGrid extends StatelessWidget {
           const SizedBox(height: 14),
           LayoutBuilder(
             builder: (context, c) {
-              final columns = c.maxWidth >= 760 ? 3 : (c.maxWidth >= 500 ? 2 : 1);
+              final columns =
+                  c.maxWidth >= 760 ? 3 : (c.maxWidth >= 500 ? 2 : 1);
               final itemWidth = (c.maxWidth - (columns - 1) * 10) / columns;
               return Wrap(
                 spacing: 10,
                 runSpacing: 10,
-                children: actions.map((item) => SizedBox(width: itemWidth, child: item)).toList(),
+                children: actions
+                    .map((item) => SizedBox(width: itemWidth, child: item))
+                    .toList(),
               );
             },
           ),
@@ -10204,7 +10874,9 @@ class _OverviewModuleCard extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: active ? _C.primaryGreen.withOpacity(.10) : Colors.black.withOpacity(.025),
+              color: active
+                  ? _C.primaryGreen.withOpacity(.10)
+                  : Colors.black.withOpacity(.025),
               blurRadius: 18,
               offset: const Offset(0, 8),
             ),
@@ -10218,9 +10890,12 @@ class _OverviewModuleCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: active ? Colors.white : _C.soft2,
                 borderRadius: BorderRadius.circular(17),
-                border: Border.all(color: active ? _C.primaryGreen.withOpacity(.16) : _C.border),
+                border: Border.all(
+                    color:
+                        active ? _C.primaryGreen.withOpacity(.16) : _C.border),
               ),
-              child: Icon(icon, color: active ? _C.primaryGreen : _C.black, size: 22),
+              child: Icon(icon,
+                  color: active ? _C.primaryGreen : _C.black, size: 22),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -10283,7 +10958,8 @@ class _OverviewEventsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return _SolidCard(
       title: 'Ближайшие события',
-      helpText: 'Здесь отображаются ближайшие события клуба. Блок помогает быстро понять, что запланировано по клубу и командам.',
+      helpText:
+          'Здесь отображаются ближайшие события клуба. Блок помогает быстро понять, что запланировано по клубу и командам.',
       helpSteps: const [
         'Добавляйте события в календаре клуба или команды.',
         'Проверяйте дату и название события перед тренировкой или матчем.',
@@ -10294,7 +10970,8 @@ class _OverviewEventsCard extends StatelessWidget {
           : Column(
               children: events.map((event) {
                 final title = '${event['title'] ?? event['name'] ?? 'Событие'}';
-                final date = '${event['date'] ?? event['event_date'] ?? event['start_date'] ?? ''}';
+                final date =
+                    '${event['date'] ?? event['event_date'] ?? event['start_date'] ?? ''}';
                 return _EventRow(title: title, date: date);
               }).toList(),
             ),
@@ -10328,7 +11005,8 @@ class _OverviewReadinessCard extends StatelessWidget {
                   color: _C.greenSoft,
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: const Icon(Icons.verified_rounded, color: _C.primaryGreen, size: 22),
+                child: const Icon(Icons.verified_rounded,
+                    color: _C.primaryGreen, size: 22),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -10375,7 +11053,9 @@ class _OverviewReadinessCard extends StatelessWidget {
                 child: Row(
                   children: [
                     Icon(
-                      item.done ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                      item.done
+                          ? Icons.check_circle_rounded
+                          : Icons.radio_button_unchecked_rounded,
                       color: item.done ? _C.primaryGreen : _C.muted,
                       size: 18,
                     ),
@@ -10429,7 +11109,8 @@ class _OverviewAdvicePanel extends StatelessWidget {
       tips.add(_OverviewTipData(
         icon: Icons.person_add_alt_1_rounded,
         title: 'Добавьте игроков',
-        text: 'Состав пустой — начните с добавления игроков в активную команду.',
+        text:
+            'Состав пустой — начните с добавления игроков в активную команду.',
         onTap: onOpenRoster,
       ));
     }
@@ -10437,7 +11118,8 @@ class _OverviewAdvicePanel extends StatelessWidget {
       tips.add(_OverviewTipData(
         icon: Icons.badge_rounded,
         title: 'Добавьте тренеров',
-        text: 'Штаб клуба пока пустой. Добавьте тренера и назначьте его в команду.',
+        text:
+            'Штаб клуба пока пустой. Добавьте тренера и назначьте его в команду.',
         onTap: onOpenTrainers,
       ));
     }
@@ -10445,7 +11127,8 @@ class _OverviewAdvicePanel extends StatelessWidget {
       tips.add(_OverviewTipData(
         icon: Icons.event_available_rounded,
         title: 'Запланируйте событие',
-        text: 'Добавьте тренировку или матч, чтобы обзор стал рабочим календарём.',
+        text:
+            'Добавьте тренировку или матч, чтобы обзор стал рабочим календарём.',
         onTap: onOpenMatches,
       ));
     }
@@ -10453,7 +11136,8 @@ class _OverviewAdvicePanel extends StatelessWidget {
       tips.add(_OverviewTipData(
         icon: Icons.task_alt_rounded,
         title: 'Можно работать',
-        text: 'Основные данные заполнены. Проверьте состав, тренеров и ближайшие матчи.',
+        text:
+            'Основные данные заполнены. Проверьте состав, тренеров и ближайшие матчи.',
         onTap: onOpenRoster,
       ));
     }
@@ -10582,7 +11266,6 @@ class _OverviewTipCard extends StatelessWidget {
   }
 }
 
-
 class _OverviewLiveFeedCard extends StatelessWidget {
   final String clubName;
   final String selectedTeamName;
@@ -10608,7 +11291,8 @@ class _OverviewLiveFeedCard extends StatelessWidget {
     required this.onOpenTeams,
   });
 
-  String _value(Map<String, dynamic> source, List<String> keys, [String fallback = '']) {
+  String _value(Map<String, dynamic> source, List<String> keys,
+      [String fallback = '']) {
     for (final key in keys) {
       final value = '${source[key] ?? ''}'.trim();
       if (value.isNotEmpty && value != 'null') return value;
@@ -10621,8 +11305,12 @@ class _OverviewLiveFeedCard extends StatelessWidget {
     final items = <_OverviewFeedItem>[];
 
     for (final event in events.take(4)) {
-      final title = _value(event, const ['title', 'name', 'event_title'], 'Событие клуба');
-      final date = _value(event, const ['date', 'event_date', 'start_date', 'created_at'], 'Дата не указана');
+      final title = _value(
+          event, const ['title', 'name', 'event_title'], 'Событие клуба');
+      final date = _value(
+          event,
+          const ['date', 'event_date', 'start_date', 'created_at'],
+          'Дата не указана');
       items.add(_OverviewFeedItem(
         icon: Icons.event_available_rounded,
         title: title,
@@ -10637,11 +11325,14 @@ class _OverviewLiveFeedCard extends StatelessWidget {
     for (final trainer in trainers.take(3)) {
       final first = _value(trainer, const ['first_name', 'firstname'], '');
       final last = _value(trainer, const ['last_name', 'lastname'], '');
-      final full = _value(trainer, const ['full_name', 'fullName', 'name'], '$first $last').trim();
+      final full = _value(
+              trainer, const ['full_name', 'fullName', 'name'], '$first $last')
+          .trim();
       items.add(_OverviewFeedItem(
         icon: Icons.badge_rounded,
         title: full.isEmpty ? 'Тренерский штаб' : full,
-        subtitle: _value(trainer, const ['role', 'position', 'specialization'], 'Тренер клуба'),
+        subtitle: _value(trainer, const ['role', 'position', 'specialization'],
+            'Тренер клуба'),
         label: 'Тренер',
         tint: _C.greenSoft,
         color: _C.primaryGreen,
@@ -10650,11 +11341,13 @@ class _OverviewLiveFeedCard extends StatelessWidget {
     }
 
     for (final team in teams.take(3)) {
-      final title = _value(team, const ['name', 'title', 'team_name'], 'Команда клуба');
+      final title =
+          _value(team, const ['name', 'title', 'team_name'], 'Команда клуба');
       items.add(_OverviewFeedItem(
         icon: Icons.groups_2_rounded,
         title: title,
-        subtitle: title == selectedTeamName ? 'Активная команда' : 'Команда клуба',
+        subtitle:
+            title == selectedTeamName ? 'Активная команда' : 'Команда клуба',
         label: title == selectedTeamName ? 'Активна' : 'Команда',
         tint: _C.bg,
         color: _C.black,
@@ -10667,7 +11360,9 @@ class _OverviewLiveFeedCard extends StatelessWidget {
         _OverviewFeedItem(
           icon: Icons.groups_2_rounded,
           title: selectedTeamName,
-          subtitle: playersCount > 0 ? '$playersCount игроков в активной команде' : 'Добавьте игроков в состав',
+          subtitle: playersCount > 0
+              ? '$playersCount игроков в активной команде'
+              : 'Добавьте игроков в состав',
           label: 'Состав',
           tint: _C.greenSoft,
           color: _C.primaryGreen,
@@ -10676,7 +11371,8 @@ class _OverviewLiveFeedCard extends StatelessWidget {
         _OverviewFeedItem(
           icon: Icons.chat_bubble_outline_rounded,
           title: 'Чаты и сообщения',
-          subtitle: 'После подключения API здесь появятся последние сообщения команды',
+          subtitle:
+              'После подключения API здесь появятся последние сообщения команды',
           label: 'Чат',
           tint: const Color(0xFFF3E8FF),
           color: _C.purple,
@@ -10701,7 +11397,8 @@ class _OverviewLiveFeedCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(18),
                   border: Border.all(color: _C.primaryGreen.withOpacity(.16)),
                 ),
-                child: const Icon(Icons.dynamic_feed_rounded, color: _C.primaryGreen, size: 23),
+                child: const Icon(Icons.dynamic_feed_rounded,
+                    color: _C.primaryGreen, size: 23),
               ),
               const SizedBox(width: 12),
               const Expanded(
@@ -10737,7 +11434,8 @@ class _OverviewLiveFeedCard extends StatelessWidget {
               const SizedBox(width: 8),
               const _HelpCircle(
                 title: 'Живая лента обзора',
-                text: 'Правая колонка не заменяет выбор команды. Она показывает последние рабочие действия клуба: события, тренеров, команды, а после подключения API — сообщения чатов, медкарту и аналитику.',
+                text:
+                    'Правая колонка не заменяет выбор команды. Она показывает последние рабочие действия клуба: события, тренеров, команды, а после подключения API — сообщения чатов, медкарту и аналитику.',
                 steps: [
                   'Выбор команды остаётся в центральном блоке обзора.',
                   'В ленте справа отображается то, что уже есть в базе и относится к клубу.',
@@ -10835,7 +11533,9 @@ class _OverviewFeedTile extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: active ? const Color(0x2200C853) : Colors.black.withOpacity(.025),
+              color: active
+                  ? const Color(0x2200C853)
+                  : Colors.black.withOpacity(.025),
               blurRadius: 18,
               offset: const Offset(0, 8),
             ),
@@ -10875,11 +11575,14 @@ class _OverviewFeedTile extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: active ? Colors.white : _C.bg,
                           borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: active ? const Color(0xFFBBF7D0) : _C.border),
+                          border: Border.all(
+                              color:
+                                  active ? const Color(0xFFBBF7D0) : _C.border),
                         ),
                         child: Text(
                           item.label,
@@ -10947,10 +11650,14 @@ class _OverviewActivityCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rows = [
-      _OverviewActivityRowData(Icons.account_tree_rounded, 'Структура клуба', '$teamsCount команд'),
-      _OverviewActivityRowData(Icons.groups_2_rounded, 'Активный состав', '$playersCount игроков'),
-      _OverviewActivityRowData(Icons.badge_rounded, 'Тренерский штаб', '$trainersCount тренеров'),
-      _OverviewActivityRowData(Icons.event_note_rounded, 'Планирование', '$eventsCount событий'),
+      _OverviewActivityRowData(
+          Icons.account_tree_rounded, 'Структура клуба', '$teamsCount команд'),
+      _OverviewActivityRowData(
+          Icons.groups_2_rounded, 'Активный состав', '$playersCount игроков'),
+      _OverviewActivityRowData(
+          Icons.badge_rounded, 'Тренерский штаб', '$trainersCount тренеров'),
+      _OverviewActivityRowData(
+          Icons.event_note_rounded, 'Планирование', '$eventsCount событий'),
     ];
 
     return Container(
@@ -11055,10 +11762,12 @@ class _CompletionInfoCard extends StatelessWidget {
     final missing = <String>[];
 
     if (clubDescription.trim().isEmpty) missing.add('Описание клуба');
-    if (clubLogo == null || clubLogo!.trim().isEmpty) missing.add('Логотип клуба');
+    if (clubLogo == null || clubLogo!.trim().isEmpty)
+      missing.add('Логотип клуба');
     if (teamsCount <= 0) missing.add('Команды');
     if (trainersCount <= 0) missing.add('Тренеры');
-    if (selectedTeamName.trim().isEmpty || selectedTeamName == 'Команда не выбрана') {
+    if (selectedTeamName.trim().isEmpty ||
+        selectedTeamName == 'Команда не выбрана') {
       missing.add('Активная команда');
     }
     if (playersCount <= 0) missing.add('Игроки активной команды');
@@ -11082,7 +11791,9 @@ class _CompletionInfoCard extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  complete ? 'Профиль клуба заполнен' : 'Что желательно заполнить',
+                  complete
+                      ? 'Профиль клуба заполнен'
+                      : 'Что желательно заполнить',
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -11110,12 +11821,15 @@ class _CompletionInfoCard extends StatelessWidget {
             runSpacing: 8,
             children: (complete ? ['Готово'] : missing).map((item) {
               return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                 decoration: BoxDecoration(
                   color: complete ? _C.primaryGreen.withOpacity(0.1) : _C.soft2,
                   borderRadius: BorderRadius.circular(99),
                   border: Border.all(
-                    color: complete ? _C.primaryGreen.withOpacity(0.25) : _C.border,
+                    color: complete
+                        ? _C.primaryGreen.withOpacity(0.25)
+                        : _C.border,
                   ),
                 ),
                 child: Text(
@@ -11157,18 +11871,17 @@ class _TeamsPanel extends StatelessWidget {
             ? _EmptyTeams(onCreateTeam: onCreateTeam)
             : GridView.builder(
                 padding: const EdgeInsets.only(bottom: 20),
-                gridDelegate:
-                    const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        mainAxisSpacing: 14,
-                        crossAxisSpacing: 14,
-                        childAspectRatio: 1.35),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    mainAxisSpacing: 14,
+                    crossAxisSpacing: 14,
+                    childAspectRatio: 1.35),
                 itemCount: teams.length,
                 itemBuilder: (_, index) {
                   final team = teams[index];
-                  final id = int.tryParse(
-                          '${team['id'] ?? team['team_id'] ?? 0}') ??
-                      0;
+                  final id =
+                      int.tryParse('${team['id'] ?? team['team_id'] ?? 0}') ??
+                          0;
                   final name =
                       '${team['name'] ?? team['team_name'] ?? 'Команда'}';
                   final subtitle =
@@ -11201,21 +11914,16 @@ class _TeamsHeader extends StatelessWidget {
         const _IconBadge(icon: Icons.account_tree_rounded, size: 54),
         const SizedBox(width: 10),
         const Expanded(
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-              Text('Команды клуба',
-                  style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: _C.text)),
-              SizedBox(height: 4),
-              Text(
-                  'Создавайте команды, выбирайте активную и переходите к рабочим модулям.',
-                  style: TextStyle(
-                      color: _C.muted,
-                      fontWeight: FontWeight.w600)),
-            ])),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Команды клуба',
+              style: TextStyle(
+                  fontSize: 20, fontWeight: FontWeight.w600, color: _C.text)),
+          SizedBox(height: 4),
+          Text(
+              'Создавайте команды, выбирайте активную и переходите к рабочим модулям.',
+              style: TextStyle(color: _C.muted, fontWeight: FontWeight.w600)),
+        ])),
         _GreenButton(
             icon: Icons.add_rounded,
             text: 'Добавить команду',
@@ -11252,9 +11960,7 @@ class _TeamCard extends StatelessWidget {
           color: active ? _C.blueSoft : Colors.white,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-              color: active
-                  ? _C.blue.withOpacity(.28)
-                  : _C.border,
+              color: active ? _C.blue.withOpacity(.28) : _C.border,
               width: active ? 1.4 : 1),
           boxShadow: [
             BoxShadow(
@@ -11265,55 +11971,45 @@ class _TeamCard extends StatelessWidget {
                 offset: const Offset(0, 12))
           ],
         ),
-        child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                _LogoBox(
-                    url: logo,
-                    size: 58,
-                    bgColor: active ? Colors.white : _C.soft),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                      color: active ? Colors.white : _C.soft2,
-                      borderRadius: BorderRadius.circular(99),
-                      border: Border.all(
-                          color: active
-                              ? _C.blue.withOpacity(.18)
-                              : _C.border)),
-                  child: Text(active ? 'Активна' : 'Открыть',
-                      style: TextStyle(
-                          color: active ? _C.blue : _C.black,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600)),
-                ),
-              ]),
-              const Spacer(),
-              Text(name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            _LogoBox(
+                url: logo, size: 58, bgColor: active ? Colors.white : _C.soft),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                  color: active ? Colors.white : _C.soft2,
+                  borderRadius: BorderRadius.circular(99),
+                  border: Border.all(
+                      color: active ? _C.blue.withOpacity(.18) : _C.border)),
+              child: Text(active ? 'Активна' : 'Открыть',
                   style: TextStyle(
-                      fontSize: 19,
-                      height: 1.1,
-                      fontWeight: FontWeight.w600,
-                      color: active ? _C.blue : _C.text)),
-              const SizedBox(height: 7),
-              Text(subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      color: _C.muted,
-                      fontSize: 13,
+                      color: active ? _C.blue : _C.black,
+                      fontSize: 11,
                       fontWeight: FontWeight.w600)),
-            ]),
+            ),
+          ]),
+          const Spacer(),
+          Text(name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  fontSize: 19,
+                  height: 1.1,
+                  fontWeight: FontWeight.w600,
+                  color: active ? _C.blue : _C.text)),
+          const SizedBox(height: 7),
+          Text(subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  color: _C.muted, fontSize: 13, fontWeight: FontWeight.w600)),
+        ]),
       ),
     );
   }
 }
-
 
 class _RosterPanel extends StatelessWidget {
   final String teamName;
@@ -11364,8 +12060,12 @@ class _RosterPanel extends StatelessWidget {
 
     final first = '${player['first_name'] ?? player['firstname'] ?? ''}'.trim();
     final last = '${player['last_name'] ?? player['lastname'] ?? ''}'.trim();
-    final full = '${player['fullName'] ?? player['full_name'] ?? player['name'] ?? ''}'.trim();
-    final birth = '${player['birth_date'] ?? player['birthDate'] ?? player['birthday'] ?? ''}'.trim();
+    final full =
+        '${player['fullName'] ?? player['full_name'] ?? player['name'] ?? ''}'
+            .trim();
+    final birth =
+        '${player['birth_date'] ?? player['birthDate'] ?? player['birthday'] ?? ''}'
+            .trim();
 
     final fallback = [first, last, full, birth]
         .where((value) => value.isNotEmpty && value != 'null')
@@ -11483,7 +12183,8 @@ class _RosterPanel extends StatelessWidget {
                         child: ListView.separated(
                           physics: const AlwaysScrollableScrollPhysics(),
                           itemCount: players.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 10),
                           itemBuilder: (_, index) {
                             final player = players[index];
                             final playerKey = _playerIdentity(player);
@@ -11564,7 +12265,10 @@ class _RosterHeaderAction extends StatelessWidget {
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: _C.border),
             boxShadow: const [
-              BoxShadow(color: Color(0x08000000), blurRadius: 10, offset: Offset(0, 4)),
+              BoxShadow(
+                  color: Color(0x08000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 4)),
             ],
           ),
           child: Icon(icon, color: _C.black, size: 20),
@@ -11594,7 +12298,8 @@ class _RosterAdviceCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: const Color(0xFFF2D98A)),
         boxShadow: const [
-          BoxShadow(color: Color(0x08000000), blurRadius: 14, offset: Offset(0, 6)),
+          BoxShadow(
+              color: Color(0x08000000), blurRadius: 14, offset: Offset(0, 6)),
         ],
       ),
       child: Row(
@@ -11672,7 +12377,8 @@ class _PlayerTile extends StatelessWidget {
         ? _field(const ['fullName', 'full_name', 'name'], 'Игрок')
         : ('$first $last').trim();
     final position = _field(const ['position', 'role'], 'Амплуа');
-    final rawPhoto = _field(const ['photo_url', 'avatar_url', 'photo', 'avatar', 'image']);
+    final rawPhoto =
+        _field(const ['photo_url', 'avatar_url', 'photo', 'avatar', 'image']);
     final photo = _photoUrl(rawPhoto);
     final number = _field(
       const ['number', 'player_number', 'shirt_number'],
@@ -11686,9 +12392,8 @@ class _PlayerTile extends StatelessWidget {
     ].join(' · ');
 
     final badgeBg = active ? _C.primaryGreen : _C.bg;
-    final borderColor = active
-        ? _C.primaryGreen.withOpacity(.34)
-        : Colors.transparent;
+    final borderColor =
+        active ? _C.primaryGreen.withOpacity(.34) : Colors.transparent;
 
     return Material(
       color: Colors.transparent,
@@ -11882,14 +12587,18 @@ class _PlayerPanel extends StatelessWidget {
 
     final first = _text('first_name', '');
     final last = _text('last_name', '');
-    final fullName = _firstNonEmpty(const ['fullName', 'full_name'], '$first $last').trim();
+    final fullName =
+        _firstNonEmpty(const ['fullName', 'full_name'], '$first $last').trim();
     final name = fullName.isEmpty ? _text('name', 'Игрок') : fullName;
     final photo = _firstNonEmpty(const ['photo', 'avatar', 'image'], '');
-    final position = _firstNonEmpty(const ['position', 'role'], 'Амплуа не указано');
-    final number = _firstNonEmpty(const ['number', 'player_number', 'shirt_number']);
+    final position =
+        _firstNonEmpty(const ['position', 'role'], 'Амплуа не указано');
+    final number =
+        _firstNonEmpty(const ['number', 'player_number', 'shirt_number']);
     final birth = _firstNonEmpty(const ['birthDate', 'birth_date', 'birthday']);
     final email = _text('email');
-    final nationality = _firstNonEmpty(const ['nationality', 'citizenship', 'nationa']);
+    final nationality =
+        _firstNonEmpty(const ['nationality', 'citizenship', 'nationa']);
     final height = _text('height');
     final weight = _text('weight');
     final sportData = _firstNonEmpty(const ['sport_data', 'sportData'], '');
@@ -11940,9 +12649,16 @@ class _PlayerPanel extends StatelessWidget {
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          _RosterInfoPill(text: position, color: _C.graphite, bg: const Color(0xFFF7F7F8)),
-                          _RosterInfoPill(text: '№ $number', color: _C.graphite, bg: const Color(0xFFF1F5F9)),
-                          _RosterInfoPill(text: teamName, color: _C.graphite, bg: _C.bg),
+                          _RosterInfoPill(
+                              text: position,
+                              color: _C.graphite,
+                              bg: const Color(0xFFF7F7F8)),
+                          _RosterInfoPill(
+                              text: '№ $number',
+                              color: _C.graphite,
+                              bg: const Color(0xFFF1F5F9)),
+                          _RosterInfoPill(
+                              text: teamName, color: _C.graphite, bg: _C.bg),
                         ],
                       ),
                     ],
@@ -12259,9 +12975,6 @@ class _TrainingsPanel extends StatelessWidget {
   }
 }
 
-
-
-
 class _MobileMoreBottomSheet extends StatelessWidget {
   final String clubName;
   final String selectedTeamName;
@@ -12321,7 +13034,8 @@ class _MobileMoreBottomSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final h = MediaQuery.of(context).size.height;
     final bottom = MediaQuery.of(context).padding.bottom;
-    final totalItems = groups.fold<int>(0, (sum, group) => sum + group.items.length);
+    final totalItems =
+        groups.fold<int>(0, (sum, group) => sum + group.items.length);
 
     return Container(
       constraints: BoxConstraints(maxHeight: h * .88),
@@ -12417,7 +13131,8 @@ class _MobileMoreBottomSheet extends StatelessWidget {
                             locked: locked,
                             onTap: () {
                               if (needsTeam) {
-                                Get.snackbar('Команда', 'Сначала выберите активную команду');
+                                Get.snackbar('Команда',
+                                    'Сначала выберите активную команду');
                                 return;
                               }
                               onSelect(item.section);
@@ -12487,7 +13202,9 @@ class _MobileMoreHeaderCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  clubName.trim().isEmpty ? 'Рабочая зона клуба' : clubName.trim(),
+                  clubName.trim().isEmpty
+                      ? 'Рабочая зона клуба'
+                      : clubName.trim(),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -12499,7 +13216,9 @@ class _MobileMoreHeaderCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  hasTeam ? 'Активная команда: $selectedTeamName' : 'Выберите команду для командных модулей',
+                  hasTeam
+                      ? 'Активная команда: $selectedTeamName'
+                      : 'Выберите команду для командных модулей',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -12519,7 +13238,6 @@ class _MobileMoreHeaderCard extends StatelessWidget {
     );
   }
 }
-
 
 class _MobileMoreTile extends StatelessWidget {
   final _NavItem item;
@@ -12590,7 +13308,9 @@ class _MobileMoreTile extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: _WorkspaceText.rowTitle.copyWith(
                                   fontSize: 12.8,
-                                  fontWeight: active ? FontWeight.w600 : FontWeight.w600,
+                                  fontWeight: active
+                                      ? FontWeight.w600
+                                      : FontWeight.w600,
                                   color: titleColor,
                                   height: 1.05,
                                 ),
@@ -12638,7 +13358,6 @@ class _MobileMoreTile extends StatelessWidget {
   }
 }
 
-
 class _TrainersModuleContent extends StatefulWidget {
   final List<Map<String, dynamic>> trainers;
   final int teamsCount;
@@ -12685,7 +13404,8 @@ class _TrainersModuleContentState extends State<_TrainersModuleContent> {
             ? _s(trainer['fullName'])
             : _s(trainer['name']).isNotEmpty
                 ? _s(trainer['name'])
-                : '${_s(trainer['first_name'])} ${_s(trainer['last_name'])}'.trim();
+                : '${_s(trainer['first_name'])} ${_s(trainer['last_name'])}'
+                    .trim();
     return full.isEmpty ? 'Тренер' : full;
   }
 
@@ -12850,7 +13570,8 @@ class _TrainersModuleContentState extends State<_TrainersModuleContent> {
               Expanded(
                 child: trainers.isEmpty
                     ? Center(
-                        child: _TrainerEmptyInline(onOpenTrainers: widget.onOpenTrainers),
+                        child: _TrainerEmptyInline(
+                            onOpenTrainers: widget.onOpenTrainers),
                       )
                     : RefreshIndicator(
                         color: _C.primaryGreen,
@@ -12858,7 +13579,8 @@ class _TrainersModuleContentState extends State<_TrainersModuleContent> {
                         child: ListView.separated(
                           physics: const AlwaysScrollableScrollPhysics(),
                           itemCount: trainers.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 10),
                           itemBuilder: (_, index) {
                             final trainer = trainers[index];
                             return _TrainerWorkTile(
@@ -12869,7 +13591,8 @@ class _TrainersModuleContentState extends State<_TrainersModuleContent> {
                               role: _trainerRole(trainer),
                               team: _trainerTeam(trainer),
                               photo: _trainerPhoto(trainer),
-                              onTap: () => setState(() => selectedIndex = index),
+                              onTap: () =>
+                                  setState(() => selectedIndex = index),
                             );
                           },
                         ),
@@ -12938,7 +13661,8 @@ class _TrainerWorkTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final initialsBg = active ? _C.primaryGreen : _C.bg;
-    final borderColor = active ? _C.primaryGreen.withOpacity(.34) : Colors.transparent;
+    final borderColor =
+        active ? _C.primaryGreen.withOpacity(.34) : Colors.transparent;
 
     return Material(
       color: Colors.transparent,
@@ -13038,7 +13762,8 @@ class _TrainerWorkTile extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: active ? _C.primaryGreen : _C.bg,
                   shape: BoxShape.circle,
-                  border: Border.all(color: active ? _C.primaryGreen : _C.border),
+                  border:
+                      Border.all(color: active ? _C.primaryGreen : _C.border),
                 ),
                 child: Icon(
                   active ? Icons.check_rounded : Icons.chevron_right_rounded,
@@ -13299,13 +14024,18 @@ class _TrainerEmptyInline extends StatelessWidget {
         const Text(
           'Тренеры пока не добавлены',
           textAlign: TextAlign.center,
-          style: TextStyle(color: _C.text, fontSize: 16, fontWeight: FontWeight.w600),
+          style: TextStyle(
+              color: _C.text, fontSize: 16, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 6),
         const Text(
           'Добавьте тренера или назначьте специалиста к команде.',
           textAlign: TextAlign.center,
-          style: TextStyle(color: _C.muted, fontSize: 12.5, height: 1.35, fontWeight: FontWeight.w600),
+          style: TextStyle(
+              color: _C.muted,
+              fontSize: 12.5,
+              height: 1.35,
+              fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 14),
         _TrainerPanelButton(
@@ -13318,7 +14048,6 @@ class _TrainerEmptyInline extends StatelessWidget {
     );
   }
 }
-
 
 class _TrainerTopStrip extends StatelessWidget {
   final int trainersCount;
@@ -13344,7 +14073,8 @@ class _TrainerTopStrip extends StatelessWidget {
     final teamText = hasActiveTeam ? selectedTeamName : 'Команда не выбрана';
 
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: isMobile ? 14 : 16, vertical: 12),
+      padding:
+          EdgeInsets.symmetric(horizontal: isMobile ? 14 : 16, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
@@ -13371,15 +14101,18 @@ class _TrainerTopStrip extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    _TrainerSmallStat(value: '$trainersCount', label: 'тренеров'),
+                    _TrainerSmallStat(
+                        value: '$trainersCount', label: 'тренеров'),
                     const SizedBox(width: 8),
-                    _TrainerSmallStat(value: '$assignedCount', label: 'назначено'),
+                    _TrainerSmallStat(
+                        value: '$assignedCount', label: 'назначено'),
                     const Spacer(),
                     _ProStatusPill(active: proActive),
                     const SizedBox(width: 8),
                     const _HelpCircle(
                       title: 'Как работать с тренерами',
-                      text: 'Раздел тренеров показывает специалистов клуба и помогает быстро открыть карточку тренера, проверить контакты и назначение к команде.',
+                      text:
+                          'Раздел тренеров показывает специалистов клуба и помогает быстро открыть карточку тренера, проверить контакты и назначение к команде.',
                       steps: [
                         'Выберите тренера в списке слева или сверху на телефоне.',
                         'Справа откроется подробная карточка с фото, ролью, командой и контактами.',
@@ -13410,7 +14143,8 @@ class _TrainerTopStrip extends StatelessWidget {
                 const SizedBox(width: 8),
                 const _HelpCircle(
                   title: 'Как работать с тренерами',
-                  text: 'Раздел тренеров показывает специалистов клуба и помогает быстро открыть карточку тренера, проверить контакты и назначение к команде.',
+                  text:
+                      'Раздел тренеров показывает специалистов клуба и помогает быстро открыть карточку тренера, проверить контакты и назначение к команде.',
                   steps: [
                     'Выберите тренера в списке слева.',
                     'Справа откроется подробная карточка с фото, ролью, командой и контактами.',
@@ -13450,9 +14184,7 @@ class _TrainerSmallStat extends StatelessWidget {
           const SizedBox(width: 5),
           Text(label,
               style: const TextStyle(
-                  color: _C.muted,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600)),
+                  color: _C.muted, fontSize: 11, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -13470,7 +14202,8 @@ class _TrainerTeamLine extends StatelessWidget {
         Container(
           width: 8,
           height: 8,
-          decoration: const BoxDecoration(color: _C.primaryGreen, shape: BoxShape.circle),
+          decoration: const BoxDecoration(
+              color: _C.primaryGreen, shape: BoxShape.circle),
         ),
         const SizedBox(width: 8),
         Expanded(
@@ -13516,11 +14249,17 @@ class _TrainerEditButton extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _TrainerGlyph(kind: _TrainerGlyphKind.clipboard, color: Colors.white, size: 18),
+            _TrainerGlyph(
+                kind: _TrainerGlyphKind.clipboard,
+                color: Colors.white,
+                size: 18),
             SizedBox(width: 7),
             Text(
               'Редактировать',
-              style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600),
             ),
           ],
         ),
@@ -13560,7 +14299,8 @@ class _TrainerCompactList extends StatelessWidget {
           final trainer = trainers[index];
           final selected = index == selectedIndex;
           return Padding(
-            padding: EdgeInsets.only(bottom: index == trainers.length - 1 ? 0 : 8),
+            padding:
+                EdgeInsets.only(bottom: index == trainers.length - 1 ? 0 : 8),
             child: _TrainerCompactRow(
               trainer: trainer,
               selected: selected,
@@ -13610,7 +14350,10 @@ class _TrainerCompactRow extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? _C.greenSoft : Colors.white,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: selected ? _C.primaryGreen.withOpacity(.22) : Colors.transparent),
+          border: Border.all(
+              color: selected
+                  ? _C.primaryGreen.withOpacity(.22)
+                  : Colors.transparent),
         ),
         child: Row(
           children: [
@@ -13762,13 +14505,13 @@ class _TrainerDetailWorkCard extends StatelessWidget {
             value: team,
           ),
           const SizedBox(height: 14),
-          SizedBox(width: double.infinity, child: _TrainerEditButton(onTap: onEdit)),
+          SizedBox(
+              width: double.infinity, child: _TrainerEditButton(onTap: onEdit)),
         ],
       ),
     );
   }
 }
-
 
 class _SafeNetworkMedia extends StatelessWidget {
   final String url;
@@ -13807,13 +14550,16 @@ class _TrainerAvatar extends StatelessWidget {
   final String photo;
   final String name;
   final double size;
-  const _TrainerAvatar({required this.photo, required this.name, required this.size});
+  const _TrainerAvatar(
+      {required this.photo, required this.name, required this.size});
 
   String get _initials {
-    final parts = name.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
+    final parts =
+        name.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
     if (parts.isEmpty) return 'Т';
     if (parts.length == 1) return parts.first.characters.first.toUpperCase();
-    return '${parts.first.characters.first}${parts.last.characters.first}'.toUpperCase();
+    return '${parts.first.characters.first}${parts.last.characters.first}'
+        .toUpperCase();
   }
 
   @override
@@ -13892,9 +14638,16 @@ class _TrainerMicroChip extends StatelessWidget {
   }
 }
 
-
-
-enum _TrainerGlyphKind { staff, whistle, clipboard, phone, mail, team, check, arrow }
+enum _TrainerGlyphKind {
+  staff,
+  whistle,
+  clipboard,
+  phone,
+  mail,
+  team,
+  check,
+  arrow
+}
 
 class _TrainerGlyphBadge extends StatelessWidget {
   final _TrainerGlyphKind kind;
@@ -13912,7 +14665,8 @@ class _TrainerGlyphBadge extends StatelessWidget {
         border: Border.all(color: _C.primaryGreen.withOpacity(.10)),
       ),
       child: Center(
-        child: _TrainerGlyph(kind: kind, color: _C.primaryGreen, size: size * .48),
+        child:
+            _TrainerGlyph(kind: kind, color: _C.primaryGreen, size: size * .48),
       ),
     );
   }
@@ -13948,7 +14702,8 @@ class _TrainerGlyph extends StatelessWidget {
   final _TrainerGlyphKind kind;
   final Color color;
   final double size;
-  const _TrainerGlyph({required this.kind, required this.color, required this.size});
+  const _TrainerGlyph(
+      {required this.kind, required this.color, required this.size});
 
   @override
   Widget build(BuildContext context) {
@@ -13977,49 +14732,94 @@ class _TrainerGlyphPainter extends CustomPainter {
       ..strokeWidth = (w * .105).clamp(1.4, 2.4)
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
-    final fill = Paint()..color = color..style = PaintingStyle.fill;
+    final fill = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
 
     switch (kind) {
       case _TrainerGlyphKind.staff:
         canvas.drawCircle(Offset(w * .36, h * .30), w * .13, p);
         canvas.drawCircle(Offset(w * .64, h * .30), w * .13, p);
-        canvas.drawArc(Rect.fromLTWH(w * .15, h * .48, w * .42, h * .34), math.pi, math.pi, false, p);
-        canvas.drawArc(Rect.fromLTWH(w * .43, h * .48, w * .42, h * .34), math.pi, math.pi, false, p);
-        canvas.drawLine(Offset(w * .50, h * .16), Offset(w * .50, h * .86), p..strokeWidth = (w * .07).clamp(1.2, 2.0));
+        canvas.drawArc(Rect.fromLTWH(w * .15, h * .48, w * .42, h * .34),
+            math.pi, math.pi, false, p);
+        canvas.drawArc(Rect.fromLTWH(w * .43, h * .48, w * .42, h * .34),
+            math.pi, math.pi, false, p);
+        canvas.drawLine(Offset(w * .50, h * .16), Offset(w * .50, h * .86),
+            p..strokeWidth = (w * .07).clamp(1.2, 2.0));
         break;
       case _TrainerGlyphKind.whistle:
-        canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(w * .18, h * .34, w * .54, h * .36), Radius.circular(w * .16)), p);
+        canvas.drawRRect(
+            RRect.fromRectAndRadius(
+                Rect.fromLTWH(w * .18, h * .34, w * .54, h * .36),
+                Radius.circular(w * .16)),
+            p);
         canvas.drawCircle(Offset(w * .42, h * .52), w * .07, p);
-        canvas.drawPath(Path()..moveTo(w*.72,h*.42)..lineTo(w*.92,h*.34)..lineTo(w*.82,h*.54), p);
+        canvas.drawPath(
+            Path()
+              ..moveTo(w * .72, h * .42)
+              ..lineTo(w * .92, h * .34)
+              ..lineTo(w * .82, h * .54),
+            p);
         break;
       case _TrainerGlyphKind.clipboard:
-        canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(w*.22,h*.16,w*.56,h*.70), Radius.circular(w*.10)), p);
-        canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(w*.36,h*.10,w*.28,h*.16), Radius.circular(w*.06)), p);
-        canvas.drawLine(Offset(w*.36,h*.42), Offset(w*.64,h*.42), p);
-        canvas.drawLine(Offset(w*.36,h*.58), Offset(w*.60,h*.58), p);
+        canvas.drawRRect(
+            RRect.fromRectAndRadius(
+                Rect.fromLTWH(w * .22, h * .16, w * .56, h * .70),
+                Radius.circular(w * .10)),
+            p);
+        canvas.drawRRect(
+            RRect.fromRectAndRadius(
+                Rect.fromLTWH(w * .36, h * .10, w * .28, h * .16),
+                Radius.circular(w * .06)),
+            p);
+        canvas.drawLine(Offset(w * .36, h * .42), Offset(w * .64, h * .42), p);
+        canvas.drawLine(Offset(w * .36, h * .58), Offset(w * .60, h * .58), p);
         break;
       case _TrainerGlyphKind.phone:
-        canvas.drawPath(Path()
-          ..moveTo(w*.30,h*.18)..cubicTo(w*.20,h*.26,w*.24,h*.48,w*.42,h*.66)
-          ..cubicTo(w*.58,h*.82,w*.78,h*.84,w*.86,h*.72), p);
-        canvas.drawLine(Offset(w*.30,h*.18), Offset(w*.42,h*.30), p);
-        canvas.drawLine(Offset(w*.70,h*.62), Offset(w*.86,h*.72), p);
+        canvas.drawPath(
+            Path()
+              ..moveTo(w * .30, h * .18)
+              ..cubicTo(w * .20, h * .26, w * .24, h * .48, w * .42, h * .66)
+              ..cubicTo(w * .58, h * .82, w * .78, h * .84, w * .86, h * .72),
+            p);
+        canvas.drawLine(Offset(w * .30, h * .18), Offset(w * .42, h * .30), p);
+        canvas.drawLine(Offset(w * .70, h * .62), Offset(w * .86, h * .72), p);
         break;
       case _TrainerGlyphKind.mail:
-        final r = Rect.fromLTWH(w*.14,h*.24,w*.72,h*.52);
-        canvas.drawRRect(RRect.fromRectAndRadius(r, Radius.circular(w*.09)), p);
-        canvas.drawPath(Path()..moveTo(w*.18,h*.30)..lineTo(w*.50,h*.55)..lineTo(w*.82,h*.30), p);
+        final r = Rect.fromLTWH(w * .14, h * .24, w * .72, h * .52);
+        canvas.drawRRect(
+            RRect.fromRectAndRadius(r, Radius.circular(w * .09)), p);
+        canvas.drawPath(
+            Path()
+              ..moveTo(w * .18, h * .30)
+              ..lineTo(w * .50, h * .55)
+              ..lineTo(w * .82, h * .30),
+            p);
         break;
       case _TrainerGlyphKind.team:
-        canvas.drawCircle(Offset(w*.34,h*.34), w*.11, p);
-        canvas.drawCircle(Offset(w*.66,h*.34), w*.11, p);
-        canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(w*.18,h*.56,w*.64,h*.24), Radius.circular(w*.12)), p);
+        canvas.drawCircle(Offset(w * .34, h * .34), w * .11, p);
+        canvas.drawCircle(Offset(w * .66, h * .34), w * .11, p);
+        canvas.drawRRect(
+            RRect.fromRectAndRadius(
+                Rect.fromLTWH(w * .18, h * .56, w * .64, h * .24),
+                Radius.circular(w * .12)),
+            p);
         break;
       case _TrainerGlyphKind.check:
-        canvas.drawPath(Path()..moveTo(w*.24,h*.52)..lineTo(w*.43,h*.70)..lineTo(w*.78,h*.30), p);
+        canvas.drawPath(
+            Path()
+              ..moveTo(w * .24, h * .52)
+              ..lineTo(w * .43, h * .70)
+              ..lineTo(w * .78, h * .30),
+            p);
         break;
       case _TrainerGlyphKind.arrow:
-        canvas.drawPath(Path()..moveTo(w*.36,h*.22)..lineTo(w*.64,h*.50)..lineTo(w*.36,h*.78), p);
+        canvas.drawPath(
+            Path()
+              ..moveTo(w * .36, h * .22)
+              ..lineTo(w * .64, h * .50)
+              ..lineTo(w * .36, h * .78),
+            p);
         break;
     }
   }
@@ -14034,7 +14834,8 @@ class _TrainerContactTile extends StatelessWidget {
   final _TrainerGlyphKind kind;
   final String title;
   final String value;
-  const _TrainerContactTile({required this.kind, required this.title, required this.value});
+  const _TrainerContactTile(
+      {required this.kind, required this.title, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -14052,7 +14853,8 @@ class _TrainerContactTile extends StatelessWidget {
             width: 72,
             child: Text(
               title,
-              style: const TextStyle(color: _C.muted, fontSize: 11.5, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                  color: _C.muted, fontSize: 11.5, fontWeight: FontWeight.w600),
             ),
           ),
           Expanded(
@@ -14060,7 +14862,8 @@ class _TrainerContactTile extends StatelessWidget {
               value,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: _C.text, fontSize: 12.5, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                  color: _C.text, fontSize: 12.5, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -14087,13 +14890,18 @@ class _TrainerEmptyWorkarea extends StatelessWidget {
           const Text(
             'Тренеры пока не добавлены',
             textAlign: TextAlign.center,
-            style: TextStyle(color: _C.text, fontSize: 16, fontWeight: FontWeight.w600),
+            style: TextStyle(
+                color: _C.text, fontSize: 16, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 6),
           const Text(
             'Добавьте тренера или назначьте специалиста к команде.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: _C.muted, fontSize: 12.5, height: 1.35, fontWeight: FontWeight.w600),
+            style: TextStyle(
+                color: _C.muted,
+                fontSize: 12.5,
+                height: 1.35,
+                fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 14),
           _TrainerEditButton(onTap: onOpenTrainers),
@@ -14102,7 +14910,6 @@ class _TrainerEmptyWorkarea extends StatelessWidget {
     );
   }
 }
-
 
 class _TrainerMobileSummaryCard extends StatelessWidget {
   final bool proActive;
@@ -14353,7 +15160,8 @@ class _TrainerHeroPanel extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: Colors.white.withOpacity(.14)),
                 ),
-                child: const Icon(Icons.supervisor_account_rounded, color: Colors.white),
+                child: const Icon(Icons.supervisor_account_rounded,
+                    color: Colors.white),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -14444,7 +15252,8 @@ class _TrainerHeroPanel extends StatelessWidget {
               _TrainerDarkChip(text: '$trainersCount тренеров'),
               _TrainerDarkChip(text: '$assignedCount назначено'),
               _TrainerDarkChip(text: 'информация $infoPercent%'),
-              if (adminName.isNotEmpty) _TrainerDarkChip(text: 'ответственный: $adminName'),
+              if (adminName.isNotEmpty)
+                _TrainerDarkChip(text: 'ответственный: $adminName'),
             ],
           ),
         ],
@@ -14499,16 +15308,22 @@ class _TrainerStatusPanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          _TrainerChecklistRow(title: 'Тренеры добавлены', done: trainersCount > 0),
-          _TrainerChecklistRow(title: 'Есть назначения к командам', done: assignedCount > 0),
-          _TrainerChecklistRow(title: 'Профили заполнены', done: filledProfiles > 0),
-          _TrainerChecklistRow(title: 'Контакты, роли и фото заполнены', done: infoPercent >= 70),
+          _TrainerChecklistRow(
+              title: 'Тренеры добавлены', done: trainersCount > 0),
+          _TrainerChecklistRow(
+              title: 'Есть назначения к командам', done: assignedCount > 0),
+          _TrainerChecklistRow(
+              title: 'Профили заполнены', done: filledProfiles > 0),
+          _TrainerChecklistRow(
+              title: 'Контакты, роли и фото заполнены',
+              done: infoPercent >= 70),
           const SizedBox(height: 12),
           if (missing.isNotEmpty)
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: missing.map((item) => _TrainerHintChip(text: item)).toList(),
+              children:
+                  missing.map((item) => _TrainerHintChip(text: item)).toList(),
             )
           else
             const Text(
@@ -14565,8 +15380,11 @@ class _TrainerListPreview extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           ...visible.map((trainer) {
-            final name = trainerName(trainer).isEmpty ? 'Тренер' : trainerName(trainer);
-            final role = trainerRole(trainer).isEmpty ? 'Роль не указана' : trainerRole(trainer);
+            final name =
+                trainerName(trainer).isEmpty ? 'Тренер' : trainerName(trainer);
+            final role = trainerRole(trainer).isEmpty
+                ? 'Роль не указана'
+                : trainerRole(trainer);
             final team = _s(trainer['team_name'] ?? trainer['teamName']);
             final percent = fillPercent(trainer);
 
@@ -14588,7 +15406,8 @@ class _TrainerListPreview extends StatelessWidget {
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: _C.border),
                     ),
-                    child: const Icon(Icons.person_rounded, color: _C.blue, size: 21),
+                    child: const Icon(Icons.person_rounded,
+                        color: _C.blue, size: 21),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -14669,7 +15488,9 @@ class _TrainerChecklistRow extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            done ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+            done
+                ? Icons.check_circle_rounded
+                : Icons.radio_button_unchecked_rounded,
             color: done ? _C.primaryGreen : _C.muted,
             size: 18,
           ),
@@ -14855,9 +15676,6 @@ class _TrainerActionButton extends StatelessWidget {
   }
 }
 
-
-
-
 class _ProCornerBadge extends StatelessWidget {
   final bool active;
 
@@ -14990,7 +15808,8 @@ class _TeamModulePanel extends StatelessWidget {
     final internalCards = <_ModuleQuickAction>[
       ...quickActions,
       if (showFullModuleCard)
-        _ModuleQuickAction('Полный модуль', Icons.open_in_new_rounded, onPrimary),
+        _ModuleQuickAction(
+            'Полный модуль', Icons.open_in_new_rounded, onPrimary),
     ];
 
     return ListView(
@@ -15109,26 +15928,26 @@ class _TeamModulePanel extends StatelessWidget {
         if (internalCards.isNotEmpty) ...[
           const SizedBox(height: 12),
           GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: columns,
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: isMobile ? 1.55 : 2.25,
-          ),
-          itemCount: internalCards.length,
-          itemBuilder: (_, index) {
-            final action = internalCards[index];
-            return _ModuleCard(
-              icon: action.icon,
-              title: action.text,
-              subtitle: index == internalCards.length - 1
-                  ? 'Открыть рабочий экран'
-                  : 'Быстрое действие',
-              onTap: action.onTap,
-            );
-          },
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columns,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: isMobile ? 1.55 : 2.25,
+            ),
+            itemCount: internalCards.length,
+            itemBuilder: (_, index) {
+              final action = internalCards[index];
+              return _ModuleCard(
+                icon: action.icon,
+                title: action.text,
+                subtitle: index == internalCards.length - 1
+                    ? 'Открыть рабочий экран'
+                    : 'Быстрое действие',
+                onTap: action.onTap,
+              );
+            },
           ),
         ],
       ],
@@ -15148,8 +15967,7 @@ class _TeamGuard extends StatelessWidget {
   final Widget child;
   const _TeamGuard({required this.hasTeam, required this.child});
   @override
-  Widget build(BuildContext context) =>
-      hasTeam ? child : const _NeedTeam();
+  Widget build(BuildContext context) => hasTeam ? child : const _NeedTeam();
 }
 
 class _NeedTeam extends StatelessWidget {
@@ -15181,31 +15999,24 @@ class _SolidPlaceholder extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: 650),
         padding: const EdgeInsets.all(28),
         decoration: _cardDecoration(radius: 32),
-        child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _IconBadge(icon: icon, size: 76, iconSize: 38),
-              const SizedBox(height: 16),
-              Text(title,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w600,
-                      color: _C.text)),
-              const SizedBox(height: 8),
-              Text(subtitle,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      color: _C.muted, height: 1.45)),
-              const SizedBox(height: 18),
-              Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  alignment: WrapAlignment.center,
-                  children: chips
-                      .map((e) => _LightChip(text: e))
-                      .toList()),
-            ]),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          _IconBadge(icon: icon, size: 76, iconSize: 38),
+          const SizedBox(height: 16),
+          Text(title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 24, fontWeight: FontWeight.w600, color: _C.text)),
+          const SizedBox(height: 8),
+          Text(subtitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: _C.muted, height: 1.45)),
+          const SizedBox(height: 18),
+          Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: chips.map((e) => _LightChip(text: e)).toList()),
+        ]),
       ),
     );
   }
@@ -15230,33 +16041,31 @@ class _SolidCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: _cardDecoration(radius: 28),
-      child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              Expanded(
-                  child: Text(title,
-                      style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: _C.text))),
-              if (helpText != null) ...[
-                const SizedBox(width: 8),
-                _HelpCircle(
-                  title: title,
-                  text: helpText!,
-                  steps: helpSteps,
-                  size: 32,
-                ),
-              ],
-              if (trailing != null) ...[
-                const SizedBox(width: 8),
-                trailing!,
-              ],
-            ]),
-            const SizedBox(height: 14),
-            child,
-          ]),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(
+              child: Text(title,
+                  style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: _C.text))),
+          if (helpText != null) ...[
+            const SizedBox(width: 8),
+            _HelpCircle(
+              title: title,
+              text: helpText!,
+              steps: helpSteps,
+              size: 32,
+            ),
+          ],
+          if (trailing != null) ...[
+            const SizedBox(width: 8),
+            trailing!,
+          ],
+        ]),
+        const SizedBox(height: 14),
+        child,
+      ]),
     );
   }
 }
@@ -15305,7 +16114,8 @@ class _ClubHeroCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _LogoBox(url: clubLogo, size: compact ? 58 : 70, bgColor: Colors.white),
+          _LogoBox(
+              url: clubLogo, size: compact ? 58 : 70, bgColor: Colors.white),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -15348,9 +16158,7 @@ class _HeroStat extends StatelessWidget {
   final String title;
   final Color color;
   const _HeroStat(
-      {required this.value,
-      required this.title,
-      this.color = _C.primaryGreen});
+      {required this.value, required this.title, this.color = _C.primaryGreen});
 
   @override
   Widget build(BuildContext context) {
@@ -15364,15 +16172,11 @@ class _HeroStat extends StatelessWidget {
       child: Column(children: [
         Text(value,
             style: TextStyle(
-                color: color,
-                fontSize: 22,
-                fontWeight: FontWeight.w600)),
+                color: color, fontSize: 22, fontWeight: FontWeight.w600)),
         const SizedBox(height: 1),
         Text(title,
             style: const TextStyle(
-                color: _C.muted,
-                fontSize: 11,
-                fontWeight: FontWeight.w600)),
+                color: _C.muted, fontSize: 11, fontWeight: FontWeight.w600)),
       ]),
     );
   }
@@ -15456,7 +16260,8 @@ class _ModuleCard extends StatelessWidget {
         decoration: _cardDecoration(radius: 24),
         child: Row(
           children: [
-            _IconBadge(icon: icon, size: mobile ? 40 : 46, iconSize: mobile ? 20 : 23),
+            _IconBadge(
+                icon: icon, size: mobile ? 40 : 46, iconSize: mobile ? 20 : 23),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -15490,7 +16295,8 @@ class _ModuleCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 4),
-            Icon(Icons.chevron_right_rounded, color: accent, size: mobile ? 20 : 24),
+            Icon(Icons.chevron_right_rounded,
+                color: accent, size: mobile ? 20 : 24),
           ],
         ),
       ),
@@ -15613,19 +16419,15 @@ class _WhiteButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(
-            horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18)),
+            color: Colors.white, borderRadius: BorderRadius.circular(18)),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(icon, color: _C.black, size: 19),
           const SizedBox(width: 8),
           Text(text,
               style: const TextStyle(
-                  color: _C.black,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13)),
+                  color: _C.black, fontWeight: FontWeight.w600, fontSize: 13)),
         ]),
       ),
     );
@@ -15635,8 +16437,7 @@ class _WhiteButton extends StatelessWidget {
 class _IconCircleButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
-  const _IconCircleButton(
-      {required this.icon, required this.onTap});
+  const _IconCircleButton({required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -15658,8 +16459,7 @@ class _IconCircleButton extends StatelessWidget {
 class _SmallIconButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
-  const _SmallIconButton(
-      {required this.icon, required this.onTap});
+  const _SmallIconButton({required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -15673,8 +16473,7 @@ class _SmallIconButton extends StatelessWidget {
               color: _C.soft2,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: _C.border)),
-          child: Icon(icon,
-              color: _C.primaryGreen, size: 20)),
+          child: Icon(icon, color: _C.primaryGreen, size: 20)),
     );
   }
 }
@@ -15683,45 +16482,37 @@ class _MiniStat extends StatelessWidget {
   final String title;
   final String value;
   final IconData? icon;
-  const _MiniStat(
-      {required this.title, required this.value, this.icon});
+  const _MiniStat({required this.title, required this.value, this.icon});
 
   @override
   Widget build(BuildContext context) {
-    final accent = icon == null
-        ? _C.primaryGreen
-        : _C.accentForIcon(icon!);
+    final accent = icon == null ? _C.primaryGreen : _C.accentForIcon(icon!);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
           color: _C.softFor(accent),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-              color: accent.withOpacity(.12))),
-      child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              if (icon != null)
-                Icon(icon, color: accent, size: 15),
-              if (icon != null) const SizedBox(width: 6),
-              Expanded(
-                  child: Text(title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          color: _C.muted,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600)))
-            ]),
-            const SizedBox(height: 5),
-            Text(value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    color: _C.text,
-                    fontWeight: FontWeight.w600)),
-          ]),
+          border: Border.all(color: accent.withOpacity(.12))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          if (icon != null) Icon(icon, color: accent, size: 15),
+          if (icon != null) const SizedBox(width: 6),
+          Expanded(
+              child: Text(title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      color: _C.muted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600)))
+        ]),
+        const SizedBox(height: 5),
+        Text(value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style:
+                const TextStyle(color: _C.text, fontWeight: FontWeight.w600)),
+      ]),
     );
   }
 }
@@ -15733,18 +16524,14 @@ class _DarkChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-          horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
           color: Colors.white.withOpacity(.12),
           borderRadius: BorderRadius.circular(99),
-          border: Border.all(
-              color: Colors.white.withOpacity(.06))),
+          border: Border.all(color: Colors.white.withOpacity(.06))),
       child: Text(text,
           style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w600)),
+              color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
     );
   }
 }
@@ -15756,16 +16543,13 @@ class _LightChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-          horizontal: 10, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
           color: Colors.white.withOpacity(.86),
           borderRadius: BorderRadius.circular(99),
           border: Border.all(color: _C.border)),
       child: Text(text,
-          style: const TextStyle(
-              color: _C.black,
-              fontWeight: FontWeight.w600)),
+          style: const TextStyle(color: _C.black, fontWeight: FontWeight.w600)),
     );
   }
 }
@@ -15784,8 +16568,7 @@ class _EventRow extends StatelessWidget {
       decoration: BoxDecoration(
           color: _C.tealSoft,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-              color: accent.withOpacity(.16))),
+          border: Border.all(color: accent.withOpacity(.16))),
       child: Row(children: [
         Container(
             width: 34,
@@ -15793,24 +16576,19 @@ class _EventRow extends StatelessWidget {
             decoration: BoxDecoration(
                 color: Colors.white.withOpacity(.9),
                 borderRadius: BorderRadius.circular(12)),
-            child: const Icon(
-                Icons.event_available_rounded,
-                color: accent,
-                size: 18)),
+            child: const Icon(Icons.event_available_rounded,
+                color: accent, size: 18)),
         const SizedBox(width: 10),
         Expanded(
             child: Text(title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: _C.text))),
+                    fontWeight: FontWeight.w600, color: _C.text))),
         const SizedBox(width: 10),
         Text(date,
             style: const TextStyle(
-                color: _C.muted,
-                fontSize: 12,
-                fontWeight: FontWeight.w600)),
+                color: _C.muted, fontSize: 12, fontWeight: FontWeight.w600)),
       ]),
     );
   }
@@ -15822,8 +16600,7 @@ class _EmptyText extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(text,
       textAlign: TextAlign.center,
-      style: const TextStyle(
-          color: _C.muted, height: 1.4));
+      style: const TextStyle(color: _C.muted, height: 1.4));
 }
 
 class _EmptyTeams extends StatelessWidget {
@@ -15868,8 +16645,7 @@ class _LargeActionButton extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
               child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                 Text(title,
                     style: const TextStyle(
@@ -15877,12 +16653,9 @@ class _LargeActionButton extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                         color: _C.text)),
                 const SizedBox(height: 4),
-                Text(subtitle,
-                    style: const TextStyle(
-                        color: _C.muted)),
+                Text(subtitle, style: const TextStyle(color: _C.muted)),
               ])),
-          Icon(Icons.chevron_right_rounded,
-              color: _C.accentForIcon(icon)),
+          Icon(Icons.chevron_right_rounded, color: _C.accentForIcon(icon)),
         ]),
       ),
     );
@@ -15925,8 +16698,7 @@ class _LogoBox extends StatelessWidget {
 class _RotateTabletHint extends StatelessWidget {
   final String clubName;
   final String? clubLogo;
-  const _RotateTabletHint(
-      {required this.clubName, required this.clubLogo});
+  const _RotateTabletHint({required this.clubName, required this.clubLogo});
 
   @override
   Widget build(BuildContext context) {
@@ -15937,33 +16709,22 @@ class _RotateTabletHint extends StatelessWidget {
           width: 520,
           padding: const EdgeInsets.all(30),
           decoration: _cardDecoration(radius: 34),
-          child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _LogoBox(
-                    url: clubLogo,
-                    size: 78,
-                    bgColor: _C.soft),
-                const SizedBox(height: 20),
-                Text(clubName,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w600,
-                        color: _C.text)),
-                const SizedBox(height: 8),
-                const Text(
-                    'Для полноценного рабочий кабинет-кабинета поверните планшет горизонтально.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                        color: _C.muted,
-                        height: 1.45)),
-                const SizedBox(height: 22),
-                const Icon(
-                    Icons.screen_rotation_alt_rounded,
-                    color: _C.primaryGreen,
-                    size: 58),
-              ]),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            _LogoBox(url: clubLogo, size: 78, bgColor: _C.soft),
+            const SizedBox(height: 20),
+            Text(clubName,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontSize: 24, fontWeight: FontWeight.w600, color: _C.text)),
+            const SizedBox(height: 8),
+            const Text(
+                'Для полноценного рабочий кабинет-кабинета поверните планшет горизонтально.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: _C.muted, height: 1.45)),
+            const SizedBox(height: 22),
+            const Icon(Icons.screen_rotation_alt_rounded,
+                color: _C.primaryGreen, size: 58),
+          ]),
         ),
       ),
     );
@@ -15975,32 +16736,25 @@ class _ProfileLine extends StatelessWidget {
   final String title;
   final String value;
   const _ProfileLine(
-      {required this.icon,
-      required this.title,
-      required this.value});
+      {required this.icon, required this.title, required this.value});
 
   @override
   Widget build(BuildContext context) {
     return Row(children: [
-      Icon(icon,
-          color: _C.accentForIcon(icon), size: 22),
+      Icon(icon, color: _C.accentForIcon(icon), size: 22),
       const SizedBox(width: 12),
       Text('$title:',
-          style: const TextStyle(
-              color: _C.muted,
-              fontWeight: FontWeight.w600)),
+          style: const TextStyle(color: _C.muted, fontWeight: FontWeight.w600)),
       const SizedBox(width: 8),
       Expanded(
           child: Text(value,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                  color: _C.text,
-                  fontWeight: FontWeight.w600))),
+                  color: _C.text, fontWeight: FontWeight.w600))),
     ]);
   }
 }
-
 
 class _HelpCircle extends StatelessWidget {
   final String title;
@@ -16089,7 +16843,8 @@ class _HelpCircle extends StatelessWidget {
                     const SizedBox(height: 14),
                     ...List.generate(steps.length, (index) {
                       return Padding(
-                        padding: EdgeInsets.only(bottom: index == steps.length - 1 ? 0 : 8),
+                        padding: EdgeInsets.only(
+                            bottom: index == steps.length - 1 ? 0 : 8),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -16170,10 +16925,7 @@ class _IconBadge extends StatelessWidget {
   final double iconSize;
   final Color? color;
   const _IconBadge(
-      {required this.icon,
-      this.size = 58,
-      this.iconSize = 30,
-      this.color});
+      {required this.icon, this.size = 58, this.iconSize = 30, this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -16183,10 +16935,8 @@ class _IconBadge extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
           color: _C.softFor(accent),
-          borderRadius:
-              BorderRadius.circular(size * .34),
-          border: Border.all(
-              color: accent.withOpacity(.08)),
+          borderRadius: BorderRadius.circular(size * .34),
+          border: Border.all(color: accent.withOpacity(.08)),
           boxShadow: [
             BoxShadow(
               color: accent.withOpacity(.055),
@@ -16229,8 +16979,7 @@ class _ClubChatPanel extends StatelessWidget {
       return const _SolidPlaceholder(
         icon: Icons.forum_rounded,
         title: 'Чаты недоступны',
-        subtitle:
-            'Не удалось определить пользователя для загрузки чатов.',
+        subtitle: 'Не удалось определить пользователя для загрузки чатов.',
         chips: ['Личные', 'Группы', 'Команда'],
       );
     }
@@ -16256,8 +17005,7 @@ class _ClubChatPanel extends StatelessWidget {
                 const SizedBox(width: 12),
                 const Expanded(
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'Чаты клуба',
@@ -16360,7 +17108,8 @@ class _ClubIntroSplash extends StatelessWidget {
               Center(
                 child: Container(
                   width: 430,
-                  padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 32),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 30, vertical: 32),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(.92),
                     borderRadius: BorderRadius.circular(30),
@@ -16446,7 +17195,6 @@ class _ClubIntroSplash extends StatelessWidget {
   }
 }
 
-
 class _WorkspaceWallpaper extends StatelessWidget {
   final _WorkspaceWallpaperStyle style;
   final String clubName;
@@ -16508,12 +17256,14 @@ class _WorkspaceWallpaperPatternPainter extends CustomPainter {
   final bool dark;
   final bool pitch;
 
-  const _WorkspaceWallpaperPatternPainter({required this.dark, required this.pitch});
+  const _WorkspaceWallpaperPatternPainter(
+      {required this.dark, required this.pitch});
 
   @override
   void paint(Canvas canvas, Size size) {
     final gridPaint = Paint()
-      ..color = (dark ? Colors.white : _C.primaryGreen).withOpacity(dark ? .035 : .04)
+      ..color =
+          (dark ? Colors.white : _C.primaryGreen).withOpacity(dark ? .035 : .04)
       ..strokeWidth = 1;
 
     for (double x = 0; x < size.width; x += 56) {
@@ -16526,11 +17276,14 @@ class _WorkspaceWallpaperPatternPainter extends CustomPainter {
     final glowPaint = Paint()
       ..shader = RadialGradient(
         colors: [
-          (dark ? _C.primaryGreen : _C.primaryGreen).withOpacity(dark ? .22 : .12),
+          (dark ? _C.primaryGreen : _C.primaryGreen)
+              .withOpacity(dark ? .22 : .12),
           Colors.transparent,
         ],
-      ).createShader(Rect.fromCircle(center: Offset(size.width * .78, size.height * .20), radius: 360));
-    canvas.drawCircle(Offset(size.width * .78, size.height * .20), 360, glowPaint);
+      ).createShader(Rect.fromCircle(
+          center: Offset(size.width * .78, size.height * .20), radius: 360));
+    canvas.drawCircle(
+        Offset(size.width * .78, size.height * .20), 360, glowPaint);
 
     if (!pitch) return;
 
@@ -16538,10 +17291,14 @@ class _WorkspaceWallpaperPatternPainter extends CustomPainter {
       ..color = _C.primaryGreen.withOpacity(.12)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
-    final rect = Rect.fromLTWH(size.width * .58, size.height * .18, size.width * .30, size.height * .50);
-    canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(18)), fieldPaint);
-    canvas.drawLine(Offset(rect.left, rect.center.dy), Offset(rect.right, rect.center.dy), fieldPaint);
-    canvas.drawCircle(rect.center, math.min(rect.width, rect.height) * .12, fieldPaint);
+    final rect = Rect.fromLTWH(size.width * .58, size.height * .18,
+        size.width * .30, size.height * .50);
+    canvas.drawRRect(
+        RRect.fromRectAndRadius(rect, const Radius.circular(18)), fieldPaint);
+    canvas.drawLine(Offset(rect.left, rect.center.dy),
+        Offset(rect.right, rect.center.dy), fieldPaint);
+    canvas.drawCircle(
+        rect.center, math.min(rect.width, rect.height) * .12, fieldPaint);
   }
 
   @override
@@ -16555,7 +17312,8 @@ class _WorkspaceDesktopIconsLayer extends StatelessWidget {
   final List<_FullMenuItem> items;
   final Map<ClubSection, Offset> iconPositions;
   final ValueChanged<ClubSection> onOpen;
-  final void Function(ClubSection section, Offset position, Size desktopSize) onMoved;
+  final void Function(ClubSection section, Offset position, Size desktopSize)
+      onMoved;
 
   const _WorkspaceDesktopIconsLayer({
     required this.desktopSize,
@@ -16588,7 +17346,8 @@ class _WorkspaceDesktopIconsLayer extends StatelessWidget {
       child: _WorkspaceDesktopIcon(
         item: item,
         onTap: () => onOpen(item.section),
-        onDragUpdate: (delta) => onMoved(item.section, position + delta, desktopSize),
+        onDragUpdate: (delta) =>
+            onMoved(item.section, position + delta, desktopSize),
       ),
     );
   }
@@ -16625,9 +17384,12 @@ class _WorkspaceDesktopIconState extends State<_WorkspaceDesktopIcon> {
           width: 92,
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
           decoration: BoxDecoration(
-            color: _hovered ? Colors.white.withOpacity(.74) : Colors.white.withOpacity(.42),
+            color: _hovered
+                ? Colors.white.withOpacity(.74)
+                : Colors.white.withOpacity(.42),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: Colors.white.withOpacity(_hovered ? .80 : .42)),
+            border: Border.all(
+                color: Colors.white.withOpacity(_hovered ? .80 : .42)),
             boxShadow: _hovered
                 ? [
                     BoxShadow(
@@ -16736,7 +17498,8 @@ class _WorkspaceFloatingWindow extends StatelessWidget {
             children: [
               GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onPanUpdate: maximized ? null : (details) => onDragUpdate(details.delta),
+                onPanUpdate:
+                    maximized ? null : (details) => onDragUpdate(details.delta),
                 onDoubleTap: onMaximize,
                 child: _WorkspaceWindowTitleBar(
                   title: title,
@@ -16764,7 +17527,8 @@ class _WorkspaceFloatingWindow extends StatelessWidget {
                         bottom: 0,
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
-                          onPanUpdate: (details) => onResizeUpdate(details.delta),
+                          onPanUpdate: (details) =>
+                              onResizeUpdate(details.delta),
                           child: SizedBox(
                             width: 28,
                             height: 28,
@@ -16772,7 +17536,9 @@ class _WorkspaceFloatingWindow extends StatelessWidget {
                               alignment: Alignment.bottomRight,
                               child: Padding(
                                 padding: const EdgeInsets.all(6),
-                                child: Icon(Icons.open_in_full_rounded, size: 13, color: _C.lightMuted.withOpacity(.80)),
+                                child: Icon(Icons.open_in_full_rounded,
+                                    size: 13,
+                                    color: _C.lightMuted.withOpacity(.80)),
                               ),
                             ),
                           ),
@@ -16817,17 +17583,35 @@ class _WorkspaceWindowTitleBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
         color: active ? Colors.white : const Color(0xFFF8F9FA),
-        border: const Border(bottom: BorderSide(color: Color(0x00FFFFFF), width: 0)),
+        border: const Border(
+            bottom: BorderSide(color: Color(0x00FFFFFF), width: 0)),
       ),
       child: Row(
         children: [
           Row(
             children: [
-              _MacWindowDot(icon: Icons.close_rounded, color: const Color(0xFFE9ECEF), iconColor: const Color(0xFF6B7280), onTap: onClose, tooltip: 'Закрыть'),
+              _MacWindowDot(
+                  icon: Icons.close_rounded,
+                  color: const Color(0xFFE9ECEF),
+                  iconColor: const Color(0xFF6B7280),
+                  onTap: onClose,
+                  tooltip: 'Закрыть'),
               const SizedBox(width: 7),
-              _MacWindowDot(icon: Icons.remove_rounded, color: const Color(0xFFF1F3F5), iconColor: const Color(0xFF6B7280), onTap: onMinimize, tooltip: 'Свернуть'),
+              _MacWindowDot(
+                  icon: Icons.remove_rounded,
+                  color: const Color(0xFFF1F3F5),
+                  iconColor: const Color(0xFF6B7280),
+                  onTap: onMinimize,
+                  tooltip: 'Свернуть'),
               const SizedBox(width: 7),
-              _MacWindowDot(icon: maximized ? Icons.fullscreen_exit_rounded : Icons.open_in_full_rounded, color: const Color(0xFFF1F3F5), iconColor: const Color(0xFF667085), onTap: onMaximize, tooltip: maximized ? 'Вернуть размер' : 'Развернуть'),
+              _MacWindowDot(
+                  icon: maximized
+                      ? Icons.fullscreen_exit_rounded
+                      : Icons.open_in_full_rounded,
+                  color: const Color(0xFFF1F3F5),
+                  iconColor: const Color(0xFF667085),
+                  onTap: onMaximize,
+                  tooltip: maximized ? 'Вернуть размер' : 'Развернуть'),
             ],
           ),
           const SizedBox(width: 14),
@@ -16860,7 +17644,9 @@ class _WorkspaceWindowTitleBar extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  subtitle.trim().isEmpty ? 'Sportoteka Workspace' : subtitle.trim(),
+                  subtitle.trim().isEmpty
+                      ? 'Sportoteka Workspace'
+                      : subtitle.trim(),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -16985,7 +17771,8 @@ class _WorkspaceDock extends StatelessWidget {
       ...pinnedItems,
       for (final window in openWindows)
         if (!pinnedItems.any((item) => item.section == window.section))
-          _FullMenuItem(window.section, Icons.widgets_rounded, window.section.name, 'Запущено'),
+          _FullMenuItem(window.section, Icons.widgets_rounded,
+              window.section.name, 'Запущено'),
     ];
 
     return Center(
@@ -17049,7 +17836,8 @@ class _WorkspaceDock extends StatelessWidget {
                           size: _buttonSize,
                           active: activeSection == item.section,
                           running: runningSections.contains(item.section),
-                          minimized: openWindows.any((w) => w.section == item.section && w.minimized),
+                          minimized: openWindows.any(
+                              (w) => w.section == item.section && w.minimized),
                           onTap: () => onOpenSection(item.section),
                         ),
                         const SizedBox(width: 5),
@@ -17101,7 +17889,8 @@ class _WorkspaceDockDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(width: 1, height: height, color: _C.border.withOpacity(.75));
+    return Container(
+        width: 1, height: height, color: _C.border.withOpacity(.75));
   }
 }
 
@@ -17138,7 +17927,8 @@ class _WorkspaceDockButtonState extends State<_WorkspaceDockButton> {
         : _hovered
             ? const Color(0xFFF3F5F7)
             : Colors.transparent;
-    final iconColor = widget.active ? const Color(0xFF111827) : const Color(0xFF344054);
+    final iconColor =
+        widget.active ? const Color(0xFF111827) : const Color(0xFF344054);
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -17161,9 +17951,13 @@ class _WorkspaceDockButtonState extends State<_WorkspaceDockButton> {
                   decoration: BoxDecoration(
                     color: bg,
                     borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: widget.active ? const Color(0xFFE3E8EF) : Colors.transparent),
+                    border: Border.all(
+                        color: widget.active
+                            ? const Color(0xFFE3E8EF)
+                            : Colors.transparent),
                   ),
-                  child: Icon(widget.icon, color: iconColor, size: widget.size >= 44 ? 23 : 21),
+                  child: Icon(widget.icon,
+                      color: iconColor, size: widget.size >= 44 ? 23 : 21),
                 ),
                 if (widget.running)
                   Positioned(
@@ -17172,7 +17966,9 @@ class _WorkspaceDockButtonState extends State<_WorkspaceDockButton> {
                       width: widget.minimized ? 12 : 6,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: widget.minimized ? _C.lightMuted : const Color(0xFF111827),
+                        color: widget.minimized
+                            ? _C.lightMuted
+                            : const Color(0xFF111827),
                         borderRadius: BorderRadius.circular(999),
                       ),
                     ),
@@ -17214,10 +18010,12 @@ class _MacWorkspaceSettingsDialog extends StatefulWidget {
   });
 
   @override
-  State<_MacWorkspaceSettingsDialog> createState() => _MacWorkspaceSettingsDialogState();
+  State<_MacWorkspaceSettingsDialog> createState() =>
+      _MacWorkspaceSettingsDialogState();
 }
 
-class _MacWorkspaceSettingsDialogState extends State<_MacWorkspaceSettingsDialog> {
+class _MacWorkspaceSettingsDialogState
+    extends State<_MacWorkspaceSettingsDialog> {
   int _tab = 0;
   late bool _showIcons;
   late _WorkspaceDockSize _dockSize;
@@ -17291,7 +18089,8 @@ class _MacWorkspaceSettingsDialogState extends State<_MacWorkspaceSettingsDialog
                           ),
                           IconButton(
                             onPressed: () => Navigator.of(context).pop(),
-                            icon: const Icon(Icons.close_rounded, color: _C.railText),
+                            icon: const Icon(Icons.close_rounded,
+                                color: _C.railText),
                           ),
                         ],
                       ),
@@ -17327,11 +18126,26 @@ class _MacWorkspaceSettingsDialogState extends State<_MacWorkspaceSettingsDialog
         children: [
           Row(
             children: [
-              _MacWindowDot(icon: Icons.close_rounded, color: const Color(0xFFE9ECEF), iconColor: const Color(0xFF6B7280), onTap: () => Navigator.of(context).pop(), tooltip: 'Закрыть'),
+              _MacWindowDot(
+                  icon: Icons.close_rounded,
+                  color: const Color(0xFFE9ECEF),
+                  iconColor: const Color(0xFF6B7280),
+                  onTap: () => Navigator.of(context).pop(),
+                  tooltip: 'Закрыть'),
               const SizedBox(width: 7),
-              _MacWindowDot(icon: Icons.remove_rounded, color: const Color(0xFFF1F3F5), iconColor: const Color(0xFF6B7280), onTap: () {}, tooltip: 'Свернуть'),
+              _MacWindowDot(
+                  icon: Icons.remove_rounded,
+                  color: const Color(0xFFF1F3F5),
+                  iconColor: const Color(0xFF6B7280),
+                  onTap: () {},
+                  tooltip: 'Свернуть'),
               const SizedBox(width: 7),
-              _MacWindowDot(icon: Icons.open_in_full_rounded, color: const Color(0xFFF1F3F5), iconColor: const Color(0xFF667085), onTap: () {}, tooltip: 'Развернуть'),
+              _MacWindowDot(
+                  icon: Icons.open_in_full_rounded,
+                  color: const Color(0xFFF1F3F5),
+                  iconColor: const Color(0xFF667085),
+                  onTap: () {},
+                  tooltip: 'Развернуть'),
             ],
           ),
           const SizedBox(height: 18),
@@ -17350,7 +18164,10 @@ class _MacWorkspaceSettingsDialogState extends State<_MacWorkspaceSettingsDialog
                 Expanded(
                   child: Text(
                     'Поиск',
-                    style: TextStyle(color: _C.railMuted, fontSize: 13, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                        color: _C.railMuted,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -17367,7 +18184,8 @@ class _MacWorkspaceSettingsDialogState extends State<_MacWorkspaceSettingsDialog
           const Spacer(),
           const Text(
             'Sportoteka Workspace',
-            style: TextStyle(color: _C.railMuted, fontSize: 12, fontWeight: FontWeight.w600),
+            style: TextStyle(
+                color: _C.railMuted, fontSize: 12, fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -17407,7 +18225,8 @@ class _MacWorkspaceSettingsDialogState extends State<_MacWorkspaceSettingsDialog
       children: [
         _MacSettingsCard(
           title: 'Рабочий стол',
-          subtitle: 'Чистое пространство клуба: обои, иконки, окна модулей и нижний Dock.',
+          subtitle:
+              'Чистое пространство клуба: обои, иконки, окна модулей и нижний Dock.',
           child: SwitchListTile.adaptive(
             value: _showIcons,
             onChanged: (value) {
@@ -17416,13 +18235,15 @@ class _MacWorkspaceSettingsDialogState extends State<_MacWorkspaceSettingsDialog
             },
             activeColor: _C.primaryGreen,
             contentPadding: EdgeInsets.zero,
-            title: const Text('Показывать иконки на рабочем столе', style: TextStyle(fontWeight: FontWeight.w600)),
+            title: const Text('Показывать иконки на рабочем столе',
+                style: TextStyle(fontWeight: FontWeight.w600)),
           ),
         ),
         const SizedBox(height: 12),
         _MacSettingsCard(
           title: 'Стиль',
-          subtitle: 'Цвета оставлены строгими: белый, графит, мягкий серый и фирменный зелёный акцент.',
+          subtitle:
+              'Цвета оставлены строгими: белый, графит, мягкий серый и фирменный зелёный акцент.',
           child: const Row(
             children: [
               _AccentPreviewDot(color: Colors.white, border: _C.border),
@@ -17441,11 +18262,16 @@ class _MacWorkspaceSettingsDialogState extends State<_MacWorkspaceSettingsDialog
 
   Widget _buildWallpaperTab() {
     final wallpapers = const [
-      _WallpaperOption(_WorkspaceWallpaperStyle.sportoteka, 'Sportoteka', 'Светлый зелёный градиент'),
-      _WallpaperOption(_WorkspaceWallpaperStyle.clean, 'Чистый', 'Белый и серый'),
-      _WallpaperOption(_WorkspaceWallpaperStyle.club, 'Клубный', 'Лёгкий фон с логотипом'),
-      _WallpaperOption(_WorkspaceWallpaperStyle.pitch, 'Поле', 'Едва заметная разметка'),
-      _WallpaperOption(_WorkspaceWallpaperStyle.graphite, 'Графит', 'Тёмный строгий фон'),
+      _WallpaperOption(_WorkspaceWallpaperStyle.sportoteka, 'Sportoteka',
+          'Светлый зелёный градиент'),
+      _WallpaperOption(
+          _WorkspaceWallpaperStyle.clean, 'Чистый', 'Белый и серый'),
+      _WallpaperOption(
+          _WorkspaceWallpaperStyle.club, 'Клубный', 'Лёгкий фон с логотипом'),
+      _WallpaperOption(
+          _WorkspaceWallpaperStyle.pitch, 'Поле', 'Едва заметная разметка'),
+      _WallpaperOption(
+          _WorkspaceWallpaperStyle.graphite, 'Графит', 'Тёмный строгий фон'),
     ];
 
     return GridView.count(
@@ -17472,7 +18298,8 @@ class _MacWorkspaceSettingsDialogState extends State<_MacWorkspaceSettingsDialog
       children: [
         _MacSettingsCard(
           title: 'Размер Dock',
-          subtitle: 'Можно сделать нижнюю панель компактнее или крупнее для ПК-монитора.',
+          subtitle:
+              'Можно сделать нижнюю панель компактнее или крупнее для ПК-монитора.',
           child: Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -17510,14 +18337,16 @@ class _MacWorkspaceSettingsDialogState extends State<_MacWorkspaceSettingsDialog
       children: [
         _MacSettingsCard(
           title: 'Иконки рабочего стола',
-          subtitle: 'Выберите модули, которые отображаются на фоне и открываются как окна.',
+          subtitle:
+              'Выберите модули, которые отображаются на фоне и открываются как окна.',
           child: _buildModuleChecklist(target: _desktopSections, dock: false),
         ),
       ],
     );
   }
 
-  Widget _buildModuleChecklist({required Set<ClubSection> target, required bool dock}) {
+  Widget _buildModuleChecklist(
+      {required Set<ClubSection> target, required bool dock}) {
     return Column(
       children: [
         for (final module in widget.modules)
@@ -17527,8 +18356,10 @@ class _MacWorkspaceSettingsDialogState extends State<_MacWorkspaceSettingsDialog
             contentPadding: EdgeInsets.zero,
             controlAffinity: ListTileControlAffinity.leading,
             secondary: Icon(module.icon, color: _C.primaryGreen),
-            title: Text(module.title, style: const TextStyle(fontWeight: FontWeight.w600)),
-            subtitle: Text(module.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+            title: Text(module.title,
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: Text(module.subtitle,
+                maxLines: 1, overflow: TextOverflow.ellipsis),
             onChanged: (checked) {
               setState(() {
                 if (checked == true) {
@@ -17566,7 +18397,11 @@ class _SettingsSidebarTile extends StatelessWidget {
   final bool active;
   final VoidCallback onTap;
 
-  const _SettingsSidebarTile({required this.icon, required this.title, required this.active, required this.onTap});
+  const _SettingsSidebarTile(
+      {required this.icon,
+      required this.title,
+      required this.active,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -17584,7 +18419,8 @@ class _SettingsSidebarTile extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(icon, color: active ? _C.primaryGreen : _C.railText, size: 18),
+              Icon(icon,
+                  color: active ? _C.primaryGreen : _C.railText, size: 18),
               const SizedBox(width: 9),
               Expanded(
                 child: Text(
@@ -17609,7 +18445,8 @@ class _MacSettingsCard extends StatelessWidget {
   final String subtitle;
   final Widget child;
 
-  const _MacSettingsCard({required this.title, required this.subtitle, required this.child});
+  const _MacSettingsCard(
+      {required this.title, required this.subtitle, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -17624,9 +18461,16 @@ class _MacSettingsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(color: _C.text, fontSize: 15, fontWeight: FontWeight.w600)),
+          Text(title,
+              style: const TextStyle(
+                  color: _C.text, fontSize: 15, fontWeight: FontWeight.w600)),
           const SizedBox(height: 5),
-          Text(subtitle, style: const TextStyle(color: _C.muted, fontSize: 12.5, height: 1.35, fontWeight: FontWeight.w600)),
+          Text(subtitle,
+              style: const TextStyle(
+                  color: _C.muted,
+                  fontSize: 12.5,
+                  height: 1.35,
+                  fontWeight: FontWeight.w600)),
           const SizedBox(height: 12),
           child,
         ],
@@ -17640,7 +18484,8 @@ class _SettingsSegment extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  const _SettingsSegment({required this.title, required this.selected, required this.onTap});
+  const _SettingsSegment(
+      {required this.title, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -17698,7 +18543,8 @@ class _WallpaperPickerTile extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  const _WallpaperPickerTile({required this.option, required this.selected, required this.onTap});
+  const _WallpaperPickerTile(
+      {required this.option, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -17711,7 +18557,10 @@ class _WallpaperPickerTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: selected ? _C.primaryGreen.withOpacity(.55) : _C.borderSoft, width: selected ? 1.5 : 1),
+          border: Border.all(
+              color:
+                  selected ? _C.primaryGreen.withOpacity(.55) : _C.borderSoft,
+              width: selected ? 1.5 : 1),
           boxShadow: const [_C.shadow],
         ),
         child: Row(
@@ -17731,13 +18580,25 @@ class _WallpaperPickerTile extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(option.title, style: const TextStyle(color: _C.text, fontSize: 13.5, fontWeight: FontWeight.w600)),
+                  Text(option.title,
+                      style: const TextStyle(
+                          color: _C.text,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600)),
                   const SizedBox(height: 5),
-                  Text(option.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 12, fontWeight: FontWeight.w600)),
+                  Text(option.subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          color: _C.muted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
-            if (selected) const Icon(Icons.check_circle_rounded, color: _C.primaryGreen, size: 21),
+            if (selected)
+              const Icon(Icons.check_circle_rounded,
+                  color: _C.primaryGreen, size: 21),
           ],
         ),
       ),
@@ -17747,15 +18608,20 @@ class _WallpaperPickerTile extends StatelessWidget {
   LinearGradient _previewGradient(_WorkspaceWallpaperStyle style) {
     switch (style) {
       case _WorkspaceWallpaperStyle.clean:
-        return const LinearGradient(colors: [Color(0xFFFFFFFF), Color(0xFFEFF3F6)]);
+        return const LinearGradient(
+            colors: [Color(0xFFFFFFFF), Color(0xFFEFF3F6)]);
       case _WorkspaceWallpaperStyle.club:
-        return const LinearGradient(colors: [Color(0xFFE8F7EF), Color(0xFFFFFFFF)]);
+        return const LinearGradient(
+            colors: [Color(0xFFE8F7EF), Color(0xFFFFFFFF)]);
       case _WorkspaceWallpaperStyle.pitch:
-        return const LinearGradient(colors: [Color(0xFFDDF2E6), Color(0xFFF8FAFC)]);
+        return const LinearGradient(
+            colors: [Color(0xFFDDF2E6), Color(0xFFF8FAFC)]);
       case _WorkspaceWallpaperStyle.graphite:
-        return const LinearGradient(colors: [Color(0xFF111315), Color(0xFF252A31)]);
+        return const LinearGradient(
+            colors: [Color(0xFF111315), Color(0xFF252A31)]);
       case _WorkspaceWallpaperStyle.sportoteka:
-        return const LinearGradient(colors: [Color(0xFFF7FBF8), Color(0xFFEAF8F0)]);
+        return const LinearGradient(
+            colors: [Color(0xFFF7FBF8), Color(0xFFEAF8F0)]);
     }
   }
 }

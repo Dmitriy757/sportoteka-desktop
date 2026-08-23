@@ -1,0 +1,2 @@
+# Добавьте эту строку в корневой .gitignore проекта:
+config/sportoteka_2gis_defines.json

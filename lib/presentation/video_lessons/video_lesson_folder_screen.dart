@@ -4,27 +4,28 @@ import 'package:sportoteka/core/utils/pref_utils.dart';
 import '../../data/models/video_folder_model.dart';
 import '../../data/models/video_lesson_model.dart';
 import '../../data/services/video_lessons_service.dart';
+import 'cmr_video_lessons_theme.dart';
 import 'widgets/create_video_folder_dialog.dart';
 import 'add_edit_video_lesson_screen.dart';
 import 'video_lesson_detail_screen.dart';
 
 class VideoLessonFolderPalette {
-  static const primaryGreen = Color(0xFF1F7A4D);
-  static const primaryGreenDark = Color(0xFF1F7A4D);
-  static const primaryGreenLight = Color(0xFF3B9567);
+  static const primaryGreen = CmrVideoColors.green;
+  static const primaryGreenDark = CmrVideoColors.greenDark;
+  static const primaryGreenLight = CmrVideoColors.green;
 
-  static const lightGreen = Color(0xFFF2F7F4);
-  static const superLightGreen = Color(0xFFF7FBF8);
+  static const lightGreen = CmrVideoColors.greenSoft;
+  static const superLightGreen = CmrVideoColors.greenSoft2;
 
-  static const white = Color(0xFFFFFFFF);
-  static const text = Color(0xFF101828);
-  static const textMuted = Color(0xFF667085);
-  static const textSoft = Color(0xFF98A2B3);
+  static const white = CmrVideoColors.panel;
+  static const text = CmrVideoColors.text;
+  static const textMuted = CmrVideoColors.muted;
+  static const textSoft = CmrVideoColors.subtle;
 
-  static const background = Color(0xFFFFFFFF);
-  static const soft = Color(0xFFF6F8FA);
-  static const border = Color(0xFFD7E8DE);
-  static const danger = Color(0xFFD92D20);
+  static const background = CmrVideoColors.bg;
+  static const soft = CmrVideoColors.soft;
+  static const border = Colors.transparent;
+  static const danger = CmrVideoColors.red;
 
   static const greenGradient = LinearGradient(
     colors: [primaryGreen, primaryGreenLight],
@@ -85,6 +86,20 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
     return 1.0;
   }
 
+  Color _parseColor(String value) {
+    try {
+      var hex = value.trim().replaceAll('#', '');
+      if (hex.length == 6) {
+        hex = 'FF$hex';
+      }
+      if (hex.length != 8) {
+        return VideoLessonFolderPalette.primaryGreen;
+      }
+      return Color(int.parse(hex, radix: 16));
+    } catch (_) {
+      return VideoLessonFolderPalette.primaryGreen;
+    }
+  }
 
   @override
   void initState() {
@@ -161,87 +176,47 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
 
     final newTitle = await showDialog<String>(
       context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: VideoLessonFolderPalette.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(22),
-        ),
-        title: const Text(
-          'Редактировать папку',
-          style: TextStyle(
-            fontWeight: FontWeight.w900,
-            color: VideoLessonFolderPalette.text,
-          ),
-        ),
-        content: TextField(
+      builder: (dialogContext) => CmrVideoDialogShell(
+        title: 'Редактировать папку',
+        subtitle: 'Измените название раздела',
+        child: TextField(
           controller: controller,
+          autofocus: true,
           maxLines: 1,
           textInputAction: TextInputAction.done,
-          decoration: InputDecoration(
-            labelText: 'Название папки',
-            filled: true,
-            fillColor: VideoLessonFolderPalette.soft,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
-                color: VideoLessonFolderPalette.border,
-              ),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
-                color: VideoLessonFolderPalette.border,
-              ),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
-                color: VideoLessonFolderPalette.primaryGreen,
-                width: 1.4,
-              ),
-            ),
+          cursorColor: CmrVideoColors.greenDark,
+          style: CmrVideoText.body(
+            11,
+            color: CmrVideoColors.text,
+            weight: FontWeight.w500,
           ),
+          decoration: cmrVideoInputDecoration(
+            'Название папки',
+            hint: 'Введите название',
+          ),
+          onSubmitted: (value) {
+            final trimmed = value.trim();
+            if (trimmed.isNotEmpty) Navigator.of(dialogContext).pop(trimmed);
+          },
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Отмена',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                color: VideoLessonFolderPalette.textMuted,
-              ),
-            ),
+        actions: <Widget>[
+          CmrVideoTextButton(
+            label: 'Отмена',
+            onTap: () => Navigator.of(dialogContext).pop(),
           ),
-          Container(
-            decoration: BoxDecoration(
-              gradient: VideoLessonFolderPalette.greenGradient,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: ElevatedButton(
-              onPressed: () {
-                final value = controller.text.trim();
-                if (value.isEmpty) return;
-                Navigator.pop(context, value);
-              },
-              style: ElevatedButton.styleFrom(
-                elevation: 0,
-                backgroundColor: Colors.transparent,
-                shadowColor: Colors.transparent,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: const Text(
-                'Сохранить',
-                style: TextStyle(fontWeight: FontWeight.w900),
-              ),
-            ),
+          CmrVideoTextButton(
+            label: 'Сохранить',
+            primary: true,
+            onTap: () {
+              final value = controller.text.trim();
+              if (value.isEmpty) return;
+              Navigator.of(dialogContext).pop(value);
+            },
           ),
         ],
       ),
     );
+    controller.dispose();
 
     if (newTitle == null || newTitle.trim().isEmpty) return;
 
@@ -254,16 +229,11 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
       );
 
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(ok ? 'Папка обновлена' : 'Не удалось обновить папку'),
-        ),
+        SnackBar(content: Text(ok ? 'Папка обновлена' : 'Не удалось обновить папку')),
       );
 
-      if (ok) {
-        await _loadData();
-      }
+      if (ok) await _loadData();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -275,49 +245,23 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
   Future<void> _deleteFolder(VideoFolderModel folder) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: VideoLessonFolderPalette.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(22),
+      builder: (dialogContext) => CmrVideoDialogShell(
+        title: 'Удалить папку?',
+        subtitle: 'Это действие нельзя отменить',
+        dotColor: CmrVideoColors.red,
+        child: Text(
+          'Папка «${folder.title}» будет удалена.',
+          style: CmrVideoText.body(10.6),
         ),
-        title: const Text(
-          'Удалить папку?',
-          style: TextStyle(
-            fontWeight: FontWeight.w900,
-            color: VideoLessonFolderPalette.text,
+        actions: <Widget>[
+          CmrVideoTextButton(
+            label: 'Отмена',
+            onTap: () => Navigator.of(dialogContext).pop(false),
           ),
-        ),
-        content: Text(
-          'Папка "${folder.title}" будет удалена.',
-          style: const TextStyle(
-            color: VideoLessonFolderPalette.textMuted,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text(
-              'Отмена',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                color: VideoLessonFolderPalette.textMuted,
-              ),
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: VideoLessonFolderPalette.danger,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Удалить',
-              style: TextStyle(fontWeight: FontWeight.w900),
-            ),
+          CmrVideoTextButton(
+            label: 'Удалить',
+            danger: true,
+            onTap: () => Navigator.of(dialogContext).pop(true),
           ),
         ],
       ),
@@ -327,32 +271,18 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
 
     try {
       final ok = await VideoLessonsService.deleteFolder(folder.id);
-
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(ok ? 'Папка удалена' : 'Не удалось удалить папку'),
-        ),
+        SnackBar(content: Text(ok ? 'Папка удалена' : 'Не удалось удалить папку')),
       );
 
-      if (ok) {
-        await _loadData();
-      }
+      if (ok) await _loadData();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Ошибка удаления папки: $e')),
       );
-    }
-  }
-
-  Color _parseColor(String hex) {
-    try {
-      final value = hex.replaceAll('#', '');
-      return Color(int.parse('FF$value', radix: 16));
-    } catch (_) {
-      return VideoLessonFolderPalette.primaryGreen;
     }
   }
 
@@ -366,8 +296,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
       padding: padding,
       decoration: BoxDecoration(
         color: color,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: VideoLessonFolderPalette.cardShadowSoft,
+        borderRadius: BorderRadius.circular(12),
       ),
       child: child,
     );
@@ -378,7 +307,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(12),
         child: card,
       ),
     );
@@ -391,7 +320,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
           child: Text(
             title,
             style: const TextStyle(
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
               fontSize: 16,
               color: VideoLessonFolderPalette.text,
             ),
@@ -402,7 +331,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
             action,
             style: const TextStyle(
               fontSize: 12,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               color: VideoLessonFolderPalette.textMuted,
             ),
           ),
@@ -429,7 +358,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
           Text(
             text,
             style: const TextStyle(
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               fontSize: 12,
               color: VideoLessonFolderPalette.textMuted,
             ),
@@ -448,7 +377,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: VideoLessonFolderPalette.lightGreen,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -460,7 +389,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                   height: 48,
                   decoration: BoxDecoration(
                     color: VideoLessonFolderPalette.white,
-                    borderRadius: BorderRadius.circular(17),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
                     Icons.folder_copy_rounded,
@@ -476,7 +405,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                       Text(
                         'Папка видеоуроков',
                         style: TextStyle(
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w600,
                           fontSize: 16,
                           color: VideoLessonFolderPalette.text,
                         ),
@@ -506,7 +435,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                     child: const Text(
                       'Управление',
                       style: TextStyle(
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         fontSize: 12,
                         color: VideoLessonFolderPalette.primaryGreen,
                       ),
@@ -521,7 +450,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: VideoLessonFolderPalette.text,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 fontSize: 24,
                 height: 1.12,
               ),
@@ -577,7 +506,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
           title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontWeight: FontWeight.w800),
+          style: const TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
     );
@@ -676,7 +605,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 14,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: VideoLessonFolderPalette.text,
                         height: 1.2,
                       ),
@@ -688,7 +617,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 12,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                         color: VideoLessonFolderPalette.textMuted,
                       ),
                     ),
@@ -812,7 +741,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 14,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: VideoLessonFolderPalette.text,
                         height: 1.2,
                       ),
@@ -824,7 +753,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 12,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                         color: VideoLessonFolderPalette.textMuted,
                       ),
                     ),
@@ -833,7 +762,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                       'Комментарии: ${lesson.commentsCount}',
                       style: const TextStyle(
                         fontSize: 12,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                         color: VideoLessonFolderPalette.textMuted,
                       ),
                     ),
@@ -866,11 +795,11 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
             ),
           ).then((_) => _loadData());
         },
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(12),
         child: Container(
           decoration: BoxDecoration(
             color: VideoLessonFolderPalette.white,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(12),
             boxShadow: VideoLessonFolderPalette.cardShadowSoft,
           ),
           clipBehavior: Clip.antiAlias,
@@ -958,7 +887,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                               'Урок',
                               style: TextStyle(
                                 color: VideoLessonFolderPalette.text,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w600,
                                 fontSize: 11,
                               ),
                             ),
@@ -1001,7 +930,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                               style: const TextStyle(
                                 color: VideoLessonFolderPalette.text,
                                 fontSize: 14,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w600,
                                 height: 1.18,
                               ),
                             ),
@@ -1013,7 +942,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                               style: const TextStyle(
                                 color: VideoLessonFolderPalette.textMuted,
                                 fontSize: 12,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -1024,7 +953,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                               style: const TextStyle(
                                 color: VideoLessonFolderPalette.textSoft,
                                 fontSize: 11.5,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                           ],
@@ -1074,8 +1003,9 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
   Widget build(BuildContext context) {
     final canManage = widget.isMyMode && currentUserId == widget.ownerUserId;
 
-    return Scaffold(
-      backgroundColor: VideoLessonFolderPalette.background,
+    return CmrVideoThemeScope(
+      child: Scaffold(
+        backgroundColor: VideoLessonFolderPalette.background,
       appBar: AppBar(
         backgroundColor: VideoLessonFolderPalette.white,
         elevation: 0,
@@ -1087,7 +1017,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             fontSize: 17,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w600,
             color: VideoLessonFolderPalette.text,
           ),
         ),
@@ -1139,7 +1069,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                             'Пока нет видеоуроков в этой папке',
                             style: TextStyle(
                               fontSize: 14,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w600,
                               color: VideoLessonFolderPalette.text,
                             ),
                           ),
@@ -1149,7 +1079,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 12,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w500,
                               color: VideoLessonFolderPalette.textMuted,
                             ),
                           ),
@@ -1162,6 +1092,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                 ],
               ),
             ),
+      ),
     );
   }
 }

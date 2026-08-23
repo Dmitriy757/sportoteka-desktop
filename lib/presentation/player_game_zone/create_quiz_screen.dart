@@ -1,10 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+
 import 'game_zone_api.dart';
 import 'game_zone_cmr_style.dart';
 
 class CreateQuizScreen extends StatefulWidget {
-  const CreateQuizScreen({super.key});
+  final bool embedded;
+  final int? teamId;
+  final int? userId;
+  final String? teamName;
+  final VoidCallback? onClose;
+  final Future<void> Function()? onChanged;
+
+  const CreateQuizScreen({
+    super.key,
+    this.embedded = false,
+    this.teamId,
+    this.userId,
+    this.teamName,
+    this.onClose,
+    this.onChanged,
+  });
 
   @override
   State<CreateQuizScreen> createState() => _CreateQuizScreenState();
@@ -30,31 +46,30 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
   final TextEditingController _optionDController = TextEditingController();
 
   String _correctOption = 'A';
-
   bool _creatingQuiz = false;
   bool _addingQuestion = false;
-
   int? _quizId;
   final List<Map<String, dynamic>> _localQuestions = [];
 
   int _asInt(dynamic v) {
     if (v is int) return v;
-    if (v is String) return int.tryParse(v) ?? 0;
-    return 0;
+    if (v is num) return v.toInt();
+    return int.tryParse('${v ?? ''}'.trim()) ?? 0;
   }
 
   @override
   void initState() {
     super.initState();
-
     final rawArgs = Get.arguments;
     final args = rawArgs is Map
         ? Map<String, dynamic>.from(rawArgs)
         : <String, dynamic>{};
 
-    teamId = _asInt(args['team_id']);
-    userId = _asInt(args['user_id']);
-    teamName = (args['team_name'] ?? '').toString();
+    teamId = widget.teamId ?? _asInt(args['team_id'] ?? args['teamId']);
+    userId = widget.userId ?? _asInt(args['user_id'] ?? args['userId']);
+    teamName = (widget.teamName ?? args['team_name'] ?? args['teamName'] ?? '')
+        .toString()
+        .trim();
   }
 
   @override
@@ -70,466 +85,301 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
     super.dispose();
   }
 
+  Future<void> _notifyChanged() async {
+    final callback = widget.onChanged;
+    if (callback != null) await callback();
+  }
+
   Future<void> _createQuiz() async {
-    if (!_quizFormKey.currentState!.validate()) return;
+    if (!(_quizFormKey.currentState?.validate() ?? false)) return;
 
     setState(() => _creatingQuiz = true);
-
-    final res = await GameZoneApi.post('create_player_quiz.php', {
-      'team_id': teamId,
-      'title': _titleController.text.trim(),
-      'description': _descriptionController.text.trim(),
-      'points_reward': _pointsController.text.trim(),
-      'created_by': userId,
-    });
-
-    if (!mounted) return;
-
-    setState(() => _creatingQuiz = false);
-
-    if (res['success'] == true) {
-      setState(() {
-        _quizId = _asInt(res['quiz_id']);
+    try {
+      final res = await GameZoneApi.post('create_player_quiz.php', {
+        'team_id': teamId,
+        'title': _titleController.text.trim(),
+        'description': _descriptionController.text.trim(),
+        'points_reward': _pointsController.text.trim(),
+        'created_by': userId,
       });
 
-      Get.snackbar(
-        'Готово',
-        res['message'] ?? 'Квиз создан',
-        snackPosition: SnackPosition.BOTTOM,
-      );
-    } else {
-      Get.snackbar(
-        'Ошибка',
-        res['message'] ?? 'Не удалось создать квиз',
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      if (!mounted) return;
+
+      if (res['success'] == true) {
+        final createdId = _asInt(res['quiz_id']);
+        setState(() => _quizId = createdId > 0 ? createdId : _quizId);
+        await _notifyChanged();
+        if (!mounted) return;
+        Get.snackbar(
+          'Квиз создан',
+          (res['message'] ?? 'Теперь добавьте вопросы').toString(),
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      } else {
+        Get.snackbar(
+          'Не удалось создать квиз',
+          (res['message'] ?? 'Проверьте данные и повторите').toString(),
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _creatingQuiz = false);
     }
   }
 
   Future<void> _addQuestion() async {
     if (_quizId == null || _quizId! <= 0) {
       Get.snackbar(
-        'Ошибка',
-        'Сначала создай квиз',
+        'Сначала создайте квиз',
+        'После сохранения основной информации станет доступно добавление вопросов.',
         snackPosition: SnackPosition.BOTTOM,
       );
       return;
     }
-
-    if (!_questionFormKey.currentState!.validate()) return;
+    if (!(_questionFormKey.currentState?.validate() ?? false)) return;
 
     setState(() => _addingQuestion = true);
+    try {
+      final res = await GameZoneApi.post('add_player_quiz_question.php', {
+        'quiz_id': _quizId!,
+        'question': _questionController.text.trim(),
+        'option_a': _optionAController.text.trim(),
+        'option_b': _optionBController.text.trim(),
+        'option_c': _optionCController.text.trim(),
+        'option_d': _optionDController.text.trim(),
+        'correct_option': _correctOption,
+      });
 
-    final res = await GameZoneApi.post('add_player_quiz_question.php', {
-      'quiz_id': _quizId!,
-      'question': _questionController.text.trim(),
-      'option_a': _optionAController.text.trim(),
-      'option_b': _optionBController.text.trim(),
-      'option_c': _optionCController.text.trim(),
-      'option_d': _optionDController.text.trim(),
-      'correct_option': _correctOption,
-    });
+      if (!mounted) return;
 
-    if (!mounted) return;
-
-    setState(() => _addingQuestion = false);
-
-    if (res['success'] == true) {
-      setState(() {
-        _localQuestions.add({
+      if (res['success'] == true) {
+        final savedQuestion = <String, dynamic>{
           'question': _questionController.text.trim(),
           'option_a': _optionAController.text.trim(),
           'option_b': _optionBController.text.trim(),
           'option_c': _optionCController.text.trim(),
           'option_d': _optionDController.text.trim(),
           'correct_option': _correctOption,
+        };
+        setState(() {
+          _localQuestions.add(savedQuestion);
+          _questionController.clear();
+          _optionAController.clear();
+          _optionBController.clear();
+          _optionCController.clear();
+          _optionDController.clear();
+          _correctOption = 'A';
         });
-      });
-
-      _questionController.clear();
-      _optionAController.clear();
-      _optionBController.clear();
-      _optionCController.clear();
-      _optionDController.clear();
-      _correctOption = 'A';
-
-      Get.snackbar(
-        'Готово',
-        res['message'] ?? 'Вопрос добавлен',
-        snackPosition: SnackPosition.BOTTOM,
-      );
-
-      setState(() {});
-    } else {
-      Get.snackbar(
-        'Ошибка',
-        res['message'] ?? 'Не удалось добавить вопрос',
-        snackPosition: SnackPosition.BOTTOM,
-      );
+        await _notifyChanged();
+        if (!mounted) return;
+        Get.snackbar(
+          'Вопрос добавлен',
+          (res['message'] ?? 'Можно добавить следующий вопрос').toString(),
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      } else {
+        Get.snackbar(
+          'Не удалось добавить вопрос',
+          (res['message'] ?? 'Проверьте варианты ответа').toString(),
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _addingQuestion = false);
     }
   }
 
-  Widget _headerCard() {
-    return GameZoneCmr.header(
-      title: 'Новый квиз для команды',
-      subtitle: '${teamName.isEmpty ? 'Командный квиз' : teamName}\nСоздай викторину, добавь вопросы и правильные ответы. Игроки смогут проходить её в игровой зоне.',
-      icon: Icons.quiz_rounded,
+  InputDecoration _fieldDecoration({
+    required String label,
+    String? hint,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      filled: true,
+      fillColor: GzColors.soft,
+      border: InputBorder.none,
+      enabledBorder: InputBorder.none,
+      focusedBorder: InputBorder.none,
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: GzColors.red.withOpacity(.22), width: .8),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: GzColors.red.withOpacity(.32), width: .8),
+      ),
     );
   }
 
-  Widget _quizCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: GzColors.divider),
-      ),
-      child: Form(
-        key: _quizFormKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Шаг 1. Основная информация',
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
-              ),
-            ),
-            const SizedBox(height: 14),
-            TextFormField(
-              controller: _titleController,
-              decoration: InputDecoration(
-                labelText: 'Название квиза',
-                hintText: 'Например: Правила футбола',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              validator: (v) {
-                if (v == null || v.trim().isEmpty) {
-                  return 'Введите название квиза';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 14),
-            TextFormField(
-              controller: _descriptionController,
-              maxLines: 3,
-              decoration: InputDecoration(
-                labelText: 'Описание',
-                hintText: 'Коротко опиши тему квиза',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              validator: (v) {
-                if (v == null || v.trim().isEmpty) {
-                  return 'Введите описание';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 14),
-            TextFormField(
-              controller: _pointsController,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'Награда в очках',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                prefixIcon: const Icon(Icons.emoji_events_outlined),
-              ),
-              validator: (v) {
-                if (v == null || v.trim().isEmpty) {
-                  return 'Введите количество очков';
-                }
-                final n = int.tryParse(v.trim());
-                if (n == null || n <= 0) {
-                  return 'Введите корректное число';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _creatingQuiz || _quizId != null ? null : _createQuiz,
-                icon: _creatingQuiz
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.quiz_outlined),
-                label: Text(
-                  _quizId != null
-                      ? 'Квиз уже создан'
-                      : (_creatingQuiz ? 'Создаём...' : 'Создать квиз'),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: GzColors.green,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
+  Widget _dot({double size = 6, double opacity = 1}) {
+    return Opacity(
+      opacity: opacity,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: GzColors.green,
+          shape: BoxShape.circle,
+          boxShadow: opacity > .8
+              ? [
+                  BoxShadow(
+                    color: GzColors.green.withOpacity(.16),
+                    blurRadius: 10,
+                    spreadRadius: .2,
                   ),
-                ),
-              ),
-            ),
-          ],
+                ]
+              : null,
         ),
       ),
     );
   }
 
-  Widget _correctOptionPicker() {
-    final options = ['A', 'B', 'C', 'D'];
+  Widget _dotCluster() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _dot(size: 3.5, opacity: .25),
+        const SizedBox(width: 3),
+        _dot(size: 4.5, opacity: .45),
+        const SizedBox(width: 3),
+        _dot(size: 5.5, opacity: .7),
+        const SizedBox(width: 3),
+        _dot(size: 6.5),
+      ],
+    );
+  }
 
-    return Column(
+  Widget _embeddedHeader() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 15, 12, 13),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: GzColors.line, width: .55)),
+      ),
+      child: Row(
+        children: [
+          _dotCluster(),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Новый квиз', style: GzText.title(16.5)),
+                const SizedBox(height: 3),
+                Text(
+                  teamName.isEmpty ? 'Командная игровая зона' : teamName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GzText.muted(10.8),
+                ),
+              ],
+            ),
+          ),
+          if (widget.onClose != null)
+            Material(
+              color: GzColors.soft,
+              borderRadius: BorderRadius.circular(9),
+              child: InkWell(
+                onTap: widget.onClose,
+                borderRadius: BorderRadius.circular(9),
+                child: const SizedBox(
+                  width: 34,
+                  height: 34,
+                  child: Icon(Icons.close_rounded, size: 17, color: GzColors.muted2),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionTitle(String title, String subtitle, {bool active = true}) {
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Правильный ответ',
-          style: TextStyle(
-            fontWeight: FontWeight.w800,
-            fontSize: 14,
-          ),
+        Padding(
+          padding: const EdgeInsets.only(top: 5),
+          child: _dot(size: active ? 6.2 : 4.8, opacity: active ? 1 : .4),
         ),
-        const SizedBox(height: 10),
-        Row(
-          children: options.map((opt) {
-            final selected = _correctOption == opt;
-            return Expanded(
-              child: GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _correctOption = opt;
-                  });
-                },
-                child: Container(
-                  margin: EdgeInsets.only(
-                    right: opt != 'D' ? 8 : 0,
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? GzColors.greenSoft
-                        : GzColors.soft,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: selected
-                          ? GzColors.green
-                          : GzColors.divider,
-                    ),
-                  ),
-                  child: Center(
-                    child: Text(
-                      opt,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        color: selected
-                            ? GzColors.green
-                            : GzColors.text,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
+        const SizedBox(width: 9),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: GzText.section()),
+              const SizedBox(height: 2),
+              Text(subtitle, style: GzText.muted(10.4)),
+            ],
+          ),
         ),
       ],
     );
   }
 
-  Widget _questionCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: GzColors.divider),
-      ),
-      child: Form(
-        key: _questionFormKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Шаг 2. Добавь вопросы',
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
-              ),
-            ),
-            const SizedBox(height: 14),
-            TextFormField(
-              controller: _questionController,
-              maxLines: 2,
-              decoration: InputDecoration(
-                labelText: 'Вопрос',
-                hintText: 'Например: Сколько игроков одной команды на поле?',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              validator: (v) {
-                if (v == null || v.trim().isEmpty) {
-                  return 'Введите вопрос';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 14),
-            TextFormField(
-              controller: _optionAController,
-              decoration: InputDecoration(
-                labelText: 'Вариант A',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              validator: (v) {
-                if (v == null || v.trim().isEmpty) {
-                  return 'Введите вариант A';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _optionBController,
-              decoration: InputDecoration(
-                labelText: 'Вариант B',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              validator: (v) {
-                if (v == null || v.trim().isEmpty) {
-                  return 'Введите вариант B';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _optionCController,
-              decoration: InputDecoration(
-                labelText: 'Вариант C',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              validator: (v) {
-                if (v == null || v.trim().isEmpty) {
-                  return 'Введите вариант C';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _optionDController,
-              decoration: InputDecoration(
-                labelText: 'Вариант D',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              validator: (v) {
-                if (v == null || v.trim().isEmpty) {
-                  return 'Введите вариант D';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 14),
-            _correctOptionPicker(),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed:
-                    _quizId == null || _addingQuestion ? null : _addQuestion,
-                icon: _addingQuestion
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.add_task_outlined),
-                label: Text(
-                  _quizId == null
-                      ? 'Сначала создай квиз'
-                      : (_addingQuestion ? 'Добавляем...' : 'Добавить вопрос'),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: GzColors.green,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _questionPreviewCard(Map<String, dynamic> q, int index) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: GzColors.soft,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: GzColors.divider),
-      ),
+  Widget _quizSection() {
+    final locked = _quizId != null;
+    return Form(
+      key: _quizFormKey,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Вопрос ${index + 1}',
-            style: const TextStyle(
-              fontWeight: FontWeight.w900,
-              color: GzColors.green,
-            ),
+          _sectionTitle(
+            'Основная информация',
+            locked
+                ? 'Квиз сохранён · теперь добавляйте вопросы'
+                : 'Название, описание и награда для игроков',
           ),
-          const SizedBox(height: 8),
-          Text(
-            q['question'] ?? '',
-            style: const TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 15,
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _titleController,
+            enabled: !locked,
+            style: GzText.value(12.2),
+            decoration: _fieldDecoration(
+              label: 'Название квиза',
+              hint: 'Например: Правила футбола',
             ),
+            validator: (v) => v == null || v.trim().isEmpty
+                ? 'Введите название квиза'
+                : null,
           ),
-          const SizedBox(height: 10),
-          Text('A: ${q['option_a']}'),
-          Text('B: ${q['option_b']}'),
-          Text('C: ${q['option_c']}'),
-          Text('D: ${q['option_d']}'),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: GzColors.greenSoft,
-              borderRadius: BorderRadius.circular(999),
+          const SizedBox(height: 9),
+          TextFormField(
+            controller: _descriptionController,
+            enabled: !locked,
+            maxLines: 3,
+            style: GzText.value(12.2),
+            decoration: _fieldDecoration(
+              label: 'Описание',
+              hint: 'Коротко опишите тему и цель',
             ),
-            child: Text(
-              'Правильный ответ: ${q['correct_option']}',
-              style: const TextStyle(
-                fontWeight: FontWeight.w900,
-                color: GzColors.green,
-              ),
+            validator: (v) => v == null || v.trim().isEmpty
+                ? 'Введите описание'
+                : null,
+          ),
+          const SizedBox(height: 9),
+          TextFormField(
+            controller: _pointsController,
+            enabled: !locked,
+            keyboardType: TextInputType.number,
+            style: GzText.value(12.2),
+            decoration: _fieldDecoration(label: 'Награда в очках'),
+            validator: (v) {
+              final n = int.tryParse('${v ?? ''}'.trim());
+              if (n == null || n <= 0) return 'Введите корректное число';
+              return null;
+            },
+          ),
+          const SizedBox(height: 11),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _ActionButton(
+              title: locked
+                  ? 'Квиз создан'
+                  : (_creatingQuiz ? 'Создаём…' : 'Создать квиз'),
+              primary: true,
+              enabled: !locked && !_creatingQuiz,
+              onTap: _createQuiz,
             ),
           ),
         ],
@@ -537,83 +387,350 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
     );
   }
 
+  Widget _correctOptionPicker() {
+    const options = ['A', 'B', 'C', 'D'];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Правильный ответ', style: GzText.caption()),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            for (var i = 0; i < options.length; i++) ...[
+              if (i > 0) const SizedBox(width: 6),
+              Expanded(
+                child: Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(9),
+                  child: InkWell(
+                    onTap: () => setState(() => _correctOption = options[i]),
+                    borderRadius: BorderRadius.circular(9),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      height: 36,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: _correctOption == options[i]
+                            ? GzColors.greenSoft
+                            : GzColors.soft,
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      child: Text(
+                        options[i],
+                        style: GzText.action(
+                          color: _correctOption == options[i]
+                              ? GzColors.greenDark
+                              : GzColors.muted2,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _questionSection() {
+    final enabled = _quizId != null && _quizId! > 0;
+    return Opacity(
+      opacity: enabled ? 1 : .52,
+      child: IgnorePointer(
+        ignoring: !enabled,
+        child: Form(
+          key: _questionFormKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _sectionTitle(
+                'Вопросы квиза',
+                enabled
+                    ? 'Добавляйте вопросы по одному и отмечайте правильный вариант'
+                    : 'Сначала сохраните основную информацию',
+                active: enabled,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _questionController,
+                maxLines: 2,
+                style: GzText.value(12.2),
+                decoration: _fieldDecoration(
+                  label: 'Вопрос',
+                  hint: 'Например: Сколько игроков одной команды на поле?',
+                ),
+                validator: (v) => v == null || v.trim().isEmpty
+                    ? 'Введите вопрос'
+                    : null,
+              ),
+              const SizedBox(height: 9),
+              _AnswerField(label: 'A', controller: _optionAController, decoration: _fieldDecoration(label: 'Вариант A')),
+              const SizedBox(height: 7),
+              _AnswerField(label: 'B', controller: _optionBController, decoration: _fieldDecoration(label: 'Вариант B')),
+              const SizedBox(height: 7),
+              _AnswerField(label: 'C', controller: _optionCController, decoration: _fieldDecoration(label: 'Вариант C')),
+              const SizedBox(height: 7),
+              _AnswerField(label: 'D', controller: _optionDController, decoration: _fieldDecoration(label: 'Вариант D')),
+              const SizedBox(height: 11),
+              _correctOptionPicker(),
+              const SizedBox(height: 11),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: _ActionButton(
+                  title: _addingQuestion ? 'Добавляем…' : 'Добавить вопрос',
+                  primary: true,
+                  enabled: enabled && !_addingQuestion,
+                  onTap: _addQuestion,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _questionsList() {
     if (_localQuestions.isEmpty) {
       return Container(
-        padding: const EdgeInsets.all(18),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
         decoration: BoxDecoration(
           color: GzColors.soft,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: GzColors.divider),
+          borderRadius: BorderRadius.circular(12),
         ),
-        child: const Center(
+        child: Text(
+          _quizId == null
+              ? 'Добавленные вопросы появятся здесь после создания квиза.'
+              : 'Пока нет добавленных вопросов.',
+          style: GzText.muted(11.2),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _sectionTitle(
+          'Добавленные вопросы',
+          '${_localQuestions.length} ${_questionWord(_localQuestions.length)} в текущем квизе',
+        ),
+        const SizedBox(height: 9),
+        for (var i = 0; i < _localQuestions.length; i++) ...[
+          _QuestionPreview(question: _localQuestions[i], index: i),
+          if (i != _localQuestions.length - 1) const SizedBox(height: 5),
+        ],
+      ],
+    );
+  }
+
+  String _questionWord(int count) {
+    final mod100 = count % 100;
+    final mod10 = count % 10;
+    if (mod100 >= 11 && mod100 <= 14) return 'вопросов';
+    if (mod10 == 1) return 'вопрос';
+    if (mod10 >= 2 && mod10 <= 4) return 'вопроса';
+    return 'вопросов';
+  }
+
+  Widget _content() {
+    final validTeam = teamId > 0;
+    if (!validTeam) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
           child: Text(
-            'Пока нет добавленных вопросов',
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              color: GzColors.subtle,
-            ),
+            'Не удалось определить команду для создания квиза',
+            textAlign: TextAlign.center,
+            style: GzText.muted(12),
           ),
         ),
       );
     }
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text(
-          'Добавленные вопросы',
-          style: TextStyle(
-            fontWeight: FontWeight.w900,
-            fontSize: 18,
+        if (widget.embedded) _embeddedHeader(),
+        Expanded(
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(
+              widget.embedded ? 18 : 14,
+              widget.embedded ? 16 : 14,
+              widget.embedded ? 18 : 14,
+              28,
+            ),
+            children: [
+              if (!widget.embedded) ...[
+                GameZoneCmr.header(
+                  title: 'Новый квиз для команды',
+                  subtitle: teamName.isEmpty ? 'Командный квиз' : teamName,
+                  icon: Icons.quiz_rounded,
+                ),
+                const SizedBox(height: 14),
+              ],
+              _quizSection(),
+              const SizedBox(height: 22),
+              _questionSection(),
+              const SizedBox(height: 22),
+              _questionsList(),
+              if (widget.embedded && _quizId != null) ...[
+                const SizedBox(height: 18),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: _ActionButton(
+                    title: 'Готово',
+                    enabled: widget.onClose != null,
+                    onTap: widget.onClose ?? () {},
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
-        const SizedBox(height: 12),
-        ..._localQuestions.asMap().entries.map(
-              (entry) => _questionPreviewCard(entry.value, entry.key),
-            ),
       ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final validTeam = teamId > 0;
+    if (widget.embedded) {
+      return GameZoneCmr.surface(
+        context,
+        child: ColoredBox(
+          color: Colors.white,
+          child: _content(),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: GzColors.bg,
-      appBar: GameZoneCmr.appBar(
-        title: const Text('Создать квиз'),
+      appBar: GameZoneCmr.appBar(title: const Text('Создать квиз')),
+      body: GameZoneCmr.page(context, child: _content()),
+    );
+  }
+}
+
+class _AnswerField extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  final InputDecoration decoration;
+
+  const _AnswerField({
+    required this.label,
+    required this.controller,
+    required this.decoration,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: controller,
+      style: GzText.value(12.1),
+      decoration: decoration,
+      validator: (v) => v == null || v.trim().isEmpty
+          ? 'Введите вариант $label'
+          : null,
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  final String title;
+  final bool primary;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  const _ActionButton({
+    required this.title,
+    this.primary = false,
+    this.enabled = true,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(9),
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(9),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          constraints: const BoxConstraints(minHeight: 38),
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+          decoration: BoxDecoration(
+            color: primary
+                ? (enabled ? GzColors.graphite : GzColors.soft2)
+                : GzColors.soft,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Text(
+            title,
+            style: GzText.action(
+              color: primary && enabled ? Colors.white : GzColors.muted2,
+            ),
+          ),
+        ),
       ),
-      body: GameZoneCmr.page(
-        context,
-        child: !validTeam
-          ? const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text(
-                  'Не удалось определить команду для создания квиза',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            )
-          : ListView(
-              padding: GameZoneCmr.listPadding(context),
+    );
+  }
+}
+
+class _QuestionPreview extends StatelessWidget {
+  final Map<String, dynamic> question;
+  final int index;
+
+  const _QuestionPreview({required this.question, required this.index});
+
+  @override
+  Widget build(BuildContext context) {
+    final correct = '${question['correct_option'] ?? ''}'.trim();
+    return Container(
+      padding: const EdgeInsets.fromLTRB(11, 10, 11, 10),
+      decoration: BoxDecoration(
+        color: GzColors.soft,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            margin: const EdgeInsets.only(top: 5),
+            decoration: const BoxDecoration(
+              color: GzColors.green,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _headerCard(),
-                const SizedBox(height: 16),
-                _quizCard(),
-                const SizedBox(height: 16),
-                _questionCard(),
-                const SizedBox(height: 20),
-                _questionsList(),
-                const SizedBox(height: 30),
+                Text(
+                  'Вопрос ${index + 1}',
+                  style: GzText.caption().copyWith(color: GzColors.greenDark),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${question['question'] ?? ''}',
+                  style: GzText.value(11.8),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  'Правильный ответ: $correct',
+                  style: GzText.muted(10.2),
+                ),
               ],
             ),
+          ),
+        ],
       ),
     );
   }

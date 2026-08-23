@@ -1,0 +1,12 @@
+SPORTOTEKA CLUB WORKSPACE — STRUCTURAL REDESIGN
+
+Design direction:
+- flat warm-white workspace background; no decorative gradient;
+- one unified neutral palette across all six panels;
+- compact list rows for teams and roster instead of oversized grids;
+- white working surfaces with subtle separators;
+- green only for selected/action states;
+- blur retained only for floating navigation/dock surfaces;
+- existing API, callbacks and business logic preserved.
+
+Replace the six files in lib/presentation/club_workspace and run Hot Restart.

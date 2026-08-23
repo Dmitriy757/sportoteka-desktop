@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
+import 'package:file_picker/file_picker.dart';
 
 import 'training_graphics_state.dart';
 import 'widgets/tg_canvas.dart';
@@ -467,6 +468,10 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   // Panel state
   bool _isPanelExpanded = false;
   bool _isPanelCollapsed = true;
+
+  // Animation controls are opened on demand in a separate right-side window.
+  // This keeps the pitch clear and prevents the timeline from covering the map.
+  bool _animationPanelOpen = false;
   TgPanel _legacyPanelInitial = TgPanel.objects;
 
   // ===== Draft / Unsaved changes =====
@@ -780,12 +785,16 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       ? widget.initialFolderTitle!.trim()
       : "Без папки";
 
+  // По умолчанию Training Graphics открывается в том же 3D PRO ракурсе,
+  // что и карта Tracker. Сохранённая схема ниже всё равно переопределит
+  // эти значения своими параметрами камеры.
   state.set3DParams(
-    enabled: false,
-    rotationX: 0.0,
+    enabled: true,
+    rotationX: -0.34,
     rotationY: 0.0,
     rotationZ: 0.0,
-    perspective: 0.0008,
+    perspective: 0.00135,
+    cameraZoom: 0.96,
     fieldSize: const Size(1050, 680),
   );
 
@@ -1450,6 +1459,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   setState(() {
     _isPanelExpanded = !_isPanelExpanded;
     _isPanelCollapsed = !_isPanelExpanded;
+    if (_isPanelExpanded) _animationPanelOpen = false;
   });
 
   if (_isPanelExpanded) {
@@ -1470,6 +1480,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       _legacyPanelInitial = panel;
       _isPanelExpanded = true;
       _isPanelCollapsed = false;
+      _animationPanelOpen = false;
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1483,6 +1494,34 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       } catch (_) {}
       _fitField();
     });
+  }
+
+  void _openAnimationPanel() {
+    if (_animationPanelOpen) return;
+    setState(() {
+      _animationPanelOpen = true;
+      _isPanelExpanded = false;
+      _isPanelCollapsed = true;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _fitField();
+    });
+  }
+
+  void _closeAnimationPanel() {
+    if (!_animationPanelOpen) return;
+    setState(() => _animationPanelOpen = false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _fitField();
+    });
+  }
+
+  void _toggleAnimationPanel() {
+    if (_animationPanelOpen) {
+      _closeAnimationPanel();
+    } else {
+      _openAnimationPanel();
+    }
   }
 
 
@@ -4312,6 +4351,67 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   // ==========================
   // UI Build
   // ==========================
+  Future<void> _pickFieldTexture() async {
+    try {
+      // file_picker 11.0.3: FilePicker использует статический pickFiles().
+      // PlatformFile.size — свойство, а содержимое читаем через XFile,
+      // чтобы не зависеть от dart:io и одинаково работать на desktop/mobile.
+      final FilePickerResult? result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['png', 'jpg', 'jpeg', 'webp'],
+        allowMultiple: false,
+      );
+      if (result == null || result.files.isEmpty) return;
+
+      final PlatformFile pickedFile = result.files.first;
+      final int fileSize = pickedFile.size;
+      if (fileSize > 4 * 1024 * 1024) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Текстура слишком большая. Используйте изображение до 4 МБ.')),
+        );
+        return;
+      }
+
+      final Uint8List bytes = pickedFile.bytes ?? await pickedFile.xFile.readAsBytes();
+      if (bytes.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось прочитать изображение текстуры.')),
+        );
+        return;
+      }
+
+      final fileName = pickedFile.name.trim();
+
+      state.setCustomFieldTexture(
+        base64Data: base64Encode(bytes),
+        name: fileName.isEmpty ? 'field_texture' : fileName,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Текстура поля: $e')),
+      );
+    }
+  }
+
+  void _setBoard3D(bool enabled) {
+    final canvas = _canvasKey.currentState;
+    if (canvas != null) {
+      canvas.set3DEnabled(enabled);
+      return;
+    }
+    state.set3DParams(
+      enabled: enabled,
+      rotationX: enabled ? -0.34 : 0.0,
+      rotationY: 0.0,
+      rotationZ: 0.0,
+      perspective: 0.00135,
+      cameraZoom: 0.96,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.selectMode) {
@@ -4594,30 +4694,46 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
             // Панель может быть боковой и раскрытой, но нижняя панель инструментов
             // всё равно должна оставаться доступной слева от неё.
             final showBottomToolbars = !_exportCleanMode && (!panelOpen || panelAsSide);
+            // Как в Tracker: на desktop/tablet инструменты живут в левой CMR-панели,
+            // без дублирующей горизонтальной полосы над/под картой.
+            final showBottomDrawingToolbar = showBottomToolbars && root.maxWidth < 920;
             final bottomToolRightInset = panelOpen && panelAsSide
                 ? sidePanelShellWidth + (microUi ? 8.0 : 14.0)
                 : (tightUi ? 6.0 : 0.0);
             final bottomToolLeftInset = tightUi ? 6.0 : 0.0;
-            final playbackRightInset = panelOpen && panelAsSide
-                ? sidePanelShellWidth + (microUi ? 12.0 : 18.0)
-                : (tightUi ? 14.0 : (desktop ? 94.0 : 64.0));
-            final playbackLeftInset = tightUi ? 14.0 : (desktop ? 94.0 : 64.0);
-            final reservedRight = (!_exportCleanMode && panelAsSide && !overlayPanel)
-                ? math.max(5.0, sidePanelShellWidth + 8.0)
-                : 5.0;
+
+            // Анимация больше не висит поверх поля снизу. Она открывается отдельным
+            // окном справа; на широком экране поле освобождает для него место,
+            // на узком окно аккуратно накладывается и закрывается по фону/крестику.
+            final animationOpen = !_exportCleanMode && _animationPanelOpen;
+            final animationAsSide = animationOpen && root.maxWidth >= 980 && root.maxHeight >= 600;
+            final animationPanelShellWidth = root.maxWidth >= 1500
+                ? 390.0
+                : (root.maxWidth >= 1180 ? 370.0 : 340.0);
+
+            final reservedRight = animationAsSide
+                ? math.max(5.0, animationPanelShellWidth + 10.0)
+                : ((!_exportCleanMode && panelAsSide && !overlayPanel)
+                    ? math.max(5.0, sidePanelShellWidth + 8.0)
+                    : 5.0);
+            final idleBottomReserve = showBottomDrawingToolbar
+                ? (microUi ? 62.0 : 70.0)
+                : 10.0;
             final reservedBottom = _exportCleanMode
                 ? 5.0
                 : (overlayPanel
                     ? (microUi ? 44.0 : 54.0)
                     : panelAsBottom
                         ? (tabletPortrait ? 240.0 : 210.0)
-                        : (tightUi ? 92.0 : (desktop ? 74.0 : 86.0)));
+                        : idleBottomReserve);
             return Container(
               color: TgScreenPalette.background,
               child: Row(
                 children: [
                   TgLeftToolbar(
                     state: state,
+                    workspaceWidth: root.maxWidth,
+                    teamName: widget.resolvedTeamName,
                     onZoomToSelection: () => _canvasKey.currentState?.zoomToSelection(),
                     onResetView: () => _canvasKey.currentState?.resetView(),
                     onCloseEditor: _handleBack,
@@ -4625,6 +4741,11 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                     onOpenLayers: () => _openLegacyPanel(TgPanel.layers),
                     onOpenProperties: _openPropertiesPanel,
                     onOpenTactics: _openTacticalPadSheet,
+                    onOpenAnimation: _toggleAnimationPanel,
+                    animationOpen: _animationPanelOpen,
+                    onSet3D: _setBoard3D,
+                    onPickFieldTexture: _pickFieldTexture,
+                    onClearFieldTexture: state.clearCustomFieldTexture,
                   ),
                   Expanded(
                     key: _rightPaneKey,
@@ -4639,23 +4760,10 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                               child: DecoratedBox(
                                 decoration: BoxDecoration(
                                   color: TgScreenPalette.surface,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: TgScreenPalette.borderLight.withOpacity(.48)),
-                                  gradient: const LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    colors: [Color(0xFFFDFEFE), Color(0xFFF5F8FA)],
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Color(0x140B1220),
-                                      blurRadius: 12,
-                                      offset: Offset(0, 8),
-                                    ),
-                                  ],
+                                  borderRadius: BorderRadius.circular(16),
                                 ),
                                 child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
+                                  borderRadius: BorderRadius.circular(16),
                                   child: LayoutBuilder(
                                     builder: (context, c) {
                                       if (!_didLayoutFit) {
@@ -4743,7 +4851,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                             left: desktop ? 22 : 12,
                             right: desktop ? 22 : 12,
                             top: 60,
-                            bottom: desktop ? 80 : 96,
+                            bottom: showBottomDrawingToolbar ? 70 : 12,
                             child: IgnorePointer(
                               child: _TgPlaybackOverlay(
                                 canvasState: _canvasKey.currentState,
@@ -4754,38 +4862,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                               ),
                             ),
                           ),
-                          if (showBottomToolbars)
-                            Positioned(
-                            left: playbackLeftInset,
-                            right: playbackRightInset,
-                            bottom: tightUi ? 64 : (desktop ? 72 : 90),
-                            child: Center(
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(maxWidth: tightUi ? 520 : 640),
-                                child: _TgPlaybackTimelineBar(
-                                  compact: tightUi,
-                                  stepLabels: _playbackSteps,
-                                  currentStep: _currentPlaybackStep,
-                                  playing: _playbackRunning,
-                                  progress: _playbackProgress,
-                                  selectedSubjectLabel: _playbackSubjectLabel(),
-                                  currentBindings: _playbackBindingsForCurrentStep(),
-                                  onTogglePlay: _togglePlayback,
-                                  onSelectStep: _selectPlaybackStep,
-                                  onAddStep: _addPlaybackStep,
-                                  onDuplicateStep: _duplicatePlaybackStep,
-                                  onDeleteStep: _removePlaybackStep,
-                                  onRenameStep: _renamePlaybackStep,
-                                  onCaptureSubject: _capturePlaybackSubject,
-                                  onBindRoute: _bindSelectedRouteToCurrentStep,
-                                  onClearBinding: _clearSelectedRouteBinding,
-                                  onSelectBinding: _selectPlaybackBinding,
-                                  onDeleteBinding: _deletePlaybackBinding,
-                                ),
-                              ),
-                            ),
-                          ),
-                          if (showBottomToolbars)
+                          if (showBottomDrawingToolbar)
                             Positioned(
                             left: bottomToolLeftInset,
                             right: bottomToolRightInset,
@@ -4810,18 +4887,69 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                               onWavy: () => state.setTool(TgTool.wavy),
                             ),
                           ),
-                          if (!_exportCleanMode && state.selected != null && (!_isPanelExpanded || _isPanelCollapsed))
+                          if (!_exportCleanMode && state.is3DMode)
+                            Positioned(
+                              right: animationAsSide
+                                  ? animationPanelShellWidth + 18
+                                  : (panelOpen && panelAsSide
+                                      ? sidePanelShellWidth + 18
+                                      : (tightUi ? 12 : 16)),
+                              bottom: showBottomDrawingToolbar ? 58 : 14,
+                              child: _TgTrackerCameraControl(
+                                onOrbitDelta: (delta) => _canvasKey.currentState?.orbit3D(delta),
+                                onZoomIn: () => _canvasKey.currentState?.zoom3DIn(),
+                                onZoomOut: () => _canvasKey.currentState?.zoom3DOut(),
+                                onReset: () => _canvasKey.currentState?.reset3DView(),
+                              ),
+                            ),
+                          if (!_exportCleanMode && !_animationPanelOpen && state.selected != null && (!_isPanelExpanded || _isPanelCollapsed))
                             Positioned(
                               top: desktop ? 66 : 60,
                               right: tightUi ? 10 : (desktop ? 12 : 10),
                               child: _ReferenceStylePanel(state: state, onOpenProperties: _openPropertiesPanel),
                             ),
-                          if (!_exportCleanMode && (!_isPanelExpanded || _isPanelCollapsed))
+                          if (!_exportCleanMode && !_animationPanelOpen && !state.is3DMode && (!_isPanelExpanded || _isPanelCollapsed))
                             Positioned(
                             right: tightUi ? 10 : (desktop ? 12 : 10),
                             bottom: tightUi ? 58 : (desktop ? 70 : 88),
                             child: _ReferenceMiniMap(state: state),
                           ),
+                          if (animationOpen && !animationAsSide)
+                            Positioned.fill(
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: _closeAnimationPanel,
+                                child: Container(color: const Color(0x140B1220)),
+                              ),
+                            ),
+                          if (animationOpen)
+                            Positioned(
+                              top: microUi ? 44 : 56,
+                              right: 8,
+                              bottom: 8,
+                              left: animationAsSide ? null : 8,
+                              width: animationAsSide ? animationPanelShellWidth : null,
+                              child: _TgPlaybackWindow(
+                                stepLabels: _playbackSteps,
+                                currentStep: _currentPlaybackStep,
+                                playing: _playbackRunning,
+                                progress: _playbackProgress,
+                                selectedSubjectLabel: _playbackSubjectLabel(),
+                                currentBindings: _playbackBindingsForCurrentStep(),
+                                onClose: _closeAnimationPanel,
+                                onTogglePlay: _togglePlayback,
+                                onSelectStep: _selectPlaybackStep,
+                                onAddStep: _addPlaybackStep,
+                                onDuplicateStep: _duplicatePlaybackStep,
+                                onDeleteStep: _removePlaybackStep,
+                                onRenameStep: _renamePlaybackStep,
+                                onCaptureSubject: _capturePlaybackSubject,
+                                onBindRoute: _bindSelectedRouteToCurrentStep,
+                                onClearBinding: _clearSelectedRouteBinding,
+                                onSelectBinding: _selectPlaybackBinding,
+                                onDeleteBinding: _deletePlaybackBinding,
+                              ),
+                            ),
                           if (!_exportCleanMode && _isPanelExpanded)
                             Positioned.fill(
                               child: _TgDraggablePanel(
@@ -5467,7 +5595,17 @@ class _MiniMapPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1
       ..color = Colors.white.withOpacity(.52);
-    canvas.drawRRect(RRect.fromRectAndRadius(field, const Radius.circular(5)), Paint()..color = const Color(0xFF1D6B38));
+    canvas.drawRRect(RRect.fromRectAndRadius(field, const Radius.circular(5)), Paint()..color = const Color(0xFF76947B));
+    final stripeW = field.width / 12.0;
+    canvas.save();
+    canvas.clipRRect(RRect.fromRectAndRadius(field.deflate(1), const Radius.circular(4)));
+    for (var stripe = 0; stripe < 14; stripe++) {
+      canvas.drawRect(
+        Rect.fromLTWH(field.left + stripe * stripeW, field.top, stripeW, field.height),
+        Paint()..color = stripe.isEven ? const Color(0xFF719078) : const Color(0xFF819E86),
+      );
+    }
+    canvas.restore();
     canvas.drawRRect(RRect.fromRectAndRadius(field, const Radius.circular(5)), p);
     canvas.drawLine(Offset(field.center.dx, field.top), Offset(field.center.dx, field.bottom), p);
     canvas.drawCircle(field.center, field.height * .17, p);
@@ -6455,11 +6593,6 @@ class _TopTitleBar extends StatelessWidget {
                 ],
               ),
             ),
-            if (!selectMode && state != null)
-              AnimatedBuilder(
-                animation: state!,
-                builder: (_, __) => _BoardModeSwitch(state: state!),
-              ),
             if (!selectMode) ...[
               const SizedBox(width: 4),
               _HeaderActionButton(
@@ -6538,10 +6671,11 @@ class _BoardModeSwitch extends StatelessWidget {
           _seg('3D', state.is3DMode, () {
             state.set3DParams(
               enabled: true,
-              rotationX: -0.78,
+              rotationX: -0.34,
               rotationY: 0.0,
               rotationZ: 0.0,
-              perspective: 0.0008,
+              perspective: 0.00135,
+              cameraZoom: 0.96,
             );
           }),
           _seg('2D', !state.is3DMode, () {
@@ -6550,7 +6684,8 @@ class _BoardModeSwitch extends StatelessWidget {
               rotationX: 0.0,
               rotationY: 0.0,
               rotationZ: 0.0,
-              perspective: 0.0008,
+              perspective: 0.00135,
+              cameraZoom: 0.96,
             );
           }),
         ],
@@ -6582,6 +6717,214 @@ class _BoardModeSwitch extends StatelessWidget {
     );
   }
 }
+
+
+class _TgTrackerCameraControl extends StatelessWidget {
+  const _TgTrackerCameraControl({
+    required this.onOrbitDelta,
+    required this.onZoomIn,
+    required this.onZoomOut,
+    required this.onReset,
+  });
+
+  final ValueChanged<Offset> onOrbitDelta;
+  final VoidCallback onZoomIn;
+  final VoidCallback onZoomOut;
+  final VoidCallback onReset;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _TgCameraRoundButton(
+              icon: Icons.add_rounded,
+              tooltip: 'Приблизить',
+              onTap: onZoomIn,
+            ),
+            const SizedBox(height: 5),
+            _TgCameraRoundButton(
+              icon: Icons.remove_rounded,
+              tooltip: 'Отдалить',
+              onTap: onZoomOut,
+            ),
+            const SizedBox(height: 5),
+            _TgCameraRoundButton(
+              icon: Icons.center_focus_strong_rounded,
+              tooltip: 'Сбросить камеру',
+              onTap: onReset,
+              compact: true,
+            ),
+          ],
+        ),
+        const SizedBox(width: 7),
+        _TgTrackerOrbitPad(onOrbitDelta: onOrbitDelta, onReset: onReset),
+      ],
+    );
+  }
+}
+
+class _TgTrackerOrbitPad extends StatefulWidget {
+  const _TgTrackerOrbitPad({
+    required this.onOrbitDelta,
+    required this.onReset,
+  });
+
+  final ValueChanged<Offset> onOrbitDelta;
+  final VoidCallback onReset;
+
+  @override
+  State<_TgTrackerOrbitPad> createState() => _TgTrackerOrbitPadState();
+}
+
+class _TgTrackerOrbitPadState extends State<_TgTrackerOrbitPad> {
+  Offset _thumb = Offset.zero;
+
+  void _updateThumb(Offset local, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    var delta = local - center;
+    const maxRadius = 20.0;
+    if (delta.distance > maxRadius) {
+      delta = Offset.fromDirection(delta.direction, maxRadius);
+    }
+    setState(() => _thumb = delta);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const size = 78.0;
+    return Tooltip(
+      message: 'Тяните внутри круга: поворот и наклон камеры. Двойное нажатие — сброс.',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onDoubleTap: widget.onReset,
+        onPanStart: (details) =>
+            _updateThumb(details.localPosition, const Size(size, size)),
+        onPanUpdate: (details) {
+          _updateThumb(details.localPosition, const Size(size, size));
+          widget.onOrbitDelta(details.delta);
+        },
+        onPanEnd: (_) => setState(() => _thumb = Offset.zero),
+        onPanCancel: () => setState(() => _thumb = Offset.zero),
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(.94),
+            shape: BoxShape.circle,
+            border: Border.all(color: const Color(0xFFE9ECEA), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(.12),
+                blurRadius: 12,
+                spreadRadius: -4,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              const Positioned(
+                top: 6,
+                child: Icon(Icons.keyboard_arrow_up_rounded,
+                    size: 17, color: Color(0xFF5F6670)),
+              ),
+              const Positioned(
+                bottom: 6,
+                child: Icon(Icons.keyboard_arrow_down_rounded,
+                    size: 17, color: Color(0xFF5F6670)),
+              ),
+              const Positioned(
+                left: 6,
+                child: Icon(Icons.keyboard_arrow_left_rounded,
+                    size: 17, color: Color(0xFF5F6670)),
+              ),
+              const Positioned(
+                right: 6,
+                child: Icon(Icons.keyboard_arrow_right_rounded,
+                    size: 17, color: Color(0xFF5F6670)),
+              ),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 70),
+                transform: Matrix4.translationValues(_thumb.dx, _thumb.dy, 0),
+                width: 30,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: TgScreenPalette.primaryGreen,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: TgScreenPalette.primaryGreen.withOpacity(.24),
+                      blurRadius: 8,
+                      spreadRadius: -2,
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.open_with_rounded, size: 14, color: Colors.white),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TgCameraRoundButton extends StatelessWidget {
+  const _TgCameraRoundButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.compact = false,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final side = compact ? 27.0 : 31.0;
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.white.withOpacity(.95),
+        shape: const CircleBorder(),
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: Container(
+            width: side,
+            height: side,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFE9ECEA), width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(.09),
+                  blurRadius: 9,
+                  spreadRadius: -4,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Icon(icon, size: compact ? 13 : 16, color: const Color(0xFF111827)),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 
 class _HeaderActionButton extends StatelessWidget {
   const _HeaderActionButton({
@@ -7317,6 +7660,552 @@ class _TgPlaybackRoute {
   final Offset endPoint;
   final bool manual;
   final Offset Function(double t) pointAt;
+}
+
+class _TgPlaybackWindow extends StatelessWidget {
+  const _TgPlaybackWindow({
+    required this.stepLabels,
+    required this.currentStep,
+    required this.playing,
+    required this.progress,
+    required this.selectedSubjectLabel,
+    required this.currentBindings,
+    required this.onClose,
+    required this.onTogglePlay,
+    required this.onSelectStep,
+    required this.onAddStep,
+    required this.onDuplicateStep,
+    required this.onDeleteStep,
+    required this.onRenameStep,
+    required this.onCaptureSubject,
+    required this.onBindRoute,
+    required this.onClearBinding,
+    required this.onSelectBinding,
+    required this.onDeleteBinding,
+  });
+
+  final List<String> stepLabels;
+  final int currentStep;
+  final bool playing;
+  final double progress;
+  final String selectedSubjectLabel;
+  final List<_TgStepBindingInfo> currentBindings;
+  final VoidCallback onClose;
+  final VoidCallback onTogglePlay;
+  final ValueChanged<int> onSelectStep;
+  final VoidCallback onAddStep;
+  final VoidCallback onDuplicateStep;
+  final VoidCallback onDeleteStep;
+  final VoidCallback onRenameStep;
+  final VoidCallback onCaptureSubject;
+  final VoidCallback onBindRoute;
+  final VoidCallback onClearBinding;
+  final ValueChanged<String> onSelectBinding;
+  final ValueChanged<String> onDeleteBinding;
+
+  @override
+  Widget build(BuildContext context) {
+    final safeStep = stepLabels.isEmpty
+        ? 0
+        : (currentStep.clamp(0, stepLabels.length - 1) as num).toInt();
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(.99),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x1F0B1220),
+              blurRadius: 30,
+              offset: Offset(0, 12),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 10, 10),
+              child: Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: TgScreenPalette.lightGreen,
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: const Icon(
+                      Icons.play_circle_outline_rounded,
+                      size: 18,
+                      color: TgScreenPalette.primaryGreen,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Анимация',
+                          style: TextStyle(
+                            fontFamily: TgScreenPalette.fontFamily,
+                            fontSize: 13.2,
+                            fontWeight: FontWeight.w800,
+                            color: TgScreenPalette.textPrimary,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Шаги, маршруты и воспроизведение',
+                          style: TextStyle(
+                            fontFamily: TgScreenPalette.fontFamily,
+                            fontSize: 9.4,
+                            fontWeight: FontWeight.w500,
+                            color: TgScreenPalette.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  InkWell(
+                    onTap: onClose,
+                    borderRadius: BorderRadius.circular(9),
+                    child: const SizedBox(
+                      width: 32,
+                      height: 32,
+                      child: Icon(Icons.close_rounded, size: 18, color: TgScreenPalette.textSecondary),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1, thickness: 1, color: Color(0xFFF0F3F1)),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        InkWell(
+                          onTap: onTogglePlay,
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: TgScreenPalette.primaryGreen,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(
+                              playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                              color: Colors.white,
+                              size: 23,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      stepLabels.isEmpty ? 'Нет шагов' : stepLabels[safeStep],
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontFamily: TgScreenPalette.fontFamily,
+                                        fontSize: 10.4,
+                                        fontWeight: FontWeight.w700,
+                                        color: TgScreenPalette.textPrimary,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    stepLabels.isEmpty ? '0 / 0' : '${safeStep + 1} / ${stepLabels.length}',
+                                    style: const TextStyle(
+                                      fontFamily: TgScreenPalette.fontFamily,
+                                      fontSize: 9.2,
+                                      fontWeight: FontWeight.w700,
+                                      color: TgScreenPalette.textMuted,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(99),
+                                child: LinearProgressIndicator(
+                                  value: (progress.clamp(0.0, 1.0) as num).toDouble(),
+                                  minHeight: 5,
+                                  backgroundColor: const Color(0xFFEFF3F6),
+                                  valueColor: const AlwaysStoppedAnimation<Color>(TgScreenPalette.primaryGreen),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    const _PlaybackWindowSectionLabel('ШАГИ'),
+                    const SizedBox(height: 7),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _PlaybackWindowAction(
+                            icon: Icons.add_rounded,
+                            label: 'Добавить',
+                            onTap: onAddStep,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: _PlaybackWindowAction(
+                            icon: Icons.copy_rounded,
+                            label: 'Копия',
+                            onTap: onDuplicateStep,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _PlaybackWindowAction(
+                            icon: Icons.edit_outlined,
+                            label: 'Переименовать',
+                            onTap: onRenameStep,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: _PlaybackWindowAction(
+                            icon: Icons.delete_outline_rounded,
+                            label: 'Удалить',
+                            danger: true,
+                            onTap: onDeleteStep,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    if (stepLabels.isEmpty)
+                      const _PlaybackWindowEmpty(text: 'Добавьте первый шаг анимации')
+                    else
+                      ...List<Widget>.generate(stepLabels.length, (index) {
+                        final active = index == safeStep;
+                        return Padding(
+                          padding: EdgeInsets.only(bottom: index == stepLabels.length - 1 ? 0 : 5),
+                          child: InkWell(
+                            onTap: () => onSelectStep(index),
+                            borderRadius: BorderRadius.circular(9),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 150),
+                              padding: const EdgeInsets.fromLTRB(9, 7, 9, 7),
+                              decoration: BoxDecoration(
+                                color: active ? TgScreenPalette.lightGreen : const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 23,
+                                    height: 23,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      color: active ? TgScreenPalette.primaryGreen : Colors.white,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Text(
+                                      '${index + 1}',
+                                      style: TextStyle(
+                                        fontFamily: TgScreenPalette.fontFamily,
+                                        fontSize: 8.8,
+                                        fontWeight: FontWeight.w800,
+                                        color: active ? Colors.white : TgScreenPalette.textMuted,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      stepLabels[index],
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontFamily: TgScreenPalette.fontFamily,
+                                        fontSize: 10.4,
+                                        fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+                                        color: active ? TgScreenPalette.primaryGreenDark : TgScreenPalette.textPrimary,
+                                      ),
+                                    ),
+                                  ),
+                                  if (active)
+                                    const Icon(Icons.chevron_right_rounded, size: 16, color: TgScreenPalette.primaryGreen),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    const SizedBox(height: 16),
+                    const _PlaybackWindowSectionLabel('ОБЪЕКТ ДЛЯ АНИМАЦИИ'),
+                    const SizedBox(height: 7),
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.ads_click_rounded, size: 16, color: TgScreenPalette.textMuted),
+                          const SizedBox(width: 7),
+                          Expanded(
+                            child: Text(
+                              selectedSubjectLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontFamily: TgScreenPalette.fontFamily,
+                                fontSize: 11.2,
+                                fontWeight: FontWeight.w700,
+                                color: TgScreenPalette.textPrimary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _PlaybackWindowAction(
+                            icon: Icons.ads_click_rounded,
+                            label: 'Взять объект',
+                            onTap: onCaptureSubject,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: _PlaybackWindowAction(
+                            icon: Icons.link_rounded,
+                            label: 'Привязать',
+                            onTap: onBindRoute,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    _PlaybackWindowAction(
+                      icon: Icons.link_off_rounded,
+                      label: 'Очистить привязку',
+                      danger: true,
+                      onTap: onClearBinding,
+                    ),
+                    const SizedBox(height: 16),
+                    const _PlaybackWindowSectionLabel('МАРШРУТЫ ТЕКУЩЕГО ШАГА'),
+                    const SizedBox(height: 7),
+                    if (currentBindings.isEmpty)
+                      const _PlaybackWindowEmpty(text: 'В этом шаге пока нет привязанных маршрутов')
+                    else
+                      ...currentBindings.map((item) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 5),
+                          child: InkWell(
+                            onTap: () => onSelectBinding(item.routeId),
+                            borderRadius: BorderRadius.circular(9),
+                            child: Container(
+                              padding: const EdgeInsets.fromLTRB(9, 7, 7, 7),
+                              decoration: BoxDecoration(
+                                color: item.isManual ? TgScreenPalette.lightGreen : const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 26,
+                                    height: 26,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      color: item.isManual ? TgScreenPalette.primaryGreen : Colors.white,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      item.isManual ? Icons.link_rounded : Icons.auto_awesome_rounded,
+                                      size: 14,
+                                      color: item.isManual ? Colors.white : TgScreenPalette.textMuted,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          item.subjectTitle,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontFamily: TgScreenPalette.fontFamily,
+                                            fontSize: 10.2,
+                                            fontWeight: FontWeight.w700,
+                                            color: TgScreenPalette.textPrimary,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          item.routeTitle,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontFamily: TgScreenPalette.fontFamily,
+                                            fontSize: 8.8,
+                                            fontWeight: FontWeight.w500,
+                                            color: TgScreenPalette.textMuted,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  InkWell(
+                                    onTap: () => onDeleteBinding(item.routeId),
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: const Padding(
+                                      padding: EdgeInsets.all(5),
+                                      child: Icon(Icons.close_rounded, size: 15, color: Color(0xFFE11D48)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PlaybackWindowSectionLabel extends StatelessWidget {
+  const _PlaybackWindowSectionLabel(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontFamily: TgScreenPalette.fontFamily,
+        fontSize: 8.7,
+        fontWeight: FontWeight.w700,
+        letterSpacing: .42,
+        color: TgScreenPalette.textMuted,
+      ),
+    );
+  }
+}
+
+class _PlaybackWindowAction extends StatelessWidget {
+  const _PlaybackWindowAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.danger = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = danger ? const Color(0xFFE11D48) : TgScreenPalette.textPrimary;
+    final bg = danger ? const Color(0xFFFFF3F5) : const Color(0xFFF6F8F7);
+    return Material(
+      color: bg,
+      borderRadius: BorderRadius.circular(9),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
+        child: Container(
+          height: 34,
+          padding: const EdgeInsets.symmetric(horizontal: 9),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 15, color: fg),
+              const SizedBox(width: 5),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: TgScreenPalette.fontFamily,
+                    fontSize: 9.7,
+                    fontWeight: FontWeight.w700,
+                    color: fg,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlaybackWindowEmpty extends StatelessWidget {
+  const _PlaybackWindowEmpty({required this.text});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline_rounded, size: 15, color: TgScreenPalette.textMuted),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontFamily: TgScreenPalette.fontFamily,
+                fontSize: 9.2,
+                height: 1.3,
+                fontWeight: FontWeight.w500,
+                color: TgScreenPalette.textMuted,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _TgPlaybackTimelineBar extends StatelessWidget {

@@ -12,6 +12,7 @@ class TrackerLiveSessionModel {
   final int? fieldId;
   final String status;
   final String source;
+  final bool personalSession;
   final String activityType;
   final double totalDistanceM;
   final double maxSpeedKmh;
@@ -52,6 +53,7 @@ class TrackerLiveSessionModel {
     this.fieldId,
     required this.status,
     required this.source,
+    this.personalSession = false,
     this.activityType = '',
     required this.totalDistanceM,
     required this.maxSpeedKmh,
@@ -82,11 +84,61 @@ class TrackerLiveSessionModel {
   });
 
   bool get isOnline {
-    if (status != 'active' && status != 'online' && status != 'live') return false;
-    if (lastSeenAt == null || lastSeenAt!.trim().isEmpty) return true;
-    final dt = DateTime.tryParse(lastSeenAt!.replaceFirst(' ', 'T'));
-    if (dt == null) return true;
-    return DateTime.now().difference(dt).inSeconds <= 45;
+    final normalizedStatus = status.trim().toLowerCase();
+    if (normalizedStatus != 'active' &&
+        normalizedStatus != 'online' &&
+        normalizedStatus != 'live') {
+      return false;
+    }
+
+    // status='active' без свежего heartbeat/GPS может остаться в БД после
+    // аварийного закрытия приложения. Такая строка не является online.
+    final seen = _parseServerUtc(lastSeenAt);
+    if (seen == null) return false;
+    final ageSec = DateTime.now().toUtc().difference(seen).inSeconds;
+    return ageSec >= -15 && ageSec <= 45;
+  }
+
+  bool get belongsToPersonalOrPhoneLive {
+    if (personalSession) return true;
+    final normalizedSource = source.trim().toLowerCase();
+    if (normalizedSource.contains('personal') ||
+        normalizedSource.contains('player_phone') ||
+        normalizedSource.contains('mobile_phone')) {
+      return true;
+    }
+    final normalizedDevice = deviceName.trim().toLowerCase();
+    final phoneDevice = normalizedDevice.contains('iphone') ||
+        normalizedDevice.contains('android') ||
+        normalizedDevice.contains('телефон') ||
+        normalizedDevice.contains('phone') ||
+        normalizedDevice.contains('sberbox');
+    final explicitlyTeam = normalizedSource.contains('team');
+    return phoneDevice && !explicitlyTeam;
+  }
+
+  static DateTime? _parseServerUtc(String? value) {
+    final raw = (value ?? '').trim();
+    if (raw.isEmpty || raw.toLowerCase() == 'null') return null;
+    final normalized = raw.replaceFirst(' ', 'T');
+    final hasZone =
+        RegExp(r'(Z|[+-]\d{2}:?\d{2})$', caseSensitive: false)
+            .hasMatch(normalized);
+    final parsed = DateTime.tryParse(normalized);
+    if (parsed == null) return null;
+    if (hasZone) return parsed.toUtc();
+
+    // MySQL API Спортотеки отдаёт UTC без суффикса timezone.
+    return DateTime.utc(
+      parsed.year,
+      parsed.month,
+      parsed.day,
+      parsed.hour,
+      parsed.minute,
+      parsed.second,
+      parsed.millisecond,
+      parsed.microsecond,
+    );
   }
 
   factory TrackerLiveSessionModel.fromJson(Map<String, dynamic> json) {
@@ -163,6 +215,11 @@ class TrackerLiveSessionModel {
       fieldId: _inull(json['field_id']),
       status: '${json['status'] ?? 'active'}',
       source: '${json['source'] ?? 'tracker'}',
+      personalSession: _boolAny(
+        json['personal_session'] ??
+            json['is_personal'] ??
+            json['personalSession'],
+      ),
       activityType: '${json['activity_type'] ?? ''}',
       totalDistanceM: distance,
       maxSpeedKmh: maxSpeed <= 0 ? speed : maxSpeed,
@@ -194,6 +251,13 @@ class TrackerLiveSessionModel {
   }
 
   static int _i(dynamic v) => int.tryParse('$v') ?? (v is num ? v.toInt() : 0);
+  static bool _boolAny(dynamic value) {
+    if (value == true) return true;
+    final normalized = '${value ?? ''}'.trim().toLowerCase();
+    return normalized == '1' ||
+        normalized == 'true' ||
+        normalized == 'yes';
+  }
   static int? _inull(dynamic v) {
     final s = '$v'.trim();
     if (s.isEmpty || s == 'null') return null;
@@ -296,6 +360,149 @@ class TrackerLiveSessionModel {
   }
 }
 
+
+class TrackerLiveEventModel {
+  final String id;
+  final int pointId;
+  final int liveSessionId;
+  final int? playerId;
+  final String playerName;
+  final String? avatarUrl;
+  final String type;
+  final String severity;
+  final String title;
+  final String detail;
+  final int timeMs;
+  final double? latitude;
+  final double? longitude;
+  final double? rawLatitude;
+  final double? rawLongitude;
+  final double speedKmh;
+  final double accelerationMps2;
+  final double loadScore;
+  final int sprintCount;
+  final int accelCount;
+  final int decelCount;
+  final int explosiveActions;
+
+  const TrackerLiveEventModel({
+    required this.id,
+    required this.pointId,
+    required this.liveSessionId,
+    required this.playerId,
+    required this.playerName,
+    this.avatarUrl,
+    required this.type,
+    required this.severity,
+    required this.title,
+    required this.detail,
+    required this.timeMs,
+    this.latitude,
+    this.longitude,
+    this.rawLatitude,
+    this.rawLongitude,
+    required this.speedKmh,
+    required this.accelerationMps2,
+    required this.loadScore,
+    required this.sprintCount,
+    required this.accelCount,
+    required this.decelCount,
+    required this.explosiveActions,
+  });
+
+  bool get isRed => severity.trim().toLowerCase() == 'red';
+
+  factory TrackerLiveEventModel.fromJson(Map<String, dynamic> json) {
+    int i(dynamic value) =>
+        int.tryParse('${value ?? ''}') ?? (value is num ? value.toInt() : 0);
+    int? inull(dynamic value) {
+      final text = '${value ?? ''}'.trim();
+      if (text.isEmpty || text == 'null') return null;
+      return int.tryParse(text) ?? (value is num ? value.toInt() : null);
+    }
+    double d(dynamic value) => double.tryParse('${value ?? ''}') ??
+        (value is num ? value.toDouble() : 0.0);
+    double? dnull(dynamic value) {
+      final text = '${value ?? ''}'.trim();
+      if (text.isEmpty || text == 'null') return null;
+      final parsed = double.tryParse(text) ??
+          (value is num ? value.toDouble() : null);
+      if (parsed == null || !parsed.isFinite) return null;
+      return parsed;
+    }
+
+    final pointId = i(json['point_id'] ?? json['source_id'] ?? json['id']);
+    final type = '${json['type'] ?? 'moment'}'.trim();
+    final liveSessionId = i(json['live_session_id']);
+    return TrackerLiveEventModel(
+      id: '${json['event_id'] ?? '$pointId:$type'}',
+      pointId: pointId,
+      liveSessionId: liveSessionId,
+      playerId: inull(json['player_id']),
+      playerName: '${json['player_name'] ?? json['name'] ?? 'Игрок'}',
+      avatarUrl: TrackerLiveSessionModel._snull(
+          json['avatar_url'] ?? json['avatar'] ?? json['photo_url']),
+      type: type,
+      severity: '${json['severity'] ?? 'orange'}'.trim().toLowerCase(),
+      title: '${json['title'] ?? 'Live-момент'}',
+      detail: '${json['detail'] ?? ''}',
+      timeMs: i(json['time_ms']),
+      latitude: dnull(json['latitude'] ?? json['lat']),
+      longitude: dnull(json['longitude'] ?? json['lng'] ?? json['lon']),
+      rawLatitude: dnull(json['raw_latitude']),
+      rawLongitude: dnull(json['raw_longitude']),
+      speedKmh: d(json['speed_kmh']),
+      accelerationMps2: d(json['acceleration_mps2']),
+      loadScore: d(json['load_score']),
+      sprintCount: i(json['sprint_count']),
+      accelCount: i(json['accel_count']),
+      decelCount: i(json['decel_count']),
+      explosiveActions: i(json['explosive_actions']),
+    );
+  }
+}
+
+class TrackerLiveEventsPage {
+  final List<TrackerLiveEventModel> events;
+  final int lastPointId;
+  final Map<int, Map<String, dynamic>> playerSummary;
+
+  const TrackerLiveEventsPage({
+    required this.events,
+    required this.lastPointId,
+    required this.playerSummary,
+  });
+
+  factory TrackerLiveEventsPage.fromJson(Map<String, dynamic> json) {
+    final events = (json['events'] as List? ?? const <dynamic>[])
+        .whereType<Map>()
+        .map((item) => TrackerLiveEventModel.fromJson(
+            Map<String, dynamic>.from(item)))
+        .toList(growable: false);
+    final rawSummary = json['player_summary'];
+    final summary = <int, Map<String, dynamic>>{};
+    if (rawSummary is Map) {
+      rawSummary.forEach((key, value) {
+        final id = int.tryParse('$key') ?? 0;
+        if (id > 0 && value is Map) {
+          summary[id] = Map<String, dynamic>.from(value);
+        }
+      });
+    } else if (rawSummary is List) {
+      for (final item in rawSummary.whereType<Map>()) {
+        final map = Map<String, dynamic>.from(item);
+        final id = int.tryParse('${map['player_id'] ?? 0}') ?? 0;
+        if (id > 0) summary[id] = map;
+      }
+    }
+    return TrackerLiveEventsPage(
+      events: events,
+      lastPointId: int.tryParse('${json['last_point_id'] ?? 0}') ?? 0,
+      playerSummary: summary,
+    );
+  }
+}
+
 class TrackerLivePointPayload {
   final int liveSessionId;
   final int clubId;
@@ -304,6 +511,13 @@ class TrackerLivePointPayload {
   final String deviceUuid;
   final double latitude;
   final double longitude;
+  // V85: когда клиент уже отфильтровал GPS-выброс, latitude/longitude могут
+  // содержать безопасную anchor-точку. Сырые координаты отправляем отдельно,
+  // чтобы сервер независимо перепроверил скачок и сохранил диагностику.
+  final double? rawLatitude;
+  final double? rawLongitude;
+  final bool? acceptedForMetrics;
+  final String? rejectReason;
   final int timeMs;
   final int? batteryPercent;
   final double? fieldXM;
@@ -326,6 +540,13 @@ class TrackerLivePointPayload {
   final double? hirDistanceM;
   final double? vhirDistanceM;
   final double? sprintDistanceM;
+  final double? runDistanceM;
+  final double? walkDistanceM;
+  final int? runDurationSec;
+  final int? walkDurationSec;
+  final int? sprintDurationSec;
+  final double? runPercent;
+  final double? walkPercent;
   final int? sprintCount;
   final int? accelCount;
   final int? decelCount;
@@ -344,6 +565,10 @@ class TrackerLivePointPayload {
     required this.deviceUuid,
     required this.latitude,
     required this.longitude,
+    this.rawLatitude,
+    this.rawLongitude,
+    this.acceptedForMetrics,
+    this.rejectReason,
     required this.timeMs,
     this.batteryPercent,
     this.fieldXM,
@@ -363,6 +588,13 @@ class TrackerLivePointPayload {
     this.hirDistanceM,
     this.vhirDistanceM,
     this.sprintDistanceM,
+    this.runDistanceM,
+    this.walkDistanceM,
+    this.runDurationSec,
+    this.walkDurationSec,
+    this.sprintDurationSec,
+    this.runPercent,
+    this.walkPercent,
     this.sprintCount,
     this.accelCount,
     this.decelCount,
@@ -382,6 +614,12 @@ class TrackerLivePointPayload {
         'device_uuid': deviceUuid,
         'latitude': latitude,
         'longitude': longitude,
+        'raw_latitude': rawLatitude,
+        'raw_longitude': rawLongitude,
+        'accepted_for_metrics': acceptedForMetrics == null
+            ? null
+            : (acceptedForMetrics! ? 1 : 0),
+        'reject_reason': rejectReason,
         'time_ms': timeMs,
         'battery_percent': batteryPercent,
         'field_x_m': fieldXM,
@@ -403,6 +641,13 @@ class TrackerLivePointPayload {
         'hir_distance_m': hirDistanceM,
         'vhir_distance_m': vhirDistanceM,
         'sprint_distance_m': sprintDistanceM,
+        'run_distance_m': runDistanceM,
+        'walk_distance_m': walkDistanceM,
+        'run_duration_sec': runDurationSec,
+        'walk_duration_sec': walkDurationSec,
+        'sprint_duration_sec': sprintDurationSec,
+        'run_percent': runPercent,
+        'walk_percent': walkPercent,
         'sprint_count': sprintCount,
         'accel_count': accelCount,
         'decel_count': decelCount,

@@ -8,6 +8,7 @@ import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/plans/file_pdf_viewer_screen.dart';
 import 'package:sportoteka/presentation/plans/plan_detail_screen.dart';
@@ -17,19 +18,19 @@ import 'api/training_graphics_api.dart';
 
 /// ================== CMR ПАЛИТРА ==================
 class ClubDashboardPalette {
-  static const primaryGreen = Color(0xFF1F8A4C);
-  static const primaryGreenDark = Color(0xFF0B3324);
-  static const primaryGreenLight = Color(0xFF7BA88D);
-  static const lightGreen = Color(0xFFF1F6F3);
-  static const superLightGreen = Color(0xFFF7FAF8);
+  static const primaryGreen = Color(0xFF00A750);
+  static const primaryGreenDark = Color(0xFF087A46);
+  static const primaryGreenLight = Color(0xFF76A487);
+  static const lightGreen = Color(0xFFF3FAF6);
+  static const superLightGreen = Color(0xFFF7F9F8);
 
   static const white = Color(0xFFFFFFFF);
   static const text = Color(0xFF111827);
   static const textMuted = Color(0xFF667085);
   static const textLight = Color(0xFF98A2B3);
-  static const background = Color(0xFFF6F8F7);
-  static const border = Color(0xFFE3E8E5);
-  static const divider = Color(0xFFE8EEEA);
+  static const background = Color(0xFFF7F9F8);
+  static const border = Colors.transparent;
+  static const divider = Color(0xFFF1F4F2);
   static const darkPanel = Color(0xFF0B3324);
 
   static const cardShadow = BoxShadow(
@@ -45,6 +46,60 @@ class ClubDashboardPalette {
   );
 }
 
+class _PlanDot extends StatelessWidget {
+  final double size;
+  final Color color;
+  final double opacity;
+  final bool glow;
+
+  const _PlanDot({
+    this.size = 6,
+    this.color = ClubDashboardPalette.primaryGreen,
+    this.opacity = 1,
+    this.glow = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: opacity,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          boxShadow: glow
+              ? [BoxShadow(color: color.withOpacity(.16), blurRadius: size * 2, spreadRadius: .25)]
+              : null,
+        ),
+      ),
+    );
+  }
+}
+
+class _PlanDotCluster extends StatelessWidget {
+  final bool compact;
+  const _PlanDotCluster({this.compact = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final f = compact ? .82 : 1.0;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _PlanDot(size: 3.5 * f, opacity: .22, glow: false),
+        SizedBox(width: 3 * f),
+        _PlanDot(size: 4.5 * f, opacity: .42, glow: false),
+        SizedBox(width: 3 * f),
+        _PlanDot(size: 5.5 * f, opacity: .68, glow: false),
+        SizedBox(width: 3 * f),
+        _PlanDot(size: 6.5 * f),
+      ],
+    );
+  }
+}
+
 class _HeaderStatChip extends StatelessWidget {
   final String label;
   final String value;
@@ -57,30 +112,31 @@ class _HeaderStatChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.10),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.10)),
+        color: ClubDashboardPalette.superLightGreen,
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          const _PlanDot(size: 4.5, glow: false),
+          const SizedBox(width: 7),
           Text(
             value,
             style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w900,
+              color: ClubDashboardPalette.text,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(width: 5),
           Text(
             label,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.66),
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
+            style: const TextStyle(
+              color: ClubDashboardPalette.textMuted,
+              fontSize: 10.2,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ],
@@ -994,11 +1050,31 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: ClubDashboardPalette.background,
-      appBar: _buildAppBar(),
-      floatingActionButton: _buildFloatingActions(),
-      body: _buildBody(),
+    final baseTheme = Theme.of(context);
+    final plansTextTheme = baseTheme.textTheme.apply(
+      fontFamily: AppTypography.custom(
+        size: 13,
+        weight: FontWeight.w400,
+        color: ClubDashboardPalette.text,
+      ).fontFamily,
+    );
+
+    return Theme(
+      data: baseTheme.copyWith(textTheme: plansTextTheme),
+      child: DefaultTextStyle.merge(
+        style: AppTypography.custom(
+          size: 12.5,
+          weight: FontWeight.w400,
+          color: ClubDashboardPalette.text,
+          height: 1.25,
+        ),
+        child: Scaffold(
+          backgroundColor: ClubDashboardPalette.background,
+          appBar: _buildAppBar(),
+          floatingActionButton: _buildFloatingActions(),
+          body: _buildBody(),
+        ),
+      ),
     );
   }
 
@@ -1015,14 +1091,25 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontWeight: FontWeight.w900,
-              color: ClubDashboardPalette.text,
-              fontSize: 18,
-              height: 1.05,
-            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const _PlanDotCluster(compact: true),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: ClubDashboardPalette.text,
+                    fontSize: 16,
+                    height: 1.05,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 2),
           Text(
@@ -1030,7 +1117,7 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w500,
               color: ClubDashboardPalette.textMuted,
               fontSize: 12,
             ),
@@ -1044,7 +1131,7 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
             child: Text(
               "Прикрепить (${_selectedGraphics.length})",
               style: TextStyle(
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w500,
                 color: _selectedGraphics.isEmpty
                     ? const Color(0xFF9CA3AF)
                     : ClubDashboardPalette.text,
@@ -1106,7 +1193,7 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
         uploadingFile
             ? "Загрузка ${fileUploadProgress.toStringAsFixed(0)}%"
             : "Добавить",
-        style: const TextStyle(fontWeight: FontWeight.w900),
+        style: const TextStyle(fontWeight: FontWeight.w500),
       ),
     );
   }
@@ -1167,64 +1254,60 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
     final isTablet = MediaQuery.of(context).size.width >= 760;
 
     return Container(
-      padding: EdgeInsets.all(isTablet ? 22 : 18),
+      padding: EdgeInsets.all(isTablet ? 16 : 14),
       decoration: BoxDecoration(
-        color: ClubDashboardPalette.darkPanel,
-        borderRadius: BorderRadius.circular(32),
-        boxShadow: [
-          BoxShadow(
-            color: ClubDashboardPalette.darkPanel.withOpacity(0.18),
-            blurRadius: 26,
-            offset: const Offset(0, 14),
-          ),
-        ],
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [ClubDashboardPalette.cardShadow],
       ),
       child: Row(
         children: [
           Container(
-            width: isTablet ? 72 : 58,
-            height: isTablet ? 72 : 58,
+            width: isTablet ? 50 : 44,
+            height: isTablet ? 50 : 44,
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(22),
+              color: ClubDashboardPalette.lightGreen,
+              borderRadius: BorderRadius.circular(15),
             ),
             child: const Icon(
               Icons.library_books_rounded,
-              color: ClubDashboardPalette.primaryGreenDark,
-              size: 34,
+              color: ClubDashboardPalette.primaryGreen,
+              size: 23,
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const _PlanDotCluster(),
+                const SizedBox(height: 7),
                 Text(
                   widget.clubName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: isTablet ? 24 : 19,
-                    height: 1.06,
+                    color: ClubDashboardPalette.text,
+                    fontWeight: FontWeight.w600,
+                    fontSize: isTablet ? 16 : 14.5,
+                    height: 1.08,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Text(
-                  "CMR-база тренировочных материалов: папки, планы, схемы и файлы",
+                  "Папки, планы, схемы и файлы тренировочного процесса",
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.70),
-                    fontWeight: FontWeight.w600,
-                    fontSize: isTablet ? 13 : 12,
+                    color: ClubDashboardPalette.textMuted,
+                    fontWeight: FontWeight.w400,
+                    fontSize: isTablet ? 11.2 : 10.5,
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 10),
                 Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  spacing: 7,
+                  runSpacing: 7,
                   children: [
                     _HeaderStatChip(label: "Папки", value: folders.length.toString()),
                     _HeaderStatChip(label: "Планы", value: plans.length.toString()),
@@ -1235,29 +1318,30 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
               ],
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.10),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Colors.white.withOpacity(0.12)),
+              color: ClubDashboardPalette.superLightGreen,
+              borderRadius: BorderRadius.circular(13),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                _PlanDot(size: 5.5, glow: false),
+                const SizedBox(width: 7),
                 Icon(
                   parentId == null ? Icons.home_rounded : Icons.folder_open_rounded,
-                  color: Colors.white,
-                  size: 18,
+                  color: ClubDashboardPalette.textMuted,
+                  size: 16,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 Text(
                   folderLabel,
                   style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 12,
+                    color: ClubDashboardPalette.text,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 10.5,
                   ),
                 ),
               ],
@@ -1298,7 +1382,7 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
                       crumb["title"]?.toString() ?? "",
                       style: TextStyle(
                         fontSize: 13,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w500,
                         color: isLast
                             ? ClubDashboardPalette.primaryGreen
                             : ClubDashboardPalette.textMuted,
@@ -1336,14 +1420,14 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
         onChanged: (_) => _load(),
         style: const TextStyle(
           color: ClubDashboardPalette.text,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w500,
           fontSize: 14,
         ),
         decoration: InputDecoration(
           hintText: "Поиск по папкам, планам, схемам и файлам…",
           hintStyle: const TextStyle(
             color: ClubDashboardPalette.textLight,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w500,
           ),
           prefixIcon: const Icon(
             Icons.search_rounded,
@@ -1432,7 +1516,7 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
           Text(
             label,
             style: TextStyle(
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w500,
               color: isActive ? Colors.white : ClubDashboardPalette.textMuted,
             ),
           ),
@@ -1743,7 +1827,7 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
             child: Text(
               title,
               style: const TextStyle(
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w500,
                 fontSize: 18,
                 color: ClubDashboardPalette.text,
                 height: 1.1,
@@ -1760,7 +1844,7 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
             child: Text(
               "$count",
               style: const TextStyle(
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w500,
                 color: ClubDashboardPalette.text,
               ),
             ),
@@ -1866,7 +1950,7 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
                   ),
                   title: const Text(
                     "Создать папку",
-                    style: TextStyle(fontWeight: FontWeight.w800),
+                    style: TextStyle(fontWeight: FontWeight.w500),
                   ),
                   subtitle: const Text("Добавить новую папку в текущий раздел"),
                   onTap: () {
@@ -1889,7 +1973,7 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
                   ),
                   title: const Text(
                     "Создать план",
-                    style: TextStyle(fontWeight: FontWeight.w800),
+                    style: TextStyle(fontWeight: FontWeight.w500),
                   ),
                   subtitle: const Text("Добавить новый тренировочный план"),
                   onTap: () {
@@ -1923,7 +2007,7 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
                   ),
                   title: const Text(
                     "Загрузить файл",
-                    style: TextStyle(fontWeight: FontWeight.w800),
+                    style: TextStyle(fontWeight: FontWeight.w500),
                   ),
                   subtitle: const Text(
                     "PDF, DOC, DOCX, TXT, XLS, PPT и другие",
@@ -1943,7 +2027,7 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
   }
 
   Future<void> _pickAndUploadFile() async {
-    final picked = await FilePicker.platform.pickFiles(
+    final picked = await FilePicker.pickFiles(
       allowMultiple: false,
       withData: false,
       type: FileType.any,
@@ -2107,7 +2191,7 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
                         "Загрузка файла",
                         style: TextStyle(
                           fontSize: 15,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -2134,7 +2218,7 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
                     "${fileUploadProgress.toStringAsFixed(0)}%",
                     style: const TextStyle(
                       fontSize: 14,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w500,
                       color: ClubDashboardPalette.primaryGreenDark,
                     ),
                   ),
@@ -2480,7 +2564,7 @@ class _FileUploadDialogState extends State<_FileUploadDialog> {
                     "Загрузка файла",
                     style: TextStyle(
                       fontSize: 18,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
@@ -2512,7 +2596,7 @@ class _FileUploadDialogState extends State<_FileUploadDialog> {
                         child: Text(
                           widget.fileName,
                           style: const TextStyle(
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w500,
                             fontSize: 14,
                           ),
                           maxLines: 1,
@@ -2533,7 +2617,7 @@ class _FileUploadDialogState extends State<_FileUploadDialog> {
                           widget.fileExt.toUpperCase(),
                           style: TextStyle(
                             fontSize: 11,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w500,
                             color: fileColor,
                           ),
                         ),
@@ -2629,7 +2713,7 @@ class _FileUploadDialogState extends State<_FileUploadDialog> {
                     ),
                     child: const Text(
                       "Загрузить",
-                      style: TextStyle(fontWeight: FontWeight.w700),
+                      style: TextStyle(fontWeight: FontWeight.w500),
                     ),
                   ),
                 ),
@@ -2807,7 +2891,7 @@ class _UploadProgressWidgetState extends State<_UploadProgressWidget>
                                 "${(_progress * 100).toStringAsFixed(0)}%",
                                 style: const TextStyle(
                                   fontSize: 14,
-                                  fontWeight: FontWeight.w900,
+                                  fontWeight: FontWeight.w500,
                                   color: ClubDashboardPalette.primaryGreenDark,
                                 ),
                               ),
@@ -2822,7 +2906,7 @@ class _UploadProgressWidgetState extends State<_UploadProgressWidget>
                 widget.fileName,
                 style: const TextStyle(
                   fontSize: 16,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w500,
                 ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -3055,7 +3139,7 @@ class _FolderGridItem extends StatelessWidget {
                     child: Text(
                       title.isNotEmpty ? title : "Папка",
                       style: TextStyle(
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w500,
                         fontSize: fontSize,
                         height: 1.2,
                       ),
@@ -3082,7 +3166,7 @@ class _FolderGridItem extends StatelessWidget {
                             label.toUpperCase(),
                             style: const TextStyle(
                               fontSize: 8.5,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w500,
                               color: ClubDashboardPalette.primaryGreenDark,
                               letterSpacing: 0.2,
                             ),
@@ -3112,7 +3196,7 @@ class _FolderGridItem extends StatelessWidget {
                               "$itemsCount",
                               style: const TextStyle(
                                 fontSize: 10,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w500,
                                 color: ClubDashboardPalette.text,
                               ),
                             ),
@@ -3181,7 +3265,7 @@ class _FolderListItem extends StatelessWidget {
         ),
         title: Text(
           title.isNotEmpty ? title : "Папка",
-          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
         ),
         subtitle: Text(
           "$label • $itemsCount материалов",
@@ -3208,7 +3292,7 @@ class _FolderListItem extends StatelessWidget {
                   "$itemsCount",
                   style: const TextStyle(
                     fontSize: 11,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
@@ -3334,7 +3418,7 @@ class _PlanGridItem extends StatelessWidget {
               Text(
                 title.isNotEmpty ? title : "План",
                 style: TextStyle(
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w500,
                   fontSize: fontSize,
                   height: 1.2,
                 ),
@@ -3348,7 +3432,7 @@ class _PlanGridItem extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 10,
                     color: ClubDashboardPalette.textMuted,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               if (team.isNotEmpty)
@@ -3357,7 +3441,7 @@ class _PlanGridItem extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 10,
                     color: ClubDashboardPalette.textMuted,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w500,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -3368,7 +3452,7 @@ class _PlanGridItem extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 10,
                     color: ClubDashboardPalette.primaryGreenDark,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w500,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -3380,7 +3464,7 @@ class _PlanGridItem extends StatelessWidget {
                     "Открыть",
                     style: TextStyle(
                       fontSize: 11,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w500,
                       color: ClubDashboardPalette.primaryGreenDark,
                     ),
                   ),
@@ -3442,7 +3526,7 @@ class _PlanListItem extends StatelessWidget {
         ),
         title: Text(
           title.isNotEmpty ? title : "План",
-          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
         ),
         subtitle: Text(
           [
@@ -3594,7 +3678,7 @@ class _GraphicGridItem extends StatelessWidget {
               Text(
                 title.isNotEmpty ? title : "Схема",
                 style: TextStyle(
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w500,
                   fontSize: fontSize,
                   height: 1.2,
                 ),
@@ -3608,7 +3692,7 @@ class _GraphicGridItem extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 10,
                     color: ClubDashboardPalette.textMuted,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               const Spacer(),
@@ -3629,7 +3713,7 @@ class _GraphicGridItem extends StatelessWidget {
                     ),
                     child: Text(
                       selected ? "Выбрано" : "Прикрепить",
-                      style: const TextStyle(fontWeight: FontWeight.w900),
+                      style: const TextStyle(fontWeight: FontWeight.w500),
                     ),
                   ),
                 )
@@ -3640,7 +3724,7 @@ class _GraphicGridItem extends StatelessWidget {
                       "Просмотр",
                       style: TextStyle(
                         fontSize: 11,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w500,
                         color: ClubDashboardPalette.primaryGreenDark,
                       ),
                     ),
@@ -3717,7 +3801,7 @@ class _GraphicListItem extends StatelessWidget {
         ),
         title: Text(
           title.isNotEmpty ? title : "Схема",
-          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
         ),
         subtitle: Text(
           createdAt.isNotEmpty
@@ -3746,7 +3830,7 @@ class _GraphicListItem extends StatelessWidget {
                 ),
                 child: Text(
                   selected ? "Выбрано" : "Прикрепить",
-                  style: const TextStyle(fontWeight: FontWeight.w900),
+                  style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
               )
             : Row(
@@ -3911,7 +3995,7 @@ class _FileGridItem extends StatelessWidget {
               Text(
                 title.isNotEmpty ? title : "Файл",
                 style: const TextStyle(
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w500,
                   fontSize: 13,
                   height: 1.2,
                 ),
@@ -3927,7 +4011,7 @@ class _FileGridItem extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 10,
                     color: ClubDashboardPalette.textMuted,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               if (ext.isNotEmpty)
@@ -3936,7 +4020,7 @@ class _FileGridItem extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 10,
                     color: color,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               if (sizeText.isNotEmpty)
@@ -3945,7 +4029,7 @@ class _FileGridItem extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 10,
                     color: ClubDashboardPalette.textMuted,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               if (createdAt.isNotEmpty)
@@ -3954,7 +4038,7 @@ class _FileGridItem extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 10,
                     color: ClubDashboardPalette.textMuted,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               const Spacer(),
@@ -3964,7 +4048,7 @@ class _FileGridItem extends StatelessWidget {
                     "Открыть",
                     style: TextStyle(
                       fontSize: 11,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w500,
                       color: color,
                     ),
                   ),
@@ -4087,7 +4171,7 @@ class _FileListItem extends StatelessWidget {
         title: Text(
           title.isNotEmpty ? title : "Файл",
           style: const TextStyle(
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w500,
             fontSize: 14,
           ),
         ),
@@ -4194,7 +4278,7 @@ class __FolderCreateSheetState extends State<_FolderCreateSheet> {
                       widget.isEdit ? "Переименовать папку" : "Новая папка",
                       style: const TextStyle(
                         fontSize: 20,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -4228,7 +4312,7 @@ class __FolderCreateSheetState extends State<_FolderCreateSheet> {
                       const Text(
                         "Тип папки",
                         style: TextStyle(
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w500,
                           fontSize: 14,
                         ),
                       ),
@@ -4347,7 +4431,7 @@ class _TypeChip extends StatelessWidget {
             child: Text(
               label,
               style: TextStyle(
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w500,
                 color: selected
                     ? ClubDashboardPalette.primaryGreen
                     : ClubDashboardPalette.textMuted,
@@ -4397,7 +4481,7 @@ class _EmptyState extends StatelessWidget {
               title,
               style: const TextStyle(
                 fontSize: 18,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w500,
                 color: ClubDashboardPalette.text,
               ),
             ),
@@ -4445,7 +4529,7 @@ class _ErrorView extends StatelessWidget {
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 16,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w500,
                 color: ClubDashboardPalette.text,
               ),
             ),

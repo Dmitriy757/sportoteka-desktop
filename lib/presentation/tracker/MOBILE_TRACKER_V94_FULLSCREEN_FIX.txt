@@ -1,0 +1,18 @@
+SPORTOTEKA TRACKER MOBILE V94 — FULLSCREEN / WHITE SCREEN FIX
+Date: 2026-08-12
+
+Problem fixed:
+- On embedded mobile/macOS/iOS layout the Tracker was placed only in OverlayPortal.
+- In some builds the portal stayed attached but did not paint.
+- Result: completely white Tracker area while the Club Workspace bottom dock stayed visible.
+- Live/BLE logic kept running in background, so logs continued even though UI was invisible.
+
+V94 changes:
+1. Removed OverlayPortalController-based fullscreen path.
+2. Added root OverlayEntry fullscreen rendering above Club Workspace dock.
+3. Added local Tracker rendering as a permanent fallback: even if root overlay cannot be inserted, the Tracker UI remains visible instead of a white screen.
+4. OverlayEntry is marked dirty after state changes so Live values, players, field markers, charts and device progress update in fullscreen.
+5. Overlay is removed safely on close/minimize/dispose and restored after maximize.
+6. Existing V93 compile fixes are preserved.
+
+The flutter_blue_plus duplicate-response log and Live API 8 second timeout are independent runtime issues and are not the cause of the blank UI fixed here.

@@ -17,7 +17,7 @@ class _PlayerQuizzesScreenState extends State<PlayerQuizzesScreen> {
   bool loading = true;
   List<dynamic> items = [];
 
-  Color get primary => const Color(0xFF00C853);
+  Color get primary => GzColors.green;
   Color get bg => GzColors.bg;
   Color get cardBg => Colors.white;
   Color get textPrimary => GzColors.text;
@@ -52,9 +52,8 @@ class _PlayerQuizzesScreenState extends State<PlayerQuizzesScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: GzColors.divider),
-      ),
+        borderRadius: BorderRadius.circular(10),
+              ),
       child: child,
     );
 
@@ -62,7 +61,7 @@ class _PlayerQuizzesScreenState extends State<PlayerQuizzesScreen> {
       return Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(10),
           onTap: onTap,
           child: content,
         ),
@@ -98,8 +97,8 @@ final pointsReward = quiz['points_reward'] ?? 0;
                     Text(
                       quiz['title'] ?? '',
                       style: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -109,7 +108,7 @@ final pointsReward = quiz['points_reward'] ?? 0;
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: textSecondary,
-                        fontSize: 12,
+                        fontSize: 10.8,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -150,8 +149,8 @@ final pointsReward = quiz['points_reward'] ?? 0;
               child: const Text(
                 "Начать квиз",
                 style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
                 ),
               ),
             ),
@@ -190,8 +189,8 @@ final pointsReward = quiz['points_reward'] ?? 0;
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: c.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: c.withOpacity(0.18)),
+        borderRadius: BorderRadius.circular(12),
+        
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -202,8 +201,8 @@ final pointsReward = quiz['points_reward'] ?? 0;
             label,
             style: TextStyle(
               color: c,
-              fontWeight: FontWeight.w800,
-              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              fontSize: 10.8,
             ),
           ),
         ],
@@ -220,7 +219,9 @@ final pointsReward = quiz['points_reward'] ?? 0;
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _QuizBottomSheet(
+      builder: (sheetContext) => GameZoneCmr.surface(
+        sheetContext,
+        child: _QuizBottomSheet(
         primary: primary,
         quizTitle: quizTitle,
         quizDescription: quiz['description'] ?? '',
@@ -248,6 +249,7 @@ final pointsReward = quiz['points_reward'] ?? 0;
 
           return res['success'] == true;
         },
+        ),
       ),
     );
   }
@@ -260,10 +262,7 @@ final pointsReward = quiz['points_reward'] ?? 0;
         backgroundColor: bg,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        title: const Text(
-          "Футбольные квизы",
-          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
-        ),
+        title: const Text("Футбольные квизы"),
         actions: [
           IconButton(
             tooltip: "Обновить",
@@ -304,7 +303,7 @@ final pointsReward = quiz['points_reward'] ?? 0;
                           height: 80,
                           decoration: BoxDecoration(
                             color: primary.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(12),
                           ),
                           child: Icon(
                             Icons.quiz_outlined,
@@ -317,8 +316,8 @@ final pointsReward = quiz['points_reward'] ?? 0;
                           "Нет доступных квизов",
                           style: TextStyle(
                             color: textSecondary,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -326,7 +325,7 @@ final pointsReward = quiz['points_reward'] ?? 0;
                           "Проверьте позже или обратитесь к тренеру",
                           style: TextStyle(
                             color: textSecondary,
-                            fontSize: 13,
+                            fontSize: 11.5,
                           ),
                         ),
                       ],
@@ -388,9 +387,8 @@ class _QuizBottomSheetState extends State<_QuizBottomSheet> {
         margin: const EdgeInsets.fromLTRB(12, 12, 12, 12),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: GzColors.divider),
-          boxShadow: const [
+          borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [
             BoxShadow(
               color: Color(0x22000000),
               blurRadius: 24,
@@ -432,8 +430,8 @@ class _QuizBottomSheetState extends State<_QuizBottomSheet> {
                         Text(
                           widget.quizTitle,
                           style: const TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
                           ),
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
@@ -443,7 +441,7 @@ class _QuizBottomSheetState extends State<_QuizBottomSheet> {
                           widget.quizDescription,
                           style: TextStyle(
                             color: const Color(0xFF64748B),
-                            fontSize: 12,
+                            fontSize: 10.8,
                           ),
                           overflow: TextOverflow.ellipsis,
                           maxLines: 2,
@@ -467,14 +465,14 @@ class _QuizBottomSheetState extends State<_QuizBottomSheet> {
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
                       color: widget.primary.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       "Прогресс: $answeredCount/$totalCount",
                       style: TextStyle(
                         color: widget.primary,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 10.8,
                       ),
                     ),
                   ),
@@ -513,10 +511,10 @@ class _QuizBottomSheetState extends State<_QuizBottomSheet> {
                         color: isAnswered 
                             ? widget.primary.withOpacity(0.02)
                             : Colors.white,
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                           color: isAnswered 
-                              ? widget.primary.withOpacity(0.3)
+                              ? GzColors.greenBorder
                               : GzColors.divider,
                           width: isAnswered ? 1.5 : 1,
                         ),
@@ -549,8 +547,8 @@ class _QuizBottomSheetState extends State<_QuizBottomSheet> {
                                       "${idx + 1}",
                                       style: const TextStyle(
                                         color: Colors.white,
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 11.5,
                                       ),
                                     ),
                                   ),
@@ -560,8 +558,8 @@ class _QuizBottomSheetState extends State<_QuizBottomSheet> {
                                   child: Text(
                                     q['question'] ?? '',
                                     style: const TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12.5,
                                       height: 1.3,
                                     ),
                                     softWrap: true,
@@ -634,8 +632,8 @@ class _QuizBottomSheetState extends State<_QuizBottomSheet> {
                                                     color: isSelected
                                                         ? Colors.white
                                                         : const Color(0xFF64748B),
-                                                    fontWeight: FontWeight.w900,
-                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 11.5,
                                                   ),
                                                 ),
                                               ),
@@ -649,9 +647,9 @@ class _QuizBottomSheetState extends State<_QuizBottomSheet> {
                                                       ? widget.primary
                                                       : const Color(0xFF334155),
                                                   fontWeight: isSelected
-                                                      ? FontWeight.w800
+                                                      ? FontWeight.w600
                                                       : FontWeight.w600,
-                                                  fontSize: 14,
+                                                  fontSize: 12,
                                                   height: 1.3,
                                                 ),
                                                 softWrap: true,
@@ -705,9 +703,9 @@ class _QuizBottomSheetState extends State<_QuizBottomSheet> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: widget.primary,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     elevation: 0,
                     disabledBackgroundColor: GzColors.divider,
@@ -726,8 +724,8 @@ class _QuizBottomSheetState extends State<_QuizBottomSheet> {
                               ? "✅ Завершить квиз"
                               : "📝 Ответьте на все вопросы (${totalCount - answeredCount} осталось)",
                           style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12.5,
                           ),
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,

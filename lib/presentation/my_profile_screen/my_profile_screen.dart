@@ -5,13 +5,17 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
+import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/community_screen/news_detail_screen.dart';
 import 'package:sportoteka/presentation/community_screen/sport_community_screen.dart';
@@ -28,8 +32,10 @@ import 'package:sportoteka/presentation/catalog/team_list_screen.dart';
 import 'package:sportoteka/presentation/service_screens/generic_service_screen.dart';
 import 'package:sportoteka/presentation/subscription/subscription_screen.dart';
 import 'package:sportoteka/presentation/tracking/tracking_mode_screen.dart';
+import 'package:sportoteka/presentation/tracker/player/player_my_trainings_screen.dart';
 import 'package:sportoteka/presentation/video_lessons/video_lessons_hub_screen.dart';
 import 'package:sportoteka/presentation/player_screen/player_dashboard_screen.dart';
+import 'package:sportoteka/presentation/parent_access/parent_family_screen.dart';
 import 'package:sportoteka/presentation/my_profile_screen/profile_reel_widget.dart';
 import 'package:sportoteka/routes/app_routes.dart';
 
@@ -759,12 +765,39 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
   bool isLoadingProfile = true;
   _ProfileFeedMode _mode = _ProfileFeedMode.posts;
 
+  // Активный раздел адаптивного Profile Workspace. На планшете и ПК
+  // содержимое меняется справа без перехода на новый экран.
+  String _profileWorkspaceSection = 'posts';
+
   // Мобильные окна поверх профиля. Так нижний Instagram-dock не исчезает
   // при открытии ленты, Reels, чата, сервисов и рабочей зоны.
   Widget? _mobileWindowChild;
   String _mobileWindowTitle = '';
   IconData _mobileWindowIcon = Icons.apps_rounded;
   String _mobileDockKey = 'profile';
+
+  // Детали публикации профиля: на планшете открываются в правой CMR-панели.
+  Map<String, dynamic>? _openedProfilePost;
+
+  // Правая рабочая область главной страницы на ПК.
+  Widget? _desktopRightPaneChild;
+  String _desktopRightPaneTitle = '';
+  IconData _desktopRightPaneIcon = Icons.newspaper_rounded;
+
+
+  // Геометрия окон ПК — та же модель, что и в Club Workspace.
+  Offset? _profileMainWindowPosition;
+  Size? _profileMainWindowSize;
+  bool _profileMainWindowMaximized = false;
+  bool _profileMainWindowMinimized = false;
+
+  Offset? _profileModuleWindowPosition;
+  Size? _profileModuleWindowSize;
+  bool _profileModuleWindowMaximized = false;
+  bool _profileModuleWindowMinimized = false;
+  int _profileWindowZCounter = 1;
+  int _profileMainWindowZ = 1;
+  int _profileModuleWindowZ = 2;
 
   File? _newPostImage;
   final TextEditingController _newPostText = TextEditingController();
@@ -798,12 +831,23 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     return r == 'coach' || r == 'trainer' || r == 'тренер' || r.contains('coach') || r.contains('trainer');
   }
 
+  bool get isParentRole {
+    final r = role.trim().toLowerCase();
+    return r == 'parent' ||
+        r == 'родитель' ||
+        r == 'guardian' ||
+        r.contains('parent') ||
+        r.contains('родител') ||
+        r.contains('guardian');
+  }
+
   bool get _isPublicProfileView => !isOwnProfile && (widget.publicView || widget.userId != null);
 
   String get _publicProfileTitle {
     if (isPlayer) return 'Публичный профиль игрока';
     if (isCoachRole) return 'Публичный профиль тренера';
     if (isClubRole) return 'Публичная страница клуба';
+    if (isParentRole) return 'Профиль родителя';
     return 'Публичный профиль';
   }
 
@@ -826,6 +870,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     if (isClubRole) return 'клуб';
     if (isCoachRole) return 'тренер';
     if (isPlayer) return 'игрок';
+    if (isParentRole) return 'родитель';
     final r = role.trim();
     return r.isEmpty ? 'пользователь' : r;
   }
@@ -837,6 +882,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     if (isClubRole) return 'Вы вошли как клуб';
     if (isCoachRole) return team.isNotEmpty ? 'Вы вошли как тренер команды' : 'Вы вошли как тренер';
     if (isPlayer) return team.isNotEmpty ? 'Вы вошли как игрок команды' : 'Вы вошли как игрок';
+    if (isParentRole) return 'Вы вошли как родитель';
     return 'Вы вошли как $_roleLabel';
   }
 
@@ -854,6 +900,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     if (isPlayer) return 'Мой кабинет';
     if (isCoachRole) return 'Кабинет тренера';
     if (isClubRole) return 'Кабинет клуба';
+    if (isParentRole) return 'Мои дети';
     return 'Мой кабинет';
   }
 
@@ -861,6 +908,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     if (isPlayer) return 'личный прогресс, тренировки и матчи';
     if (isCoachRole) return 'команда, состав, календарь и матчи';
     if (isClubRole) return 'команды, тренеры, состав и аналитика';
+    if (isParentRole) return 'дневник, посещаемость, тестирование и успехи ребёнка';
     return 'профиль, лента, чат и сервисы';
   }
 
@@ -868,12 +916,45 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     if (isPlayer) return Icons.dashboard_customize_outlined;
     if (isCoachRole) return Icons.sports_soccer_outlined;
     if (isClubRole) return Icons.apartment_outlined;
+    if (isParentRole) return Icons.family_restroom_outlined;
     return Icons.person_outline_rounded;
+  }
+
+  bool get _isDesktopOperatingSystem {
+    return defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux;
   }
 
   bool get _isDesktopProfileLayout {
     final width = MediaQuery.maybeOf(context)?.size.width ?? 0;
-    return width >= 720;
+    // Оконный рабочий стол включаем только в приложении для ПК.
+    // Большой iPad/Android-планшет может быть шире 1180 логических пикселей,
+    // но всё равно должен оставаться в полноэкранной планшетной оболочке.
+    return _isDesktopOperatingSystem && width >= 1180;
+  }
+
+  String _dockKeyForWindow(String title) {
+    final value = title.trim().toLowerCase();
+
+    if (value.contains('лента') || value.contains('feed') || value.contains('новост')) {
+      return 'feed';
+    }
+    if (value.contains('reels') || value.contains('рилс') || value.contains('видео')) {
+      return 'reels';
+    }
+    if (value.contains('чат') || value.contains('сообщ')) {
+      return 'chat';
+    }
+    if (value.contains('трек') || value.contains('трениров') || value.contains('tracking')) {
+      return 'tracker';
+    }
+    if (value.contains('профил') || value.contains('главная') || value.contains('обзор')) {
+      return 'profile';
+    }
+
+    // Все остальные рабочие разделы открываются из пункта «Ещё».
+    return 'more';
   }
 
   void _openCmrWindow({
@@ -883,91 +964,48 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     double maxWidth = 1180,
     double maxHeight = 780,
   }) {
-    if (!_isDesktopProfileLayout) {
-      if (!mounted) return;
+    if (!mounted) return;
+
+    if (_isDesktopProfileLayout) {
       setState(() {
-        _mobileWindowTitle = title;
-        _mobileWindowIcon = icon;
-        _mobileWindowChild = child;
+        // Только ПК: модуль открывается отдельным плавающим окном.
+        _desktopRightPaneTitle = title;
+        _desktopRightPaneIcon = icon;
+        _desktopRightPaneChild = child;
+        _profileModuleWindowMinimized = false;
+        _profileModuleWindowZ = ++_profileWindowZCounter;
+        _mobileWindowChild = null;
+        _mobileWindowTitle = '';
+        _openedProfilePost = null;
         _mobileDockKey = _dockKeyForWindow(title);
       });
       return;
     }
 
-    final size = MediaQuery.of(context).size;
-    final windowWidth = min(size.width - 44, maxWidth).toDouble();
-    final windowHeight = min(size.height - 44, maxHeight).toDouble();
+    final width = MediaQuery.sizeOf(context).width;
+    if (width >= 720) {
+      setState(() {
+        // Любой планшет, в том числе широкий, открывает модуль на всю
+        // доступную рабочую область без рамки плавающего окна ПК.
+        _profileWorkspaceSection = 'embedded';
+        _desktopRightPaneTitle = title;
+        _desktopRightPaneIcon = icon;
+        _desktopRightPaneChild = child;
+        _openedProfilePost = null;
+        _mobileWindowChild = null;
+        _mobileWindowTitle = '';
+        _mobileWindowIcon = Icons.apps_rounded;
+        _mobileDockKey = _dockKeyForWindow(title);
+      });
+      return;
+    }
 
-    showGeneralDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: 'Закрыть',
-      barrierColor: Colors.black.withOpacity(.16),
-      transitionDuration: const Duration(milliseconds: 180),
-      pageBuilder: (dialogContext, _, __) {
-        return Center(
-          child: Material(
-            color: Colors.transparent,
-            child: Container(
-              width: windowWidth,
-              height: windowHeight,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(.14),
-                    blurRadius: 44,
-                    spreadRadius: -18,
-                    offset: const Offset(0, 24),
-                  ),
-                  BoxShadow(
-                    color: Colors.black.withOpacity(.05),
-                    blurRadius: 12,
-                    spreadRadius: -6,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                children: [
-                  _buildCmrWindowTitleBar(title: title, icon: icon, onClose: () => Navigator.of(dialogContext).pop()),
-                  Expanded(
-                    child: Container(
-                      color: Colors.white,
-                      child: child,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-      transitionBuilder: (_, animation, __, child) {
-        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
-        return FadeTransition(
-          opacity: curved,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: .975, end: 1).animate(curved),
-            child: child,
-          ),
-        );
-      },
-    );
-  }
-
-  String _dockKeyForWindow(String title) {
-    final t = title.toLowerCase();
-    if (t.contains('reels') || t.contains('эфир')) return 'reels';
-    if (t.contains('чат') || t.contains('сообщ')) return 'chat';
-    if (t.contains('dashboard') || t.contains('панель') || t.contains('workspace')) return 'account';
-    if (t.contains('поиск')) return 'search';
-    if (t.contains('меню') || t.contains('ещё') || t.contains('еще')) return 'more';
-    if (t.contains('сервис')) return 'more';
-    if (t.contains('лента') || t.contains('новост')) return 'profile';
-    return 'more';
+    setState(() {
+      _mobileWindowTitle = title;
+      _mobileWindowIcon = icon;
+      _mobileWindowChild = child;
+      _mobileDockKey = _dockKeyForWindow(title);
+    });
   }
 
   void _closeMobileWindow({String dockKey = 'profile'}) {
@@ -980,64 +1018,130 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     });
   }
 
-  Widget _buildCmrWindowTitleBar({required String title, required IconData icon, required VoidCallback onClose}) {
+  Widget _buildCmrWindowTitleBar({
+    required String title,
+    required IconData icon,
+    required VoidCallback onClose,
+    VoidCallback? onMinimize,
+    VoidCallback? onMaximize,
+    String? subtitle,
+    bool maximized = false,
+  }) {
     return Container(
-      height: 50,
+      height: 54,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: const BoxDecoration(
-        color: Color(0xFFF3F5F7),
-        border: Border(bottom: BorderSide(color: Color(0xFFE9EEF3), width: 1)),
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0x00FFFFFF), width: 0)),
       ),
       child: Row(
         children: [
           Row(
             children: [
-              _buildMacDot(const Color(0xFFFF5F57), onClose),
+              _buildWorkspaceWindowDot(
+                icon: Icons.close_rounded,
+                color: const Color(0xFFE9ECEF),
+                iconColor: const Color(0xFF6B7280),
+                onTap: onClose,
+                tooltip: 'Закрыть',
+              ),
               const SizedBox(width: 7),
-              _buildMacDot(const Color(0xFFFFBD2E), onClose),
+              _buildWorkspaceWindowDot(
+                icon: Icons.remove_rounded,
+                color: const Color(0xFFF1F3F5),
+                iconColor: const Color(0xFF6B7280),
+                onTap: onMinimize ?? onClose,
+                tooltip: 'Свернуть',
+              ),
               const SizedBox(width: 7),
-              _buildMacDot(const Color(0xFF28C840), () {}),
+              _buildWorkspaceWindowDot(
+                icon: maximized ? Icons.fullscreen_exit_rounded : Icons.open_in_full_rounded,
+                color: const Color(0xFFF1F3F5),
+                iconColor: const Color(0xFF667085),
+                onTap: onMaximize ?? () {},
+                tooltip: maximized ? 'Вернуть размер' : 'Развернуть',
+              ),
             ],
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 14),
           Container(
-            width: 28,
-            height: 28,
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
               color: const Color(0xFFF4F6F8),
-              borderRadius: BorderRadius.circular(9),
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(color: const Color(0xFFE9EEF3)),
             ),
-            child: Icon(icon, size: 16, color: const Color(0xFF344054)),
+            child: Icon(icon, color: const Color(0xFF344054), size: 18),
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12.6, fontWeight: FontWeight.w900, color: Color(0xFF111827)),
-            ),
-          ),
-          InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: onClose,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF7F8FA),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.close_rounded, size: 15, color: Color(0xFF344054)),
-                  SizedBox(width: 5),
-                  Text('Закрыть', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900, color: Color(0xFF344054))),
-                ],
-              ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF111827),
+                    fontSize: 13.5,
+                    height: 1,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  (subtitle ?? _activeWorkspaceName).trim().isEmpty
+                      ? 'Sportoteka Workspace'
+                      : (subtitle ?? _activeWorkspaceName).trim(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF667085),
+                    fontSize: 11.5,
+                    height: 1,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildWorkspaceWindowDot({
+    required IconData icon,
+    required Color color,
+    required Color iconColor,
+    required VoidCallback onTap,
+    required String tooltip,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 17,
+          height: 17,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: color,
+            border: Border.all(color: const Color(0xFFE9EEF3)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(.035),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Icon(icon, color: iconColor, size: 10),
+        ),
       ),
     );
   }
@@ -1055,6 +1159,17 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
       if (mounted) {
         setState(() => _mode = _ProfileFeedMode.posts);
       }
+      return;
+    }
+
+    if (isParentRole) {
+      _openCmrWindow(
+        title: 'Мои дети',
+        icon: Icons.family_restroom_rounded,
+        maxWidth: 1240,
+        maxHeight: 840,
+        child: const ParentFamilyScreen(),
+      );
       return;
     }
 
@@ -1083,13 +1198,19 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     final myId = await PrefUtils.getUserId() ?? 0;
     if (!mounted || myId <= 0) return;
 
-    // Чат из главной страницы открываем как самостоятельный экран.
-    // Не используем _openCmrWindow: иначе поверх чата остаётся нижний dock
-    // профиля и на планшетах появляется оконная macOS-шапка.
+    if (_isDesktopProfileLayout) {
+      _openCmrWindow(
+        title: 'Чаты',
+        icon: Icons.forum_rounded,
+        maxWidth: 1180,
+        maxHeight: 800,
+        child: ChatScreen(userId: myId),
+      );
+      return;
+    }
+
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => ChatScreen(userId: myId),
-      ),
+      MaterialPageRoute<void>(builder: (_) => ChatScreen(userId: myId)),
     );
 
     if (!mounted) return;
@@ -1112,7 +1233,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
       'mode': isCoachRole ? 'trainer_workspace' : 'club_workspace',
       if (isClubRole && currentUserId > 0) 'club_id': currentUserId,
       if (isCoachRole && currentUserId > 0) 'trainer_id': currentUserId,
-      if (playerTeamId != null && playerTeamId! > 0) 'initial_team_id': playerTeamId,
+      if ((playerTeamId ?? 0) > 0) 'initial_team_id': playerTeamId,
     };
 
     Get.to<void>(
@@ -1146,12 +1267,47 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
 
   void _openHomeFunctions() => _openTeamsWindow();
   void _openCommunityFeedHome() {
-    _openCmrWindow(
-      title: 'Соцлента и новости',
-      icon: Icons.newspaper_rounded,
-      maxWidth: 1120,
-      maxHeight: 820,
-      child: SportCommunityScreen(sportName: 'Футбол'),
+    if (!mounted) return;
+
+    final communityFeed = const SportCommunityScreen(
+      sportName: 'Футбол',
+      embedded: true,
+    );
+
+    // ПК: отдельное плавающее окно.
+    if (_isDesktopProfileLayout) {
+      setState(() {
+        _desktopRightPaneTitle = 'Соцлента и новости';
+        _desktopRightPaneIcon = Icons.newspaper_rounded;
+        _desktopRightPaneChild = communityFeed;
+        _openedProfilePost = null;
+        _mobileDockKey = 'feed';
+      });
+      return;
+    }
+
+    // Планшет любой ширины: полноэкранный модуль в рабочей области.
+    if (MediaQuery.sizeOf(context).width >= 720) {
+      setState(() {
+        _profileWorkspaceSection = 'embedded';
+        _desktopRightPaneTitle = 'Соцлента и новости';
+        _desktopRightPaneIcon = Icons.newspaper_rounded;
+        _desktopRightPaneChild = communityFeed;
+        _openedProfilePost = null;
+        _mobileWindowChild = null;
+        _mobileDockKey = 'feed';
+      });
+      return;
+    }
+
+    // Телефон: обычный полноэкранный переход.
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => const SportCommunityScreen(
+          sportName: 'Футбол',
+          embedded: false,
+        ),
+      ),
     );
   }
   void _openHomeServices() => _openServicesWindow();
@@ -1313,6 +1469,214 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
       maxWidth: 1240,
       maxHeight: 820,
       child: const TrackingModeScreen(),
+    );
+  }
+
+  Future<void> _openPersonalTrainingsQuick() async {
+    final myId = await PrefUtils.getUserId() ?? widget.userId ?? 0;
+    if (!mounted || myId <= 0) return;
+
+    _openCmrWindow(
+      title: 'Личные тренировки',
+      icon: Icons.directions_run_rounded,
+      maxWidth: 1240,
+      maxHeight: 840,
+      child: PlayerMyTrainingsScreen(
+        teamId: playerTeamId ?? 0,
+        teamName: (playerTeamName ?? '').trim().isNotEmpty
+            ? (playerTeamName ?? '').trim()
+            : 'Личные тренировки',
+        userId: myId,
+      ),
+    );
+  }
+
+  Future<void> _openTrainingQuickMenu() async {
+    if (!mounted || _isPublicProfileView) return;
+
+    final myId = await PrefUtils.getUserId() ?? widget.userId ?? 0;
+    if (!mounted || myId <= 0) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        Widget quickItem({
+          required IconData icon,
+          required String title,
+          required String subtitle,
+          required VoidCallback onTap,
+          bool primary = false,
+        }) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Material(
+              color: primary ? const Color(0xFFF1FBF6) : const Color(0xFFF7F8F7),
+              borderRadius: BorderRadius.circular(16),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  Future<void>.delayed(const Duration(milliseconds: 80), () {
+                    if (mounted) onTap();
+                  });
+                },
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 11, 10, 11),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: primary ? const Color(0xFF00A750) : Colors.white,
+                          borderRadius: BorderRadius.circular(13),
+                        ),
+                        child: Icon(
+                          icon,
+                          size: 21,
+                          color: primary ? Colors.white : const Color(0xFF344054),
+                        ),
+                      ),
+                      const SizedBox(width: 11),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              style: _flagshipText(12.2,
+                                  color: const Color(0xFF111827),
+                                  weight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              subtitle,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: _flagshipText(10.2,
+                                  color: const Color(0xFF667085),
+                                  weight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.chevron_right_rounded,
+                          color: Color(0xFF98A2B3), size: 21),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 42,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE5E7EB),
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1FBF6),
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: const Icon(Icons.sensors_rounded,
+                          color: Color(0xFF00A750), size: 20),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Трекер и тренировки',
+                              style: _flagshipTitle(15.2, weight: FontWeight.w700)),
+                          const SizedBox(height: 2),
+                          Text('Быстрый переход без входа в кабинет',
+                              style: _flagshipText(10.4,
+                                  color: const Color(0xFF667085))),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(sheetContext).pop(),
+                      icon: const Icon(Icons.close_rounded, size: 20),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                if (isPlayer)
+                  quickItem(
+                    icon: Icons.directions_run_rounded,
+                    title: 'Личные тренировки',
+                    subtitle: 'тренировка, аналитика, календарь и сравнение с предыдущей',
+                    primary: true,
+                    onTap: () {
+                      _openPersonalTrainingsQuick();
+                    },
+                  ),
+                if (isCoachRole || isClubRole)
+                  quickItem(
+                    icon: Icons.groups_2_rounded,
+                    title: 'Командный трекер',
+                    subtitle: 'Live, устройства, сессии и аналитика команды',
+                    primary: true,
+                    onTap: _openTrackingWindow,
+                  ),
+                if (!isCoachRole && !isClubRole && !isParentRole)
+                  quickItem(
+                    icon: Icons.bluetooth_searching_rounded,
+                    title: 'Подключение трекера',
+                    subtitle: 'GPS / BLE / Polar и режим трекинга',
+                    onTap: _openTrackingWindow,
+                  ),
+                if (isCoachRole || isClubRole)
+                  quickItem(
+                    icon: _primaryZoneIcon,
+                    title: _primaryZoneTitle,
+                    subtitle: 'открыть полный рабочий кабинет',
+                    onTap: () {
+                      _openPrimaryArea();
+                    },
+                  ),
+                if (isParentRole)
+                  quickItem(
+                    icon: Icons.family_restroom_rounded,
+                    title: 'Мои дети',
+                    subtitle: 'дневник, посещаемость, тестирование и успехи',
+                    primary: true,
+                    onTap: () {
+                      _openPrimaryArea();
+                    },
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1701,7 +2065,7 @@ void initState() {
 
         resolvedAge = (apiAge > 0) ? apiAge : computedAge;
         resolvedBirthRaw = (birthAny ?? '').toString().trim();
-        if (resolvedBirthRaw != null && resolvedBirthRaw!.isEmpty) {
+        if ((resolvedBirthRaw ?? '').isEmpty) {
           resolvedBirthRaw = null;
         }
       }
@@ -1735,7 +2099,7 @@ void initState() {
         playerTeamName = resolvedTeamName;
         playerClubName = resolvedClubName;
         playerTeamLogoUrl = resolvedTeamLogo;
-        playerTeamId = (resolvedTeamId != null && resolvedTeamId! > 0) ? resolvedTeamId : null;
+        playerTeamId = (resolvedTeamId ?? 0) > 0 ? resolvedTeamId : null;
       });
 
       if (viewedUserId == currentUserId) {
@@ -2088,17 +2452,42 @@ void initState() {
   }
 
   void _openFeedPostDetail(Map<String, dynamic> post) {
+    final width = MediaQuery.sizeOf(context).width;
+
+    // Социальный профиль на планшете и ПК остаётся на месте:
+    // публикация раскрывается в соседней правой области, а сетка остаётся слева.
+    if (width >= 720) {
+      setState(() {
+        // Важно: при нажатии из общего обзора сразу переводим профиль
+        // в отдельный экран публикаций с двумя колонками.
+        _profileWorkspaceSection = 'posts';
+        _mode = _ProfileFeedMode.posts;
+        _openedProfilePost = Map<String, dynamic>.from(post);
+        _desktopRightPaneChild = null;
+        _desktopRightPaneTitle = '';
+      });
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => NewsDetailScreen(
-          title: _safeStr(post['title']).isNotEmpty ? _safeStr(post['title']) : 'Пост',
+          title: _safeStr(post['title']).isNotEmpty
+              ? _safeStr(post['title'])
+              : 'Публикация',
           body: _safeStr(post['text']),
           newsId: _safeInt(post['id']),
           imageUrl: _safeStr(post['imageUrl']),
         ),
       ),
     ).then((_) => _fetchAuthorFeedPosts());
+  }
+
+  void _closeTabletProfilePost() {
+    if (!mounted) return;
+    setState(() => _openedProfilePost = null);
+    _fetchAuthorFeedPosts();
   }
 
   Future<void> _submitProfilePost() async {
@@ -2203,7 +2592,7 @@ void initState() {
                       children: [
                         ClipRRect(
                           borderRadius: BorderRadius.circular(12),
-                          child: Image.file(_newPostImage!, height: 200, width: double.infinity, fit: BoxFit.cover),
+                          child: Image.file(_newPostImage!, height: 200, width: double.infinity, fit: BoxFit.contain),
                         ),
                         Positioned(
                           top: 8,
@@ -2543,7 +2932,7 @@ void initState() {
                         leading: CircleAvatar(
                           radius: 22,
                           backgroundColor: ProfilePalette.primaryGreen.withOpacity(0.1),
-                          backgroundImage: hasPhoto ? NetworkImage(u.photoUrl!) : null,
+                          backgroundImage: hasPhoto ? NetworkImage(u.photoUrl ?? '') : null,
                           child: !hasPhoto
                               ? Text(
                                   u.fullName.isNotEmpty ? u.fullName[0].toUpperCase() : 'П',
@@ -2552,7 +2941,7 @@ void initState() {
                               : null,
                         ),
                         title: Text(u.fullName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black)),
-                        subtitle: u.role?.isNotEmpty == true ? Text(u.role!, style: const TextStyle(fontSize: 14, color: Colors.grey)) : null,
+                        subtitle: u.role?.isNotEmpty == true ? Text(u.role ?? '', style: const TextStyle(fontSize: 14, color: Colors.grey)) : null,
                         trailing: (u.id != null)
                             ? OutlinedButton(
                                 onPressed: () {
@@ -2838,46 +3227,1619 @@ void initState() {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
-    final isDesktop = width >= 1040;
+    final isDesktopWorkspace = _isDesktopOperatingSystem && width >= 1180;
+    final isTabletWorkspace = !isDesktopWorkspace && width >= 720;
     final isVisitor = !isOwnProfile;
-
-    final showMobileDock = isOwnProfile && !isDesktop;
 
     return Scaffold(
       extendBody: true,
-      backgroundColor: Colors.white,
-      appBar: isDesktop || _mobileWindowChild != null ? null : _buildFlagshipMobileAppBar(isVisitor),
-      bottomNavigationBar: showMobileDock ? _buildSocialBottomBar() : null,
+      backgroundColor: const Color(0xFFF6F7F6),
+      appBar: isTabletWorkspace || _mobileWindowChild != null
+          ? null
+          : _buildFlagshipMobileAppBar(isVisitor),
+      bottomNavigationBar: isOwnProfile && width < 720
+          ? _buildSocialBottomBar()
+          : null,
       body: isLoadingProfile
           ? _buildFlagshipLoading()
-          : isDesktop
-              ? RefreshIndicator(
-                  onRefresh: _loadInitialData,
-                  color: const Color(0xFF00A750),
-                  child: _buildFlagshipDesktopProfile(),
-                )
-              : Stack(
-                  children: [
-                    Positioned.fill(
+          : isDesktopWorkspace
+              ? _buildProfileDesktopWorkspace(isVisitor: isVisitor)
+              : isTabletWorkspace
+                  ? _buildProfileTabletWorkspace(isVisitor: isVisitor)
+                  : _buildFlagshipPhoneOrTabletBody(
+                      width: width,
+                      isVisitor: isVisitor,
+                    ),
+    );
+  }
+
+
+  Widget _buildProfileTabletWorkspace({required bool isVisitor}) {
+    return SafeArea(
+      bottom: false,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 88),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      width: double.infinity,
+                      color: Colors.white,
                       child: RefreshIndicator(
                         onRefresh: _loadInitialData,
                         color: const Color(0xFF00A750),
-                        child: CustomScrollView(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          slivers: [
-                            SliverToBoxAdapter(child: _buildFlagshipMobileProfile()),
-                            if (isVisitor) const SliverToBoxAdapter(child: SizedBox(height: 20)),
-                            const SliverToBoxAdapter(child: SizedBox(height: 18)),
-                          ],
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 180),
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeInCubic,
+                          child: KeyedSubtree(
+                            key: ValueKey('tablet-${_profileWorkspaceSection}'),
+                            child: _buildProfileWorkspaceBody(
+                              compact: true,
+                              isVisitor: isVisitor,
+                            ),
+                          ),
                         ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              if (_mobileWindowChild != null)
+                Positioned.fill(
+                  bottom: 78,
+                  child: _buildMobilePersistentWindow(),
+                ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 10,
+                child: _buildProfileTabletTaskbar(),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildProfileTabletTaskbar() {
+    final width = MediaQuery.of(context).size.width;
+    final compact = width < 920;
+
+    Widget divider() => Container(
+          width: 1,
+          height: 30,
+          margin: const EdgeInsets.symmetric(horizontal: 7),
+          color: const Color(0xFFE9ECEA),
+        );
+
+    Widget button({
+      required IconData icon,
+      required String tooltip,
+      required VoidCallback onTap,
+      bool active = false,
+      bool system = false,
+    }) {
+      return Tooltip(
+        message: tooltip,
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(16),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: active
+                    ? const Color(0xFF344054)
+                    : system
+                        ? const Color(0xFFF7F9F8)
+                        : Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: system
+                      ? const Color(0xFFEFF2F5)
+                      : Colors.transparent,
+                ),
+                boxShadow: active
+                    ? [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(.11),
+                          blurRadius: 16,
+                          offset: const Offset(0, 7),
+                        ),
+                      ]
+                    : const [],
+              ),
+              child: Icon(
+                icon,
+                size: 22,
+                color: active ? Colors.white : const Color(0xFF344054),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final apps = <Widget>[
+      button(
+        icon: Icons.account_tree_rounded,
+        tooltip: 'Кабинет',
+        active: _profileWorkspaceSection == 'posts',
+        onTap: () => _selectProfileWorkspaceSection('posts'),
+      ),
+      button(
+        icon: Icons.dynamic_feed_rounded,
+        tooltip: 'Соцлента',
+        active: _mobileDockKey == 'feed' &&
+            _profileWorkspaceSection == 'embedded',
+        onTap: _openCommunityFeedHome,
+      ),
+      button(icon: Icons.groups_2_rounded, tooltip: 'Команды', onTap: _openTeamsWindow),
+      button(icon: Icons.badge_rounded, tooltip: 'Профиль', onTap: () => _selectProfileWorkspaceSection('profile')),
+      button(icon: Icons.sports_soccer_rounded, tooltip: 'Площадки', onTap: _openHomeServices),
+      button(icon: Icons.calendar_month_rounded, tooltip: 'Расписание', onTap: _openScheduleWindow),
+      button(icon: Icons.folder_copy_rounded, tooltip: 'Сервисы', onTap: _openServicesWindow),
+      button(icon: Icons.play_circle_outline_rounded, tooltip: 'Видеоуроки', onTap: _openVideoLessonsWindow),
+      button(
+        icon: Icons.sensors_rounded,
+        tooltip: 'Трекер / тренировки',
+        active: _mobileDockKey == 'tracker',
+        onTap: _openTrainingQuickMenu,
+      ),
+      button(icon: Icons.forum_rounded, tooltip: 'Чат', onTap: _openMainChat),
+    ];
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: math.min(width - 28, 1040.0),
+        ),
+        child: Container(
+          height: 62,
+          margin: const EdgeInsets.symmetric(horizontal: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(.97),
+            borderRadius: BorderRadius.circular(21),
+            border: Border.all(color: Colors.white.withOpacity(.82)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(.11),
+                blurRadius: 28,
+                offset: const Offset(0, 14),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              button(
+                icon: Icons.grid_view_rounded,
+                tooltip: 'Все разделы',
+                onTap: _openProfileHomeMoreSheet,
+                system: true,
+              ),
+              const SizedBox(width: 8),
+              Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+                child: InkWell(
+                  onTap: _openProfileHomeMoreSheet,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: compact ? 44 : 132,
+                    height: 44,
+                    padding: EdgeInsets.symmetric(horizontal: compact ? 0 : 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF7F9F8),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFEFF2F5)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: compact
+                          ? MainAxisAlignment.center
+                          : MainAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.search_rounded,
+                            color: Color(0xFF344054), size: 21),
+                        if (!compact) ...[
+                          const SizedBox(width: 9),
+                          const Text(
+                            'Поиск',
+                            style: TextStyle(
+                              color: Color(0xFF667085),
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              divider(),
+              Flexible(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  child: Row(
+                    children: [
+                      for (final app in apps) ...[
+                        app,
+                        const SizedBox(width: 4),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              divider(),
+              button(
+                icon: Icons.tune_rounded,
+                tooltip: 'Настройки',
+                onTap: () => _selectProfileWorkspaceSection('settings'),
+                system: true,
+              ),
+              const SizedBox(width: 6),
+              button(
+                icon: Icons.refresh_rounded,
+                tooltip: 'Обновить',
+                onTap: _loadInitialData,
+                system: true,
+              ),
+              const SizedBox(width: 6),
+              button(
+                icon: Icons.home_rounded,
+                tooltip: 'Главная',
+                onTap: () => _selectProfileWorkspaceSection('posts'),
+                system: true,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileDesktopWorkspace({required bool isVisitor}) {
+    return SafeArea(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final desktopSize = Size(constraints.maxWidth, constraints.maxHeight);
+          _profileMainWindowPosition ??= const Offset(76, 34);
+          _profileMainWindowSize ??= Size(
+            max(720.0, desktopSize.width - 152),
+            max(520.0, desktopSize.height - 134),
+          );
+          _profileModuleWindowPosition ??= Offset(
+            desktopSize.width > 1380 ? 210 : 130,
+            64,
+          );
+          _profileModuleWindowSize ??= Size(
+            min(1120.0, desktopSize.width - (desktopSize.width > 1380 ? 330 : 200)),
+            min(760.0, desktopSize.height - 182),
+          );
+
+          final windows = <({int z, Widget child})>[];
+          if (!_profileMainWindowMinimized) {
+            windows.add((
+              z: _profileMainWindowZ,
+              child: _buildPositionedProfileMainWindow(desktopSize, isVisitor),
+            ));
+          }
+          if (_desktopRightPaneChild != null && !_profileModuleWindowMinimized) {
+            windows.add((
+              z: _profileModuleWindowZ,
+              child: _buildPositionedProfileModuleWindow(desktopSize),
+            ));
+          }
+          windows.sort((a, b) => a.z.compareTo(b.z));
+
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(child: _buildProfileDesktopWallpaper()),
+              Positioned(left: 18, top: 24, child: _buildProfileDesktopShortcuts()),
+              for (final window in windows) window.child,
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 14,
+                child: _buildProfileDesktopDock(),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildPositionedProfileMainWindow(Size desktopSize, bool isVisitor) {
+    final maximized = _profileMainWindowMaximized;
+    final frame = _buildProfileFloatingWindow(
+      title: 'Мой профиль',
+      subtitle: _activeWorkspaceName,
+      icon: Icons.person_rounded,
+      active: _profileMainWindowZ >= _profileModuleWindowZ || _desktopRightPaneChild == null,
+      maximized: maximized,
+      onTap: () => setState(() => _profileMainWindowZ = ++_profileWindowZCounter),
+      onClose: () => Navigator.of(context).maybePop(),
+      onMinimize: () => setState(() => _profileMainWindowMinimized = true),
+      onMaximize: () => setState(() {
+        _profileMainWindowMaximized = !_profileMainWindowMaximized;
+        _profileMainWindowZ = ++_profileWindowZCounter;
+      }),
+      onDragUpdate: (delta) => _moveProfileMainWindow(delta, desktopSize),
+      onResizeUpdate: (delta) => _resizeProfileMainWindow(delta, desktopSize),
+      child: _buildProfileWorkspaceShell(
+        compact: false,
+        isVisitor: isVisitor,
+        desktopWindow: true,
+      ),
+    );
+
+    if (maximized) {
+      return Positioned(left: 12, top: 12, right: 12, bottom: 92, child: frame);
+    }
+
+    final size = _safeProfileWindowSize(
+      _profileMainWindowSize!,
+      desktopSize,
+      minWidth: 620,
+      minHeight: 480,
+    );
+    final pos = _safeProfileWindowPosition(_profileMainWindowPosition!, size, desktopSize);
+    return Positioned(left: pos.dx, top: pos.dy, width: size.width, height: size.height, child: frame);
+  }
+
+  Widget _buildPositionedProfileModuleWindow(Size desktopSize) {
+    final maximized = _profileModuleWindowMaximized;
+    final frame = _buildProfileFloatingWindow(
+      title: _desktopRightPaneTitle.isEmpty ? 'Подробный просмотр' : _desktopRightPaneTitle,
+      subtitle: _activeWorkspaceName,
+      icon: _desktopRightPaneIcon,
+      active: _profileModuleWindowZ >= _profileMainWindowZ,
+      maximized: maximized,
+      onTap: () => setState(() => _profileModuleWindowZ = ++_profileWindowZCounter),
+      onClose: () => setState(() {
+        _desktopRightPaneChild = null;
+        _desktopRightPaneTitle = '';
+        _profileModuleWindowMinimized = false;
+      }),
+      onMinimize: () => setState(() => _profileModuleWindowMinimized = true),
+      onMaximize: () => setState(() {
+        _profileModuleWindowMaximized = !_profileModuleWindowMaximized;
+        _profileModuleWindowZ = ++_profileWindowZCounter;
+      }),
+      onDragUpdate: (delta) => _moveProfileModuleWindow(delta, desktopSize),
+      onResizeUpdate: (delta) => _resizeProfileModuleWindow(delta, desktopSize),
+      child: _desktopRightPaneChild!,
+    );
+
+    if (maximized) {
+      return Positioned(left: 12, top: 12, right: 12, bottom: 92, child: frame);
+    }
+
+    final size = _safeProfileWindowSize(
+      _profileModuleWindowSize!,
+      desktopSize,
+      minWidth: 560,
+      minHeight: 420,
+    );
+    final pos = _safeProfileWindowPosition(_profileModuleWindowPosition!, size, desktopSize);
+    return Positioned(left: pos.dx, top: pos.dy, width: size.width, height: size.height, child: frame);
+  }
+
+  Size _safeProfileWindowSize(
+    Size requested,
+    Size desktopSize, {
+    required double minWidth,
+    required double minHeight,
+  }) {
+    final availableWidth = max(360.0, desktopSize.width - 24);
+    final availableHeight = max(300.0, desktopSize.height - 106);
+    return Size(
+      requested.width.clamp(min(minWidth, availableWidth), availableWidth).toDouble(),
+      requested.height.clamp(min(minHeight, availableHeight), availableHeight).toDouble(),
+    );
+  }
+
+  Offset _safeProfileWindowPosition(Offset requested, Size size, Size desktopSize) {
+    final maxX = max(8.0, desktopSize.width - size.width - 8);
+    final maxY = max(8.0, desktopSize.height - size.height - 96);
+    return Offset(
+      requested.dx.clamp(8.0, maxX).toDouble(),
+      requested.dy.clamp(8.0, maxY).toDouble(),
+    );
+  }
+
+  void _moveProfileMainWindow(Offset delta, Size desktopSize) {
+    setState(() {
+      _profileMainWindowMaximized = false;
+      _profileMainWindowZ = ++_profileWindowZCounter;
+      final size = _profileMainWindowSize ?? const Size(1040, 680);
+      _profileMainWindowPosition = _safeProfileWindowPosition(
+        (_profileMainWindowPosition ?? const Offset(76, 34)) + delta,
+        size,
+        desktopSize,
+      );
+    });
+  }
+
+  void _resizeProfileMainWindow(Offset delta, Size desktopSize) {
+    setState(() {
+      _profileMainWindowMaximized = false;
+      _profileMainWindowZ = ++_profileWindowZCounter;
+      final position = _profileMainWindowPosition ?? const Offset(76, 34);
+      final current = _profileMainWindowSize ?? const Size(1040, 680);
+      _profileMainWindowSize = Size(
+        (current.width + delta.dx).clamp(620.0, max(620.0, desktopSize.width - position.dx - 12)).toDouble(),
+        (current.height + delta.dy).clamp(480.0, max(480.0, desktopSize.height - position.dy - 102)).toDouble(),
+      );
+    });
+  }
+
+  void _moveProfileModuleWindow(Offset delta, Size desktopSize) {
+    setState(() {
+      _profileModuleWindowMaximized = false;
+      _profileModuleWindowZ = ++_profileWindowZCounter;
+      final size = _profileModuleWindowSize ?? const Size(1040, 680);
+      _profileModuleWindowPosition = _safeProfileWindowPosition(
+        (_profileModuleWindowPosition ?? const Offset(130, 64)) + delta,
+        size,
+        desktopSize,
+      );
+    });
+  }
+
+  void _resizeProfileModuleWindow(Offset delta, Size desktopSize) {
+    setState(() {
+      _profileModuleWindowMaximized = false;
+      _profileModuleWindowZ = ++_profileWindowZCounter;
+      final position = _profileModuleWindowPosition ?? const Offset(130, 64);
+      final current = _profileModuleWindowSize ?? const Size(1040, 680);
+      _profileModuleWindowSize = Size(
+        (current.width + delta.dx).clamp(560.0, max(560.0, desktopSize.width - position.dx - 12)).toDouble(),
+        (current.height + delta.dy).clamp(420.0, max(420.0, desktopSize.height - position.dy - 102)).toDouble(),
+      );
+    });
+  }
+
+  Widget _buildProfileFloatingWindow({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required bool active,
+    required bool maximized,
+    required VoidCallback onTap,
+    required VoidCallback onClose,
+    required VoidCallback onMinimize,
+    required VoidCallback onMaximize,
+    required ValueChanged<Offset> onDragUpdate,
+    required ValueChanged<Offset> onResizeUpdate,
+    required Widget child,
+  }) {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOutCubic,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(maximized ? 22 : 24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(active ? .14 : .09),
+              blurRadius: active ? 42 : 28,
+              offset: Offset(0, active ? 22 : 14),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(maximized ? 22 : 24),
+          child: Column(
+            children: [
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onPanUpdate: maximized ? null : (details) => onDragUpdate(details.delta),
+                onDoubleTap: onMaximize,
+                child: _buildCmrWindowTitleBar(
+                  title: title,
+                  subtitle: subtitle,
+                  icon: icon,
+                  onClose: onClose,
+                  onMinimize: onMinimize,
+                  onMaximize: onMaximize,
+                  maximized: maximized,
+                ),
+              ),
+              Expanded(
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: ColoredBox(
+                        color: const Color(0xFFF7F9F8),
+                        child: ClipRect(child: child),
+                      ),
+                    ),
+                    if (!maximized)
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onPanUpdate: (details) => onResizeUpdate(details.delta),
+                          child: const SizedBox(
+                            width: 28,
+                            height: 28,
+                            child: Align(
+                              alignment: Alignment.bottomRight,
+                              child: Padding(
+                                padding: EdgeInsets.all(6),
+                                child: Icon(Icons.open_in_full_rounded, size: 13, color: Color(0xFF98A2B3)),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileDesktopWallpaper() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFF4F8F5), Color(0xFFEAF4EE), Color(0xFFF7F8F7)],
+        ),
+      ),
+      child: Align(
+        alignment: Alignment.topRight,
+        child: Container(
+          width: 520,
+          height: 520,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: RadialGradient(
+              colors: [Color(0x2200A750), Color(0x0000A750)],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileDesktopMainWindow({required bool isVisitor}) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white.withOpacity(.9)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(.13),
+              blurRadius: 42,
+              spreadRadius: -18,
+              offset: const Offset(0, 22),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            _buildCmrWindowTitleBar(
+              title: 'Мой профиль',
+              icon: Icons.person_rounded,
+              onClose: () => Navigator.of(context).maybePop(),
+            ),
+            Expanded(
+              child: _buildProfileWorkspaceShell(
+                compact: false,
+                isVisitor: isVisitor,
+                desktopWindow: true,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileDesktopShortcuts() {
+    final items = <({IconData icon, String title, VoidCallback tap})>[
+      (icon: Icons.grid_on_rounded, title: 'Публикации', tap: () => _selectProfileWorkspaceSection('posts')),
+      (icon: Icons.newspaper_rounded, title: 'Соцлента', tap: _openCommunityFeedHome),
+      (icon: Icons.play_circle_outline_rounded, title: 'Reels', tap: _openGlobalReels),
+      (icon: Icons.groups_rounded, title: 'Команды', tap: _openTeamsWindow),
+      (icon: Icons.sensors_rounded, title: 'Трекер', tap: _openTrainingQuickMenu),
+      (icon: Icons.forum_outlined, title: 'Чаты', tap: _openMainChat),
+    ];
+    return Column(
+      children: items.map((item) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: InkWell(
+          onTap: item.tap,
+          borderRadius: BorderRadius.circular(16),
+          child: SizedBox(
+            width: 76,
+            child: Column(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(.86),
+                    borderRadius: BorderRadius.circular(15),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(.08), blurRadius: 16, offset: const Offset(0, 7))],
+                  ),
+                  child: Icon(item.icon, color: const Color(0xFF16794B), size: 24),
+                ),
+                const SizedBox(height: 5),
+                Text(item.title, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: Color(0xFF344054))),
+              ],
+            ),
+          ),
+        ),
+      )).toList(),
+    );
+  }
+
+  Widget _buildProfileDesktopDock() {
+    final actions = <({IconData icon, String key, VoidCallback tap})>[
+      (icon: Icons.home_rounded, key: 'profile', tap: () => _selectProfileWorkspaceSection('posts')),
+      (icon: Icons.dynamic_feed_rounded, key: 'feed', tap: _openCommunityFeedHome),
+      (icon: Icons.play_circle_outline_rounded, key: 'reels', tap: _openGlobalReels),
+      (icon: Icons.sensors_rounded, key: 'tracker', tap: _openTrainingQuickMenu),
+      (icon: Icons.forum_outlined, key: 'chat', tap: _openMainChat),
+      (icon: Icons.grid_view_rounded, key: 'more', tap: _openProfileHomeMoreSheet),
+    ];
+    return Center(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: math.min(MediaQuery.of(context).size.width - 28, 1040.0),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(30),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              height: 56,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(.96),
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(color: const Color(0xFFE3E8EF), width: 1),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(.12),
+                    blurRadius: 24,
+                    spreadRadius: -10,
+                    offset: const Offset(0, 12),
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withOpacity(.04),
+                    blurRadius: 8,
+                    spreadRadius: -5,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: actions.map((action) {
+                final active = _mobileDockKey == action.key;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2.5),
+                  child: InkWell(
+                    onTap: action.tap,
+                    borderRadius: BorderRadius.circular(17),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      width: active ? 46 : 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: active ? const Color(0xFFF0F2F5) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: active ? const Color(0xFFE3E8EF) : Colors.transparent,
+                        ),
+                      ),
+                      child: Icon(action.icon, size: 21, color: const Color(0xFF344054)),
+                    ),
+                  ),
+                );
+              }).toList(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFlagshipPhoneOrTabletBody({
+    required double width,
+    required bool isVisitor,
+  }) {
+    Widget profileScroll() {
+      return RefreshIndicator(
+        onRefresh: _loadInitialData,
+        color: const Color(0xFF00A750),
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverToBoxAdapter(child: _buildFlagshipMobileProfile()),
+            if (isVisitor)
+              const SliverToBoxAdapter(child: SizedBox(height: 20)),
+            const SliverToBoxAdapter(child: SizedBox(height: 18)),
+          ],
+        ),
+      );
+    }
+
+    return Stack(
+      children: [
+        Positioned.fill(child: profileScroll()),
+        if (_mobileWindowChild != null)
+          Positioned.fill(child: _buildMobilePersistentWindow()),
+      ],
+    );
+  }
+
+  void _selectProfileWorkspaceSection(String section) {
+    if (!mounted) return;
+    setState(() {
+      _profileWorkspaceSection = section;
+      _profileMainWindowMinimized = false;
+      _profileMainWindowZ = ++_profileWindowZCounter;
+      _desktopRightPaneChild = null;
+      _desktopRightPaneTitle = '';
+      _openedProfilePost = null;
+      if (section == 'posts') _mode = _ProfileFeedMode.posts;
+      if (section == 'feed') _mode = _ProfileFeedMode.feed;
+      if (section == 'reels') _mode = _ProfileFeedMode.reels;
+    });
+  }
+
+  Widget _buildProfileWorkspaceShell({
+    required bool compact,
+    required bool isVisitor,
+    bool desktopWindow = false,
+  }) {
+    final dockInset = isOwnProfile
+        ? MediaQuery.paddingOf(context).bottom + 76.0
+        : 16.0;
+
+    return SafeArea(
+      bottom: false,
+      child: Container(
+        color: desktopWindow ? Colors.white : const Color(0xFFF6F7F6),
+        padding: desktopWindow ? EdgeInsets.zero : EdgeInsets.fromLTRB(
+          compact ? 8 : 10,
+          compact ? 8 : 10,
+          compact ? 8 : 10,
+          dockInset,
+        ),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1480),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(compact ? 24 : 28),
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(compact ? 24 : 28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(.035),
+                      blurRadius: 28,
+                      spreadRadius: -18,
+                      offset: const Offset(0, 16),
+                    ),
+                  ],
+                ),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: Column(
+                        children: [
+                          _buildProfileWorkspaceTopBar(compact: compact),
+                          Expanded(
+                            child: desktopWindow
+                                ? AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 190),
+                                    switchInCurve: Curves.easeOutCubic,
+                                    switchOutCurve: Curves.easeInCubic,
+                                    child: KeyedSubtree(
+                                      key: ValueKey('desktop-${_profileWorkspaceSection}'),
+                                      child: _buildProfileWorkspaceBody(
+                                        compact: false,
+                                        isVisitor: isVisitor,
+                                      ),
+                                    ),
+                                  )
+                                : Row(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
+                                      SizedBox(
+                                        width: compact ? 270 : 304,
+                                        child: _buildProfileWorkspaceNavigation(
+                                          compact: compact,
+                                          isVisitor: isVisitor,
+                                        ),
+                                      ),
+                                      Container(
+                                        width: .7,
+                                        color: const Color(0xFFE9ECEA),
+                                      ),
+                                      Expanded(
+                                        child: AnimatedSwitcher(
+                                          duration: const Duration(milliseconds: 190),
+                                          switchInCurve: Curves.easeOutCubic,
+                                          switchOutCurve: Curves.easeInCubic,
+                                          child: KeyedSubtree(
+                                            key: ValueKey(_profileWorkspaceSection),
+                                            child: _buildProfileWorkspaceBody(
+                                              compact: compact,
+                                              isVisitor: isVisitor,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                          ),
+                        ],
                       ),
                     ),
                     if (_mobileWindowChild != null)
                       Positioned.fill(child: _buildMobilePersistentWindow()),
                   ],
                 ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
+
+  Widget _buildProfileWorkspaceNavigation({
+    required bool compact,
+    required bool isVisitor,
+  }) {
+    Widget item({
+      required String id,
+      required String title,
+      required String subtitle,
+      required IconData icon,
+      VoidCallback? onTap,
+      bool danger = false,
+    }) {
+      final active = _profileWorkspaceSection == id;
+      final foreground = danger
+          ? const Color(0xFFE11D48)
+          : active
+              ? const Color(0xFF067A46)
+              : const Color(0xFF344054);
+
+      return InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap ?? () => _selectProfileWorkspaceSection(id),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 170),
+          margin: const EdgeInsets.only(bottom: 4),
+          padding: EdgeInsets.fromLTRB(compact ? 9 : 11, 9, 8, 9),
+          decoration: BoxDecoration(
+            color: active ? const Color(0xFFF3FAF6) : Colors.transparent,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 170),
+                width: 4,
+                height: active ? 34 : 0,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00A750),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+              SizedBox(width: active ? 8 : 11),
+              Icon(icon, size: 18, color: foreground),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _flagshipText(
+                        11.3,
+                        color: foreground,
+                        weight: active ? FontWeight.w800 : FontWeight.w600,
+                      ),
+                    ),
+                    if (!compact) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _flagshipText(
+                          8.9,
+                          color: danger
+                              ? const Color(0xFFBE123C)
+                              : const Color(0xFF98A2B3),
+                          weight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      color: Colors.white,
+      padding: EdgeInsets.fromLTRB(compact ? 6 : 8, 8, compact ? 6 : 8, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildFlagshipAccountMini(),
+          const SizedBox(height: 8),
+          Expanded(
+            child: ListView(
+              physics: const BouncingScrollPhysics(),
+              children: [
+                item(
+                  id: 'posts',
+                  title: 'Публикации',
+                  subtitle: 'фото и посты профиля',
+                  icon: Icons.grid_on_rounded,
+                ),
+                item(
+                  id: 'feed',
+                  title: 'Лента',
+                  subtitle: 'публикации списком',
+                  icon: Icons.article_outlined,
+                ),
+                item(
+                  id: 'reels',
+                  title: 'Reels',
+                  subtitle: 'короткие спортивные видео',
+                  icon: Icons.play_circle_outline_rounded,
+                ),
+                if (!isVisitor) ...[
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(10, 14, 10, 6),
+                    child: Text(
+                      'РАБОЧАЯ ЗОНА',
+                      style: TextStyle(
+                        fontSize: 8.5,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF98A2B3),
+                        letterSpacing: .55,
+                      ),
+                    ),
+                  ),
+                  item(
+                    id: 'workspace',
+                    title: _primaryZoneTitle,
+                    subtitle: _primaryZoneSubtitle,
+                    icon: _primaryZoneIcon,
+                    onTap: _openPrimaryArea,
+                  ),
+                  item(
+                    id: 'community',
+                    title: 'Соцлента',
+                    subtitle: 'новости сообщества',
+                    icon: Icons.newspaper_rounded,
+                    onTap: _openCommunityFeedHome,
+                  ),
+                  item(
+                    id: 'teams',
+                    title: 'Команды / CMR',
+                    subtitle: 'составы и рабочий режим',
+                    icon: Icons.groups_rounded,
+                    onTap: _openTeamsWindow,
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(10, 14, 10, 6),
+                    child: Text(
+                      'АККАУНТ',
+                      style: TextStyle(
+                        fontSize: 8.5,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF98A2B3),
+                        letterSpacing: .55,
+                      ),
+                    ),
+                  ),
+                  item(
+                    id: 'settings',
+                    title: 'Настройки',
+                    subtitle: 'профиль и доступ',
+                    icon: Icons.settings_outlined,
+                  ),
+                  item(
+                    id: 'more',
+                    title: 'Все разделы',
+                    subtitle: 'сервисы, события и медиа',
+                    icon: Icons.grid_view_rounded,
+                    onTap: _openProfileHomeMoreSheet,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileWorkspaceTopBar({required bool compact}) {
+    String title;
+    String subtitle;
+    IconData icon;
+
+    switch (_profileWorkspaceSection) {
+      case 'embedded':
+        title = _desktopRightPaneTitle.isEmpty ? 'Раздел' : _desktopRightPaneTitle;
+        subtitle = 'Рабочая область SPORTOTEKA';
+        icon = _desktopRightPaneIcon;
+        break;
+      case 'community':
+        title = 'Соцлента и новости';
+        subtitle = 'Публикации игроков, тренеров и клубов';
+        icon = Icons.newspaper_rounded;
+        break;
+      case 'posts':
+        title = 'Публикации профиля';
+        subtitle = 'Фото и посты пользователя';
+        icon = Icons.grid_on_rounded;
+        break;
+      case 'feed':
+        title = 'Лента профиля';
+        subtitle = 'Публикации в подробном виде';
+        icon = Icons.article_outlined;
+        break;
+      case 'reels':
+        title = 'Reels профиля';
+        subtitle = 'Короткие спортивные видео';
+        icon = Icons.play_circle_outline_rounded;
+        break;
+      case 'settings':
+        title = 'Настройки профиля';
+        subtitle = 'Данные аккаунта, доступ и управление';
+        icon = Icons.settings_outlined;
+        break;
+      default:
+        title = 'Публикации профиля';
+        subtitle = 'Фото и посты пользователя';
+        icon = Icons.grid_on_rounded;
+    }
+
+    return Container(
+      height: compact ? 52 : 58,
+      padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 16),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(color: Color(0xFFE9ECEA), width: .7),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1FBF6),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 17, color: const Color(0xFF00A750)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _flagshipTitle(14.2, weight: FontWeight.w700),
+                ),
+                if (!compact) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _flagshipText(10, color: const Color(0xFF8A9099)),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (isOwnProfile)
+            _buildTinyAction(Icons.add_rounded, 'Создать', _openCreateMenuSheet),
+          if (isOwnProfile)
+            _buildTinyAction(Icons.more_horiz_rounded, 'Меню', _openProfileSettingsSheet),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileWorkspaceBody({
+    required bool compact,
+    required bool isVisitor,
+  }) {
+    if (_profileWorkspaceSection == 'embedded' &&
+        _desktopRightPaneChild != null) {
+      return ColoredBox(
+        color: Colors.white,
+        child: KeyedSubtree(
+          key: ValueKey(_desktopRightPaneTitle),
+          child: _desktopRightPaneChild!,
+        ),
+      );
+    }
+
+    if (_profileWorkspaceSection == 'community') {
+      return const SportCommunityScreen(
+        sportName: 'Футбол',
+        embedded: true,
+      );
+    }
+
+    if (_profileWorkspaceSection == 'settings') {
+      return SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: EdgeInsets.all(compact ? 12 : 16),
+        child: Column(
+          children: [
+            _buildFlagshipProfileCard(),
+            const SizedBox(height: 10),
+            _buildFlagshipSettingsPanel(),
+            SizedBox(height: compact ? 20 : 8),
+          ],
+        ),
+      );
+    }
+
+    if (_profileWorkspaceSection == 'posts') {
+      return _buildTabletPublicationsSplit(compact: compact);
+    }
+
+    if (_profileWorkspaceSection == 'feed' ||
+        _profileWorkspaceSection == 'reels') {
+      return SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.only(bottom: compact ? 20 : 8),
+        child: _buildFlagshipContentWindow(),
+      );
+    }
+
+    // Любое неизвестное состояние возвращаем к публикациям, а не к обзору.
+    return _buildTabletPublicationsSplit(compact: compact);
+  }
+
+  Map<String, dynamic> _profileGridPostToDetail(Map<String, dynamic> post) {
+    final rawBody = _safeStr(post['body'] ?? post['text'] ?? post['caption']);
+    final body = _looksLikeHtml(rawBody) ? _htmlToPlain(rawBody) : rawBody;
+    final image = _fixUrl(_safeStr(
+      post['imageUrl'] ?? post['image_url'] ?? post['image'] ?? post['photo'],
+    ));
+    final category = _safeStr(post['category']).trim();
+    final rawTitle = _safeStr(post['title']).trim();
+
+    return <String, dynamic>{
+      'id': _safeInt(post['id']),
+      'title': rawTitle.isNotEmpty
+          ? rawTitle
+          : (category.isNotEmpty ? category : 'Публикация профиля'),
+      'text': body,
+      'imageUrl': image,
+      'category': category.isNotEmpty ? category : 'Профиль',
+      'authorName': fullName,
+      'authorAvatar': _fixUrl(photo ?? ''),
+      'likes': _safeInt(post['likes_count'] ?? post['likes']),
+      'comments': _safeInt(post['comments_count'] ?? post['comments']),
+    };
+  }
+
+  Widget _buildTabletPublicationsSplit({required bool compact}) {
+    final selected = _openedProfilePost;
+    final leftWidthFactor = compact ? .53 : .57;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final leftWidth = constraints.maxWidth * leftWidthFactor;
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              width: leftWidth,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.fromLTRB(
+                  compact ? 10 : 14,
+                  compact ? 10 : 14,
+                  compact ? 8 : 12,
+                  compact ? 20 : 14,
+                ),
+                child: _buildFlagshipContentWindow(),
+              ),
+            ),
+            Container(width: 1, color: const Color(0xFFE9ECEA)),
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 190),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                child: selected == null
+                    ? _buildPublicationSelectionPlaceholder(compact: compact)
+                    : Container(
+                        key: ValueKey('tablet-profile-post-${_safeInt(selected['id'])}'),
+                        color: Colors.white,
+                        child: _buildCmrPublicationDetail(
+                          selected,
+                          compact: compact,
+                        ),
+                      ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildCmrPublicationDetail(
+    Map<String, dynamic> post, {
+    required bool compact,
+  }) {
+    final title = _safeStr(post['title']).trim().isNotEmpty
+        ? _safeStr(post['title']).trim()
+        : 'Публикация';
+    final body = _safeStr(post['text']).trim();
+    final imageUrl = _safeStr(post['imageUrl']).trim();
+    final likes = _safeInt(post['likes']);
+    final comments = _safeInt(post['comments']);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          height: compact ? 54 : 58,
+          padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 16),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              bottom: BorderSide(color: Color(0xFFE9ECEA), width: .7),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3FAF6),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.article_outlined,
+                  size: 17,
+                  color: Color(0xFF00A750),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Просмотр публикации',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _flagshipTitle(13.6, weight: FontWeight.w700),
+                    ),
+                    if (!compact) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        fullName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _flagshipText(9.8, color: const Color(0xFF8A9099)),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              InkWell(
+                onTap: _closeTabletProfilePost,
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  width: 34,
+                  height: 34,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7F8F7),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.close_rounded,
+                    size: 17,
+                    color: Color(0xFF5F6670),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: EdgeInsets.all(compact ? 12 : 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  padding: EdgeInsets.all(compact ? 12 : 14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7F8F7),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      _buildFlagshipAvatar(size: compact ? 46 : 52, hasAvatar: photo != null && photo!.trim().isNotEmpty),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              fullName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _flagshipTitle(12.6, weight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              _roleLabel,
+                              style: _flagshipText(9.8, color: const Color(0xFF8A9099)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (imageUrl.isNotEmpty)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: AspectRatio(
+                      aspectRatio: compact ? 1.05 : 1.18,
+                      child: Image.network(
+                        imageUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: const Color(0xFFF2F4F2),
+                          alignment: Alignment.center,
+                          child: const Icon(
+                            Icons.broken_image_outlined,
+                            color: Color(0xFF8A9099),
+                            size: 34,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                if (imageUrl.isNotEmpty) const SizedBox(height: 14),
+                Text(
+                  title,
+                  style: _flagshipTitle(compact ? 17 : 19, weight: FontWeight.w700),
+                ),
+                if (body.isNotEmpty) ...[
+                  const SizedBox(height: 9),
+                  Text(
+                    body,
+                    style: _flagshipText(
+                      compact ? 11.7 : 12.4,
+                      color: const Color(0xFF374151),
+                      height: 1.48,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7F8F7),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.favorite_border_rounded, size: 17, color: Color(0xFF5F6670)),
+                      const SizedBox(width: 6),
+                      Text('$likes', style: _flagshipText(10.8, weight: FontWeight.w600)),
+                      const SizedBox(width: 18),
+                      const Icon(Icons.mode_comment_outlined, size: 17, color: Color(0xFF5F6670)),
+                      const SizedBox(width: 6),
+                      Text('$comments', style: _flagshipText(10.8, weight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPublicationSelectionPlaceholder({required bool compact}) {
+    return Container(
+      key: const ValueKey('publication-placeholder'),
+      color: const Color(0xFFFCFDFC),
+      padding: EdgeInsets.all(compact ? 22 : 34),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 390),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: compact ? 64 : 72,
+                height: compact ? 64 : 72,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1FBF6),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Icon(
+                  Icons.touch_app_rounded,
+                  size: compact ? 29 : 32,
+                  color: const Color(0xFF00A750),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Выберите публикацию',
+                textAlign: TextAlign.center,
+                style: _flagshipTitle(compact ? 17 : 19, weight: FontWeight.w700),
+              ),
+              const SizedBox(height: 7),
+              Text(
+                'Нажмите на фото или пост слева — подробная публикация откроется здесь, не закрывая профиль и нижнее меню.',
+                textAlign: TextAlign.center,
+                style: _flagshipText(
+                  compact ? 11.5 : 12.2,
+                  color: const Color(0xFF667085),
+                  height: 1.42,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopWorkspaceOverlay(Widget overlay) {
+    return Container(
+      color: const Color(0xFFF4F6F5),
+      padding: const EdgeInsets.all(8),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          color: Colors.white,
+          child: Column(
+            children: [
+              Container(
+                height: 54,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  border: Border(
+                    bottom: BorderSide(color: Color(0xFFE9ECEA), width: .7),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF3FAF6),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        _desktopRightPaneIcon,
+                        size: 17,
+                        color: const Color(0xFF00A750),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _desktopRightPaneTitle.isEmpty
+                            ? 'Подробный просмотр'
+                            : _desktopRightPaneTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _flagshipTitle(14.2, weight: FontWeight.w700),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () {
+                        if (!mounted) return;
+                        setState(() {
+                          _desktopRightPaneChild = null;
+                          _desktopRightPaneTitle = '';
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF7F8F7),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.close_rounded,
+                          size: 18,
+                          color: Color(0xFF5F6670),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(child: overlay),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // =============================
   // НОВЫЕ МЕТОДЫ ПОСТРОЕНИЯ UI
   // =============================
@@ -2963,32 +4925,32 @@ void initState() {
     );
   }
 
-  TextStyle _flagshipTitle(double size, {Color color = const Color(0xFF0B0F14), FontWeight weight = FontWeight.w800}) {
-    return TextStyle(
+  TextStyle _flagshipTitle(
+    double size, {
+    Color color = const Color(0xFF0B0F14),
+    FontWeight weight = FontWeight.w600,
+  }) {
+    return AppTypography.custom(
+      size: size,
+      weight: weight,
       color: color,
-      fontFamily: 'Segoe UI',
-      fontFamilyFallback: const ['SF Pro Display', 'SF Pro Text', 'Inter', 'Roboto', 'Arial'],
-      fontSize: size,
-      fontWeight: weight,
-      letterSpacing: -0.38,
-      height: 1.05,
+      height: 1.18,
+      letterSpacing: 0,
     );
   }
 
   TextStyle _flagshipText(
     double size, {
-    Color color = const Color(0xFF374151),
-    FontWeight weight = FontWeight.w600,
-    double height = 1.15,
+    Color color = const Color(0xFF5F6670),
+    FontWeight weight = FontWeight.w400,
+    double height = 1.30,
   }) {
-    return TextStyle(
+    return AppTypography.custom(
+      size: size,
+      weight: weight,
       color: color,
-      fontFamily: 'Segoe UI',
-      fontFamilyFallback: const ['SF Pro Display', 'SF Pro Text', 'Inter', 'Roboto', 'Arial'],
-      fontSize: size,
-      fontWeight: weight,
-      letterSpacing: -0.08,
       height: height,
+      letterSpacing: 0,
     );
   }
 
@@ -3021,7 +4983,7 @@ void initState() {
   List<_ProfileFlagshipAction> get _flagshipWorkspaceActions {
     if (_isPublicProfileView) {
       return [
-        _ProfileFlagshipAction('Публикации', 'фото и посты профиля', Icons.grid_on_rounded, () => setState(() => _mode = _ProfileFeedMode.posts), group: 'Профиль', primary: true),
+        _ProfileFlagshipAction('Публикации', 'фото и посты профиля', Icons.grid_on_rounded, () => _selectProfileWorkspaceSection('posts'), group: 'Профиль', primary: true),
         _ProfileFlagshipAction('Reels профиля', 'короткие видео игрока', Icons.play_circle_fill_rounded, () => setState(() => _mode = _ProfileFeedMode.reels), group: 'Профиль'),
         _ProfileFlagshipAction('Лента профиля', 'публикации списком', Icons.article_outlined, () => setState(() => _mode = _ProfileFeedMode.feed), group: 'Профиль'),
         _ProfileFlagshipAction(isFollowing ? 'Вы подписаны' : 'Подписаться', 'следить за обновлениями', Icons.person_add_alt_1_rounded, () { _toggleFollow(); }, group: 'Действия'),
@@ -3050,11 +5012,10 @@ void initState() {
         _ProfileFlagshipAction('Советы', 'подсказки и инструкции', Icons.tips_and_updates_rounded, _openTipsWindow, group: 'Медиа'),
 
         _ProfileFlagshipAction('Сервисы', 'дополнительные инструменты', Icons.apps_rounded, _openServicesWindow, group: 'Сервисы'),
-        _ProfileFlagshipAction('Трекинг', 'датчики и live-сессии', Icons.monitor_heart_rounded, _openTrackingWindow, group: 'Сервисы'),
         _ProfileFlagshipAction('Площадки', 'бронирование объектов', Icons.stadium_rounded, _openVenuesWindow, group: 'Сервисы'),
         _ProfileFlagshipAction('Билеты', 'матчи и посещение', Icons.confirmation_number_rounded, _openTicketsWindow, group: 'Сервисы'),
 
-        _ProfileFlagshipAction('Посты профиля', 'сетка публикаций', Icons.grid_on_rounded, () => setState(() => _mode = _ProfileFeedMode.posts), group: 'Аккаунт'),
+        _ProfileFlagshipAction('Посты профиля', 'сетка публикаций', Icons.grid_on_rounded, () => _selectProfileWorkspaceSection('posts'), group: 'Аккаунт'),
         _ProfileFlagshipAction('Лента профиля', 'публикации пользователя', Icons.article_outlined, () => setState(() => _mode = _ProfileFeedMode.feed), group: 'Аккаунт'),
         _ProfileFlagshipAction('Чат', 'сообщения и группы', Icons.forum_rounded, _openMainChat, group: 'Аккаунт'),
         if (isOwnProfile)
@@ -3073,10 +5034,27 @@ void initState() {
       return _buildFlagshipDesktopPublicProfile();
     }
 
+    final Widget? overlay = _desktopRightPaneChild;
+
+    Widget mainContent() {
+      return CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverToBoxAdapter(child: _buildFlagshipDesktopHeader()),
+          const SliverToBoxAdapter(child: SizedBox(height: 10)),
+          SliverToBoxAdapter(child: _buildFlagshipProfileWorkspaceRow()),
+          const SliverToBoxAdapter(child: SizedBox(height: 10)),
+          SliverToBoxAdapter(child: _buildFlagshipContentWindow()),
+          const SliverToBoxAdapter(child: SizedBox(height: 18)),
+        ],
+      );
+    }
+
+
     return SafeArea(
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1240),
+          constraints: const BoxConstraints(maxWidth: 1480),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
             child: Row(
@@ -3085,16 +5063,113 @@ void initState() {
                 SizedBox(width: 228, child: _buildFlagshipDesktopMenu()),
                 const SizedBox(width: 14),
                 Expanded(
-                  child: CustomScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    slivers: [
-                      SliverToBoxAdapter(child: _buildFlagshipDesktopHeader()),
-                      const SliverToBoxAdapter(child: SizedBox(height: 10)),
-                      SliverToBoxAdapter(child: _buildFlagshipProfileWorkspaceRow()),
-                      const SliverToBoxAdapter(child: SizedBox(height: 10)),
-                      SliverToBoxAdapter(child: _buildFlagshipContentWindow()),
-                      const SliverToBoxAdapter(child: SizedBox(height: 18)),
-                    ],
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(18),
+                    child: Stack(
+                      children: [
+                        Positioned.fill(child: mainContent()),
+                        if (overlay != null)
+                          Positioned.fill(
+                            child: Container(
+                              color: const Color(0xFFF4F6F5),
+                              padding: const EdgeInsets.all(8),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(18),
+                                child: Container(
+                                  color: Colors.white,
+                                  child: Column(
+                                    children: [
+                                      Container(
+                                        height: 54,
+                                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                                        decoration: const BoxDecoration(
+                                          color: Colors.white,
+                                          border: Border(
+                                            bottom: BorderSide(
+                                              color: Color(0xFFE9ECEA),
+                                              width: .7,
+                                            ),
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 34,
+                                              height: 34,
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFF3FAF6),
+                                                borderRadius: BorderRadius.circular(10),
+                                              ),
+                                              child: Icon(
+                                                _desktopRightPaneIcon,
+                                                size: 17,
+                                                color: const Color(0xFF00A750),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Column(
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    _desktopRightPaneTitle.isEmpty
+                                                        ? 'Публикация'
+                                                        : _desktopRightPaneTitle,
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: _flagshipTitle(
+                                                      14.2,
+                                                      weight: FontWeight.w700,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    'Подробный просмотр',
+                                                    style: _flagshipText(
+                                                      10.2,
+                                                      color: const Color(0xFF8A9099),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            InkWell(
+                                              onTap: () {
+                                                if (!mounted) return;
+                                                setState(() {
+                                                  _desktopRightPaneChild = null;
+                                                  _desktopRightPaneTitle = '';
+                                                });
+                                              },
+                                              borderRadius: BorderRadius.circular(10),
+                                              child: Container(
+                                                width: 36,
+                                                height: 36,
+                                                alignment: Alignment.center,
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFF7F8F7),
+                                                  borderRadius: BorderRadius.circular(10),
+                                                ),
+                                                child: const Icon(
+                                                  Icons.close_rounded,
+                                                  size: 18,
+                                                  color: Color(0xFF5F6670),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Expanded(child: overlay),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -3425,7 +5500,7 @@ void initState() {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (isClubRole || isCoachRole || isPlayer)
+                    if (isClubRole || isCoachRole || isPlayer || isParentRole)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 6),
                         child: Text(
@@ -3620,7 +5695,7 @@ void initState() {
   }
 
   Widget _buildRoleCapsule() {
-    final icon = isClubRole ? Icons.apartment_rounded : isCoachRole ? Icons.sports_soccer_rounded : Icons.person_rounded;
+    final icon = isClubRole ? Icons.apartment_rounded : isCoachRole ? Icons.sports_soccer_rounded : isParentRole ? Icons.family_restroom_rounded : Icons.person_rounded;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
@@ -3874,7 +5949,7 @@ void initState() {
           _buildSettingsLine(Icons.verified_user_outlined, 'Роль аккаунта', _roleLabel.toUpperCase(), _openProfileSettingsSheet),
           _buildSettingsLine(Icons.image_outlined, 'Фото и профиль', 'Редактировать', _pickAndUploadPhoto),
           _buildSettingsLine(Icons.notifications_none_rounded, 'Уведомления', 'Открыть', _openProfileSettingsSheet),
-          _buildSettingsLine(Icons.security_rounded, isPlayer ? 'Личный доступ' : 'Права клуба', isPlayer ? 'Dashboard' : 'Панель', _openPrimaryArea),
+          _buildSettingsLine(Icons.security_rounded, isParentRole ? 'Доступ к детям' : (isPlayer ? 'Личный доступ' : 'Права клуба'), isParentRole ? 'Мои дети' : (isPlayer ? 'Dashboard' : 'Панель'), _openPrimaryArea),
         ],
       ),
     );
@@ -3958,12 +6033,11 @@ void initState() {
   }
 
   Widget _buildFlagshipMobileProfile() {
+    // На телефоне профиль сразу открывается с публикаций: без верхней карточки,
+    // статистики и блока кабинета. Нижний dock остаётся постоянным.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (isOwnProfile) _buildLoggedInClubStrip(),
-        _buildFlagshipProfileCard(),
-        if (isOwnProfile) _buildFlagshipWorkspaceSummary(),
         _buildFlagshipContentWindow(),
         SizedBox(height: MediaQuery.paddingOf(context).bottom + 116),
       ],
@@ -4006,7 +6080,7 @@ void initState() {
   }
 
   Widget _buildLoggedInClubStrip() {
-    final isWorkspaceRole = isClubRole || isCoachRole;
+    final isWorkspaceRole = isClubRole || isCoachRole || isParentRole;
 
     return Container(
       width: double.infinity,
@@ -4028,7 +6102,7 @@ void initState() {
           ),
           if (isWorkspaceRole)
             InkWell(
-              onTap: _openProPanel,
+              onTap: _openPrimaryArea,
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                 child: Text(
@@ -4107,7 +6181,7 @@ void initState() {
               title.isEmpty ? 'Окно' : title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900, color: Color(0xFF111827)),
+              style: AppTypography.custom(size: 11.5, weight: FontWeight.w600, color: const Color(0xFF111827), height: 1.2),
             ),
           ),
           InkWell(
@@ -4128,7 +6202,9 @@ void initState() {
   Widget _buildSocialBottomBar() {
     final bottom = MediaQuery.of(context).padding.bottom;
     final width = MediaQuery.of(context).size.width;
-    final side = width < 380 ? 10.0 : 14.0;
+    final side = width >= 720
+        ? max(14.0, (width - 520.0) / 2)
+        : (width < 380 ? 10.0 : 14.0);
     final bottomInset = bottom > 0 ? min(14.0, bottom * .40) : 6.0;
 
     Widget dockIcon({
@@ -4176,7 +6252,7 @@ void initState() {
                         child: Center(
                           child: Text(
                             badge > 99 ? '99+' : '$badge',
-                            style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.w900, color: Colors.white, height: 1),
+                            style: AppTypography.custom(size: 8.5, weight: FontWeight.w600, color: Colors.white, height: 1),
                           ),
                         ),
                       ),
@@ -4213,14 +6289,35 @@ void initState() {
                     icon: Icons.home_rounded,
                     onTap: () {
                       _closeMobileWindow(dockKey: 'profile');
-                      if (mounted) setState(() => _mode = _ProfileFeedMode.posts);
+                      if (mounted) _selectProfileWorkspaceSection('posts');
                     },
                   ),
-                  dockIcon(keyName: 'reels', icon: Icons.play_circle_outline_rounded, onTap: _openGlobalReels),
-                  dockIcon(keyName: 'chat', icon: Icons.near_me_outlined, badge: 1, onTap: _openMainChat),
-                  dockIcon(keyName: 'search', icon: Icons.search_rounded, onTap: _openMobileSearchWindow),
-                  dockIcon(keyName: 'account', icon: Icons.account_circle_outlined, onTap: _openPrimaryArea),
-                  dockIcon(keyName: 'more', icon: Icons.more_horiz_rounded, onTap: _openProfileHomeMoreSheet),
+                  dockIcon(
+                    keyName: 'feed',
+                    icon: Icons.dynamic_feed_rounded,
+                    onTap: _openCommunityFeedHome,
+                  ),
+                  dockIcon(
+                    keyName: 'reels',
+                    icon: Icons.play_circle_outline_rounded,
+                    onTap: _openGlobalReels,
+                  ),
+                  dockIcon(
+                    keyName: 'tracker',
+                    icon: Icons.sensors_rounded,
+                    onTap: _openTrainingQuickMenu,
+                  ),
+                  dockIcon(
+                    keyName: 'chat',
+                    icon: Icons.forum_outlined,
+                    badge: 1,
+                    onTap: _openMainChat,
+                  ),
+                  dockIcon(
+                    keyName: 'more',
+                    icon: Icons.grid_view_rounded,
+                    onTap: _openProfileHomeMoreSheet,
+                  ),
                 ],
               ),
             ),
@@ -4235,6 +6332,8 @@ void initState() {
   void _openProfileHomeMoreSheet() {
     final actions = <_ProfileFlagshipAction>[
       _ProfileFlagshipAction(_primaryZoneTitle, _primaryZoneSubtitle, _primaryZoneIcon, _openPrimaryArea, group: 'Рабочая зона', primary: true),
+      _ProfileFlagshipAction('Трекер / тренировки', 'быстрый выбор личного или командного режима', Icons.sensors_rounded, _openTrainingQuickMenu, group: 'Рабочая зона'),
+      _ProfileFlagshipAction('Соцлента и новости', 'общие новости сообщества', Icons.dynamic_feed_rounded, _openCommunityFeedHome, group: 'Основное'),
       _ProfileFlagshipAction('Чат', 'сообщения и группы', Icons.forum_rounded, _openMainChat, group: 'Аккаунт'),
       _ProfileFlagshipAction('Команды / CMR', 'команды, составы и рабочий режим', Icons.groups_rounded, _openTeamsWindow, group: 'Основное'),
       _ProfileFlagshipAction('Расписание', 'календарь занятий и матчей', Icons.calendar_month_rounded, _openScheduleWindow, group: 'Основное'),
@@ -4242,7 +6341,6 @@ void initState() {
       _ProfileFlagshipAction('Видеоуроки', 'папки, обучение и материалы', Icons.school_rounded, _openVideoLessonsWindow, group: 'Медиа'),
       _ProfileFlagshipAction('Советы', 'подсказки и инструкции', Icons.tips_and_updates_rounded, _openTipsWindow, group: 'Медиа'),
       _ProfileFlagshipAction('Сервисы', 'дополнительные инструменты', Icons.apps_rounded, _openServicesWindow, group: 'Сервисы'),
-      _ProfileFlagshipAction('Трекинг', 'датчики и тренировочный режим', Icons.monitor_heart_rounded, _openTrackingWindow, group: 'Сервисы'),
       _ProfileFlagshipAction('Площадки', 'бронирование и объекты', Icons.stadium_rounded, _openVenuesWindow, group: 'Сервисы'),
       _ProfileFlagshipAction('Билеты', 'заявки и посещение матчей', Icons.confirmation_number_rounded, _openTicketsWindow, group: 'Сервисы'),
       _ProfileFlagshipAction('PRO подписка', 'расширенные возможности', Icons.workspace_premium_rounded, _openSubscriptionWindow, group: 'Аккаунт', pro: true),
@@ -4255,10 +6353,13 @@ void initState() {
         _ProfileFlagshipAction('Удалить профиль', 'подтверждение кодовым словом', Icons.delete_forever_rounded, _deleteOwnProfileWithConfirmation, group: 'Аккаунт', danger: true),
     ];
 
-    if (!_isDesktopProfileLayout) {
+    final width = MediaQuery.sizeOf(context).width;
+
+    // Телефон сохраняет компактное окно поверх профиля.
+    if (width < 720) {
       _openCmrWindow(
-        title: 'Ещё',
-        icon: Icons.more_horiz_rounded,
+        title: 'Все разделы',
+        icon: Icons.grid_view_rounded,
         maxWidth: 520,
         maxHeight: 760,
         child: _buildProfileHomeMoreWindowContent(actions),
@@ -4266,26 +6367,40 @@ void initState() {
       return;
     }
 
-    showModalBottomSheet<void>(
+    // Планшет и ПК: меню полностью повторяет Club Workspace —
+    // большая белая панель, сетка модулей, счётчик и крестик в шапке.
+    showGeneralDialog<void>(
       context: context,
-      backgroundColor: Colors.white,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) {
-        final bottom = MediaQuery.of(context).padding.bottom;
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(14, 10, 14, 14 + bottom),
-            child: SizedBox(
-              height: min(MediaQuery.of(context).size.height * .74, 620).toDouble(),
-              child: _buildProfileHomeMoreWindowContent(
-                actions,
-                onActionTap: (action) {
-                  Navigator.pop(context);
-                  action.onTap();
-                },
-              ),
+      barrierDismissible: true,
+      barrierLabel: 'Закрыть меню',
+      barrierColor: Colors.black.withOpacity(.28),
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        return _ProfileFullModulesMenuOverlay(
+          title: fullName,
+          subtitle: _activeWorkspaceName,
+          photoUrl: photo,
+          actions: actions,
+          onSelect: (action) {
+            Navigator.of(dialogContext).pop();
+            Future<void>.delayed(const Duration(milliseconds: 80), action.onTap);
+          },
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: Transform.translate(
+            offset: Offset(0, 26 * (1 - curved.value)),
+            child: Transform.scale(
+              alignment: Alignment.bottomCenter,
+              scale: .965 + (.035 * curved.value),
+              child: child,
             ),
           ),
         );
@@ -5027,7 +7142,7 @@ void initState() {
             spacing: 6,
             runSpacing: 6,
             children: [
-              _buildProfileBadge(_roleLabel, isClubRole || isCoachRole ? const Color(0xFF00A750) : const Color(0xFF111827)),
+              _buildProfileBadge(_roleLabel, isClubRole || isCoachRole || isParentRole ? const Color(0xFF00A750) : const Color(0xFF111827)),
               if (age != null) _buildProfileBadge('$age лет', const Color(0xFF667085)),
               if ((playerTeamName ?? '').trim().isNotEmpty) _buildProfileBadge((playerTeamName ?? '').trim(), const Color(0xFF2563EB)),
             ],
@@ -5580,7 +7695,7 @@ void initState() {
             active: _mode == _ProfileFeedMode.posts,
             icon: Icons.grid_on_rounded,
             label: 'Посты',
-            onTap: () => setState(() => _mode = _ProfileFeedMode.posts),
+            onTap: () => _selectProfileWorkspaceSection('posts'),
           ),
           _buildModeButton(
             active: _mode == _ProfileFeedMode.feed,
@@ -5681,19 +7796,7 @@ void initState() {
         final hasImage = imageUrl.isNotEmpty;
 
         return GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => NewsDetailScreen(
-                  title: (post['category'] ?? 'Мой пост').toString(),
-                  body: (post['body'] ?? '').toString(),
-                  newsId: int.tryParse(post['id'].toString()) ?? 0,
-                  imageUrl: imageUrl,
-                ),
-              ),
-            );
-          },
+          onTap: () => _openFeedPostDetail(_profileGridPostToDetail(post)),
           child: Container(
             color: design.surfaceColor,
             child: Stack(
@@ -5887,7 +7990,7 @@ void initState() {
                     ),
                   ),
                   TextButton(
-                    onPressed: () => setState(() => _mode = _ProfileFeedMode.posts),
+                    onPressed: () => _selectProfileWorkspaceSection('posts'),
                     style: TextButton.styleFrom(
                       foregroundColor: const Color(0xFF101828),
                       textStyle: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800),
@@ -5927,7 +8030,7 @@ void initState() {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(18),
-              border: const Border(bottom: BorderSide(color: Color(0xFFEFF2F5), width: 1)),
+              border: Border.all(color: const Color(0xFFE9ECEA).withOpacity(.55), width: .7),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -5953,14 +8056,14 @@ void initState() {
                               author,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900, color: Color(0xFF101828)),
+                              style: AppTypography.custom(size: 11.5, weight: FontWeight.w600, color: const Color(0xFF0B0F14), height: 1.18),
                             ),
                             const SizedBox(height: 1),
                             Text(
                               '${category.isNotEmpty ? '$category • ' : ''}${_formatFeedDate(date)}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF98A2B3)),
+                              style: AppTypography.custom(size: 10, weight: FontWeight.w400, color: const Color(0xFF8A9099), height: 1.30),
                             ),
                           ],
                         ),
@@ -5976,7 +8079,7 @@ void initState() {
                       aspectRatio: 16 / 9,
                       child: Image.network(
                         img,
-                        fit: BoxFit.cover,
+                        fit: BoxFit.contain,
                         errorBuilder: (_, __, ___) => Container(
                           color: const Color(0xFFF3F7F5),
                           alignment: Alignment.center,
@@ -5995,7 +8098,7 @@ void initState() {
                           title,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 12.5, height: 1.25, fontWeight: FontWeight.w900, color: Color(0xFF101828)),
+                          style: AppTypography.custom(size: 12.5, weight: FontWeight.w600, color: const Color(0xFF0B0F14), height: 1.25),
                         ),
                       if (text.isNotEmpty) ...[
                         const SizedBox(height: 5),
@@ -6101,6 +8204,336 @@ void initState() {
 // =============================
 // ВСПОМОГАТЕЛЬНЫЕ КЛАССЫ (ОСТАВЛЯЕМ)
 // =============================
+
+class _ProfileFullModulesMenuOverlay extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final String? photoUrl;
+  final List<_ProfileFlagshipAction> actions;
+  final ValueChanged<_ProfileFlagshipAction> onSelect;
+
+  const _ProfileFullModulesMenuOverlay({
+    required this.title,
+    required this.subtitle,
+    required this.photoUrl,
+    required this.actions,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final width = media.size.width;
+    final height = media.size.height;
+    final compact = width < 720;
+    final columns = compact ? 4 : width >= 1180 ? 7 : 6;
+    final menuWidth = min(compact ? width - 22 : 760.0, width - 32);
+    final maxHeight = max(320.0, min(height - 118, compact ? 560.0 : 600.0));
+
+    return Material(
+      color: Colors.transparent,
+      child: SafeArea(
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(12, 12, 12, compact ? 78 : 88),
+            child: Container(
+              width: menuWidth,
+              constraints: BoxConstraints(maxHeight: maxHeight),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(.985),
+                borderRadius: BorderRadius.circular(compact ? 24 : 30),
+                border: Border.all(color: Colors.white.withOpacity(.88)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(.18),
+                    blurRadius: 46,
+                    offset: const Offset(0, 22),
+                  ),
+                  BoxShadow(
+                    color: Colors.white.withOpacity(.72),
+                    blurRadius: 10,
+                    offset: const Offset(0, -2),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(compact ? 24 : 30),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(compact ? 14 : 18, compact ? 13 : 16, compact ? 10 : 14, 10),
+                      child: Row(
+                        children: [
+                          _ProfileMenuAvatar(photoUrl: photoUrl, size: compact ? 38 : 44),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  title.trim().isEmpty ? 'Мой профиль' : title.trim(),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Color(0xFF111827),
+                                    fontSize: 15.5,
+                                    height: 1,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 5),
+                                Text(
+                                  subtitle.trim().isEmpty ? 'Sportoteka Workspace' : subtitle.trim(),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Color(0xFF667085),
+                                    fontSize: 11.5,
+                                    height: 1,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF7F9F8),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(color: const Color(0xFFEFF2F5)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.apps_rounded, color: const Color(0xFF344054), size: compact ? 16 : 17),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${actions.length} разделов',
+                                  style: const TextStyle(
+                                    color: Color(0xFF667085),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          IconButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            icon: const Icon(Icons.close_rounded, color: Color(0xFF344054)),
+                            tooltip: 'Закрыть',
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: compact ? 14 : 18),
+                      child: Container(height: 1, color: const Color(0xFFEFF2F5)),
+                    ),
+                    Flexible(
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(compact ? 12 : 16, 14, compact ? 12 : 16, compact ? 12 : 16),
+                        child: GridView.builder(
+                          shrinkWrap: true,
+                          physics: const BouncingScrollPhysics(),
+                          itemCount: actions.length,
+                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: columns,
+                            mainAxisSpacing: compact ? 8 : 10,
+                            crossAxisSpacing: compact ? 6 : 8,
+                            childAspectRatio: compact ? .88 : .92,
+                          ),
+                          itemBuilder: (context, index) {
+                            final action = actions[index];
+                            return _ProfileModuleMenuTile(
+                              action: action,
+                              selected: index == 0,
+                              onTap: () => onSelect(action),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(compact ? 14 : 18, 0, compact ? 14 : 18, compact ? 12 : 14),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF7F9F8),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: const Color(0xFFEFF2F5)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.search_rounded, color: Color(0xFF667085), size: 18),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Для быстрого поиска нажмите кнопку «Поиск» рядом с меню',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Color(0xFF667085),
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileMenuAvatar extends StatelessWidget {
+  final String? photoUrl;
+  final double size;
+  const _ProfileMenuAvatar({required this.photoUrl, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    final image = (photoUrl ?? '').trim();
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F9F8),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFEFF2F5)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: image.isEmpty
+          ? const Icon(Icons.person_rounded, color: Color(0xFF344054), size: 21)
+          : Image.network(
+              image,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded, color: Color(0xFF344054), size: 21),
+            ),
+    );
+  }
+}
+
+class _ProfileModuleMenuTile extends StatelessWidget {
+  final _ProfileFlagshipAction action;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ProfileModuleMenuTile({
+    required this.action,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final danger = action.danger;
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          decoration: BoxDecoration(
+            color: selected ? const Color(0xFFF7F9F8) : Colors.transparent,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: selected ? const Color(0xFFD8DEE6) : Colors.transparent,
+            ),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: selected ? 54 : 50,
+                    height: selected ? 54 : 50,
+                    decoration: BoxDecoration(
+                      color: selected ? const Color(0xFFE2E6EA) : Colors.white,
+                      borderRadius: BorderRadius.circular(17),
+                      border: Border.all(color: const Color(0xFFE9EEF3)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(.045),
+                          blurRadius: 14,
+                          offset: const Offset(0, 7),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      action.icon,
+                      size: selected ? 25 : 23,
+                      color: danger ? const Color(0xFFD92D20) : const Color(0xFF344054),
+                    ),
+                  ),
+                  if (action.pro)
+                    Positioned(
+                      right: -4,
+                      top: -4,
+                      child: Container(
+                        width: 16,
+                        height: 16,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF1E8),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 1.5),
+                        ),
+                        child: const Icon(Icons.lock_rounded, size: 9, color: Color(0xFFF05A18)),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 7),
+              Flexible(
+                child: Text(
+                  action.title,
+                  maxLines: 2,
+                  textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: danger ? const Color(0xFFD92D20) : const Color(0xFF172033),
+                    fontSize: 11.5,
+                    height: 1.05,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              if (selected) ...[
+                const SizedBox(height: 5),
+                Container(
+                  width: 20,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF344054),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _ProfileFlagshipAction {
   final String title;

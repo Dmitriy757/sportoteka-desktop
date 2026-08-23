@@ -9,18 +9,21 @@ list(APPEND FLUTTER_PLUGIN_LIST
   emoji_picker_flutter
   file_selector_windows
   firebase_core
+  flutter_webrtc
   geolocator_windows
   iris_method_channel
+  livekit_client
   permission_handler_windows
   printing
   share_plus
-  smart_auth
   syncfusion_pdfviewer_windows
   url_launcher_windows
   video_player_win
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
+  flutter_local_notifications_windows
+  jni
 )
 
 set(PLUGIN_BUNDLED_LIBRARIES)

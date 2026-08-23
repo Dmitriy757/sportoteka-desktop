@@ -11,16 +11,18 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:http/http.dart' as http;
 
+import 'package:sportoteka/core/theme/app_typography.dart';
+
 // ==================== Цветовая схема (унифицирована с матчами) ====================
 
 class _CmrTestColors {
   static const Color panel = Colors.white;
-  static const Color soft = Colors.white;
-  static const Color soft2 = Colors.white;
+  static const Color soft = Color(0xFFF7F8F7);
+  static const Color soft2 = Color(0xFFF2F4F2);
   static const Color text = Color(0xFF0B0F14);
   static const Color muted = Color(0xFF475467);
   static const Color muted2 = Color(0xFF667085);
-  static const Color line = Color(0x00000000);
+  static const Color line = Color(0xFFE9ECEA);
   static const Color graphite = Color(0xFF111827);
   static const Color graphite2 = Color(0xFF1F2937);
 
@@ -28,7 +30,7 @@ class _CmrTestColors {
   static const Color green = Color(0xFF00A750);
   static const Color greenDark = Color(0xFF067A46);
   static const Color greenSoft = Color(0xFFF3FBF7);
-  static const Color greenBorder = Color(0x00000000);
+  static const Color greenBorder = Color(0xFFD7F0E2);
 
   static const Color red = Color(0xFFD92D20);
   static const Color redSoft = Color(0xFFFFF1F1);
@@ -41,87 +43,96 @@ class _CmrTestColors {
 
 class _CmrTestText {
   static TextStyle title(double size) {
-    return TextStyle(
+    return AppTypography.custom(
+      size: size,
+      weight: FontWeight.w600,
       color: _CmrTestColors.text,
-      fontSize: size,
-      fontWeight: FontWeight.w600,
-      height: 1.12,
+      height: 1.18,
+      letterSpacing: 0,
     );
   }
 
   static TextStyle section() {
-    return const TextStyle(
+    return AppTypography.custom(
+      size: 12.2,
+      weight: FontWeight.w600,
       color: _CmrTestColors.text,
-      fontSize: 16,
-      fontWeight: FontWeight.w600,
-      height: 1.18,
+      height: 1.20,
+      letterSpacing: 0,
     );
   }
 
   static TextStyle value(double size) {
-    return TextStyle(
+    return AppTypography.custom(
+      size: size,
+      weight: FontWeight.w600,
       color: _CmrTestColors.text,
-      fontSize: size,
-      fontWeight: FontWeight.w700,
-      height: 1.35,
+      height: 1.18,
+      letterSpacing: 0,
     );
   }
 
   static TextStyle muted(double size) {
-    return TextStyle(
+    return AppTypography.custom(
+      size: size,
+      weight: FontWeight.w400,
       color: _CmrTestColors.muted,
-      fontSize: size,
-      fontWeight: FontWeight.w600,
-      height: 1.42,
+      height: 1.32,
+      letterSpacing: 0,
     );
   }
 
   static TextStyle caption() {
-    return const TextStyle(
-      color: _CmrTestColors.muted,
-      fontSize: 12,
-      fontWeight: FontWeight.w700,
-      height: 1.15,
+    return AppTypography.custom(
+      size: 10.5,
+      weight: FontWeight.w500,
+      color: _CmrTestColors.muted2,
+      height: 1.14,
     );
   }
 
   static TextStyle pill() {
-    return const TextStyle(
+    return AppTypography.custom(
+      size: 11,
+      weight: FontWeight.w600,
       color: _CmrTestColors.text,
-      fontSize: 12,
-      fontWeight: FontWeight.w700,
+      height: 1,
     );
   }
 
   static TextStyle tab() {
-    return const TextStyle(
+    return AppTypography.custom(
+      size: 11.5,
+      weight: FontWeight.w500,
       color: _CmrTestColors.text,
-      fontSize: 13,
-      fontWeight: FontWeight.w600,
+      height: 1,
     );
   }
 
   static TextStyle tabSelected() {
-    return const TextStyle(
+    return AppTypography.custom(
+      size: 11.5,
+      weight: FontWeight.w600,
       color: _CmrTestColors.text,
-      fontSize: 13,
-      fontWeight: FontWeight.w700,
+      height: 1,
     );
   }
 
   static TextStyle action() {
-    return const TextStyle(
+    return AppTypography.custom(
+      size: 11.5,
+      weight: FontWeight.w600,
       color: _CmrTestColors.text,
-      fontSize: 13,
-      fontWeight: FontWeight.w700,
+      height: 1,
     );
   }
 
   static TextStyle danger() {
-    return const TextStyle(
+    return AppTypography.custom(
+      size: 11.5,
+      weight: FontWeight.w600,
       color: _CmrTestColors.red,
-      fontSize: 13,
-      fontWeight: FontWeight.w600,
+      height: 1,
     );
   }
 }
@@ -129,35 +140,20 @@ class _CmrTestText {
 // ==================== Декораторы ====================
 
 class _CmrTestDecor {
-  static double _radius(double value) => value > 18 ? 18 : value;
+  static double _radius(double value) => value > 12 ? 12 : value;
 
-  static BoxDecoration panel({double radius = 18}) {
+  static BoxDecoration panel({double radius = 12}) {
     return BoxDecoration(
       color: _CmrTestColors.panel,
       borderRadius: BorderRadius.circular(_radius(radius)),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(.028),
-          blurRadius: 18,
-          offset: const Offset(0, 10),
-        ),
-      ],
+      boxShadow: const [],
     );
   }
 
-  static BoxDecoration softCard({double radius = 16, bool active = false}) {
+  static BoxDecoration softCard({double radius = 10, bool active = false}) {
     return BoxDecoration(
-      color: _CmrTestColors.panel,
+      color: active ? _CmrTestColors.greenSoft : const Color(0xFFF7F8F7),
       borderRadius: BorderRadius.circular(_radius(radius)),
-      boxShadow: active
-          ? [
-              BoxShadow(
-                color: Colors.black.withOpacity(.035),
-                blurRadius: 14,
-                offset: const Offset(0, 8),
-              ),
-            ]
-          : null,
     );
   }
 }
@@ -433,20 +429,71 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
 
   bool _sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
 
+  String _sessionDateIso(Map<String, dynamic> session) {
+    final raw = _asStr(
+      session['test_date'] ??
+          session['testing_date'] ??
+          session['session_date'] ??
+          session['date'] ??
+          session['created_at'] ??
+          session['updated_at'],
+    );
+    if (raw.isEmpty) return '';
+
+    final normalized = raw.replaceAll(' ', 'T');
+    final parsed = DateTime.tryParse(normalized);
+    if (parsed != null) return _dateIso(parsed);
+    return raw.length >= 10 ? raw.substring(0, 10) : raw;
+  }
+
+  int _sessionRowId(Map<String, dynamic> session) {
+    return _asInt(
+      session['id'] ??
+          session['session_id'] ??
+          session['testing_session_id'] ??
+          session['testingSessionId'],
+    );
+  }
+
+  List<Map<String, dynamic>> _sessionRowsFromResponse(Map<String, dynamic> data) {
+    for (final key in const ['sessions', 'data', 'items', 'result', 'rows', 'list']) {
+      final value = data[key];
+      if (value is List) {
+        return value
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      }
+      if (value is Map) {
+        for (final nestedKey in const ['sessions', 'items', 'data', 'rows', 'list']) {
+          final nested = value[nestedKey];
+          if (nested is List) {
+            return nested
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList();
+          }
+        }
+      }
+    }
+    return <Map<String, dynamic>>[];
+  }
+
   bool _hasSessionOn(DateTime d) {
     final iso = _dateIso(d);
-    return sessions.any((s) => _asStr(s['test_date']) == iso);
+    return sessions.any((s) => _sessionDateIso(s) == iso);
   }
 
   int _sessionIdForDate(DateTime d) {
     final iso = _dateIso(d);
     for (final s in sessions) {
-      if (_asStr(s['test_date']) == iso) return _asInt(s['id']);
+      if (_sessionDateIso(s) == iso) return _sessionRowId(s);
     }
     return 0;
   }
 
   Future<void> _loadSessionsOnly() async {
+    sessionsLoading = true;
     try {
       final uri = Uri.parse('${TestingApi.base}/get_testing_sessions.php').replace(queryParameters: {
         'club_id': '${widget.clubId}',
@@ -457,10 +504,34 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
 
       final r = await http.get(uri).timeout(const Duration(seconds: 16));
       final data = _decode(r.body);
-      if (data['success'] != true) throw data['message'] ?? 'Не удалось загрузить даты тестирований';
-      sessions = _list(data['sessions']);
-    } catch (_) {
-      sessions = [];
+      final ok = data['success'] == true || _asStr(data['status']).toLowerCase() == 'success';
+      if (!ok) {
+        throw data['message'] ?? data['error'] ?? 'Не удалось загрузить даты тестирований';
+      }
+
+      final loaded = _sessionRowsFromResponse(data);
+      final normalized = <Map<String, dynamic>>[];
+      final seen = <String>{};
+      for (final row in loaded) {
+        final date = _sessionDateIso(row);
+        if (date.isEmpty) continue;
+        final id = _sessionRowId(row);
+        final key = '$id|$date';
+        if (!seen.add(key)) continue;
+        normalized.add({
+          ...row,
+          'id': id > 0 ? id : row['id'],
+          'test_date': date,
+        });
+      }
+      normalized.sort((a, b) => _sessionDateIso(b).compareTo(_sessionDateIso(a)));
+      sessions = normalized;
+    } catch (e) {
+      // Не маскируем уже загруженные даты при кратковременной ошибке сети.
+      if (sessions.isEmpty) sessions = <Map<String, dynamic>>[];
+      debugPrint('CmrTestingPanel: get_testing_sessions failed: $e');
+    } finally {
+      sessionsLoading = false;
     }
   }
 
@@ -855,26 +926,42 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
-    final isMobile = media.size.width < 680;
+    final isMobile = media.size.width < 640;
 
     return MediaQuery(
       data: media.copyWith(textScaler: TextScaler.noScaling),
       child: Container(
-        color: _CmrTestColors.panel,
-        child: Column(
-          children: [
-            _header(isMobile),
-            if (saving) const LinearProgressIndicator(minHeight: 2, color: _CmrTestColors.green),
-            Expanded(
-              child: loading
-                  ? const Center(child: CircularProgressIndicator(color: _CmrTestColors.green))
-                  : error != null
-                      ? _error()
-                      : isMobile
-                          ? _mobileBody()
-                          : _desktopBody(),
+        color: const Color(0xFFF6F7F6),
+        padding: EdgeInsets.all(isMobile ? 6 : 10),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(isMobile ? 18 : 20),
+          child: Container(
+            color: Colors.white,
+            child: Column(
+              children: [
+                _header(isMobile),
+                if (saving)
+                  const LinearProgressIndicator(
+                    minHeight: 2,
+                    color: _CmrTestColors.green,
+                    backgroundColor: _CmrTestColors.greenSoft,
+                  ),
+                Expanded(
+                  child: loading
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            color: _CmrTestColors.green,
+                          ),
+                        )
+                      : error != null
+                          ? _error()
+                          : isMobile
+                              ? _mobileBody()
+                              : _desktopBody(),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -882,70 +969,65 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
 
   Widget _header(bool mobile) {
     return Container(
-      margin: EdgeInsets.fromLTRB(mobile ? 8 : 12, mobile ? 8 : 12, mobile ? 8 : 12, 6),
-      padding: EdgeInsets.fromLTRB(mobile ? 10 : 12, 8, mobile ? 10 : 12, 8),
-      decoration: _CmrTestDecor.panel(),
+      constraints: const BoxConstraints(minHeight: 62),
+      padding: EdgeInsets.fromLTRB(mobile ? 10 : 12, 9, mobile ? 10 : 12, 9),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(color: _CmrTestColors.line, width: .55),
+        ),
+      ),
       child: Row(
         children: [
-          _IconButton(
-            icon: Icons.arrow_back_rounded,
-            onPressed: widget.onBackToMenu,
-            tooltip: 'Назад',
-            compact: mobile,
+          if (widget.onBackToMenu != null) ...[
+            _IconButton(
+              icon: Icons.arrow_back_rounded,
+              onPressed: widget.onBackToMenu,
+              tooltip: 'Назад',
+              compact: true,
+            ),
+            const SizedBox(width: 9),
+          ],
+          const _CmrTestDot(active: true, size: 6.4),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'Тестирование',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _CmrTestText.title(mobile ? 15.5 : 16.5),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${widget.teamName} · ${_categoryTitle(category)} · $stage',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _CmrTestText.muted(mobile ? 10.5 : 11),
+                ),
+              ],
+            ),
           ),
-          if (mobile) ...[
-            const SizedBox(width: 4),
-            _IconBox(icon: Icons.fact_check_rounded, size: 42),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Тестирование',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: _CmrTestText.title(17),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${widget.clubName} • ${widget.teamName}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: _CmrTestText.muted(11),
-                  ),
-                ],
-              ),
-            ),
-          ],
-          if (!mobile) ...[
-            const SizedBox(width: 6),
-            Expanded(
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: _filterBar(compact: false),
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
           if (!mobile) ...[
             _IconButton(
               icon: Icons.open_in_full_rounded,
               onPressed: _openFullscreen,
-              tooltip: 'Открыть тестирование во весь экран',
-              compact: mobile,
+              tooltip: 'Открыть во весь экран',
+              compact: true,
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
           ],
           _exportButton(mobile: mobile),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           _IconButton(
             icon: Icons.save_rounded,
             onPressed: saving ? null : _manualSave,
             tooltip: 'Сохранить результаты',
             filled: true,
-            compact: mobile,
+            compact: true,
             isLoading: saving,
           ),
         ],
@@ -1024,14 +1106,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
         color: _CmrTestColors.greenSoft,
-        borderRadius: BorderRadius.circular(compact ? 14 : 15),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(.026),
-            blurRadius: 14,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1057,9 +1132,143 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
   }
 
   Widget _desktopBody() {
-    return Container(
-      color: _CmrTestColors.panel,
-      child: _tableArea(),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final menuWidth = constraints.maxWidth >= 1500
+            ? 292.0
+            : (constraints.maxWidth >= 1180 ? 272.0 : 244.0);
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              width: menuWidth,
+              child: _testingNavigationPanel(),
+            ),
+            Container(width: 1, color: _CmrTestColors.line),
+            Expanded(child: _tableArea()),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _testingNavigationPanel() {
+    final recentSessions = [...sessions]
+      ..sort((a, b) => _sessionDateIso(b).compareTo(_sessionDateIso(a)));
+
+    return ColoredBox(
+      color: Colors.white,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Разделы тестирования', style: _CmrTestText.section()),
+                const SizedBox(height: 4),
+                Text(
+                  '${widget.teamName} · этап $stage',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _CmrTestText.muted(10.4),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(10, 2, 10, 12),
+              children: [
+                ..._categoryItems.map((e) {
+                  final code = _asStr(e['code']);
+                  final active = category == code;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: _TestingNavItem(
+                      title: _categoryTitle(code),
+                      subtitle: _categoryHint(code),
+                      active: active,
+                      onTap: () {
+                        if (active) return;
+                        setState(() {
+                          category = code;
+                          sessionId = 0;
+                        });
+                        _load();
+                      },
+                    ),
+                  );
+                }),
+                const SizedBox(height: 10),
+                Container(height: 1, color: _CmrTestColors.line),
+                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: Text('Дата и сессии', style: _CmrTestText.section()),
+                ),
+                const SizedBox(height: 7),
+                _TestingDateTile(
+                  title: _dateRu(_selectedDate),
+                  subtitle: sessionId > 0 || _hasSessionOn(_selectedDate)
+                      ? 'Сохранённое тестирование'
+                      : 'Новая дата тестирования',
+                  active: true,
+                  onTap: _showCalendarDialog,
+                ),
+                if (recentSessions.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  ...recentSessions.take(7).map((session) {
+                    final raw = _sessionDateIso(session);
+                    final date = _parseDate(raw);
+                    if (date == null || _sameDay(date, _selectedDate)) {
+                      return const SizedBox.shrink();
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 3),
+                      child: _TestingDateTile(
+                        title: _dateRu(date),
+                        subtitle: 'Сохранённые результаты',
+                        active: false,
+                        onTap: () => _selectTestingDate(date),
+                      ),
+                    );
+                  }),
+                ],
+                const SizedBox(height: 12),
+                Container(height: 1, color: _CmrTestColors.line),
+                const SizedBox(height: 12),
+                _TestingSidebarMeta(
+                  label: 'Игроки',
+                  value: '${players.length}',
+                ),
+                const SizedBox(height: 5),
+                _TestingSidebarMeta(
+                  label: 'Тесты в разделе',
+                  value: '${tests.length}',
+                ),
+                const SizedBox(height: 5),
+                _TestingSidebarMeta(
+                  label: 'Сохранённых дат',
+                  value: '${sessions.length}',
+                ),
+              ],
+            ),
+          ),
+          Container(height: 1, color: _CmrTestColors.line),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+            child: _TestingNavItem(
+              title: 'Методика и нормативы',
+              subtitle: 'описание тестов и схемы',
+              active: false,
+              onTap: tests.isEmpty ? null : () => _showTestInfo(tests.first),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1280,7 +1489,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: _CmrTestColors.panel,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: _CmrTestColors.greenBorder, width: 1),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1356,19 +1565,25 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
   Widget _playerAvatar(Map<String, dynamic> p) {
     final url = _playerAvatarUrl(p);
     final initials = _initials(_playerFullName(p));
-    if (url.isNotEmpty) {
-      return CircleAvatar(
-        radius: 17,
-        backgroundColor: _CmrTestColors.greenSoft,
-        backgroundImage: NetworkImage(url),
-        onBackgroundImageError: (_, __) {},
-        child: const SizedBox.shrink(),
-      );
-    }
-    return CircleAvatar(
-      radius: 17,
-      backgroundColor: _CmrTestColors.greenSoft,
-      child: Text(initials, style: const TextStyle(color: _CmrTestColors.green, fontWeight: FontWeight.w700, fontSize: 11)),
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: _CmrTestColors.soft,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: url.isNotEmpty
+          ? Image.network(
+              url,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Center(
+                child: Text(initials, style: _CmrTestText.value(10.8)),
+              ),
+            )
+          : Center(
+              child: Text(initials, style: _CmrTestText.value(10.8)),
+            ),
     );
   }
 
@@ -1468,11 +1683,46 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
       color: Colors.white,
       child: Column(
         children: [
-          LayoutBuilder(builder: (context, c) => _dateCalendarBar(compact: c.maxWidth < 640)),
-          const SizedBox(height: 2),
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 9),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(
+                bottom: BorderSide(color: _CmrTestColors.line, width: .55),
+              ),
+            ),
+            child: Row(
+              children: [
+                const _CmrTestDot(active: true, size: 6),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _categoryTitle(category),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _CmrTestText.title(15),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${_dateRu(_selectedDate)} · $stage · ${tests.length} тестов',
+                        style: _CmrTestText.muted(10.5),
+                      ),
+                    ],
+                  ),
+                ),
+                _ActionButton(
+                  icon: Icons.calendar_month_rounded,
+                  text: _dateRu(_selectedDate),
+                  onTap: _showCalendarDialog,
+                ),
+              ],
+            ),
+          ),
           _tableToolbar(),
           if (_hasFocusedPlayer) _focusedPlayerBanner(compact: false),
-          const SizedBox(height: 2),
           Expanded(child: _table()),
         ],
       ),
@@ -1529,8 +1779,8 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: hasData ? _CmrTestColors.panel : const Color(0xFFFFF7ED),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: hasData ? _CmrTestColors.greenBorder : const Color(0xFFFED7AA), width: 1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.transparent, width: 0),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1626,12 +1876,12 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                           final saved = _hasSessionOn(date);
 
                           return InkWell(
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(10),
                             onTap: () => localSetState(() => picked = date),
                             child: Container(
                               decoration: BoxDecoration(
                                 color: selected ? _CmrTestColors.graphite : saved ? _CmrTestColors.greenSoft : today ? _CmrTestColors.soft2 : Colors.white,
-                                borderRadius: BorderRadius.circular(14),
+                                borderRadius: BorderRadius.circular(10),
                               ),
                               child: Stack(
                                 children: [
@@ -1639,7 +1889,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                                     child: Text(
                                       '$day',
                                       style: _CmrTestText.value(13).copyWith(
-                                        fontWeight: FontWeight.w700,
+                                        fontWeight: FontWeight.w600,
                                         color: selected ? Colors.white : _CmrTestColors.text,
                                       ),
                                     ),
@@ -1671,7 +1921,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: _CmrTestColors.graphite,
                                 side: BorderSide.none,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                 minimumSize: const Size(0, 48),
                               ),
                               onPressed: () {
@@ -1689,7 +1939,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                               style: FilledButton.styleFrom(
                                 backgroundColor: _CmrTestColors.graphite,
                                 foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                 minimumSize: const Size(0, 48),
                               ),
                               onPressed: () => Navigator.pop(dialogContext, picked),
@@ -1724,8 +1974,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
       padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
       decoration: BoxDecoration(
         color: _CmrTestColors.panel,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _CmrTestColors.greenBorder, width: 1),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         children: [
@@ -1744,7 +1993,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
             style: TextButton.styleFrom(
               foregroundColor: _CmrTestColors.graphite,
               visualDensity: VisualDensity.compact,
-              textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+              textStyle: AppTypography.custom(size: 11.5, weight: FontWeight.w600, color: _CmrTestColors.graphite),
             ),
             child: const Text('Показать всех'),
           ),
@@ -1890,7 +2139,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
               dataRowMinHeight: 58,
               dataRowMaxHeight: 64,
               columnSpacing: 14,
-              headingTextStyle: _CmrTestText.caption().copyWith(fontWeight: FontWeight.w700),
+              headingTextStyle: _CmrTestText.caption().copyWith(fontWeight: FontWeight.w600),
               dataTextStyle: _CmrTestText.value(11.5),
               columns: [
                 const DataColumn(
@@ -1958,15 +2207,8 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
       decoration: focused
           ? BoxDecoration(
               color: _CmrTestColors.panel,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: _CmrTestColors.green.withOpacity(.38), width: 1.2),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(.035),
-                  blurRadius: 14,
-                  offset: const Offset(0, 8),
-                ),
-              ],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _CmrTestColors.green.withOpacity(.22), width: 1),
             )
           : _CmrTestDecor.panel(),
       child: Column(
@@ -1998,11 +2240,11 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                     decoration: BoxDecoration(
                       color: _CmrTestColors.green,
-                      borderRadius: BorderRadius.circular(999),
+                      borderRadius: BorderRadius.circular(9),
                     ),
-                    child: const Text(
+                    child: Text(
                       'Найден',
-                      style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w700),
+                      style: AppTypography.custom(size: 10.5, weight: FontWeight.w600, color: Colors.white),
                     ),
                   ),
                   const SizedBox(width: 6),
@@ -2052,7 +2294,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
         padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
         decoration: BoxDecoration(
           color: hasRating ? r.color.withOpacity(.08) : _CmrTestColors.soft,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(10),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2150,11 +2392,11 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
                             color: _CmrTestColors.green,
-                            borderRadius: BorderRadius.circular(999),
+                            borderRadius: BorderRadius.circular(9),
                           ),
-                          child: const Text(
+                          child: Text(
                             'Найден',
-                            style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
+                            style: AppTypography.custom(size: 9, weight: FontWeight.w600, color: Colors.white),
                           ),
                         ),
                       ],
@@ -2186,7 +2428,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
           color: _CmrTestColors.panel,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(10),
         ),
         child: TextField(
           controller: c,
@@ -2199,7 +2441,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
             hintText: '—',
             border: InputBorder.none,
             helperText: r.label.isEmpty ? null : r.label,
-            helperStyle: TextStyle(fontSize: 9, color: _darken(r.color), fontWeight: FontWeight.w600),
+            helperStyle: AppTypography.custom(size: 9, weight: FontWeight.w600, color: _darken(r.color)),
           ),
         ),
       );
@@ -2217,7 +2459,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
           style: hasRating
-              ? TextStyle(color: _darken(r.color), fontWeight: FontWeight.w700, fontSize: 11)
+              ? AppTypography.custom(size: 11, weight: FontWeight.w600, color: _darken(r.color))
               : _CmrTestText.caption(),
         ),
       ),
@@ -2240,7 +2482,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
-          style: TextStyle(color: _darken(r.color), fontWeight: FontWeight.w700, fontSize: 11),
+          style: AppTypography.custom(size: 11, weight: FontWeight.w600, color: _darken(r.color)),
         ),
       ),
     );
@@ -2260,12 +2502,12 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
         PopupMenuItem(value: 'pdf', child: Text('Экспорт в PDF')),
       ],
       child: Container(
-        width: 42,
-        height: 42,
+        width: 38,
+        height: 38,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: _CmrTestColors.panel,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(color: _CmrTestColors.line, width: 1),
         ),
         child: const Icon(Icons.file_download_outlined, size: 19, color: _CmrTestColors.muted),
@@ -2526,7 +2768,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                               width: double.infinity,
                               decoration: _CmrTestDecor.softCard(radius: 20),
                               child: ClipRRect(
-                                borderRadius: BorderRadius.circular(20),
+                                borderRadius: BorderRadius.circular(12),
                                 child: CustomPaint(
                                   painter: _TestSchemePainter(code: code, title: _asStr(t['short_title'])),
                                   child: const SizedBox.expand(),
@@ -2614,7 +2856,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                 children: [
                   Container(width: 10, height: 10, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(99))),
                   const SizedBox(width: 8),
-                  SizedBox(width: 154, child: FittedBox(alignment: Alignment.centerLeft, fit: BoxFit.scaleDown, child: Text(_asStr(n['label']), maxLines: 1, softWrap: false, style: _CmrTestText.caption().copyWith(fontWeight: FontWeight.w700, color: _darken(color))))),
+                  SizedBox(width: 154, child: FittedBox(alignment: Alignment.centerLeft, fit: BoxFit.scaleDown, child: Text(_asStr(n['label']), maxLines: 1, softWrap: false, style: _CmrTestText.caption().copyWith(fontWeight: FontWeight.w600, color: _darken(color))))),
                   Expanded(child: Text(range, textAlign: TextAlign.right, style: _CmrTestText.caption())),
                 ],
               ),
@@ -2711,9 +2953,9 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
           style: OutlinedButton.styleFrom(
             foregroundColor: _CmrTestColors.graphite,
             side: BorderSide.none,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
-          child: const Text('Повторить'),
+          child: Text('Повторить', style: _CmrTestText.action()),
         ),
       ]),
     ),
@@ -2729,6 +2971,190 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
 }
 
 // ==================== Компоненты ====================
+
+class _CmrTestDot extends StatelessWidget {
+  final bool active;
+  final double size;
+
+  const _CmrTestDot({this.active = false, this.size = 5});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = active ? _CmrTestColors.green : _CmrTestColors.muted2;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color.withOpacity(active ? 1 : .46),
+        shape: BoxShape.circle,
+        boxShadow: active
+            ? [
+                BoxShadow(
+                  color: _CmrTestColors.green.withOpacity(.15),
+                  blurRadius: 9,
+                  spreadRadius: .2,
+                ),
+              ]
+            : null,
+      ),
+    );
+  }
+}
+
+class _TestingNavItem extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final bool active;
+  final VoidCallback? onTap;
+
+  const _TestingNavItem({
+    required this.title,
+    required this.subtitle,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(9),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          constraints: const BoxConstraints(minHeight: 50),
+          padding: const EdgeInsets.fromLTRB(10, 7, 8, 7),
+          decoration: BoxDecoration(
+            color: active ? _CmrTestColors.greenSoft : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Opacity(
+            opacity: onTap == null ? .45 : 1,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 5),
+                  child: _CmrTestDot(active: active, size: active ? 6.4 : 4.8),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.custom(
+                          size: 11.0,
+                          weight: active ? FontWeight.w600 : FontWeight.w500,
+                          color: active ? _CmrTestColors.greenDark : _CmrTestColors.text,
+                          height: 1.30,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.custom(
+                          size: 10.1,
+                          weight: FontWeight.w400,
+                          color: active
+                              ? _CmrTestColors.greenDark.withOpacity(.68)
+                              : _CmrTestColors.muted2,
+                          height: 1.30,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TestingDateTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _TestingDateTile({
+    required this.title,
+    required this.subtitle,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(9),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 44),
+          padding: const EdgeInsets.fromLTRB(10, 7, 8, 7),
+          decoration: BoxDecoration(
+            color: active ? _CmrTestColors.greenSoft : _CmrTestColors.soft,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Row(
+            children: [
+              _CmrTestDot(active: active, size: active ? 6 : 4.5),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: _CmrTestText.value(11.2)),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _CmrTestText.muted(9.7),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TestingSidebarMeta extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _TestingSidebarMeta({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: _CmrTestText.muted(10.2))),
+          Text(value, style: _CmrTestText.value(10.8)),
+        ],
+      ),
+    );
+  }
+}
 
 class _IconButton extends StatelessWidget {
   final IconData icon;
@@ -2749,35 +3175,26 @@ class _IconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final size = compact ? 38.0 : 42.0;
-    final bgColor = filled ? _CmrTestColors.graphite : _CmrTestColors.panel;
-    final fgColor = filled ? _CmrTestColors.green : _CmrTestColors.graphite;
+    final size = compact ? 36.0 : 38.0;
+    final bgColor = filled ? _CmrTestColors.greenSoft : _CmrTestColors.soft;
+    final fgColor = filled ? _CmrTestColors.greenDark : _CmrTestColors.graphite;
 
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(10),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(10),
         onTap: isLoading ? null : onPressed,
         child: Container(
           width: size,
           height: size,
           decoration: BoxDecoration(
             color: bgColor,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: filled ? _CmrTestColors.graphite : _CmrTestColors.line, width: 1),
-            boxShadow: filled
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(.08),
-                      blurRadius: 14,
-                      offset: const Offset(0, 8),
-                    ),
-                  ]
-                : null,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.transparent, width: 0),
           ),
           child: isLoading
-              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: _CmrTestColors.greenDark))
               : Icon(icon, color: fgColor, size: size * 0.48),
         ),
       ),
@@ -2798,8 +3215,7 @@ class _IconBox extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         color: _CmrTestColors.panel,
-        borderRadius: BorderRadius.circular(size * 0.35),
-        border: Border.all(color: _CmrTestColors.line, width: 1),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Icon(icon, color: _CmrTestColors.green, size: size * 0.48),
     );
@@ -2821,16 +3237,16 @@ class _ActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(10),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(10),
         onTap: onTap,
         child: Container(
           height: 44,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
             color: _CmrTestColors.panel,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(color: _CmrTestColors.line, width: 1),
           ),
           child: Row(
@@ -2859,16 +3275,16 @@ class _SquareButton extends StatelessWidget {
     final size = compact ? 38.0 : 42.0;
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(compact ? 14 : 15),
+      borderRadius: BorderRadius.circular(10),
       child: InkWell(
-        borderRadius: BorderRadius.circular(compact ? 14 : 15),
+        borderRadius: BorderRadius.circular(10),
         onTap: onTap,
         child: Container(
           width: size,
           height: size,
           decoration: BoxDecoration(
             color: _CmrTestColors.panel,
-            borderRadius: BorderRadius.circular(compact ? 14 : 15),
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(color: _CmrTestColors.line, width: 1),
           ),
           child: Icon(icon, color: _CmrTestColors.text, size: size * 0.55),
@@ -2908,7 +3324,7 @@ class _CategoryChip extends StatelessWidget {
     final iconSize = compact ? 16.0 : (isTightDesktop ? 13.5 : 14.5);
     final horizontalPadding = compact ? 11.0 : (isTightDesktop ? 9.0 : 11.0);
     final verticalPadding = compact ? 10.0 : 8.0;
-    final radius = BorderRadius.circular(compact ? 17 : 15);
+    final radius = BorderRadius.circular(10);
 
     return Material(
       color: Colors.transparent,
@@ -2925,31 +3341,10 @@ class _CategoryChip extends StatelessWidget {
           decoration: BoxDecoration(
             color: active ? _CmrTestColors.greenSoft : _CmrTestColors.panel,
             borderRadius: radius,
-            boxShadow: active
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(.035),
-                      blurRadius: 16,
-                      offset: const Offset(0, 9),
-                    ),
-                  ]
-                : null,
+
           ),
           child: Stack(
             children: [
-              if (active)
-                Positioned(
-                  left: 0,
-                  top: compact ? 10 : 8,
-                  bottom: compact ? 10 : 8,
-                  child: Container(
-                    width: 3.5,
-                    decoration: BoxDecoration(
-                      color: _CmrTestColors.green,
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                  ),
-                ),
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: verticalPadding),
                 child: Row(
@@ -2969,24 +3364,13 @@ class _CategoryChip extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (active) ...[
-                            Container(
-                              width: 7,
-                              height: 7,
-                              decoration: BoxDecoration(
-                                color: _CmrTestColors.green,
-                                borderRadius: BorderRadius.circular(99),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                          ],
                           Flexible(
                             child: Text(
                               title,
                               maxLines: compact ? 2 : 1,
                               overflow: TextOverflow.ellipsis,
                               style: _CmrTestText.value(titleFontSize).copyWith(
-                                fontWeight: active ? FontWeight.w800 : FontWeight.w700,
+                                fontWeight: active ? FontWeight.w600 : FontWeight.w500,
                                 color: _CmrTestColors.text,
                               ),
                             ),
@@ -3024,15 +3408,15 @@ class _PositionChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(999),
+      borderRadius: BorderRadius.circular(9),
       child: InkWell(
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(9),
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
           decoration: BoxDecoration(
             color: active ? _CmrTestColors.greenSoft : _CmrTestColors.panel,
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(9),
           ),
           child: Text(
             '$label · $count',
@@ -3363,7 +3747,7 @@ class _TestSchemePainter extends CustomPainter {
 
   void _label(Canvas canvas, String text, Offset o, {Color color = const Color(0xFF101828), double size = 11, bool bold = false}) {
     final tp = TextPainter(
-      text: TextSpan(text: text, style: TextStyle(color: color, fontSize: size, fontWeight: bold ? FontWeight.w700 : FontWeight.w700)),
+      text: TextSpan(text: text, style: TextStyle(color: color, fontSize: size, fontWeight: bold ? FontWeight.w600 : FontWeight.w500)),
       textDirection: TextDirection.ltr,
       maxLines: 2,
     )..layout(maxWidth: 150);

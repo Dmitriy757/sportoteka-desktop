@@ -8,7 +8,18 @@ import 'package:sportoteka/presentation/player_screen/widgets/player_self_rating
 enum _RateFilter { all, unrated, rated }
 
 class PlayerSelfAssessmentScreen extends StatefulWidget {
-  const PlayerSelfAssessmentScreen({super.key});
+  final int? teamId;
+  final int? userId;
+  final int? playerId;
+  final bool readOnly;
+
+  const PlayerSelfAssessmentScreen({
+    super.key,
+    this.teamId,
+    this.userId,
+    this.playerId,
+    this.readOnly = false,
+  });
 
   @override
   State<PlayerSelfAssessmentScreen> createState() => _PlayerSelfAssessmentScreenState();
@@ -94,7 +105,10 @@ class _PlayerSelfAssessmentScreenState extends State<PlayerSelfAssessmentScreen>
   Future<void> _init() async {
     final args = ModalRoute.of(context)?.settings.arguments;
 
-    if (args is Map) {
+    if (widget.teamId != null || widget.userId != null) {
+      teamId = widget.teamId ?? 0;
+      userId = widget.userId ?? 0;
+    } else if (args is Map) {
       teamId = _asInt(args["team_id"]);
       userId = _asInt(args["user_id"]);
     } else {
@@ -115,7 +129,9 @@ class _PlayerSelfAssessmentScreenState extends State<PlayerSelfAssessmentScreen>
       error = null;
     });
 
-    final pid = await PlayerIdResolver.resolvePlayerId(apiBase: apiBase, userId: userId);
+    final pid = (widget.playerId ?? 0) > 0
+        ? widget.playerId!
+        : await PlayerIdResolver.resolvePlayerId(apiBase: apiBase, userId: userId);
     if (!mounted) return;
 
     if (pid <= 0) {
@@ -188,6 +204,10 @@ class _PlayerSelfAssessmentScreenState extends State<PlayerSelfAssessmentScreen>
   }
 
   Future<void> _openEvent(Map<String, dynamic> e) async {
+    if (widget.readOnly) {
+      await _openActionsSheet(e);
+      return;
+    }
     final eventId = _asInt(e["id"]);
     if (eventId <= 0) return;
 
@@ -358,24 +378,26 @@ class _PlayerSelfAssessmentScreenState extends State<PlayerSelfAssessmentScreen>
                   const SizedBox(height: 10),
                 ],
 
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () async {
-                      Navigator.pop(context);
-                      await _openEvent(e);
-                    },
-                    icon: Icon(rated ? Icons.edit : Icons.check_circle_outline),
-                    label: Text(rated ? "Изменить оценку" : "Оценить"),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primary,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                if (!widget.readOnly) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        await _openEvent(e);
+                      },
+                      icon: Icon(rated ? Icons.edit : Icons.check_circle_outline),
+                      label: Text(rated ? "Изменить оценку" : "Оценить"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primary,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 10),
+                  const SizedBox(height: 10),
+                ],
               ],
             ),
           ),

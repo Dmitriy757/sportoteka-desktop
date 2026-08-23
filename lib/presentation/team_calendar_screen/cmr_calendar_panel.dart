@@ -12,18 +12,19 @@ import 'package:sportoteka/presentation/team_calendar_screen/calendar_week_view.
 import 'package:sportoteka/presentation/team_calendar_screen/event_editor_sheet.dart';
 import 'package:sportoteka/presentation/team_calendar_screen/team_calendar_api.dart';
 import 'package:sportoteka/presentation/team_calendar_screen/team_calendar_models.dart';
-import 'package:sportoteka/presentation/team_calendar_screen/team_calendar_screen.dart';
 import 'package:sportoteka/presentation/team_calendar_screen/training_rating_sheet.dart';
+import 'package:sportoteka/presentation/team_calendar_screen/training_attendance_panel.dart';
 
 enum CmrCalendarMode { month, week }
 
-enum _CalendarWorkPanel { calendar, details, editor }
+enum _CalendarWorkPanel { calendar, details, editor, ratings }
 
 class CmrCalendarPanel extends StatefulWidget {
   final int teamId;
   final String teamName;
   final int clubId;
   final String clubName;
+  final bool allowOpenFull;
 
   const CmrCalendarPanel({
     super.key,
@@ -31,6 +32,7 @@ class CmrCalendarPanel extends StatefulWidget {
     required this.teamName,
     required this.clubId,
     required this.clubName,
+    this.allowOpenFull = true,
   });
 
   @override
@@ -251,12 +253,20 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
 
   void _openFullCalendar() {
     Get.to(
-      () => TeamCalendarScreen(
-        teamId: widget.teamId,
-        teamName: widget.teamName,
+      () => Scaffold(
+        backgroundColor: _C.bg,
+        body: SafeArea(
+          child: CmrCalendarPanel(
+            teamId: widget.teamId,
+            teamName: widget.teamName,
+            clubId: widget.clubId,
+            clubName: widget.clubName,
+            allowOpenFull: false,
+          ),
+        ),
       ),
       transition: Transition.fadeIn,
-      duration: const Duration(milliseconds: 220),
+      duration: const Duration(milliseconds: 180),
     );
   }
 
@@ -353,19 +363,13 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
     }
 
     if (!mounted) return;
-
-    await showTrainingRatingWindow(
-      context,
-      apiBase: apiBase,
-      teamId: event.teamId,
-      eventId: event.id,
-      coachId: coachId,
-      title: event.title,
-    );
-
-    if (mounted) {
-      await _fetch();
-    }
+    setState(() {
+      selectedDay = event.startAt;
+      _selectedEventForPanel = event;
+      _editingEventForPanel = null;
+      _createDateForPanel = null;
+      _workPanel = _CalendarWorkPanel.ratings;
+    });
   }
 
   void _closeWorkPanel() {
@@ -448,7 +452,8 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
   }
 
   TeamEvent? _eventForRightPane(List<TeamEvent> selectedList) {
-    if (_workPanel == _CalendarWorkPanel.details) {
+    if (_workPanel == _CalendarWorkPanel.details ||
+        _workPanel == _CalendarWorkPanel.ratings) {
       final current = _selectedEventForPanel;
       if (current != null && events.any((e) => e.id == current.id)) return current;
     }
@@ -534,7 +539,9 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
   }) {
     final height = constraints.maxHeight.isFinite ? constraints.maxHeight : 780.0;
     final showWorkPane = _workPanel == _CalendarWorkPanel.editor ||
-        (_workPanel == _CalendarWorkPanel.details && selectedForDetails != null);
+        ((_workPanel == _CalendarWorkPanel.details ||
+                _workPanel == _CalendarWorkPanel.ratings) &&
+            selectedForDetails != null);
     final calendarWidth = _calendarColumnWidth(constraints);
 
     return SizedBox(
@@ -544,17 +551,17 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
         color: const Color(0xFFF6F7F6),
         padding: EdgeInsets.all(constraints.maxWidth < 980 ? 8 : 10),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(constraints.maxWidth < 980 ? 18 : 20),
+          borderRadius: BorderRadius.circular(constraints.maxWidth < 980 ? 14 : 16),
           child: Container(
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(constraints.maxWidth < 980 ? 18 : 20),
+              borderRadius: BorderRadius.circular(constraints.maxWidth < 980 ? 14 : 16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(.035),
-                  blurRadius: 28,
-                  spreadRadius: -18,
-                  offset: const Offset(0, 16),
+                  color: Colors.black.withOpacity(.025),
+                  blurRadius: 22,
+                  spreadRadius: -16,
+                  offset: const Offset(0, 12),
                 ),
               ],
             ),
@@ -565,6 +572,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                   width: calendarWidth,
                   child: _buildStrictCalendarWindow(weekStart, selectedList),
                 ),
+                Container(width: 1, color: _C.line),
                 Expanded(
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 180),
@@ -598,6 +606,8 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
       padding: const EdgeInsets.fromLTRB(10, 7, 8, 7),
       child: Row(
         children: [
+          const _CalendarBrandDots(),
+          const SizedBox(width: 9),
           Container(
             width: 34,
             height: 34,
@@ -621,7 +631,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                   widget.teamName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _C.text, fontSize: 13.65, fontWeight: FontWeight.w700, height: 1),
+                  style: const TextStyle(color: _C.text, fontSize: 13.65, fontWeight: FontWeight.w600, height: 1),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -729,15 +739,9 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
       title: 'События дня',
       whiteSurface: true,
       subtitle: '$selectedTitle · ${selectedList.length} ${_pluralEvent(selectedList.length)}',
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _ProfileRoundButton(icon: refreshing ? Icons.sync_rounded : Icons.refresh_rounded, onTap: () => _fetch()),
-          if (canEdit) ...[
-            const SizedBox(width: 7),
-            _ProfileRoundButton(icon: Icons.add_rounded, onTap: () => _openCreate(selectedDay)),
-          ],
-        ],
+      trailing: _ProfileRoundButton(
+        icon: refreshing ? Icons.sync_rounded : Icons.refresh_rounded,
+        onTap: () => _fetch(),
       ),
       child: Column(
         children: [
@@ -759,7 +763,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                   label: 'Тренировки',
                   value: '$trainingCount',
                   hint: 'в периоде',
-                  color: _C.cyan,
+                  color: _C.green,
                 ),
               ),
               const SizedBox(width: 8),
@@ -769,7 +773,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                   label: 'Матчи',
                   value: '$matchCount',
                   hint: 'в периоде',
-                  color: _C.blue,
+                  color: _C.green,
                 ),
               ),
             ],
@@ -787,7 +791,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                   label: 'Теория',
                   value: '$theoryCount',
                   hint: 'разборы',
-                  color: const Color(0xFFB7791F),
+                  color: _C.green,
                 ),
               ),
               const SizedBox(width: 8),
@@ -797,7 +801,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                   label: 'Выходные',
                   value: '$dayOffCount',
                   hint: 'в периоде',
-                  color: const Color(0xFF64748B),
+                  color: _C.green,
                 ),
               ),
             ],
@@ -883,7 +887,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                       'Структура периода',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _C.title.copyWith(fontSize: 12.55, fontWeight: FontWeight.w700),
+                      style: _C.title.copyWith(fontSize: 12.55, fontWeight: FontWeight.w600),
                     ),
                   ),
                   Text(
@@ -926,10 +930,10 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
 
     final items = [
       _CalendarKpiData(label: 'Период', value: '${events.length}', icon: Icons.dashboard_customize_rounded, color: _C.green, hint: mode == CmrCalendarMode.month ? _monthTitle(cursor) : _weekTitle(cursor)),
-      _CalendarKpiData(label: 'День', value: '${selectedList.length}', icon: Icons.today_rounded, color: _C.cyan, hint: _dateTitle(selectedDay)),
+      _CalendarKpiData(label: 'День', value: '${selectedList.length}', icon: Icons.today_rounded, color: _C.green, hint: _dateTitle(selectedDay)),
       _CalendarKpiData(label: 'Тренировки', value: '$trainingCount', icon: Icons.fitness_center_rounded, color: _C.green, hint: 'поле + зал'),
-      _CalendarKpiData(label: 'Матчи', value: '$matchCount', icon: Icons.sports_soccer_rounded, color: _C.blue, hint: 'игры'),
-      _CalendarKpiData(label: 'Теория', value: '$theoryCount', icon: Icons.psychology_alt_outlined, color: const Color(0xFFB7791F), hint: dayOffCount > 0 ? 'выходных: $dayOffCount' : 'разбор'),
+      _CalendarKpiData(label: 'Матчи', value: '$matchCount', icon: Icons.sports_soccer_rounded, color: _C.green, hint: 'игры'),
+      _CalendarKpiData(label: 'Теория', value: '$theoryCount', icon: Icons.psychology_alt_outlined, color: _C.green, hint: dayOffCount > 0 ? 'выходных: $dayOffCount' : 'разбор'),
       _CalendarKpiData(label: 'Следующее', value: next == null ? '—' : hhmm(next.startAt), icon: Icons.play_arrow_rounded, color: next == null ? _C.slate : eventTypeColor(next.type), hint: next == null ? 'нет' : next.title),
     ];
 
@@ -979,6 +983,10 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
           _ProfileRoundButton(icon: Icons.today_rounded, onTap: _today),
           const SizedBox(width: 6),
           _ProfileRoundButton(icon: refreshing ? Icons.sync_rounded : Icons.refresh_rounded, onTap: () => _fetch()),
+          if (canEdit) ...[
+            const SizedBox(width: 6),
+            _ProfileRoundButton(icon: Icons.add_rounded, onTap: () => _openCreate(selectedDay)),
+          ],
         ],
       ),
       child: Column(
@@ -990,19 +998,17 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
               SizedBox(width: 250, child: _buildModeSelector()),
               const SizedBox(width: 8),
               Expanded(child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: _legend())),
-              const SizedBox(width: 8),
-              if (canEdit) _ProfileActionButton(icon: Icons.add_rounded, text: 'Событие', onTap: () => _openCreate(selectedDay)),
             ],
           ),
           const SizedBox(height: 8),
           Expanded(
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(10),
               child: Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(.70),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: Colors.transparent, width: 0),
                 ),
                 padding: const EdgeInsets.all(8),
@@ -1143,7 +1149,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                   'События за ${_dateTitle(selectedDay)}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: _C.title.copyWith(fontSize: 16.75, fontWeight: FontWeight.w700),
+                  style: _C.title.copyWith(fontSize: 16.75, fontWeight: FontWeight.w600),
                 ),
               ),
               if (canEdit) _ProfileActionButton(icon: Icons.add_rounded, text: 'Событие', onTap: () => _openCreate(selectedDay)),
@@ -1179,7 +1185,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                     onTap: _pickMonth,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
-                      child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.title.copyWith(fontSize: 15.05, fontWeight: FontWeight.w700)),
+                      child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.title.copyWith(fontSize: 15.05, fontWeight: FontWeight.w600)),
                     ),
                   ),
                 ),
@@ -1188,7 +1194,8 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
               const SizedBox(width: 6),
               _ProfileRoundButton(icon: Icons.today_rounded, onTap: _today),
               const SizedBox(width: 6),
-              _ProfileRoundButton(icon: Icons.open_in_full_rounded, onTap: _openFullCalendar),
+              if (widget.allowOpenFull)
+                _ProfileRoundButton(icon: Icons.open_in_full_rounded, onTap: _openFullCalendar),
             ],
           ),
           const SizedBox(height: 8),
@@ -1237,7 +1244,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                   child: Center(
                     child: Text(
                       d,
-                      style: const TextStyle(color: _C.muted, fontSize: 10.55, fontWeight: FontWeight.w700, height: 1.15),
+                      style: const TextStyle(color: _C.muted, fontSize: 10.55, fontWeight: FontWeight.w600, height: 1.15),
                     ),
                   ),
                 ),
@@ -1334,7 +1341,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                                         ? (today ? _C.greenDark : _C.text)
                                         : _C.muted.withOpacity(.64),
                                 fontSize: maxHeight == null ? 13 : 12.5,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
@@ -1396,22 +1403,28 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
           initialDateTime: base,
           initial: editing,
           onEventAdded: editing == null ? _handleAddMoreFromEditor : null,
+          onSubmit: _handleEditorSubmit,
+          onCancel: _closeWorkPanel,
           embedded: true,
         ),
-        onSubmit: _handleEditorSubmit,
       );
     }
 
-    if (_workPanel == _CalendarWorkPanel.details && event != null) {
+    if ((_workPanel == _CalendarWorkPanel.details ||
+            _workPanel == _CalendarWorkPanel.ratings) &&
+        event != null) {
       return _InlineEventDetailsPanel(
+        key: ValueKey<String>('calendar-event-${event.id}-${_workPanel.name}'),
         event: event,
         teamName: widget.teamName,
         canEdit: canEdit,
+        initialTab: _workPanel == _CalendarWorkPanel.ratings ? 2 : 0,
         onClose: _closeWorkPanel,
         onBackToCalendar: _closeWorkPanel,
         onEdit: () => _openEdit(event),
         onDelete: () => _delete(event),
         onOpenRating: () => _openTrainingRatings(event),
+        onRatingsSaved: () => _fetch(),
       );
     }
 
@@ -1447,10 +1460,16 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
               _buildSlimCalendarBlock(weekStart),
               const SizedBox(height: 8),
               _buildSelectedDayEventsWindow(selectedList),
-              if (_workPanel == _CalendarWorkPanel.editor || _workPanel == _CalendarWorkPanel.details) ...[
+              if (_workPanel == _CalendarWorkPanel.editor ||
+                  _workPanel == _CalendarWorkPanel.details ||
+                  _workPanel == _CalendarWorkPanel.ratings) ...[
                 const SizedBox(height: 8),
                 SizedBox(
-                  height: _workPanel == _CalendarWorkPanel.editor ? 560 : 360,
+                  height: _workPanel == _CalendarWorkPanel.editor
+                      ? 560
+                      : _workPanel == _CalendarWorkPanel.ratings
+                          ? 520
+                          : 360,
                   child: _buildCalendarDetailsPane(_eventForRightPane(selectedList), selectedList, compact: true),
                 ),
               ],
@@ -1467,10 +1486,12 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
       decoration: _C.cardDecoration,
       child: Row(
         children: [
+          const _CalendarBrandDots(),
+          const SizedBox(width: 9),
           Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(color: _C.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.transparent)),
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(10)),
             child: const Icon(Icons.calendar_month_rounded, color: _C.text, size: 19),
           ),
           const SizedBox(width: 6),
@@ -1478,7 +1499,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_monthTitle(cursor), maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.title.copyWith(fontSize: 15.25, fontWeight: FontWeight.w700)),
+                Text(_monthTitle(cursor), maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.title.copyWith(fontSize: 15.25, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 3),
                 Text('${_dateTitle(selectedDay)} · ${selectedList.length} ${_pluralEvent(selectedList.length)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 11.05, fontWeight: FontWeight.w600)),
               ],
@@ -1543,7 +1564,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
           children: [
             Container(width: 7, height: 7, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(2))),
             const SizedBox(width: 6),
-            Text(eventTypeLabel(t), style: const TextStyle(fontSize: 10.75, fontWeight: FontWeight.w700, color: _C.text, height: 1)),
+            Text(eventTypeLabel(t), style: const TextStyle(fontSize: 10.75, fontWeight: FontWeight.w600, color: _C.text, height: 1)),
           ],
         ),
       );
@@ -1575,19 +1596,20 @@ class _C {
   static const Color workspace = Color(0xFFFFFFFF);
   static const Color panel = Colors.white;
   static const Color card = Colors.white;
-  static const Color surface = Colors.white;
-  static const Color soft = Color(0xFFF8F9F8);
-  static const Color soft2 = Color(0xFFF4F6F4);
+  static const Color surface = Color(0xFFF7F8F7);
+  static const Color soft = Color(0xFFF7F8F7);
+  static const Color soft2 = Color(0xFFF2F4F2);
   static const Color glass = Colors.white;
   static const Color border = Color(0xFFE9ECEA);
+  static const Color line = Color(0xFFE9ECEA);
   static const Color borderStrong = Color(0xFFE1E6E3);
 
   static const Color text = Color(0xFF0B0F14);
   static const Color text2 = Color(0xFF111827);
-  static const Color muted = Color(0xFF374151);
-  static const Color muted2 = Color(0xFF6B7280);
+  static const Color muted = Color(0xFF5F6670);
+  static const Color muted2 = Color(0xFF8A9099);
 
-  static const Color green = Color(0xFF0E9F5B);
+  static const Color green = Color(0xFF00A750);
   static const Color greenDark = Color(0xFF067A46);
   static const Color darkGreen = Color(0xFF067A46);
   static const Color accentSoft = Color(0xFFF3FAF6);
@@ -1659,7 +1681,7 @@ class _C {
         color: panel,
       );
 
-  static BoxDecoration seamlessPaneDecoration({double radius = 22}) => BoxDecoration(
+  static BoxDecoration seamlessPaneDecoration({double radius = 12}) => BoxDecoration(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(radius),
       );
@@ -1682,15 +1704,13 @@ class _C {
         borderRadius: BorderRadius.circular(radius),
       );
 
-  static BoxDecoration accentCard({required Color color, double radius = 18}) => BoxDecoration(
-        color: Color.alphaBlend(color.withOpacity(.060), Colors.white),
+  static BoxDecoration accentCard({required Color color, double radius = 12}) => BoxDecoration(
+        color: Color.alphaBlend(color.withOpacity(.045), Colors.white),
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: color.withOpacity(.16), width: 1),
-        boxShadow: microShadow,
       );
 
   static TextStyle get title => _base(
-        size: 17.2,
+        size: 16.0,
         weight: FontWeight.w600,
         color: text,
         height: 1.10,
@@ -1698,7 +1718,7 @@ class _C {
       );
 
   static TextStyle section() => _base(
-        size: 13.4,
+        size: 12.8,
         weight: FontWeight.w600,
         color: text,
         height: 1.12,
@@ -1707,7 +1727,7 @@ class _C {
 
   static TextStyle value(double size) => _base(
         size: size,
-        weight: FontWeight.w700,
+        weight: FontWeight.w600,
         color: text,
         height: 1.08,
         letterSpacing: -0.25,
@@ -1731,8 +1751,8 @@ class _C {
       );
 
   static TextStyle tab({bool active = false}) => _base(
-        size: 11.8,
-        weight: FontWeight.w700,
+        size: 11.2,
+        weight: FontWeight.w600,
         color: active ? greenDark : text,
         height: 1,
       );
@@ -1741,14 +1761,14 @@ class _C {
 
   static TextStyle action() => _base(
         size: 11.8,
-        weight: FontWeight.w700,
+        weight: FontWeight.w600,
         color: text,
         height: 1.05,
       );
 
   static TextStyle danger() => _base(
         size: 11.8,
-        weight: FontWeight.w700,
+        weight: FontWeight.w600,
         color: red,
         height: 1,
       );
@@ -1801,6 +1821,70 @@ String? _eventCoachRatingText(TeamEvent event) {
 }
 
 
+class _CalendarBrandDot extends StatelessWidget {
+  final double size;
+  final double opacity;
+  final Color color;
+  final bool glow;
+
+  const _CalendarBrandDot({
+    this.size = 6,
+    this.opacity = 1,
+    this.color = _C.green,
+    this.glow = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: opacity,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          boxShadow: glow
+              ? <BoxShadow>[
+                  BoxShadow(
+                    color: color.withOpacity(.18),
+                    blurRadius: size * 1.9,
+                    spreadRadius: .25,
+                  ),
+                  BoxShadow(
+                    color: color.withOpacity(.08),
+                    blurRadius: size * 3.2,
+                    spreadRadius: .6,
+                  ),
+                ]
+              : null,
+        ),
+      ),
+    );
+  }
+}
+
+class _CalendarBrandDots extends StatelessWidget {
+  final Color color;
+  const _CalendarBrandDots({this.color = _C.green});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _CalendarBrandDot(size: 3.5, opacity: .22, color: color, glow: false),
+        const SizedBox(width: 3),
+        _CalendarBrandDot(size: 4.5, opacity: .42, color: color, glow: false),
+        const SizedBox(width: 3),
+        _CalendarBrandDot(size: 5.5, opacity: .68, color: color, glow: false),
+        const SizedBox(width: 3),
+        _CalendarBrandDot(size: 6.5, color: color),
+      ],
+    );
+  }
+}
+
 class _CalendarKpiData {
   final String label;
   final String value;
@@ -1836,7 +1920,7 @@ class _CalendarHeaderSide extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
-        Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: alignEnd ? TextAlign.right : TextAlign.left, style: const TextStyle(color: _C.text, fontSize: 14.05, fontWeight: FontWeight.w700, height: 1.0)),
+        Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: alignEnd ? TextAlign.right : TextAlign.left, style: const TextStyle(color: _C.text, fontSize: 14.05, fontWeight: FontWeight.w600, height: 1.0)),
         const SizedBox(height: 5),
         Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: alignEnd ? TextAlign.right : TextAlign.left, style: const TextStyle(color: _C.muted, fontSize: 10.25, fontWeight: FontWeight.w600, height: 1.0)),
         const SizedBox(height: 6),
@@ -1846,7 +1930,7 @@ class _CalendarHeaderSide extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(metric, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: accent, fontSize: 11.15, fontWeight: FontWeight.w700, height: 1)),
+              Text(metric, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: accent, fontSize: 11.15, fontWeight: FontWeight.w600, height: 1)),
               const SizedBox(width: 6),
               Text(metricLabel, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 9.25, fontWeight: FontWeight.w600, height: 1)),
             ],
@@ -1882,13 +1966,13 @@ class _CalendarHeaderCenter extends StatelessWidget {
     return Container(
       height: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
-      decoration: BoxDecoration(color: _C.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.transparent)),
+      decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(10)),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(color: _C.text, fontSize: 15.95, fontWeight: FontWeight.w700, height: 1.05)),
+          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(color: _C.text, fontSize: 15.95, fontWeight: FontWeight.w600, height: 1.05)),
           const SizedBox(height: 5),
-          Text(status, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.greenDark, fontSize: 9.65, fontWeight: FontWeight.w700, letterSpacing: .25, height: 1)),
+          Text(status, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.greenDark, fontSize: 9.65, fontWeight: FontWeight.w600, letterSpacing: .25, height: 1)),
           const SizedBox(height: 5),
           Text('$subtitle · $count', maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(color: _C.muted, fontSize: 9.65, fontWeight: FontWeight.w600, height: 1.1)),
         ],
@@ -1911,10 +1995,10 @@ class _CalendarTopLine extends StatelessWidget {
     return Container(
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(color: Color.alphaBlend(color.withOpacity(.045), Colors.white), borderRadius: BorderRadius.circular(12), boxShadow: _C.microShadow),
+      decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(10), boxShadow: _C.microShadow),
       child: Row(
         children: [
-          Container(width: 27, height: 27, decoration: BoxDecoration(color: color.withOpacity(.08), borderRadius: BorderRadius.circular(8)), child: Icon(icon, color: color, size: 13)),
+          Container(width: 27, height: 27, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)), child: Icon(icon, color: _C.green, size: 13)),
           const SizedBox(width: 7),
           Expanded(
             child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1954,17 +2038,18 @@ class _CalendarRightHeader extends StatelessWidget {
       color: Colors.white,
       child: Row(
         children: [
+          const _CalendarBrandDots(),
+          const SizedBox(width: 9),
           Container(
-            width: 36,
-            height: 36,
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
-              color: _C.surface,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.transparent),
+              color: _C.greenSoft,
+              borderRadius: BorderRadius.circular(9),
             ),
-            child: Icon(icon, color: _C.text, size: 16),
+            child: Icon(icon, color: _C.greenDark, size: 15),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 9),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -2007,9 +2092,8 @@ class _CalendarSideKpi extends StatelessWidget {
       height: 62,
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
       decoration: BoxDecoration(
-        color: Color.alphaBlend(color.withOpacity(.045), Colors.white),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(.10), width: .8),
+        color: _C.soft,
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2059,10 +2143,10 @@ class _CalendarNextEventStrip extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      decoration: BoxDecoration(color: Color.alphaBlend(color.withOpacity(.045), Colors.white), borderRadius: BorderRadius.circular(16), boxShadow: _C.microShadow),
+      decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(10)),
       child: Row(
         children: [
-          Container(width: 34, height: 34, decoration: BoxDecoration(color: Color.alphaBlend(color.withOpacity(.08), Colors.white), borderRadius: BorderRadius.circular(11)), child: Icon(Icons.event_available_rounded, color: color, size: 16)),
+          Container(width: 34, height: 34, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.event_available_rounded, color: _C.green, size: 16)),
           const SizedBox(width: 10),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -2094,9 +2178,8 @@ class _CalendarInfoCell extends StatelessWidget {
       height: 44,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
-        color: Color.alphaBlend(item.color.withOpacity(.040), Colors.white),
+        color: _C.soft,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: item.color.withOpacity(.08), width: .7),
       ),
       child: Row(
         children: [
@@ -2148,9 +2231,8 @@ class _CalendarKpiTile extends StatelessWidget {
       height: 56,
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(.80),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.transparent, width: 0),
+        color: _C.soft,
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         children: [
@@ -2160,7 +2242,6 @@ class _CalendarKpiTile extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(.88),
               borderRadius: BorderRadius.circular(7),
-              border: Border.all(color: item.color.withOpacity(.16), width: 1),
             ),
             child: Icon(item.icon, color: item.color, size: 15),
           ),
@@ -2170,11 +2251,11 @@ class _CalendarKpiTile extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 9.45, fontWeight: FontWeight.w700, height: 1)),
+                Text(item.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 9.45, fontWeight: FontWeight.w600, height: 1)),
                 const SizedBox(height: 2),
                 Row(
                   children: [
-                    Text(item.value, maxLines: 1, style: const TextStyle(color: _C.text, fontSize: 14.55, fontWeight: FontWeight.w700, height: 1)),
+                    Text(item.value, maxLines: 1, style: const TextStyle(color: _C.text, fontSize: 14.55, fontWeight: FontWeight.w600, height: 1)),
                     const SizedBox(width: 6),
                     Expanded(child: Text(item.hint, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 8.95, fontWeight: FontWeight.w600, height: 1))),
                   ],
@@ -2219,6 +2300,8 @@ class _StrictWorkspaceCard extends StatelessWidget {
         children: [
           Row(
             children: [
+              const _CalendarBrandDots(),
+              const SizedBox(width: 9),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -2280,9 +2363,8 @@ class _CalendarTypeTile extends StatelessWidget {
       height: 34,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: _C.softTint(color, opacity: .075),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(.10)),
+        color: _C.soft,
+        borderRadius: BorderRadius.circular(9),
       ),
       child: Row(
         children: [
@@ -2301,7 +2383,7 @@ class _CalendarTypeTile extends StatelessWidget {
               style: TextStyle(
                 color: color,
                 fontSize: 11.2,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 height: 1,
               ),
             ),
@@ -2315,7 +2397,7 @@ class _CalendarTypeTile extends StatelessWidget {
               style: const TextStyle(
                 color: _C.text,
                 fontSize: 10.4,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
                 height: 1.05,
               ),
             ),
@@ -2435,7 +2517,7 @@ class _ModeButton extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: active ? _C.greenSoft : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(8),
         ),
         child: Text(
           text,
@@ -2444,7 +2526,7 @@ class _ModeButton extends StatelessWidget {
           style: _C.action().copyWith(
             color: active ? _C.text : _C.muted2,
             fontSize: 11.2,
-            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+            fontWeight: active ? FontWeight.w600 : FontWeight.w500,
           ),
         ),
       ),
@@ -2469,7 +2551,7 @@ class _SegmentedEventBadge extends StatelessWidget {
         painter: _SegmentedEventBadgePainter(colors: colors, borderColor: Colors.white),
         child: events.length > 1
             ? Center(
-                child: Text(events.length > 9 ? '9+' : '${events.length}', style: const TextStyle(color: Colors.white, fontSize: 8.4, fontWeight: FontWeight.w700, height: 1, shadows: [Shadow(color: Color(0x66000000), blurRadius: 4)])),
+                child: Text(events.length > 9 ? '9+' : '${events.length}', style: const TextStyle(color: Colors.white, fontSize: 8.4, fontWeight: FontWeight.w600, height: 1, shadows: [Shadow(color: Color(0x66000000), blurRadius: 4)])),
               )
             : const SizedBox.shrink(),
       ),
@@ -2552,14 +2634,28 @@ class _CmrEventTile extends StatelessWidget {
 
     return Material(
       color: Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
       child: InkWell(
         onTap: onDetails,
+        borderRadius: BorderRadius.circular(10),
         child: Container(
-          constraints: const BoxConstraints(minHeight: 62),
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
-          color: Colors.white,
+          constraints: const BoxConstraints(minHeight: 66),
+          padding: const EdgeInsets.fromLTRB(10, 9, 8, 9),
+          decoration: BoxDecoration(
+            color: _C.soft,
+            borderRadius: BorderRadius.circular(10),
+          ),
           child: Row(
             children: [
+              Container(
+                width: 3,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: accent,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -2608,10 +2704,15 @@ class _CmrEventTile extends StatelessWidget {
                   ),
                 const SizedBox(width: 4),
                 _MiniIconButton(
-                  icon: Icons.more_horiz_rounded,
+                  icon: Icons.edit_outlined,
                   onTap: onEdit,
                 ),
-              ],
+              ] else
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: _C.muted2,
+                ),
             ],
           ),
         ),
@@ -2644,7 +2745,7 @@ class _CalendarRatingChip extends StatelessWidget {
           const SizedBox(width: 4),
           Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 9.25, fontWeight: FontWeight.w600, height: 1)),
           const SizedBox(width: 4),
-          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontSize: 10.05, fontWeight: FontWeight.w700, height: 1)),
+          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontSize: 10.05, fontWeight: FontWeight.w600, height: 1)),
         ],
       ),
     );
@@ -2716,7 +2817,7 @@ class _CalendarDetailsPlaceholder extends StatelessWidget {
   }
 }
 
-class _InlineEventDetailsPanel extends StatelessWidget {
+class _InlineEventDetailsPanel extends StatefulWidget {
   final TeamEvent event;
   final String teamName;
   final bool canEdit;
@@ -2725,83 +2826,124 @@ class _InlineEventDetailsPanel extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onOpenRating;
+  final VoidCallback onRatingsSaved;
+  final int initialTab;
 
-  const _InlineEventDetailsPanel({required this.event, required this.teamName, required this.canEdit, required this.onClose, required this.onBackToCalendar, required this.onEdit, required this.onDelete, required this.onOpenRating});
+  const _InlineEventDetailsPanel({
+    super.key,
+    required this.event,
+    required this.teamName,
+    required this.canEdit,
+    required this.onClose,
+    required this.onBackToCalendar,
+    required this.onEdit,
+    required this.onDelete,
+    required this.onOpenRating,
+    required this.onRatingsSaved,
+    this.initialTab = 0,
+  });
+  @override State<_InlineEventDetailsPanel> createState() => _InlineEventDetailsPanelState();
+}
 
-  String get _dateText => '${event.startAt.day.toString().padLeft(2, '0')}.${event.startAt.month.toString().padLeft(2, '0')}.${event.startAt.year}';
-  String get _timeText {
-    final endAt = event.endAt;
-    return endAt == null ? hhmm(event.startAt) : '${hhmm(event.startAt)}–${hhmm(endAt)}';
+class _InlineEventDetailsPanelState extends State<_InlineEventDetailsPanel> {
+  late int tab;
+  int coachId = 0;
+  @override void initState(){super.initState(); tab = widget.initialTab.clamp(0, 2); _loadCoach();}
+  Future<void> _loadCoach() async {final id=await PrefUtils.getUserId()??0; if(mounted)setState(()=>coachId=id);}
+  String get _dateText => '${widget.event.startAt.day.toString().padLeft(2, '0')}.${widget.event.startAt.month.toString().padLeft(2, '0')}.${widget.event.startAt.year}';
+  String get _timeText {final e=widget.event.endAt; return e==null?hhmm(widget.event.startAt):'${hhmm(widget.event.startAt)}–${hhmm(e)}';}
+
+  @override Widget build(BuildContext context) {
+    final event=widget.event;
+    final c=eventTypeColor(event.type);
+    final isTrainingLike=event.type==TeamEventType.training||event.type==TeamEventType.gym;
+    return _StrictWorkspaceCard(
+      icon: Icons.event_note_rounded,
+      title: event.title.trim().isEmpty?'Событие календаря':event.title,
+      subtitle: '${eventTypeLabel(event.type)} · $_dateText · $_timeText',
+      trailing: _ProfileRoundButton(icon:Icons.close_rounded,onTap:widget.onClose),
+      child: Column(children:[
+        if(isTrainingLike) Container(height:42,padding:const EdgeInsets.all(4),decoration:BoxDecoration(color:_C.surface,borderRadius:BorderRadius.circular(12)),child:Row(children:[
+          Expanded(child:_InlineTabButton(text:'Описание',icon:Icons.info_outline_rounded,active:tab==0,onTap:()=>setState(()=>tab=0))),
+          const SizedBox(width:4),
+          Expanded(child:_InlineTabButton(text:'Посещаемость',icon:Icons.fact_check_rounded,active:tab==1,onTap:()=>setState(()=>tab=1))),
+          const SizedBox(width:4),
+          Expanded(child:_InlineTabButton(text:'Оценки',icon:Icons.star_rate_rounded,active:tab==2,onTap:()=>setState(()=>tab=2))),
+        ])),
+        if(isTrainingLike) const SizedBox(height:8),
+        Expanded(child: !isTrainingLike||tab==0
+            ? _eventInfo(c)
+            : tab==1
+                ? TrainingAttendancePanel(key:ValueKey('attendance-${event.id}'),apiBase:_CmrCalendarPanelState.apiBase,teamId:event.teamId,eventId:event.id)
+                : (coachId<=0
+                    ? const Center(child:CircularProgressIndicator(strokeWidth:2))
+                    : TrainingRatingSheet(key:ValueKey('rating-${event.id}'),apiBase:_CmrCalendarPanelState.apiBase,teamId:event.teamId,eventId:event.id,coachId:coachId,title:event.title,embedded:true,onSaved:widget.onRatingsSaved))),
+      ]),
+    );
   }
+
+  Widget _eventInfo(Color c){
+    final event=widget.event; final notes=event.notes.trim(); final location=event.location.trim(); final coachRating=_eventCoachRatingText(event);
+    return SingleChildScrollView(child:Column(children:[
+      Row(children:[Expanded(child:_DetailMetric(icon:Icons.schedule_rounded,title:'Время',value:_timeText,accent:c)),const SizedBox(width:6),Expanded(child:_DetailMetric(icon:Icons.category_rounded,title:'Тип',value:eventTypeLabel(event.type),accent:c))]),
+      const SizedBox(height:8),
+      Row(children:[Expanded(child:_DetailMetric(icon:Icons.calendar_month_rounded,title:'Дата',value:_dateText,accent:c)),const SizedBox(width:6),Expanded(child:_DetailMetric(icon:Icons.location_on_outlined,title:'Место',value:location.isEmpty?'Не указано':location,accent:c))]),
+      if(coachRating!=null)...[const SizedBox(height:8),_DetailMetric(icon:Icons.workspace_premium_rounded,title:'Оценка тренера',value:coachRating,accent:_C.greenDark)],
+      const SizedBox(height:8),_InfoBox(icon:Icons.notes_rounded,title:'Заметки',text:notes.isEmpty?'Заметки не добавлены.':notes),const SizedBox(height:8),
+      if(widget.canEdit) Row(children:[Expanded(child:_SheetActionButton(icon:Icons.edit_rounded,text:'Редактировать',onTap:widget.onEdit)),const SizedBox(width:6),Expanded(child:_SheetActionButton(icon:Icons.delete_outline_rounded,text:'Удалить',onTap:widget.onDelete,danger:true))]),
+    ]));
+  }
+}
+
+class _InlineTabButton extends StatelessWidget {
+  final String text;
+  final IconData icon;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _InlineTabButton({
+    required this.text,
+    required this.icon,
+    required this.active,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final c = eventTypeColor(event.type);
-    final notes = event.notes.trim();
-    final location = event.location.trim();
-    final coachRating = _eventCoachRatingText(event);
-    final isTrainingLike = event.type == TeamEventType.training || event.type == TeamEventType.gym;
-    return _StrictWorkspaceCard(
-      icon: Icons.event_note_rounded,
-      title: event.title.trim().isEmpty ? 'Событие календаря' : event.title,
-      subtitle: '${eventTypeLabel(event.type)} · $_dateText · $_timeText',
-      trailing: _ProfileRoundButton(icon: Icons.close_rounded, onTap: onClose),
-      child: SingleChildScrollView(
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(child: _DetailMetric(icon: Icons.schedule_rounded, title: 'Время', value: _timeText, accent: c)),
-                const SizedBox(width: 6),
-                Expanded(child: _DetailMetric(icon: Icons.category_rounded, title: 'Тип', value: eventTypeLabel(event.type), accent: c)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(child: _DetailMetric(icon: Icons.calendar_month_rounded, title: 'Дата', value: _dateText, accent: c)),
-                const SizedBox(width: 6),
-                Expanded(child: _DetailMetric(icon: Icons.location_on_outlined, title: 'Место', value: location.isEmpty ? 'Не указано' : location, accent: c)),
-              ],
-            ),
-            if (coachRating != null) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: _DetailMetric(
-                      icon: Icons.workspace_premium_rounded,
-                      title: 'Оценка тренера',
-                      value: coachRating,
-                      accent: _C.greenDark,
-                    ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Container(
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: active ? _C.greenSoft : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 14,
+                color: active ? _C.greenDark : _C.muted2,
+              ),
+              const SizedBox(width: 5),
+              Flexible(
+                child: Text(
+                  text,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                    color: active ? _C.text : _C.muted2,
                   ),
-                ],
+                ),
               ),
             ],
-            const SizedBox(height: 8),
-            _InfoBox(icon: Icons.notes_rounded, title: 'Заметки', text: notes.isEmpty ? 'Заметки не добавлены.' : notes),
-            const SizedBox(height: 8),
-            if (canEdit && isTrainingLike) ...[
-              _SheetActionButton(
-                icon: Icons.star_rate_rounded,
-                text: 'Оценка игроков',
-                onTap: onOpenRating,
-              ),
-              const SizedBox(height: 8),
-            ] else if (canEdit) ...[
-              const _MutedHint('Оценка доступна только для тренировок и ОФП.'),
-              const SizedBox(height: 8),
-            ],
-            if (canEdit)
-              Row(
-                children: [
-                  Expanded(child: _SheetActionButton(icon: Icons.edit_rounded, text: 'Редактировать', onTap: onEdit)),
-                  const SizedBox(width: 6),
-                  Expanded(child: _SheetActionButton(icon: Icons.delete_outline_rounded, text: 'Удалить', onTap: onDelete, danger: true)),
-                ],
-              ),
-          ],
+          ),
         ),
       ),
     );
@@ -2815,9 +2957,8 @@ class _InlineEventEditorPanel extends StatelessWidget {
   final Color accent;
   final Widget child;
   final VoidCallback onClose;
-  final Future<void> Function(TeamEvent event) onSubmit;
 
-  const _InlineEventEditorPanel({required this.title, required this.subtitle, required this.icon, required this.accent, required this.child, required this.onClose, required this.onSubmit});
+  const _InlineEventEditorPanel({required this.title, required this.subtitle, required this.icon, required this.accent, required this.child, required this.onClose});
 
   @override
   Widget build(BuildContext context) {
@@ -2832,14 +2973,14 @@ class _InlineEventEditorPanel extends StatelessWidget {
             decoration: const BoxDecoration(color: Colors.white),
             child: Row(
               children: [
+                _CalendarBrandDots(color: accent),
+                const SizedBox(width: 9),
                 Container(
-                  width: 34,
-                  height: 34,
+                  width: 32,
+                  height: 32,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(.88),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: accent.withOpacity(.16), width: 1),
-                    boxShadow: _C.microShadow,
+                    color: Color.alphaBlend(accent.withOpacity(.07), Colors.white),
+                    borderRadius: BorderRadius.circular(9),
                   ),
                   child: Icon(icon, color: accent, size: 15),
                 ),
@@ -2849,7 +2990,7 @@ class _InlineEventEditorPanel extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 13.45, fontWeight: FontWeight.w700, height: 1.05)),
+                      Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 13.45, fontWeight: FontWeight.w600, height: 1.05)),
                       const SizedBox(height: 3),
                       Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 10.05, fontWeight: FontWeight.w600, height: 1.05)),
                     ],
@@ -2861,23 +3002,9 @@ class _InlineEventEditorPanel extends StatelessWidget {
           ),
           Expanded(
             child: Container(
-              decoration: const BoxDecoration(color: Colors.transparent),
-              padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Navigator(
-                  pages: [MaterialPage<void>(key: ValueKey('calendar-event-editor-$title-$subtitle'), child: child)],
-                  onPopPage: (route, result) {
-                    if (!route.didPop(result)) return false;
-                    if (result is TeamEvent) {
-                      onSubmit(result);
-                    } else {
-                      onClose();
-                    }
-                    return true;
-                  },
-                ),
-              ),
+              color: Colors.white,
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+              child: child,
             ),
           ),
         ],
@@ -2899,9 +3026,8 @@ class _DetailMetric extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(.80),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.transparent, width: 0),
+        color: _C.soft,
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         children: [
@@ -2913,7 +3039,7 @@ class _DetailMetric extends StatelessWidget {
               children: [
                 Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 10.35, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 3),
-                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 11.85, fontWeight: FontWeight.w700)),
+                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 11.85, fontWeight: FontWeight.w600)),
               ],
             ),
           ),
@@ -2935,7 +3061,7 @@ class _InfoBox extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(11),
-      decoration: BoxDecoration(color: _C.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.transparent)),
+      decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(10)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2943,11 +3069,11 @@ class _InfoBox extends StatelessWidget {
             children: [
               Icon(icon, color: _C.greenDark, size: 15),
               const SizedBox(width: 7),
-              Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 11.85, fontWeight: FontWeight.w700))),
+              Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 11.85, fontWeight: FontWeight.w600))),
             ],
           ),
           const SizedBox(height: 5),
-          Text(text, style: const TextStyle(color: _C.muted, fontSize: 11.55, fontWeight: FontWeight.w700, height: 1.35)),
+          Text(text, style: const TextStyle(color: _C.muted, fontSize: 11.55, fontWeight: FontWeight.w600, height: 1.35)),
         ],
       ),
     );
@@ -2970,13 +3096,12 @@ class _HeroStat extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(.80),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.transparent, width: 0),
+        color: _C.soft,
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
         children: [
-          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 16.75, fontWeight: FontWeight.w700)),
+          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 16.75, fontWeight: FontWeight.w600)),
           const SizedBox(height: 2),
           Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 10.35, fontWeight: FontWeight.w600)),
         ],
@@ -3005,17 +3130,15 @@ class _SheetActionButton extends StatelessWidget {
           height: 40,
           padding: const EdgeInsets.symmetric(horizontal: 11),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(.92),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withOpacity(.18), width: 1),
-            boxShadow: _C.microShadow,
+            color: danger ? _C.redSoft : _C.soft,
+            borderRadius: BorderRadius.circular(10),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon, color: color, size: 14),
               const SizedBox(width: 7),
-              Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontSize: 11.5, fontWeight: FontWeight.w700))),
+              Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontSize: 11.5, fontWeight: FontWeight.w600))),
             ],
           ),
         ),
@@ -3034,7 +3157,7 @@ class _MutedHint extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(11),
-      decoration: BoxDecoration(color: _C.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.transparent)),
+      decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(10)),
       child: Text(text, style: const TextStyle(color: _C.muted, fontSize: 11.55, fontWeight: FontWeight.w600)),
     );
   }
@@ -3050,7 +3173,7 @@ class _MiniEmpty extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Text(text, textAlign: TextAlign.center, style: const TextStyle(color: _C.muted, fontWeight: FontWeight.w700, height: 1.4)),
+        child: Text(text, textAlign: TextAlign.center, style: const TextStyle(color: _C.muted, fontWeight: FontWeight.w600, height: 1.4)),
       ),
     );
   }

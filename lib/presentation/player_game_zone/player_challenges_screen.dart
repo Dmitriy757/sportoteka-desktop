@@ -74,10 +74,16 @@ class _PlayerChallengesScreenState extends State<PlayerChallengesScreen> {
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.transparent,
       builder: (_) {
-        return Padding(
-          padding: EdgeInsets.only(
+        return GameZoneCmr.surface(
+          context,
+          child: Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+            ),
+            padding: EdgeInsets.only(
             left: 16,
             right: 16,
             top: 16,
@@ -89,8 +95,8 @@ class _PlayerChallengesScreenState extends State<PlayerChallengesScreen> {
               const Text(
                 'Отправить результат',
                 style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
                 ),
               ),
               const SizedBox(height: 12),
@@ -100,9 +106,9 @@ class _PlayerChallengesScreenState extends State<PlayerChallengesScreen> {
                 decoration: InputDecoration(
                   hintText:
                       'Напиши, как выполнил задание: количество повторов, время, результат...',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
+                  border: InputBorder.none,
+                filled: true,
+                fillColor: GzColors.soft,
                 ),
               ),
               const SizedBox(height: 14),
@@ -136,6 +142,7 @@ class _PlayerChallengesScreenState extends State<PlayerChallengesScreen> {
                 ),
               ),
             ],
+          ),
           ),
         );
       },
@@ -171,9 +178,8 @@ class _PlayerChallengesScreenState extends State<PlayerChallengesScreen> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: GzColors.divider),
-      ),
+        borderRadius: BorderRadius.circular(12),
+              ),
       child: Column(
         children: [
           const Icon(
@@ -185,8 +191,8 @@ class _PlayerChallengesScreenState extends State<PlayerChallengesScreen> {
           const Text(
             'Пока нет активных челленджей',
             style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w900,
+              fontSize: 14.5,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 8),
@@ -220,9 +226,8 @@ class _PlayerChallengesScreenState extends State<PlayerChallengesScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: GzColors.divider),
-      ),
+        borderRadius: BorderRadius.circular(12),
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -233,14 +238,14 @@ class _PlayerChallengesScreenState extends State<PlayerChallengesScreen> {
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: _typeColor((item['challenge_type'] ?? '').toString()),
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   ((item['challenge_type'] ?? 'challenge').toString())
                       .toUpperCase(),
                   style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 10.2,
                   ),
                 ),
               ),
@@ -250,11 +255,11 @@ class _PlayerChallengesScreenState extends State<PlayerChallengesScreen> {
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFF7D6),
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   '+${item['points_reward']}',
-                  style: const TextStyle(fontWeight: FontWeight.w900),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
             ],
@@ -263,8 +268,8 @@ class _PlayerChallengesScreenState extends State<PlayerChallengesScreen> {
           Text(
             item['title'] ?? '',
             style: const TextStyle(
-              fontWeight: FontWeight.w900,
-              fontSize: 17,
+              fontWeight: FontWeight.w600,
+              fontSize: 14.5,
             ),
           ),
           const SizedBox(height: 8),
@@ -279,7 +284,7 @@ class _PlayerChallengesScreenState extends State<PlayerChallengesScreen> {
           Text(
             'До: ${item['due_date'] ?? '-'}',
             style: const TextStyle(
-              fontSize: 12,
+              fontSize: 10.8,
               color: Color(0xFF9CA3AF),
             ),
           ),

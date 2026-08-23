@@ -1,4 +1,4 @@
-
+import 'dart:math' as math;
 
 DateTime? _trackerParseServerInstant(dynamic value) {
   final raw = '${value ?? ''}'.trim();
@@ -63,6 +63,7 @@ class TrackerTrainingReport {
   final String title;
   final String dateLabel;
   final int teamId;
+  final int clubId;
   final String teamName;
   final String teamLogoUrl;
   final String opponent;
@@ -80,6 +81,7 @@ class TrackerTrainingReport {
   final List<TrackerReportPoint> heatmapPoints;
   final List<TrackerSpeedZone> speedZones;
   final List<TrackerHeartRatePoint> heartRateTimeline;
+  final List<TrackerReportEvent> events;
 
   const TrackerTrainingReport({
     required this.sessionId,
@@ -87,6 +89,7 @@ class TrackerTrainingReport {
     required this.title,
     required this.dateLabel,
     this.teamId = 0,
+    this.clubId = 0,
     required this.teamName,
     this.teamLogoUrl = '',
     required this.opponent,
@@ -104,6 +107,7 @@ class TrackerTrainingReport {
     this.heatmapPoints = const [],
     this.speedZones = const [],
     this.heartRateTimeline = const [],
+    this.events = const [],
   });
 
   factory TrackerTrainingReport.fromJson(Map<String, dynamic> json) {
@@ -121,6 +125,14 @@ class TrackerTrainingReport {
       _nested(json, 'summary', 'speed_zones'),
     ]));
     final heartRateTimeline = _combinedHrPointList(json);
+    final events = _combinedReportEventList(
+      json,
+      routePoints: routePoints,
+      speedZones: speedZones,
+      players: playerSource,
+      heartRateTimeline: heartRateTimeline,
+      teamName: '${json['team_name'] ?? json['team'] ?? ''}',
+    );
     final summary = _summaryWithFallbacks(
       TrackerReportSummary.fromJson(Map<String, dynamic>.from((json['summary'] ?? json['totals'] ?? json['team_summary'] ?? json) as Map? ?? const {})),
       playerSource,
@@ -140,7 +152,8 @@ class TrackerTrainingReport {
       sessionIds: (json['session_ids'] as List? ?? const []).map((e) => _i(e)).where((e) => e > 0).toList(),
       title: '${json['title'] ?? 'Отчёт по тренировке'}',
       dateLabel: '${json['date_label'] ?? json['date'] ?? json['started_at'] ?? ''}',
-      teamId: _i(json['team_id']),
+      teamId: _i(json['team_id'] ?? _nested(json, 'team', 'id')),
+      clubId: _i(json['club_id'] ?? _nested(json, 'club', 'id')),
       teamName: '${json['team_name'] ?? json['team'] ?? ''}',
       teamLogoUrl: _s(_firstPresent([
         json['team_logo_url'],
@@ -168,6 +181,7 @@ class TrackerTrainingReport {
       heatmapPoints: heatmapPoints,
       speedZones: speedZones,
       heartRateTimeline: heartRateTimeline,
+      events: events,
     );
   }
 
@@ -192,6 +206,7 @@ class TrackerTrainingReport {
       heatmapPoints: const [],
       speedZones: const [],
       heartRateTimeline: const [],
+      events: const [],
     );
   }
 }
@@ -238,6 +253,32 @@ class TrackerReportSummary {
     this.heartRateMaxBpm = 0,
     this.heartRateSamplesCount = 0,
   });
+
+  TrackerReportSummary copyWith({
+    double? maxSpeedKmh,
+  }) {
+    return TrackerReportSummary(
+      averageDistanceM: averageDistanceM,
+      totalDistanceM: totalDistanceM,
+      highSpeedDistanceM: highSpeedDistanceM,
+      playerLoad: playerLoad,
+      accDecPerMin: accDecPerMin,
+      maxSpeedKmh: maxSpeedKmh ?? this.maxSpeedKmh,
+      avgSpeedKmh: avgSpeedKmh,
+      distancePerMin: distancePerMin,
+      accelerationCount: accelerationCount,
+      decelerationCount: decelerationCount,
+      explosiveActions: explosiveActions,
+      sprintCount: sprintCount,
+      sprintDistanceM: sprintDistanceM,
+      v3RunM: v3RunM,
+      v4HsrM: v4HsrM,
+      v5SprintM: v5SprintM,
+      heartRateAvgBpm: heartRateAvgBpm,
+      heartRateMaxBpm: heartRateMaxBpm,
+      heartRateSamplesCount: heartRateSamplesCount,
+    );
+  }
 
   factory TrackerReportSummary.fromJson(Map<String, dynamic> json) {
     final hrRaw = json['heart_rate'] ?? json['hr'] ?? json['polar'] ?? json['heart_rate_summary'];
@@ -402,13 +443,16 @@ class TrackerTrainingPlayerRow {
   });
 
   TrackerTrainingPlayerRow copyWith({
+    int? playerId,
     String? name,
     String? avatarUrl,
     String? number,
     String? position,
+    double? maxSpeedKmh,
+    int? sessionsCount,
   }) {
     return TrackerTrainingPlayerRow(
-      playerId: playerId,
+      playerId: playerId ?? this.playerId,
       name: name ?? this.name,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       number: number ?? this.number,
@@ -418,7 +462,7 @@ class TrackerTrainingPlayerRow {
       duration: duration,
       distanceM: distanceM,
       metersPerMin: metersPerMin,
-      maxSpeedKmh: maxSpeedKmh,
+      maxSpeedKmh: maxSpeedKmh ?? this.maxSpeedKmh,
       avgSpeedKmh: avgSpeedKmh,
       accelerations: accelerations,
       decelerations: decelerations,
@@ -443,7 +487,7 @@ class TrackerTrainingPlayerRow {
       hrZ4Samples: hrZ4Samples,
       hrZ5Samples: hrZ5Samples,
       pointsCount: pointsCount,
-      sessionsCount: sessionsCount,
+      sessionsCount: sessionsCount ?? this.sessionsCount,
       hasMovement: hasMovement,
     );
   }
@@ -518,6 +562,22 @@ class TrackerReportPoint {
     this.breakBefore = false,
   });
 
+  TrackerReportPoint copyWith({
+    double? speedKmh,
+  }) {
+    return TrackerReportPoint(
+      playerId: playerId,
+      playerName: playerName,
+      x: x,
+      y: y,
+      speedKmh: speedKmh ?? this.speedKmh,
+      value: value,
+      distanceM: distanceM,
+      timeMs: timeMs,
+      breakBefore: breakBefore,
+    );
+  }
+
   factory TrackerReportPoint.fromJson(Map<String, dynamic> json) {
     return TrackerReportPoint(
       playerId: int.tryParse('${json['player_id'] ?? json['playerId'] ?? json['id'] ?? ''}'),
@@ -529,6 +589,94 @@ class TrackerReportPoint {
       distanceM: _d(json['distance_m'] ?? json['total_distance_m']),
       timeMs: _pointTimeMs(json),
       breakBefore: _b(json['break_before']),
+    );
+  }
+}
+
+
+class TrackerReportEvent {
+  final String id;
+  final String kind;
+  final String title;
+  final String detail;
+  final String severity;
+  final int? playerId;
+  final String playerName;
+  final int timeMs;
+  final int elapsedMs;
+  final double speedKmh;
+  final double accelerationMps2;
+  final int bpm;
+  final double x;
+  final double y;
+  final bool hasPoint;
+
+  const TrackerReportEvent({
+    required this.id,
+    required this.kind,
+    required this.title,
+    required this.detail,
+    this.severity = 'orange',
+    this.playerId,
+    this.playerName = '',
+    this.timeMs = 0,
+    this.elapsedMs = 0,
+    this.speedKmh = 0,
+    this.accelerationMps2 = 0,
+    this.bpm = 0,
+    this.x = 0,
+    this.y = 0,
+    this.hasPoint = false,
+  });
+
+  TrackerReportEvent copyWith({
+    String? playerName,
+    int? elapsedMs,
+    int? bpm,
+    double? x,
+    double? y,
+    bool? hasPoint,
+  }) {
+    return TrackerReportEvent(
+      id: id,
+      kind: kind,
+      title: title,
+      detail: detail,
+      severity: severity,
+      playerId: playerId,
+      playerName: playerName ?? this.playerName,
+      timeMs: timeMs,
+      elapsedMs: elapsedMs ?? this.elapsedMs,
+      speedKmh: speedKmh,
+      accelerationMps2: accelerationMps2,
+      bpm: bpm ?? this.bpm,
+      x: x ?? this.x,
+      y: y ?? this.y,
+      hasPoint: hasPoint ?? this.hasPoint,
+    );
+  }
+
+  factory TrackerReportEvent.fromJson(Map<String, dynamic> json) {
+    final rawX = json['x'] ?? json['nx'] ?? json['field_x_norm'];
+    final rawY = json['y'] ?? json['ny'] ?? json['field_y_norm'];
+    final hasPoint = rawX != null && rawY != null;
+    final timeMs = _i(json['time_ms'] ?? json['timestamp_ms'] ?? json['ts_ms']);
+    return TrackerReportEvent(
+      id: _s(json['event_id'] ?? json['id'] ?? '${json['type'] ?? json['kind'] ?? 'event'}:$timeMs'),
+      kind: _normalizeReportEventKind(_s(json['kind'] ?? json['type'] ?? json['event_type'])),
+      title: _s(json['title'] ?? json['label']),
+      detail: _s(json['detail'] ?? json['message'] ?? json['description']),
+      severity: _s(json['severity']).isEmpty ? 'orange' : _s(json['severity']).toLowerCase(),
+      playerId: int.tryParse('${json['player_id'] ?? json['playerId'] ?? ''}'),
+      playerName: _s(json['player_name'] ?? json['name'] ?? json['player']),
+      timeMs: timeMs,
+      elapsedMs: _i(json['elapsed_ms'] ?? json['elapsed']),
+      speedKmh: _speedFromJson(json['speed_kmh'] ?? json['speed_kph'] ?? json['speed'], json['speed_mps']),
+      accelerationMps2: _d(json['acceleration_mps2'] ?? json['accel_mps2'] ?? json['acceleration']),
+      bpm: _i(json['bpm'] ?? json['heart_rate'] ?? json['hr']),
+      x: hasPoint ? _normalizeReportEventCoord(rawX, isY: false) : 0,
+      y: hasPoint ? _normalizeReportEventCoord(rawY, isY: true) : 0,
+      hasPoint: hasPoint,
     );
   }
 }
@@ -778,6 +926,250 @@ List<TrackerHeartRatePoint> _combinedHrPointList(Map<String, dynamic> json) {
   return out;
 }
 
+
+String _normalizeReportEventKind(String raw) {
+  final v = raw.trim().toLowerCase();
+  if (v.contains('sprint') || v.contains('сприн')) return 'sprint';
+  if (v == 'hir' || v.contains('high_intensity') || v.contains('high-speed') || v.contains('высок')) return 'hir';
+  if (v.contains('accel') || v.contains('ускор')) return 'accel';
+  if (v.contains('decel') || v.contains('brake') || v.contains('торм')) return 'decel';
+  if (v.contains('turn') || v.contains('cod') || v.contains('повор')) return 'turn';
+  if (v.contains('gap') || v.contains('gps') || v.contains('разрыв')) return 'gps_gap';
+  if (v.contains('stop') || v.contains('останов')) return 'stop';
+  return v.isEmpty ? 'moment' : v;
+}
+
+double _normalizeReportEventCoord(dynamic value, {required bool isY}) {
+  final v = _d(value);
+  if (v >= -0.05 && v <= 1.05) return v.clamp(0.0, 1.0).toDouble();
+  return (v / (isY ? 68.0 : 105.0)).clamp(0.0, 1.0).toDouble();
+}
+
+String _reportEventPlayerName(int? playerId, String fallback, List<TrackerTrainingPlayerRow> players) {
+  if (playerId != null && playerId > 0) {
+    for (final player in players) {
+      if (player.playerId == playerId && player.name.trim().isNotEmpty) return player.name.trim();
+    }
+  }
+  return fallback.trim().isEmpty ? (playerId != null && playerId > 0 ? 'Игрок $playerId' : 'Игрок') : fallback.trim();
+}
+
+TrackerReportPoint? _nearestReportEventPoint(
+  List<TrackerReportPoint> points,
+  int? playerId,
+  int timeMs,
+) {
+  if (points.isEmpty) return null;
+  TrackerReportPoint? best;
+  var bestDelta = 1 << 62;
+  for (final point in points) {
+    if (playerId != null && playerId > 0 && point.playerId != null && point.playerId != playerId) continue;
+    final delta = timeMs > 0 && point.timeMs > 0 ? (point.timeMs - timeMs).abs() : 0;
+    if (timeMs > 0 && point.timeMs > 0 && delta > 7000) continue;
+    if (best == null || delta < bestDelta) {
+      best = point;
+      bestDelta = delta;
+    }
+  }
+  return best;
+}
+
+int _nearestReportEventBpm(
+  List<TrackerHeartRatePoint> timeline,
+  int? playerId,
+  int timeMs,
+) {
+  if (timeline.isEmpty || timeMs <= 0) return 0;
+  var bestBpm = 0;
+  var bestDelta = 1 << 62;
+  for (final point in timeline) {
+    if (playerId != null && playerId > 0 && point.playerId != null && point.playerId != playerId) continue;
+    final pointTime = point.timeMs > 0 ? point.timeMs : point.minute * 60000;
+    if (pointTime <= 0) continue;
+    final delta = (pointTime - timeMs).abs();
+    if (delta <= 15000 && delta < bestDelta) {
+      bestDelta = delta;
+      bestBpm = point.bpm;
+    }
+  }
+  return bestBpm;
+}
+
+double _reportEventSprintThreshold(List<TrackerSpeedZone> zones, String teamName) {
+  for (final zone in zones) {
+    if (zone.label.toLowerCase().contains('сприн') && zone.fromKmh > 0) return zone.fromKmh;
+  }
+  final match = RegExp(r'U\s*(\d{1,2})', caseSensitive: false).firstMatch(teamName);
+  final age = int.tryParse(match?.group(1) ?? '');
+  if (age != null) {
+    if (age <= 8) return 14.5;
+    if (age <= 10) return 15.5;
+    if (age <= 12) return 17.0;
+    if (age <= 13) return 18.0;
+    if (age <= 15) return 20.0;
+    if (age <= 17) return 22.0;
+    return 25.2;
+  }
+  return 18.0;
+}
+
+double _reportEventHsrThreshold(List<TrackerSpeedZone> zones, String teamName) {
+  for (final zone in zones) {
+    final label = zone.label.toLowerCase();
+    if ((label.contains('высок') || label.contains('hir') || label.contains('hsr')) && zone.fromKmh > 0) return zone.fromKmh;
+  }
+  final match = RegExp(r'U\s*(\d{1,2})', caseSensitive: false).firstMatch(teamName);
+  final age = int.tryParse(match?.group(1) ?? '');
+  if (age != null) {
+    if (age <= 8) return 11.5;
+    if (age <= 10) return 12.5;
+    if (age <= 12) return 13.5;
+    if (age <= 13) return 14.0;
+    if (age <= 15) return 16.0;
+    if (age <= 17) return 18.0;
+    return 19.8;
+  }
+  return 14.0;
+}
+
+String _reportEventTitle(String kind) {
+  switch (kind) {
+    case 'sprint': return 'Спринт';
+    case 'hir': return 'Высокая интенсивность';
+    case 'accel': return 'Взрывное ускорение';
+    case 'decel': return 'Торможение';
+    case 'turn': return 'Смена направления';
+    case 'gps_gap': return 'Разрыв GPS / связи';
+    case 'stop': return 'Остановка';
+    default: return 'Событие';
+  }
+}
+
+List<TrackerReportEvent> _combinedReportEventList(
+  Map<String, dynamic> json, {
+  required List<TrackerReportPoint> routePoints,
+  required List<TrackerSpeedZone> speedZones,
+  required List<TrackerTrainingPlayerRow> players,
+  required List<TrackerHeartRatePoint> heartRateTimeline,
+  required String teamName,
+}) {
+  final parsed = <TrackerReportEvent>[];
+  final seen = <String>{};
+  void addRaw(dynamic raw) {
+    for (final item in _asList(raw)) {
+      if (item is! Map) continue;
+      var event = TrackerReportEvent.fromJson(Map<String, dynamic>.from(item));
+      final point = event.hasPoint ? null : _nearestReportEventPoint(routePoints, event.playerId, event.timeMs);
+      final playerName = _reportEventPlayerName(event.playerId, event.playerName, players);
+      final bpm = event.bpm > 0 ? event.bpm : _nearestReportEventBpm(heartRateTimeline, event.playerId, event.timeMs);
+      event = event.copyWith(
+        playerName: playerName,
+        bpm: bpm,
+        x: point?.x,
+        y: point?.y,
+        hasPoint: event.hasPoint || point != null,
+      );
+      final key = '${event.playerId ?? 0}|${event.kind}|${event.timeMs}|${event.id}';
+      if (seen.add(key)) parsed.add(event);
+    }
+  }
+  addRaw(json['events']);
+  addRaw(json['report_events']);
+  addRaw(json['journal_events']);
+  addRaw(_nested(json, 'journal', 'events'));
+  addRaw(_nested(json, 'timeline', 'events'));
+  if (parsed.isNotEmpty) {
+    parsed.sort((a, b) => b.timeMs.compareTo(a.timeMs));
+    return parsed.take(320).toList(growable: false);
+  }
+
+  if (routePoints.length < 2) return const <TrackerReportEvent>[];
+  final sprint = _reportEventSprintThreshold(speedZones, teamName);
+  final hsr = _reportEventHsrThreshold(speedZones, teamName);
+  final grouped = <String, List<TrackerReportPoint>>{};
+  for (final point in routePoints) {
+    final key = point.playerId != null && point.playerId! > 0
+        ? 'p:${point.playerId}'
+        : 'n:${point.playerName.trim().toLowerCase()}';
+    (grouped[key] ??= <TrackerReportPoint>[]).add(point);
+  }
+  final out = <TrackerReportEvent>[];
+  final lastByKind = <String, int>{};
+  for (final group in grouped.values) {
+    group.sort((a, b) => a.timeMs.compareTo(b.timeMs));
+    final startMs = group.where((p) => p.timeMs > 0).fold<int>(0, (m, p) => m == 0 || p.timeMs < m ? p.timeMs : m);
+    for (var i = 1; i < group.length; i++) {
+      final prev = group[i - 1];
+      final point = group[i];
+      if (point.timeMs <= 0 || prev.timeMs <= 0) continue;
+      final dtMs = point.timeMs - prev.timeMs;
+      if (dtMs <= 0) continue;
+      final playerId = point.playerId ?? prev.playerId;
+      final playerName = _reportEventPlayerName(playerId, point.playerName.isNotEmpty ? point.playerName : prev.playerName, players);
+      final elapsed = startMs > 0 ? math.max(0, point.timeMs - startMs) : 0;
+      final bpm = _nearestReportEventBpm(heartRateTimeline, playerId, point.timeMs);
+
+      void addEvent(String kind, String detail, {double acceleration = 0, String severity = 'orange'}) {
+        final gap = (kind == 'sprint' || kind == 'hir') ? 1500 : (kind == 'gps_gap' ? 5000 : 3000);
+        final key = '${playerId ?? 0}:$kind';
+        final last = lastByKind[key] ?? 0;
+        if (last > 0 && point.timeMs - last < gap) return;
+        lastByKind[key] = point.timeMs;
+        out.add(TrackerReportEvent(
+          id: 'reconstructed:${playerId ?? 0}:$kind:${point.timeMs}',
+          kind: kind,
+          title: _reportEventTitle(kind),
+          detail: detail,
+          severity: severity,
+          playerId: playerId,
+          playerName: playerName,
+          timeMs: point.timeMs,
+          elapsedMs: elapsed,
+          speedKmh: point.speedKmh,
+          accelerationMps2: acceleration,
+          bpm: bpm,
+          x: point.x,
+          y: point.y,
+          hasPoint: true,
+        ));
+      }
+
+      if (dtMs >= 6000 && dtMs <= 10 * 60 * 1000) {
+        final sec = dtMs / 1000.0;
+        addEvent('gps_gap', 'без новой GPS-точки ${sec.toStringAsFixed(1)} с', severity: dtMs >= 15000 || point.breakBefore ? 'red' : 'orange');
+      }
+      if (dtMs > 10000) continue;
+      final dtSec = dtMs / 1000.0;
+      final acceleration = ((point.speedKmh - prev.speedKmh) / 3.6) / dtSec;
+      if (point.speedKmh >= sprint && prev.speedKmh < sprint * .94) {
+        addEvent('sprint', 'скорость ${point.speedKmh.toStringAsFixed(1)} км/ч', acceleration: acceleration, severity: 'red');
+      } else if (point.speedKmh >= hsr && point.speedKmh < sprint && prev.speedKmh < hsr * .96) {
+        addEvent('hir', 'скорость ${point.speedKmh.toStringAsFixed(1)} км/ч', acceleration: acceleration);
+      }
+      if (acceleration >= 1.35) {
+        addEvent('accel', '+${acceleration.toStringAsFixed(2)} м/с² · ${point.speedKmh.toStringAsFixed(1)} км/ч', acceleration: acceleration, severity: acceleration >= 2.6 ? 'red' : 'orange');
+      } else if (acceleration <= -1.35) {
+        addEvent('decel', '${acceleration.toStringAsFixed(2)} м/с² · ${point.speedKmh.toStringAsFixed(1)} км/ч', acceleration: acceleration, severity: acceleration <= -2.6 ? 'red' : 'orange');
+      }
+      if (i + 1 < group.length) {
+        final next = group[i + 1];
+        final ax = point.x - prev.x, ay = point.y - prev.y;
+        final bx = next.x - point.x, by = next.y - point.y;
+        final al = math.sqrt(ax * ax + ay * ay), bl = math.sqrt(bx * bx + by * by);
+        if (al > .002 && bl > .002 && point.speedKmh >= 3) {
+          final dot = ((ax * bx + ay * by) / (al * bl)).clamp(-1.0, 1.0).toDouble();
+          final angle = math.acos(dot) * 180 / math.pi;
+          if (angle >= 30) {
+            addEvent('turn', '${angle.toStringAsFixed(0)}° · ${point.speedKmh.toStringAsFixed(1)} км/ч', acceleration: acceleration, severity: angle >= 100 && point.speedKmh >= 10 ? 'red' : 'orange');
+          }
+        }
+      }
+    }
+  }
+  out.sort((a, b) => b.timeMs.compareTo(a.timeMs));
+  return out.take(320).toList(growable: false);
+}
+
 TrackerReportSummary _summaryWithFallbacks(TrackerReportSummary summary, List<TrackerTrainingPlayerRow> players, List<TrackerReportPoint> routePoints, List<TrackerHeartRatePoint> hr) {
   final movingPlayers = players.where((p) => p.distanceM > 0 || p.maxSpeedKmh > 0 || p.pointsCount > 0 || p.heartRateSamplesCount > 0).toList(growable: false);
   final src = movingPlayers.isEmpty ? players : movingPlayers;
@@ -877,10 +1269,15 @@ double _pointCoord(Map<String, dynamic> json, {required bool isY}) {
 
 
 double _speedFromJson(dynamic kmhValue, dynamic mpsValue) {
-  final kmh = _d(kmhValue);
+  double safe(double value) {
+    if (!value.isFinite || value <= 0 || value > 36.0) return 0.0;
+    return value;
+  }
+
+  final kmh = safe(_d(kmhValue));
   if (kmh > 0) return kmh;
   final mps = _d(mpsValue);
-  return mps > 0 ? mps * 3.6 : 0;
+  return safe(mps > 0 ? mps * 3.6 : 0.0);
 }
 
 int _pointTimeMs(Map<String, dynamic> json) {

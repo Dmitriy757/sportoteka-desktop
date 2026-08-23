@@ -317,6 +317,7 @@ class _AdvancedVideoAnalysisScreenState extends State<AdvancedVideoAnalysisScree
   bool _isLoading = true;
   bool _isVideoReady = false;
   List<PlayerDetection> _players = [];
+  Map<String, dynamic>? _ball;
   Map<String, dynamic> _stats = {};
   String _connectionStatus = '🔄 Подключение...';
   bool _isTestMode = false;
@@ -1161,6 +1162,7 @@ unawaited(_allowAndroidInlineVideoPlayback());
             // Fallback только до первого сообщения от video-плеера.
             setState(() {
               _players = result.players;
+              _ball = result.ball;
               _stats = result.stats;
               _isTestMode = false;
               _isLoading = false;
@@ -1174,6 +1176,7 @@ unawaited(_allowAndroidInlineVideoPlayback());
             }
             setState(() {
               _stats = result.stats;
+              _ball = result.ball;
               _isTestMode = false;
               _isLoading = false;
               _connectionStatus = '⏸ Пауза: квадраты зафиксированы';
@@ -1194,7 +1197,7 @@ unawaited(_allowAndroidInlineVideoPlayback());
       if (forceRestart) {
         await _wsService.disconnect(silent: true);
       }
-      await _wsService.connect(_videoUrl);
+      await _wsService.connect(_videoUrl, params: widget.params);
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -1381,7 +1384,7 @@ unawaited(_allowAndroidInlineVideoPlayback());
   }
 
   void _addAnalysisFrame(AnalysisResult result) {
-    if (result.players.isEmpty) return;
+    if (result.players.isEmpty && result.ball == null && result.events.isEmpty) return;
 
     final timeMs = _resultTimeMs(result);
     final normalized = AnalysisResult(
@@ -1389,6 +1392,15 @@ unawaited(_allowAndroidInlineVideoPlayback());
       stats: result.stats,
       frame: result.frame,
       timestamp: timeMs,
+      ball: result.ball,
+      events: result.events,
+      recentEvents: result.recentEvents,
+      advice: result.advice,
+      recentAdvice: result.recentAdvice,
+      telemetry: result.telemetry,
+      matchLiveId: result.matchLiveId,
+      sourceMode: result.sourceMode,
+      frameJpegBase64: result.frameJpegBase64,
     );
 
     final duplicateIndex = _analysisBuffer.indexWhere(
@@ -1521,10 +1533,19 @@ unawaited(_allowAndroidInlineVideoPlayback());
       stats: nextStats,
       frame: nearest?.frame ?? 0,
       timestamp: _currentVideoTimeMs,
+      ball: nearest?.ball,
+      events: nearest?.events ?? const [],
+      recentEvents: nearest?.recentEvents ?? const [],
+      advice: nearest?.advice ?? const [],
+      recentAdvice: nearest?.recentAdvice ?? const [],
+      telemetry: nearest?.telemetry ?? const {},
+      matchLiveId: nearest?.matchLiveId ?? '',
+      sourceMode: nearest?.sourceMode ?? 'recording',
     );
 
     setState(() {
       _players = visiblePlayers;
+      _ball = nearest?.ball;
       _stats = nextStats;
       _isTestMode = false;
       _isLoading = false;
@@ -2093,12 +2114,13 @@ unawaited(_allowAndroidInlineVideoPlayback());
                 ? _buildNativeWindowsVideoLayer()
                 : WebViewWidget(controller: _webController),
           ),
-          if (widget.showAiOverlay && _players.isNotEmpty)
+          if (widget.showAiOverlay && (_players.isNotEmpty || _ball != null))
             Positioned.fill(
               child: AnalysisOverlayWidget(
                 players: _players,
                 stats: _stats,
                 videoSize: stageSize,
+                ball: _ball,
               ),
             ),
           if (widget.connectAi && !_isLoading && _players.isEmpty)

@@ -1,0 +1,7 @@
+<!--
+  Если macOS Runner работает в App Sandbox, добавьте этот ключ в
+  macos/Runner/DebugProfile.entitlements и macos/Runner/Release.entitlements.
+-->
+<key>com.apple.security.network.client</key>
+<true/>
+

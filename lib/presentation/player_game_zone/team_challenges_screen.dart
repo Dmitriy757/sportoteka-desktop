@@ -118,6 +118,14 @@ class _TeamChallengesScreenState extends State<TeamChallengesScreen> {
       context: context,
       builder: (_) {
         return AlertDialog(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          titleTextStyle: GzText.title(16),
+          contentTextStyle: GzText.muted(11.4),
           title: const Text('Удалить челлендж?'),
           content: const Text(
             'Челлендж и связанные отправки игроков будут удалены.',
@@ -125,10 +133,23 @@ class _TeamChallengesScreenState extends State<TeamChallengesScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
+              style: TextButton.styleFrom(
+                foregroundColor: GzColors.graphiteSoft,
+                textStyle: GzText.action(),
+              ),
               child: const Text('Отмена'),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: GzColors.red,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                textStyle: GzText.action(color: Colors.white),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
               child: const Text('Удалить'),
             ),
           ],
@@ -195,7 +216,7 @@ class _TeamChallengesScreenState extends State<TeamChallengesScreen> {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.14),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
         children: [
@@ -203,8 +224,8 @@ class _TeamChallengesScreenState extends State<TeamChallengesScreen> {
             value,
             style: const TextStyle(
               color: Colors.white,
-              fontWeight: FontWeight.w900,
-              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              fontSize: 16,
             ),
           ),
           const SizedBox(height: 4),
@@ -213,7 +234,7 @@ class _TeamChallengesScreenState extends State<TeamChallengesScreen> {
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: Colors.white70,
-              fontSize: 12,
+              fontSize: 10.8,
             ),
           ),
         ],
@@ -255,9 +276,8 @@ class _TeamChallengesScreenState extends State<TeamChallengesScreen> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: GzColors.divider),
-      ),
+        borderRadius: BorderRadius.circular(12),
+              ),
       child: Column(
         children: [
           const Icon(
@@ -269,8 +289,8 @@ class _TeamChallengesScreenState extends State<TeamChallengesScreen> {
           const Text(
             'Пока нет созданных челленджей',
             style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 8),
@@ -305,9 +325,8 @@ class _TeamChallengesScreenState extends State<TeamChallengesScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: GzColors.divider),
-      ),
+        borderRadius: BorderRadius.circular(12),
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -318,13 +337,13 @@ class _TeamChallengesScreenState extends State<TeamChallengesScreen> {
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: _typeColor((item['challenge_type'] ?? '').toString()),
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   ((item['challenge_type'] ?? '').toString()).toUpperCase(),
                   style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 10.2,
                   ),
                 ),
               ),
@@ -334,13 +353,13 @@ class _TeamChallengesScreenState extends State<TeamChallengesScreen> {
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: _statusColor(status),
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   status.toUpperCase(),
                   style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 10.2,
                   ),
                 ),
               ),
@@ -350,12 +369,12 @@ class _TeamChallengesScreenState extends State<TeamChallengesScreen> {
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFF7D6),
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   '+${item['points_reward']}',
                   style: const TextStyle(
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -365,8 +384,8 @@ class _TeamChallengesScreenState extends State<TeamChallengesScreen> {
           Text(
             item['title'] ?? '',
             style: const TextStyle(
-              fontWeight: FontWeight.w900,
-              fontSize: 17,
+              fontWeight: FontWeight.w600,
+              fontSize: 14.5,
             ),
           ),
           const SizedBox(height: 8),
@@ -418,13 +437,12 @@ class _TeamChallengesScreenState extends State<TeamChallengesScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: GzColors.soft,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: GzColors.divider),
-      ),
+        borderRadius: BorderRadius.circular(8),
+              ),
       child: Text(
         text,
         style: const TextStyle(
-          fontSize: 12,
+          fontSize: 10.8,
           fontWeight: FontWeight.w700,
           color: Color(0xFF4B5563),
         ),

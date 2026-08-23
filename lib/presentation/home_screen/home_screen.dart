@@ -40,6 +40,7 @@ import 'package:sportoteka/presentation/video_lessons/video_lesson_folder_screen
 import 'package:sportoteka/presentation/video_lessons/video_lessons_hub_screen.dart';
 import 'package:sportoteka/presentation/club_dashboard_screen/club_dashboard_screen.dart';
 import 'package:sportoteka/presentation/club_workspace/club_workspace_screen.dart';
+import 'package:sportoteka/presentation/parent_access/parent_family_screen.dart';
 import 'package:sportoteka/update_checker.dart';
 import 'package:get/get.dart';
 import 'package:sportoteka/routes/app_routes.dart';
@@ -3287,6 +3288,14 @@ Future<void> _loadRoleWorkspaceData() async {
             teamLogo: _currentTeamLogoUrl,
           ),
         ),
+      );
+      return;
+    }
+
+    if (_isParentRole) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ParentFamilyScreen()),
       );
       return;
     }

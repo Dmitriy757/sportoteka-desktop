@@ -1,15 +1,19 @@
 // lib/presentation/club_workspace/cmr_club_roster_panel.dart
 // Typography uses the centralized Sportoteka AppTypography / Inter system.
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' show FontFeature;
 
 import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:http/http.dart' as http;
 
 import 'package:sportoteka/core/theme/app_typography.dart';
 
 import 'package:sportoteka/presentation/player_profile_screen/cmr_player_profile_screen.dart';
+import 'package:sportoteka/presentation/player_profile_screen/models/player_profile_models.dart';
+import 'package:sportoteka/presentation/club_workspace/cmr_player_parent_access_panel.dart';
 
 // ==================== Цветовая схема ====================
 
@@ -136,6 +140,25 @@ class _CmrRosterText {
         color: _CmrRosterColors.red,
         letterSpacing: 0,
       );
+
+  // Точная типографика внутреннего меню Tracker -> Аналитика.
+  static TextStyle navLabel({required bool active}) => AppTypography.custom(
+        size: 11.0,
+        weight: active ? FontWeight.w600 : FontWeight.w500,
+        color: active ? _CmrRosterColors.greenDark : _CmrRosterColors.text,
+        height: 1.30,
+        letterSpacing: 0,
+      );
+
+  static TextStyle navSubtitle({required bool active}) => AppTypography.custom(
+        size: 10.2,
+        weight: FontWeight.w400,
+        color: active
+            ? _CmrRosterColors.greenDark.withOpacity(.68)
+            : _CmrRosterColors.muted2,
+        height: 1.30,
+        letterSpacing: 0,
+      );
 }
 
 
@@ -217,7 +240,17 @@ class CmrClubRosterPanel extends StatefulWidget {
   final String teamName;
   final int? selectedTeamId;
   final int clubId;
+
+  /// Необязательный user_id текущего тренера/руководителя.
+  /// Если не передан, Parent Access сам получает его из PrefUtils.
+  final int? currentUserId;
+
   final List<Map<String, dynamic>> players;
+
+  /// Максимальное количество игроков для текущего тарифа.
+  /// null = без клиентского ограничения.
+  final int? maxPlayers;
+
   final bool loading;
   final Map<String, dynamic>? selectedPlayer;
   final Future<void> Function()? onRefresh;
@@ -232,7 +265,9 @@ class CmrClubRosterPanel extends StatefulWidget {
     required this.teamName,
     required this.selectedTeamId,
     required this.clubId,
+    this.currentUserId,
     required this.players,
+    this.maxPlayers,
     required this.loading,
     required this.selectedPlayer,
     required this.onRefresh,
@@ -254,8 +289,1054 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
   final ScrollController _scrollC = ScrollController();
   _RosterFilter _filter = _RosterFilter.all;
 
+  bool _showProfileMenu = false;
   bool _showFullProfileInRightPane = false;
   Map<String, dynamic>? _rightPanePlayer;
+  PlayerProfileSection _profileSection = PlayerProfileSection.card;
+
+  static const String _apiBase = 'https://sportotekaapp.ru/api';
+  static const String _getClubTeamsUrl = '$_apiBase/get_club_teams.php';
+  static const String _movePlayerTeamUrl = '$_apiBase/move_player_team.php';
+  static const String _getUnassignedPlayersUrl =
+      '$_apiBase/get_unassigned_players.php';
+  static const String _getArchivedPlayersUrl =
+      '$_apiBase/get_archived_players.php';
+  static const String _restoreArchivedPlayerUrl =
+      '$_apiBase/restore_player.php';
+
+  int _rosterInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse('${value ?? ''}'.trim()) ?? 0;
+  }
+
+  String _rosterText(dynamic value) {
+    final text = '${value ?? ''}'.trim();
+    return text == 'null' ? '' : text;
+  }
+
+  dynamic _decodeRosterResponse(String raw) {
+    try {
+      return jsonDecode(raw);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  int _teamId(Map<String, dynamic> team) => _rosterInt(
+        team['id'] ?? team['team_id'] ?? team['teamId'],
+      );
+
+  String _teamTitle(Map<String, dynamic> team) {
+    final value = _rosterText(
+      team['name'] ??
+          team['team_name'] ??
+          team['teamName'] ??
+          team['title'],
+    );
+    return value.isEmpty ? 'Команда #${_teamId(team)}' : value;
+  }
+
+  int? _ageGroupFromName(String value) {
+    final match = RegExp(
+      r'\bU\s*([0-9]{1,2})\b',
+      caseSensitive: false,
+    ).firstMatch(value);
+    if (match == null) return null;
+    return int.tryParse(match.group(1) ?? '');
+  }
+
+  Future<List<Map<String, dynamic>>> _loadTransferTeams() async {
+    final response = await http
+        .post(
+          Uri.parse(_getClubTeamsUrl),
+          body: {'club_id': '${widget.clubId}'},
+        )
+        .timeout(const Duration(seconds: 12));
+
+    final data = _decodeRosterResponse(response.body);
+
+    List raw = const [];
+    if (data is Map && data['teams'] is List) {
+      raw = data['teams'] as List;
+    } else if (data is Map && data['data'] is List) {
+      raw = data['data'] as List;
+    } else if (data is List) {
+      raw = data;
+    }
+
+    final currentId = widget.selectedTeamId ?? 0;
+    final currentAge = _ageGroupFromName(widget.teamName);
+
+    final rows = raw
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .where((row) {
+          final id = _teamId(row);
+          return id > 0 && id != currentId;
+        })
+        .toList();
+
+    rows.sort((a, b) {
+      final ageA = _ageGroupFromName(_teamTitle(a));
+      final ageB = _ageGroupFromName(_teamTitle(b));
+
+      final aRecommended =
+          currentAge != null && ageA == currentAge + 1;
+      final bRecommended =
+          currentAge != null && ageB == currentAge + 1;
+
+      if (aRecommended != bRecommended) {
+        return aRecommended ? -1 : 1;
+      }
+
+      if (ageA != null && ageB != null && ageA != ageB) {
+        return ageA.compareTo(ageB);
+      }
+
+      return _teamTitle(a).compareTo(_teamTitle(b));
+    });
+
+    return rows;
+  }
+
+  Future<bool> _movePlayerToTeam(
+    Map<String, dynamic> player,
+    int targetTeamId,
+    String targetTeamName,
+  ) async {
+    final playerId = _rosterInt(
+      player['id'] ??
+          player['player_id'] ??
+          player['playerId'],
+    );
+    if (playerId <= 0) {
+      Get.snackbar(
+        'Перевод игрока',
+        'Не найден player_id',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return false;
+    }
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse(_movePlayerTeamUrl),
+            headers: const {
+              'Content-Type':
+                  'application/json; charset=utf-8',
+            },
+            body: jsonEncode({
+              'club_id': widget.clubId,
+              'player_id': playerId,
+              'target_team_id': targetTeamId,
+              'actor_user_id': widget.currentUserId ?? 0,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      final data = _decodeRosterResponse(response.body);
+      final ok = data is Map &&
+          (data['success'] == true ||
+              data['status'] == 'success');
+
+      if (!ok) {
+        final message = data is Map
+            ? _rosterText(
+                data['message'] ??
+                    data['error'] ??
+                    'Сервер не подтвердил перевод',
+              )
+            : 'Сервер вернул некорректный ответ';
+        throw Exception(message);
+      }
+
+      if (!mounted) return true;
+
+      setState(() {
+        _showFullProfileInRightPane = false;
+        _rightPanePlayer = null;
+      });
+
+      Get.snackbar(
+        targetTeamId > 0
+            ? 'Игрок переведён'
+            : 'Игрок отвязан',
+        targetTeamId > 0
+            ? '${_playerName(player)} → $targetTeamName'
+            : '${_playerName(player)} → Без команды',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: _CmrRosterColors.green,
+        colorText: Colors.white,
+      );
+
+      await widget.onRefresh?.call();
+      return true;
+    } catch (error) {
+      if (mounted) {
+        Get.snackbar(
+          'Не удалось изменить команду',
+          '$error',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: _CmrRosterColors.red,
+          colorText: Colors.white,
+        );
+      }
+      return false;
+    }
+  }
+
+  Future<void> _openTransferPicker(
+    Map<String, dynamic> player, {
+    String? sourceTeamName,
+  }) async {
+    List<Map<String, dynamic>> teams;
+    try {
+      teams = await _loadTransferTeams();
+    } catch (error) {
+      if (mounted) {
+        Get.snackbar(
+          'Команды',
+          'Не удалось загрузить список: $error',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+
+    final sourceTitle =
+        sourceTeamName?.trim().isNotEmpty == true
+            ? sourceTeamName!.trim()
+            : widget.teamName;
+    final sourceAge = _ageGroupFromName(sourceTitle);
+
+    final selected = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: 540,
+            maxHeight: 650,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding:
+                    const EdgeInsets.fromLTRB(18, 16, 12, 12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: const BoxDecoration(
+                        color: _CmrRosterColors.green,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Перевести игрока',
+                            style:
+                                _CmrRosterText.title(16.5),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            '${_playerName(player)} · $sourceTitle',
+                            style:
+                                _CmrRosterText.muted(10.8),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () =>
+                          Navigator.pop(dialogContext),
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        size: 18,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(
+                height: 1,
+                color: _CmrRosterColors.line,
+              ),
+              Padding(
+                padding:
+                    const EdgeInsets.fromLTRB(18, 11, 18, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Родительский доступ и действующие ключи '
+                    'сохранятся после перевода.',
+                    style: _CmrRosterText.muted(10.4),
+                  ),
+                ),
+              ),
+              Flexible(
+                child: teams.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          'Других команд клуба нет',
+                          style:
+                              _CmrRosterText.muted(11.5),
+                        ),
+                      )
+                    : ListView.separated(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.fromLTRB(
+                          10,
+                          4,
+                          10,
+                          14,
+                        ),
+                        itemCount: teams.length,
+                        separatorBuilder: (_, __) =>
+                            const Divider(
+                          height: 1,
+                          color: _CmrRosterColors.line,
+                        ),
+                        itemBuilder: (_, index) {
+                          final team = teams[index];
+                          final title = _teamTitle(team);
+                          final age =
+                              _ageGroupFromName(title);
+                          final recommended =
+                              sourceAge != null &&
+                                  age == sourceAge + 1;
+
+                          return Material(
+                            color: recommended
+                                ? _CmrRosterColors
+                                    .greenSoft2
+                                : Colors.transparent,
+                            borderRadius:
+                                BorderRadius.circular(10),
+                            child: InkWell(
+                              onTap: () => Navigator.pop(
+                                dialogContext,
+                                team,
+                              ),
+                              borderRadius:
+                                  BorderRadius.circular(10),
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 11,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: recommended
+                                          ? 7
+                                          : 5,
+                                      height: recommended
+                                          ? 7
+                                          : 5,
+                                      decoration:
+                                          BoxDecoration(
+                                        color: recommended
+                                            ? _CmrRosterColors
+                                                .green
+                                            : _CmrRosterColors
+                                                .subtle,
+                                        shape:
+                                            BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment
+                                                .start,
+                                        children: [
+                                          Text(
+                                            title,
+                                            style:
+                                                _CmrRosterText
+                                                    .value(12),
+                                          ),
+                                          if (recommended) ...[
+                                            const SizedBox(
+                                              height: 2,
+                                            ),
+                                            Text(
+                                              'Следующая возрастная команда',
+                                              style:
+                                                  _CmrRosterText
+                                                      .muted(
+                                                9.8,
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                    Text(
+                                      'Выбрать',
+                                      style:
+                                          _CmrRosterText
+                                              .action()
+                                              .copyWith(
+                                                color:
+                                                    _CmrRosterColors
+                                                        .greenDark,
+                                              ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (selected == null || !mounted) return;
+
+    await _movePlayerToTeam(
+      player,
+      _teamId(selected),
+      _teamTitle(selected),
+    );
+  }
+
+  Future<void> _confirmUnbindPlayer(
+    Map<String, dynamic> player,
+  ) async {
+    final confirm = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: Colors.white,
+            surfaceTintColor: Colors.white,
+            title: const Text(
+              'Отвязать игрока от команды?',
+            ),
+            content: Text(
+              '${_playerName(player)} будет помещён в '
+              '«Без команды».\n\n'
+              'Профиль, история, дневник, трекер и '
+              'родительские доступы сохранятся.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () =>
+                    Navigator.pop(dialogContext, false),
+                child: const Text('Отмена'),
+              ),
+              FilledButton(
+                onPressed: () =>
+                    Navigator.pop(dialogContext, true),
+                style: FilledButton.styleFrom(
+                  backgroundColor:
+                      _CmrRosterColors.graphiteButton,
+                ),
+                child: const Text('Отвязать'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!confirm) return;
+
+    await _movePlayerToTeam(
+      player,
+      0,
+      'Без команды',
+    );
+  }
+
+  Future<List<Map<String, dynamic>>>
+      _loadUnassignedPlayers() async {
+    final response = await http
+        .post(
+          Uri.parse(_getUnassignedPlayersUrl),
+          body: {'club_id': '${widget.clubId}'},
+        )
+        .timeout(const Duration(seconds: 12));
+
+    final data = _decodeRosterResponse(response.body);
+
+    List raw = const [];
+    if (data is Map && data['players'] is List) {
+      raw = data['players'] as List;
+    } else if (data is Map && data['items'] is List) {
+      raw = data['items'] as List;
+    } else if (data is List) {
+      raw = data;
+    }
+
+    return raw
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  }
+
+  Future<void> _openUnassignedPlayers() async {
+    List<Map<String, dynamic>> rows;
+    try {
+      rows = await _loadUnassignedPlayers();
+    } catch (error) {
+      if (mounted) {
+        Get.snackbar(
+          'Без команды',
+          'Не удалось загрузить список: $error',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: 560,
+            maxHeight: 650,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding:
+                    const EdgeInsets.fromLTRB(18, 16, 12, 12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: const BoxDecoration(
+                        color: _CmrRosterColors.amber,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Игроки без команды',
+                            style:
+                                _CmrRosterText.title(16),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Можно снова привязать к любой команде клуба',
+                            style:
+                                _CmrRosterText.muted(10.5),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () =>
+                          Navigator.pop(dialogContext),
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        size: 18,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(
+                height: 1,
+                color: _CmrRosterColors.line,
+              ),
+              Flexible(
+                child: rows.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding:
+                              const EdgeInsets.all(28),
+                          child: Text(
+                            'Список пуст',
+                            style:
+                                _CmrRosterText.muted(11.5),
+                          ),
+                        ),
+                      )
+                    : ListView.separated(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.all(10),
+                        itemCount: rows.length,
+                        separatorBuilder: (_, __) =>
+                            const Divider(
+                          height: 1,
+                          color: _CmrRosterColors.line,
+                        ),
+                        itemBuilder: (_, index) {
+                          final player = rows[index];
+                          final lastTeam = _rosterText(
+                            player[
+                                'last_team_name'],
+                          );
+
+                          return Padding(
+                            padding:
+                                const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 10,
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment
+                                            .start,
+                                    children: [
+                                      Text(
+                                        _playerName(player),
+                                        style:
+                                            _CmrRosterText
+                                                .value(11.8),
+                                      ),
+                                      if (lastTeam
+                                          .isNotEmpty) ...[
+                                        const SizedBox(
+                                          height: 2,
+                                        ),
+                                        Text(
+                                          'Был в $lastTeam',
+                                          style:
+                                              _CmrRosterText
+                                                  .muted(
+                                            9.8,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: () async {
+                                    Navigator.pop(
+                                      dialogContext,
+                                    );
+                                    await _openTransferPicker(
+                                      player,
+                                      sourceTeamName:
+                                          lastTeam.isEmpty
+                                              ? 'Без команды'
+                                              : lastTeam,
+                                    );
+                                  },
+                                  child: const Text(
+                                    'Привязать',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<List<Map<String, dynamic>>>
+      _loadArchivedPlayers() async {
+    final response = await http
+        .post(
+          Uri.parse(_getArchivedPlayersUrl),
+          headers: const {
+            'Content-Type':
+                'application/json; charset=utf-8',
+          },
+          body: jsonEncode({
+            'club_id': widget.clubId,
+          }),
+        )
+        .timeout(const Duration(seconds: 12));
+
+    final data = _decodeRosterResponse(response.body);
+
+    List raw = const [];
+    if (data is Map && data['players'] is List) {
+      raw = data['players'] as List;
+    } else if (data is Map && data['items'] is List) {
+      raw = data['items'] as List;
+    } else if (data is List) {
+      raw = data;
+    }
+
+    return raw
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  }
+
+  Future<void> _restoreArchivedPlayer(
+    Map<String, dynamic> player,
+  ) async {
+    final playerId = _rosterInt(
+      player['player_id'] ??
+          player['id'],
+    );
+
+    if (playerId <= 0) {
+      Get.snackbar(
+        'Архив',
+        'Не найден player_id',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse(_restoreArchivedPlayerUrl),
+            headers: const {
+              'Content-Type':
+                  'application/json; charset=utf-8',
+            },
+            body: jsonEncode({
+              'club_id': widget.clubId,
+              'player_id': playerId,
+              'actor_user_id':
+                  widget.currentUserId ?? 0,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      final data =
+          _decodeRosterResponse(response.body);
+
+      final ok = data is Map &&
+          (data['success'] == true ||
+              data['status'] == 'success');
+
+      if (!ok) {
+        final message = data is Map
+            ? _rosterText(
+                data['message'] ??
+                    data['error'] ??
+                    'Сервер не подтвердил восстановление',
+              )
+            : 'Некорректный ответ сервера';
+
+        throw Exception(message);
+      }
+
+      if (!mounted) return;
+
+      Get.snackbar(
+        'Игрок восстановлен',
+        '${_playerName(player)} → '
+        '${_rosterText(data['team_name']).isEmpty ? 'прежняя команда' : _rosterText(data['team_name'])}',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor:
+            _CmrRosterColors.green,
+        colorText: Colors.white,
+      );
+
+      await widget.onRefresh?.call();
+    } catch (error) {
+      if (!mounted) return;
+
+      Get.snackbar(
+        'Не удалось восстановить',
+        '$error',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: _CmrRosterColors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  Future<void> _openArchivedPlayers() async {
+    List<Map<String, dynamic>> rows;
+
+    try {
+      rows = await _loadArchivedPlayers();
+    } catch (error) {
+      if (mounted) {
+        Get.snackbar(
+          'Архив',
+          'Не удалось загрузить архив: $error',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: 590,
+            maxHeight: 680,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding:
+                    const EdgeInsets.fromLTRB(
+                  18,
+                  16,
+                  12,
+                  12,
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration:
+                          const BoxDecoration(
+                        color:
+                            _CmrRosterColors.greenDark,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Архив игроков',
+                            style:
+                                _CmrRosterText.title(
+                              16,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Данные не удаляются. Игрока можно восстановить в прежнюю команду.',
+                            style:
+                                _CmrRosterText.muted(
+                              10.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () =>
+                          Navigator.pop(
+                        dialogContext,
+                      ),
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        size: 18,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(
+                height: 1,
+                color: _CmrRosterColors.line,
+              ),
+              Flexible(
+                child: rows.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding:
+                              const EdgeInsets.all(
+                            30,
+                          ),
+                          child: Text(
+                            'Архив пуст',
+                            style:
+                                _CmrRosterText.muted(
+                              11.5,
+                            ),
+                          ),
+                        ),
+                      )
+                    : ListView.separated(
+                        shrinkWrap: true,
+                        padding:
+                            const EdgeInsets.all(10),
+                        itemCount: rows.length,
+                        separatorBuilder: (_, __) =>
+                            const Divider(
+                          height: 1,
+                          color:
+                              _CmrRosterColors.line,
+                        ),
+                        itemBuilder: (_, index) {
+                          final player = rows[index];
+                          final teamName =
+                              _rosterText(
+                            player[
+                                'original_team_name'],
+                          );
+                          final archivedAt =
+                              _rosterText(
+                            player['archived_at'],
+                          );
+                          final linkedRows =
+                              _rosterInt(
+                            player[
+                                'linked_rows_total'],
+                          );
+
+                          return Padding(
+                            padding:
+                                const EdgeInsets
+                                    .symmetric(
+                              horizontal: 8,
+                              vertical: 10,
+                            ),
+                            child: Row(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment
+                                      .start,
+                              children: [
+                                Container(
+                                  width: 7,
+                                  height: 7,
+                                  margin:
+                                      const EdgeInsets
+                                          .only(
+                                    top: 6,
+                                  ),
+                                  decoration:
+                                      const BoxDecoration(
+                                    color:
+                                        _CmrRosterColors
+                                            .greenDark,
+                                    shape:
+                                        BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(
+                                  width: 10,
+                                ),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment
+                                            .start,
+                                    children: [
+                                      Text(
+                                        _playerName(
+                                          player,
+                                        ),
+                                        style:
+                                            _CmrRosterText
+                                                .value(
+                                          11.8,
+                                        ),
+                                      ),
+                                      if (teamName
+                                          .isNotEmpty) ...[
+                                        const SizedBox(
+                                          height: 2,
+                                        ),
+                                        Text(
+                                          'Команда: $teamName',
+                                          style:
+                                              _CmrRosterText
+                                                  .muted(
+                                            9.8,
+                                          ),
+                                        ),
+                                      ],
+                                      const SizedBox(
+                                        height: 2,
+                                      ),
+                                      Text(
+                                        <String>[
+                                          if (archivedAt
+                                              .isNotEmpty)
+                                            'Архив: $archivedAt',
+                                          if (linkedRows >
+                                              0)
+                                            'Связанных записей: $linkedRows',
+                                        ].join(' · '),
+                                        style:
+                                            _CmrRosterText
+                                                .muted(
+                                          9.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(
+                                  width: 8,
+                                ),
+                                TextButton(
+                                  onPressed:
+                                      () async {
+                                    Navigator.pop(
+                                      dialogContext,
+                                    );
+                                    await _restoreArchivedPlayer(
+                                      player,
+                                    );
+                                  },
+                                  child: const Text(
+                                    'Восстановить',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -274,8 +1355,18 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
 
     final selected = widget.selectedPlayer;
     if (selected == null) {
-      _rightPanePlayer = null;
-      _showFullProfileInRightPane = false;
+      // Локальный выбор игрока не сбрасываем на обычном rebuild родителя.
+      // Сбрасываем только если реально сменилась команда либо выбранного
+      // игрока больше нет в текущем составе.
+      final teamChanged = oldWidget.selectedTeamId != widget.selectedTeamId;
+      final localKey = _playerIdentity(_rightPanePlayer);
+      final localStillExists = localKey.isNotEmpty &&
+          widget.players.any((p) => _playerIdentity(p) == localKey);
+      if (teamChanged || !localStillExists) {
+        _rightPanePlayer = null;
+        _showProfileMenu = false;
+        _showFullProfileInRightPane = false;
+      }
       return;
     }
 
@@ -283,6 +1374,7 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
     final newKey = _playerIdentity(selected);
     if (oldKey != newKey) {
       _rightPanePlayer = Map<String, dynamic>.from(selected);
+      _profileSection = PlayerProfileSection.card;
     }
   }
 
@@ -396,10 +1488,15 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
     // На планшете и ПК полный профиль раскрывается внутри правой рабочей
     // области состава. Список игроков слева остаётся доступен.
     if (width >= 640) {
-      widget.onOpenPlayer(mp);
+      // ВАЖНО: widget.onOpenPlayer здесь не вызываем. В родительском
+      // workspace этот callback может сам переключать экран на подробный
+      // профиль. Полный профиль открываем только локально после явного
+      // нажатия «Открыть профиль».
       if (!mounted) return;
       setState(() {
         _rightPanePlayer = mp;
+        _profileSection = PlayerProfileSection.card;
+        _showProfileMenu = true;
         _showFullProfileInRightPane = true;
       });
       return;
@@ -419,15 +1516,47 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
     );
   }
 
-  void _handleOpenPlayer(Map<String, dynamic> player, bool mobile) {
-    widget.onOpenPlayer(player);
+  void _selectProfileSection(PlayerProfileSection section) {
+    if (!mounted) return;
+    setState(() {
+      _profileSection = section;
+      _showProfileMenu = true;
+      _showFullProfileInRightPane = true;
+    });
+  }
 
-    if (!mobile) {
-      setState(() {
-        _rightPanePlayer = Map<String, dynamic>.from(player);
-      });
-      return;
-    }
+  void _backToRosterList() {
+    if (!mounted) return;
+    setState(() {
+      _showProfileMenu = false;
+      _showFullProfileInRightPane = false;
+      // _rightPanePlayer и ScrollController сохраняем намеренно:
+      // при возврате состав открывается на том же игроке и том же scroll offset.
+    });
+  }
+
+  void _handleOpenPlayer(Map<String, dynamic> player, bool mobile) {
+    final selected = Map<String, dynamic>.from(player);
+    selected['team_id'] ??= selected['teamId'] ?? widget.selectedTeamId;
+    selected['teamId'] ??= selected['team_id'] ?? widget.selectedTeamId;
+    selected['club_id'] ??= selected['clubId'] ?? widget.clubId;
+    selected['clubId'] ??= selected['club_id'] ?? widget.clubId;
+    selected['team_name'] ??= widget.teamName;
+    selected['teamName'] ??= widget.teamName;
+
+    // Первый клик по игроку НЕ открывает полный профиль и НЕ заменяет
+    // список игроков меню профиля. Слева остаётся состав, справа показываем
+    // только компактный обзор с отдельной кнопкой «Открыть профиль».
+    // Также не вызываем widget.onOpenPlayer: в родительском workspace этот
+    // callback может сразу переводить на подробный экран.
+    setState(() {
+      _rightPanePlayer = selected;
+      _profileSection = PlayerProfileSection.card;
+      _showProfileMenu = false;
+      _showFullProfileInRightPane = false;
+    });
+
+    if (!mobile) return;
 
     showModalBottomSheet<void>(
       context: context,
@@ -444,6 +1573,9 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
             return _PlayerDetailPanel(
               player: player,
               teamName: widget.teamName,
+              clubId: widget.clubId,
+              teamId: widget.selectedTeamId ?? 0,
+              currentUserId: widget.currentUserId,
               scrollController: controller,
               onOpenFullProfile: () {
                 Navigator.of(sheetContext).pop();
@@ -469,173 +1601,240 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
   Future<void> _confirmDeletePlayer(Map<String, dynamic> player) async {
     if (!mounted) return;
 
-    final name = _playerName(player);
-    const codeWord = 'УДАЛИТЬ';
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        var typedCode = '';
-        var deleting = false;
-
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            final canDelete = typedCode.trim().toUpperCase() == codeWord;
-
-            return Dialog(
-              backgroundColor: Colors.transparent,
-              insetPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 460),
-                padding: const EdgeInsets.all(20),
-                decoration: _CmrRosterDecor.panel(radius: _CmrRosterDecor.mobileCardRadius),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 54,
-                          height: 54,
-                          decoration: BoxDecoration(
-                            color: _CmrRosterColors.redSoft,
-                            borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
-                          ),
-                          child: const Icon(
-                            Icons.delete_forever_rounded,
-                            color: _CmrRosterColors.red,
-                            size: 28,
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Удалить игрока?', style: _CmrRosterText.title(20)),
-                              const SizedBox(height: 4),
-                              Text(
-                                name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: _CmrRosterText.muted(12.5),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: _CmrRosterColors.redSoft,
-                        borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
-                      ),
-                      child: Text(
-                        'Игрок будет удалён из состава. Это действие нельзя будет отменить без повторного добавления игрока.',
-                        style: _CmrRosterText.muted(12.5),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text('Введите кодовое слово: $codeWord', style: _CmrRosterText.title(14)),
-                    const SizedBox(height: 10),
-                    TextField(
-                      enabled: !deleting,
-                      autofocus: true,
-                      textInputAction: TextInputAction.done,
-                      onChanged: (value) => setDialogState(() => typedCode = value),
-                      onSubmitted: (_) {
-                        if (!deleting && canDelete) {
-                          Navigator.of(dialogContext).pop(true);
-                        }
-                      },
-                      decoration: InputDecoration(
-                        hintText: codeWord,
-                        filled: true,
-                        fillColor: _CmrRosterColors.soft,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                      ),
-                      style: _CmrRosterText.title(14),
-                    ),
-                    const SizedBox(height: 18),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _CmrRosterOutlineButton(
-                            title: 'Отмена',
-                            onTap: deleting ? null : () => Navigator.of(dialogContext).pop(false),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _CmrRosterDangerButton(
-                            title: deleting ? 'Удаление...' : 'Удалить',
-                            enabled: canDelete && !deleting,
-                            onTap: () {
-                              setDialogState(() => deleting = true);
-                              Navigator.of(dialogContext).pop(true);
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-
-    if (!mounted || confirmed != true) return;
-
     final deletePlayer = widget.onDeletePlayer;
+    final name = _playerName(player);
+    const codeWord = 'АРХИВ';
+
     if (deletePlayer == null) {
       Get.snackbar(
         'Удаление не подключено',
-        'Передайте onDeletePlayer в CmrClubRosterPanel и вызовите API delete_player.php.',
+        'В родительском экране не передан onDeletePlayer.',
         snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: _CmrRosterColors.red,
+        colorText: Colors.white,
       );
       return;
     }
 
-    try {
-      await Future<void>.delayed(const Duration(milliseconds: 80));
-      if (!mounted) return;
+    final codeController = TextEditingController();
 
-      await deletePlayer(player);
+    try {
+      final deleted = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          var deleting = false;
+          String? errorText;
+
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              final canDelete =
+                  codeController.text.trim().toUpperCase() == codeWord;
+
+              Future<void> submitDelete() async {
+                if (deleting || !canDelete) return;
+
+                setDialogState(() {
+                  deleting = true;
+                  errorText = null;
+                });
+
+                try {
+                  await deletePlayer(player);
+
+                  if (!dialogContext.mounted) return;
+                  Navigator.of(dialogContext).pop(true);
+                } catch (e) {
+                  if (!dialogContext.mounted) return;
+                  setDialogState(() {
+                    deleting = false;
+                    errorText = e.toString();
+                  });
+                }
+              }
+
+              return PopScope(
+                canPop: !deleting,
+                child: Dialog(
+                  backgroundColor: Colors.transparent,
+                  insetPadding: const EdgeInsets.symmetric(
+                    horizontal: 22,
+                    vertical: 24,
+                  ),
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 460),
+                    padding: const EdgeInsets.all(20),
+                    decoration: _CmrRosterDecor.panel(
+                      radius: _CmrRosterDecor.mobileCardRadius,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 54,
+                              height: 54,
+                              decoration: BoxDecoration(
+                                color: _CmrRosterColors.redSoft,
+                                borderRadius: BorderRadius.circular(
+                                  _CmrRosterDecor.mobileInnerRadius,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.delete_forever_rounded,
+                                color: _CmrRosterColors.red,
+                                size: 28,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Переместить игрока в архив?',
+                                    style: _CmrRosterText.title(20),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: _CmrRosterText.muted(12.5),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 18),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: _CmrRosterColors.redSoft,
+                            borderRadius: BorderRadius.circular(
+                              _CmrRosterDecor.mobileInnerRadius,
+                            ),
+                          ),
+                          child: Text(
+                            'Игрок исчезнет из активного состава, но профиль, аналитика, трекер, дневник, тесты, медицина, посещаемость, матчи и родительские связи останутся на сервере. Для подтверждения введите $codeWord.',
+                            style: _CmrRosterText.muted(12.5),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: codeController,
+                          enabled: !deleting,
+                          autofocus: true,
+                          textCapitalization: TextCapitalization.characters,
+                          textInputAction: TextInputAction.done,
+                          onChanged: (_) => setDialogState(() {
+                            errorText = null;
+                          }),
+                          onSubmitted: (_) => submitDelete(),
+                          decoration: InputDecoration(
+                            hintText: codeWord,
+                            filled: true,
+                            fillColor: _CmrRosterColors.soft,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 14,
+                            ),
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                          ),
+                          style: _CmrRosterText.title(14),
+                        ),
+                        if (errorText != null) ...[
+                          const SizedBox(height: 10),
+                          Text(
+                            'Ошибка архивации: $errorText',
+                            style: _CmrRosterText.muted(11.5).copyWith(
+                              color: _CmrRosterColors.red,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 18),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _CmrRosterOutlineButton(
+                                title: 'Отмена',
+                                onTap: deleting
+                                    ? null
+                                    : () => Navigator.of(dialogContext).pop(false),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _CmrRosterDangerButton(
+                                title: deleting ? 'Архивация...' : 'В архив',
+                                enabled: canDelete && !deleting,
+                                onTap: submitDelete,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      );
+
+      if (!mounted || deleted != true) return;
+
+      setState(() {
+        final deletedKey = _playerIdentity(player);
+        if (_playerIdentity(_rightPanePlayer) == deletedKey) {
+          _rightPanePlayer = null;
+          _showProfileMenu = false;
+          _showFullProfileInRightPane = false;
+        }
+      });
+
+      await widget.onRefresh?.call();
       if (!mounted) return;
 
       Get.snackbar(
-        'Игрок удалён',
+        'Игрок перемещён в архив',
         name,
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: _CmrRosterColors.green,
         colorText: Colors.white,
       );
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        widget.onRefresh?.call();
-      });
-    } catch (e) {
-      if (!mounted) return;
-      Get.snackbar(
-        'Не удалось удалить игрока',
-        '$e',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: _CmrRosterColors.red,
-        colorText: Colors.white,
-      );
+    } finally {
+      codeController.dispose();
     }
+  }
+
+  void _handleAddPlayer() {
+    final limit = widget.maxPlayers;
+
+    if (limit != null && limit > 0 && widget.players.length >= limit) {
+      Get.snackbar(
+        'Лимит базовой подписки',
+        'В одной команде доступно до $limit игроков. '
+        'Сейчас в составе: ${widget.players.length}.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.white,
+        colorText: _CmrRosterColors.text,
+        icon: const Icon(
+          Icons.info_outline_rounded,
+          color: _CmrRosterColors.green,
+        ),
+      );
+      return;
+    }
+
+    widget.onAddPlayer();
   }
 
   @override
@@ -652,14 +1851,34 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
         builder: (context, constraints) {
           final mobile = constraints.maxWidth < 640;
           final compact = constraints.maxWidth < 980;
-          final listWidth = _showFullProfileInRightPane
-              ? math.min(compact ? 300.0 : 340.0, constraints.maxWidth * .30)
-              : math.min(
-                  compact ? 430.0 : 480.0,
-                  constraints.maxWidth * (compact ? .43 : .45),
-                );
+          final profilePlayer = _rightPanePlayer ?? widget.selectedPlayer;
 
-          final list = _RosterListPanel(
+          // Обычный состав имеет ту же ширину, что левые панели
+          // «Команды» и «Тренеры». Внутреннее меню профиля игрока
+          // сохраняет прежнюю компактную Tracker-ширину.
+          final trackerMenuWidth = constraints.maxWidth >= 1700
+              ? 306.0
+              : (constraints.maxWidth >= 1440
+                  ? 286.0
+                  : (constraints.maxWidth >= 1180 ? 262.0 : 232.0));
+
+          final rosterListWidth = math.min(
+            compact ? 430.0 : 480.0,
+            constraints.maxWidth * (compact ? .43 : .45),
+          );
+
+          final profileMenuWidth = math.min(
+            math.max(trackerMenuWidth, 232.0),
+            constraints.maxWidth * .42,
+          );
+
+          final listWidth = mobile
+              ? constraints.maxWidth
+              : (_showProfileMenu && profilePlayer != null
+                  ? profileMenuWidth
+                  : rosterListWidth);
+
+          final rosterList = _RosterListPanel(
             teamName: widget.teamName,
             playersCount: widget.players.length,
             visibleCount: visiblePlayers.length,
@@ -667,16 +1886,32 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
             scrollController: _scrollC,
             filter: _filter,
             onFilterChanged: (value) => setState(() => _filter = value),
-            onAddPlayer: widget.onAddPlayer,
+            onAddPlayer: _handleAddPlayer,
             onRefresh: widget.onRefresh,
             onDeletePlayer: _confirmDeletePlayer,
+            onMovePlayer: _openTransferPicker,
+            onUnbindPlayer: _confirmUnbindPlayer,
+            onOpenUnassigned: _openUnassignedPlayers,
+            onOpenArchive: _openArchivedPlayers,
             players: visiblePlayers,
-            selectedKey: _playerIdentity(widget.selectedPlayer),
+            selectedKey: _playerIdentity(_rightPanePlayer ?? widget.selectedPlayer),
             playerIdentity: _playerIdentity,
             onOpenPlayer: (player) => _handleOpenPlayer(player, mobile),
             compact: compact,
             mobile: mobile,
           );
+
+          final list = !mobile &&
+                  _showProfileMenu &&
+                  profilePlayer != null
+              ? _PlayerProfileNavigationPanel(
+                  player: profilePlayer,
+                  teamName: widget.teamName,
+                  selectedSection: _profileSection,
+                  onSelect: _selectProfileSection,
+                  onBack: _backToRosterList,
+                )
+              : rosterList;
 
           if (mobile) {
             return Container(
@@ -727,21 +1962,26 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
                                 _rightPanePlayer ?? widget.selectedPlayer!,
                               ),
                               embeddedInWorkspace: true,
-                              onClose: () {
-                                if (!mounted) return;
-                                setState(() => _showFullProfileInRightPane = false);
-                              },
+                              // Навигация полностью живёт слева, как в Tracker.
+                              // Поэтому горизонтальные вкладки и дублирующий ×
+                              // в шапке встроенного профиля не показываем.
+                              showSectionTabs: false,
+                              externalSection: _profileSection,
+                              onSectionChanged: _selectProfileSection,
                             )
                           : _PlayerDetailPanel(
-                              player: widget.selectedPlayer,
+                              player: profilePlayer,
                               teamName: widget.teamName,
-                              onOpenFullProfile: widget.selectedPlayer == null
+                              clubId: widget.clubId,
+                              teamId: widget.selectedTeamId ?? 0,
+                              currentUserId: widget.currentUserId,
+                              onOpenFullProfile: profilePlayer == null
                                   ? null
-                                  : () => _openFullProfile(widget.selectedPlayer!),
-                              onDeletePlayer: widget.selectedPlayer == null ||
+                                  : () => _openFullProfile(profilePlayer),
+                              onDeletePlayer: profilePlayer == null ||
                                       widget.onDeletePlayer == null
                                   ? null
-                                  : () => _confirmDeletePlayer(widget.selectedPlayer!),
+                                  : () => _confirmDeletePlayer(profilePlayer),
                             ),
                     ),
                   ],
@@ -769,6 +2009,10 @@ class _RosterListPanel extends StatelessWidget {
   final VoidCallback onAddPlayer;
   final Future<void> Function()? onRefresh;
   final ValueChanged<Map<String, dynamic>> onDeletePlayer;
+  final ValueChanged<Map<String, dynamic>> onMovePlayer;
+  final ValueChanged<Map<String, dynamic>> onUnbindPlayer;
+  final VoidCallback onOpenUnassigned;
+  final VoidCallback onOpenArchive;
   final List<Map<String, dynamic>> players;
   final String selectedKey;
   final String Function(Map<String, dynamic>?) playerIdentity;
@@ -787,6 +2031,10 @@ class _RosterListPanel extends StatelessWidget {
     required this.onAddPlayer,
     required this.onRefresh,
     required this.onDeletePlayer,
+    required this.onMovePlayer,
+    required this.onUnbindPlayer,
+    required this.onOpenUnassigned,
+    required this.onOpenArchive,
     required this.players,
     required this.selectedKey,
     required this.playerIdentity,
@@ -815,6 +2063,8 @@ class _RosterListPanel extends StatelessWidget {
               teamName: teamName,
               onAddPlayer: onAddPlayer,
               onRefresh: onRefresh,
+              onOpenUnassigned: onOpenUnassigned,
+              onOpenArchive: onOpenArchive,
               mobile: mobile,
             ),
           ),
@@ -838,24 +2088,30 @@ class _RosterListPanel extends StatelessWidget {
                 : RefreshIndicator(
                     color: _CmrRosterColors.green,
                     onRefresh: onRefresh ?? () async {},
-                    child: ListView.builder(
+                    child: ListView.separated(
                       controller: scrollController,
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: EdgeInsets.only(
-                        top: 0,
-                        bottom: mobile
+                      padding: EdgeInsets.fromLTRB(
+                        10,
+                        6,
+                        10,
+                        mobile
                             ? _CmrRosterDecor.mobileDockScrollInset
                             : 12,
                       ),
                       itemCount: players.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 4),
                       itemBuilder: (_, index) {
                         final player = players[index];
-                        final active = selectedKey.isNotEmpty && selectedKey == playerIdentity(player);
+                        final active = selectedKey.isNotEmpty &&
+                            selectedKey == playerIdentity(player);
                         return _PlayerTile(
                           player: player,
                           active: active,
                           index: index,
                           onTap: () => onOpenPlayer(player),
+                          onMove: () => onMovePlayer(player),
+                          onUnbind: () => onUnbindPlayer(player),
                           onDelete: () => onDeletePlayer(player),
                           mobile: mobile,
                         );
@@ -873,56 +2129,178 @@ class _RosterToolbar extends StatelessWidget {
   final String teamName;
   final VoidCallback onAddPlayer;
   final Future<void> Function()? onRefresh;
+  final VoidCallback onOpenUnassigned;
+  final VoidCallback onOpenArchive;
   final bool mobile;
 
   const _RosterToolbar({
     required this.teamName,
     required this.onAddPlayer,
     required this.onRefresh,
+    required this.onOpenUnassigned,
+    required this.onOpenArchive,
     required this.mobile,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Игроки',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: _CmrRosterText.title(mobile ? 15.5 : 16.5),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final narrow = constraints.maxWidth < 330;
+
+        return Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Игроки',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _CmrRosterText.title(mobile ? 15.5 : 16.5),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    teamName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _CmrRosterText.muted(mobile ? 11 : 11.5),
+                  ),
+                ],
               ),
-              const SizedBox(height: 3),
-              Text(
-                teamName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: _CmrRosterText.muted(mobile ? 11 : 11.5),
+            ),
+            if (narrow) ...[
+              PopupMenuButton<String>(
+                tooltip: 'Действия со списком',
+                elevation: 0,
+                color: Colors.white,
+                surfaceTintColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                onSelected: (value) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (value == 'refresh') onRefresh?.call();
+                    if (value == 'unassigned') onOpenUnassigned();
+                    if (value == 'archive') onOpenArchive();
+                  });
+                },
+                itemBuilder: (_) => [
+                  if (onRefresh != null)
+                    PopupMenuItem<String>(
+                      value: 'refresh',
+                      child: Text(
+                        'Обновить',
+                        style: _CmrRosterText.action(),
+                      ),
+                    ),
+                  PopupMenuItem<String>(
+                    value: 'unassigned',
+                    child: Text(
+                      'Без команды',
+                      style: _CmrRosterText.action(),
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'archive',
+                    child: Text(
+                      'Архив',
+                      style: _CmrRosterText.action(),
+                    ),
+                  ),
+                ],
+                child: Container(
+                  width: 34,
+                  height: 34,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: _CmrRosterColors.soft,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '•••',
+                    style: _CmrRosterText.action().copyWith(
+                      color: _CmrRosterColors.muted2,
+                      fontSize: 11.5,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              _CmrRosterIconButton(
+                icon: Icons.person_add_alt_1_rounded,
+                tooltip: 'Добавить игрока',
+                onTap: onAddPlayer,
+                emphasized: true,
+                compact: true,
+              ),
+            ] else ...[
+              if (onRefresh != null && !mobile) ...[
+                _CmrRosterIconButton(
+                  icon: Icons.refresh_rounded,
+                  tooltip: 'Обновить',
+                  onTap: () => onRefresh?.call(),
+                  compact: true,
+                ),
+                const SizedBox(width: 6),
+              ],
+              Material(
+                color: _CmrRosterColors.soft,
+                borderRadius: BorderRadius.circular(9),
+                child: InkWell(
+                  onTap: onOpenUnassigned,
+                  borderRadius: BorderRadius.circular(9),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: mobile ? 8 : 10,
+                      vertical: 8,
+                    ),
+                    child: Text(
+                      mobile ? 'Без ком.' : 'Без команды',
+                      style: _CmrRosterText.action().copyWith(
+                        color: _CmrRosterColors.graphiteSoft,
+                        fontSize: mobile ? 10.2 : 10.7,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Material(
+                color: _CmrRosterColors.greenSoft2,
+                borderRadius: BorderRadius.circular(9),
+                child: InkWell(
+                  onTap: onOpenArchive,
+                  borderRadius: BorderRadius.circular(9),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: mobile ? 8 : 10,
+                      vertical: 8,
+                    ),
+                    child: Text(
+                      'Архив',
+                      style: _CmrRosterText.action().copyWith(
+                        color: _CmrRosterColors.greenDark,
+                        fontSize: mobile ? 10.2 : 10.7,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              _CmrRosterIconButton(
+                icon: Icons.person_add_alt_1_rounded,
+                tooltip: 'Добавить игрока',
+                onTap: onAddPlayer,
+                emphasized: true,
+                compact: true,
               ),
             ],
-          ),
-        ),
-        if (onRefresh != null && !mobile) ...[
-          _CmrRosterIconButton(
-            icon: Icons.refresh_rounded,
-            tooltip: 'Обновить',
-            onTap: () => onRefresh?.call(),
-            compact: true,
-          ),
-          const SizedBox(width: 6),
-        ],
-        _CmrRosterIconButton(
-          icon: Icons.person_add_alt_1_rounded,
-          tooltip: 'Добавить игрока',
-          onTap: onAddPlayer,
-          emphasized: true,
-          compact: true,
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 }
@@ -1077,14 +2455,6 @@ class _FilterPill extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                icon,
-                size: dense ? 13.5 : 14,
-                color: active
-                    ? _CmrRosterColors.greenDark
-                    : _CmrRosterColors.subtle,
-              ),
-              SizedBox(width: dense ? 5 : 6),
               Text(
                 label,
                 maxLines: 1,
@@ -1100,17 +2470,7 @@ class _FilterPill extends StatelessWidget {
                   height: 1,
                 ),
               ),
-              if (active) ...[
-                const SizedBox(width: 6),
-                Container(
-                  width: 5,
-                  height: 5,
-                  decoration: const BoxDecoration(
-                    color: _CmrRosterColors.green,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ],
+
             ],
           ),
         ),
@@ -1124,6 +2484,8 @@ class _PlayerTile extends StatelessWidget {
   final bool active;
   final int index;
   final VoidCallback onTap;
+  final VoidCallback onMove;
+  final VoidCallback onUnbind;
   final VoidCallback onDelete;
   final bool mobile;
 
@@ -1132,6 +2494,8 @@ class _PlayerTile extends StatelessWidget {
     required this.active,
     required this.index,
     required this.onTap,
+    required this.onMove,
+    required this.onUnbind,
     required this.onDelete,
     required this.mobile,
   });
@@ -1141,140 +2505,293 @@ class _PlayerTile extends StatelessWidget {
     final name = _playerName(player);
     final position = _playerPosition(player);
     final number = _jerseyNumber(player);
-    final photo = _absoluteUrl(
-      _first(
-        player,
-        const ['photo', 'avatar', 'image', 'photo_url', 'avatar_url'],
-      ),
-    );
+    final photo = _playerPhotoUrl(player);
     final age = _ageLabel(player);
     final polar = _playerHasPolar(player);
     final gps = _playerHasGps(player);
     final activity = _playerActivityLabel(player);
 
+    final subtitleParts = <String>[
+      position.isEmpty ? 'Без амплуа' : position,
+      if (age.isNotEmpty) age,
+      if (number.isNotEmpty) '№ $number',
+      if (gps) 'GPS',
+      if (polar) 'POLAR',
+      if (activity.isNotEmpty) activity,
+    ];
+
     return Material(
       color: Colors.transparent,
+      borderRadius: BorderRadius.circular(9),
       child: InkWell(
         onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          constraints: BoxConstraints(minHeight: mobile ? 80 : 76),
-          padding: EdgeInsets.fromLTRB(
-            mobile ? 10 : 12,
-            9,
-            mobile ? 10 : 12,
-            9,
-          ),
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          constraints: const BoxConstraints(minHeight: 58),
+          padding: const EdgeInsets.fromLTRB(10, 6, 8, 6),
           decoration: BoxDecoration(
             color: active
-                ? _CmrRosterColors.greenSoft2
-                : Colors.white,
-            border: const Border(
-              bottom: BorderSide(
-                color: _CmrRosterColors.line,
-                width: .65,
-              ),
-            ),
+                ? _CmrRosterColors.greenSoft
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
           ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                width: 3,
-                height: mobile ? 50 : 48,
-                decoration: BoxDecoration(
-                  color: active
-                      ? _CmrRosterColors.green
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(99),
-                ),
+              _CmrGlowDot(
+                color: active
+                    ? _CmrRosterColors.green
+                    : _CmrRosterColors.muted2,
+                size: active ? 6.4 : 4.8,
+                opacity: active ? 1 : .48,
+                halo: active,
               ),
               const SizedBox(width: 9),
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  _CmrRosterAvatar(
-                    photo: photo,
-                    name: name,
-                    size: mobile ? 52 : 50,
-                  ),
-                  Positioned(
-                    right: -3,
-                    bottom: -3,
-                    child: _PlayerStatusBadge(
-                      number: number,
-                      active: active,
-                    ),
-                  ),
-                ],
+              _CmrRosterAvatar(
+                photo: photo,
+                name: name,
+                size: mobile ? 40 : 38,
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: _CmrRosterText.title(
-                              mobile ? 14.2 : 14.0,
-                            ),
-                          ),
-                        ),
-                        if (activity.isNotEmpty) ...[
-                          const SizedBox(width: 6),
-                          _ActivityDot(label: activity),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 5),
                     Text(
-                      [
-                        position.isEmpty ? 'Без амплуа' : position,
-                        if (age.isNotEmpty) age,
-                      ].join('  ·  '),
+                      name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _CmrRosterText.muted(11.4),
+                      style: _CmrRosterText.navLabel(active: active),
                     ),
-                    if (polar || gps) ...[
-                      const SizedBox(height: 5),
-                      Row(
-                        children: [
-                          if (polar)
-                            const _InlineStatusDot(
-                              label: 'POLAR',
-                              color: _CmrRosterColors.red,
-                            ),
-                          if (polar && gps)
-                            const SizedBox(width: 12),
-                          if (gps)
-                            const _InlineStatusDot(
-                              label: 'GPS',
-                              color: _CmrRosterColors.blue,
-                            ),
-                        ],
-                      ),
-                    ],
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitleParts.join(' · '),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: _CmrRosterText.navSubtitle(active: active),
+                    ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              if (mobile)
-                _RosterPlayerActionsButton(
-                  onDelete: onDelete,
-                  compact: true,
-                )
-              else
-                _ChevronBadge(active: active),
+              const SizedBox(width: 5),
+              _RosterPlayerActionsButton(
+                onMove: onMove,
+                onUnbind: onUnbind,
+                onDelete: onDelete,
+                compact: true,
+              ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _PlayerProfileNavigationPanel extends StatelessWidget {
+  final Map<String, dynamic> player;
+  final String teamName;
+  final PlayerProfileSection selectedSection;
+  final ValueChanged<PlayerProfileSection> onSelect;
+  final VoidCallback onBack;
+
+  const _PlayerProfileNavigationPanel({
+    required this.player,
+    required this.teamName,
+    required this.selectedSection,
+    required this.onSelect,
+    required this.onBack,
+  });
+
+  static const List<
+      ({
+        PlayerProfileSection section,
+        String label,
+        String subtitle,
+      })> _items = [
+    (
+      section: PlayerProfileSection.card,
+      label: 'Карточка игрока',
+      subtitle: 'основные данные и профиль',
+    ),
+    (
+      section: PlayerProfileSection.diary,
+      label: 'Дневник',
+      subtitle: 'оценки, самооценка и заметки',
+    ),
+    (
+      section: PlayerProfileSection.readiness,
+      label: 'Готовность',
+      subtitle: 'readiness и нагрузка',
+    ),
+    (
+      section: PlayerProfileSection.activity,
+      label: 'Активность',
+      subtitle: 'тренировки и показатели',
+    ),
+    (
+      section: PlayerProfileSection.matches,
+      label: 'Матчи',
+      subtitle: 'игры и статистика',
+    ),
+    (
+      section: PlayerProfileSection.testing,
+      label: 'Тестирование',
+      subtitle: 'тесты и динамика',
+    ),
+    (
+      section: PlayerProfileSection.health,
+      label: 'Здоровье',
+      subtitle: 'медицина и физические данные',
+    ),
+    (
+      section: PlayerProfileSection.documents,
+      label: 'Документы',
+      subtitle: 'файлы и документы игрока',
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: Colors.white,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+              itemCount: _items.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 4),
+              itemBuilder: (_, index) {
+                final item = _items[index];
+                final active = selectedSection == item.section ||
+                    (item.section == PlayerProfileSection.card &&
+                        selectedSection == PlayerProfileSection.overview) ||
+                    (item.section == PlayerProfileSection.activity &&
+                        selectedSection == PlayerProfileSection.analytics);
+
+                return Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(9),
+                  child: InkWell(
+                    onTap: () => onSelect(item.section),
+                    borderRadius: BorderRadius.circular(9),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 160),
+                      curve: Curves.easeOutCubic,
+                      constraints: const BoxConstraints(minHeight: 48),
+                      padding: const EdgeInsets.fromLTRB(10, 7, 8, 7),
+                      decoration: BoxDecoration(
+                        color: active
+                            ? _CmrRosterColors.greenSoft
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(top: 5),
+                            child: _CmrGlowDot(
+                              color: active
+                                  ? _CmrRosterColors.green
+                                  : _CmrRosterColors.muted2,
+                              size: active ? 6.4 : 4.8,
+                              opacity: active ? 1 : .48,
+                              halo: active,
+                            ),
+                          ),
+                          const SizedBox(width: 9),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.label,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: _CmrRosterText.navLabel(
+                                    active: active,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  item.subtitle,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: _CmrRosterText.navSubtitle(
+                                    active: active,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          Container(height: 1, color: _CmrRosterColors.line),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 11, 12, 13),
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(9),
+              child: InkWell(
+                onTap: onBack,
+                borderRadius: BorderRadius.circular(9),
+                child: Container(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  padding: const EdgeInsets.fromLTRB(10, 7, 8, 7),
+                  decoration: BoxDecoration(
+                    color: _CmrRosterColors.soft,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(top: 5),
+                        child: _CmrGlowDot(
+                          color: _CmrRosterColors.green,
+                          size: 6.4,
+                        ),
+                      ),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'К списку игроков',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _CmrRosterText.navLabel(active: false),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              '${_playerName(player)} · $teamName',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: _CmrRosterText.navSubtitle(active: false),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1321,6 +2838,76 @@ class _MiniPlayerChip extends StatelessWidget {
 }
 
 
+class _CmrGlowDot extends StatelessWidget {
+  final Color color;
+  final double size;
+  final double opacity;
+  final bool halo;
+
+  const _CmrGlowDot({
+    required this.color,
+    this.size = 6,
+    this.opacity = 1,
+    this.halo = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: opacity,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          boxShadow: halo
+              ? <BoxShadow>[
+                  BoxShadow(
+                    color: color.withOpacity(.18),
+                    blurRadius: size * 1.9,
+                    spreadRadius: .2,
+                  ),
+                  BoxShadow(
+                    color: color.withOpacity(.07),
+                    blurRadius: size * 3,
+                    spreadRadius: .5,
+                  ),
+                ]
+              : null,
+        ),
+      ),
+    );
+  }
+}
+
+class _CmrDotCluster extends StatelessWidget {
+  final Color color;
+  final bool light;
+
+  const _CmrDotCluster({
+    this.color = _CmrRosterColors.green,
+    this.light = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = light ? Colors.white : color;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _CmrGlowDot(color: c, size: 3.5, opacity: .25, halo: false),
+        const SizedBox(width: 3),
+        _CmrGlowDot(color: c, size: 4.5, opacity: .48, halo: false),
+        const SizedBox(width: 3),
+        _CmrGlowDot(color: c, size: 5.5, opacity: .72, halo: false),
+        const SizedBox(width: 3),
+        _CmrGlowDot(color: c, size: 6.5),
+      ],
+    );
+  }
+}
+
 class _InlineStatusDot extends StatelessWidget {
   final String label;
   final Color color;
@@ -1331,7 +2918,10 @@ class _InlineStatusDot extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(width: 6, height: 6, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        _CmrGlowDot(
+          color: color,
+          size: 6,
+        ),
         const SizedBox(width: 5),
         Text(label, style: TextStyle(color: _CmrRosterColors.subtle, fontSize: 10.2, fontWeight: FontWeight.w700, letterSpacing: .2)),
       ],
@@ -1353,14 +2943,9 @@ class _ActivityDot extends StatelessWidget {
             : _CmrRosterColors.muted2;
     return Tooltip(
       message: label,
-      child: Container(
-        width: 8,
-        height: 8,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          boxShadow: [BoxShadow(color: color.withOpacity(.22), blurRadius: 5)],
-        ),
+      child: _CmrGlowDot(
+        color: color,
+        size: 8,
       ),
     );
   }
@@ -1371,13 +2956,9 @@ class _RosterActiveDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 6,
-      height: 6,
-      decoration: const BoxDecoration(
-        color: _CmrRosterColors.green,
-        shape: BoxShape.circle,
-      ),
+    return const _CmrGlowDot(
+      color: _CmrRosterColors.green,
+      size: 6,
     );
   }
 }
@@ -1391,8 +2972,8 @@ class _PlayerStatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 19,
-      height: 19,
+      width: 18,
+      height: 18,
       decoration: BoxDecoration(
         color: active ? _CmrRosterColors.greenSoft : Colors.white,
         borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
@@ -1405,16 +2986,23 @@ class _PlayerStatusBadge extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.clip,
               style: TextStyle(
-                color: active ? _CmrRosterColors.green : _CmrRosterColors.muted,
+                color: active
+                    ? _CmrRosterColors.green
+                    : _CmrRosterColors.muted,
                 fontSize: number.length == 1 ? 10.5 : 9.6,
                 fontWeight: FontWeight.w500,
                 height: 1,
               ),
             )
-          : Icon(
-              Icons.sports_soccer_rounded,
-              color: active ? _CmrRosterColors.green : _CmrRosterColors.muted,
-              size: 12,
+          : Center(
+              child: _CmrGlowDot(
+                color: active
+                    ? _CmrRosterColors.green
+                    : _CmrRosterColors.muted2,
+                size: 6,
+                opacity: active ? 1 : .72,
+                halo: active,
+              ),
             ),
     );
   }
@@ -1425,6 +3013,9 @@ class _PlayerStatusBadge extends StatelessWidget {
 class _PlayerDetailPanel extends StatelessWidget {
   final Map<String, dynamic>? player;
   final String teamName;
+  final int clubId;
+  final int teamId;
+  final int? currentUserId;
   final VoidCallback? onOpenFullProfile;
   final Future<void> Function()? onDeletePlayer;
   final VoidCallback? onClose;
@@ -1433,6 +3024,9 @@ class _PlayerDetailPanel extends StatelessWidget {
   const _PlayerDetailPanel({
     required this.player,
     required this.teamName,
+    required this.clubId,
+    required this.teamId,
+    required this.currentUserId,
     this.onOpenFullProfile,
     this.onDeletePlayer,
     this.onClose,
@@ -1454,7 +3048,7 @@ class _PlayerDetailPanel extends StatelessWidget {
 
     final name = _playerName(p);
     final position = _playerPosition(p).isEmpty ? 'Амплуа не указано' : _playerPosition(p);
-    final photo = _absoluteUrl(_first(p, const ['photo', 'avatar', 'image', 'photo_url', 'avatar_url']));
+    final photo = _playerPhotoUrl(p);
     final number = _jerseyNumber(p);
     final birth = _first(p, const ['birth_date', 'birthDate', 'birthday', 'date_birth']);
     final age = _ageLabel(p);
@@ -1468,7 +3062,7 @@ class _PlayerDetailPanel extends StatelessWidget {
 
     final content = ListView(
       controller: scrollController,
-      padding: EdgeInsets.fromLTRB(14, onClose == null ? 14 : 8, 14, 14),
+      padding: EdgeInsets.fromLTRB(18, onClose == null ? 18 : 10, 18, 20),
       children: [
         if (onClose != null) ...[
           const _ModalGrabber(),
@@ -1483,25 +3077,20 @@ class _PlayerDetailPanel extends StatelessWidget {
           onClose: onClose,
         ),
         const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            SizedBox(
-              width: 148,
-              child: _PrimaryActionButton(
-                icon: Icons.open_in_new_rounded,
-                text: 'Открыть профиль',
-                onTap: onOpenFullProfile,
-              ),
+        _InspectorActionGroup(
+          actions: [
+            _InspectorAction(
+              icon: Icons.person_outline_rounded,
+              title: 'Открыть профиль',
+              subtitle: 'Полная карточка игрока',
+              onTap: onOpenFullProfile,
+              accent: true,
             ),
-            SizedBox(
-              width: 136,
-              child: _SecondaryActionButton(
-                icon: Icons.edit_rounded,
-                text: 'Редактировать',
-                onTap: onOpenFullProfile,
-              ),
+            _InspectorAction(
+              icon: Icons.edit_outlined,
+              title: 'Редактировать',
+              subtitle: 'Изменить данные и амплуа',
+              onTap: onOpenFullProfile,
             ),
           ],
         ),
@@ -1538,27 +3127,59 @@ class _PlayerDetailPanel extends StatelessWidget {
               ? 'Дополнительные спортивные показатели пока не заполнены.'
               : sportData,
         ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _SecondaryActionButton(
-                icon: Icons.analytics_outlined,
-                text: 'Метрики',
-                onTap: onOpenFullProfile,
-              ),
+        const SizedBox(height: 18),
+
+        // Parent Access deliberately lives BELOW the player overview.
+        // One parent ListView, no fixed 420px nested scroll.
+        Container(
+          padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+          decoration: BoxDecoration(
+            color: Color.alphaBlend(
+              _CmrRosterColors.green.withOpacity(.022),
+              _CmrRosterColors.soft,
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _SecondaryActionButton(
-                icon: Icons.assignment_turned_in_outlined,
-                text: 'Тренировки',
-                onTap: onOpenFullProfile,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: _CmrRosterColors.green.withOpacity(.025),
+                blurRadius: 18,
+                spreadRadius: -10,
+                offset: const Offset(0, 7),
               ),
+            ],
+          ),
+          child: CmrPlayerParentAccessPanel(
+            key: ValueKey(
+              'parent-access-${_first(p, const ['player_id', 'id'])}',
+            ),
+            player: p,
+            clubId: clubId,
+            teamId: teamId,
+            currentUserId: currentUserId,
+            compact: true,
+            inlineInParentScroll: true,
+          ),
+        ),
+        const SizedBox(height: 18),
+
+        _InspectorActionGroup(
+          title: 'Быстрый переход',
+          actions: [
+            _InspectorAction(
+              icon: Icons.analytics_outlined,
+              title: 'Метрики',
+              subtitle: 'Нагрузка и показатели',
+              onTap: onOpenFullProfile,
+            ),
+            _InspectorAction(
+              icon: Icons.assignment_turned_in_outlined,
+              title: 'Тренировки',
+              subtitle: 'История занятий игрока',
+              onTap: onOpenFullProfile,
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 18),
         _DeletePlayerButton(onTap: onDeletePlayer),
       ],
     );
@@ -1620,7 +3241,7 @@ class _PlayerDetailHeader extends StatelessWidget {
         Stack(
           clipBehavior: Clip.none,
           children: [
-            _CmrRosterAvatar(photo: photo, name: name, size: 88),
+            _CmrRosterAvatar(photo: photo, name: name, size: 96),
             Positioned(right: -4, bottom: -4, child: _PlayerStatusBadge(number: number, active: true)),
           ],
         ),
@@ -1629,7 +3250,7 @@ class _PlayerDetailHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(name, style: _CmrRosterText.title(20), maxLines: 2, overflow: TextOverflow.ellipsis),
+              Text(name, style: _CmrRosterText.title(22), maxLines: 2, overflow: TextOverflow.ellipsis),
               const SizedBox(height: 6),
               Wrap(
                 spacing: 6,
@@ -1730,40 +3351,48 @@ class _PlayerMetricsStrip extends StatelessWidget {
       (value: number, label: 'Номер'),
     ];
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final twoColumns = constraints.maxWidth < 520;
-        final itemWidth = twoColumns
-            ? (constraints.maxWidth - 8) / 2
-            : (constraints.maxWidth - 24) / 4;
-        return Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final item in items)
-              SizedBox(
-                width: itemWidth,
-                child: Container(
-                  height: 64,
-                  padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: _CmrRosterColors.soft,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: _CmrRosterColors.line.withOpacity(.72), width: .7),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(item.value, style: _CmrRosterText.title(16), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      Text(item.label, style: _CmrRosterText.caption()),
-                    ],
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: _CmrRosterColors.soft,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 520;
+          return Wrap(
+            spacing: 0,
+            runSpacing: compact ? 14 : 0,
+            children: [
+              for (var i = 0; i < items.length; i++)
+                SizedBox(
+                  width: compact
+                      ? constraints.maxWidth / 2
+                      : constraints.maxWidth / 4,
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      left: i == 0 ? 0 : 10,
+                      right: i == items.length - 1 ? 0 : 10,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          items[i].value,
+                          style: _CmrRosterText.title(15.5),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(items[i].label, style: _CmrRosterText.caption()),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-          ],
-        );
-      },
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -1784,16 +3413,15 @@ class _PlayerConnectionCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _CmrRosterColors.soft,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _CmrRosterColors.line.withOpacity(.72), width: .7),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Expanded(child: Text('Состояние игрока', style: _CmrRosterText.section())),
+              Expanded(child: Text('Состояние', style: _CmrRosterText.section())),
               if (activity.isNotEmpty) _StatusLabel(text: activity),
             ],
           ),
@@ -1844,10 +3472,19 @@ class _ConnectionItem extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(width: 7, height: 7, decoration: BoxDecoration(color: enabled ? color : _CmrRosterColors.line, shape: BoxShape.circle)),
+          _CmrGlowDot(
+            color: enabled ? color : _CmrRosterColors.line,
+            size: 7,
+            halo: enabled,
+          ),
           const SizedBox(width: 7),
           Expanded(child: Text(title, style: _CmrRosterText.value(11.5))),
-          Container(width: 7, height: 7, decoration: BoxDecoration(color: enabled ? color : _CmrRosterColors.line, shape: BoxShape.circle)),
+          _CmrGlowDot(
+            color: enabled ? color : _CmrRosterColors.line,
+            size: 5,
+            opacity: enabled ? .48 : 1,
+            halo: false,
+          ),
         ],
       ),
     );
@@ -1924,12 +3561,22 @@ class _DetailSection extends StatelessWidget {
         ),
         Container(
           clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: _CmrRosterColors.panel,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: _CmrRosterColors.line.withOpacity(.65), width: .7),
+          decoration: const BoxDecoration(
+            color: Colors.transparent,
           ),
-          child: Column(children: children),
+          child: Column(
+            children: [
+              for (var i = 0; i < children.length; i++) ...[
+                children[i],
+                if (i != children.length - 1)
+                  const Divider(
+                    height: 1,
+                    thickness: .55,
+                    color: _CmrRosterColors.line,
+                  ),
+              ],
+            ],
+          ),
         ),
       ],
     );
@@ -1970,14 +3617,21 @@ class _CommentBox extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       clipBehavior: Clip.antiAlias,
-      decoration: _CmrRosterDecor.softCard(radius: _CmrRosterDecor.mobileInnerRadius),
+      decoration: BoxDecoration(
+        color: _CmrRosterColors.soft,
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Container(
           height: 38,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: const BoxDecoration(color: Colors.transparent),
           child: Row(children: [
-            const Icon(Icons.notes_rounded, color: _CmrRosterColors.muted2, size: 15),
+            const _CmrGlowDot(
+              color: _CmrRosterColors.greenDark,
+              size: 6,
+              halo: false,
+            ),
             const SizedBox(width: 8),
             Expanded(child: Text(title, style: _CmrRosterText.section())),
           ]),
@@ -2018,68 +3672,152 @@ class _NoPlayerSelected extends StatelessWidget {
 // ==================== Общие компоненты ====================
 
 class _RosterPlayerActionsButton extends StatelessWidget {
+  final VoidCallback onMove;
+  final VoidCallback onUnbind;
   final VoidCallback onDelete;
   final bool compact;
 
-  const _RosterPlayerActionsButton({required this.onDelete, required this.compact});
+  const _RosterPlayerActionsButton({
+    required this.onMove,
+    required this.onUnbind,
+    required this.onDelete,
+    required this.compact,
+  });
 
   @override
   Widget build(BuildContext context) {
     return PopupMenuButton<_RosterPlayerAction>(
-      tooltip: 'Дополнительно',
+      tooltip: 'Действия с игроком',
       elevation: 0,
       color: _CmrRosterColors.panel,
       surfaceTintColor: _CmrRosterColors.panel,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(
+          _CmrRosterDecor.mobileInnerRadius,
+        ),
+      ),
       position: PopupMenuPosition.under,
       offset: const Offset(0, 8),
       onSelected: (action) {
-        switch (action) {
-          case _RosterPlayerAction.delete:
-            WidgetsBinding.instance.addPostFrameCallback((_) => onDelete());
-            break;
-        }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          switch (action) {
+            case _RosterPlayerAction.move:
+              onMove();
+              break;
+            case _RosterPlayerAction.unbind:
+              onUnbind();
+              break;
+            case _RosterPlayerAction.delete:
+              onDelete();
+              break;
+          }
+        });
       },
       itemBuilder: (context) => [
         PopupMenuItem<_RosterPlayerAction>(
+          value: _RosterPlayerAction.move,
+          padding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 3,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  color: _CmrRosterColors.green,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Text(
+                'Перевести в команду…',
+                style: _CmrRosterText.value(10.8),
+              ),
+            ],
+          ),
+        ),
+        PopupMenuItem<_RosterPlayerAction>(
+          value: _RosterPlayerAction.unbind,
+          padding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 3,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  color: _CmrRosterColors.amber,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Text(
+                'Отвязать от команды',
+                style: _CmrRosterText.value(10.8),
+              ),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(height: 8),
+        PopupMenuItem<_RosterPlayerAction>(
           value: _RosterPlayerAction.delete,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-            decoration: BoxDecoration(
-              color: _CmrRosterColors.redSoft,
-              borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.delete_outline_rounded, color: _CmrRosterColors.red, size: 18),
-                const SizedBox(width: 8),
-                Text('Удалить игрока', style: _CmrRosterText.danger()),
-              ],
-            ),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 3,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  color: _CmrRosterColors.red,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Text(
+                'В архив',
+                style: _CmrRosterText.danger(),
+              ),
+            ],
           ),
         ),
       ],
       child: Container(
-        width: compact ? 26 : 38,
-        height: compact ? 26 : 38,
+        width: compact ? 28 : 38,
+        height: compact ? 28 : 38,
         decoration: BoxDecoration(
           color: _CmrRosterColors.soft,
-          borderRadius: BorderRadius.circular(compact ? 10 : _CmrRosterDecor.mobileInnerRadius),
+          borderRadius: BorderRadius.circular(
+            compact
+                ? 10
+                : _CmrRosterDecor.mobileInnerRadius,
+          ),
         ),
         alignment: Alignment.center,
-        child: Icon(
-          Icons.more_horiz_rounded,
-          color: _CmrRosterColors.muted2,
-          size: compact ? 17 : 20,
+        child: Text(
+          '•••',
+          style: _CmrRosterText.action().copyWith(
+            color: _CmrRosterColors.muted2,
+            fontSize: compact ? 11.5 : 13,
+            letterSpacing: 1.2,
+          ),
         ),
       ),
     );
   }
 }
 
-enum _RosterPlayerAction { delete }
+enum _RosterPlayerAction {
+  move,
+  unbind,
+  delete,
+}
 
 class _CmrRosterOutlineButton extends StatelessWidget {
   final String title;
@@ -2369,6 +4107,131 @@ class _CloseButton extends StatelessWidget {
 }
 
 
+class _InspectorAction {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback? onTap;
+  final bool accent;
+
+  const _InspectorAction({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.accent = false,
+  });
+}
+
+class _InspectorActionGroup extends StatelessWidget {
+  final String? title;
+  final List<_InspectorAction> actions;
+
+  const _InspectorActionGroup({this.title, required this.actions});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (title != null) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(2, 0, 2, 10),
+            child: Text(title!, style: _CmrRosterText.section()),
+          ),
+        ],
+        Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: _CmrRosterColors.soft,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            children: [
+              for (var i = 0; i < actions.length; i++) ...[
+                _InspectorActionRow(action: actions[i]),
+                if (i != actions.length - 1)
+                  const Padding(
+                    padding: EdgeInsets.only(left: 50),
+                    child: Divider(height: 1, thickness: .55, color: _CmrRosterColors.line),
+                  ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _InspectorActionRow extends StatelessWidget {
+  final _InspectorAction action;
+  const _InspectorActionRow({required this.action});
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = action.onTap != null;
+    final iconColor = action.accent
+        ? _CmrRosterColors.greenDark
+        : _CmrRosterColors.graphiteSoft;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: action.onTap,
+        child: Opacity(
+          opacity: enabled ? 1 : .45,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            child: Row(
+              children: [
+                Container(
+                  width: 30,
+                  height: 30,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: action.accent
+                        ? _CmrRosterColors.green.withOpacity(.055)
+                        : Colors.white.withOpacity(.68),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Container(
+                    width: 3,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: iconColor.withOpacity(action.accent ? .9 : .55),
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(action.title, style: _CmrRosterText.action()),
+                      const SizedBox(height: 2),
+                      Text(action.subtitle, style: _CmrRosterText.muted(10.8)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: action.accent
+                      ? _CmrRosterColors.green
+                      : _CmrRosterColors.subtle,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _PrimaryActionButton extends StatelessWidget {
   final IconData icon;
   final String text;
@@ -2442,24 +4305,34 @@ class _DeletePlayerButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: _CmrRosterColors.panel,
-      borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileInnerRadius),
-        onTap: onTap,
-        child: Opacity(
-          opacity: onTap == null ? .55 : 1,
-          child: Container(
-            height: 38,
-            alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: 11),
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(_CmrRosterDecor.mobileButtonRadius), border: Border.all(color: _CmrRosterColors.red.withOpacity(.35), width: .8)),
-            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(Icons.delete_outline_rounded, color: onTap == null ? _CmrRosterColors.muted : _CmrRosterColors.red, size: 14),
-              const SizedBox(width: 6),
-              Flexible(child: Text('Удалить игрока', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: onTap == null ? _CmrRosterColors.muted : _CmrRosterColors.red, fontSize: 11.4, fontWeight: FontWeight.w500))),
-            ]),
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(9),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(9),
+          onTap: onTap,
+          child: Opacity(
+            opacity: onTap == null ? .45 : 1,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.delete_outline_rounded,
+                    color: onTap == null ? _CmrRosterColors.muted : _CmrRosterColors.red,
+                    size: 15,
+                  ),
+                  const SizedBox(width: 7),
+                  Text(
+                    'В архив',
+                    style: _CmrRosterText.danger().copyWith(fontSize: 11.4),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -2535,8 +4408,52 @@ String _absoluteUrl(String raw) {
   if (value.startsWith('//')) return 'https:$value';
   if (value.startsWith('sportotekaapp.ru/')) return 'https://$value';
   if (value.startsWith('www.sportotekaapp.ru/')) return 'https://$value';
-  final cleaned = value.startsWith('/') ? value.substring(1) : value;
-  return 'https://sportotekaapp.ru/$cleaned';
+  if (value.startsWith('/')) return 'https://sportotekaapp.ru$value';
+
+  final cleaned = value.replaceFirst(RegExp(r'^\./+'), '');
+  if (cleaned.startsWith('uploads/')) {
+    return 'https://sportotekaapp.ru/$cleaned';
+  }
+
+  // В профиле игрока относительное имя фото хранится как файл uploads/.
+  // Старый roster ошибочно собирал URL от корня домена, поэтому фото могло
+  // стабильно получать 404.
+  return 'https://sportotekaapp.ru/uploads/$cleaned';
+}
+
+String _playerPhotoUrl(Map<String, dynamic> player) {
+  const keys = <String>[
+    'photo',
+    'photo_url',
+    'photoUrl',
+    'avatar',
+    'avatar_url',
+    'avatarUrl',
+    'image',
+    'image_url',
+    'imageUrl',
+    'player_photo',
+    'playerPhoto',
+    'profile_photo',
+    'profilePhoto',
+    'photo_path',
+    'photoPath',
+    'avatar_path',
+    'avatarPath',
+  ];
+
+  final direct = _first(player, keys);
+  if (direct.isNotEmpty) return _absoluteUrl(direct);
+
+  // Некоторые API возвращают медиа внутри profile/player/media.
+  for (final containerKey in const ['profile', 'player', 'media']) {
+    final nested = player[containerKey];
+    if (nested is Map) {
+      final value = _first(Map<String, dynamic>.from(nested), keys);
+      if (value.isNotEmpty) return _absoluteUrl(value);
+    }
+  }
+  return '';
 }
 
 bool _boolish(dynamic value) {

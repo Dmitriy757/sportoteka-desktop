@@ -148,8 +148,8 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
         const Text(
           'Тип челленджа',
           style: TextStyle(
-            fontWeight: FontWeight.w800,
-            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
           ),
         ),
         const SizedBox(height: 10),
@@ -173,18 +173,19 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
                     color: selected
                         ? GzColors.greenSoft
                         : GzColors.soft,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(10),
                     border: Border.all(
                       color: selected
-                          ? GzColors.green
-                          : GzColors.divider,
+                          ? GzColors.greenBorder
+                          : Colors.transparent,
+                      width: .8,
                     ),
                   ),
                   child: Center(
                     child: Text(
                       item['label']!,
                       style: TextStyle(
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: selected
                             ? GzColors.green
                             : GzColors.text,
@@ -205,9 +206,8 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: GzColors.divider),
-      ),
+        borderRadius: BorderRadius.circular(12),
+            ),
       child: Form(
         key: _formKey,
         child: Column(
@@ -217,9 +217,9 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
               decoration: InputDecoration(
                 labelText: 'Название челленджа',
                 hintText: 'Например: 30 точных передач',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
+                border: InputBorder.none,
+                filled: true,
+                fillColor: GzColors.soft,
               ),
               validator: (v) {
                 if (v == null || v.trim().isEmpty) {
@@ -236,9 +236,9 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
                 labelText: 'Описание',
                 hintText:
                     'Опиши задание подробно: что должен сделать игрок, какой результат нужен',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
+                border: InputBorder.none,
+                filled: true,
+                fillColor: GzColors.soft,
               ),
               validator: (v) {
                 if (v == null || v.trim().isEmpty) {
@@ -256,9 +256,9 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
               decoration: InputDecoration(
                 labelText: 'Награда в очках',
                 hintText: '20',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
+                border: InputBorder.none,
+                filled: true,
+                fillColor: GzColors.soft,
                 prefixIcon: const Icon(Icons.emoji_events_outlined),
               ),
               validator: (v) {
@@ -279,9 +279,9 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
               onTap: _pickDateTime,
               decoration: InputDecoration(
                 labelText: 'Срок выполнения',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
+                border: InputBorder.none,
+                filled: true,
+                fillColor: GzColors.soft,
                 prefixIcon: const Icon(Icons.schedule_outlined),
                 suffixIcon: IconButton(
                   onPressed: _pickDateTime,
@@ -309,9 +309,9 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
                     : const Icon(Icons.flag_outlined),
                 label: Text(_saving ? 'Сохраняем...' : 'Создать челлендж'),
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   backgroundColor: GzColors.green,
                   foregroundColor: Colors.white,
@@ -329,9 +329,8 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: GzColors.soft,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: GzColors.divider),
-      ),
+        borderRadius: BorderRadius.circular(12),
+              ),
       child: Row(
         children: [
           Container(
@@ -339,7 +338,7 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
             height: 42,
             decoration: BoxDecoration(
               color: GzColors.greenSoft,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: GzColors.green),
           ),
@@ -351,8 +350,8 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
                 Text(
                   title,
                   style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -360,7 +359,7 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
                   subtitle,
                   style: const TextStyle(
                     color: GzColors.subtle,
-                    fontSize: 12,
+                    fontSize: 10.8,
                     height: 1.35,
                   ),
                 ),
@@ -379,8 +378,8 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
         const Text(
           'Идеи для челленджей',
           style: TextStyle(
-            fontWeight: FontWeight.w900,
-            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            fontSize: 16,
           ),
         ),
         const SizedBox(height: 12),
@@ -424,7 +423,7 @@ class _CreateChallengeScreenState extends State<CreateChallengeScreen> {
                   'Не удалось определить команду для создания челленджа',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 14,
                     fontWeight: FontWeight.w700,
                   ),
                 ),

@@ -1,5 +1,6 @@
 // lib/presentation/training_graphics/widgets/tg_canvas.dart
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -29,10 +30,59 @@ enum _PointerMode {
   pendingObjectDrag,
   pendingViewportPan,
   draggingObject,
+  scalingObject,
+  rotatingObject,
   panningViewport,
   drawing,
 }
 
+enum _SelectionHandle {
+  none,
+  scaleTopLeft,
+  scaleTopRight,
+  scaleBottomRight,
+  scaleBottomLeft,
+  rotate,
+}
+
+
+Offset _tgTransformPoint(vector.Matrix4 matrix, Offset point) {
+  final out = matrix.transform(vector.Vector4(point.dx, point.dy, 0.0, 1.0));
+  final w = out.w;
+  if (w.abs() < 1e-9) return Offset(out.x, out.y);
+  return Offset(out.x / w, out.y / w);
+}
+
+Offset _tgUntransformPlanePoint(vector.Matrix4 matrix, Offset point) {
+  // The football field is the z=0 plane. A 4x4 perspective transform on that
+  // plane is a 3x3 homography. Invert the homography directly so drawing and
+  // hit testing remain exact even with Tracker's real perspective enabled.
+  final m = matrix.storage;
+  final a = m[0], b = m[4], c = m[12];
+  final d = m[1], e = m[5], f = m[13];
+  final g = m[3], h = m[7], i = m[15];
+
+  final A = e * i - f * h;
+  final B = c * h - b * i;
+  final C = b * f - c * e;
+  final D = f * g - d * i;
+  final E = a * i - c * g;
+  final F = c * d - a * f;
+  final G = d * h - e * g;
+  final H = b * g - a * h;
+  final I = a * e - b * d;
+  final det = a * A + b * D + c * G;
+  if (det.abs() < 1e-12) return point;
+
+  final invDet = 1.0 / det;
+  final x = point.dx;
+  final y = point.dy;
+  final sx = (A * x + B * y + C) * invDet;
+  final sy = (D * x + E * y + F) * invDet;
+  final sw = (G * x + H * y + I) * invDet;
+  if (sw.abs() < 1e-9) return Offset(sx, sy);
+  return Offset(sx / sw, sy / sw);
+}
 
 bool _isTgVirtualAsset(String asset) => asset.startsWith('sportoteka://');
 bool _isTgAvatarAsset(String asset) => asset.startsWith('sportoteka://player-avatar');
@@ -112,9 +162,10 @@ class TgCanvasState extends State<TgCanvas>
   double _rotationX = 0.0;
   double _rotationY = 0.0;
   double _rotationZ = 0.0;
+  double _camera3DZoom = 0.96;
 
-  // Для совместимости храним в state, но в орто-3D не используем perspective
-  double _perspective = 0.0008;
+  // Tracker perspective constant.
+  double _perspective = 0.00135;
 
   bool _syncing3D = false;
 
@@ -146,6 +197,15 @@ class TgCanvasState extends State<TgCanvas>
   Offset _dragAppliedDelta = Offset.zero;
 
   _PointerMode _pointerMode = _PointerMode.idle;
+  _SelectionHandle _activeSelectionHandle = _SelectionHandle.none;
+  Offset? _transformCenterScene;
+  Offset? _transformCenterLocal;
+  double _transformStartDistance = 1.0;
+  double _transformStartAngle = 0.0;
+
+  bool _scaleTransformsObject = false;
+  Offset? _scaleObjectCenterScene;
+  Offset? _scaleObjectStartFocalScene;
 
   static const double _dragSlop = 6.0;
 
@@ -159,6 +219,8 @@ class TgCanvasState extends State<TgCanvas>
 
   // ===== Image cache (PNG/JPG) =====
   ui.Image? _fieldImg;
+  ui.Image? _customFieldImg;
+  String? _customFieldTextureKey;
   final Map<String, ui.Image> _stampCache = {};
   final Map<String, Future<ui.Image>> _stampLoading = {};
 
@@ -298,6 +360,7 @@ class TgCanvasState extends State<TgCanvas>
     _rotationY = state.rotationY;
     _rotationZ = state.rotationZ;
     _perspective = state.perspective;
+    _camera3DZoom = state.camera3DZoom;
 
     rotationXNotifier.value = _rotationX;
     rotationYNotifier.value = _rotationY;
@@ -306,7 +369,9 @@ class TgCanvasState extends State<TgCanvas>
   }
 
   // =========================================================
-  // ✅ ОРТО-3D математика (БЕЗ перспективы => нет деформации)
+  // 3D CAMERA — pixel parity with Tracker Live / Analytics.
+  // Tracker uses a real perspective matrix (0.00135), tilt -0.34,
+  // yaw around Z and an initial camera zoom of 0.96.
   // =========================================================
   vector.Matrix4 _buildField3DMatrix() {
     if (!_is3DMode) return vector.Matrix4.identity();
@@ -315,42 +380,34 @@ class TgCanvasState extends State<TgCanvas>
     final cx = fs.width / 2.0;
     final cy = fs.height / 2.0;
 
-    final tilt = _rotationX.clamp(-1.25, 0.0);
+    final tilt = _rotationX.clamp(-.70, -.10).toDouble();
     final zRot = _rotationZ;
+    final perspective = _perspective.clamp(0.0002, 0.0030).toDouble();
 
-    const depth = 420.0;
-
-    return vector.Matrix4.identity()
-      ..translate(cx, cy, 0.0)
-      ..translate(0.0, 0.0, -depth)
+    final camera = vector.Matrix4.identity()
+      ..setEntry(3, 2, perspective)
       ..rotateX(tilt)
       ..rotateZ(zRot)
-      ..translate(0.0, 0.0, depth)
+      ..scale(_camera3DZoom.clamp(.96, 1.38).toDouble());
+
+    // Flutter Transform(alignment: Alignment.center) effectively applies
+    // T(center) * camera * T(-center). Build the same matrix here so paint,
+    // hit testing and tactical objects all use one camera.
+    return vector.Matrix4.translationValues(cx, cy, 0.0)
+      ..multiply(camera)
       ..translate(-cx, -cy, 0.0);
   }
 
   Offset _projectPoint3D(Offset p) {
     if (!state.is3DMode) return p;
-    final m3d = _buildField3DMatrix();
-    final out = m3d.transform(vector.Vector4(p.dx, p.dy, 0.0, 1.0));
-    return Offset(out.x, out.y);
+    return _tgTransformPoint(_buildField3DMatrix(), p);
   }
 
   Offset _unprojectPoint3D(Offset projected) {
     if (!state.is3DMode) return projected;
 
     final fs = state.fieldLogicalSize;
-    final m3d = _buildField3DMatrix();
-    final inv = vector.Matrix4.copy(m3d);
-
-    final ok = inv.invert();
-    if (ok == 0.0) return projected;
-
-    final out = inv.transform(
-      vector.Vector4(projected.dx, projected.dy, 0.0, 1.0),
-    );
-    final p = Offset(out.x, out.y);
-
+    final p = _tgUntransformPlanePoint(_buildField3DMatrix(), projected);
     return Offset(
       p.dx.clamp(0.0, fs.width),
       p.dy.clamp(0.0, fs.height),
@@ -441,12 +498,188 @@ class TgCanvasState extends State<TgCanvas>
     return null;
   }
 
+  Offset _scenePointToLocal(Offset scenePoint) {
+    final projected = state.is3DMode ? _projectPoint3D(scenePoint) : scenePoint;
+    return _fieldToLocal(projected);
+  }
+
+  List<Offset> _selectionSceneCorners() {
+    if (state.selectedIds.isEmpty) return const <Offset>[];
+    final b = state.selectionBounds();
+    if (b == Rect.zero || !b.width.isFinite || !b.height.isFinite) {
+      return const <Offset>[];
+    }
+
+    if (state.selectedIds.length == 1) {
+      final e = state.selected;
+      Offset center = b.center;
+      double width = b.width;
+      double height = b.height;
+      double rotation = 0.0;
+
+      if (e is TgRect) {
+        center = e.position;
+        width = e.width;
+        height = e.height;
+        rotation = e.rotation;
+      } else if (e is TgStamp) {
+        center = e.pos;
+        width = e.size;
+        height = e.size;
+        rotation = e.rotation;
+      } else if (e is TgText) {
+        center = e.position;
+        final eb = e.bounds();
+        width = eb.width;
+        height = eb.height;
+        rotation = e.rotation;
+      } else if (e is TgCircle) {
+        center = e.position;
+        width = e.radius * 2.0;
+        height = e.radius * 2.0;
+      }
+
+      if (rotation.abs() > 0.00001) {
+        final c = math.cos(rotation);
+        final sn = math.sin(rotation);
+        Offset rotateLocal(Offset v) => Offset(
+              v.dx * c - v.dy * sn,
+              v.dx * sn + v.dy * c,
+            ) + center;
+        final hx = width / 2.0;
+        final hy = height / 2.0;
+        return <Offset>[
+          rotateLocal(Offset(-hx, -hy)),
+          rotateLocal(Offset(hx, -hy)),
+          rotateLocal(Offset(hx, hy)),
+          rotateLocal(Offset(-hx, hy)),
+        ];
+      }
+    }
+
+    return <Offset>[b.topLeft, b.topRight, b.bottomRight, b.bottomLeft];
+  }
+
+  Map<_SelectionHandle, Offset> _selectionHandlePoints() {
+    final selected = state.selected;
+    if (selected is TgStamp &&
+        state.is3DMode &&
+        !_isFieldAttachedStampAsset(selected.asset)) {
+      final projected = _projectPoint3D(selected.pos);
+      final center = _fieldToLocal(projected);
+      final sizePx = (selected.size * _billboardScaleForStamp(selected) * _scale)
+          .clamp(20.0, 4000.0)
+          .toDouble();
+      final half = sizePx / 2.0;
+      final c = math.cos(selected.rotation);
+      final sn = math.sin(selected.rotation);
+      Offset rp(Offset v) => Offset(
+            v.dx * c - v.dy * sn,
+            v.dx * sn + v.dy * c,
+          ) + center;
+      final corners = <Offset>[
+        rp(Offset(-half, -half)),
+        rp(Offset(half, -half)),
+        rp(Offset(half, half)),
+        rp(Offset(-half, half)),
+      ];
+      final topMid = (corners[0] + corners[1]) / 2.0;
+      var outward = topMid - center;
+      if (outward.distance < .001) outward = const Offset(0, -1);
+      outward = outward / outward.distance;
+      return <_SelectionHandle, Offset>{
+        _SelectionHandle.scaleTopLeft: corners[0],
+        _SelectionHandle.scaleTopRight: corners[1],
+        _SelectionHandle.scaleBottomRight: corners[2],
+        _SelectionHandle.scaleBottomLeft: corners[3],
+        _SelectionHandle.rotate: topMid + outward * 34.0,
+      };
+    }
+
+    final sceneCorners = _selectionSceneCorners();
+    if (sceneCorners.length != 4) {
+      return const <_SelectionHandle, Offset>{};
+    }
+    final corners = sceneCorners.map(_scenePointToLocal).toList(growable: false);
+    final centerScene = Offset(
+      sceneCorners.map((p) => p.dx).reduce((a, b) => a + b) / 4.0,
+      sceneCorners.map((p) => p.dy).reduce((a, b) => a + b) / 4.0,
+    );
+    final center = _scenePointToLocal(centerScene);
+    final topMid = (corners[0] + corners[1]) / 2.0;
+    var outward = topMid - center;
+    if (outward.distance < 0.001) outward = const Offset(0, -1);
+    outward = outward / outward.distance;
+    final rotate = topMid + outward * 34.0;
+
+    return <_SelectionHandle, Offset>{
+      _SelectionHandle.scaleTopLeft: corners[0],
+      _SelectionHandle.scaleTopRight: corners[1],
+      _SelectionHandle.scaleBottomRight: corners[2],
+      _SelectionHandle.scaleBottomLeft: corners[3],
+      _SelectionHandle.rotate: rotate,
+    };
+  }
+
+  Rect? _selectionLocalBounds() {
+    final pts = _selectionHandlePoints();
+    if (pts.isEmpty) return null;
+    final corners = <Offset>[
+      pts[_SelectionHandle.scaleTopLeft]!,
+      pts[_SelectionHandle.scaleTopRight]!,
+      pts[_SelectionHandle.scaleBottomRight]!,
+      pts[_SelectionHandle.scaleBottomLeft]!,
+    ];
+    var left = corners.first.dx;
+    var right = corners.first.dx;
+    var top = corners.first.dy;
+    var bottom = corners.first.dy;
+    for (final p in corners.skip(1)) {
+      left = math.min(left, p.dx);
+      right = math.max(right, p.dx);
+      top = math.min(top, p.dy);
+      bottom = math.max(bottom, p.dy);
+    }
+    return Rect.fromLTRB(left, top, right, bottom);
+  }
+
+  _SelectionHandle _hitSelectionHandle(Offset localPos) {
+    final sel = state.selected;
+    if (sel == null || sel.locked || state.tool != TgTool.select) {
+      return _SelectionHandle.none;
+    }
+    final points = _selectionHandlePoints();
+    if (points.isEmpty) return _SelectionHandle.none;
+
+    // Rotation handle gets priority over a nearby corner on very small items.
+    final rotate = points[_SelectionHandle.rotate];
+    if (rotate != null && (localPos - rotate).distance <= 18.0) {
+      return _SelectionHandle.rotate;
+    }
+
+    for (final h in const <_SelectionHandle>[
+      _SelectionHandle.scaleTopLeft,
+      _SelectionHandle.scaleTopRight,
+      _SelectionHandle.scaleBottomRight,
+      _SelectionHandle.scaleBottomLeft,
+    ]) {
+      final p = points[h];
+      if (p != null && (localPos - p).distance <= 18.0) return h;
+    }
+    return _SelectionHandle.none;
+  }
+
   void _resetPointerSession() {
     _downScene = null;
     _downLocal = null;
     _downHitId = null;
     _dragStartScene = null;
     _dragAppliedDelta = Offset.zero;
+    _activeSelectionHandle = _SelectionHandle.none;
+    _transformCenterScene = null;
+    _transformCenterLocal = null;
+    _transformStartDistance = 1.0;
+    _transformStartAngle = 0.0;
     _pointerMode = _PointerMode.idle;
     _velocity = Offset.zero;
   }
@@ -454,6 +687,119 @@ class TgCanvasState extends State<TgCanvas>
   // =========================================================
   // 3D controls (PUBLIC API)
   // =========================================================
+  void set3DEnabled(bool enabled) {
+    if (_is3DMode == enabled) {
+      if (_lastViewportSize != Size.zero) {
+        enabled ? fitFieldToViewport3D(_lastViewportSize) : fitFieldToViewport(_lastViewportSize);
+      }
+      return;
+    }
+
+    _is3DMode = enabled;
+    if (enabled) {
+      _rotationX = -0.34;
+      _rotationY = 0.0;
+      _rotationZ = 0.0;
+      _camera3DZoom = 0.96;
+    } else {
+      _rotationX = 0.0;
+      _rotationY = 0.0;
+      _rotationZ = 0.0;
+    }
+
+    rotationXNotifier.value = _rotationX;
+    rotationYNotifier.value = _rotationY;
+
+    _syncing3D = true;
+    state.set3DParams(
+      enabled: enabled,
+      rotationX: _rotationX,
+      rotationY: _rotationY,
+      rotationZ: _rotationZ,
+      perspective: _perspective,
+      cameraZoom: _camera3DZoom,
+      fieldSize: Size(fieldLogicalWidth, fieldLogicalHeight),
+      notify: true,
+    );
+    _syncing3D = false;
+
+    if (_lastViewportSize != Size.zero) {
+      enabled ? fitFieldToViewport3D(_lastViewportSize) : fitFieldToViewport(_lastViewportSize);
+    }
+    if (mounted) setState(() {});
+  }
+
+  void orbit3D(Offset delta) {
+    if (!_is3DMode) return;
+    _rotationZ = (_rotationZ + delta.dx * (.48 * math.pi / 180.0))
+        .clamp(-math.pi, math.pi)
+        .toDouble();
+    _rotationX = (_rotationX - delta.dy * .0065).clamp(-.70, -.10).toDouble();
+    rotationXNotifier.value = _rotationX;
+    rotationYNotifier.value = _rotationY;
+
+    _syncing3D = true;
+    state.set3DParams(
+      enabled: true,
+      rotationX: _rotationX,
+      rotationY: _rotationY,
+      rotationZ: _rotationZ,
+      perspective: _perspective,
+      cameraZoom: _camera3DZoom,
+      fieldSize: Size(fieldLogicalWidth, fieldLogicalHeight),
+      notify: true,
+    );
+    _syncing3D = false;
+    if (mounted) setState(() {});
+  }
+
+  void zoom3DBy(double delta) {
+    if (!_is3DMode) return;
+    _camera3DZoom = (_camera3DZoom + delta).clamp(.96, 1.38).toDouble();
+    _syncing3D = true;
+    state.set3DParams(
+      enabled: true,
+      rotationX: _rotationX,
+      rotationY: _rotationY,
+      rotationZ: _rotationZ,
+      perspective: _perspective,
+      cameraZoom: _camera3DZoom,
+      fieldSize: Size(fieldLogicalWidth, fieldLogicalHeight),
+      notify: true,
+    );
+    _syncing3D = false;
+    if (mounted) setState(() {});
+  }
+
+  void zoom3DIn() => zoom3DBy(.08);
+  void zoom3DOut() => zoom3DBy(-.08);
+
+  void reset3DView() {
+    _is3DMode = true;
+    _rotationX = -0.34;
+    _rotationY = 0.0;
+    _rotationZ = 0.0;
+    _camera3DZoom = 0.96;
+    rotationXNotifier.value = _rotationX;
+    rotationYNotifier.value = _rotationY;
+
+    _syncing3D = true;
+    state.set3DParams(
+      enabled: true,
+      rotationX: _rotationX,
+      rotationY: _rotationY,
+      rotationZ: _rotationZ,
+      perspective: _perspective,
+      cameraZoom: _camera3DZoom,
+      fieldSize: Size(fieldLogicalWidth, fieldLogicalHeight),
+      notify: true,
+    );
+    _syncing3D = false;
+
+    if (_lastViewportSize != Size.zero) fitFieldToViewport3D(_lastViewportSize);
+    if (mounted) setState(() {});
+  }
+
   void toggle3DMode() {
     _is3DMode = !_is3DMode;
 
@@ -535,6 +881,7 @@ class TgCanvasState extends State<TgCanvas>
     _rotationX = 0.0;
     _rotationY = 0.0;
     _rotationZ = 0.0;
+    _camera3DZoom = 0.96;
 
     rotationXNotifier.value = 0.0;
     rotationYNotifier.value = 0.0;
@@ -546,6 +893,7 @@ class TgCanvasState extends State<TgCanvas>
       rotationY: 0.0,
       rotationZ: 0.0,
       perspective: _perspective,
+      cameraZoom: _camera3DZoom,
       fieldSize: Size(fieldLogicalWidth, fieldLogicalHeight),
       notify: true,
     );
@@ -567,10 +915,7 @@ class TgCanvasState extends State<TgCanvas>
 
     final m3d = _buildField3DMatrix();
 
-    Offset proj(Offset p) {
-      final out = m3d.transform(vector.Vector4(p.dx, p.dy, 0.0, 1.0));
-      return Offset(out.x, out.y);
-    }
+    Offset proj(Offset p) => _tgTransformPoint(m3d, p);
 
     final p0 = proj(rect.topLeft);
     final p1 = proj(rect.topRight);
@@ -626,20 +971,25 @@ class TgCanvasState extends State<TgCanvas>
     final b = _projectedFieldBounds();
     if (b.width <= 0 || b.height <= 0) return;
 
-    const pad = 18.0;
+    // Tracker does NOT refit the already tilted pitch. Its full-bleed child is
+    // fitted first and then the 3D camera (zoom .96) is applied. Using the
+    // logical field here preserves the same apparent size and air around it.
+    final source = _activeFieldRect();
+    const pad = 10.0;
     final vw = math.max(1.0, viewportSize.width - pad * 2);
     final vh = math.max(1.0, viewportSize.height - pad * 2);
 
-    _scale = math.min(vw / b.width, vh / b.height).clamp(0.15, 6.0);
+    _scale = math.min(vw / source.width, vh / source.height).clamp(0.15, 6.0);
 
     _t = Offset(
-      (viewportSize.width - b.width * _scale) / 2.0 - b.left * _scale,
-      (viewportSize.height - b.height * _scale) / 2.0 - b.top * _scale,
+      (viewportSize.width - source.width * _scale) / 2.0 - source.left * _scale,
+      (viewportSize.height - source.height * _scale) / 2.0 - source.top * _scale,
     );
 
     _stopInertia();
     _t = _clampTranslation(_t, _scale, viewportSize);
     _pushMatrixToState();
+    _didInitialFit = true;
     if (mounted) setState(() {});
   }
 
@@ -660,6 +1010,7 @@ class TgCanvasState extends State<TgCanvas>
       rotationY: _is3DMode ? _rotationY : 0.0,
       rotationZ: _is3DMode ? _rotationZ : 0.0,
       perspective: _perspective,
+      cameraZoom: _camera3DZoom,
       fieldSize: Size(fieldLogicalWidth, fieldLogicalHeight),
       notify: true,
     );
@@ -1247,6 +1598,37 @@ class TgCanvasState extends State<TgCanvas>
     return c.future;
   }
 
+
+  Future<void> _syncCustomFieldTextureFromState() async {
+    final raw = state.customFieldTextureBase64;
+    if (raw == _customFieldTextureKey) return;
+    _customFieldTextureKey = raw;
+
+    if (raw == null || raw.isEmpty) {
+      if (_customFieldImg != null && mounted) {
+        setState(() => _customFieldImg = null);
+      }
+      return;
+    }
+
+    try {
+      final bytes = base64Decode(raw);
+      final img = await _loadImageProvider(MemoryImage(bytes));
+      if (!mounted || _customFieldTextureKey != raw) return;
+      setState(() => _customFieldImg = img);
+    } catch (e) {
+      debugPrint('❌ custom field texture load failed: $e');
+      if (mounted && _customFieldTextureKey == raw) {
+        setState(() => _customFieldImg = null);
+      }
+    }
+  }
+
+  void _syncCanvasState() {
+    _sync3DFromState();
+    unawaited(_syncCustomFieldTextureFromState());
+  }
+
   // =========================================================
   // Lifecycle
   // =========================================================
@@ -1262,6 +1644,7 @@ class TgCanvasState extends State<TgCanvas>
     _rotationY = state.rotationY;
     _rotationZ = state.rotationZ;
     _perspective = state.perspective;
+    _camera3DZoom = state.camera3DZoom;
 
     rotationXNotifier.value = _rotationX;
     rotationYNotifier.value = _rotationY;
@@ -1271,16 +1654,17 @@ class TgCanvasState extends State<TgCanvas>
     // Иначе поле может открываться как портретный фрагмент даже при 1050×680.
     _didInitialFit = false;
 
-    state.addListener(_sync3DFromState);
+    state.addListener(_syncCanvasState);
 
     _loadField();
+    unawaited(_syncCustomFieldTextureFromState());
     _pushMatrixToState();
     _anim.addListener(_onAnimTick);
   }
 
   @override
   void dispose() {
-    state.removeListener(_sync3DFromState);
+    state.removeListener(_syncCanvasState);
 
     rotationXNotifier.dispose();
     rotationYNotifier.dispose();
@@ -1300,10 +1684,10 @@ class TgCanvasState extends State<TgCanvas>
 
     final rect = _activeFieldRect();
 
-    // TacticalPad-style: оставляем воздух вокруг поля, чтобы схемы,
-    // подписи и панели не выглядели прижатыми к краям.
-    final padX = math.max(28.0, viewportSize.width * 0.035);
-    final padY = math.max(28.0, viewportSize.height * 0.045);
+    // Tracker field is full-bleed inside its map viewport. Keep only the same
+    // small technical inset instead of the old TacticalPad-style large air.
+    const padX = 6.0;
+    const padY = 6.0;
     final vw = math.max(1.0, viewportSize.width - padX * 2);
     final vh = math.max(1.0, viewportSize.height - padY * 2);
 
@@ -1329,7 +1713,7 @@ class TgCanvasState extends State<TgCanvas>
   void resetView() {
     final sz = _lastViewportSize;
     if (sz == Size.zero) return;
-    fitFieldToViewport(sz);
+    state.is3DMode ? fitFieldToViewport3D(sz) : fitFieldToViewport(sz);
   }
 
   @override
@@ -1522,6 +1906,28 @@ class TgCanvasState extends State<TgCanvas>
       return;
     }
 
+    // Direct manipulation: selected items expose four resize handles and one
+    // rotation handle. This keeps the object transform on the pitch itself,
+    // instead of forcing the coach to hunt through the properties panel.
+    final handle = _hitSelectionHandle(localPos);
+    if (handle != _SelectionHandle.none) {
+      final b = state.selectionBounds();
+      final centerScene = b.center;
+      final centerLocal = _scenePointToLocal(centerScene);
+      final v = localPos - centerLocal;
+
+      state.commitOnceForGestureStart();
+      _activeSelectionHandle = handle;
+      _transformCenterScene = centerScene;
+      _transformCenterLocal = centerLocal;
+      _transformStartDistance = math.max(1.0, v.distance);
+      _transformStartAngle = math.atan2(v.dy, v.dx);
+      _pointerMode = handle == _SelectionHandle.rotate
+          ? _PointerMode.rotatingObject
+          : _PointerMode.scalingObject;
+      return;
+    }
+
     if (_downHitId != null) {
       if (!state.selectedIds.contains(_downHitId)) {
         state.selectById(_downHitId!);
@@ -1557,6 +1963,41 @@ class TgCanvasState extends State<TgCanvas>
     }
 
     final totalMove = (_downLocal == null) ? 0.0 : (localPos - _downLocal!).distance;
+
+    if (_pointerMode == _PointerMode.scalingObject) {
+      final centerScene = _transformCenterScene;
+      final centerLocal = _transformCenterLocal;
+      if (centerScene == null || centerLocal == null) return;
+      final distance = math.max(1.0, (localPos - centerLocal).distance);
+      final factor = (distance / _transformStartDistance).clamp(0.10, 10.0).toDouble();
+      state.transformSelectedGesture(
+        centerScene: centerScene,
+        moveDelta: Offset.zero,
+        scaleFactor: factor,
+        rotationDelta: 0.0,
+      );
+      if (mounted) setState(() {});
+      return;
+    }
+
+    if (_pointerMode == _PointerMode.rotatingObject) {
+      final centerScene = _transformCenterScene;
+      final centerLocal = _transformCenterLocal;
+      if (centerScene == null || centerLocal == null) return;
+      final v = localPos - centerLocal;
+      final angle = math.atan2(v.dy, v.dx);
+      var delta = angle - _transformStartAngle;
+      while (delta > math.pi) delta -= math.pi * 2;
+      while (delta < -math.pi) delta += math.pi * 2;
+      state.transformSelectedGesture(
+        centerScene: centerScene,
+        moveDelta: Offset.zero,
+        scaleFactor: 1.0,
+        rotationDelta: delta,
+      );
+      if (mounted) setState(() {});
+      return;
+    }
 
     if (_pointerMode == _PointerMode.pendingObjectDrag) {
       if (totalMove < _dragSlop) return;
@@ -1607,7 +2048,9 @@ class TgCanvasState extends State<TgCanvas>
       return;
     }
 
-    if (_pointerMode == _PointerMode.draggingObject) {
+    if (_pointerMode == _PointerMode.draggingObject ||
+        _pointerMode == _PointerMode.scalingObject ||
+        _pointerMode == _PointerMode.rotatingObject) {
       state.finishGestureCommit();
       _resetPointerSession();
       return;
@@ -1666,9 +2109,32 @@ class TgCanvasState extends State<TgCanvas>
     if (!_multiTouchActive) return;
 
     _stopInertia();
+    final focal = d.localFocalPoint;
+
+    // If the two-finger gesture starts on the selected item, transform that
+    // item (pinch = scale, twist = rotate, two-finger move = move). Otherwise
+    // the same gesture keeps controlling the camera/viewport.
+    final selectionLocal = _selectionLocalBounds();
+    final selected = state.selected;
+    _scaleTransformsObject = selected != null &&
+        !selected.locked &&
+        selectionLocal != null &&
+        selectionLocal.inflate(42.0).contains(focal);
+
+    if (_scaleTransformsObject) {
+      final center = state.selectionBounds().center;
+      _scaleObjectCenterScene = center;
+      _scaleObjectStartFocalScene = _sceneFromLocal(
+        focal,
+        clampToField: false,
+      );
+      state.commitOnceForGestureStart();
+      return;
+    }
+
     _scaleStart = _scale;
     _tStart = _t;
-    _focalStart = d.focalPoint;
+    _focalStart = focal;
   }
 
   void _onScaleUpdate(ScaleUpdateDetails d) {
@@ -1677,14 +2143,31 @@ class TgCanvasState extends State<TgCanvas>
     if (_lastViewportSize == Size.zero) return;
     if (!_multiTouchActive) return;
 
-    final nextScale = (_scaleStart * d.scale).clamp(0.18, 6.0);
+    final focal = d.localFocalPoint;
 
-    final focal = d.focalPoint;
+    if (_scaleTransformsObject) {
+      final centerScene = _scaleObjectCenterScene;
+      final startFocalScene = _scaleObjectStartFocalScene;
+      if (centerScene == null || startFocalScene == null) return;
+      final currentFocalScene = _sceneFromLocal(
+        focal,
+        clampToField: false,
+      );
+      state.transformSelectedGesture(
+        centerScene: centerScene,
+        moveDelta: currentFocalScene - startFocalScene,
+        scaleFactor: d.scale.clamp(0.10, 10.0).toDouble(),
+        rotationDelta: d.rotation,
+      );
+      if (mounted) setState(() {});
+      return;
+    }
+
+    final nextScale = (_scaleStart * d.scale).clamp(0.18, 6.0);
     final focalDelta = focal - _focalStart;
 
     final oldT = _tStart + focalDelta;
     final sceneFocal = (focal - oldT) / _scaleStart;
-
     final newT = focal - sceneFocal * nextScale;
 
     _scale = nextScale;
@@ -1698,10 +2181,15 @@ class TgCanvasState extends State<TgCanvas>
     if (_locked) return;
     if (state.tool != TgTool.select) return;
 
-    if (_multiTouchActive) {
+    if (_scaleTransformsObject) {
+      state.finishGestureCommit();
+    } else if (_multiTouchActive) {
       _bounceToClamp();
     }
 
+    _scaleTransformsObject = false;
+    _scaleObjectCenterScene = null;
+    _scaleObjectStartFocalScene = null;
     _multiTouchActive = false;
   }
 
@@ -1724,8 +2212,11 @@ class TgCanvasState extends State<TgCanvas>
                 if (!mounted) return;
                 if (_lastViewportSize != Size.zero) {
                   // Всегда заново вписываем поле при первом открытии редактора.
-                  // Это убирает старое портретное позиционирование/зум из сохранённых схем.
-                  fitFieldToViewport(_lastViewportSize);
+                  // Новый документ стартует в Tracker-подобном 3D PRO, поэтому
+                  // сразу используем 3D bounds; сохранённая 2D-схема остаётся 2D.
+                  state.is3DMode
+                      ? fitFieldToViewport3D(_lastViewportSize)
+                      : fitFieldToViewport(_lastViewportSize);
                 }
               });
             }
@@ -1777,7 +2268,9 @@ class TgCanvasState extends State<TgCanvas>
               onDoubleTap: () {
                 if (_locked) return;
                 if (_lastViewportSize != Size.zero) {
-                  fitFieldToViewport(_lastViewportSize);
+                  state.is3DMode
+                      ? fitFieldToViewport3D(_lastViewportSize)
+                      : fitFieldToViewport(_lastViewportSize);
                 }
               },
               onScaleStart: _onScaleStart,
@@ -1805,6 +2298,8 @@ class TgCanvasState extends State<TgCanvas>
                     painter: _TgBoardPainter(
                       state: state,
                       fieldImg: _fieldImg,
+                      customFieldImg: _customFieldImg,
+                      customFieldTextureOpacity: state.customFieldTextureOpacity,
                       stampImages: _stampCache,
                       stampSvgImages: _stampSvgAsImageCache,
                       svgCacheKey: svgCacheKey,
@@ -1826,6 +2321,8 @@ class _TgBoardPainter extends CustomPainter {
   _TgBoardPainter({
     required this.state,
     required this.fieldImg,
+    required this.customFieldImg,
+    required this.customFieldTextureOpacity,
     required this.stampImages,
     required this.stampSvgImages,
     required this.svgCacheKey,
@@ -1838,6 +2335,8 @@ class _TgBoardPainter extends CustomPainter {
 
   final TgState state;
   final ui.Image? fieldImg;
+  final ui.Image? customFieldImg;
+  final double customFieldTextureOpacity;
   final Map<String, ui.Image> stampImages;
   final Map<String, ui.Image> stampSvgImages;
   final String Function(String, PlayerColors?) svgCacheKey;
@@ -1882,25 +2381,24 @@ class _TgBoardPainter extends CustomPainter {
     final fs = state.fieldLogicalSize;
     final cx = fs.width / 2.0;
     final cy = fs.height / 2.0;
-
-    final tilt = state.rotationX.clamp(-1.25, 0.0);
+    final tilt = state.rotationX.clamp(-.70, -.10).toDouble();
     final zRot = state.rotationZ;
+    final perspective = state.perspective.clamp(0.0002, 0.0030).toDouble();
 
-    const depth = 420.0;
-
-    return vector.Matrix4.identity()
-      ..translate(cx, cy, 0.0)
-      ..translate(0.0, 0.0, -depth)
+    final camera = vector.Matrix4.identity()
+      ..setEntry(3, 2, perspective)
       ..rotateX(tilt)
       ..rotateZ(zRot)
-      ..translate(0.0, 0.0, depth)
+      ..scale(state.camera3DZoom.clamp(.96, 1.38).toDouble());
+
+    return vector.Matrix4.translationValues(cx, cy, 0.0)
+      ..multiply(camera)
       ..translate(-cx, -cy, 0.0);
   }
 
   Offset _projectOnField(Offset p, vector.Matrix4 m3d) {
     if (!_is3DMode) return p;
-    final out = m3d.transform(vector.Vector4(p.dx, p.dy, 0.0, 1.0));
-    return Offset(out.x, out.y);
+    return _tgTransformPoint(m3d, p);
   }
 
   double _billboardScale(Offset p, vector.Matrix4 m3d) {
@@ -2678,54 +3176,128 @@ class _TgBoardPainter extends CustomPainter {
   }
 
   void _paintFieldCover(Canvas canvas, Rect fieldRect) {
-    final scaleNow = _currentScale(state.transform.value.value);
+    // Pixel parity with Tracker _RuntimeFieldPainter / _ActionPitchPainter.
+    // Do not tune these colours independently: they are the current Tracker
+    // pitch palette used by Live and the full match analytics map.
+    final scaleNow = math.max(_currentScale(state.transform.value.value), 0.01);
+    final px = 1.0 / scaleNow;
 
-    if (fieldImg != null) {
-      final img = fieldImg!;
-      final srcW = img.width.toDouble();
-      final srcH = img.height.toDouble();
+    final outerRadius = Radius.circular(16.0 * px);
+    final border = RRect.fromRectAndRadius(fieldRect, outerRadius);
+    canvas.drawRRect(border, Paint()..color = const Color(0xFF76947B));
 
-      // В старом ассете поле нарисовано вертикально. Редактор должен работать
-      // в нормальной футбольной логике: длинная сторона по горизонтали.
-      // Если картинка портретная, а поле сейчас горизонтальное — поворачиваем
-      // только фон поля. Координаты объектов остаются правильные 1050×680.
-      final rotatePortraitAsset = fieldRect.width > fieldRect.height;
-      final paint = Paint()
-        ..isAntiAlias = true
-        ..filterQuality = FilterQuality.high;
+    final stripeInset = 8.0 * px;
+    final stripeClip = Path()
+      ..addRRect(border.deflate(stripeInset));
+    canvas.save();
+    canvas.clipPath(stripeClip);
 
-      if (rotatePortraitAsset) {
-        final rotatedDst = Rect.fromCenter(
-          center: Offset.zero,
-          width: fieldRect.height,
-          height: fieldRect.width,
-        );
-        _drawImageCover(canvas, img, Offset.zero & Size(srcW, srcH), rotatedDst, paint,
-            preTransform: () {
-          canvas.translate(fieldRect.center.dx, fieldRect.center.dy);
-          canvas.rotate(-math.pi / 2);
-        });
-      } else {
-        _drawImageCover(canvas, img, Offset.zero & Size(srcW, srcH), fieldRect, paint);
-      }
-
+    final stripeW = math.max(36.0 * px, fieldRect.width / 12.0);
+    for (var i = 0; i < 14; i++) {
+      final color =
+          i.isEven ? const Color(0xFF719078) : const Color(0xFF819E86);
       canvas.drawRect(
-        fieldRect,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.0 / scaleNow
-          ..color = Colors.white.withOpacity(0.06),
-      );
-    } else {
-      canvas.drawRect(fieldRect, Paint()..color = const Color(0xFF1B3A2A));
-      canvas.drawRect(
-        fieldRect,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.0 / scaleNow
-          ..color = Colors.white.withOpacity(0.10),
+        Rect.fromLTWH(
+          fieldRect.left + stripeInset + i * stripeW,
+          fieldRect.top + stripeInset,
+          stripeW,
+          math.max(px, fieldRect.height - stripeInset * 2),
+        ),
+        Paint()..color = color,
       );
     }
+
+    // A custom user texture is an optional layer. With no custom texture the
+    // field is visually identical to Tracker. Lines are always painted after
+    // the texture, exactly like the native pitch layer.
+    final custom = customFieldImg;
+    if (custom != null && customFieldTextureOpacity > 0.001) {
+      final customPaint = Paint()
+        ..isAntiAlias = true
+        ..filterQuality = FilterQuality.high
+        ..color = Colors.white.withOpacity(
+          customFieldTextureOpacity.clamp(0.0, 1.0).toDouble(),
+        );
+      _drawImageCover(
+        canvas,
+        custom,
+        Offset.zero & Size(custom.width.toDouble(), custom.height.toDouble()),
+        fieldRect.deflate(stripeInset),
+        customPaint,
+      );
+    }
+
+    canvas.restore();
+
+    final line = Paint()
+      ..color = Colors.white.withOpacity(.78)
+      ..strokeWidth = 1.5 * px
+      ..style = PaintingStyle.stroke;
+
+    final inner = fieldRect.deflate(10.0 * px);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(inner, Radius.circular(12.0 * px)),
+      line,
+    );
+    canvas.drawLine(
+      Offset(inner.center.dx, inner.top),
+      Offset(inner.center.dx, inner.bottom),
+      line,
+    );
+    canvas.drawCircle(
+      inner.center,
+      math.min(fieldRect.width, fieldRect.height) * .12,
+      line,
+    );
+
+    canvas.drawRect(
+      Rect.fromLTWH(
+        inner.left,
+        fieldRect.top + fieldRect.height * .28,
+        fieldRect.width * .17,
+        fieldRect.height * .44,
+      ),
+      line,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(
+        inner.left,
+        fieldRect.top + fieldRect.height * .38,
+        fieldRect.width * .08,
+        fieldRect.height * .24,
+      ),
+      line,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(
+        inner.right - fieldRect.width * .17,
+        fieldRect.top + fieldRect.height * .28,
+        fieldRect.width * .17,
+        fieldRect.height * .44,
+      ),
+      line,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(
+        inner.right - fieldRect.width * .08,
+        fieldRect.top + fieldRect.height * .38,
+        fieldRect.width * .08,
+        fieldRect.height * .24,
+      ),
+      line,
+    );
+
+    final spot = Paint()..color = Colors.white.withOpacity(.75);
+    canvas.drawCircle(
+      Offset(fieldRect.left + fieldRect.width * .13, fieldRect.center.dy),
+      3.0 * px,
+      spot,
+    );
+    canvas.drawCircle(
+      Offset(fieldRect.left + fieldRect.width * .87, fieldRect.center.dy),
+      3.0 * px,
+      spot,
+    );
   }
 
   void _drawImageCover(
@@ -3270,11 +3842,202 @@ class _TgBoardPainter extends CustomPainter {
     }
   }
 
+  Offset _selectionSceneToViewport(Offset scene, vector.Matrix4 m3d) {
+    final fieldPoint = _is3DMode ? _projectOnField(scene, m3d) : scene;
+    return _tgTransformPoint(state.transform.value.value, fieldPoint);
+  }
+
+  void _paintSelectionControlsFromCorners(
+    Canvas canvas,
+    List<Offset> corners,
+    Offset center,
+    bool locked,
+  ) {
+    if (corners.length != 4) return;
+    final topMid = (corners[0] + corners[1]) / 2.0;
+    var outward = topMid - center;
+    if (outward.distance < 0.001) outward = const Offset(0, -1);
+    outward = outward / outward.distance;
+    final rotateHandle = topMid + outward * 34.0;
+
+    const green = Color(0xFF00A750);
+    final outline = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..color = green.withOpacity(locked ? .42 : .90);
+    final halo = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4.5
+      ..color = Colors.white.withOpacity(.82);
+
+    final path = Path()
+      ..moveTo(corners[0].dx, corners[0].dy)
+      ..lineTo(corners[1].dx, corners[1].dy)
+      ..lineTo(corners[2].dx, corners[2].dy)
+      ..lineTo(corners[3].dx, corners[3].dy)
+      ..close();
+    canvas.drawPath(path, halo);
+    canvas.drawPath(path, outline);
+
+    if (locked) return;
+
+    canvas.drawLine(
+      topMid,
+      rotateHandle,
+      Paint()
+        ..color = green.withOpacity(.72)
+        ..strokeWidth = 1.4,
+    );
+
+    for (final p in corners) {
+      canvas.drawCircle(p, 7.2, Paint()..color = Colors.white);
+      canvas.drawCircle(
+        p,
+        7.2,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.0
+          ..color = green,
+      );
+      canvas.drawCircle(p, 2.2, Paint()..color = green);
+    }
+
+    canvas.drawCircle(
+      rotateHandle,
+      9.0,
+      Paint()
+        ..color = Colors.white
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0.5),
+    );
+    canvas.drawCircle(
+      rotateHandle,
+      9.0,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.0
+        ..color = green,
+    );
+    final arcRect = Rect.fromCircle(center: rotateHandle, radius: 4.2);
+    canvas.drawArc(
+      arcRect,
+      -math.pi * .20,
+      math.pi * 1.35,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.6
+        ..strokeCap = StrokeCap.round
+        ..color = green,
+    );
+  }
+
+  void _paintSelectionOverlay(Canvas canvas, vector.Matrix4 m3d) {
+    if (state.tool != TgTool.select || state.selectedIds.isEmpty) return;
+    final selected = state.selected;
+    if (selected == null || selected.hidden) return;
+
+    final b = state.selectionBounds();
+    if (b == Rect.zero || !b.width.isFinite || !b.height.isFinite) return;
+
+    if (selected is TgStamp &&
+        _is3DMode &&
+        !_isFieldAttachedStampAsset(selected.asset)) {
+      final center = _selectionSceneToViewport(selected.pos, m3d);
+      final scaleNow = _currentScale(state.transform.value.value);
+      final sizePx = (selected.size * _billboardScale(selected.pos, m3d) * scaleNow)
+          .clamp(20.0, 4000.0)
+          .toDouble();
+      final half = sizePx / 2.0;
+      final c = math.cos(selected.rotation);
+      final sn = math.sin(selected.rotation);
+      Offset rp(Offset v) => Offset(
+            v.dx * c - v.dy * sn,
+            v.dx * sn + v.dy * c,
+          ) + center;
+      final corners = <Offset>[
+        rp(Offset(-half, -half)),
+        rp(Offset(half, -half)),
+        rp(Offset(half, half)),
+        rp(Offset(-half, half)),
+      ];
+      _paintSelectionControlsFromCorners(canvas, corners, center, selected.locked);
+      return;
+    }
+
+    List<Offset> sceneCorners = <Offset>[
+      b.topLeft,
+      b.topRight,
+      b.bottomRight,
+      b.bottomLeft,
+    ];
+
+    if (state.selectedIds.length == 1) {
+      Offset centerScene = b.center;
+      double width = b.width;
+      double height = b.height;
+      double rotation = 0.0;
+      if (selected is TgRect) {
+        centerScene = selected.position;
+        width = selected.width;
+        height = selected.height;
+        rotation = selected.rotation;
+      } else if (selected is TgStamp) {
+        centerScene = selected.pos;
+        width = selected.size;
+        height = selected.size;
+        rotation = selected.rotation;
+      } else if (selected is TgText) {
+        centerScene = selected.position;
+        final eb = selected.bounds();
+        width = eb.width;
+        height = eb.height;
+        rotation = selected.rotation;
+      } else if (selected is TgCircle) {
+        centerScene = selected.position;
+        width = selected.radius * 2.0;
+        height = selected.radius * 2.0;
+      }
+
+      if (rotation.abs() > 0.00001) {
+        final c = math.cos(rotation);
+        final sn = math.sin(rotation);
+        Offset rp(Offset v) => Offset(
+              v.dx * c - v.dy * sn,
+              v.dx * sn + v.dy * c,
+            ) + centerScene;
+        final hx = width / 2.0;
+        final hy = height / 2.0;
+        sceneCorners = <Offset>[
+          rp(Offset(-hx, -hy)),
+          rp(Offset(hx, -hy)),
+          rp(Offset(hx, hy)),
+          rp(Offset(-hx, hy)),
+        ];
+      }
+    }
+
+    final corners = sceneCorners
+        .map((p) => _selectionSceneToViewport(p, m3d))
+        .toList(growable: false);
+    final centerScene = Offset(
+      sceneCorners.map((p) => p.dx).reduce((a, b) => a + b) / 4.0,
+      sceneCorners.map((p) => p.dy).reduce((a, b) => a + b) / 4.0,
+    );
+    final center = _selectionSceneToViewport(centerScene, m3d);
+    _paintSelectionControlsFromCorners(canvas, corners, center, selected.locked);
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
+    final viewportRect = Offset.zero & size;
     canvas.drawRect(
-      Offset.zero & size,
-      Paint()..color = const Color(0xFFF4F7FA),
+      viewportRect,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[Color(0xFFDDE7E1), Color(0xFFF6F8F7)],
+        ).createShader(viewportRect),
     );
 
     final fieldRect = _activeFieldRect();
@@ -3289,12 +4052,27 @@ class _TgBoardPainter extends CustomPainter {
     if (_is3DMode) canvas.transform(m3d.storage);
 
     if (_is3DMode) {
-      final shadowRect = fieldRect.inflate(10);
-      canvas.drawRect(
-        shadowRect.shift(const Offset(0, 26)),
+      // Same support plate / shadow used by Tracker's 3D perspective layer.
+      // In Tracker the plate is +8 and the pitch is -5 => 13 px relative
+      // separation, with #284B38 and a soft 18 px shadow.
+      final scaleNow = math.max(_currentScale(state.transform.value.value), 0.01);
+      final px = 1.0 / scaleNow;
+      final support = fieldRect.shift(Offset(0, 13.0 * px));
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          support.shift(Offset(0, 12.0 * px)),
+          Radius.circular(14.0 * px),
+        ),
         Paint()
-          ..color = const Color(0xFF0B1220).withOpacity(0.10)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 22),
+          ..color = Colors.black.withOpacity(.20)
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, 18.0 * px),
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          support,
+          Radius.circular(14.0 * px),
+        ),
+        Paint()..color = const Color(0xFF284B38),
       );
     }
 
@@ -3316,7 +4094,7 @@ class _TgBoardPainter extends CustomPainter {
 
         // ✅ Ворота и другие "прикреплённые к полю" штампы
         if (_isFieldAttachedStampAsset(e.asset)) {
-          _paintStampAttachedToField(canvas, e, selected);
+          _paintStampAttachedToField(canvas, e, false);
         }
         continue;
       }
@@ -3359,7 +4137,7 @@ class _TgBoardPainter extends CustomPainter {
       final projected = _is3DMode ? _projectOnField(e.pos, m3d) : e.pos;
       final s = _is3DMode ? _billboardScale(e.pos, m3d) : 1.0;
 
-      _paintStampBillboard(canvas, e, projected, s, selected);
+      _paintStampBillboard(canvas, e, projected, s, false);
     }
 
     if (prev is TgStamp &&
@@ -3372,6 +4150,10 @@ class _TgBoardPainter extends CustomPainter {
     }
 
     canvas.restore();
+
+    // Screen-space transform controls: they stay the same physical size in
+    // 2D and 3D and therefore remain easy to grab with mouse or finger.
+    _paintSelectionOverlay(canvas, m3d);
   }
 
   @override

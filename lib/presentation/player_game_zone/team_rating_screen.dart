@@ -70,7 +70,7 @@ class _TeamRatingScreenState extends State<TeamRatingScreen> {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.14),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(10),
         ),
         child: Column(
           children: [
@@ -79,8 +79,8 @@ class _TeamRatingScreenState extends State<TeamRatingScreen> {
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
               ),
             ),
             const SizedBox(height: 4),
@@ -89,7 +89,7 @@ class _TeamRatingScreenState extends State<TeamRatingScreen> {
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Colors.white70,
-                fontSize: 11,
+                fontSize: 10.2,
               ),
             ),
           ],
@@ -109,10 +109,7 @@ class _TeamRatingScreenState extends State<TeamRatingScreen> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: isMe ? GzColors.greenSoft : Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isMe ? GzColors.green : GzColors.divider,
-        ),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
@@ -124,7 +121,7 @@ class _TeamRatingScreenState extends State<TeamRatingScreen> {
               '$rank',
               style: TextStyle(
                 color: isMe ? Colors.white : GzColors.text,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -133,8 +130,8 @@ class _TeamRatingScreenState extends State<TeamRatingScreen> {
             child: Text(
               name,
               style: const TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                fontSize: 12.5,
               ),
             ),
           ),
@@ -142,12 +139,12 @@ class _TeamRatingScreenState extends State<TeamRatingScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: const Color(0xFFFFF7D6),
-              borderRadius: BorderRadius.circular(999),
+              borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
               '$points очк.',
               style: const TextStyle(
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w600,
                 color: Color(0xFF8A6400),
               ),
             ),
@@ -178,8 +175,8 @@ class _TeamRatingScreenState extends State<TeamRatingScreen> {
                   const Text(
                     'Лидеры команды',
                     style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
                     ),
                   ),
                   const SizedBox(height: 12),

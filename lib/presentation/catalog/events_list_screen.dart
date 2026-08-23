@@ -1,9 +1,12 @@
 // lib/presentation/events_list_screen/events_list_screen.dart
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
+import 'dart:ui' show FontFeature;
 
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/presentation/service_screens/event_detail_screen.dart';
 
 const String apiBaseUrl = 'https://sportotekaapp.ru/api/';
@@ -52,6 +55,7 @@ class _EventsListScreenState extends State<EventsListScreen> {
   bool _loadingMore = false;
 
   EventCatalogView _view = EventCatalogView.list;
+  String _selectedEventKey = '';
 
   // ====== Calendar state
   DateTime _calMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
@@ -117,6 +121,7 @@ class _EventsListScreenState extends State<EventsListScreen> {
       setState(() {
         _items = data;
         _prepareFiltersFrom(data);
+        _syncSelectedEvent(data);
       });
 
       // ✅ если сейчас в режиме календаря — обновим маркеры месяца и список дня
@@ -316,6 +321,7 @@ class _EventsListScreenState extends State<EventsListScreen> {
       if (!mounted) return;
       setState(() {
         _items = list;
+        _syncSelectedEvent(list);
       });
     } catch (e) {
       if (!mounted) return;
@@ -341,12 +347,40 @@ class _EventsListScreenState extends State<EventsListScreen> {
     Navigator.push(context, MaterialPageRoute(builder: (_) => EventDetailScreen(event: event)));
   }
 
+  String _eventKey(Map<String, dynamic> event) {
+    final id = (event['id'] ?? event['event_id'] ?? '').toString().trim();
+    if (id.isNotEmpty) return id;
+    return '${event['title'] ?? ''}|${event['event_date'] ?? event['date'] ?? ''}';
+  }
+
+  void _syncSelectedEvent(List<Map<String, dynamic>> items) {
+    if (items.isEmpty) {
+      _selectedEventKey = '';
+      return;
+    }
+    final exists = items.any((event) => _eventKey(event) == _selectedEventKey);
+    if (!exists) _selectedEventKey = _eventKey(items.first);
+  }
+
+  Map<String, dynamic>? get _selectedEvent {
+    for (final event in _items) {
+      if (_eventKey(event) == _selectedEventKey) return event;
+    }
+    return _items.isEmpty ? null : _items.first;
+  }
+
+  void _selectEvent(Map<String, dynamic> event, {required bool compact}) {
+    if (compact) {
+      _openDetails(event);
+      return;
+    }
+    setState(() => _selectedEventKey = _eventKey(event));
+  }
+
   // ------------------- UI -------------------
 
   @override
   Widget build(BuildContext context) {
-    final bg = const Color(0xFFF3F5F8);
-
     Future<void> refresh() async {
       if (_view == EventCatalogView.calendar) {
         await _loadMonthMarks(_calMonth);
@@ -356,130 +390,274 @@ class _EventsListScreenState extends State<EventsListScreen> {
       }
     }
 
-    Future<void> toggleView() async {
-      if (_view == EventCatalogView.list) {
-        setState(() => _view = EventCatalogView.grid);
-      } else if (_view == EventCatalogView.grid) {
+    Future<void> toggleCalendar() async {
+      if (_view != EventCatalogView.calendar) {
         setState(() => _view = EventCatalogView.calendar);
         await _loadMonthMarks(_calMonth);
         await _loadDayEvents(_selectedDay);
       } else {
         setState(() => _view = EventCatalogView.list);
-        _loadFirst();
+        await _loadFirst();
       }
     }
 
-    final viewIcon = _view == EventCatalogView.list
-        ? Icons.grid_view_rounded
-        : _view == EventCatalogView.grid
-            ? Icons.calendar_month_rounded
-            : Icons.view_list_rounded;
-    final viewTooltip = _view == EventCatalogView.list
-        ? 'Сетка'
-        : _view == EventCatalogView.grid
-            ? 'Календарь'
-            : 'Список';
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 640;
+        final paneWidth = math.min(372.0, math.max(316.0, constraints.maxWidth * .34));
+        final canClose = widget.onClose != null || Navigator.of(context).canPop();
 
-    final content = RefreshIndicator(
-      onRefresh: refresh,
+        final header = _EmbeddedCatalogHeader(
+          icon: Icons.event_available_rounded,
+          title: 'Мероприятия',
+          subtitle: '${_items.length} событий · сборы, турниры и активности',
+          onClose: canClose
+              ? (widget.onClose ?? () => Navigator.of(context).maybePop())
+              : null,
+          actions: [
+            _CatalogIconButton(
+              icon: _view == EventCatalogView.calendar
+                  ? Icons.view_list_rounded
+                  : Icons.calendar_month_rounded,
+              tooltip: _view == EventCatalogView.calendar
+                  ? 'Вернуться к списку'
+                  : 'Открыть календарь',
+              active: _view == EventCatalogView.calendar,
+              onTap: toggleCalendar,
+            ),
+            _CatalogIconButton(
+              icon: Icons.refresh_rounded,
+              tooltip: 'Обновить',
+              onTap: refresh,
+            ),
+          ],
+        );
+
+        final listPane = _buildListPane(
+          compact: compact,
+          onRefresh: refresh,
+          showCalendar: compact && _view == EventCatalogView.calendar,
+        );
+
+        final workspace = Container(
+          color: _CatalogColors.workspace,
+          padding: EdgeInsets.all(compact ? 6 : 10),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(compact ? 18 : 20),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(compact ? 18 : 20),
+                boxShadow: _CatalogDecor.windowShadow,
+              ),
+              child: Column(
+                children: [
+                  header,
+                  const Divider(height: 1, thickness: .7, color: _CatalogColors.line),
+                  Expanded(
+                    child: compact
+                        ? listPane
+                        : Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              SizedBox(width: paneWidth, child: listPane),
+                              const VerticalDivider(
+                                width: 1,
+                                thickness: .7,
+                                color: _CatalogColors.line,
+                              ),
+                              Expanded(
+                                child: _view == EventCatalogView.calendar
+                                    ? _calendarDetailPane()
+                                    : _eventDetailPane(_selectedEvent),
+                              ),
+                            ],
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+
+        if (widget.embedded) return workspace;
+        return Scaffold(
+          backgroundColor: _CatalogColors.workspace,
+          body: SafeArea(child: workspace),
+        );
+      },
+    );
+  }
+
+  Widget _buildListPane({
+    required bool compact,
+    required Future<void> Function() onRefresh,
+    required bool showCalendar,
+  }) {
+    return RefreshIndicator(
+      color: _CatalogColors.green,
+      onRefresh: onRefresh,
       child: CustomScrollView(
         physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
         slivers: [
-          SliverToBoxAdapter(child: _searchAndChips(bg)),
-          const SliverToBoxAdapter(child: SizedBox(height: 8)),
-
-          if (_view == EventCatalogView.calendar) ...[
-            SliverToBoxAdapter(child: _calendarBlock(bg)),
+          SliverToBoxAdapter(child: _CatalogPaneLabel(title: 'Мероприятия', subtitle: 'Выберите событие', count: _items.length)),
+          SliverToBoxAdapter(child: _searchAndChips(_CatalogColors.panel)),
+          if (showCalendar) ...[
+            SliverToBoxAdapter(child: _calendarBlock(_CatalogColors.panel)),
             const SliverToBoxAdapter(child: SizedBox(height: 10)),
             SliverToBoxAdapter(child: _dayHeader()),
+            const SliverToBoxAdapter(child: SizedBox(height: 8)),
           ],
-
-          if (_loading) ...[
-            SliverToBoxAdapter(child: _skeletonList()),
-          ] else if (_err) ...[
-            SliverFillRemaining(hasScrollBody: false, child: _error()),
-          ] else if (_items.isEmpty) ...[
-            SliverFillRemaining(hasScrollBody: false, child: _empty()),
-          ] else if (_view == EventCatalogView.grid) ...[
-            _gridSliver(),
-            SliverToBoxAdapter(child: _loadMoreFooter()),
-            const SliverToBoxAdapter(child: SizedBox(height: 16)),
-          ] else ...[
-            _listSliver(),
-            if (_view == EventCatalogView.list) SliverToBoxAdapter(child: _loadMoreFooter()),
-            const SliverToBoxAdapter(child: SizedBox(height: 16)),
+          if (_loading)
+            SliverToBoxAdapter(child: _skeletonList())
+          else if (_err)
+            SliverFillRemaining(hasScrollBody: false, child: _error())
+          else if (_items.isEmpty)
+            SliverFillRemaining(hasScrollBody: false, child: _empty())
+          else ...[
+            _listSliver(compact: compact),
+            if (_view != EventCatalogView.calendar)
+              SliverToBoxAdapter(child: _loadMoreFooter()),
+            const SliverToBoxAdapter(child: SizedBox(height: 18)),
           ],
         ],
       ),
     );
+  }
 
-    if (widget.embedded) {
-      return Container(
-        color: bg,
-        child: Column(
-          children: [
-            _EmbeddedCatalogHeader(
-              icon: Icons.event_rounded,
-              title: 'Мероприятия',
-              subtitle: 'События, сборы и активности внутри главного экрана',
-              onClose: widget.onClose,
-              actions: [
-                IconButton(
-                  tooltip: viewTooltip,
-                  onPressed: toggleView,
-                  icon: Icon(viewIcon),
-                ),
-                IconButton(
-                  tooltip: 'Обновить',
-                  onPressed: refresh,
-                  icon: const Icon(Icons.refresh_rounded),
-                ),
-              ],
-            ),
-            Expanded(child: content),
-          ],
+  Widget _calendarDetailPane() {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(4, 14, 4, 18),
+      children: [
+        _calendarBlock(_CatalogColors.panel),
+        const SizedBox(height: 14),
+        _dayHeader(),
+        const SizedBox(height: 14),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: _eventDetailPane(_selectedEvent, embeddedInScroll: true),
         ),
+      ],
+    );
+  }
+
+  Widget _eventDetailPane(
+    Map<String, dynamic>? event, {
+    bool embeddedInScroll = false,
+  }) {
+    if (event == null) {
+      return const _CatalogEmptyDetail(
+        icon: Icons.event_busy_rounded,
+        title: 'Выберите мероприятие',
+        subtitle: 'Информация о событии появится в этом блоке.',
       );
     }
 
-    return Scaffold(
-      backgroundColor: bg,
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: bg,
-        surfaceTintColor: Colors.transparent,
-        titleSpacing: 16,
-        title: const Text('Каталог мероприятий', style: TextStyle(fontWeight: FontWeight.w800)),
-        actions: [
-          IconButton(
-            tooltip: viewTooltip,
-            onPressed: toggleView,
-            icon: Icon(viewIcon),
-          ),
-          IconButton(
-            tooltip: 'Обновить',
-            onPressed: refresh,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
-      body: content,
+    final title = (event['title'] ?? 'Мероприятие').toString();
+    final date = (event['event_date'] ?? event['date'] ?? '').toString();
+    final location = (event['location'] ?? event['address'] ?? '').toString();
+    final city = (event['city'] ?? '').toString();
+    final sport = (event['sport'] ?? '').toString();
+    final description =
+        (event['description'] ?? event['about'] ?? event['details'] ?? '').toString();
+    final image =
+        (event['image'] ?? event['thumbnail'] ?? event['banner'] ?? '').toString();
+
+    final content = ListView(
+      shrinkWrap: embeddedInScroll,
+      physics: embeddedInScroll
+          ? const NeverScrollableScrollPhysics()
+          : const BouncingScrollPhysics(),
+      padding: embeddedInScroll
+          ? EdgeInsets.zero
+          : const EdgeInsets.fromLTRB(18, 18, 18, 24),
+      children: [
+        _CatalogDetailHero(
+          image: image,
+          icon: Icons.event_available_rounded,
+          eyebrow: sport.isEmpty ? 'МЕРОПРИЯТИЕ' : sport.toUpperCase(),
+          title: title,
+          subtitle: date.isEmpty ? 'Дата уточняется' : _formatDate(date),
+        ),
+        const SizedBox(height: 12),
+        _CatalogMetrics(
+          items: [
+            _CatalogMetricData(
+              icon: Icons.calendar_today_rounded,
+              value: date.isEmpty ? '—' : _shortDate(date),
+              label: 'Дата',
+            ),
+            _CatalogMetricData(
+              icon: Icons.location_on_outlined,
+              value: city.isEmpty ? '—' : city,
+              label: 'Город',
+            ),
+            _CatalogMetricData(
+              icon: Icons.sports_soccer_rounded,
+              value: sport.isEmpty ? '—' : sport,
+              label: 'Спорт',
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _CatalogInfoSection(
+          title: 'Данные мероприятия',
+          children: [
+            _CatalogInfoRow(
+              icon: Icons.schedule_rounded,
+              label: 'Дата и время',
+              value: date.isEmpty ? 'Не указаны' : _formatDate(date),
+            ),
+            _CatalogInfoRow(
+              icon: Icons.place_outlined,
+              label: 'Место',
+              value: location.isEmpty ? 'Не указано' : location,
+            ),
+            _CatalogInfoRow(
+              icon: Icons.location_city_rounded,
+              label: 'Город',
+              value: city.isEmpty ? 'Не указан' : city,
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        _CatalogDescription(
+          title: 'О мероприятии',
+          text: description.trim().isEmpty
+              ? 'Организатор пока не добавил подробное описание.'
+              : description,
+        ),
+        const SizedBox(height: 12),
+        _CatalogPrimaryButton(
+          title: 'Открыть мероприятие',
+          icon: Icons.arrow_forward_rounded,
+          onTap: () => _openDetails(event),
+        ),
+      ],
     );
+
+    return embeddedInScroll ? content : content;
+  }
+
+  String _shortDate(String raw) {
+    final parsed = _tryParseDate(raw);
+    if (parsed == null) return raw;
+    return '${parsed.day.toString().padLeft(2, '0')}.${parsed.month.toString().padLeft(2, '0')}';
   }
 
   // --- Top search + chips ---
   Widget _searchAndChips(Color bg) {
     return Container(
       decoration: BoxDecoration(color: bg),
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
+      padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
       child: Column(
         children: [
           _MatteSurface(
+            soft: true,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: Row(
               children: [
-                const Icon(Icons.search_rounded, size: 22, color: Color(0xFF64748B)),
+                const Icon(Icons.search_rounded, size: 18, color: _CatalogColors.muted),
                 const SizedBox(width: 8),
                 Expanded(
                   child: TextField(
@@ -489,6 +667,7 @@ class _EventsListScreenState extends State<EventsListScreen> {
                       border: InputBorder.none,
                       isDense: true,
                     ),
+                    style: _CatalogText.title(12.4),
                     textInputAction: TextInputAction.search,
                     onSubmitted: (_) => _loadFirst(),
                   ),
@@ -617,7 +796,7 @@ class _EventsListScreenState extends State<EventsListScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                Text(title, style: _CatalogText.title(16)),
                 const SizedBox(height: 12),
                 SizedBox(
                   height: MediaQuery.of(context).size.height * 0.5,
@@ -651,7 +830,7 @@ class _EventsListScreenState extends State<EventsListScreen> {
 
   Widget _calendarBlock(Color bg) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
       child: _MatteSurface(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -669,7 +848,7 @@ class _EventsListScreenState extends State<EventsListScreen> {
                   child: Center(
                     child: Text(
                       _monthTitle(_calMonth),
-                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                      style: _CatalogText.title(14.5),
                     ),
                   ),
                 ),
@@ -704,7 +883,7 @@ class _EventsListScreenState extends State<EventsListScreen> {
       children: days
           .map((d) => Expanded(
                 child: Center(
-                  child: Text(d, style: const TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w700)),
+                  child: Text(d, style: _CatalogText.muted(10.5)),
                 ),
               ))
           .toList(),
@@ -751,9 +930,9 @@ class _EventsListScreenState extends State<EventsListScreen> {
     final key = _k(date);
     final count = _monthMarks[key] ?? 0;
 
-    final bg = isSelected ? const Color(0xFFEFF6FF) : Colors.transparent;
-    final border = isSelected ? const Color(0xFF93C5FD) : const Color(0xFFE5E7EB);
-    final text = isSelected ? const Color(0xFF1D4ED8) : const Color(0xFF0F172A);
+    final bg = isSelected ? _CatalogColors.greenSoft : Colors.transparent;
+    final border = isSelected ? _CatalogColors.greenBorder : Colors.transparent;
+    final text = isSelected ? _CatalogColors.greenDark : _CatalogColors.text;
 
     return InkWell(
       borderRadius: BorderRadius.circular(12),
@@ -762,7 +941,7 @@ class _EventsListScreenState extends State<EventsListScreen> {
         await _loadDayEvents(date);
       },
       child: Container(
-        height: 44,
+        height: 40,
         margin: const EdgeInsets.all(2),
         decoration: BoxDecoration(
           color: bg,
@@ -774,9 +953,8 @@ class _EventsListScreenState extends State<EventsListScreen> {
           children: [
             Text(
               '${date.day}',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                color: isToday && !isSelected ? const Color(0xFF0EA5E9) : text,
+              style: _CatalogText.title(11.5).copyWith(
+                color: isToday && !isSelected ? _CatalogColors.green : text,
               ),
             ),
             if (count > 0)
@@ -801,7 +979,7 @@ class _EventsListScreenState extends State<EventsListScreen> {
           height: 5,
           margin: const EdgeInsets.symmetric(horizontal: 2),
           decoration: BoxDecoration(
-            color: const Color(0xFF0EA5E9),
+            color: _CatalogColors.green,
             borderRadius: BorderRadius.circular(10),
           ),
         );
@@ -829,14 +1007,14 @@ class _EventsListScreenState extends State<EventsListScreen> {
 
   Widget _dayHeader() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
       child: Row(
         children: [
-          const Icon(Icons.event_available_rounded, color: Color(0xFF0EA5E9)),
+          const Icon(Icons.event_available_rounded, color: _CatalogColors.green),
           const SizedBox(width: 8),
           Text(
             "События: ${_k(_selectedDay)}",
-            style: const TextStyle(fontWeight: FontWeight.w800),
+            style: _CatalogText.title(12.5),
           ),
         ],
       ),
@@ -844,13 +1022,13 @@ class _EventsListScreenState extends State<EventsListScreen> {
   }
 
   // --- Список (sliver) ---
-  Widget _listSliver() {
+  Widget _listSliver({required bool compact}) {
     return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+      padding: const EdgeInsets.fromLTRB(10, 0, 10, 0),
       sliver: SliverList.separated(
         itemCount: _items.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
-        itemBuilder: (_, i) => _eventTile(_items[i]),
+        separatorBuilder: (_, __) => const SizedBox(height: 1),
+        itemBuilder: (_, i) => _eventTile(_items[i], compact: compact),
       ),
     );
   }
@@ -858,7 +1036,7 @@ class _EventsListScreenState extends State<EventsListScreen> {
   // --- Сетка (sliver) ---
   Widget _gridSliver() {
     return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
       sliver: SliverGrid.builder(
         itemCount: _items.length,
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -873,72 +1051,61 @@ class _EventsListScreenState extends State<EventsListScreen> {
   }
 
   // --- Карточка события в списке ---
-  Widget _eventTile(Map<String, dynamic> event) {
+  Widget _eventTile(Map<String, dynamic> event, {bool compact = true}) {
     final title = (event['title'] ?? 'Мероприятие').toString();
     final date = (event['event_date'] ?? event['date'] ?? '').toString();
     final location = (event['location'] ?? event['address'] ?? '').toString();
     final image = (event['image'] ?? event['thumbnail'] ?? event['banner'] ?? '').toString();
     final sport = (event['sport'] ?? '').toString();
+    final active = _eventKey(event) == _selectedEventKey;
 
     return _MatteSurface(
-      onTap: () => _openDetails(event),
+      selected: active,
+      onTap: () => _selectEvent(event, compact: compact),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          _EventImage(image: image, fallbackIcon: Icons.event_available_rounded),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 4),
-                  if (date.isNotEmpty)
-                    Row(
-                      children: [
-                        Icon(Icons.calendar_today_rounded, size: 14, color: Colors.grey[600]),
-                        const SizedBox(width: 6),
-                        Text(_formatDate(date), style: const TextStyle(color: Color(0xFF475569), fontSize: 13)),
-                      ],
-                    ),
-                  if (location.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Row(
-                        children: [
-                          Icon(Icons.location_on_rounded, size: 14, color: Colors.grey[600]),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(location,
-                                style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis),
-                          ),
-                        ],
-                      ),
-                    ),
-                  if (sport.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Row(
-                        children: [
-                          Icon(Icons.sports_soccer_rounded, size: 14, color: Colors.grey[600]),
-                          const SizedBox(width: 6),
-                          Text(sport, style: const TextStyle(color: Color(0xFF64748B), fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(
+              color: active ? _CatalogColors.green : _CatalogColors.line,
+              shape: BoxShape.circle,
             ),
           ),
-          const SizedBox(width: 8),
-          const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8)),
+          const SizedBox(width: 9),
+          _EventImage(
+            image: image,
+            fallbackIcon: Icons.event_available_rounded,
+            height: 38,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  title,
+                  style: _CatalogText.title(compact ? 13.8 : 14.2),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  [
+                    if (date.isNotEmpty) _formatDate(date),
+                    if (location.isNotEmpty) location,
+                    if (sport.isNotEmpty) sport,
+                  ].join('  ·  '),
+                  style: _CatalogText.muted(10.7),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -959,7 +1126,7 @@ class _EventsListScreenState extends State<EventsListScreen> {
           _EventImage(image: image, fallbackIcon: Icons.event_available_rounded, height: 100, borderRadius: 8),
           const SizedBox(height: 10),
           Text(title,
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+              style: _CatalogText.title(13.5),
               maxLines: 2,
               overflow: TextOverflow.ellipsis),
           const SizedBox(height: 6),
@@ -970,7 +1137,7 @@ class _EventsListScreenState extends State<EventsListScreen> {
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(_formatDate(date),
-                      style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                      style: _CatalogText.muted(10.5),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis),
                 ),
@@ -978,10 +1145,10 @@ class _EventsListScreenState extends State<EventsListScreen> {
             ),
           const Spacer(),
           Row(
-            children: const [
-              Text("Открыть", style: TextStyle(color: Color(0xFF0EA5E9), fontWeight: FontWeight.bold, fontSize: 12)),
-              SizedBox(width: 4),
-              Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Color(0xFF0EA5E9)),
+            children: [
+              Text('Открыть', style: _CatalogText.action(color: _CatalogColors.green)),
+              const SizedBox(width: 4),
+              const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: _CatalogColors.green),
             ],
           ),
         ],
@@ -1004,8 +1171,8 @@ class _EventsListScreenState extends State<EventsListScreen> {
           child: _loadingMore
               ? const SizedBox(height: 28, width: 28, child: CircularProgressIndicator(strokeWidth: 2.8))
               : _canLoadMore
-                  ? const Text('Прокрутите вниз, чтобы загрузить ещё', style: TextStyle(color: Color(0xFF94A3B8)))
-                  : const Text('Больше результатов нет', style: TextStyle(color: Color(0xFF94A3B8))),
+                  ? Text('Прокрутите вниз, чтобы загрузить ещё', style: _CatalogText.muted(10.5))
+                  : Text('Больше результатов нет', style: _CatalogText.muted(10.5)),
         ),
       ),
     );
@@ -1055,9 +1222,9 @@ class _EventsListScreenState extends State<EventsListScreen> {
           children: [
             const Icon(Icons.search_off_rounded, size: 56, color: Color(0xFF94A3B8)),
             const SizedBox(height: 12),
-            const Text('Мероприятий не найдено', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            Text('Мероприятий не найдено', style: _CatalogText.title(15)),
             const SizedBox(height: 6),
-            const Text('Попробуйте изменить фильтры или запрос', style: TextStyle(color: Color(0xFF64748B))),
+            Text('Попробуйте изменить фильтры или запрос', style: _CatalogText.muted(11)),
             const SizedBox(height: 16),
             FilledButton.tonal(
               onPressed: () async {
@@ -1090,9 +1257,9 @@ class _EventsListScreenState extends State<EventsListScreen> {
           children: [
             const Icon(Icons.error_outline, size: 56, color: Colors.redAccent),
             const SizedBox(height: 12),
-            const Text('Ошибка загрузки', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            Text('Ошибка загрузки', style: _CatalogText.title(15)),
             const SizedBox(height: 6),
-            Text(_errMsg ?? 'Попробуйте ещё раз', textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF64748B))),
+            Text(_errMsg ?? 'Попробуйте ещё раз', textAlign: TextAlign.center, style: _CatalogText.muted(11)),
             const SizedBox(height: 16),
             FilledButton(onPressed: _loadFirst, child: const Text('Повторить')),
           ],
@@ -1131,17 +1298,486 @@ class _EventsListScreenState extends State<EventsListScreen> {
   }
 }
 
+class _CatalogColors {
+  static const workspace = Color(0xFFF6F7F6);
+  static const panel = Colors.white;
+  static const soft = Color(0xFFF7F8F7);
+  static const soft2 = Color(0xFFF2F4F2);
+  static const text = Color(0xFF0B0F14);
+  static const muted = Color(0xFF5F6670);
+  static const line = Color(0xFFE9ECEA);
+  static const green = Color(0xFF00A750);
+  static const greenDark = Color(0xFF067A46);
+  static const greenSoft = Color(0xFFF3FAF6);
+  static const greenBorder = Color(0xFFD7F0E2);
+  static const red = Color(0xFFD92D20);
+}
+
+class _CatalogText {
+  static TextStyle title(double size) => AppTypography.custom(
+        size: size,
+        weight: FontWeight.w600,
+        color: _CatalogColors.text,
+        height: 1.18,
+        letterSpacing: 0,
+        features: const [FontFeature.tabularFigures()],
+      );
+
+  static TextStyle section() => AppTypography.custom(
+        size: 12.2,
+        weight: FontWeight.w600,
+        color: _CatalogColors.text,
+        height: 1.18,
+        letterSpacing: 0,
+      );
+
+  static TextStyle muted(double size) => AppTypography.custom(
+        size: size,
+        weight: FontWeight.w400,
+        color: _CatalogColors.muted,
+        height: 1.32,
+        letterSpacing: 0,
+      );
+
+  static TextStyle action({Color color = _CatalogColors.text}) =>
+      AppTypography.custom(
+        size: 11.8,
+        weight: FontWeight.w600,
+        color: color,
+        height: 1.16,
+        letterSpacing: 0,
+      );
+}
+
+class _CatalogDecor {
+  static List<BoxShadow> get windowShadow => [
+        BoxShadow(
+          color: Colors.black.withOpacity(.035),
+          blurRadius: 28,
+          spreadRadius: -18,
+          offset: const Offset(0, 16),
+        ),
+      ];
+}
+
+class _CatalogPaneLabel extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final int count;
+
+  const _CatalogPaneLabel({
+    required this.title,
+    required this.subtitle,
+    required this.count,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+      child: Row(
+        children: [
+          const _CatalogDotCluster(),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: _CatalogText.title(13.5)),
+                const SizedBox(height: 2),
+                Text('$subtitle · $count', maxLines: 1, overflow: TextOverflow.ellipsis, style: _CatalogText.muted(10.2)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CatalogDotCluster extends StatelessWidget {
+  const _CatalogDotCluster();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 25,
+      height: 18,
+      child: Stack(
+        children: const [
+          Positioned(left: 0, top: 5, child: _CatalogGlowDot(size: 8)),
+          Positioned(left: 9, top: 1, child: _CatalogGlowDot(size: 5, faint: true)),
+          Positioned(left: 15, top: 10, child: _CatalogGlowDot(size: 4, faint: true)),
+        ],
+      ),
+    );
+  }
+}
+
+class _CatalogGlowDot extends StatelessWidget {
+  final double size;
+  final bool faint;
+  const _CatalogGlowDot({this.size = 7, this.faint = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: _CatalogColors.green.withOpacity(faint ? .32 : 1),
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+}
+
+class _CatalogIconButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  final bool active;
+
+  const _CatalogIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.active = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: active ? _CatalogColors.greenSoft : _CatalogColors.soft,
+        borderRadius: BorderRadius.circular(9),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(9),
+          child: SizedBox(
+            width: 32,
+            height: 32,
+            child: Icon(icon, size: 15, color: active ? _CatalogColors.greenDark : _CatalogColors.muted),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+class _CatalogEmptyDetail extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _CatalogEmptyDetail({required this.icon, required this.title, required this.subtitle});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const _CatalogDotCluster(),
+            const SizedBox(height: 10),
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(color: _CatalogColors.soft, borderRadius: BorderRadius.circular(10)),
+              child: Icon(icon, color: _CatalogColors.greenDark, size: 18),
+            ),
+            const SizedBox(height: 10),
+            Text(title, textAlign: TextAlign.center, style: _CatalogText.title(13.8)),
+            const SizedBox(height: 4),
+            Text(subtitle, textAlign: TextAlign.center, style: _CatalogText.muted(10.5)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+class _CatalogDetailHero extends StatelessWidget {
+  final String image;
+  final IconData icon;
+  final String eyebrow;
+  final String title;
+  final String subtitle;
+
+  const _CatalogDetailHero({
+    required this.image,
+    required this.icon,
+    required this.eyebrow,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+            color: _CatalogColors.greenSoft,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: image.trim().isEmpty
+              ? Icon(icon, color: _CatalogColors.green, size: 20)
+              : Image.network(
+                  image,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) =>
+                      Icon(icon, color: _CatalogColors.green, size: 20),
+                ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                eyebrow,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.custom(
+                  size: 9,
+                  weight: FontWeight.w600,
+                  color: _CatalogColors.greenDark,
+                  height: 1.1,
+                  letterSpacing: .35,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                title,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: _CatalogText.title(16.5),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: _CatalogText.muted(11.3),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CatalogMetricData {
+  final IconData icon;
+  final String value;
+  final String label;
+
+  const _CatalogMetricData({
+    required this.icon,
+    required this.value,
+    required this.label,
+  });
+}
+
+class _CatalogMetrics extends StatelessWidget {
+  final List<_CatalogMetricData> items;
+  const _CatalogMetrics({required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final itemWidth = (constraints.maxWidth - 16) / items.length;
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: items
+              .map(
+                (item) => Container(
+                  width: itemWidth,
+                  constraints: const BoxConstraints(minWidth: 108),
+                  padding: const EdgeInsets.all(11),
+                  decoration: BoxDecoration(
+                    color: _CatalogColors.soft,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(item.icon, size: 16, color: _CatalogColors.green),
+                      const SizedBox(height: 9),
+                      Text(
+                        item.value,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _CatalogText.title(13),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        item.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _CatalogText.muted(9.8),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+              .toList(),
+        );
+      },
+    );
+  }
+}
+
+class _CatalogInfoSection extends StatelessWidget {
+  final String title;
+  final List<Widget> children;
+
+  const _CatalogInfoSection({required this.title, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 11, 12, 3),
+      decoration: BoxDecoration(
+        color: _CatalogColors.soft,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: _CatalogText.section()),
+          const SizedBox(height: 7),
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
+class _CatalogInfoRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _CatalogInfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 9),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: _CatalogColors.green),
+          const SizedBox(width: 10),
+          SizedBox(width: 92, child: Text(label, style: _CatalogText.muted(10.5))),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: _CatalogText.title(11.2),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CatalogDescription extends StatelessWidget {
+  final String title;
+  final String text;
+
+  const _CatalogDescription({required this.title, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _CatalogColors.greenSoft,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: _CatalogText.section()),
+          const SizedBox(height: 7),
+          Text(text, style: _CatalogText.muted(11.1)),
+        ],
+      ),
+    );
+  }
+}
+
+class _CatalogPrimaryButton extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _CatalogPrimaryButton({
+    required this.title,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _CatalogColors.green,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox(
+          height: 40,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(title, style: _CatalogText.action(color: Colors.white)),
+              const SizedBox(width: 8),
+              Icon(icon, size: 16, color: Colors.white),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ===================== MATTE UI COMPONENTS =====================
 
 class _MatteSurface extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
   final VoidCallback? onTap;
+  final bool selected;
+  final bool soft;
 
   const _MatteSurface({
     required this.child,
     this.padding = const EdgeInsets.all(12),
     this.onTap,
+    this.selected = false,
+    this.soft = false,
   });
 
   @override
@@ -1149,12 +1785,12 @@ class _MatteSurface extends StatelessWidget {
     final content = Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: const [
-          BoxShadow(color: Color(0x11000000), blurRadius: 16, offset: Offset(0, 6)),
-        ],
+        color: selected
+            ? _CatalogColors.greenSoft
+            : soft
+                ? _CatalogColors.soft
+                : Colors.white,
+        borderRadius: BorderRadius.circular(9),
       ),
       child: child,
     );
@@ -1163,7 +1799,7 @@ class _MatteSurface extends StatelessWidget {
       return Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(9),
           onTap: onTap,
           child: content,
         ),
@@ -1193,18 +1829,18 @@ class _EventImage extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: _CatalogColors.greenSoft,
         borderRadius: BorderRadius.circular(borderRadius),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       clipBehavior: Clip.antiAlias,
       child: image.isNotEmpty
           ? Image.network(
               image,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Icon(fallbackIcon, color: const Color(0xFF0EA5E9)),
+              errorBuilder: (_, __, ___) =>
+                  Icon(fallbackIcon, color: _CatalogColors.green),
             )
-          : Icon(fallbackIcon, color: const Color(0xFF0EA5E9)),
+          : Icon(fallbackIcon, color: _CatalogColors.green),
     );
   }
 }
@@ -1228,82 +1864,50 @@ class _EmbeddedCatalogHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    final isCompact = width < 720;
-
-    return SafeArea(
-      bottom: false,
-      child: Container(
-        margin: EdgeInsets.fromLTRB(isCompact ? 12 : 18, 12, isCompact ? 12 : 18, 10),
-        padding: EdgeInsets.all(isCompact ? 12 : 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 18,
-              offset: const Offset(0, 8),
+    final compact = MediaQuery.sizeOf(context).width < 640;
+    return Container(
+      height: compact ? 54 : 58,
+      padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 14),
+      color: Colors.white,
+      child: Row(
+        children: [
+          const _CatalogDotCluster(),
+          const SizedBox(width: 8),
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: _CatalogColors.soft,
+              borderRadius: BorderRadius.circular(9),
             ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: isCompact ? 42 : 48,
-              height: isCompact ? 42 : 48,
-              decoration: BoxDecoration(
-                color: const Color(0xFFEFF6FF),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFDBEAFE)),
-              ),
-              child: Icon(icon, color: const Color(0xFF2563EB), size: isCompact ? 22 : 24),
+            child: Icon(icon, color: _CatalogColors.greenDark, size: 15),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CatalogText.title(compact ? 14.5 : 15.2)),
+                const SizedBox(height: 2),
+                Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CatalogText.muted(compact ? 10.1 : 10.5)),
+              ],
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: isCompact ? 17 : 20,
-                      fontWeight: FontWeight.w900,
-                      color: const Color(0xFF0F172A),
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: isCompact ? 12 : 13,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF64748B),
-                    ),
-                  ),
-                ],
-              ),
+          ),
+          const SizedBox(width: 8),
+          ...actions.expand((action) => [action, const SizedBox(width: 5)]),
+          if (onClose != null)
+            _CatalogIconButton(
+              icon: Icons.close_rounded,
+              tooltip: 'Закрыть',
+              onTap: onClose!,
             ),
-            const SizedBox(width: 8),
-            ...actions,
-            if (onClose != null)
-              IconButton(
-                tooltip: 'Закрыть',
-                onPressed: onClose,
-                icon: const Icon(Icons.close_rounded),
-              ),
-          ],
-        ),
+        ],
       ),
     );
   }
 }
+
 
 class _FilterChipMatte extends StatelessWidget {
   final String label;
@@ -1320,26 +1924,24 @@ class _FilterChipMatte extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = selected ? const Color(0xFFEFF6FF) : Colors.white;
-    final border = selected ? const Color(0xFF93C5FD) : const Color(0xFFE5E7EB);
-    final text = selected ? const Color(0xFF1D4ED8) : const Color(0xFF334155);
+    final bg = selected ? _CatalogColors.greenSoft : _CatalogColors.soft;
+    final text = selected ? _CatalogColors.greenDark : _CatalogColors.text;
 
     return InkWell(
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.circular(10),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: border),
+          borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 18, color: text),
+            Icon(icon, size: 15, color: text),
             const SizedBox(width: 6),
-            Text(label, style: TextStyle(color: text, fontWeight: FontWeight.w600)),
+            Text(label, style: _CatalogText.action(color: text)),
           ],
         ),
       ),

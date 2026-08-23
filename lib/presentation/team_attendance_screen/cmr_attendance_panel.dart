@@ -1,12 +1,20 @@
 // lib/presentation/attendance/cmr_attendance_panel.dart
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
+
+import 'package:flutter/services.dart';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:share_plus/share_plus.dart';
 
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 
 class CmrAttendancePanel extends StatefulWidget {
@@ -38,6 +46,7 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
   static const String getAttendanceUrl = '$apiBase/get_team_attendance.php';
   static const String setAttendanceUrl = '$apiBase/set_team_attendance.php';
   static const String getTeamProfileUrl = '$apiBase/get_team_profile.php';
+  static const String notifyTrainingStartedUrl = '$apiBase/notify_training_started.php';
 
   static const String kStatusUnset = 'unset';
 
@@ -439,15 +448,236 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
         'marked_by': markedBy.toString(),
       }).timeout(const Duration(seconds: 14));
       final data = _decode(res.body);
-      if (data is Map && data['success'] != true) {
+      var savedOk = res.statusCode >= 200 && res.statusCode < 300;
+      if (data is Map && data['success'] == false) {
+        savedOk = false;
         Get.snackbar('Ошибка', '${data['message'] ?? 'Не удалось сохранить отметку'}');
       }
+
+      if (savedOk && status != kStatusUnset) {
+        // Отдельный endpoint идемпотентен: первая отметка мероприятия создаёт
+        // событие «Тренировка началась», повторные отметки push не дублируют.
+        await _notifyTrainingStarted(
+          eventId: eventId,
+          markedBy: markedBy,
+          status: status,
+        );
+      }
+
       await _reloadAttendanceForEvent(eventId);
       _calculateStats();
     } catch (_) {
       Get.snackbar('Ошибка сети', 'Не удалось сохранить посещаемость');
     } finally {
       if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Future<void> _notifyTrainingStarted({
+    required int eventId,
+    required int markedBy,
+    required String status,
+  }) async {
+    if (widget.clubId <= 0 || widget.teamId <= 0 || eventId <= 0) return;
+    try {
+      await http.post(
+        Uri.parse(notifyTrainingStartedUrl),
+        body: {
+          'club_id': widget.clubId.toString(),
+          'team_id': widget.teamId.toString(),
+          'event_id': eventId.toString(),
+          'started_by': markedBy.toString(),
+          'attendance_status': status,
+        },
+      ).timeout(const Duration(seconds: 8));
+    } catch (_) {
+      // Посещаемость уже сохранена. Ошибка push не должна откатывать отметку:
+      // следующая отметка повторит вызов, а UNIQUE(event_id) защитит от дубля.
+    }
+  }
+
+
+  String _exportStatusText(String status) {
+    if (status == kStatusUnset || status.trim().isEmpty) return 'Не отмечено';
+    return _statusText(status);
+  }
+
+  String _csvCell(String value) {
+    final escaped = value.replaceAll('"', '""');
+    return '"$escaped"';
+  }
+
+  String _htmlCell(String value) {
+    return value
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;');
+  }
+
+  List<List<String>> _exportRows() {
+    final rows = <List<String>>[
+      ['Дата', 'Время', 'Мероприятие', 'Игрок', 'Статус', 'Примечание'],
+    ];
+    for (final event in events) {
+      final eventId = _asInt(event['id']);
+      if (eventId <= 0) continue;
+      final dateRaw = '${event['start_at'] ?? event['event_date'] ?? ''}'.trim();
+      final date = dateRaw.length >= 10 ? dateRaw.substring(0, 10) : dateRaw;
+      final time = _prettyTime(event);
+      final title = _eventTitle(event);
+      final eventMap = attendanceByEvent[eventId] ?? const <String, Map<String, dynamic>>{};
+      for (final player in players) {
+        final playerId = _asInt(player['id']);
+        final mark = eventMap[playerId.toString()];
+        final status = '${mark?['status'] ?? kStatusUnset}';
+        final note = '${mark?['note'] ?? ''}'.trim();
+        rows.add([
+          date,
+          time,
+          title,
+          _playerName(player),
+          _exportStatusText(status),
+          note,
+        ]);
+      }
+    }
+    return rows;
+  }
+
+  Future<Directory> _exportDirectory() async {
+    try {
+      return await getTemporaryDirectory();
+    } catch (_) {
+      return Directory.systemTemp;
+    }
+  }
+
+  String _safeExportName(String raw) {
+    final clean = raw
+        .trim()
+        .replaceAll(RegExp(r'[\\/:*?"<>|]+'), '_')
+        .replaceAll(RegExp(r'\s+'), '_');
+    return clean.isEmpty ? 'team' : clean;
+  }
+
+  Future<void> _exportExcel() async {
+    try {
+      final rows = _exportRows();
+      if (rows.length <= 1) {
+        Get.snackbar('Экспорт', 'За выбранный месяц нет мероприятий для экспорта');
+        return;
+      }
+
+      final html = StringBuffer()
+        ..writeln('<!doctype html><html><head><meta charset="utf-8"></head><body>')
+        ..writeln('<h2>Журнал посещаемости · ${_htmlCell(widget.teamName)}</h2>')
+        ..writeln('<p>${_htmlCell(widget.clubName)} · ${_htmlCell(_monthTitle())}</p>')
+        ..writeln('<table border="1" cellspacing="0" cellpadding="5">');
+
+      for (var i = 0; i < rows.length; i++) {
+        html.writeln('<tr>');
+        final tag = i == 0 ? 'th' : 'td';
+        for (final cell in rows[i]) {
+          html.writeln('<$tag>${_htmlCell(cell)}</$tag>');
+        }
+        html.writeln('</tr>');
+      }
+      html.writeln('</table></body></html>');
+
+      final dir = await _exportDirectory();
+      final file = File(
+        '${dir.path}/attendance_${_safeExportName(widget.teamName)}_${selectedMonth.year}_${selectedMonth.month.toString().padLeft(2, '0')}.xls',
+      );
+      await file.writeAsString(html.toString(), encoding: utf8, flush: true);
+
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'application/vnd.ms-excel')],
+        subject: 'Журнал посещаемости · ${widget.teamName}',
+      );
+    } catch (e) {
+      Get.snackbar('Экспорт Excel', 'Не удалось создать файл: $e');
+    }
+  }
+
+  Future<void> _exportPdf() async {
+    try {
+      final rows = _exportRows();
+      if (rows.length <= 1) {
+        Get.snackbar('Экспорт', 'За выбранный месяц нет мероприятий для экспорта');
+        return;
+      }
+
+      final regularData = await rootBundle.load('assets/fonts/Inter-Regular.ttf');
+      final boldData = await rootBundle.load('assets/fonts/Inter-Bold.ttf');
+      final regular = pw.Font.ttf(regularData);
+      final bold = pw.Font.ttf(boldData);
+
+      final doc = pw.Document(
+        theme: pw.ThemeData.withFont(base: regular, bold: bold),
+      );
+
+      final bodyRows = rows.skip(1).toList();
+      doc.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4.landscape,
+          margin: const pw.EdgeInsets.all(22),
+          header: (context) => pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                'Журнал посещаемости · ${widget.teamName}',
+                style: pw.TextStyle(font: bold, fontSize: 15),
+              ),
+              pw.SizedBox(height: 3),
+              pw.Text(
+                '${widget.clubName} · ${_monthTitle()}',
+                style: pw.TextStyle(font: regular, fontSize: 9, color: PdfColors.grey700),
+              ),
+              pw.SizedBox(height: 8),
+            ],
+          ),
+          footer: (context) => pw.Align(
+            alignment: pw.Alignment.centerRight,
+            child: pw.Text(
+              'Sportoteka · стр. ${context.pageNumber}',
+              style: pw.TextStyle(font: regular, fontSize: 7.5, color: PdfColors.grey600),
+            ),
+          ),
+          build: (context) => [
+            pw.TableHelper.fromTextArray(
+              headers: rows.first,
+              data: bodyRows,
+              headerStyle: pw.TextStyle(font: bold, fontSize: 7.5),
+              cellStyle: pw.TextStyle(font: regular, fontSize: 7.2),
+              headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
+              border: pw.TableBorder.all(color: PdfColors.grey400, width: .35),
+              cellPadding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+              columnWidths: const {
+                0: pw.FixedColumnWidth(58),
+                1: pw.FixedColumnWidth(38),
+                2: pw.FlexColumnWidth(1.5),
+                3: pw.FlexColumnWidth(1.4),
+                4: pw.FixedColumnWidth(68),
+                5: pw.FlexColumnWidth(1.1),
+              },
+            ),
+          ],
+        ),
+      );
+
+      final dir = await _exportDirectory();
+      final file = File(
+        '${dir.path}/attendance_${_safeExportName(widget.teamName)}_${selectedMonth.year}_${selectedMonth.month.toString().padLeft(2, '0')}.pdf',
+      );
+      await file.writeAsBytes(await doc.save(), flush: true);
+
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'application/pdf')],
+        subject: 'Журнал посещаемости · ${widget.teamName}',
+      );
+    } catch (e) {
+      Get.snackbar('Экспорт PDF', 'Не удалось создать файл: $e');
     }
   }
 
@@ -504,43 +734,67 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
     final hasEditor = editingEventId != null && editingPlayerId != null;
     return LayoutBuilder(
       builder: (_, constraints) {
-        final compact = constraints.maxWidth < 1040;
-        if (compact) {
+        final media = MediaQuery.of(context);
+        final isTablet = media.size.shortestSide >= 600;
+        final stackEditorBelow = !isTablet && constraints.maxWidth < 720;
+
+        if (stackEditorBelow) {
           return Column(
             children: [
               Expanded(child: _journalTable()),
               AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
+                duration: const Duration(milliseconds: 180),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeOutCubic,
                 child: hasEditor
-                    ? Padding(
+                    ? Column(
                         key: const ValueKey('attendance-side-editor-mobile'),
-                        padding: const EdgeInsets.only(top: 10),
-                        child: SizedBox(
-                          height: 250,
-                          child: _attendanceEditorPanel(compact: true),
-                        ),
+                        children: [
+                          const Divider(height: 1, color: _C.line),
+                          SizedBox(
+                            height: 248,
+                            child: _attendanceEditorPanel(compact: true),
+                          ),
+                        ],
                       )
-                    : const SizedBox.shrink(key: ValueKey('attendance-side-editor-empty')),
+                    : const SizedBox.shrink(
+                        key: ValueKey('attendance-side-editor-empty'),
+                      ),
               ),
             ],
           );
         }
 
         return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(child: _journalTable()),
             AnimatedSwitcher(
-              duration: const Duration(milliseconds: 240),
+              duration: const Duration(milliseconds: 180),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeOutCubic,
               child: hasEditor
-                  ? Padding(
+                  ? Row(
                       key: const ValueKey('attendance-side-editor-desktop'),
-                      padding: const EdgeInsets.only(left: 12),
-                      child: SizedBox(
-                        width: 334,
-                        child: _attendanceEditorPanel(),
-                      ),
+                      children: [
+                        const VerticalDivider(
+                          width: 1,
+                          thickness: 1,
+                          color: _C.line,
+                        ),
+                        SizedBox(
+                          width: constraints.maxWidth < 900 ? 292 : 326,
+                          child: _attendanceEditorPanel(
+                            compact: constraints.maxWidth < 900,
+                          ),
+                        ),
+                      ],
                     )
-                  : const SizedBox.shrink(key: ValueKey('attendance-side-editor-empty-desktop')),
+                  : const SizedBox.shrink(
+                      key: ValueKey(
+                        'attendance-side-editor-empty-desktop',
+                      ),
+                    ),
             ),
           ],
         );
@@ -555,7 +809,7 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
     final status = editingStatus;
     final statusColor = _statusColor(status);
     final items = [
-      [kStatusUnset, 'Очистить', '—', const Color(0xFF64748B)],
+      [kStatusUnset, 'Очистить', '—', _C.subtle],
       ['present', 'Присутствует', 'П', const Color(0xFF22C55E)],
       ['absent', 'Отсутствует', 'Н', const Color(0xFFEF4444)],
       ['late', 'Болен', 'Б', const Color(0xFFF59E0B)],
@@ -565,120 +819,175 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
     ];
 
     if (event == null || player == null) {
-      return Container(
-        decoration: _C.glassCard,
-        alignment: Alignment.center,
-        child: const Text('Выберите ячейку посещаемости', style: TextStyle(fontSize: 11.55, fontWeight: FontWeight.w700, color: _C.muted)),
+      return ColoredBox(
+        color: Colors.white,
+        child: Center(
+          child: Text(
+            'Выберите ячейку посещаемости',
+            style: _AttText.muted(11.2),
+          ),
+        ),
       );
     }
 
-    return Container(
-      decoration: _C.glassCard,
-      padding: EdgeInsets.all(compact ? 14 : 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  gradient: _C.accentGradient,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [BoxShadow(color: _C.green.withOpacity(.22), blurRadius: 18, offset: const Offset(0, 8))],
-                ),
-                child: const Icon(Icons.edit_calendar_rounded, color: Colors.white, size: 16),
-              ),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Text('Редактирование', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13.55, fontWeight: FontWeight.w800, color: _C.text, letterSpacing: -.2)),
-              ),
-              InkWell(
-                borderRadius: BorderRadius.circular(11),
-                onTap: _closeAttendanceEditor,
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(11)),
-                  child: const Icon(Icons.close_rounded, size: 16, color: _C.muted),
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: compact ? 10 : 14),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(colors: [statusColor.withOpacity(.14), Colors.white]),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Row(
+    return ColoredBox(
+      color: Colors.white,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          compact ? 12 : 14,
+          compact ? 10 : 12,
+          compact ? 12 : 14,
+          compact ? 10 : 14,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Container(
-                  width: compact ? 42 : 48,
-                  height: compact ? 42 : 48,
-                  decoration: BoxDecoration(color: _C.softGreen, borderRadius: BorderRadius.circular(15)),
-                  clipBehavior: Clip.antiAlias,
-                  child: photo != null ? Image.network(photo, fit: BoxFit.cover) : const Icon(Icons.person_rounded, color: _C.green),
-                ),
-                const SizedBox(width: 12),
+                const _CmrDotCluster(),
+                const SizedBox(width: 9),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(_playerName(player), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.55, fontWeight: FontWeight.w800, color: _C.text)),
-                      const SizedBox(height: 3),
-                      Text(_playerSub(player), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10.75, fontWeight: FontWeight.w700, color: _C.muted)),
-                      const SizedBox(height: 6),
-                      Text('${_eventDateLabel(event).replaceAll('\n', ' · ')} · ${_eventTitle(event)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10.35, fontWeight: FontWeight.w700, color: statusColor)),
+                      Text(
+                        'Редактирование отметки',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _AttText.title(14.2),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Статус игрока для выбранного события',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _AttText.muted(10.2),
+                      ),
                     ],
                   ),
                 ),
+                _CompactIconButton(
+                  icon: Icons.close_rounded,
+                  tooltip: 'Закрыть',
+                  onTap: _closeAttendanceEditor,
+                ),
               ],
             ),
-          ),
-          SizedBox(height: compact ? 10 : 14),
-          Expanded(
-            child: GridView.builder(
-              padding: EdgeInsets.zero,
-              itemCount: items.length,
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: compact ? 4 : 2,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-                childAspectRatio: compact ? 1.9 : 2.58,
+            SizedBox(height: compact ? 10 : 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Color.alphaBlend(
+                  statusColor.withOpacity(.045),
+                  _C.soft,
+                ),
+                borderRadius: BorderRadius.circular(12),
               ),
-              itemBuilder: (_, index) {
-                final code = items[index][0] as String;
-                final label = items[index][1] as String;
-                final symbol = items[index][2] as String;
-                final color = items[index][3] as Color;
-                final active = code == status;
-                return _EditorStatusTile(
-                  code: code,
-                  label: label,
-                  symbol: symbol,
-                  color: color,
-                  active: active,
-                  onTap: () => _applyEditorStatus(code),
-                );
-              },
+              child: Row(
+                children: [
+                  Container(
+                    width: compact ? 38 : 42,
+                    height: compact ? 38 : 42,
+                    decoration: BoxDecoration(
+                      color: _C.soft2,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: photo != null
+                        ? Image.network(photo, fit: BoxFit.cover)
+                        : const Center(
+                            child: _CmrGlowDot(
+                              color: _C.green,
+                              size: 7,
+                            ),
+                          ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _playerName(player),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: _AttText.value(11.8),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _playerSub(player),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: _AttText.muted(9.8),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${_eventDateLabel(event).replaceAll('\n', ' · ')} · ${_eventTitle(event)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: _AttText.caption().copyWith(
+                            color: status == kStatusUnset
+                                ? _C.muted2
+                                : statusColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          if (saving) ...[
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(99),
-              child: const LinearProgressIndicator(minHeight: 4, color: _C.green, backgroundColor: _C.softGreen),
+            SizedBox(height: compact ? 10 : 12),
+            Text('Статус', style: _AttText.section()),
+            const SizedBox(height: 7),
+            Expanded(
+              child: GridView.builder(
+                padding: EdgeInsets.zero,
+                itemCount: items.length,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: compact ? 4 : 2,
+                  crossAxisSpacing: 6,
+                  mainAxisSpacing: 6,
+                  childAspectRatio: compact ? 2.05 : 2.78,
+                ),
+                itemBuilder: (_, index) {
+                  final code = items[index][0] as String;
+                  final label = items[index][1] as String;
+                  final symbol = items[index][2] as String;
+                  final color = items[index][3] as Color;
+                  return _EditorStatusTile(
+                    code: code,
+                    label: label,
+                    symbol: symbol,
+                    color: color,
+                    active: code == status,
+                    onTap: () => _applyEditorStatus(code),
+                  );
+                },
+              ),
             ),
+            if (saving) ...[
+              const SizedBox(height: 7),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(99),
+                child: const LinearProgressIndicator(
+                  minHeight: 3,
+                  color: _C.green,
+                  backgroundColor: _C.greenSoft,
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
 
-  Future<void> _showStatusSelector(int eventId, int playerId, String currentStatus) async {
+  Future<void> _showStatusSelector(
+    int eventId,
+    int playerId,
+    String currentStatus,
+  ) async {
     final items = [
       [kStatusUnset, 'Очистить', '—'],
       ['present', 'Присутствует', 'П'],
@@ -689,57 +998,64 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
       ['dayoff', 'Выходной', 'В'],
     ];
 
-    await showModalBottomSheet(
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         final width = MediaQuery.of(sheetContext).size.width;
         final crossAxisCount = width < 420 ? 2 : 3;
+
         return DraggableScrollableSheet(
           expand: false,
-          initialChildSize: width < 420 ? .78 : .64,
+          initialChildSize: width < 420 ? .76 : .62,
           minChildSize: .42,
-          maxChildSize: .92,
+          maxChildSize: .9,
           builder: (_, controller) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
+            return Container(
+              margin: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+              ),
               child: ListView(
                 controller: controller,
                 children: [
                   Center(
                     child: Container(
-                      width: 44,
+                      width: 38,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: _C.border,
+                        color: _C.line,
                         borderRadius: BorderRadius.circular(99),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  const Text(
+                  const SizedBox(height: 14),
+                  const _CmrDotCluster(),
+                  const SizedBox(height: 10),
+                  Text(
                     'Отметка посещаемости',
-                    style: TextStyle(fontSize: 16.75, fontWeight: FontWeight.w700, color: _C.text),
+                    style: _AttText.title(15.5),
                   ),
-                  const SizedBox(height: 5),
-                  const Text(
-                    'Выберите статус игрока для выбранной тренировки или мероприятия.',
-                    style: TextStyle(fontSize: 11.85, fontWeight: FontWeight.w700, color: _C.muted, height: 1.35),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Выберите статус игрока для выбранного мероприятия.',
+                    style: _AttText.muted(10.8),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
                   GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    gridDelegate:
+                        SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: crossAxisCount,
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                      childAspectRatio: width < 420 ? 1.72 : 1.55,
+                      crossAxisSpacing: 7,
+                      mainAxisSpacing: 7,
+                      childAspectRatio:
+                          width < 420 ? 1.85 : 1.7,
                     ),
                     itemCount: items.length,
                     itemBuilder: (_, index) {
@@ -747,38 +1063,23 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
                       final label = items[index][1];
                       final symbol = items[index][2];
                       final color = _statusColor(code);
-                      final active = code == currentStatus;
-                      return InkWell(
-                        borderRadius: BorderRadius.circular(18),
+                      return _EditorStatusTile(
+                        code: code,
+                        label: label,
+                        symbol: symbol,
+                        color: color,
+                        active: code == currentStatus,
                         onTap: () async {
                           Navigator.pop(sheetContext);
-                          await _setStatusForEvent(eventId, playerId, code);
+                          await _setStatusForEvent(
+                            eventId,
+                            playerId,
+                            code,
+                          );
                         },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: active ? color.withOpacity(.12) : _C.soft,
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          child: Row(
-                            children: [
-                              _StatusCircle(status: code, symbol: symbol, size: 30),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  label,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(fontSize: 11.55, height: 1.15, fontWeight: FontWeight.w700, color: active ? color : _C.text),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
                       );
                     },
                   ),
-                  const SizedBox(height: 8),
                 ],
               ),
             );
@@ -817,52 +1118,69 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
         teamLogoUrl: teamLogoUrl ?? widget.teamLogoUrl,
       );
     }
-    if (error != null) return _ErrorPanel(text: error!, onRetry: _loadAll);
+    if (error != null) {
+      return _ErrorPanel(text: error!, onRetry: _loadAll);
+    }
 
-    final content = Container(
-      decoration: BoxDecoration(gradient: _C.bgGradient),
-      padding: EdgeInsets.all(widget.fullScreen ? 10 : 14),
+    final workspace = DefaultTextStyle.merge(
+      style: _AttText.body(11.5),
       child: Column(
         children: [
           _toolbar(),
-          const SizedBox(height: 8),
+          const Divider(height: 1, color: _C.line),
           _compactControlStrip(),
-          const SizedBox(height: 8),
+          const Divider(height: 1, color: _C.line),
           Expanded(child: _attendanceWorkspace()),
         ],
+      ),
+    );
+
+    final content = Container(
+      width: double.infinity,
+      color: _C.workspace,
+      padding: EdgeInsets.all(widget.fullScreen ? 8 : 10),
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(
+            widget.fullScreen ? 16 : 20,
+          ),
+          boxShadow: _C.windowShadow,
+        ),
+        child: workspace,
       ),
     );
 
     if (!widget.fullScreen) return content;
 
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: _C.text,
-        titleSpacing: 0,
-        title: Text(
-          'Журнал посещаемости · ${widget.teamName}',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 15.05, fontWeight: FontWeight.w700),
-        ),
+      backgroundColor: _C.workspace,
+      body: SafeArea(
+        bottom: false,
+        child: content,
       ),
-      body: content,
     );
   }
 
 
   Widget _toolbar() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: _C.cardCompact,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      color: Colors.white,
       child: LayoutBuilder(
         builder: (_, constraints) {
-          final compact = constraints.maxWidth < 680;
+          final compact = constraints.maxWidth < 720;
+
           final title = Row(
             children: [
+              if (widget.fullScreen) ...[
+                _CmrAttendanceBackButton(
+                  onTap: () => Navigator.of(context).maybePop(),
+                  showLabel: constraints.maxWidth >= 860,
+                ),
+                const SizedBox(width: 10),
+              ],
               _TeamLogoMark(
                 logoUrl: teamLogoUrl ?? widget.teamLogoUrl,
                 teamName: widget.teamName,
@@ -874,18 +1192,29 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      widget.teamName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 14.55, fontWeight: FontWeight.w700, color: _C.text),
+                    Row(
+                      children: [
+                        const _CmrGlowDot(
+                          color: _C.green,
+                          size: 6.4,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Посещаемость',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _AttText.title(15.5),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 3),
                     Text(
-                      '${widget.clubName} · ${_monthTitle()}',
+                      '${widget.teamName} · ${widget.clubName}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 10.55, fontWeight: FontWeight.w700, color: _C.muted),
+                      style: _AttText.muted(10.6),
                     ),
                   ],
                 ),
@@ -899,30 +1228,85 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
             crossAxisAlignment: WrapCrossAlignment.center,
             alignment: compact ? WrapAlignment.start : WrapAlignment.end,
             children: [
-              _MonthButton(icon: Icons.chevron_left_rounded, onTap: () => _changeMonth(-1), compact: true),
-              Container(
-                constraints: const BoxConstraints(minWidth: 118),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(12)),
-                child: Text(_monthTitle(), textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w700, color: _C.text, fontSize: 11.05)),
+              _MonthButton(
+                icon: Icons.chevron_left_rounded,
+                onTap: () => _changeMonth(-1),
+                compact: true,
               ),
-              _MonthButton(icon: Icons.chevron_right_rounded, onTap: () => _changeMonth(1), compact: true),
-              _GhostButton(icon: Icons.refresh_rounded, text: 'Обновить', onTap: _loadAll, compact: true),
+              Container(
+                constraints: const BoxConstraints(minWidth: 116),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: _C.soft,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Text(
+                  _monthTitle(),
+                  textAlign: TextAlign.center,
+                  style: _AttText.action(),
+                ),
+              ),
+              _MonthButton(
+                icon: Icons.chevron_right_rounded,
+                onTap: () => _changeMonth(1),
+                compact: true,
+              ),
+              _GhostButton(
+                icon: Icons.refresh_rounded,
+                text: 'Обновить',
+                onTap: _loadAll,
+                compact: true,
+              ),
+              _GhostButton(
+                icon: Icons.picture_as_pdf_outlined,
+                text: 'PDF',
+                onTap: _exportPdf,
+                compact: true,
+              ),
+              _GhostButton(
+                icon: Icons.table_chart_outlined,
+                text: 'Excel',
+                onTap: _exportExcel,
+                compact: true,
+              ),
               if (!widget.fullScreen)
-                _AccentButton(icon: Icons.open_in_full_rounded, text: 'На весь экран', onTap: _openFullScreenJournal, compact: true),
+                _AccentButton(
+                  icon: Icons.open_in_full_rounded,
+                  text: 'На весь экран',
+                  onTap: _openFullScreenJournal,
+                  compact: true,
+                ),
               if (saving)
-                const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: _C.green)),
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.8,
+                    color: _C.green,
+                  ),
+                ),
             ],
           );
 
           if (compact) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [title, const SizedBox(height: 8), controls],
+              children: [
+                title,
+                const SizedBox(height: 9),
+                controls,
+              ],
             );
           }
 
-          return Row(children: [Expanded(child: title), const SizedBox(width: 12), controls]);
+          return Row(
+            children: [
+              Expanded(child: title),
+              const SizedBox(width: 12),
+              controls,
+            ],
+          );
         },
       ),
     );
@@ -931,28 +1315,57 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
 
   Widget _compactControlStrip() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: _C.cardCompact,
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      color: Colors.white,
       child: LayoutBuilder(
         builder: (_, constraints) {
           final compact = constraints.maxWidth < 880;
+
           final legend = SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _TinyStat(title: 'Игроки', value: '${stats['total'] ?? 0}', color: _C.green),
+                _TinyStat(
+                  title: 'Игроки',
+                  value: '${stats['total'] ?? 0}',
+                  color: _C.green,
+                ),
                 const SizedBox(width: 6),
-                _TinyStat(title: 'П', value: '${stats['present'] ?? 0}', color: const Color(0xFF22C55E)),
+                _TinyStat(
+                  title: 'П',
+                  value: '${stats['present'] ?? 0}',
+                  color: const Color(0xFF22C55E),
+                ),
                 const SizedBox(width: 6),
-                _TinyStat(title: 'Нет', value: '${stats['absent'] ?? 0}', color: const Color(0xFFEF4444)),
+                _TinyStat(
+                  title: 'Нет',
+                  value: '${stats['absent'] ?? 0}',
+                  color: const Color(0xFFEF4444),
+                ),
                 const SizedBox(width: 6),
-                _TinyStat(title: 'Болен', value: '${stats['late'] ?? 0}', color: const Color(0xFFF59E0B)),
+                _TinyStat(
+                  title: 'Болен',
+                  value: '${stats['late'] ?? 0}',
+                  color: const Color(0xFFF59E0B),
+                ),
                 const SizedBox(width: 6),
-                _TinyStat(title: 'Травма', value: '${stats['injured'] ?? 0}', color: const Color(0xFF8B5CF6)),
+                _TinyStat(
+                  title: 'Травма',
+                  value: '${stats['injured'] ?? 0}',
+                  color: const Color(0xFF8B5CF6),
+                ),
                 const SizedBox(width: 6),
-                _TinyStat(title: 'Инд.', value: '${stats['individual'] ?? 0}', color: const Color(0xFF0EA5E9)),
+                _TinyStat(
+                  title: 'Инд.',
+                  value: '${stats['individual'] ?? 0}',
+                  color: const Color(0xFF0EA5E9),
+                ),
                 const SizedBox(width: 6),
-                _TinyStat(title: 'Вых.', value: '${stats['dayoff'] ?? 0}', color: const Color(0xFF94A3B8)),
+                _TinyStat(
+                  title: 'Вых.',
+                  value: '${stats['dayoff'] ?? 0}',
+                  color: const Color(0xFF94A3B8),
+                ),
               ],
             ),
           );
@@ -960,24 +1373,56 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
           final search = Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              SizedBox(
-                width: compact ? math.min(constraints.maxWidth - 54.0, 280.0) : 280,
+              Container(
+                width: compact
+                    ? math.min(constraints.maxWidth - 52.0, 280.0)
+                    : 280,
                 height: 38,
-                child: TextField(
-                  controller: searchC,
-                  style: const TextStyle(fontSize: 11.85, fontWeight: FontWeight.w700),
-                  decoration: InputDecoration(
-                    hintText: 'Поиск игрока',
-                    prefixIcon: const Icon(Icons.search_rounded, size: 16),
-                    isDense: true,
-                    filled: true,
-                    fillColor: _C.soft,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                  ),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  color: _C.soft,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.search_rounded,
+                      size: 15,
+                      color: _C.muted2,
+                    ),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: TextField(
+                        controller: searchC,
+                        style: _AttText.value(11.6),
+                        decoration: InputDecoration(
+                          hintText: 'Поиск игрока',
+                          hintStyle: _AttText.muted(10.8),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          isDense: true,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ),
+                    if (searchC.text.trim().isNotEmpty)
+                      InkWell(
+                        borderRadius: BorderRadius.circular(99),
+                        onTap: searchC.clear,
+                        child: const Padding(
+                          padding: EdgeInsets.all(3),
+                          child: Icon(
+                            Icons.close_rounded,
+                            size: 14,
+                            color: _C.muted2,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 7),
               _filterMenu(),
             ],
           );
@@ -985,7 +1430,11 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
           if (compact) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [legend, const SizedBox(height: 8), search],
+              children: [
+                legend,
+                const SizedBox(height: 8),
+                search,
+              ],
             );
           }
 
@@ -1006,35 +1455,95 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
     return PopupMenuButton<String>(
       initialValue: filter,
       tooltip: 'Фильтр',
+      elevation: 0,
+      color: Colors.white,
+      surfaceTintColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
       onSelected: (v) => setState(() => filter = v),
-      itemBuilder: (_) => const [
-        PopupMenuItem(value: 'all', child: Text('Все игроки')),
-        PopupMenuItem(value: 'present', child: Text('Присутствуют')),
-        PopupMenuItem(value: 'absent', child: Text('Отсутствуют')),
-        PopupMenuItem(value: 'late', child: Text('Болеют')),
-        PopupMenuItem(value: 'injured', child: Text('Травмы')),
-        PopupMenuItem(value: 'unset', child: Text('Не отмечено')),
+      itemBuilder: (_) => [
+        _attendanceFilterItem('all', 'Все игроки'),
+        _attendanceFilterItem('present', 'Присутствуют'),
+        _attendanceFilterItem('absent', 'Отсутствуют'),
+        _attendanceFilterItem('late', 'Болеют'),
+        _attendanceFilterItem('injured', 'Травмы'),
+        _attendanceFilterItem('unset', 'Не отмечено'),
       ],
       child: Container(
         height: 38,
-        padding: const EdgeInsets.symmetric(horizontal: 11),
-        decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(12)),
-        child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.tune_rounded, size: 15, color: _C.green), SizedBox(width: 6), Text('Фильтр', style: TextStyle(fontWeight: FontWeight.w700, color: _C.text, fontSize: 11.05))]),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: filter == 'all' ? _C.soft : _C.greenSoft,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _CmrGlowDot(
+              color: filter == 'all' ? _C.muted2 : _C.green,
+              size: filter == 'all' ? 4.8 : 6,
+              opacity: filter == 'all' ? .55 : 1,
+              halo: filter != 'all',
+            ),
+            const SizedBox(width: 7),
+            Text(
+              'Фильтр',
+              style: _AttText.action().copyWith(
+                color: filter == 'all' ? _C.text : _C.greenDark,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  PopupMenuItem<String> _attendanceFilterItem(
+    String value,
+    String label,
+  ) {
+    final active = filter == value;
+    return PopupMenuItem<String>(
+      value: value,
+      child: Row(
+        children: [
+          _CmrGlowDot(
+            color: active ? _C.green : _C.muted2,
+            size: active ? 6 : 4.5,
+            opacity: active ? 1 : .45,
+            halo: active,
+          ),
+          const SizedBox(width: 9),
+          Text(
+            label,
+            style: _AttText.action().copyWith(
+              color: active ? _C.greenDark : _C.text,
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _journalTable() {
     final filtered = _filteredPlayers;
-    if (players.isEmpty) return const _EmptyPanel(text: 'В команде пока нет игроков');
-    if (events.isEmpty) return const _EmptyPanel(text: 'В выбранном месяце нет тренировок или мероприятий');
-    if (filtered.isEmpty) return const _EmptyPanel(text: 'По фильтру игроки не найдены');
+    if (players.isEmpty) {
+      return const _EmptyPanel(text: 'В команде пока нет игроков');
+    }
+    if (events.isEmpty) {
+      return const _EmptyPanel(
+        text: 'В выбранном месяце нет тренировок или мероприятий',
+      );
+    }
+    if (filtered.isEmpty) {
+      return const _EmptyPanel(text: 'По фильтру игроки не найдены');
+    }
 
     final tableWidth = _leftWidth + events.length * _cellWidth;
 
-    return Container(
-      decoration: _C.card,
-      clipBehavior: Clip.antiAlias,
+    return ColoredBox(
+      color: Colors.white,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: SizedBox(
@@ -1047,16 +1556,27 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
                   _rightHeader(),
                 ],
               ),
+              const Divider(height: 1, color: _C.line),
               Expanded(
                 child: ListView.builder(
                   itemCount: filtered.length,
                   itemBuilder: (_, index) {
                     final player = filtered[index];
-                    return Row(
-                      children: [
-                        _leftPlayerCell(player, index),
-                        _rightStatusRow(player, index),
-                      ],
+                    return DecoratedBox(
+                      decoration: const BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(
+                            color: _C.line,
+                            width: .55,
+                          ),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          _leftPlayerCell(player, index),
+                          _rightStatusRow(player, index),
+                        ],
+                      ),
                     );
                   },
                 ),
@@ -1072,10 +1592,23 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
     return Container(
       width: _leftWidth,
       height: _headerHeight,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: const BoxDecoration(color: _C.header),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      color: _C.soft,
       alignment: Alignment.centerLeft,
-      child: Text('Игроки (${_filteredPlayers.length})', style: const TextStyle(fontSize: 12.35, fontWeight: FontWeight.w700, color: _C.text)),
+      child: Row(
+        children: [
+          const _CmrGlowDot(
+            color: _C.green,
+            size: 5.5,
+            halo: false,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Игроки (${_filteredPlayers.length})',
+            style: _AttText.section(),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1083,15 +1616,34 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
     return Container(
       width: events.length * _cellWidth,
       height: _headerHeight,
-      decoration: const BoxDecoration(color: _C.header),
+      color: _C.soft,
       child: Row(
         children: events.map((event) {
+          final eventId = _asInt(event['id']);
+          final selected = eventId == selectedEventId;
           return SizedBox(
             width: _cellWidth,
             child: Tooltip(
               message: _eventTitle(event),
-              child: Center(
-                child: Text(_eventDateLabel(event), textAlign: TextAlign.center, style: const TextStyle(fontSize: 10.35, height: 1.1, fontWeight: FontWeight.w700, color: _C.text)),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                margin: const EdgeInsets.symmetric(
+                  horizontal: 3,
+                  vertical: 5,
+                ),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: selected ? _C.greenSoft : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  _eventDateLabel(event),
+                  textAlign: TextAlign.center,
+                  style: _AttText.caption().copyWith(
+                    color: selected ? _C.greenDark : _C.text,
+                    height: 1.08,
+                  ),
+                ),
               ),
             ),
           );
@@ -1100,38 +1652,85 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
     );
   }
 
-  Widget _leftPlayerCell(Map<String, dynamic> player, int index) {
+  Widget _leftPlayerCell(
+    Map<String, dynamic> player,
+    int index,
+  ) {
     final photo = _photo(player);
+    final playerId = _asInt(player['id']);
+    final status = selectedEventId == null
+        ? _getAggregatedStatus(playerId)
+        : _getStatusForEvent(playerId, selectedEventId!);
+    final active = editingPlayerId == playerId;
+
     return Container(
       width: _leftWidth,
       height: _rowHeight,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: index.isEven ? Colors.white : _C.soft.withOpacity(.42),
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      color: active
+          ? _C.greenSoft2
+          : (index.isEven ? Colors.white : _C.soft.withOpacity(.42)),
       child: Row(
         children: [
+          _CmrGlowDot(
+            color: active
+                ? _C.green
+                : (status == kStatusUnset
+                    ? _C.muted2
+                    : _statusColor(status)),
+            size: active ? 6.2 : 4.8,
+            opacity: active ? 1 : .58,
+            halo: active,
+          ),
+          const SizedBox(width: 8),
           Container(
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: _C.softGreen,
+              color: _C.soft2,
               borderRadius: BorderRadius.circular(10),
             ),
             clipBehavior: Clip.antiAlias,
             child: photo != null
                 ? Image.network(photo, fit: BoxFit.cover)
-                : Icon(Icons.shield_outlined, color: _C.green, size: 16),
+                : Center(
+                    child: Text(
+                      _playerName(player)
+                          .trim()
+                          .split(RegExp(r'\s+'))
+                          .where((e) => e.isNotEmpty)
+                          .take(2)
+                          .map((e) => e.substring(0, 1).toUpperCase())
+                          .join(),
+                      style: _AttText.value(10.4),
+                    ),
+                  ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 9),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_playerName(player), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.95, fontWeight: FontWeight.w700, color: _C.text)),
+                Text(
+                  _playerName(player),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _AttText.value(11.2).copyWith(
+                    color: active ? _C.greenDark : _C.text,
+                  ),
+                ),
                 const SizedBox(height: 3),
-                Text(_playerSub(player), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10.15, fontWeight: FontWeight.w700, color: _C.muted)),
+                Text(
+                  _playerSub(player),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _AttText.muted(9.8).copyWith(
+                    color: active
+                        ? _C.greenDark.withOpacity(.68)
+                        : _C.muted2,
+                  ),
+                ),
               ],
             ),
           ),
@@ -1140,21 +1739,53 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
     );
   }
 
-  Widget _rightStatusRow(Map<String, dynamic> player, int index) {
+  Widget _rightStatusRow(
+    Map<String, dynamic> player,
+    int index,
+  ) {
     final playerId = _asInt(player['id']);
+    final activePlayer = editingPlayerId == playerId;
+
     return Container(
       width: events.length * _cellWidth,
       height: _rowHeight,
-      decoration: BoxDecoration(color: index.isEven ? Colors.white : _C.soft.withOpacity(.42)),
+      color: activePlayer
+          ? _C.greenSoft2
+          : (index.isEven ? Colors.white : _C.soft.withOpacity(.42)),
       child: Row(
         children: events.map((event) {
           final eventId = _asInt(event['id']);
           final status = _getStatusForEvent(playerId, eventId);
+          final activeCell =
+              editingEventId == eventId && editingPlayerId == playerId;
+
           return InkWell(
-            onTap: () => _openAttendanceEditor(eventId, playerId, status),
+            onTap: () => _openAttendanceEditor(
+              eventId,
+              playerId,
+              status,
+            ),
             child: SizedBox(
               width: _cellWidth,
-              child: Center(child: _StatusCircle(status: status, symbol: _symbol(status), size: 25)),
+              child: Center(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  width: 34,
+                  height: 34,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: activeCell
+                        ? _C.greenSoft
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: _StatusCircle(
+                    status: status,
+                    symbol: _symbol(status),
+                    size: activeCell ? 27 : 24,
+                  ),
+                ),
+              ),
             ),
           );
         }).toList(),
@@ -1164,57 +1795,226 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
 }
 
 class _C {
-  static const Color bg = Color(0xFFF5F8FB);
+  static const Color workspace = Color(0xFFF6F7F6);
+  static const Color bg = Colors.white;
   static const Color cardColor = Colors.white;
-  static const Color header = Color(0xFFEFF6F4);
-  static const Color soft = Color(0xFFF2F6F8);
-  static const Color softGreen = Color(0xFFEAF7EF);
-  static const Color green = Color(0xFF18864B);
-  static const Color greenDark = Color(0xFF0F5F36);
+  static const Color header = Color(0xFFF7F8F7);
+  static const Color soft = Color(0xFFF7F8F7);
+  static const Color soft2 = Color(0xFFF2F4F2);
+  static const Color green = Color(0xFF00A750);
+  static const Color greenDark = Color(0xFF067A46);
+  static const Color greenSoft = Color(0xFFF3FAF6);
+  static const Color greenSoft2 = Color(0xFFF8FEFA);
+  static const Color greenBorder = Color(0xFFD7F0E2);
+  static const Color text = Color(0xFF0B0F14);
+  static const Color muted = Color(0xFF5F6670);
+  static const Color muted2 = Color(0xFF5F6670);
+  static const Color subtle = Color(0xFF8A9099);
+  static const Color line = Color(0xFFE9ECEA);
+  static const Color border = Color(0xFFE9ECEA);
   static const Color blue = Color(0xFF2563EB);
   static const Color cyan = Color(0xFF06B6D4);
-  static const Color text = Color(0xFF14211B);
-  static const Color muted = Color(0xFF66736C);
-  static const Color border = Color(0xFFDDE7E2);
 
-  static LinearGradient get bgGradient => const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0xFFF7FBFF), Color(0xFFF3FAF6), Color(0xFFFFFFFF)],
-      );
-
-  static LinearGradient get accentGradient => const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0xFF0F5F36), Color(0xFF18864B), Color(0xFF06B6D4)],
-      );
+  static List<BoxShadow> get windowShadow => [
+        BoxShadow(
+          color: Colors.black.withOpacity(.035),
+          blurRadius: 28,
+          spreadRadius: -18,
+          offset: const Offset(0, 16),
+        ),
+      ];
 
   static BoxDecoration get card => BoxDecoration(
-        color: cardColor.withOpacity(.92),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white.withOpacity(.72)),
-        boxShadow: [
-          BoxShadow(color: const Color(0xFF0F172A).withOpacity(.06), blurRadius: 28, offset: const Offset(0, 16)),
-        ],
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: line.withOpacity(.55),
+          width: .7,
+        ),
       );
 
-  static BoxDecoration get cardCompact => BoxDecoration(
-        color: cardColor.withOpacity(.88),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withOpacity(.70)),
-        boxShadow: [
-          BoxShadow(color: const Color(0xFF0F172A).withOpacity(.045), blurRadius: 20, offset: const Offset(0, 10)),
-        ],
+  static BoxDecoration get cardCompact => const BoxDecoration(
+        color: Colors.white,
       );
 
-  static BoxDecoration get glassCard => BoxDecoration(
-        color: Colors.white.withOpacity(.9),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(.72)),
-        boxShadow: [
-          BoxShadow(color: const Color(0xFF0F172A).withOpacity(.08), blurRadius: 30, offset: const Offset(0, 18)),
-        ],
+  static BoxDecoration get glassCard => const BoxDecoration(
+        color: Colors.white,
       );
+}
+
+class _AttText {
+  static TextStyle title(double size) => AppTypography.custom(
+        size: size,
+        weight: FontWeight.w600,
+        color: _C.text,
+        height: 1.18,
+        letterSpacing: 0,
+      );
+
+  static TextStyle section() => AppTypography.custom(
+        size: 11.8,
+        weight: FontWeight.w600,
+        color: _C.text,
+        height: 1.2,
+        letterSpacing: 0,
+      );
+
+  static TextStyle value(double size) => AppTypography.custom(
+        size: size,
+        weight: FontWeight.w600,
+        color: _C.text,
+        height: 1.18,
+        letterSpacing: 0,
+      );
+
+  static TextStyle body(double size) => AppTypography.custom(
+        size: size,
+        weight: FontWeight.w400,
+        color: _C.text,
+        height: 1.3,
+        letterSpacing: 0,
+      );
+
+  static TextStyle muted(double size) => AppTypography.custom(
+        size: size,
+        weight: FontWeight.w400,
+        color: _C.muted2,
+        height: 1.3,
+        letterSpacing: 0,
+      );
+
+  static TextStyle caption() => AppTypography.custom(
+        size: 10.1,
+        weight: FontWeight.w500,
+        color: _C.subtle,
+        height: 1.18,
+        letterSpacing: 0,
+      );
+
+  static TextStyle action() => AppTypography.custom(
+        size: 10.9,
+        weight: FontWeight.w600,
+        color: _C.text,
+        height: 1.1,
+        letterSpacing: 0,
+      );
+}
+
+class _CmrGlowDot extends StatelessWidget {
+  final Color color;
+  final double size;
+  final double opacity;
+  final bool halo;
+
+  const _CmrGlowDot({
+    required this.color,
+    this.size = 6,
+    this.opacity = 1,
+    this.halo = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: opacity,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          boxShadow: halo
+              ? [
+                  BoxShadow(
+                    color: color.withOpacity(.17),
+                    blurRadius: size * 1.8,
+                    spreadRadius: .15,
+                  ),
+                  BoxShadow(
+                    color: color.withOpacity(.06),
+                    blurRadius: size * 3,
+                    spreadRadius: .4,
+                  ),
+                ]
+              : null,
+        ),
+      ),
+    );
+  }
+}
+
+class _CmrDotCluster extends StatelessWidget {
+  const _CmrDotCluster();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _CmrGlowDot(
+          color: _C.green,
+          size: 3.4,
+          opacity: .25,
+          halo: false,
+        ),
+        SizedBox(width: 3),
+        _CmrGlowDot(
+          color: _C.green,
+          size: 4.2,
+          opacity: .45,
+          halo: false,
+        ),
+        SizedBox(width: 3),
+        _CmrGlowDot(
+          color: _C.green,
+          size: 5.2,
+          opacity: .72,
+          halo: false,
+        ),
+        SizedBox(width: 3),
+        _CmrGlowDot(
+          color: _C.green,
+          size: 6.2,
+        ),
+      ],
+    );
+  }
+}
+
+class _CompactIconButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  const _CompactIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: _C.soft,
+        borderRadius: BorderRadius.circular(9),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(9),
+          child: SizedBox(
+            width: 32,
+            height: 32,
+            child: Icon(
+              icon,
+              size: 15,
+              color: _C.muted2,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _EditorStatusTile extends StatelessWidget {
@@ -1236,38 +2036,73 @@ class _EditorStatusTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final empty = code == _CmrAttendancePanelState.kStatusUnset;
     return Material(
       color: Colors.transparent,
+      borderRadius: BorderRadius.circular(9),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(9),
         onTap: onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 9,
+            vertical: 7,
+          ),
           decoration: BoxDecoration(
-            color: active ? color.withOpacity(.15) : const Color(0xFFF8FAFC),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: active ? color.withOpacity(.82) : color.withOpacity(.16), width: active ? 1.4 : 1),
-            boxShadow: active ? [BoxShadow(color: color.withOpacity(.18), blurRadius: 18, offset: const Offset(0, 8))] : null,
+            color: active
+                ? color.withOpacity(.085)
+                : _C.soft,
+            borderRadius: BorderRadius.circular(9),
+            border: Border.all(
+              color: active
+                  ? color.withOpacity(.22)
+                  : Colors.transparent,
+              width: .75,
+            ),
           ),
           child: Row(
             children: [
               Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: code == _CmrAttendancePanelState.kStatusUnset ? Colors.white : color.withOpacity(active ? 1 : .12),
-                  shape: BoxShape.circle,
-                ),
+                width: 23,
+                height: 23,
                 alignment: Alignment.center,
-                child: code == _CmrAttendancePanelState.kStatusUnset
-                    ? Icon(Icons.remove_rounded, size: 15, color: color)
-                    : Text(symbol, style: TextStyle(fontSize: 11.55, fontWeight: FontWeight.w800, color: active ? Colors.white : color)),
+                decoration: BoxDecoration(
+                  color: empty
+                      ? Colors.white
+                      : color.withOpacity(active ? .16 : .07),
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: empty
+                    ? Icon(
+                        Icons.remove_rounded,
+                        size: 12,
+                        color: color,
+                      )
+                    : Text(
+                        symbol,
+                        style: _AttText.value(9.6).copyWith(
+                          color: color,
+                        ),
+                      ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 7),
               Expanded(
-                child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10.75, fontWeight: FontWeight.w800, color: active ? color : _C.text)),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _AttText.action().copyWith(
+                    color: active ? color : _C.text,
+                  ),
+                ),
               ),
+              if (active)
+                _CmrGlowDot(
+                  color: color,
+                  size: 5,
+                  halo: false,
+                ),
             ],
           ),
         ),
@@ -1275,7 +2110,6 @@ class _EditorStatusTile extends StatelessWidget {
     );
   }
 }
-
 
 class _TeamLogoMark extends StatelessWidget {
   final String? logoUrl;
@@ -1292,26 +2126,28 @@ class _TeamLogoMark extends StatelessWidget {
     if (raw == null || raw.trim().isEmpty) return null;
     var url = raw.trim();
     if (url == 'null') return null;
-    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
     if (url.startsWith('//')) return 'https:$url';
     if (url.startsWith('sportotekaapp.ru/')) return 'https://$url';
-    if (url.startsWith('www.sportotekaapp.ru/')) return 'https://$url';
+    if (url.startsWith('www.sportotekaapp.ru/')) {
+      return 'https://$url';
+    }
     if (url.startsWith('/')) return 'https://sportotekaapp.ru$url';
-    if (url.startsWith('uploads/')) return 'https://sportotekaapp.ru/$url';
+    if (url.startsWith('uploads/')) {
+      return 'https://sportotekaapp.ru/$url';
+    }
     return 'https://sportotekaapp.ru/$url';
   }
 
   Widget _fallback(String letter) {
     return Container(
-      color: _C.softGreen,
+      color: _C.soft,
       alignment: Alignment.center,
       child: Text(
         letter,
-        style: TextStyle(
-          color: _C.green,
-          fontSize: size * .42,
-          fontWeight: FontWeight.w700,
-        ),
+        style: _AttText.title(size * .34),
       ),
     );
   }
@@ -1320,14 +2156,16 @@ class _TeamLogoMark extends StatelessWidget {
   Widget build(BuildContext context) {
     final url = _normalizeImage(logoUrl);
     final cleanName = teamName.trim();
-    final letter = cleanName.isNotEmpty ? cleanName.characters.first.toUpperCase() : 'К';
+    final letter = cleanName.isNotEmpty
+        ? cleanName.characters.first.toUpperCase()
+        : 'К';
 
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: _C.softGreen,
-        borderRadius: BorderRadius.circular(size * .33),
+        color: _C.soft,
+        borderRadius: BorderRadius.circular(10),
       ),
       clipBehavior: Clip.antiAlias,
       child: url == null
@@ -1347,58 +2185,102 @@ class _StatusCircle extends StatelessWidget {
   final String symbol;
   final double size;
 
-  const _StatusCircle({required this.status, required this.symbol, required this.size});
+  const _StatusCircle({
+    required this.status,
+    required this.symbol,
+    required this.size,
+  });
 
   Color get color {
     switch (status) {
-      case 'present': return const Color(0xFF22C55E);
-      case 'absent': return const Color(0xFFEF4444);
-      case 'late': return const Color(0xFFF59E0B);
-      case 'injured': return const Color(0xFF8B5CF6);
-      case 'individual': return const Color(0xFF0EA5E9);
-      case 'dayoff': return const Color(0xFF94A3B8);
-      default: return const Color(0xFFCBD5E1);
+      case 'present':
+        return const Color(0xFF22C55E);
+      case 'absent':
+        return const Color(0xFFEF4444);
+      case 'late':
+        return const Color(0xFFF59E0B);
+      case 'injured':
+        return const Color(0xFF8B5CF6);
+      case 'individual':
+        return const Color(0xFF0EA5E9);
+      case 'dayoff':
+        return const Color(0xFF94A3B8);
+      default:
+        return const Color(0xFFCBD5E1);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final empty = status == _CmrAttendancePanelState.kStatusUnset;
+    final empty =
+        status == _CmrAttendancePanelState.kStatusUnset;
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: empty ? const Color(0xFFF1F5F9) : color.withOpacity(.14),
-        shape: BoxShape.circle,
+        color: empty
+            ? _C.soft2
+            : color.withOpacity(.10),
+        borderRadius: BorderRadius.circular(8),
       ),
       alignment: Alignment.center,
-      child: empty ? null : Text(symbol, style: TextStyle(fontSize: size * .43, fontWeight: FontWeight.w700, color: color)),
+      child: empty
+          ? _CmrGlowDot(
+              color: _C.subtle,
+              size: 4,
+              opacity: .35,
+              halo: false,
+            )
+          : Text(
+              symbol,
+              style: _AttText.value(size * .38).copyWith(
+                color: color,
+              ),
+            ),
     );
   }
 }
-
 
 class _TinyStat extends StatelessWidget {
   final String title;
   final String value;
   final Color color;
 
-  const _TinyStat({required this.title, required this.value, required this.color});
+  const _TinyStat({
+    required this.title,
+    required this.value,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 34,
-      padding: const EdgeInsets.symmetric(horizontal: 9),
-      decoration: BoxDecoration(color: color.withOpacity(.075), borderRadius: BorderRadius.circular(11)),
+      height: 32,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: _C.soft,
+        borderRadius: BorderRadius.circular(9),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          _CmrGlowDot(
+            color: color,
+            size: 5.5,
+            halo: false,
+          ),
           const SizedBox(width: 6),
-          Text(value, style: TextStyle(fontWeight: FontWeight.w700, color: color, fontSize: 11.85)),
+          Text(
+            value,
+            style: _AttText.value(10.7).copyWith(
+              color: _C.text,
+            ),
+          ),
           const SizedBox(width: 4),
-          Text(title, style: TextStyle(fontWeight: FontWeight.w600, color: color, fontSize: 10.35)),
+          Text(
+            title,
+            style: _AttText.caption(),
+          ),
         ],
       ),
     );
@@ -1410,21 +2292,18 @@ class _StatPill extends StatelessWidget {
   final String value;
   final Color color;
 
-  const _StatPill({required this.title, required this.value, required this.color});
+  const _StatPill({
+    required this.title,
+    required this.value,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-      decoration: BoxDecoration(color: color.withOpacity(.08), borderRadius: BorderRadius.circular(14)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(value, style: TextStyle(fontWeight: FontWeight.w700, color: color, fontSize: 13.05)),
-          const SizedBox(width: 5),
-          Text(title, style: TextStyle(fontWeight: FontWeight.w600, color: color, fontSize: 10.55)),
-        ],
-      ),
+    return _TinyStat(
+      title: title,
+      value: value,
+      color: color,
     );
   }
 }
@@ -1433,18 +2312,25 @@ class _LegendItem extends StatelessWidget {
   final String status;
   final String label;
 
-  const _LegendItem({required this.status, required this.label});
+  const _LegendItem({
+    required this.status,
+    required this.label,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(right: 13),
+      padding: const EdgeInsets.only(right: 12),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _StatusCircle(status: status, symbol: _symbolStatic(status), size: 16),
+          _StatusCircle(
+            status: status,
+            symbol: _symbolStatic(status),
+            size: 16,
+          ),
           const SizedBox(width: 5),
-          Text(label, style: const TextStyle(fontSize: 10.75, fontWeight: FontWeight.w700, color: _C.muted)),
+          Text(label, style: _AttText.caption()),
         ],
       ),
     );
@@ -1452,31 +2338,102 @@ class _LegendItem extends StatelessWidget {
 
   static String _symbolStatic(String status) {
     switch (status) {
-      case 'present': return 'П';
-      case 'absent': return 'Н';
-      case 'late': return 'Б';
-      case 'injured': return 'Т';
-      case 'individual': return 'И';
-      case 'dayoff': return 'В';
-      default: return '';
+      case 'present':
+        return 'П';
+      case 'absent':
+        return 'Н';
+      case 'late':
+        return 'Б';
+      case 'injured':
+        return 'Т';
+      case 'individual':
+        return 'И';
+      case 'dayoff':
+        return 'В';
+      default:
+        return '';
     }
   }
 }
+
+class _CmrAttendanceBackButton extends StatelessWidget {
+  final VoidCallback onTap;
+  final bool showLabel;
+
+  const _CmrAttendanceBackButton({
+    required this.onTap,
+    this.showLabel = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _C.soft,
+      borderRadius: BorderRadius.circular(9),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
+        child: SizedBox(
+          height: 36,
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: showLabel ? 10 : 9,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.arrow_back_rounded,
+                  size: 16,
+                  color: _C.text,
+                ),
+                if (showLabel) ...[
+                  const SizedBox(width: 7),
+                  Text(
+                    'Назад',
+                    style: _AttText.action(),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 
 class _MonthButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
   final bool compact;
 
-  const _MonthButton({required this.icon, required this.onTap, this.compact = false});
+  const _MonthButton({
+    required this.icon,
+    required this.onTap,
+    this.compact = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final side = compact ? 36.0 : 40.0;
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Container(width: side, height: side, decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: _C.green, size: compact ? 18 : 21)),
+    final side = compact ? 34.0 : 36.0;
+    return Material(
+      color: _C.soft,
+      borderRadius: BorderRadius.circular(9),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(9),
+        onTap: onTap,
+        child: SizedBox(
+          width: side,
+          height: side,
+          child: Icon(
+            icon,
+            color: _C.text,
+            size: compact ? 17 : 19,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1487,18 +2444,40 @@ class _GhostButton extends StatelessWidget {
   final VoidCallback onTap;
   final bool compact;
 
-  const _GhostButton({required this.icon, required this.text, required this.onTap, this.compact = false});
+  const _GhostButton({
+    required this.icon,
+    required this.text,
+    required this.onTap,
+    this.compact = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Container(
-        height: compact ? 36 : 40,
-        padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 13),
-        decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(12)),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, color: _C.green, size: compact ? 15 : 16), const SizedBox(width: 6), Text(text, style: TextStyle(color: _C.text, fontWeight: FontWeight.w700, fontSize: compact ? 11.5 : 12.5))]),
+    return Material(
+      color: _C.soft,
+      borderRadius: BorderRadius.circular(9),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(9),
+        onTap: onTap,
+        child: Container(
+          height: compact ? 34 : 36,
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 9 : 11,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _CmrGlowDot(
+                color: _C.muted2,
+                size: 4.5,
+                opacity: .55,
+                halo: false,
+              ),
+              const SizedBox(width: 6),
+              Text(text, style: _AttText.action()),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1510,18 +2489,43 @@ class _AccentButton extends StatelessWidget {
   final VoidCallback onTap;
   final bool compact;
 
-  const _AccentButton({required this.icon, required this.text, required this.onTap, this.compact = false});
+  const _AccentButton({
+    required this.icon,
+    required this.text,
+    required this.onTap,
+    this.compact = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Container(
-        height: compact ? 36 : 40,
-        padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 13),
-        decoration: BoxDecoration(color: _C.green, borderRadius: BorderRadius.circular(12)),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, color: Colors.white, size: compact ? 15 : 16), const SizedBox(width: 6), Text(text, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: compact ? 11.5 : 12.5))]),
+    return Material(
+      color: _C.greenSoft,
+      borderRadius: BorderRadius.circular(9),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(9),
+        onTap: onTap,
+        child: Container(
+          height: compact ? 34 : 36,
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 9 : 11,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const _CmrGlowDot(
+                color: _C.green,
+                size: 5.5,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                text,
+                style: _AttText.action().copyWith(
+                  color: _C.greenDark,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1540,13 +2544,17 @@ class _LoadingPanel extends StatefulWidget {
   State<_LoadingPanel> createState() => _LoadingPanelState();
 }
 
-class _LoadingPanelState extends State<_LoadingPanel> with SingleTickerProviderStateMixin {
+class _LoadingPanelState extends State<_LoadingPanel>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
   }
 
   @override
@@ -1557,12 +2565,12 @@ class _LoadingPanelState extends State<_LoadingPanel> with SingleTickerProviderS
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: _C.bg,
+    return ColoredBox(
+      color: _C.workspace,
       child: Center(
         child: Container(
           width: 320,
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(18),
           decoration: _C.card,
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1572,17 +2580,29 @@ class _LoadingPanelState extends State<_LoadingPanel> with SingleTickerProviderS
                 child: _TeamLogoMark(
                   logoUrl: widget.teamLogoUrl,
                   teamName: widget.teamName,
-                  size: 78,
+                  size: 64,
                 ),
               ),
+              const SizedBox(height: 13),
+              Text(
+                'Загружаем журнал посещаемости',
+                textAlign: TextAlign.center,
+                style: _AttText.title(14),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                'Подгружаем игроков, мероприятия и отметки',
+                textAlign: TextAlign.center,
+                style: _AttText.muted(10.8),
+              ),
               const SizedBox(height: 14),
-              const Text('Загружаем журнал посещаемости', textAlign: TextAlign.center, style: TextStyle(fontSize: 14.05, fontWeight: FontWeight.w700, color: _C.text)),
-              const SizedBox(height: 6),
-              const Text('Подгружаем игроков, мероприятия и отметки', textAlign: TextAlign.center, style: TextStyle(fontSize: 11.55, fontWeight: FontWeight.w700, color: _C.muted)),
-              const SizedBox(height: 16),
               ClipRRect(
                 borderRadius: BorderRadius.circular(99),
-                child: const LinearProgressIndicator(minHeight: 5, color: _C.green, backgroundColor: _C.softGreen),
+                child: const LinearProgressIndicator(
+                  minHeight: 3,
+                  color: _C.green,
+                  backgroundColor: _C.greenSoft,
+                ),
               ),
             ],
           ),
@@ -1596,18 +2616,47 @@ class _ErrorPanel extends StatelessWidget {
   final String text;
   final VoidCallback onRetry;
 
-  const _ErrorPanel({required this.text, required this.onRetry});
+  const _ErrorPanel({
+    required this.text,
+    required this.onRetry,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: _C.bg,
-      padding: const EdgeInsets.all(24),
+    return ColoredBox(
+      color: _C.workspace,
       child: Center(
         child: Container(
-          padding: const EdgeInsets.all(24),
+          constraints: const BoxConstraints(maxWidth: 430),
+          padding: const EdgeInsets.all(18),
           decoration: _C.card,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.warning_rounded, color: Colors.redAccent, size: 38), const SizedBox(height: 12), Text(text, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w700, color: _C.muted)), const SizedBox(height: 16), _AccentButton(icon: Icons.refresh_rounded, text: 'Повторить', onTap: onRetry)]),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const _CmrGlowDot(
+                color: Color(0xFFD92D20),
+                size: 7,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Не удалось загрузить журнал',
+                textAlign: TextAlign.center,
+                style: _AttText.title(14.5),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                text,
+                textAlign: TextAlign.center,
+                style: _AttText.muted(11),
+              ),
+              const SizedBox(height: 14),
+              _AccentButton(
+                icon: Icons.refresh_rounded,
+                text: 'Повторить',
+                onTap: onRetry,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1617,23 +2666,36 @@ class _ErrorPanel extends StatelessWidget {
 class _EmptyPanel extends StatelessWidget {
   final String text;
 
-  const _EmptyPanel({required this.text});
+  const _EmptyPanel({
+    required this.text,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: _C.card,
+    return ColoredBox(
+      color: Colors.white,
       child: Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    color: _C.softGreen,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Icon(Icons.groups_rounded, color: _C.green, size: 25),
-                ),
-                const SizedBox(height: 14), Text(text, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15.05, fontWeight: FontWeight.w700, color: _C.text)), const SizedBox(height: 6), const Text('Проверьте выбранный месяц или состав команды', style: TextStyle(fontWeight: FontWeight.w700, color: _C.muted))]),
+        child: Padding(
+          padding: const EdgeInsets.all(22),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const _CmrDotCluster(),
+              const SizedBox(height: 12),
+              Text(
+                text,
+                textAlign: TextAlign.center,
+                style: _AttText.title(13.5),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                'Проверьте выбранный месяц или состав команды',
+                textAlign: TextAlign.center,
+                style: _AttText.muted(10.7),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -1,0 +1,6 @@
+# Добавьте строку в существующий раздел dependencies проекта.
+# ^4.9.0 — первая ветка webview_flutter с поддержкой macOS;
+# pub выберет самую новую совместимую 4.x-версию под установленный Flutter SDK.
+dependencies:
+  webview_flutter: ^4.9.0
+
