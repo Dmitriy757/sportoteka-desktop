@@ -36,6 +36,56 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
+import 'package:sportoteka/presentation/match_live/match_live_screen.dart';
+
+// ============================================================================
+// Excel 4.x compatibility helper
+// ============================================================================
+
+excel.CellValue? _toExcelCellValue(dynamic value) {
+  if (value == null) return null;
+
+  if (value is excel.CellValue) {
+    return value;
+  }
+
+  if (value is bool) {
+    return excel.BoolCellValue(value);
+  }
+
+  if (value is int) {
+    return excel.IntCellValue(value);
+  }
+
+  if (value is double) {
+    return excel.DoubleCellValue(value);
+  }
+
+  if (value is num) {
+    return excel.DoubleCellValue(value.toDouble());
+  }
+
+  if (value is DateTime) {
+    return excel.DateTimeCellValue(
+      year: value.year,
+      month: value.month,
+      day: value.day,
+      hour: value.hour,
+      minute: value.minute,
+      second: value.second,
+    );
+  }
+
+  return excel.TextCellValue(value.toString());
+}
+
+void _appendExcelRow(excel.Sheet sheet, List<dynamic> values) {
+  sheet.appendRow(
+    values.map<excel.CellValue?>((value) => _toExcelCellValue(value)).toList(),
+  );
+}
+
 
 
 
@@ -6112,7 +6162,7 @@ class CmrAiWindowColors {
 }
 
 class CmrAiText {
-  static const String family = 'Segoe UI';
+  static String get family => AppTypography.fontFamily;
   static const List<String> fallback = <String>[
     'SF Pro Display',
     'SF Pro Text',
@@ -6125,7 +6175,7 @@ class CmrAiText {
         fontFamily: family,
         fontFamilyFallback: fallback,
         fontSize: size,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w600,
         letterSpacing: -0.28,
         height: 1.08,
         color: CmrAiWindowColors.text,
@@ -6135,7 +6185,7 @@ class CmrAiText {
         fontFamily: family,
         fontFamilyFallback: fallback,
         fontSize: size,
-        fontWeight: weight ?? FontWeight.w500,
+        fontWeight: weight ?? FontWeight.w400,
         letterSpacing: -0.05,
         height: 1.18,
         color: color ?? CmrAiWindowColors.muted,
@@ -6145,7 +6195,7 @@ class CmrAiText {
         fontFamily: family,
         fontFamilyFallback: fallback,
         fontSize: size,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w600,
         letterSpacing: -0.06,
         height: 1.12,
         color: color ?? CmrAiWindowColors.text,
@@ -7763,7 +7813,7 @@ class _AiPanelColors {
   static const surfaceSoft = Color(0xFFF8F9FA);
   static const line = Color(0xFFF0F2F4);
   static const text = Color(0xFF101828);
-  static const textMuted = Color(0xFF374151);
+  static const textMuted = Color(0xFF5F6670);
   static const textSoft = Color(0xFF6B7280);
   static const black = Color(0xFF121212);
   static const green = Color(0xFF00A750);
@@ -11256,44 +11306,44 @@ class ReportTablesWidget extends StatelessWidget {
   // CMR PREMIUM STYLE
   // =========================
 
-  static const Color _cmrBg = Color(0xFFF5F6F7);
+  static const Color _cmrBg = Color(0xFFFFFFFF);
   static const Color _cmrPanel = Colors.white;
-  static const Color _cmrSoft = Color(0xFFF8F9FA);
+  static const Color _cmrSoft = Color(0xFFF7F8F7);
   static const Color _cmrText = Color(0xFF0B0F14);
   static const Color _cmrText2 = Color(0xFF182230);
-  static const Color _cmrMuted = Color(0xFF374151);
-  static const Color _cmrMuted2 = Color(0xFF6B7280);
+  static const Color _cmrMuted = Color(0xFF5F6670);
+  static const Color _cmrMuted2 = Color(0xFF8A9099);
   static const Color _cmrGraphite = Color(0xFF111827);
   static const Color _cmrGreen = Color(0xFF00A750);
   static const Color _cmrGreenDark = Color(0xFF067A46);
-  static const Color _cmrGreenSoft = Color(0xFFF3FBF7);
+  static const Color _cmrGreenSoft = Color(0xFFF3FAF6);
   static const Color _cmrGreenBorder = Color(0xFFD7F0E2);
-  static const Color _cmrLine = Color(0xFFE5E7EB);
+  static const Color _cmrLine = Color(0xFFE9ECEA);
   static const Color _cmrRed = Color(0xFFD92D20);
 
   TextStyle _cmrTitle(double size) => TextStyle(
-        fontFamily: 'Roboto',
+        fontFamily: AppTypography.fontFamily,
         color: _cmrText,
         fontSize: size,
-        fontWeight: FontWeight.w900,
+        fontWeight: FontWeight.w600,
         height: 1.12,
         letterSpacing: -0.25,
       );
 
   TextStyle _cmrValue(double size, {Color? color}) => TextStyle(
-        fontFamily: 'Roboto',
+        fontFamily: AppTypography.fontFamily,
         color: color ?? _cmrText2,
         fontSize: size,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
         height: 1.15,
         letterSpacing: -0.12,
       );
 
   TextStyle _cmrMutedStyle(double size, {Color? color, FontWeight? weight}) => TextStyle(
-        fontFamily: 'Roboto',
+        fontFamily: AppTypography.fontFamily,
         color: color ?? _cmrMuted,
         fontSize: size,
-        fontWeight: weight ?? FontWeight.w700,
+        fontWeight: weight ?? FontWeight.w500,
         height: 1.25,
         letterSpacing: -0.05,
       );
@@ -11302,7 +11352,6 @@ class ReportTablesWidget extends StatelessWidget {
     return BoxDecoration(
       color: _cmrPanel,
       borderRadius: BorderRadius.circular(math.min(radius, 14)),
-      border: Border.all(color: _cmrLine, width: 1),
       boxShadow: elevated
           ? [
               BoxShadow(
@@ -11831,7 +11880,7 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
           style: TextStyle(
             color: Colors.white,
             fontSize: size * 0.42,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ),
@@ -11875,7 +11924,7 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: _cmrMutedStyle(11.5, color: _cmrMuted2, weight: FontWeight.w800),
+                  style: _cmrMutedStyle(11.5, color: _cmrMuted2, weight: FontWeight.w600),
                 ),
                 const SizedBox(height: 5),
                 Row(
@@ -11895,7 +11944,7 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
                     subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: _cmrMutedStyle(11, color: _cmrMuted2, weight: FontWeight.w700),
+                    style: _cmrMutedStyle(11, color: _cmrMuted2, weight: FontWeight.w500),
                   ),
                 ],
               ],
@@ -11977,8 +12026,8 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
     excelFile.rename(excelFile.getDefaultSheet()!, 'Отчет');
     final sheetObject = excelFile['Отчет'];
 
-    sheetObject.appendRow(['Технико-тактические действия']);
-    sheetObject.appendRow([
+    _appendExcelRow(sheetObject, ['Технико-тактические действия']);
+    _appendExcelRow(sheetObject, [
       'Игрок',
       'Финт/Дриблинг',
       'Удары',
@@ -11993,7 +12042,7 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
     ]);
 
     for (final player in _filteredMainReportRows) {
-      sheetObject.appendRow([
+      _appendExcelRow(sheetObject, [
         player['player_name'] ?? '',
         player['feint_dribble'] ?? '0/0',
         player['shot_on_goal'] ?? '0/0',
@@ -12009,9 +12058,9 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
     }
 
     // Добавляем командную статистику
-    sheetObject.appendRow([]);
-    sheetObject.appendRow(['КОМАНДНАЯ СТАТИСТИКА']);
-    sheetObject.appendRow(['Действие', 'Точные', 'Неточные', 'Всего', 'Эффективность']);
+    _appendExcelRow(sheetObject, []);
+    _appendExcelRow(sheetObject, ['КОМАНДНАЯ СТАТИСТИКА']);
+    _appendExcelRow(sheetObject, ['Действие', 'Точные', 'Неточные', 'Всего', 'Эффективность']);
     
     final teamStats = _getTeamMainStats();
     final actionNames = {
@@ -12031,7 +12080,7 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
       final total = success + fail;
       final percent = total > 0 ? ((success / total) * 100).round() : 0;
       
-      sheetObject.appendRow([
+      _appendExcelRow(sheetObject, [
         actionNames[entry.key] ?? entry.key,
         success,
         fail,
@@ -12040,12 +12089,12 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
       ]);
     }
     
-    sheetObject.appendRow([]);
-    sheetObject.appendRow(['Общая эффективность команды: ${_getTeamMainEfficiency().round()}%']);
+    _appendExcelRow(sheetObject, []);
+    _appendExcelRow(sheetObject, ['Общая эффективность команды: ${_getTeamMainEfficiency().round()}%']);
 
-    sheetObject.appendRow([]);
-    sheetObject.appendRow(['Анализ передач']);
-    sheetObject.appendRow([
+    _appendExcelRow(sheetObject, []);
+    _appendExcelRow(sheetObject, ['Анализ передач']);
+    _appendExcelRow(sheetObject, [
       'Игрок',
       'Вперед К',
       'Вперед С',
@@ -12061,7 +12110,7 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
     ]);
 
     for (final player in _filteredPassReportRows) {
-      sheetObject.appendRow([
+      _appendExcelRow(sheetObject, [
         player['player_name'] ?? '',
         player['forward_short'] ?? '0/0',
         player['forward_medium'] ?? '0/0',
@@ -12078,9 +12127,9 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
     }
     
     // Командная статистика передач
-    sheetObject.appendRow([]);
-    sheetObject.appendRow(['КОМАНДНАЯ СТАТИСТИКА ПЕРЕДАЧ']);
-    sheetObject.appendRow(['Направление', 'Дистанция', 'Точные', 'Неточные', 'Всего', 'Эффективность']);
+    _appendExcelRow(sheetObject, []);
+    _appendExcelRow(sheetObject, ['КОМАНДНАЯ СТАТИСТИКА ПЕРЕДАЧ']);
+    _appendExcelRow(sheetObject, ['Направление', 'Дистанция', 'Точные', 'Неточные', 'Всего', 'Эффективность']);
     
     final passStats = _getTeamPassStats();
     final passNames = {
@@ -12102,7 +12151,7 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
       final percent = total > 0 ? ((success / total) * 100).round() : 0;
       final nameInfo = passNames[entry.key] ?? [entry.key, ''];
       
-      sheetObject.appendRow([
+      _appendExcelRow(sheetObject, [
         nameInfo[0],
         nameInfo[1],
         success,
@@ -12112,12 +12161,12 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
       ]);
     }
     
-    sheetObject.appendRow([]);
-    sheetObject.appendRow(['Общая эффективность передач: ${_getTeamPassEfficiency().round()}%']);
+    _appendExcelRow(sheetObject, []);
+    _appendExcelRow(sheetObject, ['Общая эффективность передач: ${_getTeamPassEfficiency().round()}%']);
 
-    sheetObject.appendRow([]);
-    sheetObject.appendRow(['Вратарская статистика']);
-    sheetObject.appendRow([
+    _appendExcelRow(sheetObject, []);
+    _appendExcelRow(sheetObject, ['Вратарская статистика']);
+    _appendExcelRow(sheetObject, [
       'Игрок',
       'Пропущено',
       'Сейвы',
@@ -12134,7 +12183,7 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
     ]);
 
     for (final player in _filteredGoalkeeperReportRows) {
-      sheetObject.appendRow([
+      _appendExcelRow(sheetObject, [
         player['player_name'] ?? '',
         player['conceded'] ?? 0,
         player['saves'] ?? 0,
@@ -12151,8 +12200,8 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
       ]);
     }
     
-    sheetObject.appendRow([]);
-    sheetObject.appendRow(['Общая эффективность вратарей: ${_getTeamGoalkeeperEfficiency().round()}%']);
+    _appendExcelRow(sheetObject, []);
+    _appendExcelRow(sheetObject, ['Общая эффективность вратарей: ${_getTeamGoalkeeperEfficiency().round()}%']);
 
     final directory = await getApplicationDocumentsDirectory();
     final path =
@@ -12400,7 +12449,7 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
             const SizedBox(height: 20),
             const Text(
               'Экспорт отчета',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
             ),
             const SizedBox(height: 20),
             ListTile(
@@ -12458,7 +12507,7 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
       alignment: Alignment.center,
       child: Text(
         title,
-        style: _cmrMutedStyle(fontSize, color: _cmrMuted2, weight: FontWeight.w900),
+        style: _cmrMutedStyle(fontSize, color: _cmrMuted2, weight: FontWeight.w600),
         textAlign: TextAlign.center,
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
@@ -12480,7 +12529,6 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
       decoration: BoxDecoration(
         color: _cmrPanel,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _cmrLine),
       ),
       child: Row(
         children: [
@@ -12498,7 +12546,7 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: color.withOpacity(.22)),
             ),
-            child: Text('ГРУППА', style: _cmrMutedStyle(10, color: color, weight: FontWeight.w900)),
+            child: Text('ГРУППА', style: _cmrMutedStyle(10, color: color, weight: FontWeight.w600)),
           ),
         ],
       ),
@@ -12517,16 +12565,15 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(title, style: _cmrMutedStyle(titleFontSize, color: _cmrMuted2, weight: FontWeight.w900)),
+          Text(title, style: _cmrMutedStyle(titleFontSize, color: _cmrMuted2, weight: FontWeight.w600)),
           const SizedBox(height: 4),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
               color: _cmrPanel,
               borderRadius: BorderRadius.circular(7),
-              border: Border.all(color: _cmrLine),
-            ),
-            child: Text('К   С   Д', style: _cmrMutedStyle(subFontSize, color: _cmrMuted2, weight: FontWeight.w900), textAlign: TextAlign.center),
+                  ),
+            child: Text('К   С   Д', style: _cmrMutedStyle(subFontSize, color: _cmrMuted2, weight: FontWeight.w600), textAlign: TextAlign.center),
           ),
         ],
       ),
@@ -12547,7 +12594,6 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
       decoration: BoxDecoration(
         color: _cmrPanel,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _cmrLine),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -12589,7 +12635,7 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
                 child: Icon(icon, color: color, size: 15),
               ),
               const SizedBox(width: 8),
-              Text(label, style: _cmrMutedStyle(12.5, color: _cmrText, weight: FontWeight.w900)),
+              Text(label, style: _cmrMutedStyle(12.5, color: _cmrText, weight: FontWeight.w600)),
             ],
           ),
         ),
@@ -12613,8 +12659,7 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
             decoration: BoxDecoration(
               color: _cmrPanel,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: _cmrLine),
-            ),
+                  ),
             child: Icon(icon, color: _cmrMuted2, size: 20),
           ),
           const SizedBox(width: 12),
@@ -12682,7 +12727,7 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
                       borderRadius: BorderRadius.circular(9),
                       border: Border.all(color: _cmrGreenBorder),
                     ),
-                    child: Text(badge, style: _cmrMutedStyle(11.5, color: _cmrGreenDark, weight: FontWeight.w900)),
+                    child: Text(badge, style: _cmrMutedStyle(11.5, color: _cmrGreenDark, weight: FontWeight.w600)),
                   ),
                 ],
               ],
@@ -12703,7 +12748,6 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
       decoration: BoxDecoration(
         color: _cmrSoft,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _cmrLine),
       ),
       child: Row(children: children),
     );
@@ -12727,9 +12771,9 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
           '$percent%',
           textAlign: TextAlign.center,
           style: TextStyle(
-            fontFamily: 'Roboto',
+            fontFamily: AppTypography.fontFamily,
             fontSize: fontSize,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w600,
             color: Colors.white,
             height: 1,
           ),
@@ -12887,13 +12931,13 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(success.toString(), style: _cmrValue(metricFont, color: _cmrGreenDark)),
-                    Text(' / ', style: _cmrMutedStyle(metricFont - 1, color: _cmrMuted2, weight: FontWeight.w800)),
+                    Text(' / ', style: _cmrMutedStyle(metricFont - 1, color: _cmrMuted2, weight: FontWeight.w600)),
                     Text(fail.toString(), style: _cmrValue(metricFont, color: _cmrRed)),
                   ],
                 ),
                 if (total > 0) ...[
                   const SizedBox(height: 2),
-                  Text(value, textAlign: TextAlign.center, style: _cmrMutedStyle(metricFont - 1, color: isTotal ? activeAccent : _cmrMuted2, weight: FontWeight.w800)),
+                  Text(value, textAlign: TextAlign.center, style: _cmrMutedStyle(metricFont - 1, color: isTotal ? activeAccent : _cmrMuted2, weight: FontWeight.w600)),
                 ],
               ],
             ),
@@ -12953,7 +12997,7 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
               children: [
                 _buildCmrTableHeader(
                   children: [
-                    SizedBox(width: playerW, child: Padding(padding: const EdgeInsets.only(left: 8), child: Text('Игрок', style: _cmrMutedStyle(headerFont + 1, color: _cmrMuted2, weight: FontWeight.w900)))),
+                    SizedBox(width: playerW, child: Padding(padding: const EdgeInsets.only(left: 8), child: Text('Игрок', style: _cmrMutedStyle(headerFont + 1, color: _cmrMuted2, weight: FontWeight.w600)))),
                     SizedBox(width: gapW),
                     _buildHeaderCell('Финт+\nДриблинг', feintW, fontSize: headerFont),
                     _buildHeaderCell('Удары', metricW, fontSize: headerFont),
@@ -13069,11 +13113,11 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
               children: [
                 Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Text(success.toString(), style: _cmrValue(metricFont, color: _cmrGreenDark)),
-                  Text('/', style: _cmrMutedStyle(metricFont - 1, color: _cmrMuted2, weight: FontWeight.w800)),
+                  Text('/', style: _cmrMutedStyle(metricFont - 1, color: _cmrMuted2, weight: FontWeight.w600)),
                   Text(fail.toString(), style: _cmrValue(metricFont, color: _cmrRed)),
                 ]),
                 const SizedBox(height: 2),
-                Text(value, style: _cmrMutedStyle(metricFont - 1, color: isTotal ? activeAccent : _cmrMuted2, weight: FontWeight.w800)),
+                Text(value, style: _cmrMutedStyle(metricFont - 1, color: isTotal ? activeAccent : _cmrMuted2, weight: FontWeight.w600)),
               ],
             ),
           );
@@ -13123,7 +13167,7 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
             width: tableWidth,
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               _buildCmrTableHeader(children: [
-                SizedBox(width: playerW, child: Padding(padding: const EdgeInsets.only(left: 8), child: Text('Игрок', style: _cmrMutedStyle(headerFont + 1, color: _cmrMuted2, weight: FontWeight.w900)))),
+                SizedBox(width: playerW, child: Padding(padding: const EdgeInsets.only(left: 8), child: Text('Игрок', style: _cmrMutedStyle(headerFont + 1, color: _cmrMuted2, weight: FontWeight.w600)))),
                 SizedBox(width: gapW),
                 _buildPassHeaderGroup('Вперед', metricW * 3, titleFontSize: headerFont, subFontSize: subHeaderFont),
                 _buildPassHeaderGroup('Поперек', metricW * 3, titleFontSize: headerFont, subFontSize: subHeaderFont),
@@ -13223,11 +13267,11 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
               child: Column(mainAxisAlignment: MainAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: [
                 Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Text(success.toString(), style: _cmrValue(metricMainFont, color: _cmrGreenDark)),
-                  Text('/', style: _cmrMutedStyle(metricMainFont - 1, color: _cmrMuted2, weight: FontWeight.w800)),
+                  Text('/', style: _cmrMutedStyle(metricMainFont - 1, color: _cmrMuted2, weight: FontWeight.w600)),
                   Text(fail.toString(), style: _cmrValue(metricMainFont, color: _cmrRed)),
                 ]),
                 const SizedBox(height: 2),
-                Text(value, style: _cmrMutedStyle(metricSubFont, color: isTotal ? _cmrRed : _cmrMuted2, weight: FontWeight.w800)),
+                Text(value, style: _cmrMutedStyle(metricSubFont, color: isTotal ? _cmrRed : _cmrMuted2, weight: FontWeight.w600)),
               ]),
             );
           }
@@ -13241,7 +13285,7 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
         }
 
         Widget headerText(String text, double width, {TextAlign align = TextAlign.center}) {
-          return SizedBox(width: width, child: Text(text, textAlign: align, maxLines: 2, overflow: TextOverflow.ellipsis, style: _cmrMutedStyle(headerFont, color: _cmrMuted2, weight: FontWeight.w900)));
+          return SizedBox(width: width, child: Text(text, textAlign: align, maxLines: 2, overflow: TextOverflow.ellipsis, style: _cmrMutedStyle(headerFont, color: _cmrMuted2, weight: FontWeight.w600)));
         }
 
         final content = Padding(
@@ -13250,7 +13294,7 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
             width: tableWidth,
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               _buildCmrTableHeader(children: [
-                SizedBox(width: playerW, child: Padding(padding: const EdgeInsets.only(left: 8), child: Text('Игрок', style: _cmrMutedStyle(headerFont + 1, color: _cmrMuted2, weight: FontWeight.w900)))),
+                SizedBox(width: playerW, child: Padding(padding: const EdgeInsets.only(left: 8), child: Text('Игрок', style: _cmrMutedStyle(headerFont + 1, color: _cmrMuted2, weight: FontWeight.w600)))),
                 SizedBox(width: gapW),
                 headerText('Проп.', metricSmallW),
                 headerText('Сейвы', metricSmallW),
@@ -13714,7 +13758,7 @@ class _TtdPanelWidgetState extends State<TtdPanelWidget> {
   static const Color _red = Color(0xFFDC2626);
   static const Color _redSoft = Color(0xFFFEF2F2);
 
-  static const String _family = 'Segoe UI';
+  static String get _family => AppTypography.fontFamily;
   static const List<String> _fallback = <String>['SF Pro Display', 'SF Pro Text', 'Inter', 'Roboto', 'Arial'];
 
   int _selectedRating = 5;
@@ -21802,7 +21846,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                           "Загрузка видео",
                           style: TextStyle(
                             fontSize: 18,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w600,
                             color: FeedPalette.text,
                           ),
                         ),
@@ -21833,7 +21877,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                           text,
                           style: const TextStyle(
                             fontSize: 15,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w600,
                             color: FeedPalette.primaryGreen,
                           ),
                         ),
@@ -22154,7 +22198,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                       "Удалить видео",
                       style: TextStyle(
                         color: Colors.red,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                     onTap: () async {
@@ -22171,7 +22215,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                     "Удалить матч",
                     style: TextStyle(
                       color: Colors.red,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   onTap: () async {
@@ -22322,7 +22366,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
           builder: (ctx, setSB) {
             Future<void> pickVideo() async {
               try {
-                final result = await FilePicker.platform.pickFiles(
+                final result = await FilePicker.pickFiles(
                   type: FileType.video,
                   allowMultiple: false,
                   withData: false,
@@ -22426,7 +22470,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                                   "Загрузить видео матча",
                                   style: TextStyle(
                                     fontSize: 17,
-                                    fontWeight: FontWeight.w900,
+                                    fontWeight: FontWeight.w600,
                                     color: FeedPalette.text,
                                   ),
                                 ),
@@ -22437,7 +22481,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                     color: FeedPalette.textMuted,
-                                    fontWeight: FontWeight.w700,
+                                    fontWeight: FontWeight.w500,
                                     fontSize: 12,
                                   ),
                                 ),
@@ -22523,7 +22567,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       fontSize: 13,
-                                      fontWeight: FontWeight.w800,
+                                      fontWeight: FontWeight.w600,
                                       color: FeedPalette.text,
                                     ),
                                   ),
@@ -22581,7 +22625,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: FeedPalette.textMuted,
-                                  fontWeight: FontWeight.w700,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ),
@@ -22680,7 +22724,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                             localSaving ? "Подготовка..." : "Сохранить видео",
                             style: const TextStyle(
                               color: Colors.white,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                           style: ElevatedButton.styleFrom(
@@ -22733,6 +22777,42 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
         videoUrl: videoUrl,
         videoId: videoId,
       ),
+    );
+  }
+
+  Future<void> _openTeamMatchLive() async {
+    final item = _matches.isEmpty ? <String, dynamic>{} : _matches.first;
+    final rawSessions = item['tracker_session_ids'] ??
+        item['session_ids'] ??
+        item['tracker_session_id'] ??
+        const [];
+    final sessionValues = rawSessions is List
+        ? rawSessions
+        : _s(rawSessions).replaceAll(';', ',').split(',');
+    final sessionIds = sessionValues
+        .map((value) => int.tryParse(_s(value)) ?? 0)
+        .where((value) => value > 0)
+        .toSet()
+        .toList();
+    await MatchLiveScreen.open(
+      context,
+      initialMode: 'live',
+      params: {
+        'sourceMode': 'live',
+        'matchId': int.tryParse(_s(item['id'])) ?? 0,
+        'clubId': widget.clubId,
+        'teamId': widget.teamId,
+        'coachId': _coachId,
+        'fieldId': int.tryParse(_s(item['field_id'])) ?? 0,
+        'teamName': _displayTeamName,
+        'matchTitle': item.isEmpty ? 'Матч онлайн' : _buildMatchTitle(item),
+        'videoUrl': _normalizeUrl(_s(item['video_url'])) ?? '',
+        'sessionIds': sessionIds,
+        'teamColors': {
+          'home': _s(item['home_team_color']).isEmpty ? '#00A750' : _s(item['home_team_color']),
+          'away': _s(item['away_team_color']).isEmpty ? '#FFFFFF' : _s(item['away_team_color']),
+        },
+      },
     );
   }
 
@@ -22809,112 +22889,77 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
   }
 
   Widget _buildVideoWindowChrome({required bool compact}) {
-    return SafeArea(
-      bottom: false,
-      child: Container(
+    return Container(
+      height: compact ? 54 : 56,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: const BoxDecoration(
         color: Colors.white,
-        padding: EdgeInsets.fromLTRB(14, compact ? 10 : 12, 14, compact ? 8 : 10),
-        child: Row(
-          children: [
-            if (widget.embedded) ...[
-              _macWindowDots(),
-              const SizedBox(width: 14),
-            ] else ...[
-              InkWell(
-                onTap: () => Get.back(),
-                borderRadius: BorderRadius.circular(14),
-                child: Container(
-                  width: compact ? 36 : 38,
-                  height: compact ? 36 : 38,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: FeedPalette.surface,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(
-                    Icons.arrow_back_rounded,
-                    color: FeedPalette.text,
-                    size: 21,
-                  ),
+        border: Border(
+          bottom: BorderSide(color: FeedPalette.border, width: .8),
+        ),
+      ),
+      child: Row(
+        children: [
+          if (!widget.embedded) ...[
+            InkWell(
+              onTap: () => Get.back(),
+              borderRadius: BorderRadius.circular(9),
+              child: const SizedBox(
+                width: 34,
+                height: 34,
+                child: Icon(
+                  Icons.arrow_back_rounded,
+                  color: FeedPalette.text,
+                  size: 18,
                 ),
               ),
-              const SizedBox(width: 10),
-            ],
-            Container(
-              width: compact ? 38 : 42,
-              height: compact ? 38 : 42,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: FeedPalette.greenSoft,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(
-                Icons.movie_filter_outlined,
-                color: FeedPalette.primaryGreen,
-                size: 22,
-              ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Видеоанализ',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: FeedPalette.text,
-                      fontSize: compact ? 16 : 18,
-                      height: 1.05,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    [
-                      _displayTeamName,
-                      if (widget.clubName.trim().isNotEmpty) widget.clubName.trim(),
-                      '${_readyVideoCount}/${_matches.length} видео',
-                    ].where((e) => e.trim().isNotEmpty).join(' • '),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: FeedPalette.textMuted,
-                      fontSize: 10.5,
-                      height: 1.05,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (!compact) ...[
-              _videoToolbarButton(
-                label: 'Обновить',
-                icon: Icons.refresh_rounded,
-                onTap: _refreshWorkspace,
-              ),
-              const SizedBox(width: 8),
-              _videoToolbarButton(
-                label: _view == TeamVideoCatalogView.list ? 'Список' : 'Сетка',
-                icon: _view == TeamVideoCatalogView.list
-                    ? Icons.view_list_rounded
-                    : Icons.grid_view_rounded,
-                onTap: () {
-                  setState(() {
-                    _view = _view == TeamVideoCatalogView.list
-                        ? TeamVideoCatalogView.grid
-                        : TeamVideoCatalogView.list;
-                  });
-                },
-              ),
-            ] else ...[
-              _analysisTopIcon(Icons.refresh_rounded, onTap: _refreshWorkspace),
-            ],
+            const SizedBox(width: 8),
           ],
-        ),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Видеоанализ',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _VideoT.title(compact ? 13.2 : 13.6),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  [
+                    _displayTeamName,
+                    if (widget.clubName.trim().isNotEmpty) widget.clubName.trim(),
+                    '${_readyVideoCount}/${_matches.length} видео',
+                  ].where((e) => e.trim().isNotEmpty).join('  ·  '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _VideoT.body(10.8),
+                ),
+              ],
+            ),
+          ),
+          _analysisTopIcon(Icons.videocam_rounded, onTap: _openTeamMatchLive),
+          const SizedBox(width: 5),
+          _analysisTopIcon(Icons.refresh_rounded, onTap: _refreshWorkspace),
+          if (!compact) ...[
+            const SizedBox(width: 5),
+            _analysisTopIcon(
+              _view == TeamVideoCatalogView.list
+                  ? Icons.view_list_rounded
+                  : Icons.grid_view_rounded,
+              onTap: () {
+                setState(() {
+                  _view = _view == TeamVideoCatalogView.list
+                      ? TeamVideoCatalogView.grid
+                      : TeamVideoCatalogView.list;
+                });
+              },
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -22947,7 +22992,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                 style: TextStyle(
                   color: filled ? Colors.white : FeedPalette.text,
                   fontSize: 11.2,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -22976,56 +23021,50 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
 
   Widget _buildVideoSidebar() {
     return Container(
-      width: 168,
-      color: Colors.transparent,
-      padding: const EdgeInsets.fromLTRB(9, 12, 8, 10),
+      width: 220,
+      padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          right: BorderSide(color: FeedPalette.border, width: .8),
+        ),
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
               Container(
-                width: 38,
-                height: 38,
+                width: 34,
+                height: 34,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF3F5F8),
-                  borderRadius: BorderRadius.circular(14),
+                  color: FeedPalette.primaryGreen,
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(
                   Icons.movie_filter_outlined,
-                  color: Color(0xFF6B7280),
-                  size: 20,
+                  color: Colors.white,
+                  size: 18,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 9),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
+                      'СПОРТОТЕКА',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _VideoT.title(12.4, color: FeedPalette.primaryGreenDark),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
                       _displayTeamName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: FeedPalette.text,
-                        fontSize: 12.0,
-                        height: 1.05,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -.18,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '${_matches.length} матчей • $_readyVideoCount видео',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: FeedPalette.textMuted,
-                        fontSize: 9.6,
-                        height: 1.1,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: _VideoT.body(9.5),
                     ),
                   ],
                 ),
@@ -23042,46 +23081,49 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                   section: TeamVideoWorkspaceSection.overview,
                   icon: Icons.dashboard_customize_outlined,
                   title: 'Обзор',
-                  subtitle: 'статус',
+                  subtitle: 'Сводка по видео',
                   count: _matches.length,
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 _videoSidebarButton(
                   section: TeamVideoWorkspaceSection.all,
                   icon: Icons.video_library_outlined,
                   title: 'Все матчи',
-                  subtitle: 'каталог',
+                  subtitle: 'Каталог команды',
                   count: _matches.length,
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 _videoSidebarButton(
                   section: TeamVideoWorkspaceSection.ready,
                   icon: Icons.play_circle_outline_rounded,
                   title: 'С видео',
-                  subtitle: 'готово',
+                  subtitle: 'Готовы к разбору',
                   count: _readyVideoCount,
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 _videoSidebarButton(
                   section: TeamVideoWorkspaceSection.missing,
                   icon: Icons.cloud_upload_outlined,
                   title: 'Без видео',
-                  subtitle: 'загрузить',
+                  subtitle: 'Ожидают загрузку',
                   count: _missingVideoCount,
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 10),
+          Container(height: 1, color: FeedPalette.border),
+          const SizedBox(height: 9),
           _buildVideoSidebarFooterAction(
             icon: Icons.refresh_rounded,
-            label: 'Обновить',
+            label: 'Обновить данные',
             onTap: _refreshWorkspace,
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           _buildVideoSidebarFooterAction(
-            icon: Icons.grid_view_rounded,
-            label: _view == TeamVideoCatalogView.grid ? 'Список' : 'Сетка',
+            icon: _view == TeamVideoCatalogView.grid
+                ? Icons.view_list_rounded
+                : Icons.grid_view_rounded,
+            label: _view == TeamVideoCatalogView.grid ? 'Вид: список' : 'Вид: сетка',
             onTap: () {
               setState(() {
                 _view = _view == TeamVideoCatalogView.grid
@@ -23103,31 +23145,36 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
     required int count,
   }) {
     final active = _section == section;
-    final bgColor = active ? const Color(0xFFF3FBF7) : Colors.transparent;
-    final iconColor = active ? FeedPalette.primaryGreen : const Color(0xFF6B7280);
-    final textColor = active ? const Color(0xFF0B0F14) : const Color(0xFF344054);
 
     return Material(
-      color: bgColor,
-      borderRadius: BorderRadius.circular(12),
+      color: active ? FeedPalette.greenSoft : Colors.transparent,
+      borderRadius: BorderRadius.circular(9),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(9),
         onTap: () => _setSection(section),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOut,
-          constraints: const BoxConstraints(minHeight: 38),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 44),
+          padding: const EdgeInsets.fromLTRB(9, 7, 8, 7),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: active
-                ? Border.all(color: const Color(0xFFDCEFE5), width: 1)
-                : null,
+            borderRadius: BorderRadius.circular(9),
           ),
           child: Row(
             children: [
-              Icon(icon, color: iconColor, size: 18),
-              const SizedBox(width: 10),
+              Container(
+                width: 3,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: active ? FeedPalette.primaryGreen : Colors.transparent,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              const SizedBox(width: 7),
+              Icon(
+                icon,
+                color: active ? FeedPalette.primaryGreen : const Color(0xFF374151),
+                size: 17,
+              ),
+              const SizedBox(width: 9),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -23137,38 +23184,29 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: textColor,
-                        fontSize: 10.8,
-                        height: 1,
-                        fontWeight: active ? FontWeight.w800 : FontWeight.w600,
-                        letterSpacing: -.12,
-                      ),
+                      style: _VideoT.body(10.8,
+                          color: FeedPalette.text,
+                          weight: active ? FontWeight.w600 : FontWeight.w500),
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '$subtitle • $count',
+                      '$subtitle · $count',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: active ? FeedPalette.primaryGreen : FeedPalette.textMuted,
-                        fontSize: 9.2,
-                        height: 1,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: _VideoT.body(9.4,
+                          color: active
+                              ? FeedPalette.primaryGreenDark.withOpacity(.72)
+                              : FeedPalette.textMuted),
                     ),
                   ],
                 ),
               ),
-              if (active)
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: const BoxDecoration(
-                    color: FeedPalette.primaryGreen,
-                    shape: BoxShape.circle,
-                  ),
-                ),
+              _VideoGlowDot(
+                color: active ? FeedPalette.primaryGreen : FeedPalette.textMuted,
+                size: active ? 6.2 : 4.6,
+                opacity: active ? 1 : .42,
+                halo: active,
+              ),
             ],
           ),
         ),
@@ -23183,29 +23221,25 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
   }) {
     return Material(
       color: FeedPalette.surface,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(9),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(9),
         onTap: onTap,
         child: Container(
-          height: 34,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 9),
           child: Row(
             children: [
-              Icon(icon, color: FeedPalette.textMuted, size: 17),
+              Icon(icon, color: const Color(0xFF374151), size: 17),
               const SizedBox(width: 9),
               Expanded(
                 child: Text(
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF344054),
-                    fontSize: 10.8,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -.12,
-                    height: 1,
-                  ),
+                  style: _VideoT.body(10.5,
+                      color: const Color(0xFF344054),
+                      weight: FontWeight.w500),
                 ),
               ),
             ],
@@ -23279,7 +23313,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                 title,
                 style: TextStyle(
                   fontSize: 11.5,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                   color: active ? FeedPalette.primaryGreen : FeedPalette.textMuted,
                 ),
               ),
@@ -23292,23 +23326,13 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
 
   Widget _buildWorkspaceContentHeader({required bool compact}) {
     return Container(
-      height: compact ? 52 : 48,
+      height: compact ? 52 : 50,
       padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 14),
       color: Colors.white,
       child: Row(
         children: [
-          Container(
-            width: 28,
-            height: 28,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: FeedPalette.greenSoft,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFDCEFE5)),
-            ),
-            child: Icon(_sectionIcon, color: FeedPalette.primaryGreen, size: 16),
-          ),
-          const SizedBox(width: 10),
+          _VideoGlowDot(color: FeedPalette.primaryGreen, size: 6.2),
+          const SizedBox(width: 9),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -23318,39 +23342,29 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                   _sectionTitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: FeedPalette.text,
-                    fontSize: 12.4,
-                    fontWeight: FontWeight.w800,
-                    height: 1.05,
-                    letterSpacing: -.18,
-                  ),
+                  style: _VideoT.title(13.4),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Text(
                   _sectionSubtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: FeedPalette.textMuted,
-                    fontSize: 9.8,
-                    fontWeight: FontWeight.w700,
-                    height: 1.05,
-                  ),
+                  style: _VideoT.body(10.5),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 10),
           if (!compact) ...[
             _videoCountBadge('Видео', _readyVideoCount.toString()),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             _videoCountBadge('Без видео', _missingVideoCount.toString()),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
           ],
-          _analysisTopIcon(Icons.view_list_rounded, onTap: () => setState(() => _view = TeamVideoCatalogView.list)),
-          const SizedBox(width: 8),
-          _analysisTopIcon(Icons.grid_view_rounded, onTap: () => setState(() => _view = TeamVideoCatalogView.grid)),
+          _analysisTopIcon(Icons.view_list_rounded,
+              onTap: () => setState(() => _view = TeamVideoCatalogView.list)),
+          const SizedBox(width: 5),
+          _analysisTopIcon(Icons.grid_view_rounded,
+              onTap: () => setState(() => _view = TeamVideoCatalogView.grid)),
         ],
       ),
     );
@@ -23360,20 +23374,16 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
     return Container(
       height: 28,
       alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 9),
       decoration: BoxDecoration(
         color: FeedPalette.greenSoft,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFDCEFE5)),
+        borderRadius: BorderRadius.circular(9),
       ),
       child: Text(
         '$label $value',
-        style: const TextStyle(
-          color: FeedPalette.primaryGreen,
-          fontSize: 10.5,
-          fontWeight: FontWeight.w900,
-          height: 1,
-        ),
+        style: _VideoT.body(10.1,
+            color: FeedPalette.primaryGreenDark,
+            weight: FontWeight.w500),
       ),
     );
   }
@@ -23554,7 +23564,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                   style: const TextStyle(
                     color: FeedPalette.textMuted,
                     fontSize: 11,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -23566,7 +23576,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                     color: FeedPalette.text,
                     fontSize: 20,
                     height: 1,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -23577,7 +23587,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                   style: const TextStyle(
                     color: FeedPalette.textMuted,
                     fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
@@ -23634,7 +23644,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                       style: const TextStyle(
                         color: FeedPalette.text,
                         fontSize: 13,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -23645,7 +23655,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                       style: const TextStyle(
                         color: FeedPalette.textMuted,
                         fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
@@ -23674,7 +23684,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
           color: FeedPalette.textMuted,
           fontSize: 12,
           height: 1.35,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w500,
         ),
       ),
     );
@@ -23723,7 +23733,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                       style: const TextStyle(
                         color: FeedPalette.text,
                         fontSize: 12.2,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -23734,7 +23744,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                       style: const TextStyle(
                         color: FeedPalette.textMuted,
                         fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
@@ -23759,14 +23769,13 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
       child: Column(
         children: [
           _buildVideoWindowChrome(compact: isPhone),
-          Container(height: 1, color: const Color(0xFFE8EEE9)),
           Expanded(
             child: isPhone
                 ? Column(
                     children: [
                       _buildVideoCompactNav(),
                       _buildWorkspaceContentHeader(compact: true),
-                      Container(height: 1, color: const Color(0xFFE8EEE9)),
+                      Container(height: 1, color: FeedPalette.border),
                       Expanded(child: _activeVideoContent(isTablet: false)),
                     ],
                   )
@@ -23774,12 +23783,11 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _buildVideoSidebar(),
-                      Container(width: 1, color: const Color(0xFFE8EEE9)),
                       Expanded(
                         child: Column(
                           children: [
                             _buildWorkspaceContentHeader(compact: false),
-                            Container(height: 1, color: const Color(0xFFE8EEE9)),
+                            Container(height: 1, color: FeedPalette.border),
                             Expanded(child: _activeVideoContent(isTablet: isTablet)),
                           ],
                         ),
@@ -23848,7 +23856,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 12,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: FeedPalette.textMuted,
                     letterSpacing: 0.3,
                   ),
@@ -23912,7 +23920,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
         _sectionTitle.toUpperCase(),
         style: const TextStyle(
           fontSize: 11,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w600,
           color: FeedPalette.textMuted,
           letterSpacing: 1.0,
         ),
@@ -23982,7 +23990,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w600,
                             fontSize: 15,
                             color: FeedPalette.text,
                             height: 1.25,
@@ -23998,7 +24006,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                     "$eventType • Счёт $score",
                     style: const TextStyle(
                       fontSize: 12,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w500,
                       color: FeedPalette.textMuted,
                     ),
                   ),
@@ -24092,7 +24100,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
               borderRadius: BorderRadius.circular(12),
             ),
             textStyle: const TextStyle(
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               fontSize: 12,
             ),
           ),
@@ -24112,7 +24120,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
           borderRadius: BorderRadius.circular(12),
         ),
         textStyle: const TextStyle(
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
           fontSize: 12,
         ),
       ),
@@ -24161,7 +24169,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w600,
                             fontSize: 14,
                             color: FeedPalette.text,
                             height: 1.25,
@@ -24179,7 +24187,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontSize: 12,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                       color: FeedPalette.textMuted,
                     ),
                   ),
@@ -24241,7 +24249,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 textStyle: const TextStyle(
-                                  fontWeight: FontWeight.w900,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
@@ -24259,7 +24267,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               textStyle: const TextStyle(
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
@@ -24306,7 +24314,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
               isSearching ? "Ничего не найдено" : "Пока нет добавленных матчей",
               style: const TextStyle(
                 fontSize: 17,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w600,
                 color: FeedPalette.text,
               ),
             ),
@@ -24364,11 +24372,20 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
     final isPhone = width < 700;
     final isTablet = width >= 900;
 
-    final body = FadeTransition(
-      opacity: _animationController,
-      child: _buildVideoWorkspace(
-        isPhone: isPhone,
-        isTablet: isTablet,
+    final body = DefaultTextStyle(
+      style: AppTypography.custom(
+        size: 12,
+        weight: FontWeight.w400,
+        color: FeedPalette.text,
+        height: 1.24,
+        letterSpacing: 0,
+      ),
+      child: FadeTransition(
+        opacity: _animationController,
+        child: _buildVideoWorkspace(
+          isPhone: isPhone,
+          isTablet: isTablet,
+        ),
       ),
     );
 
@@ -24417,15 +24434,8 @@ class _MatteSurface extends StatelessWidget {
     final content = Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: FeedPalette.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0B000000),
-            blurRadius: 18,
-            offset: Offset(0, 8),
-          ),
-        ],
+        color: FeedPalette.surface,
+        borderRadius: BorderRadius.circular(10),
       ),
       child: child,
     );
@@ -24434,7 +24444,7 @@ class _MatteSurface extends StatelessWidget {
       return Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(10),
           onTap: onTap,
           child: content,
         ),
@@ -24514,7 +24524,7 @@ class _MatchThumb extends StatelessWidget {
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 10,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -24531,15 +24541,15 @@ class FeedPalette {
   static const primaryGreenLight = Color(0xFF00C060);
 
   static const lightGreen = Color(0xFFE8F5E9);
-  static const superLightGreen = Color(0xFFF2FFF5);
-  static const greenSoft = Color(0xFFF3FBF7);
-  static const surface = Color(0xFFF6F7F9);
+  static const superLightGreen = Color(0xFFF3FAF6);
+  static const greenSoft = Color(0xFFF3FAF6);
+  static const surface = Color(0xFFF7F8F7);
 
   static const white = Color(0xFFFFFFFF);
-  static const text = Color(0xFF1A1A1A);
-  static const textMuted = Color(0xFF666666);
-  static const background = Color(0xFFF8F9FA);
-  static const border = Color(0xFFE5E7EB);
+  static const text = Color(0xFF0B0F14);
+  static const textMuted = Color(0xFF5F6670);
+  static const background = Color(0xFFFFFFFF);
+  static const border = Color(0xFFE9ECEA);
 
   static const greenGradient = LinearGradient(
     colors: [primaryGreen, primaryGreenDark],
@@ -24547,6 +24557,78 @@ class FeedPalette {
     end: Alignment.bottomRight,
   );
   
+}
+
+
+class _VideoT {
+  static TextStyle title(double size, {Color color = FeedPalette.text}) =>
+      AppTypography.custom(
+        size: size,
+        weight: FontWeight.w600,
+        color: color,
+        height: 1.18,
+        letterSpacing: 0,
+      );
+
+  static TextStyle body(
+    double size, {
+    Color color = FeedPalette.textMuted,
+    FontWeight weight = FontWeight.w400,
+  }) =>
+      AppTypography.custom(
+        size: size,
+        weight: weight,
+        color: color,
+        height: 1.28,
+        letterSpacing: 0,
+      );
+
+  static TextStyle value(double size, {Color color = FeedPalette.text}) =>
+      AppTypography.custom(
+        size: size,
+        weight: FontWeight.w600,
+        color: color,
+        height: 1.12,
+        letterSpacing: 0,
+      );
+}
+
+class _VideoGlowDot extends StatelessWidget {
+  const _VideoGlowDot({
+    this.color = FeedPalette.primaryGreen,
+    this.size = 6,
+    this.opacity = 1,
+    this.halo = true,
+  });
+
+  final Color color;
+  final double size;
+  final double opacity;
+  final bool halo;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: opacity,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          boxShadow: halo
+              ? [
+                  BoxShadow(
+                    color: color.withOpacity(.18),
+                    blurRadius: size * 1.8,
+                    spreadRadius: .2,
+                  ),
+                ]
+              : null,
+        ),
+      ),
+    );
+  }
 }
 
 
@@ -24753,7 +24835,7 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
       AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Удалить видео?', style: TextStyle(fontWeight: FontWeight.w700)),
+        title: const Text('Удалить видео?', style: TextStyle(fontWeight: FontWeight.w600)),
         content: Text('Видео матча «${_matchTitle(item)}» будет удалено.'),
         actions: [
           TextButton(onPressed: () => Get.back(result: false), child: const Text('Отмена')),
@@ -24804,7 +24886,7 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
       AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Удалить матч?', style: TextStyle(fontWeight: FontWeight.w700)),
+        title: const Text('Удалить матч?', style: TextStyle(fontWeight: FontWeight.w600)),
         content: Text('Матч «${_matchTitle(item)}» будет удалён.'),
         actions: [
           TextButton(onPressed: () => Get.back(result: false), child: const Text('Отмена')),
@@ -25001,7 +25083,15 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
       );
     }
 
-    return Stack(
+    return DefaultTextStyle(
+      style: AppTypography.custom(
+        size: 12,
+        weight: FontWeight.w400,
+        color: _C.text,
+        height: 1.24,
+        letterSpacing: 0,
+      ),
+      child: Stack(
       children: [
         isPhone ? _buildMobileLayout() : _buildTabletLayout(),
         if (_isBusy)
@@ -25016,16 +25106,126 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
             ),
           ),
       ],
+      ),
     );
   }
 
   Widget _buildTabletLayout() {
-    return Row(
-      children: [
-        SizedBox(width: 420, child: _buildLeftColumn(isPhone: false)),
-        const SizedBox(width: 12),
-        Expanded(child: _buildDetails(isPhone: false)),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final listWidth = constraints.maxWidth >= 1280 ? 330.0 : 292.0;
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(width: 52, child: _buildTrackerRail()),
+            SizedBox(width: listWidth, child: _buildLeftColumn(isPhone: false)),
+            Expanded(
+              child: ColoredBox(
+                color: _C.bg,
+                child: _buildDetails(isPhone: false),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildTrackerRail() {
+    final hasSelection = selectedMatch != null;
+    final reviewing = reviewMatch != null;
+
+    Widget railButton({
+      required IconData icon,
+      required String tooltip,
+      required bool active,
+      VoidCallback? onTap,
+    }) {
+      return Tooltip(
+        message: tooltip,
+        child: Material(
+          color: active ? _C.greenSoft : _C.soft,
+          borderRadius: BorderRadius.circular(10),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: onTap,
+            child: SizedBox(
+              width: 38,
+              height: 38,
+              child: Center(
+                child: Icon(
+                  icon,
+                  color: active ? _C.primary : _C.dim,
+                  size: 19,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(4, 6, 4, 6),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(right: BorderSide(color: _C.softLine, width: .8)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: _C.primary,
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: const Icon(
+              Icons.movie_filter_outlined,
+              color: Colors.white,
+              size: 21,
+            ),
+          ),
+          const SizedBox(height: 11),
+          railButton(
+            icon: Icons.video_library_outlined,
+            tooltip: 'Матчи',
+            active: !reviewing,
+            onTap: () => setState(() => reviewMatch = null),
+          ),
+          const SizedBox(height: 5),
+          railButton(
+            icon: Icons.analytics_outlined,
+            tooltip: 'Видеоразбор',
+            active: reviewing,
+            onTap: hasSelection
+                ? () {
+                    final item = selectedMatch!;
+                    if (_normalizeUrl(_s(item['video_url'])) == null) {
+                      Get.snackbar('Видеоанализ', 'Сначала загрузите видео матча');
+                      return;
+                    }
+                    _openReview(item);
+                  }
+                : null,
+          ),
+          const SizedBox(height: 5),
+          railButton(
+            icon: Icons.open_in_new_rounded,
+            tooltip: 'Полный модуль',
+            active: false,
+            onTap: _openFullModule,
+          ),
+          const Spacer(),
+          railButton(
+            icon: Icons.refresh_rounded,
+            tooltip: 'Обновить',
+            active: refreshing,
+            onTap: () => _loadMatches(),
+          ),
+        ],
+      ),
     );
   }
 
@@ -25089,7 +25289,7 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: _C.muted,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         fontSize: 12,
                       ),
                     ),
@@ -25141,7 +25341,7 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
               children: [
                 Text('Матчи команды', style: _C.title.copyWith(fontSize: 16)),
                 const Spacer(),
-                Text('${filtered.length}', style: const TextStyle(color: _C.muted, fontWeight: FontWeight.w700)),
+                Text('${filtered.length}', style: const TextStyle(color: _C.muted, fontWeight: FontWeight.w600)),
               ],
             ),
           ),
@@ -25179,87 +25379,82 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
   }
 
   Widget _buildLeftColumn({required bool isPhone}) {
-    final withVideo = matches.where((m) => _normalizeUrl(_s(m['video_url'])) != null).length;
+    final withVideo = matches
+        .where((m) => _normalizeUrl(_s(m['video_url'])) != null)
+        .length;
 
     return Container(
-      decoration: _C.cardDecoration,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(right: BorderSide(color: _C.softLine, width: .8)),
+      ),
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
-            child: Column(
+          Container(
+            height: 58,
+            padding: const EdgeInsets.fromLTRB(12, 8, 10, 7),
+            child: Row(
               children: [
-                Row(
-                  children: [
-                    const _IconBox(icon: Icons.analytics_rounded),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _displayTeamName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: _C.title.copyWith(fontSize: 19),
-                          ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'Видеоанализ команды',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: _C.muted,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
+                const _VideoGlowDot(color: _C.primary, size: 6.2),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _displayTeamName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _C.title.copyWith(fontSize: 13.2),
                       ),
-                    ),
-                    _HeaderIconButton(icon: Icons.refresh_rounded, onTap: () => _loadMatches()),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Expanded(child: _HeroStat(value: '${matches.length}', title: 'матчей', icon: Icons.sports_soccer_rounded)),
-                    const SizedBox(width: 8),
-                    Expanded(child: _HeroStat(value: '$withVideo', title: 'с видео', icon: Icons.videocam_rounded)),
-                    const SizedBox(width: 8),
-                    Expanded(child: _HeroStat(value: '${matches.length - withVideo}', title: 'без видео', icon: Icons.videocam_off_rounded)),
-                  ],
+                      const SizedBox(height: 2),
+                      Text(
+                        '${matches.length} матчей  ·  $withVideo видео',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: _C.muted,
+                          fontSize: 10.2,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+            padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
             child: _buildSearchAndActions(isPhone: false),
           ),
-          const Divider(height: 1, color: _C.border),
+          Container(height: 1, color: _C.softLine),
           Expanded(
             child: filtered.isEmpty
                 ? const _MiniEmpty(text: 'Матчи не найдены')
                 : ListView.separated(
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
                     itemCount: filtered.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    separatorBuilder: (_, __) => const SizedBox(height: 4),
                     itemBuilder: (_, index) {
                       final item = filtered[index];
-                      final active = _asInt(item['id']) == _asInt(selectedMatch?['id']);
+                      final active = _asInt(item['id']) ==
+                          _asInt(selectedMatch?['id']);
 
                       return _MatchTile(
                         title: _matchTitle(item),
                         date: _date(item),
                         score: _score(item),
                         tournament: _s(item['tournament']),
-                        hasVideo: _normalizeUrl(_s(item['video_url'])) != null,
+                        hasVideo:
+                            _normalizeUrl(_s(item['video_url'])) != null,
                         active: active,
+                        compact: true,
                         onTap: () => setState(() {
-                    selectedMatch = item;
-                    reviewMatch = null;
-                  }),
+                          selectedMatch = item;
+                          reviewMatch = null;
+                        }),
                       );
                     },
                   ),
@@ -25276,13 +25471,21 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
           controller: searchCtrl,
           style: TextStyle(
             color: _C.text,
-            fontWeight: FontWeight.w700,
-            fontSize: isPhone ? 13 : 14,
+            fontWeight: FontWeight.w400,
+            fontSize: isPhone ? 12.2 : 11.2,
           ),
           decoration: InputDecoration(
-            hintText: isPhone ? 'Поиск по матчам' : 'Поиск по матчу, сопернику, турниру',
-            hintStyle: const TextStyle(color: _C.muted),
-            prefixIcon: const Icon(Icons.search_rounded, color: _C.muted),
+            hintText: isPhone
+                ? 'Поиск по матчам'
+                : 'Поиск по матчу, сопернику, турниру',
+            hintStyle: const TextStyle(
+              color: _C.muted,
+              fontWeight: FontWeight.w400,
+            ),
+            prefixIcon: const Icon(Icons.search_rounded,
+                color: _C.muted, size: 17),
+            prefixIconConstraints:
+                const BoxConstraints(minWidth: 36, minHeight: 34),
             suffixIcon: searchCtrl.text.isEmpty
                 ? null
                 : IconButton(
@@ -25290,33 +25493,43 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
                       searchCtrl.clear();
                       _applySearch();
                     },
-                    icon: const Icon(Icons.close_rounded, color: _C.muted),
+                    icon: const Icon(Icons.close_rounded,
+                        color: _C.muted, size: 16),
                   ),
             filled: true,
             fillColor: _C.soft,
-            contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: isPhone ? 11 : 13),
+            isDense: true,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(isPhone ? 16 : 18),
-              borderSide: const BorderSide(color: _C.border),
+              borderRadius: BorderRadius.circular(9),
+              borderSide: BorderSide.none,
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(isPhone ? 16 : 18),
-              borderSide: const BorderSide(color: _C.border),
+              borderRadius: BorderRadius.circular(9),
+              borderSide: BorderSide.none,
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(isPhone ? 16 : 18),
-              borderSide: const BorderSide(color: _C.primary, width: 1.2),
+              borderRadius: BorderRadius.circular(9),
+              borderSide: BorderSide.none,
             ),
           ),
         ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(child: _ToolButton(icon: Icons.open_in_new_rounded, text: isPhone ? 'Модуль' : 'Полный модуль', onTap: _openFullModule, compact: isPhone)),
-            const SizedBox(width: 8),
-            Expanded(child: _ToolButton(icon: Icons.cloud_upload_outlined, text: isPhone ? 'Видео' : 'Загрузка видео', onTap: _openFullModule, compact: isPhone)),
-          ],
-        ),
+        if (isPhone) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _ToolButton(
+                  icon: Icons.open_in_new_rounded,
+                  text: 'Полный модуль',
+                  onTap: _openFullModule,
+                  compact: true,
+                ),
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -25357,9 +25570,7 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
     }
 
     return Container(
-      decoration: _C.cardDecoration.copyWith(
-        borderRadius: BorderRadius.circular(28),
-      ),
+      color: Colors.white,
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
@@ -25368,7 +25579,7 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: const BoxDecoration(
               color: _C.card,
-              border: Border(bottom: BorderSide(color: _C.border)),
+              border: Border(bottom: BorderSide(color: _C.softLine, width: .8)),
             ),
             child: Row(
               children: [
@@ -25390,7 +25601,7 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
                         style: TextStyle(
                           color: _C.text,
                           fontSize: 15,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -25401,7 +25612,7 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
                         style: const TextStyle(
                           color: _C.muted,
                           fontSize: 12,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
@@ -25592,9 +25803,8 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
                       padding: EdgeInsets.all(isPhone ? 12 : 14),
                       decoration: BoxDecoration(
                         color: _C.softBlue,
-                        borderRadius: BorderRadius.circular(isPhone ? 16 : 18),
-                        border: Border.all(color: _C.blue.withOpacity(.18)),
-                      ),
+                        borderRadius: BorderRadius.circular(isPhone ? 10 : 12),
+                                              ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -25637,7 +25847,7 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
                   children: [
                     Text(
                       'Видео ещё не загружено. Для загрузки открой полный модуль.',
-                      style: TextStyle(color: _C.text, fontWeight: FontWeight.w700, height: 1.45, fontSize: isPhone ? 13 : 14),
+                      style: TextStyle(color: _C.text, fontWeight: FontWeight.w600, height: 1.45, fontSize: isPhone ? 13 : 14),
                     ),
                     const SizedBox(height: 12),
                     _PrimaryButton(text: 'Загрузить видео', icon: Icons.cloud_upload_outlined, onTap: _openFullModule, compact: isPhone),
@@ -25653,7 +25863,7 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
           backgroundColor: _C.softOrange,
           child: Text(
             notes.isEmpty ? 'Заметки пока не заполнены.' : notes,
-            style: TextStyle(color: _C.text, fontSize: isPhone ? 13.5 : 15, fontWeight: FontWeight.w700, height: 1.45),
+            style: TextStyle(color: _C.text, fontSize: isPhone ? 13.5 : 15, fontWeight: FontWeight.w600, height: 1.45),
           ),
         ),
         SizedBox(height: isPhone ? 10 : 12),
@@ -25678,26 +25888,29 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
     );
 
     return Container(
-      decoration: _C.cardDecoration.copyWith(borderRadius: BorderRadius.circular(isPhone ? 24 : 28)),
+      color: Colors.white,
       child: insideMobile
-          ? Column(children: [header, const Divider(height: 1, color: _C.border), content])
-          : Column(children: [header, const Divider(height: 1, color: _C.border), Expanded(child: content)]),
+          ? Column(children: [header, const Divider(height: 1, color: _C.softLine), content])
+          : Column(children: [header, const Divider(height: 1, color: _C.softLine), Expanded(child: content)]),
     );
   }
 }
 
 class _C {
-  static const Color primary = Color(0xFF1F8A4C);
-  static const Color primaryDark = Color(0xFF176B3A);
-  static const Color dark = Color(0xFF0F172A);
-  static const Color bg = Color(0xFFF7FAF8);
+  static const Color primary = Color(0xFF00A750);
+  static const Color primaryDark = Color(0xFF067A46);
+  static const Color dark = Color(0xFF0B0F14);
+  static const Color bg = Color(0xFFFFFFFF);
   static const Color card = Colors.white;
-  static const Color soft = Color(0xFFF4F7F5);
-  static const Color softGreen = Color(0xFFEAF5EF);
-  static const Color active = Color(0xFFEFF7F2);
-  static const Color text = Color(0xFF111827);
-  static const Color muted = Color(0xFF667085);
-  static const Color border = Color(0xFFE1E8E4);
+  static const Color soft = Color(0xFFF7F8F7);
+  static const Color softGreen = Color(0xFFF3FAF6);
+  static const Color greenSoft = Color(0xFFF3FAF6);
+  static const Color active = Color(0xFFF3FAF6);
+  static const Color text = Color(0xFF0B0F14);
+  static const Color muted = Color(0xFF5F6670);
+  static const Color dim = Color(0xFF8A9099);
+  static const Color border = Color(0xFFE9ECEA);
+  static const Color softLine = Color(0xFFE9ECEA);
   static const Color red = Color(0xFFDC2626);
   static const Color orange = Color(0xFFF97316);
   static const Color blue = Color(0xFF2563EB);
@@ -25706,25 +25919,17 @@ class _C {
   static const Color softOrange = Color(0xFFFFF7ED);
   static const Color softPurple = Color(0xFFF5F3FF);
 
-  static BoxDecoration get cardDecoration => BoxDecoration(
+  static BoxDecoration get cardDecoration => const BoxDecoration(
         color: card,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(.035),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
       );
 
-  static const TextStyle title = TextStyle(
-    color: text,
-    fontSize: 18,
-    fontWeight: FontWeight.w700,
-    height: 1.15,
-  );
+  static TextStyle get title => AppTypography.custom(
+        size: 14,
+        weight: FontWeight.w600,
+        color: text,
+        height: 1.18,
+        letterSpacing: 0,
+      );
 }
 
 class _LoadingCard extends StatelessWidget {
@@ -25752,7 +25957,7 @@ class _LoadingCard extends StatelessWidget {
                     Text(
                       'Загружаем видеоанализ',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: _C.text, fontSize: isPhone ? 20 : 24, fontWeight: FontWeight.w700),
+                      style: TextStyle(color: _C.text, fontSize: isPhone ? 20 : 24, fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -25788,7 +25993,6 @@ class _IconBox extends StatelessWidget {
       decoration: BoxDecoration(
         color: _C.softGreen,
         borderRadius: BorderRadius.circular(size * .34),
-        border: Border.all(color: _C.border),
       ),
       child: Icon(icon, color: _C.primaryDark, size: iconSize),
     );
@@ -25810,8 +26014,7 @@ class _HeroStat extends StatelessWidget {
       padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 10, vertical: compact ? 8 : 10),
       decoration: BoxDecoration(
         color: _C.soft,
-        borderRadius: BorderRadius.circular(compact ? 16 : 18),
-        border: Border.all(color: _C.border),
+        borderRadius: BorderRadius.circular(compact ? 10 : 12),
       ),
       child: Row(
         children: [
@@ -25822,9 +26025,9 @@ class _HeroStat extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _C.text, fontSize: compact ? 16 : 18, fontWeight: FontWeight.w700)),
+                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _C.text, fontSize: compact ? 16 : 18, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 2),
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _C.muted, fontSize: compact ? 10 : 10.5, fontWeight: FontWeight.w700)),
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _C.muted, fontSize: compact ? 10 : 10.5, fontWeight: FontWeight.w600)),
               ],
             ),
           ),
@@ -25845,23 +26048,22 @@ class _ToolButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      borderRadius: BorderRadius.circular(compact ? 14 : 16),
+      borderRadius: BorderRadius.circular(compact ? 9 : 10),
       onTap: onTap,
       child: Container(
         height: compact ? 40 : 44,
         padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 10),
         decoration: BoxDecoration(
           color: _C.soft,
-          borderRadius: BorderRadius.circular(compact ? 14 : 16),
-          border: Border.all(color: _C.border),
-        ),
+          borderRadius: BorderRadius.circular(compact ? 9 : 10),
+          ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, color: _C.primaryDark, size: compact ? 17 : 18),
             const SizedBox(width: 7),
             Flexible(
-              child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _C.text, fontSize: compact ? 11.5 : 12, fontWeight: FontWeight.w700)),
+              child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _C.text, fontSize: compact ? 11.5 : 12, fontWeight: FontWeight.w600)),
             ),
           ],
         ),
@@ -25881,16 +26083,15 @@ class _HeaderIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final size = compact ? 40.0 : 44.0;
     return InkWell(
-      borderRadius: BorderRadius.circular(compact ? 14 : 16),
+      borderRadius: BorderRadius.circular(compact ? 9 : 10),
       onTap: onTap,
       child: Container(
         width: size,
         height: size,
         decoration: BoxDecoration(
           color: _C.soft,
-          borderRadius: BorderRadius.circular(compact ? 14 : 16),
-          border: Border.all(color: _C.border),
-        ),
+          borderRadius: BorderRadius.circular(compact ? 9 : 10),
+          ),
         child: Icon(icon, color: _C.primaryDark, size: compact ? 20 : 22),
       ),
     );
@@ -25920,35 +26121,83 @@ class _MatchTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final line = [date, 'счёт $score', if (tournament.isNotEmpty) tournament].join(' • ');
+    final line = [
+      date,
+      'счёт $score',
+      if (tournament.isNotEmpty) tournament,
+    ].join('  ·  ');
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(compact ? 18 : 20),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: EdgeInsets.all(compact ? 12 : 14),
-        decoration: BoxDecoration(
-          color: active ? _C.active : _C.soft,
-          borderRadius: BorderRadius.circular(compact ? 18 : 20),
-          border: Border.all(color: active ? _C.primary.withOpacity(.35) : _C.border),
-        ),
-        child: Row(
-          children: [
-            _IconBox(icon: hasVideo ? Icons.play_circle_fill_rounded : Icons.sports_soccer_rounded, size: compact ? 42 : 48, iconSize: compact ? 22 : 25),
-            SizedBox(width: compact ? 10 : 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: _C.title.copyWith(fontSize: compact ? 13.5 : 14.5)),
-                  const SizedBox(height: 5),
-                  Text(line, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _C.muted, fontSize: compact ? 11.2 : 12, fontWeight: FontWeight.w700)),
-                ],
+    return Material(
+      color: active ? _C.greenSoft : Colors.transparent,
+      borderRadius: BorderRadius.circular(9),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(9),
+        onTap: onTap,
+        child: Container(
+          constraints: BoxConstraints(minHeight: compact ? 54 : 58),
+          padding: EdgeInsets.fromLTRB(
+            compact ? 9 : 10,
+            compact ? 7 : 8,
+            compact ? 8 : 9,
+            compact ? 7 : 8,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 5),
+                child: _VideoGlowDot(
+                  color: active ? _C.primary : _C.muted,
+                  size: active ? 6.2 : 4.8,
+                  opacity: active ? 1 : .46,
+                  halo: active,
+                ),
               ),
-            ),
-            Icon(hasVideo ? Icons.videocam_rounded : Icons.videocam_off_rounded, color: active ? _C.primaryDark : _C.muted, size: compact ? 20 : 24),
-          ],
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.custom(
+                        size: compact ? 10.8 : 11.2,
+                        weight: active ? FontWeight.w600 : FontWeight.w500,
+                        color: active ? _C.primaryDark : _C.text,
+                        height: 1.2,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      line,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.custom(
+                        size: compact ? 9.4 : 9.8,
+                        weight: FontWeight.w400,
+                        color: active
+                            ? _C.primaryDark.withOpacity(.68)
+                            : _C.muted,
+                        height: 1.2,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 7),
+              Icon(
+                hasVideo ? Icons.videocam_rounded : Icons.videocam_off_rounded,
+                color: hasVideo
+                    ? (active ? _C.primary : _C.primaryDark.withOpacity(.72))
+                    : _C.dim,
+                size: 16,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -25973,8 +26222,7 @@ class _ThumbBox extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: _C.soft,
-        borderRadius: BorderRadius.circular(compact ? 20 : 24),
-        border: Border.all(color: _C.border),
+        borderRadius: BorderRadius.circular(compact ? 10 : 12),
       ),
       child: hasUrl
           ? Image.network(
@@ -26003,9 +26251,8 @@ class _InfoCard extends StatelessWidget {
         padding: EdgeInsets.all(compact ? 11 : 14),
         decoration: BoxDecoration(
           color: _C.soft,
-          borderRadius: BorderRadius.circular(compact ? 16 : 18),
-          border: Border.all(color: _C.border),
-        ),
+          borderRadius: BorderRadius.circular(compact ? 10 : 12),
+          ),
         child: Row(
           children: [
             Icon(icon, color: _C.primaryDark, size: compact ? 18 : 21),
@@ -26015,9 +26262,9 @@ class _InfoCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _C.muted, fontSize: compact ? 10.5 : 11.5, fontWeight: FontWeight.w700)),
+                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _C.muted, fontSize: compact ? 10.5 : 11.5, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 4),
-                  Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _C.text, fontSize: compact ? 12.5 : 14, fontWeight: FontWeight.w700)),
+                  Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _C.text, fontSize: compact ? 12.5 : 14, fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
@@ -26051,8 +26298,7 @@ class _SectionCard extends StatelessWidget {
       padding: EdgeInsets.all(compact ? 14 : 18),
       decoration: BoxDecoration(
         color: backgroundColor,
-        borderRadius: BorderRadius.circular(compact ? 20 : 24),
-        border: Border.all(color: accentColor.withOpacity(.18)),
+        borderRadius: BorderRadius.circular(compact ? 10 : 12),
         boxShadow: [
           BoxShadow(
             color: accentColor.withOpacity(.045),
@@ -26107,7 +26353,6 @@ class _LightChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: _C.soft,
         borderRadius: BorderRadius.circular(99),
-        border: Border.all(color: _C.border),
       ),
       child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _C.text, fontSize: compact ? 11 : 12, fontWeight: FontWeight.w600)),
     );
@@ -26126,23 +26371,22 @@ class _HeaderButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      borderRadius: BorderRadius.circular(compact ? 14 : 16),
+      borderRadius: BorderRadius.circular(compact ? 9 : 10),
       onTap: onTap,
       child: Container(
         height: compact ? 42.0 : null,
         padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 12, vertical: compact ? 10 : 11),
         decoration: BoxDecoration(
           color: secondary ? _C.soft : _C.primary,
-          borderRadius: BorderRadius.circular(compact ? 14 : 16),
-          border: secondary ? Border.all(color: _C.border) : null,
-        ),
+          borderRadius: BorderRadius.circular(compact ? 9 : 10),
+                  ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, color: secondary ? _C.primaryDark : Colors.white, size: compact ? 17 : 18),
             const SizedBox(width: 7),
             Flexible(
-              child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: secondary ? _C.text : Colors.white, fontSize: compact ? 11.5 : 12.5, fontWeight: FontWeight.w700)),
+              child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: secondary ? _C.text : Colors.white, fontSize: compact ? 11.5 : 12.5, fontWeight: FontWeight.w600)),
             ),
           ],
         ),
@@ -26170,8 +26414,8 @@ class _PrimaryButton extends StatelessWidget {
         foregroundColor: Colors.white,
         elevation: 0,
         minimumSize: Size.fromHeight(compact ? 46.0 : 52.0),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(compact ? 16 : 18)),
-        textStyle: TextStyle(fontWeight: FontWeight.w700, fontSize: compact ? 12.5 : 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(compact ? 10 : 12)),
+        textStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: compact ? 12.5 : 14),
       ),
     );
   }
@@ -26187,16 +26431,17 @@ class _DangerButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton.icon(
+    return FilledButton.icon(
       onPressed: onTap,
-      icon: Icon(icon, size: compact ? 18 : 20),
+      icon: Icon(icon, size: compact ? 17 : 18),
       label: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis),
-      style: OutlinedButton.styleFrom(
+      style: FilledButton.styleFrom(
+        backgroundColor: const Color(0xFFFEF2F2),
         foregroundColor: _C.red,
-        side: const BorderSide(color: Color(0xFFFECACA)),
-        minimumSize: Size(compact ? double.infinity : 158.0, compact ? 46.0 : 52.0),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(compact ? 16 : 18)),
-        textStyle: TextStyle(fontWeight: FontWeight.w700, fontSize: compact ? 12.5 : 14),
+        elevation: 0,
+        minimumSize: Size(compact ? double.infinity : 148.0, compact ? 42.0 : 44.0),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        textStyle: TextStyle(fontWeight: FontWeight.w500, fontSize: compact ? 11.5 : 12.2),
       ),
     );
   }
@@ -26214,22 +26459,21 @@ class _ActionPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bg = danger ? const Color(0xFFFFF1F2) : _C.soft;
-    final border = danger ? const Color(0xFFFECACA) : _C.border;
     final color = danger ? _C.red : _C.text;
     final iconColor = danger ? _C.red : _C.primaryDark;
 
     return InkWell(
-      borderRadius: BorderRadius.circular(compact ? 14 : 16),
+      borderRadius: BorderRadius.circular(compact ? 9 : 10),
       onTap: onTap,
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 13, vertical: compact ? 9 : 10),
-        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(compact ? 14 : 16), border: Border.all(color: border)),
+        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(compact ? 9 : 10)),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, color: iconColor, size: compact ? 17 : 18),
             const SizedBox(width: 7),
-            Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: compact ? 12 : 13)),
+            Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: compact ? 12 : 13)),
           ],
         ),
       ),
@@ -26247,7 +26491,7 @@ class _MiniEmpty extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Text(text, textAlign: TextAlign.center, style: const TextStyle(color: _C.muted, fontWeight: FontWeight.w700, height: 1.4)),
+        child: Text(text, textAlign: TextAlign.center, style: const TextStyle(color: _C.muted, fontWeight: FontWeight.w600, height: 1.4)),
       ),
     );
   }
@@ -26266,7 +26510,7 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: _C.cardDecoration.copyWith(borderRadius: BorderRadius.circular(isPhone ? 24 : 28)),
+      color: Colors.white,
       child: Center(
         child: Container(
           constraints: const BoxConstraints(maxWidth: 520),
@@ -26536,17 +26780,17 @@ class _ReviewMacWindowDot extends StatelessWidget {
 class ReviewUiPalette {
   // CMR / Club Roster стиль: светлая рабочая область, белые панели,
   // графитовая типографика и точечный зелёный акцент Sportoteka.
-  static const bg = Color(0xFFF5F6F7);
+  static const bg = Color(0xFFFFFFFF);
   static const panel = Colors.white;
-  static const panelSoft = Color(0xFFF8F9FA);
-  static const panelSoft2 = Color(0xFFF1F3F5);
-  static const line = Color(0xFFE5E7EB);
+  static const panelSoft = Color(0xFFF7F8F7);
+  static const panelSoft2 = Color(0xFFF2F4F2);
+  static const line = Color(0xFFE9ECEA);
   static const border = Color(0xFFD7F0E2);
 
   static const text = Color(0xFF0B0F14);
   static const text2 = Color(0xFF182230);
   static const textMuted = Color(0xFF374151);
-  static const textSubtle = Color(0xFF6B7280);
+  static const textSubtle = Color(0xFF8A9099);
 
   static const graphite = Color(0xFF111827);
   static const graphiteSoft = Color(0xFF1F2937);
@@ -26555,7 +26799,7 @@ class ReviewUiPalette {
   static const primary2 = Color(0xFF067A46);
   static const green = Color(0xFF00A750);
   static const greenDark = Color(0xFF067A46);
-  static const greenSoft = Color(0xFFF3FBF7);
+  static const greenSoft = Color(0xFFF3FAF6);
   static const greenSoft2 = Color(0xFFF8FEFA);
 
   static const blue = Color(0xFF2563EB);
@@ -38221,28 +38465,45 @@ if (_showAiPanelInline) ...[
       return _buildVideoCanvas();
     }
 
+    Widget withTypography(Widget child) => DefaultTextStyle(
+          style: AppTypography.custom(
+            size: 12,
+            weight: FontWeight.w400,
+            color: ReviewUiPalette.text,
+            height: 1.24,
+            letterSpacing: 0,
+          ),
+          child: child,
+        );
+
     if (_loading) {
       final body = loadingBody();
-      if (widget.embedded) return body;
+      if (widget.embedded) return withTypography(body);
 
-      return const Scaffold(
-        backgroundColor: Color(0xFFF4F7FA),
-        body: Center(
-          child: CircularProgressIndicator(),
+      return withTypography(
+        const Scaffold(
+          backgroundColor: Colors.white,
+          body: Center(
+            child: CircularProgressIndicator(),
+          ),
         ),
       );
     }
 
     if (widget.embedded) {
-      return Container(
-        color: Colors.white,
-        child: reviewBody(),
+      return withTypography(
+        Container(
+          color: Colors.white,
+          child: reviewBody(),
+        ),
       );
     }
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: isLandscape ? reviewBody() : _buildFallbackPortrait(),
+    return withTypography(
+      Scaffold(
+        backgroundColor: Colors.white,
+        body: isLandscape ? reviewBody() : _buildFallbackPortrait(),
+      ),
     );
   }
 }
@@ -38299,4 +38560,3 @@ class MatchPlayersService {
     throw Exception(data['message'] ?? 'Ошибка загрузки состава матча');
   }
 }
-

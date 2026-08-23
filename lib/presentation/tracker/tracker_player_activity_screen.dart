@@ -315,7 +315,7 @@ class _TrackerPlayerActivityScreenState extends State<TrackerPlayerActivityScree
     if (filtered.length >= 2) {
       return List<_SpeedPoint>.generate(
         filtered.length,
-        (i) => _SpeedPoint(i.toDouble(), filtered[i].maxSpeedKmh.clamp(0, 44).toDouble()),
+        (i) => _SpeedPoint(i.toDouble(), filtered[i].maxSpeedKmh.clamp(0, 36).toDouble()),
       );
     }
 
@@ -327,7 +327,7 @@ class _TrackerPlayerActivityScreenState extends State<TrackerPlayerActivityScree
       final wave = math.sin(i * .72).abs() * 1.4;
       final spikeEvery = math.max(6, count ~/ math.max(1, stats.sprintCount == 0 ? 2 : stats.sprintCount));
       final spike = (stats.sprintCount > 0 && i % spikeEvery == 0) ? max * .54 : 0.0;
-      final value = (avg * .78 + wave + spike).clamp(0.0, max.clamp(4.0, 44.0).toDouble());
+      final value = (avg * .78 + wave + spike).clamp(0.0, max.clamp(4.0, 36.0).toDouble());
       return _SpeedPoint(t, value);
     });
   }
@@ -345,7 +345,7 @@ class _TrackerPlayerActivityScreenState extends State<TrackerPlayerActivityScree
       final d = _gpsDistanceMeters(a.latitude, a.longitude, b.latitude, b.longitude);
       if (d <= 0 || d > 80) continue;
       final speed = (d / (dtMs / 1000.0)) * 3.6;
-      if (!speed.isFinite || speed > 44) continue;
+      if (!speed.isFinite || d <= 0.35 || speed < 1.5 || speed > 36) continue;
       distance += d;
       maxSpeed = math.max(maxSpeed, speed);
       if (speed >= 14.0) hir += d;
@@ -393,7 +393,7 @@ class _TrackerPlayerActivityScreenState extends State<TrackerPlayerActivityScree
       final d = _gpsDistanceMeters(a.latitude, a.longitude, b.latitude, b.longitude);
       if (d <= 0 || d > 80) continue;
       final speed = (d / (dtMs / 1000.0)) * 3.6;
-      if (speed.isFinite && speed <= 44) out.add(_SpeedPoint(out.length.toDouble(), speed));
+      if (speed.isFinite && d > 0.35 && speed >= 1.5 && speed <= 36) out.add(_SpeedPoint(out.length.toDouble(), speed));
     }
     return out;
   }
@@ -508,7 +508,7 @@ class _RadarAxis {
 }
 
 class _AA {
-  static const bg = Color(0xFFFFFFFF);
+  static const bg = Color(0xFFF6F8F7);
   static const card = Color(0xFFFFFFFF);
   static const card2 = Color(0xFFFFFFFF);
   static const border = Color(0xFFE9ECEA);

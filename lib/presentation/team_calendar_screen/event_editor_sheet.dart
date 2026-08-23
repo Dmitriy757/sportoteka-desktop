@@ -25,11 +25,11 @@ Future<TeamEvent?> showEventEditorWindow(
 
   void close([TeamEvent? result]) {
     if (!completer.isCompleted) completer.complete(result);
-    entry.remove();
+    if (entry.mounted) entry.remove();
   }
 
   entry = OverlayEntry(
-    builder: (_) => _EventEditorFloatingWindow(
+    builder: (_) => _EventEditorRightPane(
       primary: primary,
       teamId: teamId,
       clubId: clubId,
@@ -43,6 +43,213 @@ Future<TeamEvent?> showEventEditorWindow(
 
   overlay.insert(entry);
   return completer.future;
+}
+
+/// Fallback для старых экранов календаря.
+///
+/// Даже если старый код всё ещё вызывает `showEventEditorWindow`, редактор
+/// больше не превращается в модальное плавающее окно. Он пристыковывается
+/// справа, не затемняет календарь и использует тот же визуальный язык CMR.
+class _EventEditorRightPane extends StatelessWidget {
+  final Color primary;
+  final int teamId;
+  final int clubId;
+  final int createdBy;
+  final DateTime initialDateTime;
+  final TeamEvent? initial;
+  final Function(TeamEvent)? onEventAdded;
+  final ValueChanged<TeamEvent?> onClose;
+
+  const _EventEditorRightPane({
+    required this.primary,
+    required this.teamId,
+    required this.clubId,
+    required this.createdBy,
+    required this.initialDateTime,
+    required this.initial,
+    required this.onEventAdded,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final width = math.min(520.0, math.max(320.0, media.size.width - 16)).toDouble();
+    final title = initial == null ? 'Добавить событие' : 'Редактировать событие';
+    final subtitle = initial == null
+        ? 'Создайте событие календаря'
+        : 'Измените данные события и сохраните обновления';
+
+    return Material(
+      color: Colors.transparent,
+      child: Stack(
+        children: [
+          Positioned(
+            top: media.padding.top + 8,
+            right: 8,
+            bottom: media.padding.bottom + 8,
+            width: width,
+            child: Container(
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(.10),
+                    blurRadius: 34,
+                    spreadRadius: -18,
+                    offset: const Offset(0, 16),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    height: 58,
+                    padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
+                    color: Colors.white,
+                    child: Row(
+                      children: [
+                        _EditorBrandDots(color: primary),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.custom(
+                                  size: 13.4,
+                                  weight: FontWeight.w600,
+                                  color: const Color(0xFF0B0F14),
+                                  height: 1.05,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                subtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.custom(
+                                  size: 10.2,
+                                  weight: FontWeight.w400,
+                                  color: const Color(0xFF667085),
+                                  height: 1.05,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Material(
+                          color: const Color(0xFFF7F8F7),
+                          borderRadius: BorderRadius.circular(9),
+                          child: InkWell(
+                            onTap: () => onClose(null),
+                            borderRadius: BorderRadius.circular(9),
+                            child: const SizedBox(
+                              width: 32,
+                              height: 32,
+                              child: Icon(
+                                Icons.close_rounded,
+                                size: 16,
+                                color: Color(0xFF667085),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: EventEditorSheet(
+                      primary: primary,
+                      teamId: teamId,
+                      clubId: clubId,
+                      createdBy: createdBy,
+                      initialDateTime: initialDateTime,
+                      initial: initial,
+                      onEventAdded: onEventAdded,
+                      onSubmit: (event) => onClose(event),
+                      onCancel: () => onClose(null),
+                      embedded: true,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EditorBrandDot extends StatelessWidget {
+  final double size;
+  final double opacity;
+  final Color color;
+  final bool glow;
+
+  const _EditorBrandDot({
+    required this.size,
+    required this.opacity,
+    required this.color,
+    this.glow = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: opacity,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          boxShadow: glow
+              ? [
+                  BoxShadow(
+                    color: color.withOpacity(.18),
+                    blurRadius: size * 1.9,
+                    spreadRadius: .25,
+                  ),
+                  BoxShadow(
+                    color: color.withOpacity(.08),
+                    blurRadius: size * 3.2,
+                    spreadRadius: .6,
+                  ),
+                ]
+              : null,
+        ),
+      ),
+    );
+  }
+}
+
+class _EditorBrandDots extends StatelessWidget {
+  final Color color;
+  const _EditorBrandDots({this.color = const Color(0xFF00A750)});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _EditorBrandDot(size: 3.5, opacity: .22, color: color),
+        const SizedBox(width: 3),
+        _EditorBrandDot(size: 4.5, opacity: .42, color: color),
+        const SizedBox(width: 3),
+        _EditorBrandDot(size: 5.5, opacity: .68, color: color),
+        const SizedBox(width: 3),
+        _EditorBrandDot(size: 6.5, opacity: 1, color: color, glow: true),
+      ],
+    );
+  }
 }
 
 class EventEditorSheet extends StatefulWidget {
@@ -486,7 +693,7 @@ class _EventEditorSheetState extends State<EventEditorSheet> {
                   child: Text(
                     widget.initial == null ? "Добавить событие" : "Редактировать",
                     style: const TextStyle(
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                       fontSize: 18,
                       color: Color(0xFF111827),
                     ),
@@ -732,15 +939,10 @@ class _EventEditorSheetState extends State<EventEditorSheet> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
           decoration: BoxDecoration(
-            color: active ? Color.alphaBlend(c.withOpacity(.08), Colors.white) : Colors.white,
-            borderRadius: BorderRadius.circular(11),
-            border: Border.all(
-              color: active ? c.withOpacity(.30) : const Color(0xFFE9ECEA),
-              width: active ? 1 : .8,
-            ),
-            boxShadow: active
-                ? [BoxShadow(color: c.withOpacity(.06), blurRadius: 12, offset: const Offset(0, 5))]
-                : null,
+            color: active
+                ? Color.alphaBlend(c.withOpacity(.085), Colors.white)
+                : const Color(0xFFF7F8F7),
+            borderRadius: BorderRadius.circular(9),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -761,7 +963,7 @@ class _EventEditorSheetState extends State<EventEditorSheet> {
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.left,
                   style: const TextStyle(
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     fontSize: 10.4,
                     height: 1.15,
                   ),
@@ -778,9 +980,8 @@ class _EventEditorSheetState extends State<EventEditorSheet> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8F9F8),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE9ECEA), width: .8),
+        color: const Color(0xFFF7F8F7),
+        borderRadius: BorderRadius.circular(9),
       ),
       child: child,
     );
@@ -795,40 +996,49 @@ class _EventEditorSheetState extends State<EventEditorSheet> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE9ECEA), width: .8),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(.018),
-            blurRadius: 14,
-            spreadRadius: -10,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        color: const Color(0xFFF7F8F7),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              const _EditorBrandDots(),
+              const SizedBox(width: 9),
               Container(
-                width: 32,
-                height: 32,
+                width: 28,
+                height: 28,
                 decoration: BoxDecoration(
                   color: const Color(0xFFF3FAF6),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(icon, size: 15, color: const Color(0xFF067A46)),
+                child: Icon(icon, size: 14, color: const Color(0xFF067A46)),
               ),
-              const SizedBox(width: 9),
+              const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: const TextStyle(fontSize: 12.6, fontWeight: FontWeight.w700, color: Color(0xFF0B0F14))),
+                    Text(
+                      title,
+                      style: AppTypography.custom(
+                        size: 11.9,
+                        weight: FontWeight.w600,
+                        color: const Color(0xFF0B0F14),
+                        height: 1.05,
+                      ),
+                    ),
                     const SizedBox(height: 2),
-                    Text(subtitle, style: const TextStyle(fontSize: 10.3, fontWeight: FontWeight.w500, color: Color(0xFF6B7280))),
+                    Text(
+                      subtitle,
+                      style: AppTypography.custom(
+                        size: 9.9,
+                        weight: FontWeight.w400,
+                        color: const Color(0xFF667085),
+                        height: 1.1,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -854,7 +1064,7 @@ class _EventEditorSheetState extends State<EventEditorSheet> {
             color: const Color(0xFFF3FAF6),
             borderRadius: BorderRadius.circular(9),
           ),
-          child: Text(text, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF067A46))),
+          child: Text(text, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: Color(0xFF067A46))),
         ),
       ),
     );
@@ -890,7 +1100,7 @@ class _EventEditorSheetState extends State<EventEditorSheet> {
                       style: const TextStyle(
                         fontSize: 10.2,
                         color: Color(0xFF6B7280),
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -898,7 +1108,7 @@ class _EventEditorSheetState extends State<EventEditorSheet> {
                       value,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11.4),
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11.4),
                     ),
                   ],
                 ),
@@ -1165,8 +1375,7 @@ class _SportotekaDatePickerWindowState extends State<_SportotekaDatePickerWindow
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: const Color(0xFFE6EAEE), width: 1),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(.10), blurRadius: 30, spreadRadius: -16, offset: const Offset(0, 18))],
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(.10), blurRadius: 30, spreadRadius: -16, offset: const Offset(0, 18))],
             ),
             clipBehavior: Clip.antiAlias,
             child: Column(
@@ -1182,7 +1391,7 @@ class _SportotekaDatePickerWindowState extends State<_SportotekaDatePickerWindow
                       const SizedBox(width: 8),
                       Container(width: 30, height: 30, decoration: BoxDecoration(color: Color.alphaBlend(widget.primary.withOpacity(.10), Colors.white), borderRadius: BorderRadius.circular(12), border: Border.all(color: widget.primary.withOpacity(.18))), child: Icon(Icons.calendar_today_rounded, color: widget.primary, size: 16)),
                       const SizedBox(width: 8),
-                      Expanded(child: Text(widget.title, style: const TextStyle(color: Color(0xFF111827), fontSize: 12.4, fontWeight: FontWeight.w800, height: 1.05))),
+                      Expanded(child: Text(widget.title, style: const TextStyle(color: Color(0xFF111827), fontSize: 12.4, fontWeight: FontWeight.w600, height: 1.05))),
                     ],
                   ),
                 ),
@@ -1194,7 +1403,7 @@ class _SportotekaDatePickerWindowState extends State<_SportotekaDatePickerWindow
                       const SizedBox(width: 8),
                       Expanded(
                         child: Center(
-                          child: Text('${_months[_visibleMonth.month - 1]} ${_visibleMonth.year}', style: const TextStyle(fontSize: 12.8, fontWeight: FontWeight.w800, color: Color(0xFF111827), letterSpacing: -.1)),
+                          child: Text('${_months[_visibleMonth.month - 1]} ${_visibleMonth.year}', style: const TextStyle(fontSize: 12.8, fontWeight: FontWeight.w600, color: Color(0xFF111827), letterSpacing: -.1)),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -1205,7 +1414,7 @@ class _SportotekaDatePickerWindowState extends State<_SportotekaDatePickerWindow
                 Padding(
                   padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
                   child: Row(
-                    children: _week.map((w) => Expanded(child: Center(child: Text(w, style: const TextStyle(fontSize: 9.8, fontWeight: FontWeight.w800, color: Color(0xFF8A94A3)))))).toList(),
+                    children: _week.map((w) => Expanded(child: Center(child: Text(w, style: const TextStyle(fontSize: 9.8, fontWeight: FontWeight.w600, color: Color(0xFF8A94A3)))))).toList(),
                   ),
                 ),
                 Padding(
@@ -1239,7 +1448,7 @@ class _SportotekaDatePickerWindowState extends State<_SportotekaDatePickerWindow
                             border: Border.all(color: selected ? widget.primary : (today ? widget.primary.withOpacity(.20) : const Color(0xFFE9EDF2)), width: 1),
                           ),
                           alignment: Alignment.center,
-                          child: Text('${d.day}', style: TextStyle(fontSize: 10.8, fontWeight: FontWeight.w800, color: fg, height: 1)),
+                          child: Text('${d.day}', style: TextStyle(fontSize: 10.8, fontWeight: FontWeight.w600, color: fg, height: 1)),
                         ),
                       );
                     },
@@ -1299,7 +1508,6 @@ class _CmrWindowFrame extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: radius,
-          border: Border.all(color: const Color(0xFFE6EAEE), width: 1),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(.10),
@@ -1354,7 +1562,7 @@ class _CmrWindowFrame extends StatelessWidget {
                             style: const TextStyle(
                               fontSize: 12.8,
                               height: 1.05,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w600,
                               color: Color(0xFF111827),
                               letterSpacing: -.15,
                             ),
@@ -1426,14 +1634,13 @@ class _CmrMinimizedPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE6EAEE)),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(.10), blurRadius: 24, spreadRadius: -14, offset: const Offset(0, 14))],
       ),
       child: Row(
         children: [
-          Container(width: 36, height: 36, decoration: BoxDecoration(color: const Color(0xFFF3F5F7), borderRadius: BorderRadius.circular(14)), child: Icon(icon, color: const Color(0xFF0E9F5B), size: 18)),
+          Container(width: 36, height: 36, decoration: BoxDecoration(color: const Color(0xFFF3F5F7), borderRadius: BorderRadius.circular(14)), child: Icon(icon, color: const Color(0xFF00A750), size: 18)),
           const SizedBox(width: 8),
-          Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.0, fontWeight: FontWeight.w800, color: Color(0xFF111827)))),
+          Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.0, fontWeight: FontWeight.w600, color: Color(0xFF111827)))),
           _RoundWindowButton(icon: Icons.open_in_full_rounded, onTap: onRestore),
           const SizedBox(width: 6),
           _RoundWindowButton(icon: Icons.close_rounded, onTap: onClose),
@@ -1630,7 +1837,6 @@ class _SportotekaTimePickerWindowState extends State<_SportotekaTimePickerWindow
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(.14),
@@ -1750,7 +1956,7 @@ class _CompactTimeHeader extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 12.2,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: Color(0xFF111827),
                     height: 1.05,
                   ),
@@ -1762,7 +1968,7 @@ class _CompactTimeHeader extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 9.8,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: Color(0xFF6B7280),
                     height: 1.05,
                   ),
@@ -1781,7 +1987,7 @@ class _CompactTimeHeader extends StatelessWidget {
               value,
               style: TextStyle(
                 fontSize: 11.5,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w600,
                 color: primary,
               ),
             ),
@@ -1811,7 +2017,6 @@ class _CompactRoundButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: const Color(0xFFF3F4F6),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFE5E7EB)),
           ),
           child: Icon(icon, size: 17, color: const Color(0xFF6B7280)),
         ),
@@ -1830,7 +2035,7 @@ class _CompactTimeLabel extends StatelessWidget {
       text,
       style: const TextStyle(
         fontSize: 10.2,
-        fontWeight: FontWeight.w900,
+        fontWeight: FontWeight.w600,
         color: Color(0xFF111827),
       ),
     );
@@ -1915,7 +2120,7 @@ class _CompactTimeCell extends StatelessWidget {
               text,
               style: TextStyle(
                 fontSize: 11.4,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w600,
                 color: active ? primary : const Color(0xFF111827),
               ),
             ),
@@ -1958,7 +2163,7 @@ class _CompactTimeAction extends StatelessWidget {
               text,
               style: TextStyle(
                 fontSize: 11.2,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w600,
                 color: filled ? Colors.white : const Color(0xFF111827),
               ),
             ),
@@ -1988,27 +2193,19 @@ class _PrimarySportButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: Ink(
-          height: 46,
+          height: 38,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            gradient: LinearGradient(
-              colors: [primary, primary.withOpacity(0.85)],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: primary.withOpacity(0.28),
-                blurRadius: 16,
-                offset: const Offset(0, 8),
-              ),
-            ],
+            color: Color.alphaBlend(primary.withOpacity(.10), Colors.white),
+            borderRadius: BorderRadius.circular(9),
           ),
           child: Center(
             child: Text(
               text,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: 14,
+              style: AppTypography.custom(
+                size: 11.4,
+                weight: FontWeight.w600,
+                color: const Color(0xFF067A46),
+                height: 1,
               ),
             ),
           ),
@@ -2037,18 +2234,17 @@ class _OutlineSportButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: Ink(
-          height: 46,
+          height: 38,
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: primary.withOpacity(0.35)),
+            color: const Color(0xFFF7F8F7),
+            borderRadius: BorderRadius.circular(9),
           ),
           child: Center(
             child: Text(
               text,
               style: const TextStyle(
                 color: Color(0xFF111827),
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w600,
                 fontSize: 14,
               ),
             ),

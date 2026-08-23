@@ -119,10 +119,10 @@ class _AD {
   static const card2 = Color(0xFFFFFFFF);
   static const border = Color(0xFFE9ECEA);
   static const grid = Color(0xFFDDE2DF);
-  static const text = Color(0xFF111512);
+  static const text = Color(0xFF171B18);
   static const muted = Color(0xFF4F5B54);
   static const dim = Color(0xFF737B76);
-  static const green = Color(0xFF00A750);
+  static const green = Color(0xFF12B85A);
   static const yellow = Color(0xFFB7791F);
   static const orange = Color(0xFFB7791F);
   static const red = Color(0xFFD92D20);

@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
-import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
@@ -228,12 +228,12 @@ class _TeamAttendanceJournalScreenState
 
   IconData statusIcon(String s) {
     switch (s) {
-      case "absent": return PhosphorIcons.xCircle(PhosphorIconsStyle.bold);
-      case "late": return PhosphorIcons.clock(PhosphorIconsStyle.bold);
-      case "injured": return PhosphorIcons.firstAid(PhosphorIconsStyle.bold);
-      case "individual": return PhosphorIcons.barbell(PhosphorIconsStyle.bold);
-      case "dayoff": return PhosphorIcons.sun(PhosphorIconsStyle.bold);
-      default: return PhosphorIcons.checkCircle(PhosphorIconsStyle.bold);
+      case "absent": return PhosphorIcons.xCircle;
+      case "late": return PhosphorIcons.clock;
+      case "injured": return PhosphorIcons.firstAid;
+      case "individual": return PhosphorIcons.barbell;
+      case "dayoff": return PhosphorIcons.sun;
+      default: return PhosphorIcons.checkCircle;
     }
   }
 
@@ -491,7 +491,7 @@ class _TeamAttendanceJournalScreenState
               });
               _loadAll();
             },
-            icon: Icon(PhosphorIcons.caretLeft(PhosphorIconsStyle.bold)),
+            icon: Icon(PhosphorIcons.caretLeft),
           ),
           Expanded(
             child: Column(
@@ -525,7 +525,7 @@ class _TeamAttendanceJournalScreenState
               });
               _loadAll();
             },
-            icon: Icon(PhosphorIcons.caretRight(PhosphorIconsStyle.bold)),
+            icon: Icon(PhosphorIcons.caretRight),
           ),
         ],
       ),
@@ -564,7 +564,7 @@ class _TeamAttendanceJournalScreenState
                   value: null,
                   child: Row(
                     children: [
-                      Icon(PhosphorIcons.calendarBlank(PhosphorIconsStyle.bold),
+                      Icon(PhosphorIcons.calendarBlank,
                           size: 20, color: const Color(0xFF6B7280)),
                       const SizedBox(width: 8),
                       const Text("Все мероприятия месяца"),
@@ -637,25 +637,25 @@ class _TeamAttendanceJournalScreenState
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _buildStatPill(
-                icon: PhosphorIcons.checkCircle(PhosphorIconsStyle.bold),
+                icon: PhosphorIcons.checkCircle,
                 count: stats["present"] ?? 0,
                 color: const Color(0xFF22C55E),
                 label: "Присут.",
               ),
               _buildStatPill(
-                icon: PhosphorIcons.xCircle(PhosphorIconsStyle.bold),
+                icon: PhosphorIcons.xCircle,
                 count: stats["absent"] ?? 0,
                 color: const Color(0xFFEF4444),
                 label: "Отсут.",
               ),
               _buildStatPill(
-                icon: PhosphorIcons.clock(PhosphorIconsStyle.bold),
+                icon: PhosphorIcons.clock,
                 count: stats["late"] ?? 0,
                 color: const Color(0xFFF59E0B),
                 label: "Болел",
               ),
               _buildStatPill(
-                icon: PhosphorIcons.firstAid(PhosphorIconsStyle.bold),
+                icon: PhosphorIcons.firstAid,
                 count: stats["injured"] ?? 0,
                 color: const Color(0xFF8B5CF6),
                 label: "Травма",
@@ -667,19 +667,19 @@ class _TeamAttendanceJournalScreenState
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _buildStatPill(
-                icon: PhosphorIcons.barbell(PhosphorIconsStyle.bold),
+                icon: PhosphorIcons.barbell,
                 count: stats["individual"] ?? 0,
                 color: const Color(0xFF0EA5E9),
                 label: "ИП",
               ),
               _buildStatPill(
-                icon: PhosphorIcons.sun(PhosphorIconsStyle.bold),
+                icon: PhosphorIcons.sun,
                 count: stats["dayoff"] ?? 0,
                 color: const Color(0xFF9CA3AF),
                 label: "Выходн.",
               ),
               _buildStatPill(
-                icon: PhosphorIcons.users(PhosphorIconsStyle.bold),
+                icon: PhosphorIcons.users,
                 count: stats["total"] ?? 0,
                 color: const Color(0xFF111827),
                 label: "Всего",
@@ -771,7 +771,7 @@ class _TeamAttendanceJournalScreenState
               decoration: InputDecoration(
                 border: InputBorder.none,
                 hintText: "Поиск игрока...",
-                prefixIcon: Icon(PhosphorIcons.magnifyingGlass(PhosphorIconsStyle.bold)),
+                prefixIcon: Icon(PhosphorIcons.magnifyingGlass),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               ),
             ),
@@ -807,7 +807,7 @@ class _TeamAttendanceJournalScreenState
                 ],
               ),
               child: Icon(
-                PhosphorIcons.funnel(PhosphorIconsStyle.bold),
+                PhosphorIcons.funnel,
                 color: Theme.of(context).colorScheme.primary,
               ),
             ),
@@ -1002,42 +1002,42 @@ class _TeamAttendanceJournalScreenState
                 _buildStatusButton(
                   active: status == "present",
                   color: const Color(0xFF22C55E),
-                  icon: PhosphorIcons.checkCircle(PhosphorIconsStyle.bold),
+                  icon: PhosphorIcons.checkCircle,
                   label: "Присутствует",
                   onTap: () => _setStatus(playerId, "present"),
                 ),
                 _buildStatusButton(
                   active: status == "absent",
                   color: const Color(0xFFEF4444),
-                  icon: PhosphorIcons.xCircle(PhosphorIconsStyle.bold),
+                  icon: PhosphorIcons.xCircle,
                   label: "Отсутствует",
                   onTap: () => _setStatus(playerId, "absent"),
                 ),
                 _buildStatusButton(
                   active: status == "late",
                   color: const Color(0xFFF59E0B),
-                  icon: PhosphorIcons.clock(PhosphorIconsStyle.bold),
+                  icon: PhosphorIcons.clock,
                   label: "Опоздал",
                   onTap: () => _setStatus(playerId, "late"),
                 ),
                 _buildStatusButton(
                   active: status == "injured",
                   color: const Color(0xFF8B5CF6),
-                  icon: PhosphorIcons.firstAid(PhosphorIconsStyle.bold),
+                  icon: PhosphorIcons.firstAid,
                   label: "Травма",
                   onTap: () => _setStatus(playerId, "injured"),
                 ),
                 _buildStatusButton(
                   active: status == "individual",
                   color: const Color(0xFF0EA5E9),
-                  icon: PhosphorIcons.barbell(PhosphorIconsStyle.bold),
+                  icon: PhosphorIcons.barbell,
                   label: "ИП",
                   onTap: () => _setStatus(playerId, "individual"),
                 ),
                 _buildStatusButton(
                   active: status == "dayoff",
                   color: const Color(0xFF9CA3AF),
-                  icon: PhosphorIcons.sun(PhosphorIconsStyle.bold),
+                  icon: PhosphorIcons.sun,
                   label: "Выходной",
                   onTap: () => _setStatus(playerId, "dayoff"),
                 ),
@@ -1128,12 +1128,12 @@ class _TeamAttendanceJournalScreenState
             ),
           IconButton(
             onPressed: _loadAll,
-            icon: Icon(PhosphorIcons.arrowClockwise(PhosphorIconsStyle.bold)),
+            icon: Icon(PhosphorIcons.arrowClockwise),
             tooltip: "Обновить",
           ),
           IconButton(
             onPressed: _exportCsv,
-            icon: Icon(PhosphorIcons.fileCsv(PhosphorIconsStyle.bold)),
+            icon: Icon(PhosphorIcons.fileCsv),
             tooltip: "Экспорт CSV",
           ),
         ],
@@ -1148,7 +1148,7 @@ class _TeamAttendanceJournalScreenState
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
-                          PhosphorIcons.warningCircle(PhosphorIconsStyle.bold),
+                          PhosphorIcons.warningCircle,
                           size: 64,
                           color: const Color(0xFFEF4444),
                         ),
@@ -1194,7 +1194,7 @@ class _TeamAttendanceJournalScreenState
                           child: Row(
                             children: [
                               Icon(
-                                PhosphorIcons.info(PhosphorIconsStyle.bold),
+                                PhosphorIcons.info,
                                 color: const Color(0xFFF59E0B),
                               ),
                               const SizedBox(width: 12),
@@ -1231,7 +1231,7 @@ class _TeamAttendanceJournalScreenState
                               child: Column(
                                 children: [
                                   Icon(
-                                    PhosphorIcons.users(PhosphorIconsStyle.bold),
+                                    PhosphorIcons.users,
                                     size: 64,
                                     color: const Color(0xFFD1D5DB),
                                   ),

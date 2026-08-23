@@ -308,14 +308,68 @@ class ActionTrackerProtocolParser {
 
 
   ActionTrackerGpsChunk _parseCurrentGps3B(List<int> bytes) {
-    // На разных прошивках после 3B может идти service/flag byte, поэтому
-    // координаты не всегда начинаются строго с offset=2. Пробуем несколько
-    // безопасных вариантов и несколько масштабов, чтобы не терять реальный RX.
-    final point = _tryParseLivePoint(bytes, preferredOffsets: const [2, 3, 1, 4]);
+    // Подтверждённый формат текущих ATP-трекеров:
+    // 3B 01 [lat i32 LE] [lon i32 LE] [time-of-day ms u32 LE].
+    // Раньше Live ставил DateTime.now() при получении notify. При двух BLE RX в
+    // одну миллисекунду dt становился почти нулевым и 2–8 м превращались в
+    // тысячи км/ч. Сначала всегда используем время самого трекера.
+    final strict = _tryParseCurrentGps3BStrict(bytes);
+    final point = strict ??
+        _tryParseLivePoint(bytes, preferredOffsets: const [2, 3, 1, 4]);
     return ActionTrackerGpsChunk(
       packetType: bytes.first,
       points: point == null ? const [] : [point],
     );
+  }
+
+  ActionTrackerGpsPoint? _tryParseCurrentGps3BStrict(List<int> bytes) {
+    if (bytes.length < 14) return null;
+    final rawLat = _i32(bytes, 2);
+    final rawLon = _i32(bytes, 6);
+    if (rawLat == 0 || rawLon == 0) return null;
+
+    final lat = rawLat / 6000000.0;
+    final lon = rawLon / 6000000.0;
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+
+    final deviceTimeOfDayMs = _u32(bytes, 10);
+    return ActionTrackerGpsPoint(
+      timeMs: _deviceTimeOfDayToEpochMs(deviceTimeOfDayMs),
+      latitude: lat,
+      longitude: lon,
+    );
+  }
+
+  int _deviceTimeOfDayToEpochMs(int deviceTimeOfDayMs) {
+    // ATP передаёт time-of-day в UTC. Если прибавить его к локальной полуночи
+    // (Europe/Tallinn = UTC+3 летом), абсолютный timestamp уедет на -3 часа.
+    // Для replay/offline merge нужен настоящий epoch, поэтому базовая
+    // полночь тоже должна быть UTC.
+    final now = DateTime.now();
+    final nowUtc = now.toUtc();
+    if (deviceTimeOfDayMs <= 0 || deviceTimeOfDayMs >= 86400000) {
+      return now.millisecondsSinceEpoch;
+    }
+
+    final startOfTodayUtc = DateTime.utc(
+      nowUtc.year,
+      nowUtc.month,
+      nowUtc.day,
+    );
+    var candidate =
+        startOfTodayUtc.millisecondsSinceEpoch + deviceTimeOfDayMs;
+    final nowMs = now.millisecondsSinceEpoch;
+    const halfDayMs = 12 * 60 * 60 * 1000;
+    const dayMs = 24 * 60 * 60 * 1000;
+
+    // Корректно переживаем полночь: пакет около 23:59, принятый сразу после
+    // 00:00, относится ко вчерашнему дню, и наоборот.
+    if (candidate - nowMs > halfDayMs) {
+      candidate -= dayMs;
+    } else if (nowMs - candidate > halfDayMs) {
+      candidate += dayMs;
+    }
+    return candidate;
   }
 
 

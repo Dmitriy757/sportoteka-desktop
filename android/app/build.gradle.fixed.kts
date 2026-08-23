@@ -74,7 +74,6 @@ android {
 }
 
 dependencies {
-    implementation(project(":unityLibrary"))
 
     // Play Services
     implementation("com.google.android.gms:play-services-auth:20.7.0")

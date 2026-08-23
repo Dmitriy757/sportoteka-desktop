@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/plans/plan_folders_screen.dart';
 
@@ -43,11 +44,27 @@ class _PlansBrowseModalState extends State<PlansBrowseModal> {
   @override
   Widget build(BuildContext context) {
     final pad = MediaQuery.of(context).viewInsets.bottom;
+    final baseTheme = Theme.of(context);
+    final textTheme = baseTheme.textTheme.apply(
+      fontFamily: AppTypography.custom(
+        size: 13,
+        weight: FontWeight.w400,
+        color: const Color(0xFF111827),
+      ).fontFamily,
+    );
 
-    return Container(
+    return Theme(
+      data: baseTheme.copyWith(textTheme: textTheme),
+      child: DefaultTextStyle.merge(
+        style: AppTypography.custom(
+          size: 12.5,
+          weight: FontWeight.w400,
+          color: const Color(0xFF111827),
+        ),
+        child: Container(
       padding: EdgeInsets.fromLTRB(14, 14, 14, 14 + pad),
       decoration: const BoxDecoration(
-        color: Color(0xFFF3F5F8),
+        color: Color(0xFFF7F9F8),
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
       child: SafeArea(
@@ -70,7 +87,7 @@ class _PlansBrowseModalState extends State<PlansBrowseModal> {
                 Expanded(
                   child: Text(
                     widget.title,
-                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                    style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 16),
                   ),
                 ),
                 TextButton(
@@ -164,6 +181,8 @@ class _PlansBrowseModalState extends State<PlansBrowseModal> {
           ],
         ),
       ),
+        ),
+      ),
     );
   }
 }
@@ -205,9 +224,9 @@ class _InfoCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+                Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
                 const SizedBox(height: 6),
-                Text(subtitle, style: const TextStyle(color: Color(0xFF6B7280), fontWeight: FontWeight.w600)),
+                Text(subtitle, style: const TextStyle(color: Color(0xFF6B7280), fontWeight: FontWeight.w500)),
               ],
             ),
           ),

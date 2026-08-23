@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
-import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
@@ -124,12 +124,12 @@ class _TeamAttendanceScreenState extends State<TeamAttendanceScreen> {
   // ✅ Используем существующие иконки из PhosphorIcons
   IconData statusIcon(String s) {
     switch (s) {
-      case "absent": return PhosphorIcons.xCircle(PhosphorIconsStyle.bold);
-      case "late": return PhosphorIcons.clock(PhosphorIconsStyle.bold);
-      case "injured": return PhosphorIcons.firstAid(PhosphorIconsStyle.bold);
-      case "individual": return PhosphorIcons.barbell(PhosphorIconsStyle.bold); // Используем barbell вместо dumbbell
-      case "dayoff": return PhosphorIcons.sun(PhosphorIconsStyle.bold); // Используем sun вместо palmTree
-      default: return PhosphorIcons.checkCircle(PhosphorIconsStyle.bold);
+      case "absent": return PhosphorIcons.xCircle;
+      case "late": return PhosphorIcons.clock;
+      case "injured": return PhosphorIcons.firstAid;
+      case "individual": return PhosphorIcons.barbell; // Используем barbell вместо dumbbell
+      case "dayoff": return PhosphorIcons.sun; // Используем sun вместо palmTree
+      default: return PhosphorIcons.checkCircle;
     }
   }
 
@@ -463,17 +463,17 @@ class _TeamAttendanceScreenState extends State<TeamAttendanceScreen> {
           IconButton(
             tooltip: "Отметить всех присутствуют",
             onPressed: saving ? null : markAllPresent,
-            icon: Icon(PhosphorIcons.userCheck(PhosphorIconsStyle.bold)),
+            icon: Icon(PhosphorIcons.userCheck),
           ),
           IconButton(
             tooltip: "Экспорт в CSV",
             onPressed: saving ? null : exportCsv,
-            icon: Icon(PhosphorIcons.fileCsv(PhosphorIconsStyle.bold)),
+            icon: Icon(PhosphorIcons.fileCsv),
           ),
           IconButton(
             tooltip: "Обновить",
             onPressed: saving ? null : loadAll,
-            icon: Icon(PhosphorIcons.arrowClockwise(PhosphorIconsStyle.bold)),
+            icon: Icon(PhosphorIcons.arrowClockwise),
           ),
         ],
       ),
@@ -608,7 +608,7 @@ class _SearchField extends StatelessWidget {
         decoration: InputDecoration(
           border: InputBorder.none,
           hintText: "Поиск игрока…",
-          prefixIcon: Icon(PhosphorIcons.magnifyingGlass(PhosphorIconsStyle.bold)),
+          prefixIcon: Icon(PhosphorIcons.magnifyingGlass),
           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         ),
       ),
@@ -673,7 +673,7 @@ class _FilterButton extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                PhosphorIcons.funnel(PhosphorIconsStyle.bold),
+                PhosphorIcons.funnel,
                 color: primary,
               ),
               const SizedBox(height: 2),
@@ -753,19 +753,19 @@ class _StatsBar extends StatelessWidget {
     
     return Row(
       children: [
-        pill("all", PhosphorIcons.stack(PhosphorIconsStyle.bold), "Все", const Color(0xFF111827)),
+        pill("all", PhosphorIcons.stack, "Все", const Color(0xFF111827)),
         const SizedBox(width: 8),
-        pill("present", PhosphorIcons.checkCircle(PhosphorIconsStyle.bold), "$present", const Color(0xFF22C55E)),
+        pill("present", PhosphorIcons.checkCircle, "$present", const Color(0xFF22C55E)),
         const SizedBox(width: 8),
-        pill("absent", PhosphorIcons.xCircle(PhosphorIconsStyle.bold), "$absent", const Color(0xFFEF4444)),
+        pill("absent", PhosphorIcons.xCircle, "$absent", const Color(0xFFEF4444)),
         const SizedBox(width: 8),
-        pill("late", PhosphorIcons.clock(PhosphorIconsStyle.bold), "$late", const Color(0xFFF59E0B)),
+        pill("late", PhosphorIcons.clock, "$late", const Color(0xFFF59E0B)),
         const SizedBox(width: 8),
-        pill("injured", PhosphorIcons.firstAid(PhosphorIconsStyle.bold), "$injured", const Color(0xFF8B5CF6)),
+        pill("injured", PhosphorIcons.firstAid, "$injured", const Color(0xFF8B5CF6)),
         const SizedBox(width: 8),
-        pill("individual", PhosphorIcons.barbell(PhosphorIconsStyle.bold), "$individual", const Color(0xFF0EA5E9)),
+        pill("individual", PhosphorIcons.barbell, "$individual", const Color(0xFF0EA5E9)),
         const SizedBox(width: 8),
-        pill("dayoff", PhosphorIcons.sun(PhosphorIconsStyle.bold), "$dayoff", const Color(0xFF9CA3AF)),
+        pill("dayoff", PhosphorIcons.sun, "$dayoff", const Color(0xFF9CA3AF)),
       ],
     );
   }
@@ -804,12 +804,12 @@ class _PlayerAttendanceCard extends StatelessWidget {
   
   IconData _statusIcon(String s) {
     switch (s) {
-      case "absent": return PhosphorIcons.xCircle(PhosphorIconsStyle.bold);
-      case "late": return PhosphorIcons.clock(PhosphorIconsStyle.bold);
-      case "injured": return PhosphorIcons.firstAid(PhosphorIconsStyle.bold);
-      case "individual": return PhosphorIcons.barbell(PhosphorIconsStyle.bold);
-      case "dayoff": return PhosphorIcons.sun(PhosphorIconsStyle.bold);
-      default: return PhosphorIcons.checkCircle(PhosphorIconsStyle.bold);
+      case "absent": return PhosphorIcons.xCircle;
+      case "late": return PhosphorIcons.clock;
+      case "injured": return PhosphorIcons.firstAid;
+      case "individual": return PhosphorIcons.barbell;
+      case "dayoff": return PhosphorIcons.sun;
+      default: return PhosphorIcons.checkCircle;
     }
   }
   
@@ -927,7 +927,7 @@ class _PlayerAttendanceCard extends StatelessWidget {
                       border: Border.all(color: const Color(0xFFE8ECF3)),
                     ),
                     child: Icon(
-                      PhosphorIcons.chatTeardropDots(PhosphorIconsStyle.bold),
+                      PhosphorIcons.chatTeardropDots,
                       size: 20,
                       color: const Color(0xFF111827),
                     ),
@@ -964,7 +964,7 @@ class _PlayerAttendanceCard extends StatelessWidget {
                 child: _StatusChip(
                   active: status == "present",
                   color: const Color(0xFF22C55E),
-                  icon: PhosphorIcons.checkCircle(PhosphorIconsStyle.bold),
+                  icon: PhosphorIcons.checkCircle,
                   text: "Есть",
                   onTap: onSetPresent,
                 ),
@@ -974,7 +974,7 @@ class _PlayerAttendanceCard extends StatelessWidget {
                 child: _StatusChip(
                   active: status == "absent",
                   color: const Color(0xFFEF4444),
-                  icon: PhosphorIcons.xCircle(PhosphorIconsStyle.bold),
+                  icon: PhosphorIcons.xCircle,
                   text: "Нет",
                   onTap: onSetAbsent,
                 ),
@@ -984,7 +984,7 @@ class _PlayerAttendanceCard extends StatelessWidget {
                 child: _StatusChip(
                   active: status == "late",
                   color: const Color(0xFFF59E0B),
-                  icon: PhosphorIcons.clock(PhosphorIconsStyle.bold),
+                  icon: PhosphorIcons.clock,
                   text: "Опозд.",
                   onTap: onSetLate,
                 ),
@@ -994,7 +994,7 @@ class _PlayerAttendanceCard extends StatelessWidget {
                 child: _StatusChip(
                   active: status == "injured",
                   color: const Color(0xFF8B5CF6),
-                  icon: PhosphorIcons.firstAid(PhosphorIconsStyle.bold),
+                  icon: PhosphorIcons.firstAid,
                   text: "Травма",
                   onTap: onSetInjured,
                 ),
@@ -1004,7 +1004,7 @@ class _PlayerAttendanceCard extends StatelessWidget {
                 child: _StatusChip(
                   active: status == "individual",
                   color: const Color(0xFF0EA5E9),
-                  icon: PhosphorIcons.barbell(PhosphorIconsStyle.bold),
+                  icon: PhosphorIcons.barbell,
                   text: "ИП",
                   onTap: onSetIndividual,
                 ),
@@ -1014,7 +1014,7 @@ class _PlayerAttendanceCard extends StatelessWidget {
                 child: _StatusChip(
                   active: status == "dayoff",
                   color: const Color(0xFF9CA3AF),
-                  icon: PhosphorIcons.sun(PhosphorIconsStyle.bold),
+                  icon: PhosphorIcons.sun,
                   text: "Выходн.",
                   onTap: onSetDayOff,
                 ),

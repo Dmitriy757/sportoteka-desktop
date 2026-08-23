@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:sportoteka/core/utils/confirm_dialogs.dart';
@@ -28,7 +29,7 @@ Future<void> showTrainingRatingWindow(
   }
 
   entry = OverlayEntry(
-    builder: (_) => TrainingRatingSheet(
+    builder: (_) => _TrainingRatingRightPane(
       apiBase: apiBase,
       teamId: teamId,
       eventId: eventId,
@@ -42,6 +43,200 @@ Future<void> showTrainingRatingWindow(
   return completer.future;
 }
 
+/// Совместимость со старыми точками входа.
+/// Вместо плавающей модалки оценки открываются справа как рабочая панель.
+class _TrainingRatingRightPane extends StatelessWidget {
+  final String apiBase;
+  final int teamId;
+  final int eventId;
+  final int coachId;
+  final String title;
+  final VoidCallback onClose;
+
+  const _TrainingRatingRightPane({
+    required this.apiBase,
+    required this.teamId,
+    required this.eventId,
+    required this.coachId,
+    required this.title,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final width = math.min(520.0, math.max(320.0, media.size.width - 16)).toDouble();
+
+    return Material(
+      color: Colors.transparent,
+      child: Stack(
+        children: [
+          Positioned(
+            top: media.padding.top + 8,
+            right: 8,
+            bottom: media.padding.bottom + 8,
+            width: width,
+            child: Container(
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(.10),
+                    blurRadius: 34,
+                    spreadRadius: -18,
+                    offset: const Offset(0, 16),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    height: 58,
+                    padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
+                    color: Colors.white,
+                    child: Row(
+                      children: [
+                        const _RatingBrandDots(),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Оценки тренировки',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.custom(
+                                  size: 13.4,
+                                  weight: FontWeight.w600,
+                                  color: const Color(0xFF0B0F14),
+                                  height: 1.05,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.custom(
+                                  size: 10.2,
+                                  weight: FontWeight.w400,
+                                  color: const Color(0xFF667085),
+                                  height: 1.05,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Material(
+                          color: const Color(0xFFF7F8F7),
+                          borderRadius: BorderRadius.circular(9),
+                          child: InkWell(
+                            onTap: onClose,
+                            borderRadius: BorderRadius.circular(9),
+                            child: const SizedBox(
+                              width: 32,
+                              height: 32,
+                              child: Icon(
+                                Icons.close_rounded,
+                                size: 16,
+                                color: Color(0xFF667085),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: TrainingRatingSheet(
+                      apiBase: apiBase,
+                      teamId: teamId,
+                      eventId: eventId,
+                      coachId: coachId,
+                      title: title,
+                      embedded: true,
+                      onClose: onClose,
+                      onSaved: onClose,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RatingBrandDot extends StatelessWidget {
+  final double size;
+  final double opacity;
+  final Color color;
+  final bool glow;
+
+  const _RatingBrandDot({
+    required this.size,
+    required this.opacity,
+    this.color = const Color(0xFF00A750),
+    this.glow = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: opacity,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          boxShadow: glow
+              ? [
+                  BoxShadow(
+                    color: color.withOpacity(.18),
+                    blurRadius: size * 1.9,
+                    spreadRadius: .25,
+                  ),
+                  BoxShadow(
+                    color: color.withOpacity(.08),
+                    blurRadius: size * 3.2,
+                    spreadRadius: .6,
+                  ),
+                ]
+              : null,
+        ),
+      ),
+    );
+  }
+}
+
+class _RatingBrandDots extends StatelessWidget {
+  final Color color;
+  const _RatingBrandDots({this.color = const Color(0xFF00A750)});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _RatingBrandDot(size: 3.5, opacity: .22, color: color),
+        const SizedBox(width: 3),
+        _RatingBrandDot(size: 4.5, opacity: .42, color: color),
+        const SizedBox(width: 3),
+        _RatingBrandDot(size: 5.5, opacity: .68, color: color),
+        const SizedBox(width: 3),
+        _RatingBrandDot(size: 6.5, opacity: 1, color: color, glow: true),
+      ],
+    );
+  }
+}
+
 class TrainingRatingSheet extends StatefulWidget {
   final String apiBase;
   final int teamId;
@@ -49,6 +244,8 @@ class TrainingRatingSheet extends StatefulWidget {
   final int coachId;
   final String title;
   final VoidCallback? onClose;
+  final bool embedded;
+  final VoidCallback? onSaved;
 
   const TrainingRatingSheet({
     super.key,
@@ -58,6 +255,8 @@ class TrainingRatingSheet extends StatefulWidget {
     required this.coachId,
     required this.title,
     this.onClose,
+    this.embedded = false,
+    this.onSaved,
   });
 
   @override
@@ -188,7 +387,8 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
       }
 
       Get.snackbar('Оценка', 'Сохранено', snackPosition: SnackPosition.BOTTOM);
-      if (mounted) _close();
+      widget.onSaved?.call();
+      if (mounted && !widget.embedded) _close();
     } catch (e) {
       Get.snackbar('Ошибка', e.toString(), snackPosition: SnackPosition.BOTTOM);
     }
@@ -198,6 +398,23 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.embedded) {
+      return Column(
+        children: [
+          Expanded(child: _buildRatingsBody()),
+          _CmrBottomBar(
+            child: Row(
+              children: [
+                Expanded(child: _GhostButton(text: saving ? 'Сброс...' : 'Сбросить', icon: Icons.restart_alt_rounded, onTap: saving ? null : _resetRatings)),
+                const SizedBox(width: 10),
+                Expanded(child: _PrimaryButton(text: 'Сохранить оценки', saving: saving, onTap: saving ? null : _save)),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
     final media = MediaQuery.of(context);
     final size = media.size;
     final bottomInset = media.viewInsets.bottom;
@@ -355,6 +572,35 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
 
     return Column(
       children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 2),
+          child: Row(
+            children: [
+              const _RatingBrandDots(),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  'Оценки игроков',
+                  style: AppTypography.custom(
+                    size: 11.8,
+                    weight: FontWeight.w600,
+                    color: const Color(0xFF0B0F14),
+                    height: 1,
+                  ),
+                ),
+              ),
+              Text(
+                '${ratingByPlayerId.values.where((v) => v > 0).length}/${players.length}',
+                style: AppTypography.custom(
+                  size: 10.2,
+                  weight: FontWeight.w500,
+                  color: const Color(0xFF667085),
+                  height: 1,
+                ),
+              ),
+            ],
+          ),
+        ),
         _RatingsSummaryBar(
           playersCount: players.length,
           ratedCount: ratingByPlayerId.values.where((v) => v > 0).length,
@@ -420,7 +666,6 @@ class _CmrWindowFrame extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(radius),
-          border: Border.all(color: const Color(0xFFE5EAEF), width: 1),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(.10),
@@ -440,7 +685,7 @@ class _CmrWindowFrame extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
                 decoration: const BoxDecoration(
                   color: Colors.white,
-                  border: Border(bottom: BorderSide(color: Color(0xFFE9EDF2), width: 1)),
+                  
                 ),
                 child: Row(
                   children: [
@@ -459,8 +704,7 @@ class _CmrWindowFrame extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: _WinColors.tint(_WinColors.green, opacity: .10),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: _WinColors.green.withOpacity(.22)),
-                      ),
+                                    ),
                       child: Icon(icon, color: _WinColors.green, size: 13),
                     ),
                     const SizedBox(width: 10),
@@ -506,7 +750,7 @@ class _RatingsSummaryBar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE9EDF2), width: 1)),
+        
       ),
       child: Row(
         children: [
@@ -534,8 +778,7 @@ class _MiniStat extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
         color: _WinColors.tint(_WinColors.green, opacity: .060),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE6EAEE)),
+        borderRadius: BorderRadius.circular(9),
       ),
       child: Row(
         children: [
@@ -575,7 +818,7 @@ class _CmrBottomBar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(top: BorderSide(color: Color(0xFFE9EDF2), width: 1)),
+        
       ),
       child: child,
     );
@@ -626,7 +869,6 @@ class _CmrMinimizedPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE6EAEE)),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(.10), blurRadius: 24, spreadRadius: -14, offset: const Offset(0, 14))],
       ),
       child: Row(
@@ -675,24 +917,23 @@ class _PlayerRow extends StatelessWidget {
     final rated = rating > 0;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 7),
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: rated ? _WinColors.tint(primary, opacity: .055) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: rated ? primary.withOpacity(.25) : const Color(0xFFE6EAEE)),
+        color: rated
+            ? _WinColors.tint(primary, opacity: .055)
+            : const Color(0xFFF7F8F7),
+        borderRadius: BorderRadius.circular(9),
       ),
       child: Row(
         children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            width: 4,
-            height: 56,
-            decoration: BoxDecoration(
-              color: rated ? primary : Colors.transparent,
-              borderRadius: const BorderRadius.horizontal(left: Radius.circular(18)),
-            ),
+          _RatingBrandDot(
+            size: 6,
+            opacity: rated ? 1 : .28,
+            color: rated ? primary : const Color(0xFF98A2B3),
+            glow: rated,
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 9),
           Container(
             width: 34,
             height: 34,
@@ -702,7 +943,7 @@ class _PlayerRow extends StatelessWidget {
               image: p.photo.trim().isNotEmpty ? DecorationImage(image: NetworkImage(p.photo), fit: BoxFit.cover) : null,
             ),
             child: p.photo.trim().isEmpty
-                ? Center(child: Text(initials, style: _WinText.base(12.0, FontWeight.w700, primary, height: 1)))
+                ? Center(child: Text(initials, style: _WinText.base(12.0, FontWeight.w600, primary, height: 1)))
                 : null,
           ),
           const SizedBox(width: 10),
@@ -781,12 +1022,11 @@ class _PrimaryButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: _WinColors.tint(_WinColors.green, opacity: .10),
           borderRadius: BorderRadius.circular(13),
-          border: Border.all(color: _WinColors.green.withOpacity(.22)),
         ),
         child: Center(
           child: saving
               ? const SizedBox(width: 17, height: 17, child: CircularProgressIndicator(strokeWidth: 2, color: _WinColors.green))
-              : Text(text, style: _WinText.base(11.4, FontWeight.w700, _WinColors.green, height: 1)),
+              : Text(text, style: _WinText.base(11.4, FontWeight.w600, _WinColors.green, height: 1)),
         ),
       ),
     );
@@ -810,14 +1050,13 @@ class _GhostButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0xFFF5F7F9),
           borderRadius: BorderRadius.circular(13),
-          border: Border.all(color: const Color(0xFFE6EAEE)),
-        ),
+          ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, color: _WinColors.slate, size: 15),
             const SizedBox(width: 7),
-            Text(text, style: _WinText.base(11.2, FontWeight.w700, _WinColors.slate, height: 1)),
+            Text(text, style: _WinText.base(11.2, FontWeight.w600, _WinColors.slate, height: 1)),
           ],
         ),
       ),
@@ -842,7 +1081,7 @@ class _ErrorView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(text, style: _WinText.base(11.2, FontWeight.w700, _WinColors.red)),
+          Text(text, style: _WinText.base(11.2, FontWeight.w600, _WinColors.red)),
           const SizedBox(height: 10),
           _GhostButton(text: 'Повторить', icon: Icons.refresh_rounded, onTap: onRetry),
         ],
@@ -852,10 +1091,10 @@ class _ErrorView extends StatelessWidget {
 }
 
 class _WinColors {
-  static const Color text = Color(0xFF111827);
-  static const Color muted = Color(0xFF374151);
-  static const Color muted2 = Color(0xFF6B7280);
-  static const Color green = Color(0xFF0E9F5B);
+  static const Color text = Color(0xFF0B0F14);
+  static const Color muted = Color(0xFF5F6670);
+  static const Color muted2 = Color(0xFF8A9099);
+  static const Color green = Color(0xFF00A750);
   static const Color slate = Color(0xFF64748B);
   static const Color red = Color(0xFFD92D20);
 
@@ -863,23 +1102,18 @@ class _WinColors {
 }
 
 class _WinText {
-  static const String font = 'Segoe UI';
-  static const List<String> fallback = <String>['SF Pro Display', 'SF Pro Text', 'Inter', 'Roboto', 'Arial'];
-
   static TextStyle base(double size, FontWeight weight, Color color, {double height = 1.18}) {
-    return TextStyle(
-      fontFamily: font,
-      fontFamilyFallback: fallback,
+    return AppTypography.custom(
+      size: size,
+      weight: weight,
       color: color,
-      fontSize: size,
-      fontWeight: weight,
       height: height,
-      letterSpacing: -0.12,
+      letterSpacing: 0,
     );
   }
 
-  static TextStyle title(double size) => base(size, FontWeight.w700, _WinColors.text, height: 1.10);
-  static TextStyle muted(double size) => base(size, FontWeight.w700, _WinColors.muted2, height: 1.22);
+  static TextStyle title(double size) => base(size, FontWeight.w600, _WinColors.text, height: 1.10);
+  static TextStyle muted(double size) => base(size, FontWeight.w400, _WinColors.muted2, height: 1.22);
 }
 
 class _Player {

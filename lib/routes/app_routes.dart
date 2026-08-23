@@ -60,8 +60,6 @@ import 'package:sportoteka/presentation/nearby_you_screen/binding/nearby_you_bin
 import 'package:sportoteka/presentation/nearby_you_screen/nearby_you_screen.dart';
 import 'package:sportoteka/presentation/notification_screen/binding/notification_binding.dart';
 import 'package:sportoteka/presentation/notification_screen/notification_screen.dart';
-import 'package:sportoteka/presentation/onboarding_one_screen/binding/onboarding_one_binding.dart';
-import 'package:sportoteka/presentation/onboarding_one_screen/onboarding_one_screen.dart';
 import 'package:sportoteka/presentation/order_placed_screen/binding/order_placed_binding.dart';
 import 'package:sportoteka/presentation/booking_screen/my_bookings_screen.dart';
 import 'package:sportoteka/presentation/order_placed_screen/order_placed_screen.dart';
@@ -123,14 +121,13 @@ import 'package:sportoteka/presentation/player_game_zone/quiz_detail_screen.dart
 import 'package:sportoteka/presentation/player_screen/player_match_detail_screen.dart';
 import 'package:sportoteka/presentation/player_matches_screen/player_matches_screen.dart';
 import 'package:sportoteka/presentation/club_workspace/club_workspace_screen.dart';
+import 'package:sportoteka/presentation/workspace_hub/workspace_hub_screen.dart';
 
 class AppRoutes {
   static const String loginScreen = '/login_screen';
 
   static const String splashScreen = '/splash_screen';
   static const String initialRoute = '/initialRoute'; 
-  static const String onboardingOneScreen = '/onboarding_one_screen';
-
   static const String onboardingTwoScreen = '/onboarding_two_screen';
 
   static const String onboardingThreeScreen = '/onboarding_three_screen';
@@ -243,6 +240,7 @@ class AppRoutes {
   static const String profileScreen = '/profile_screen';
 
   static const String myProfileScreen = '/my_profile_screen';
+  static const String workspaceHubScreen = '/workspace_hub_screen';
 
   static const String editProfileScreen = '/edit_profile_screen';
 
@@ -308,14 +306,6 @@ static const String playerMatchesScreen = '/player_matches_screen';
       page: () => SplashScreen(),
       bindings: [
         SplashBinding(),
-      ],
-    ),
-    GetPage(
-      transition: Transition.rightToLeft,
-      name: onboardingOneScreen,
-      page: () => OnboardingOneScreen(),
-      bindings: [
-        OnboardingOneBinding(),
       ],
     ),
     GetPage(
@@ -577,6 +567,12 @@ static const String playerMatchesScreen = '/player_matches_screen';
     return AddPlayerScreen(teamId: teamId, teamName: teamName);
   },
 ),
+
+    GetPage(
+      transition: Transition.fadeIn,
+      name: workspaceHubScreen,
+      page: () => const WorkspaceHubScreen(),
+    ),
     GetPage(
       transition: Transition.rightToLeft,
       name: myProfileScreen,

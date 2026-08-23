@@ -17,12 +17,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 
 import 'package:sportoteka/core/constants/app_colors.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/team_video_analysis/match_video_player_screen.dart';
 import 'package:sportoteka/presentation/team_video_analysis/video_match_review_screen.dart';
 import 'package:sportoteka/presentation/advanced_video_analysis/advanced_video_analysis_screen.dart';
 import 'package:sportoteka/presentation/advanced_video_analysis/models/analysis_result.dart';
 import 'package:sportoteka/presentation/advanced_video_analysis/models/player_detection.dart';
+import 'package:sportoteka/presentation/match_live/match_live_screen.dart';
 
 class TeamMatchDetailScreen extends StatefulWidget {
   final int? matchId;
@@ -186,7 +188,7 @@ void showTeamMatchDetailCmrWindow(
                       style: TextStyle(
                         color: Color(0xFF111827),
                         fontSize: 11.2,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
@@ -327,11 +329,11 @@ void showTeamMatchDetailCmrWindow(
 }
 
 class _TeamMatchUiText {
-  static const String family = 'Segoe UI';
+  static String get family => AppTypography.fontFamily;
   static const List<String> fallback = <String>[
-    'SF Pro Display',
-    'SF Pro Text',
     'Inter',
+    'SF Pro Text',
+    'SF Pro Display',
     'Roboto',
     'Arial',
   ];
@@ -341,7 +343,7 @@ class _TeamMatchUiText {
         fontFamily: family,
         fontFamilyFallback: fallback,
         fontSize: size,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w600,
         letterSpacing: -0.22,
         height: 1.08,
       );
@@ -361,7 +363,7 @@ class _TeamMatchUiText {
         fontFamily: family,
         fontFamilyFallback: fallback,
         fontSize: size,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w600,
         letterSpacing: -0.06,
         height: 1.08,
       );
@@ -1128,7 +1130,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                   title,
                   style: TextStyle(
                     color: textPrimary,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     fontSize: 12.5,
                   ),
                 ),
@@ -1441,7 +1443,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: Color(0xFF344054),
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                   fontSize: 12.2,
                 ),
               ),
@@ -1484,7 +1486,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                   ),
                   title: const Text(
                     'Переименовать матч',
-                    style: TextStyle(fontWeight: FontWeight.w800),
+                    style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                   subtitle: Text(
                     _currentMatchActionTitle,
@@ -1500,7 +1502,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                   leading: const Icon(Icons.edit_note_rounded, color: Color(0xFF28A86B)),
                   title: const Text(
                     'Редактировать данные матча',
-                    style: TextStyle(fontWeight: FontWeight.w800),
+                    style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                   subtitle: const Text('Турнир, дата, стадион, статистика'),
                   onTap: () {
@@ -1513,7 +1515,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                   leading: const Icon(Icons.delete_forever_outlined, color: Colors.red),
                   title: const Text(
                     'Удалить матч',
-                    style: TextStyle(color: Colors.red, fontWeight: FontWeight.w900),
+                    style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
                   ),
                   subtitle: const Text('Матч будет удалён полностью'),
                   onTap: () {
@@ -1542,7 +1544,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: const Text(
           'Переименовать матч',
-          style: TextStyle(fontWeight: FontWeight.w900),
+          style: TextStyle(fontWeight: FontWeight.w600),
         ),
         content: TextField(
           controller: controller,
@@ -1641,7 +1643,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: const Text(
           'Удалить матч?',
-          style: TextStyle(fontWeight: FontWeight.w900),
+          style: TextStyle(fontWeight: FontWeight.w600),
         ),
         content: Text(
           'Матч\n\n$_currentMatchActionTitle\n\nбудет удалён полностью. Это действие нельзя отменить.',
@@ -1787,7 +1789,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                       child: Text(
                         title,
                         style: const TextStyle(
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w600,
                           fontSize: 18,
                         ),
                         maxLines: 2,
@@ -1810,7 +1812,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                           eventType,
                           style: TextStyle(
                             fontSize: 10,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
                             color: primary,
                           ),
                         ),
@@ -1830,7 +1832,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                         ":",
                         style: TextStyle(
                           fontSize: 20,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w600,
                           color: textSecondary,
                         ),
                       ),
@@ -1912,7 +1914,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
               style: TextStyle(
                 fontSize: compact ? 24 : 30,
                 height: 1,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w600,
                 color: primary,
               ),
             ),
@@ -1945,7 +1947,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
       style: TextStyle(
         fontSize: compact ? 12 : 14,
         height: 1.15,
-        fontWeight: FontWeight.w900,
+        fontWeight: FontWeight.w600,
         color: color,
       ),
     );
@@ -1979,7 +1981,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
             style: TextStyle(
               fontSize: compact ? 11 : 12,
               height: 1.1,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
               color: accent,
             ),
           ),
@@ -1988,7 +1990,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
             score,
             style: TextStyle(
               fontSize: compact ? 22 : 26,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
               color: accent,
             ),
           ),
@@ -2116,7 +2118,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 11,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w600,
                           color: textSecondary,
                         ),
                       ),
@@ -2139,7 +2141,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 20,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                     color: textPrimary,
                     height: 1,
                   ),
@@ -2249,11 +2251,11 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
         labelColor: primary,
         unselectedLabelColor: textSecondary,
         labelStyle: const TextStyle(
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w600,
           fontSize: 13,
         ),
         unselectedLabelStyle: const TextStyle(
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w600,
           fontSize: 13,
         ),
         dividerColor: Colors.transparent,
@@ -2308,7 +2310,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                             maxLines: isPhone ? 2 : 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w600,
                               fontSize: isPhone ? 16 : 17,
                               color: textPrimary,
                               height: 1.14,
@@ -2362,7 +2364,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
           Text(
             label,
             style: TextStyle(
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
               fontSize: 13,
               color: textSecondary,
             ),
@@ -2379,7 +2381,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
               keyboardType: keyboardType,
               style: TextStyle(
                 color: textPrimary,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
                 fontSize: 14,
               ),
               decoration: InputDecoration(
@@ -2431,7 +2433,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
             value,
             style: TextStyle(
               fontSize: 24,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               color: textPrimary,
             ),
           ),
@@ -2464,7 +2466,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
             value,
             style: TextStyle(
               fontSize: 16,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               color: c,
             ),
           ),
@@ -2500,7 +2502,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
             title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w800),
+            style: const TextStyle(fontWeight: FontWeight.w600),
           ),
         ),
         style: ElevatedButton.styleFrom(
@@ -2558,7 +2560,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
       child: TextField(
         controller: _searchCtrl,
         onChanged: (v) => setState(() => _search = v),
-        style: TextStyle(color: textPrimary, fontWeight: FontWeight.w700),
+        style: TextStyle(color: textPrimary, fontWeight: FontWeight.w600),
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: TextStyle(color: textSecondary.withOpacity(.65), fontWeight: FontWeight.w600),
@@ -2720,7 +2722,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                         fontSize: 13,
                         height: 1.32,
                         color: textSecondary,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -2819,7 +2821,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: textPrimary,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                   fontSize: 13.2,
                   height: 1.12,
                 ),
@@ -2831,7 +2833,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: textSecondary,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                   fontSize: 11.2,
                   height: 1.18,
                 ),
@@ -2861,7 +2863,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: textPrimary,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                         fontSize: 13,
                       ),
                     ),
@@ -2872,7 +2874,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: textSecondary,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         fontSize: 11.2,
                       ),
                     ),
@@ -2970,7 +2972,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                   'Основные цифры',
                   style: TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                     color: textPrimary,
                   ),
                 ),
@@ -3032,7 +3034,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                   style: TextStyle(
                     fontSize: 16,
                     height: 1,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                     color: textPrimary,
                   ),
                 ),
@@ -3043,7 +3045,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 10.5,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: textSecondary,
                   ),
                 ),
@@ -3124,7 +3126,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       fontSize: 18,
-                                      fontWeight: FontWeight.w900,
+                                      fontWeight: FontWeight.w600,
                                       color: Color(0xFF101828),
                                     ),
                                   ),
@@ -3136,7 +3138,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                                     style: TextStyle(
                                       fontSize: 12.5,
                                       height: 1.25,
-                                      fontWeight: FontWeight.w700,
+                                      fontWeight: FontWeight.w600,
                                       color: Color(0xFF667085),
                                     ),
                                   ),
@@ -3193,7 +3195,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                                       borderRadius: BorderRadius.circular(16),
                                     ),
                                     textStyle: const TextStyle(
-                                      fontWeight: FontWeight.w900,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                   child: const Text('Отмена'),
@@ -3227,7 +3229,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                                       borderRadius: BorderRadius.circular(16),
                                     ),
                                     textStyle: const TextStyle(
-                                      fontWeight: FontWeight.w900,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                 ),
@@ -3391,7 +3393,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
             title,
             style: const TextStyle(
               fontSize: 15.5,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
               color: Color(0xFF101828),
             ),
           ),
@@ -3401,7 +3403,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
             style: const TextStyle(
               fontSize: 12.5,
               height: 1.25,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
               color: Color(0xFF667085),
             ),
           ),
@@ -3438,7 +3440,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
             playerName,
             style: const TextStyle(
               fontSize: 15,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 10),
@@ -3632,7 +3634,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                               style: TextStyle(
                                 color: textPrimary,
                                 fontSize: 18,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                             const SizedBox(height: 3),
@@ -3643,7 +3645,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                               style: TextStyle(
                                 color: textSecondary,
                                 fontSize: 12,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
@@ -3725,7 +3727,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                               style: TextStyle(
                                 color: textPrimary,
                                 fontSize: 18,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                             const SizedBox(height: 3),
@@ -3736,7 +3738,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                               style: TextStyle(
                                 color: textSecondary,
                                 fontSize: 12,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
@@ -3956,7 +3958,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                         fontSize: 13.5,
                       ),
                     ),
@@ -3968,7 +3970,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                       style: TextStyle(
                         color: textSecondary,
                         fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
@@ -3985,7 +3987,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                   '$total',
                   style: TextStyle(
                     color: active ? Colors.white : textPrimary,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                     fontSize: 12,
                   ),
                 ),
@@ -4067,7 +4069,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                   fontSize: flatMobile ? 16 : 17,
                   color: textPrimary,
                 ),
@@ -4079,7 +4081,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: textSecondary,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                   fontSize: flatMobile ? 12 : 12.5,
                 ),
               ),
@@ -4180,7 +4182,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: textSecondary,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 fontSize: 12,
               ),
             ),
@@ -4190,7 +4192,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
             value.isEmpty ? "0" : value,
             style: TextStyle(
               color: textPrimary,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
               fontSize: 15,
             ),
           ),
@@ -4217,7 +4219,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
             playerName,
             style: const TextStyle(
               fontSize: 15,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 10),
@@ -4431,7 +4433,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -4439,7 +4441,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                         "Вратарские действия по матчу",
                         style: TextStyle(
                           color: textSecondary,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w600,
                           fontSize: 12,
                         ),
                       ),
@@ -4660,7 +4662,7 @@ String _normalizeKey(String key) {
       title: Text(
         playerName,
         style: const TextStyle(
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w600,
         ),
       ),
       subtitle: Text(
@@ -4717,7 +4719,7 @@ String _normalizeKey(String key) {
                     m.title,
                     style: const TextStyle(
                       fontSize: 14,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -4758,7 +4760,7 @@ String _normalizeKey(String key) {
                     style: TextStyle(
                       fontSize: 12,
                       color: textSecondary,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -4998,7 +5000,7 @@ String _translatePosition(String key) {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: textPrimary,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                         fontSize: 15,
                         height: 1.18,
                       ),
@@ -5010,7 +5012,7 @@ String _translatePosition(String key) {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: textSecondary,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         fontSize: 12.5,
                       ),
                     ),
@@ -5080,7 +5082,7 @@ String _translatePosition(String key) {
             text,
             style: TextStyle(
               color: textPrimary,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               fontSize: 12,
             ),
           ),
@@ -5209,7 +5211,7 @@ String _translatePosition(String key) {
           builder: (overlayContext, setSB) {
             Future<void> pickVideo() async {
               try {
-                final result = await FilePicker.platform.pickFiles(
+                final result = await FilePicker.pickFiles(
                   type: FileType.custom,
                   allowedExtensions: const ['mp4', 'mov', 'm4v', 'avi'],
                   allowMultiple: false,
@@ -5354,7 +5356,7 @@ String _translatePosition(String key) {
                                             style: TextStyle(
                                               fontSize: 18,
                                               height: 1.12,
-                                              fontWeight: FontWeight.w900,
+                                              fontWeight: FontWeight.w600,
                                               color: textPrimary,
                                             ),
                                           ),
@@ -5366,7 +5368,7 @@ String _translatePosition(String key) {
                                             style: TextStyle(
                                               fontSize: 12.5,
                                               height: 1.25,
-                                              fontWeight: FontWeight.w700,
+                                              fontWeight: FontWeight.w600,
                                               color: textSecondary,
                                             ),
                                           ),
@@ -5447,7 +5449,7 @@ String _translatePosition(String key) {
                                                   'Загрузка по частям',
                                                   style: TextStyle(
                                                     fontSize: 13,
-                                                    fontWeight: FontWeight.w900,
+                                                    fontWeight: FontWeight.w600,
                                                     color: textPrimary,
                                                   ),
                                                 ),
@@ -5457,7 +5459,7 @@ String _translatePosition(String key) {
                                                   style: TextStyle(
                                                     fontSize: 12,
                                                     height: 1.28,
-                                                    fontWeight: FontWeight.w700,
+                                                    fontWeight: FontWeight.w600,
                                                     color: textSecondary,
                                                   ),
                                                 ),
@@ -5488,7 +5490,7 @@ String _translatePosition(String key) {
                                             shape: RoundedRectangleBorder(
                                               borderRadius: BorderRadius.circular(16),
                                             ),
-                                            textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                                            textStyle: const TextStyle(fontWeight: FontWeight.w600),
                                           ),
                                           child: const Text('Отмена'),
                                         ),
@@ -5557,7 +5559,7 @@ String _translatePosition(String key) {
                                             shape: RoundedRectangleBorder(
                                               borderRadius: BorderRadius.circular(16),
                                             ),
-                                            textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                                            textStyle: const TextStyle(fontWeight: FontWeight.w600),
                                           ),
                                         ),
                                       ),
@@ -5632,7 +5634,7 @@ String _translatePosition(String key) {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 14.5,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w600,
                             color: textPrimary,
                           ),
                         ),
@@ -5644,7 +5646,7 @@ String _translatePosition(String key) {
                           style: TextStyle(
                             fontSize: 12,
                             height: 1.25,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w600,
                             color: textSecondary,
                           ),
                         ),
@@ -5692,7 +5694,7 @@ String _translatePosition(String key) {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 12.5,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w600,
                                 color: textPrimary,
                               ),
                             ),
@@ -5701,7 +5703,7 @@ String _translatePosition(String key) {
                               _formatFileSize(fileSize ?? 0),
                               style: TextStyle(
                                 fontSize: 11.5,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w600,
                                 color: textSecondary,
                               ),
                             ),
@@ -5735,7 +5737,7 @@ String _translatePosition(String key) {
                       style: TextStyle(
                         color: selected ? primary : Colors.white,
                         fontSize: 12.5,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
@@ -6068,7 +6070,7 @@ String _translatePosition(String key) {
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontWeight: FontWeight.w900,
+                                  fontWeight: FontWeight.w600,
                                   fontSize: 13.5,
                                 ),
                               ),
@@ -6080,7 +6082,7 @@ String _translatePosition(String key) {
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     color: Colors.white.withOpacity(0.86),
-                                    fontWeight: FontWeight.w700,
+                                    fontWeight: FontWeight.w600,
                                     fontSize: 12,
                                     height: 1.18,
                                   ),
@@ -6187,7 +6189,7 @@ String _translatePosition(String key) {
                               style: TextStyle(
                                 fontSize: 18,
                                 height: 1.1,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w600,
                                 color: Color(0xFF101828),
                               ),
                             ),
@@ -6205,7 +6207,7 @@ String _translatePosition(String key) {
                           color: Color(0xFF667085),
                           fontSize: 13,
                           height: 1.32,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -6222,7 +6224,7 @@ String _translatePosition(String key) {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: Color(0xFF101828),
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w600,
                             fontSize: 13,
                           ),
                         ),
@@ -6240,7 +6242,7 @@ String _translatePosition(String key) {
                                 padding: const EdgeInsets.symmetric(vertical: 14),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                               ),
-                              child: const Text('Отмена', style: TextStyle(fontWeight: FontWeight.w900)),
+                              child: const Text('Отмена', style: TextStyle(fontWeight: FontWeight.w600)),
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -6254,7 +6256,7 @@ String _translatePosition(String key) {
                                 foregroundColor: Colors.white,
                                 padding: const EdgeInsets.symmetric(vertical: 14),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                                textStyle: const TextStyle(fontWeight: FontWeight.w600),
                               ),
                             ),
                           ),
@@ -6330,7 +6332,7 @@ String _translatePosition(String key) {
                               style: TextStyle(
                                 fontSize: 18,
                                 height: 1.12,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w600,
                                 color: textPrimary,
                               ),
                             ),
@@ -6341,7 +6343,7 @@ String _translatePosition(String key) {
                               style: TextStyle(
                                 fontSize: 12.5,
                                 height: 1.25,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w600,
                                 color: textSecondary,
                               ),
                             ),
@@ -6366,7 +6368,7 @@ String _translatePosition(String key) {
                                     style: TextStyle(
                                       fontSize: 12.5,
                                       height: 1.22,
-                                      fontWeight: FontWeight.w800,
+                                      fontWeight: FontWeight.w600,
                                       color: textSecondary,
                                     ),
                                   ),
@@ -6382,7 +6384,7 @@ String _translatePosition(String key) {
                                     '$percent%',
                                     style: TextStyle(
                                       fontSize: 12,
-                                      fontWeight: FontWeight.w900,
+                                      fontWeight: FontWeight.w600,
                                       color: primary,
                                     ),
                                   ),
@@ -6503,7 +6505,7 @@ void _openVideoPlayerCmrWindow(String videoUrl, {String? title}) {
                       style: const TextStyle(
                         color: Color(0xFF111827),
                         fontSize: 11,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
@@ -6660,13 +6662,18 @@ Map<String, dynamic> _analysisParamsForVideo(Map<String, dynamic> video, {String
       .toList();
 
   return {
+    'sourceMode': 'recording',
     'matchId': matchId,
+    'clubId': widget.clubId ?? _i(match?["club_id"]),
     'teamId': resolvedTeamId,
+    'fieldId': _i(match?["field_id"]),
+    'coachId': _coachId,
     'videoUrl': normalized,
     'teamName': resolvedTeamName,
     'matchTitle': _matchTitleForReview(),
     'videoId': _i(video["id"]),
     'teamColors': _extractTeamColors(),
+    'sessionIds': _analysisTrackerSessionIds(),
     'players': players.map((player) {
       return {
         'id': player['id'],
@@ -6676,6 +6683,37 @@ Map<String, dynamic> _analysisParamsForVideo(Map<String, dynamic> video, {String
       };
     }).toList(),
   };
+}
+
+List<int> _analysisTrackerSessionIds() {
+  final raw = match?["tracker_session_ids"] ??
+      match?["tracker_sessions"] ??
+      match?["session_ids"] ??
+      match?["tracker_session_id"];
+  final values = raw is List ? raw : _s(raw).replaceAll(';', ',').split(',');
+  return values
+      .map((value) => int.tryParse(_s(value)) ?? 0)
+      .where((value) => value > 0)
+      .toSet()
+      .toList();
+}
+
+Future<void> _openMatchLive({Map<String, dynamic>? video}) async {
+  final params = _analysisParamsForVideo(video ?? const <String, dynamic>{});
+  await MatchLiveScreen.open(context, params: params, initialMode: 'live');
+}
+
+void _openMatchRecordingAnalysis() {
+  final video = _primaryAiVideo();
+  if (video == null) {
+    _openMatchDetailTab(4);
+    Get.snackbar(
+      'Анализ записи',
+      'Сначала загрузите полное видео матча',
+    );
+    return;
+  }
+  _openMatchDetailTab(5);
 }
 
 // ============================================================
@@ -7157,7 +7195,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: Colors.white,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                   fontSize: 12.5,
                 ),
               ),
@@ -7336,10 +7374,6 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
 
   void _openMatchDetailTab(int index) {
     final target = _safeMatchTabIndex(index);
-    if (target == 5) {
-      _openAiReviewCmrWindow();
-      return;
-    }
     if (_tabController.index != target) {
       _tabController.animateTo(
         target,
@@ -7420,179 +7454,884 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
   }
 
   Widget _buildAiVideoAnalysisTab() {
-  final video = _primaryAiVideo();
-  final normalizedVideoUrl = video == null ? "" : (_normalizeUrl(_s(video["video_url"])) ?? "");
-  final resolvedTeamId = teamId > 0 ? teamId : (widget.teamId ?? _i(match?["team_id"]));
-  final resolvedTeamName = teamName.trim().isNotEmpty
-      ? teamName.trim()
-      : ((widget.teamName ?? '').trim().isNotEmpty ? widget.teamName!.trim() : 'Команда');
+    final video = _primaryAiVideo();
+    final resolvedTeamId =
+        teamId > 0 ? teamId : (widget.teamId ?? _i(match?['team_id']));
 
-  if (resolvedTeamId <= 0) {
-    return _buildSectionCard(
-      title: 'Видеоанализ ИИ',
-      subtitle: 'Не удалось определить ID команды',
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: borderColor),
+    if (resolvedTeamId <= 0) {
+      return _matchAiEmptyState(
+        icon: Icons.info_outline_rounded,
+        title: 'Не удалось определить команду',
+        subtitle: 'Откройте матч из карточки команды, чтобы ИИ получил teamId и состав.',
+      );
+    }
+
+    if (video == null || _s(_analysisParamsForVideo(video)['videoUrl']).isEmpty) {
+      return _matchAiEmptyState(
+        icon: Icons.video_file_outlined,
+        title: 'Добавьте полную запись матча',
+        subtitle:
+            'После загрузки ИИ начнёт распознавать игроков, мяч и события прямо на этой странице.',
+        action: ElevatedButton.icon(
+          onPressed: uploadingVideo ? null : () => _showUploadVideoSheet('full'),
+          icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+          label: Text(uploadingVideo ? 'Загрузка...' : 'Загрузить видео'),
+          style: ElevatedButton.styleFrom(
+            elevation: 0,
+            backgroundColor: _mcGreen,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.info_outline_rounded, color: primary),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Откройте матч из карточки команды или передайте teamId.',
-                style: TextStyle(
-                  color: textSecondary,
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
-                  height: 1.35,
+      );
+    }
+
+    final params = _analysisParamsForVideo(video);
+
+    return ColoredBox(
+      color: Colors.white,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 840;
+          final medium = constraints.maxWidth < 1120;
+          final topSpeed = _liveAiSpeedsKmh.isEmpty
+              ? 0.0
+              : _liveAiSpeedsKmh.values.reduce(max);
+          final sprintCount = _liveAiSprints.values.fold<int>(
+            0,
+            (sum, value) => sum + value,
+          );
+          final load = _liveAiLoad.isEmpty
+              ? 0.0
+              : _liveAiLoad.values.reduce((a, b) => a + b) /
+                  _liveAiLoad.length;
+
+          final videoStage = ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: AdvancedVideoAnalysisScreen(
+              key: ValueKey('inline-match-ai-${_i(video['id'])}-${_s(params['videoUrl'])}'),
+              params: params,
+              embedded: true,
+              modalWindow: false,
+              hideControls: true,
+              connectAi: true,
+              showAiOverlay: true,
+              externalPlaybackController: _embeddedAiPlayback,
+              onAnalysisFrame: _onLiveAiFrame,
+              onStatusChanged: _onLiveAiStatus,
+            ),
+          );
+
+          final metrics = Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _inlineAiMetric(
+                icon: Icons.people_alt_outlined,
+                label: 'В кадре',
+                value: '${_liveAiPlayers.length}',
+                suffix: 'игроков',
+              ),
+              _inlineAiMetric(
+                icon: Icons.speed_rounded,
+                label: 'Макс. скорость',
+                value: topSpeed.toStringAsFixed(1),
+                suffix: 'км/ч',
+              ),
+              _inlineAiMetric(
+                icon: Icons.bolt_rounded,
+                label: 'Спринты',
+                value: '$sprintCount',
+                suffix: 'событий',
+              ),
+              _inlineAiMetric(
+                icon: Icons.monitor_heart_outlined,
+                label: 'Нагрузка',
+                value: load.toStringAsFixed(0),
+                suffix: 'средняя',
+              ),
+            ],
+          );
+
+          final header = Container(
+            constraints: const BoxConstraints(minHeight: 58),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: _mcLine.withOpacity(.7))),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEAF8F1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.auto_awesome_rounded, color: _mcGreen, size: 19),
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text(
+                        'ИИ-видеоповтор',
+                        style: TextStyle(
+                          color: Color(0xFF111827),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: _liveAiPlayers.isNotEmpty
+                                  ? _mcGreen
+                                  : const Color(0xFFF59E0B),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              _liveAiStatus,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: _mcSub,
+                                fontSize: 10.8,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                if (!compact) ...[
+                  TextButton.icon(
+                    onPressed: () => _openMatchLive(video: video),
+                    icon: const Icon(Icons.sensors_rounded, size: 17),
+                    label: const Text('Онлайн-матч'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: _mcGreen,
+                      textStyle: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  IconButton(
+                    tooltip: 'Развернуть видеоповтор',
+                    onPressed: () => _openMatchVideoAnalysis(video),
+                    icon: const Icon(Icons.open_in_full_rounded, size: 20),
+                    color: _mcText,
+                  ),
+                ],
+              ],
+            ),
+          );
+
+          if (compact) {
+            return Column(
+              children: [
+                header,
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        AspectRatio(aspectRatio: 16 / 9, child: videoStage),
+                        const SizedBox(height: 12),
+                        metrics,
+                        const SizedBox(height: 12),
+                        SizedBox(height: 250, child: _inlineAiEventsPanel()),
+                        const SizedBox(height: 12),
+                        SizedBox(height: 290, child: _inlineAiPitchPanel()),
+                        const SizedBox(height: 12),
+                        SizedBox(height: 230, child: _inlineAiPlayersPanel()),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              header,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
+                child: metrics,
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        flex: medium ? 7 : 8,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(child: videoStage),
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              height: medium ? 138 : 154,
+                              child: _inlineAiEventsPanel(horizontal: true),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        width: medium ? 286 : 326,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(flex: 6, child: _inlineAiPitchPanel()),
+                            const SizedBox(height: 10),
+                            Expanded(flex: 4, child: _inlineAiPlayersPanel()),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _matchAiEmptyState({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    Widget? action,
+  }) {
+    return ColoredBox(
+      color: Colors.white,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 58,
+                  height: 58,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEAF8F1),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Icon(icon, color: _mcGreen, size: 28),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: _mcText, fontSize: 18, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  subtitle,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: _mcSub, fontSize: 12.5, height: 1.4),
+                ),
+                if (action != null) ...[
+                  const SizedBox(height: 18),
+                  action,
+                ],
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  if (normalizedVideoUrl.isEmpty) {
-    return _buildSectionCard(
-      title: 'Видеоанализ ИИ',
-      subtitle: 'Для AI-разбора нужно сначала загрузить полное видео матча',
-      trailing: _videoAddButton(
-        label: uploadingVideo ? 'Загрузка...' : 'Загрузить видео',
-        icon: Icons.cloud_upload_outlined,
-        onTap: uploadingVideo ? null : () => _showUploadVideoSheet('full'),
+  Widget _inlineAiMetric({
+    required IconData icon,
+    required String label,
+    required String value,
+    required String suffix,
+  }) {
+    return Container(
+      width: 158,
+      height: 60,
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F9F8),
+        borderRadius: BorderRadius.circular(12),
       ),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(22),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: borderColor),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: softAccent,
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Icon(Icons.psychology_alt_rounded, color: primary, size: 28),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: const Color(0xFFEAF8F1),
+              borderRadius: BorderRadius.circular(10),
             ),
-            const SizedBox(height: 14),
-            Text(
-              'AI-видеоанализ откроется после загрузки видео матча',
-              style: TextStyle(
-                color: textPrimary,
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-                height: 1.15,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Загрузите запись в разделе «Видео», после этого здесь появится экран разбора.',
-              style: TextStyle(
-                color: textSecondary,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w700,
-                height: 1.35,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
+            child: Icon(icon, color: _mcGreen, size: 17),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _proOutlineButton(
-                  icon: Icons.play_circle_outline_rounded,
-                  text: 'Открыть раздел видео',
-                  onTap: () => _openMatchDetailTab(4),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: _mcSub, fontSize: 9.4, fontWeight: FontWeight.w600),
                 ),
-                _proOutlineButton(
-                  icon: Icons.cloud_upload_outlined,
-                  text: uploadingVideo ? 'Загрузка...' : 'Загрузить видео',
-                  onTap: uploadingVideo ? null : () => _showUploadVideoSheet('full'),
+                const SizedBox(height: 2),
+                Text.rich(
+                  TextSpan(
+                    text: value,
+                    style: TextStyle(color: _mcText, fontSize: 14, fontWeight: FontWeight.w600),
+                    children: [
+                      TextSpan(
+                        text: '  $suffix',
+                        style: TextStyle(color: _mcSub, fontSize: 8.6, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _inlineAiPanel({
+    required String title,
+    required String subtitle,
+    required Widget child,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F9F8),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(title, style: TextStyle(color: _mcText, fontSize: 12.2, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 3),
+          Text(subtitle, style: TextStyle(color: _mcSub, fontSize: 9.8, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 10),
+          Expanded(child: child),
+        ],
+      ),
+    );
+  }
+
+  Widget _inlineAiEventsPanel({bool horizontal = false}) {
+    final events = _liveAiEvents.take(horizontal ? 4 : 8).toList();
+    return _inlineAiPanel(
+      title: 'События ИИ',
+      subtitle: 'Распознавание синхронизировано с видеоповтором',
+      child: events.isEmpty
+          ? _inlineAiWaiting(
+              icon: Icons.timeline_rounded,
+              text: 'Запустите видео — события появятся здесь по ходу анализа.',
+            )
+          : ListView.separated(
+              scrollDirection: horizontal ? Axis.horizontal : Axis.vertical,
+              physics: const BouncingScrollPhysics(),
+              itemCount: events.length,
+              separatorBuilder: (_, __) => SizedBox(
+                width: horizontal ? 8 : 0,
+                height: horizontal ? 0 : 7,
+              ),
+              itemBuilder: (context, index) {
+                final event = events[index];
+                final color = event['color'] is Color
+                    ? event['color'] as Color
+                    : _mcGreen;
+                return Container(
+                  width: horizontal ? 210 : double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: color.withOpacity(.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          event['icon'] is IconData
+                              ? event['icon'] as IconData
+                              : Icons.auto_awesome_rounded,
+                          color: color,
+                          size: 15,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              _s(event['title']),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: _mcText, fontSize: 10.2, fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${_s(event['minute'])}${_s(event['subtitle']).isEmpty ? '' : ' · ${_s(event['subtitle'])}'}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: _mcSub, fontSize: 8.8, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+    );
+  }
+
+  Widget _inlineAiPitchPanel() {
+    return _inlineAiPanel(
+      title: 'Мини-карта',
+      subtitle: 'Позиции, траектории и скорость игроков',
+      child: _liveAiPositions.isEmpty
+          ? _inlineAiWaiting(
+              icon: Icons.map_outlined,
+              text: 'Жду первые координаты игроков от ИИ.',
+            )
+          : CustomPaint(
+              painter: _MatchPitchNetworkPainter(
+                vertical: true,
+                livePositions: _liveAiPositions,
+                liveTrails: _liveAiTrails,
+                liveSpeeds: _liveAiSpeedsKmh,
+              ),
+            ),
+    );
+  }
+
+  Widget _inlineAiPlayersPanel() {
+    final players = _liveAiPlayers.take(7).toList();
+    return _inlineAiPanel(
+      title: 'Игроки в кадре',
+      subtitle: 'Track ID и уверенность распознавания',
+      child: players.isEmpty
+          ? _inlineAiWaiting(
+              icon: Icons.groups_2_outlined,
+              text: 'Игроки появятся после запуска видеоповтора.',
+            )
+          : ListView.separated(
+              physics: const BouncingScrollPhysics(),
+              itemCount: players.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 5),
+              itemBuilder: (context, index) {
+                final player = players[index];
+                final trackId = player.trackId > 0
+                    ? player.trackId
+                    : int.tryParse(player.id) ?? index + 1;
+                return Row(
+                  children: [
+                    Container(
+                      width: 27,
+                      height: 27,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEAF8F1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        player.number > 0 ? '${player.number}' : '$trackId',
+                        style: TextStyle(color: _mcGreen, fontSize: 9.5, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _liveAiPlayerLabel(trackId, player: player),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: _mcText, fontSize: 10.2, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    Text(
+                      '${(player.confidence * 100).round()}%',
+                      style: TextStyle(color: _mcSub, fontSize: 9.2, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                );
+              },
+            ),
+    );
+  }
+
+  Widget _inlineAiWaiting({required IconData icon, required String text}) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: const Color(0xFF98A2B3), size: 24),
+            const SizedBox(height: 7),
+            Text(
+              text,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: _mcSub, fontSize: 9.8, height: 1.35, fontWeight: FontWeight.w600),
+            ),
           ],
         ),
       ),
     );
   }
 
-  // ЕСЛИ ВИДЕО ЕСТЬ - ОТКРЫВАЕМ НОВЫЙ ЭКРАН
-  return Center(
-    child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            color: softAccent,
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: Icon(
-            Icons.analytics_outlined,
-            color: primary,
-            size: 40,
-          ),
-        ),
-        const SizedBox(height: 20),
-        Text(
-          'AI-анализ матча',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w900,
-            color: textPrimary,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Видео загружено, можно начать анализ',
-          style: TextStyle(
-            color: textSecondary,
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 24),
-        SizedBox(
-          width: 240,
-          child: ElevatedButton.icon(
-            onPressed: () => _openMatchVideoAnalysis(video!),
-            icon: const Icon(Icons.analytics_outlined),
-            label: const Text(
-              'Запустить AI-анализ',
-              style: TextStyle(fontWeight: FontWeight.w800),
+  Widget _buildAiVideoAnalysisTabLegacy() {
+    final video = _primaryAiVideo();
+    final normalizedVideoUrl = video == null
+        ? ''
+        : (_normalizeUrl(_s(video['video_url'])) ?? '');
+    final resolvedTeamId =
+        teamId > 0 ? teamId : (widget.teamId ?? _i(match?['team_id']));
+    final hasVideo = normalizedVideoUrl.isNotEmpty;
+
+    Widget actionButton({
+      required String label,
+      required IconData icon,
+      required VoidCallback? onPressed,
+      bool primaryAction = false,
+    }) {
+      final shape = RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      );
+      if (primaryAction) {
+        return ElevatedButton.icon(
+          onPressed: onPressed,
+          icon: Icon(icon, size: 18),
+          label: Text(label),
+          style: ElevatedButton.styleFrom(
+            minimumSize: const Size(0, 44),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            elevation: 0,
+            backgroundColor: _mcGreen,
+            foregroundColor: Colors.white,
+            disabledBackgroundColor: _mcGreen.withOpacity(.45),
+            shape: shape,
+            textStyle: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
             ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00A750),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+          ),
+        );
+      }
+      return OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 18),
+        label: Text(label),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(0, 44),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          foregroundColor: _mcText,
+          side: BorderSide(color: _mcLine),
+          shape: shape,
+          textStyle: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
+    }
+
+    return ColoredBox(
+      color: _mcBg,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 720;
+          final title = resolvedTeamId <= 0
+              ? 'Команда не определена'
+              : hasVideo
+                  ? 'Запись готова к AI-разбору'
+                  : 'Добавьте видео матча';
+          final description = resolvedTeamId <= 0
+              ? 'Откройте матч из карточки команды, чтобы передать teamId.'
+              : hasVideo
+                  ? 'Запускайте анализ записи или переходите в режим онлайн-матча. Плеер, таймлайн и управление скоростью сохраняются.'
+                  : 'После загрузки полной записи здесь появятся распознавание игроков и мяча, эпизоды и тактический разбор.';
+
+          return SingleChildScrollView(
+            padding: EdgeInsets.all(compact ? 10 : 14),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 980),
+                child: Container(
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: _mcLine),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Container(
+                        height: 42,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: _mcPanelTop,
+                          border: Border(bottom: BorderSide(color: _mcLine)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.psychology_alt_rounded,
+                              color: _mcGreen,
+                              size: 19,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'ВИДЕОАНАЛИЗ ИИ',
+                                style: TextStyle(
+                                  color: _mcText,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: .5,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 9,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: hasVideo
+                                    ? const Color(0xFFE8F7EF)
+                                    : const Color(0xFFF2F4F7),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                hasVideo ? 'ВИДЕО ГОТОВО' : 'НЕТ ВИДЕО',
+                                style: TextStyle(
+                                  color: hasVideo ? _mcGreen : _mcSub,
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.all(compact ? 16 : 22),
+                        child: Flex(
+                          direction: compact ? Axis.vertical : Axis.horizontal,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 58,
+                              height: 58,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE8F7EF),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                hasVideo
+                                    ? Icons.analytics_outlined
+                                    : Icons.video_file_outlined,
+                                color: _mcGreen,
+                                size: 29,
+                              ),
+                            ),
+                            SizedBox(
+                              width: compact ? 0 : 16,
+                              height: compact ? 14 : 0,
+                            ),
+                            if (compact)
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    title,
+                                    style: TextStyle(
+                                      color: _mcText,
+                                      fontSize: compact ? 17 : 19,
+                                      fontWeight: FontWeight.w600,
+                                      height: 1.15,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    description,
+                                    style: TextStyle(
+                                      color: _mcSub,
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                      height: 1.42,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 18),
+                                  Wrap(
+                                    spacing: 9,
+                                    runSpacing: 9,
+                                    children: [
+                                      if (resolvedTeamId > 0 && hasVideo)
+                                        actionButton(
+                                          label: 'Анализ записи',
+                                          icon: Icons.auto_awesome_motion_rounded,
+                                          onPressed: () =>
+                                              _openMatchVideoAnalysis(video!),
+                                          primaryAction: true,
+                                        ),
+                                      if (resolvedTeamId > 0 && !hasVideo)
+                                        actionButton(
+                                          label: uploadingVideo
+                                              ? 'Загрузка...'
+                                              : 'Загрузить видео',
+                                          icon: Icons.cloud_upload_outlined,
+                                          onPressed: uploadingVideo
+                                              ? null
+                                              : () =>
+                                                  _showUploadVideoSheet('full'),
+                                          primaryAction: true,
+                                        ),
+                                      if (resolvedTeamId > 0)
+                                        actionButton(
+                                          label: 'Онлайн-матч',
+                                          icon: Icons.sensors_rounded,
+                                          onPressed: () =>
+                                              _openMatchLive(video: video),
+                                        ),
+                                      actionButton(
+                                        label: 'Раздел видео',
+                                        icon: Icons.video_library_outlined,
+                                        onPressed: () =>
+                                            _openMatchDetailTab(4),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              )
+                            else
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      title,
+                                      style: TextStyle(
+                                        color: _mcText,
+                                        fontSize: 19,
+                                        fontWeight: FontWeight.w600,
+                                        height: 1.15,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      description,
+                                      style: TextStyle(
+                                        color: _mcSub,
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w600,
+                                        height: 1.42,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 18),
+                                    Wrap(
+                                      spacing: 9,
+                                      runSpacing: 9,
+                                      children: [
+                                        if (resolvedTeamId > 0 && hasVideo)
+                                          actionButton(
+                                            label: 'Анализ записи',
+                                            icon: Icons
+                                                .auto_awesome_motion_rounded,
+                                            onPressed: () =>
+                                                _openMatchVideoAnalysis(video!),
+                                            primaryAction: true,
+                                          ),
+                                        if (resolvedTeamId > 0 && !hasVideo)
+                                          actionButton(
+                                            label: uploadingVideo
+                                                ? 'Загрузка...'
+                                                : 'Загрузить видео',
+                                            icon: Icons.cloud_upload_outlined,
+                                            onPressed: uploadingVideo
+                                                ? null
+                                                : () => _showUploadVideoSheet(
+                                                      'full',
+                                                    ),
+                                            primaryAction: true,
+                                          ),
+                                        if (resolvedTeamId > 0)
+                                          actionButton(
+                                            label: 'Онлайн-матч',
+                                            icon: Icons.sensors_rounded,
+                                            onPressed: () =>
+                                                _openMatchLive(video: video),
+                                          ),
+                                        actionButton(
+                                          label: 'Раздел видео',
+                                          icon: Icons.video_library_outlined,
+                                          onPressed: () =>
+                                              _openMatchDetailTab(4),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
+          );
+        },
+      ),
+    );
+  }
 
   // ---------------------------------------------------------------------------
   // Professional white Match Center layout for tablets / desktop.
@@ -7699,20 +8438,20 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                   child: Icon(Icons.sports_soccer_rounded, color: primary, size: 22),
                 ),
                 const SizedBox(height: 14),
-                Text('Матч', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: textSecondary)),
+                Text('Матч', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textSecondary)),
                 const SizedBox(height: 6),
                 Text(
                   teamName,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 14, height: 1.15, fontWeight: FontWeight.w900, color: textPrimary),
+                  style: TextStyle(fontSize: 14, height: 1.15, fontWeight: FontWeight.w600, color: textPrimary),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   '$score  $opponent',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: primary),
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: primary),
                 ),
                 const SizedBox(height: 14),
                 _proSideMeta(Icons.calendar_month_outlined, date.isEmpty ? 'Дата не указана' : date),
@@ -7722,7 +8461,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(color: softAccent, borderRadius: BorderRadius.circular(999)),
-                  child: Text('Завершен', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: primary)),
+                  child: Text('Завершен', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: primary)),
                 ),
               ],
             ),
@@ -7767,9 +8506,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: active ? textPrimary : textPrimary.withOpacity(.86))),
+                                  Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: active ? textPrimary : textPrimary.withOpacity(.86))),
                                   const SizedBox(height: 2),
-                                  Text(item.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: active ? primary : textSecondary)),
+                                  Text(item.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: active ? primary : textSecondary)),
                                 ],
                               ),
                             ),
@@ -7913,7 +8652,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                       style: TextStyle(
                         color: Colors.white.withOpacity(.64),
                         fontSize: 9.7,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         letterSpacing: .55,
                       ),
                     ),
@@ -7926,7 +8665,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                         color: Colors.white,
                         fontSize: 18.5,
                         height: 1.10,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
@@ -7944,7 +8683,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                   style: TextStyle(
                     color: primary,
                     fontSize: 22,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     height: 1,
                   ),
                 ),
@@ -8065,7 +8804,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
-                  child: Text(item.value, maxLines: 1, style: TextStyle(fontSize: 18.5, height: 1, fontWeight: FontWeight.w700, color: textPrimary)),
+                  child: Text(item.value, maxLines: 1, style: TextStyle(fontSize: 18.5, height: 1, fontWeight: FontWeight.w600, color: textPrimary)),
                 ),
                 const SizedBox(height: 5),
                 Text(item.hint, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10.2, fontWeight: FontWeight.w600, color: textSecondary.withOpacity(.86))),
@@ -8092,7 +8831,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             risk,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 16.2, height: 1.12, fontWeight: FontWeight.w700, color: textPrimary),
+            style: TextStyle(fontSize: 16.2, height: 1.12, fontWeight: FontWeight.w600, color: textPrimary),
           ),
           const SizedBox(height: 10),
           Text(
@@ -8133,9 +8872,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: textSecondary)),
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: textSecondary)),
                 const SizedBox(height: 3),
-                Text(value, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, height: 1.2, fontWeight: FontWeight.w900, color: textPrimary)),
+                Text(value, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, height: 1.2, fontWeight: FontWeight.w600, color: textPrimary)),
               ],
             ),
           ),
@@ -8232,7 +8971,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           color: color.withOpacity(.16),
           borderRadius: BorderRadius.circular(999),
         ),
-        child: Text(label, style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w900)),
+        child: Text(label, style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w600)),
       ),
     );
   }
@@ -8244,7 +8983,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
         color: active ? color : color.withOpacity(.08),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(text, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: active ? Colors.white : color)),
+      child: Text(text, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: active ? Colors.white : color)),
     );
   }
 
@@ -8297,9 +9036,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text('Автоматическая схема', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w900, color: textPrimary)),
+                      Text('Автоматическая схема', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: textPrimary)),
                       const SizedBox(height: 8),
-                      Text('Здесь можно подключить координаты игроков из видеоаналитики и строить связи, средние позиции, зоны прессинга и тепловую карту.', maxLines: 5, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.2, height: 1.32, fontWeight: FontWeight.w700, color: textSecondary)),
+                      Text('Здесь можно подключить координаты игроков из видеоаналитики и строить связи, средние позиции, зоны прессинга и тепловую карту.', maxLines: 5, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.2, height: 1.32, fontWeight: FontWeight.w600, color: textSecondary)),
                     ],
                   ),
                 ),
@@ -8327,9 +9066,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           children: [
             Icon(item.icon, size: 22, color: item.color),
             const Spacer(),
-            Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.2, fontWeight: FontWeight.w900, color: textPrimary)),
+            Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.2, fontWeight: FontWeight.w600, color: textPrimary)),
             const SizedBox(height: 2),
-            Text(item.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: textSecondary)),
+            Text(item.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: textSecondary)),
           ],
         ),
       ),
@@ -8361,9 +9100,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('${load.toStringAsFixed(0)}%', style: TextStyle(fontSize: 24, height: 1, fontWeight: FontWeight.w900, color: textPrimary)),
+                    Text('${load.toStringAsFixed(0)}%', style: TextStyle(fontSize: 24, height: 1, fontWeight: FontWeight.w600, color: textPrimary)),
                     const SizedBox(height: 4),
-                    Text('нагрузка', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: textSecondary)),
+                    Text('нагрузка', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: textSecondary)),
                   ],
                 ),
               ],
@@ -8391,8 +9130,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
         children: [
           Icon(icon, size: 17, color: color),
           const SizedBox(width: 10),
-          Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: textSecondary))),
-          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900, color: textPrimary)),
+          Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textSecondary))),
+          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: textPrimary)),
         ],
       ),
     );
@@ -8406,9 +9145,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
         children: [
           Row(
             children: [
-              Expanded(child: Text(teamName, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: textSecondary))),
+              Expanded(child: Text(teamName, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textSecondary))),
               const SizedBox(width: 10),
-              Expanded(child: Text(_s(match?["opponent"]).isEmpty ? 'Соперник' : _s(match?["opponent"]), textAlign: TextAlign.right, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: textSecondary))),
+              Expanded(child: Text(_s(match?["opponent"]).isEmpty ? 'Соперник' : _s(match?["opponent"]), textAlign: TextAlign.right, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textSecondary))),
             ],
           ),
           const SizedBox(height: 14),
@@ -8445,7 +9184,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       title: 'Видеоаналитика',
       trailing: InkWell(
         onTap: () => _openMatchDetailTab(3),
-        child: Text('Все фрагменты  ›', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900, color: primary)),
+        child: Text('Все фрагменты  ›', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: primary)),
       ),
       child: videos.isEmpty
           ? _emptyState('Видео пока не загружено', icon: Icons.video_collection_outlined)
@@ -8493,14 +9232,14 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
         children: [
           Text(
             'Тренерский вывод',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: textPrimary),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: textPrimary),
           ),
           const SizedBox(height: 8),
           Text(
             _aiCoachText(),
             maxLines: 5,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 12.5, height: 1.35, fontWeight: FontWeight.w700, color: textSecondary),
+            style: TextStyle(fontSize: 12.5, height: 1.35, fontWeight: FontWeight.w600, color: textSecondary),
           ),
           const SizedBox(height: 14),
           _proAiPoint('Эффективность: ${_efficiency.toStringAsFixed(1)}%'),
@@ -8541,11 +9280,11 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                   children: [
                     Row(
                       children: [
-                        Expanded(child: Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: textPrimary))),
+                        Expanded(child: Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: textPrimary))),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                           decoration: BoxDecoration(color: primary, borderRadius: BorderRadius.circular(12)),
-                          child: Text(rating, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900)),
+                          child: Text(rating, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
                         ),
                       ],
                     ),
@@ -8575,10 +9314,10 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             controller: _coachCommentCtrl,
             minLines: 4,
             maxLines: 5,
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: textPrimary),
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textPrimary),
             decoration: InputDecoration(
               hintText: 'Добавьте заметку о матче...',
-              hintStyle: TextStyle(color: textSecondary.withOpacity(.75), fontWeight: FontWeight.w700),
+              hintStyle: TextStyle(color: textSecondary.withOpacity(.75), fontWeight: FontWeight.w600),
               filled: true,
               fillColor: softSurface,
               border: OutlineInputBorder(borderSide: BorderSide.none, borderRadius: BorderRadius.circular(18)),
@@ -8596,7 +9335,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(color: softAccent, borderRadius: BorderRadius.circular(999)),
-      child: Text(text.toUpperCase(), style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900, color: primary)),
+      child: Text(text.toUpperCase(), style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: primary)),
     );
   }
 
@@ -8610,7 +9349,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w900, color: textPrimary))), if (trailing != null) trailing]),
+          Row(children: [Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600, color: textPrimary))), if (trailing != null) trailing]),
           const SizedBox(height: 16),
           child,
         ],
@@ -8688,15 +9427,15 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900, color: textPrimary)),
+                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: textPrimary)),
                   const SizedBox(height: 5),
                   FittedBox(
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.centerLeft,
-                    child: Text(value, maxLines: 1, style: TextStyle(fontSize: value.length > 12 ? 14 : 20, height: 1, fontWeight: FontWeight.w900, color: textPrimary)),
+                    child: Text(value, maxLines: 1, style: TextStyle(fontSize: value.length > 12 ? 14 : 20, height: 1, fontWeight: FontWeight.w600, color: textPrimary)),
                   ),
                   const SizedBox(height: 5),
-                  Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: textSecondary)),
+                  Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: textSecondary)),
                 ],
               ),
             ),
@@ -8713,11 +9452,11 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       padding: const EdgeInsets.only(bottom: 13),
       child: Row(
         children: [
-          SizedBox(width: 46, child: Text('$left', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: textPrimary))),
+          SizedBox(width: 46, child: Text('$left', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textPrimary))),
           Expanded(
             child: Column(
               children: [
-                Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: textSecondary)),
+                Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textSecondary)),
                 const SizedBox(height: 5),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(99),
@@ -8726,7 +9465,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
               ],
             ),
           ),
-          SizedBox(width: 46, child: Text('$right', textAlign: TextAlign.right, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: textPrimary))),
+          SizedBox(width: 46, child: Text('$right', textAlign: TextAlign.right, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textPrimary))),
         ],
       ),
     );
@@ -8738,20 +9477,20 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 42, child: Text(minute, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: textSecondary))),
+          SizedBox(width: 42, child: Text(minute, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textSecondary))),
           Container(width: 30, height: 30, decoration: BoxDecoration(color: color.withOpacity(.12), shape: BoxShape.circle), child: Icon(icon, size: 17, color: color)),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: color)),
-                Text(player, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: textPrimary)),
-                if (subtitle.isNotEmpty) Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: textSecondary)),
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
+                Text(player, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textPrimary)),
+                if (subtitle.isNotEmpty) Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textSecondary)),
               ],
             ),
           ),
-          if (score.isNotEmpty) Flexible(child: Text(score, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: textPrimary))),
+          if (score.isNotEmpty) Flexible(child: Text(score, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: textPrimary))),
         ],
       ),
     );
@@ -8774,7 +9513,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             if (thumb != null) Image.network(thumb, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
             Container(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black.withOpacity(.55)]))),
             Center(child: Icon(Icons.play_circle_fill_rounded, color: Colors.white.withOpacity(.92), size: 44)),
-            Positioned(left: 12, right: 12, bottom: 10, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900)), Text(_videoMeta(video), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white.withOpacity(.78), fontSize: 11, fontWeight: FontWeight.w700))])),
+            Positioned(left: 12, right: 12, bottom: 10, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)), Text(_videoMeta(video), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white.withOpacity(.78), fontSize: 11, fontWeight: FontWeight.w600))])),
           ],
         ),
       ),
@@ -8793,7 +9532,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           foregroundColor: primary,
           side: BorderSide.none,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
         ),
       ),
     );
@@ -8809,9 +9548,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           child: Column(
             crossAxisAlignment: alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
             children: [
-              Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: alignRight ? TextAlign.right : TextAlign.left, style: TextStyle(fontSize: 17.5, height: 1.12, fontWeight: FontWeight.w900, color: textPrimary)),
+              Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: alignRight ? TextAlign.right : TextAlign.left, style: TextStyle(fontSize: 17.5, height: 1.12, fontWeight: FontWeight.w600, color: textPrimary)),
               const SizedBox(height: 8),
-              Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5), decoration: BoxDecoration(color: color.withOpacity(.10), borderRadius: BorderRadius.circular(8)), child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900, color: color))),
+              Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5), decoration: BoxDecoration(color: color.withOpacity(.10), borderRadius: BorderRadius.circular(8)), child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: color))),
             ],
           ),
         ),
@@ -8825,13 +9564,13 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     return Container(width: 58, height: 58, decoration: BoxDecoration(color: color.withOpacity(.09), borderRadius: BorderRadius.circular(20)), child: Icon(icon, color: color, size: 32));
   }
 
-  Widget _proHeroMeta(IconData icon, String text) => Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 16, color: textSecondary), const SizedBox(width: 7), ConstrainedBox(constraints: const BoxConstraints(maxWidth: 220), child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: textSecondary)))]);
+  Widget _proHeroMeta(IconData icon, String text) => Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 16, color: textSecondary), const SizedBox(width: 7), ConstrainedBox(constraints: const BoxConstraints(maxWidth: 220), child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: textSecondary)))]);
 
-  Widget _proSideMeta(IconData icon, String text) => Padding(padding: const EdgeInsets.only(bottom: 9), child: Row(children: [Icon(icon, size: 16, color: textSecondary), const SizedBox(width: 8), Expanded(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: textSecondary)))]));
+  Widget _proSideMeta(IconData icon, String text) => Padding(padding: const EdgeInsets.only(bottom: 9), child: Row(children: [Icon(icon, size: 16, color: textSecondary), const SizedBox(width: 8), Expanded(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textSecondary)))]));
 
-  Widget _proMiniPlayerStat(String label, String value) => Padding(padding: const EdgeInsets.only(bottom: 7), child: Row(children: [Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: textSecondary))), const SizedBox(width: 8), Flexible(child: Text(value.isEmpty || value == '0' ? '—' : value, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: textPrimary)))]));
+  Widget _proMiniPlayerStat(String label, String value) => Padding(padding: const EdgeInsets.only(bottom: 7), child: Row(children: [Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textSecondary))), const SizedBox(width: 8), Flexible(child: Text(value.isEmpty || value == '0' ? '—' : value, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textPrimary)))]));
 
-  Widget _proAiPoint(String text) => Padding(padding: const EdgeInsets.only(bottom: 8), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Icon(Icons.check_circle_rounded, color: primary, size: 17), const SizedBox(width: 8), Expanded(child: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, height: 1.25, fontWeight: FontWeight.w800, color: textSecondary)))]));
+  Widget _proAiPoint(String text) => Padding(padding: const EdgeInsets.only(bottom: 8), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Icon(Icons.check_circle_rounded, color: primary, size: 17), const SizedBox(width: 8), Expanded(child: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, height: 1.25, fontWeight: FontWeight.w600, color: textSecondary)))]));
 
   List<Map<String, dynamic>> _videosByType(String type) {
     return ((match?["videos"] as List?) ?? [])
@@ -9327,7 +10066,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: compact ? 16 : 18,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w600,
                           color: textPrimary,
                         ),
                       ),
@@ -9419,7 +10158,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                         color: Color(0xFF0B0F14),
                         fontSize: 12.0,
                         height: 1.05,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         letterSpacing: -.18,
                       ),
                     ),
@@ -9589,7 +10328,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 10.8,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w600,
                               color: active ? primary : textSecondary,
                             ),
                           ),
@@ -9648,7 +10387,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 16,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w600,
                               color: textPrimary,
                             ),
                           ),
@@ -9716,7 +10455,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w600,
                           color: textPrimary,
                         ),
                       ),
@@ -9800,7 +10539,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     fontSize: 11.5,
-                                    fontWeight: FontWeight.w800,
+                                    fontWeight: FontWeight.w600,
                                     color: active ? primary : textSecondary,
                                   ),
                                 ),
@@ -9847,23 +10586,27 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
   // Existing tabs stay the same: Обзор / Основные ТТД / Эпизоды / Нарезка / Видео.
   // ---------------------------------------------------------------------------
 
-  Color get _mcBg => Colors.white;
+  Color get _mcBg => const Color(0xFFF6F7F6);
   Color get _mcRail => Colors.white;
   Color get _mcHeader => Colors.white;
   Color get _mcPanel => const Color(0xFFFFFFFF);
   Color get _mcPanelTop => const Color(0xFFF8F9FA);
   Color get _mcLine => const Color(0xFFE5E7EB);
   Color get _mcText => const Color(0xFF111827);
-  Color get _mcSub => const Color(0xFF6B7280);
-  Color get _mcGreen => const Color(0xFF28A86B);
-  Color get _mcBlue => const Color(0xFF28A86B);
+  Color get _mcSub => const Color(0xFF475467);
+  Color get _mcGreen => const Color(0xFF00A750);
+  Color get _mcBlue => const Color(0xFF00A750);
   Color get _mcRed => const Color(0xFFD64545);
   Color get _mcYellow => const Color(0xFFD99A00);
-  Color get _mcControl => const Color(0xFFF6F7F9);
-  Color get _mcControlLine => const Color(0xFFE8EEE9);
-  Color get _mcOnDark => const Color(0xFF111827);
-  Color get _mcOnDarkSub => const Color(0xFF6B7280);
-  Color get _cmrMatchGreen => const Color(0xFF28A86B);
+  Color get _mcControl => const Color(0xFF111827);
+  Color get _mcControlLine => const Color(0xFF263244);
+  Color get _mcOnDark => const Color(0xFFFFFFFF);
+  Color get _mcOnDarkSub => const Color(0xFFCBD5E1);
+  Color get _mcPlayerBar => Colors.white;
+  Color get _mcPlayerLine => const Color(0xFFE5EAE7);
+  Color get _mcPlayerText => const Color(0xFF111827);
+  Color get _mcPlayerSub => const Color(0xFF667085);
+  Color get _cmrMatchGreen => const Color(0xFF00A750);
   Color get _cmrMatchGreenSoft => const Color(0xFFEAF7F0);
   Color get _cmrMatchSurface => const Color(0xFFF7F9F8);
   Color get _cmrMatchMuted => const Color(0xFF667085);
@@ -9877,64 +10620,381 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     required String score,
   }) {
     return Container(
-      color: Colors.white,
-      child: Row(
+      color: _mcBg,
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildCmrSidebar(
+          _buildMatchWorkspaceContentHeader(
             title: title,
             opponent: opponent,
             date: date,
+            competition: competition,
             score: score,
           ),
-          Container(width: 1, color: const Color(0xFFE8EEE9)),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildMatchWorkspaceContentHeader(
-                  title: title,
-                  opponent: opponent,
-                  date: date,
-                  competition: competition,
-                  score: score,
-                ),
-                Container(height: 1, color: const Color(0xFFE8EEE9)),
-                Expanded(
-                  child: AnimatedBuilder(
-                    animation: _tabController,
-                    builder: (context, _) {
-                      final index = _safeMatchTabIndex(_tabController.index);
-                      final content = index == 0
-                          ? _matchAnalysisOverview(
-                              title: title,
-                              opponent: opponent,
-                              date: date,
-                              competition: competition,
-                              score: score,
-                            )
-                          : _activeTabWidgetByIndex(index);
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final compactRail = constraints.maxWidth < 860;
+                final railWidth = compactRail
+                    ? 56.0
+                    : constraints.maxWidth < 1180
+                        ? 206.0
+                        : 232.0;
 
-                      return ColoredBox(
-                        color: Colors.white,
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 160),
-                          switchInCurve: Curves.easeOutCubic,
-                          switchOutCurve: Curves.easeOutCubic,
-                          child: KeyedSubtree(
-                            key: ValueKey('match-detail-cmr-tab-$index'),
-                            child: content,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                _matchAnalysisVideoBottomTimeline(),
-              ],
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(
+                      width: railWidth,
+                      child: _buildTrackerMatchSideNav(compact: compactRail),
+                    ),
+                    Expanded(
+                      child: AnimatedBuilder(
+                        animation: _tabController,
+                        builder: (context, _) {
+                          final index =
+                              _safeMatchTabIndex(_tabController.index);
+                          final content = index == 0
+                              ? _matchAnalysisOverview(
+                                  title: title,
+                                  opponent: opponent,
+                                  date: date,
+                                  competition: competition,
+                                  score: score,
+                                )
+                              : _activeTabWidgetByIndex(index);
+
+                          return ColoredBox(
+                            color: Colors.white,
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 160),
+                              switchInCurve: Curves.easeOutCubic,
+                              switchOutCurve: Curves.easeOutCubic,
+                              child: KeyedSubtree(
+                                key: ValueKey(
+                                  'match-detail-tracker-tab-$index',
+                                ),
+                                child: content,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
+          _matchAnalysisVideoBottomTimeline(),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTrackerMatchSideNav({required bool compact}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          right: BorderSide(
+            color: _mcLine.withOpacity(.72),
+            width: .8,
+          ),
+        ),
+      ),
+      child: AnimatedBuilder(
+        animation: _tabController,
+        builder: (context, _) {
+          final activeIndex = _safeMatchTabIndex(_tabController.index);
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (!compact)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 13, 12, 7),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 5,
+                        height: 5,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF00A750),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 7),
+                      Text(
+                        'РАЗБОР МАТЧА',
+                        style: TextStyle(
+                          fontFamily: AppTypography.fontFamily,
+                          color: const Color(0xFF98A2B3),
+                          fontSize: 9.6,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: .35,
+                          height: 1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              Expanded(
+                child: ListView.builder(
+                  padding: EdgeInsets.fromLTRB(
+                    compact ? 7 : 9,
+                    compact ? 9 : 5,
+                    compact ? 7 : 9,
+                    12,
+                  ),
+                  itemCount: _matchNavItems.length,
+                  itemBuilder: (context, index) {
+                    final item = _matchNavItems[index];
+                    final active = activeIndex == index;
+                    final label = item.title == 'Основные ТТД'
+                        ? 'Основные ТТД'
+                        : item.title == 'Видеоанализ ИИ'
+                            ? 'ИИ-анализ'
+                            : item.title;
+
+                    final tile = Material(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(9),
+                      child: InkWell(
+                        onTap: () => _openMatchDetailTab(index),
+                        borderRadius: BorderRadius.circular(9),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          curve: Curves.easeOutCubic,
+                          height: compact ? 40 : 42,
+                          padding: EdgeInsets.fromLTRB(
+                            compact ? 0 : 7,
+                            0,
+                            compact ? 0 : 9,
+                            0,
+                          ),
+                          decoration: BoxDecoration(
+                            color: active
+                                ? const Color(0xFFF1F7F3)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: compact
+                                ? MainAxisAlignment.center
+                                : MainAxisAlignment.start,
+                            children: [
+                              if (!compact) ...[
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 150),
+                                  width: 3,
+                                  height: active ? 22 : 12,
+                                  decoration: BoxDecoration(
+                                    color: active
+                                        ? const Color(0xFF00A750)
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(99),
+                                  ),
+                                ),
+                                const SizedBox(width: 9),
+                              ],
+                              Icon(
+                                item.icon,
+                                size: 17,
+                                color: active
+                                    ? const Color(0xFF087A3A)
+                                    : const Color(0xFF667085),
+                              ),
+                              if (!compact) ...[
+                                const SizedBox(width: 9),
+                                Expanded(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        label,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontFamily:
+                                              AppTypography.fontFamily,
+                                          color: active
+                                              ? const Color(0xFF111827)
+                                              : const Color(0xFF344054),
+                                          fontSize: 12.1,
+                                          fontWeight: FontWeight.w600,
+                                          height: 1.05,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        item.subtitle,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontFamily:
+                                              AppTypography.fontFamily,
+                                          color: const Color(0xFF98A2B3),
+                                          fontSize: 9.8,
+                                          fontWeight: FontWeight.w400,
+                                          height: 1,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (index == 5)
+                                  Container(
+                                    width: 6,
+                                    height: 6,
+                                    margin: const EdgeInsets.only(left: 5),
+                                    decoration: BoxDecoration(
+                                      color: _liveAiPlayers.isNotEmpty
+                                          ? const Color(0xFF00A750)
+                                          : const Color(0xFFCBD5E1),
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 3),
+                      child: compact
+                          ? Tooltip(
+                              message: label,
+                              waitDuration:
+                                  const Duration(milliseconds: 220),
+                              child: tile,
+                            )
+                          : tile,
+                    );
+                  },
+                ),
+              ),
+              if (!compact)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(13, 8, 13, 12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 9,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF7F9F8),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.sports_soccer_rounded,
+                          size: 14,
+                          color: Color(0xFF00A750),
+                        ),
+                        const SizedBox(width: 7),
+                        Expanded(
+                          child: Text(
+                            _currentTabTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: AppTypography.fontFamily,
+                              color: const Color(0xFF667085),
+                              fontSize: 10.3,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildTrackerStyleMatchTabs() {
+    return Container(
+      height: 54,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+      ),
+      child: AnimatedBuilder(
+        animation: _tabController,
+        builder: (context, _) {
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+            child: Row(
+              children: List.generate(_matchNavItems.length, (index) {
+                final item = _matchNavItems[index];
+                final active = _safeMatchTabIndex(_tabController.index) == index;
+                var label = item.title;
+                if (label == 'Основные ТТД') label = 'ТТД';
+                if (label == 'Видеоанализ ИИ') label = 'ИИ-анализ';
+
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: InkWell(
+                    onTap: () => _openMatchDetailTab(index),
+                    borderRadius: BorderRadius.circular(12),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 160),
+                      height: 40,
+                      padding: const EdgeInsets.symmetric(horizontal: 13),
+                      decoration: BoxDecoration(
+                        color: active ? const Color(0xFFEAF8F1) : Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            item.icon,
+                            size: 17,
+                            color: active ? _mcGreen : _mcSub,
+                          ),
+                          const SizedBox(width: 7),
+                          Text(
+                            label,
+                            style: TextStyle(
+                              color: active ? _mcGreen : _mcText,
+                              fontSize: 11.5,
+                              fontWeight: active ? FontWeight.w600 : FontWeight.w600,
+                            ),
+                          ),
+                          if (index == 5) ...[
+                            const SizedBox(width: 7),
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: _liveAiPlayers.isNotEmpty
+                                    ? _mcGreen
+                                    : const Color(0xFF98A2B3),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          );
+        },
       ),
     );
   }
@@ -9950,21 +11010,26 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     final safeOpponent = opponent.trim().isEmpty ? 'Соперник' : opponent.trim();
 
     return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      height: 58,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       color: Colors.white,
       child: Row(
         children: [
+          if (!widget.embedded) ...[
+            _analysisTopIcon(Icons.arrow_back_rounded, onTap: () => Get.back()),
+            const SizedBox(width: 8),
+            Container(width: 1, height: 24, color: _mcLine),
+            const SizedBox(width: 10),
+          ],
           Container(
-            width: 28,
-            height: 28,
+            width: 32,
+            height: 32,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: const Color(0xFFF3FBF7),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFDCEFE5)),
+              borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.sports_soccer_rounded, color: Color(0xFF28A86B), size: 16),
+            child: const Icon(Icons.sports_soccer_rounded, color: Color(0xFF00A750), size: 17),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -9979,7 +11044,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                   style: const TextStyle(
                     color: Color(0xFF0B0F14),
                     fontSize: 12.4,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     height: 1.05,
                     letterSpacing: -.18,
                   ),
@@ -10012,15 +11077,14 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
               color: const Color(0xFFF3FBF7),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFDCEFE5)),
+              borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
               score,
               style: const TextStyle(
-                color: Color(0xFF28A86B),
+                color: Color(0xFF00A750),
                 fontSize: 10.8,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 height: 1,
               ),
             ),
@@ -10112,7 +11176,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                 color: _cmrMatchInk,
                                 fontSize: compact ? 13.2 : 14.4,
                                 height: 1.08,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
@@ -10128,7 +11192,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                               style: TextStyle(
                                 color: _cmrMatchGreen,
                                 fontSize: 10.8,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
@@ -10241,7 +11305,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                       style: TextStyle(
                                         color: active ? _cmrMatchInk : _cmrMatchMuted,
                                         fontSize: 11.2,
-                                        fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+                                        fontWeight: active ? FontWeight.w600 : FontWeight.w600,
                                       ),
                                     ),
                                     if (active) ...[
@@ -10275,7 +11339,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                   style: TextStyle(
                     color: _cmrMatchMuted,
                     fontSize: 11.5,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -10291,13 +11355,14 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
   Widget _analysisTopIcon(IconData icon, {VoidCallback? onTap}) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(8),
       child: Container(
-        width: 38,
-        height: 38,
+        width: 34,
+        height: 34,
         decoration: BoxDecoration(
           color: _cmrMatchSurface,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: _mcLine),
         ),
         child: Icon(icon, color: _cmrMatchInk, size: 18),
       ),
@@ -10336,7 +11401,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
               style: TextStyle(
                 color: filled ? Colors.white : _cmrMatchInk,
                 fontSize: 11.5,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -10355,18 +11420,18 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     final safeOpponent = opponent.trim().isEmpty ? 'Соперник' : opponent.trim();
 
     return Container(
-      width: 74,
-      margin: const EdgeInsets.fromLTRB(6, 6, 0, 6),
+      width: 72,
+      margin: const EdgeInsets.all(8),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: _MatchRailColors.rail,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: _MatchRailColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.018),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(.12),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -10386,12 +11451,12 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                   final active = _safeMatchTabIndex(_tabController.index) == 0;
                   return AnimatedContainer(
                     duration: const Duration(milliseconds: 160),
-                    width: 58,
+                    width: 56,
                     height: 50,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: active ? _MatchRailColors.active : _MatchRailColors.railPanel,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: active ? _MatchRailColors.active : _MatchRailColors.border),
                       boxShadow: active
                           ? [
@@ -10425,7 +11490,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                           children: [
                             Icon(
                               Icons.sports_soccer_rounded,
-                              color: active ? Colors.white : _MatchRailColors.railText,
+                              color: active ? _MatchRailColors.activeText : _MatchRailColors.railText,
                               size: 18,
                             ),
                             const SizedBox(height: 3),
@@ -10435,11 +11500,11 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                               overflow: TextOverflow.ellipsis,
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                color: active ? Colors.white : _MatchRailColors.railMuted,
+                                color: active ? _MatchRailColors.activeText : _MatchRailColors.railMuted,
                                 fontSize: 8,
                                 height: .95,
                                 letterSpacing: -.25,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
@@ -10467,16 +11532,17 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                 return ListView.separated(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                   physics: const BouncingScrollPhysics(),
-                  itemCount: _matchNavItems.length,
+                  itemCount: max(0, _matchNavItems.length - 1),
                   separatorBuilder: (_, __) => const SizedBox(height: 5),
                   itemBuilder: (context, index) {
-                    final item = _matchNavItems[index];
-                    final active = _safeMatchTabIndex(_tabController.index) == index;
+                    final navIndex = index + 1;
+                    final item = _matchNavItems[navIndex];
+                    final active = _safeMatchTabIndex(_tabController.index) == navIndex;
 
                     return _MatchRailButton(
                       item: item,
                       active: active,
-                      onTap: () => _openMatchDetailTab(index),
+                      onTap: () => _openMatchDetailTab(navIndex),
                     );
                   },
                 );
@@ -11164,15 +12230,15 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE8EEE9), width: 1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _mcLine, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
-            height: 32,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
+            height: 38,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: const BoxDecoration(
               color: Colors.white,
               border: Border(bottom: BorderSide(color: Color(0xFFE8EEE9))),
@@ -11190,8 +12256,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Color(0xFF0B0F14),
-                          fontSize: 10.8,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 11.2,
+                          fontWeight: FontWeight.w600,
                           height: .95,
                           letterSpacing: -.12,
                         ),
@@ -11203,7 +12269,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: Color(0xFF6B7280),
-                            fontSize: 8.9,
+                            fontSize: 9.3,
                             fontWeight: FontWeight.w600,
                             height: .95,
                           ),
@@ -11236,7 +12302,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           ),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(10),
               child: child,
             ),
           ),
@@ -11255,18 +12321,20 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _analysisToolButton(
-          icon: Icons.copy_all_rounded,
-          tooltip: 'Копировать блок',
-          onTap: onCopy,
-        ),
-        const SizedBox(width: 2),
-        _analysisToolButton(
-          icon: Icons.open_in_full_rounded,
-          tooltip: 'Открыть шире',
-          onTap: onExpand,
-        ),
-
+        if (onCopy != null) ...[
+          _analysisToolButton(
+            icon: Icons.copy_all_rounded,
+            tooltip: 'Копировать блок',
+            onTap: onCopy,
+          ),
+          const SizedBox(width: 3),
+        ],
+        if (onExpand != null)
+          _analysisToolButton(
+            icon: Icons.open_in_full_rounded,
+            tooltip: 'Открыть шире',
+            onTap: onExpand,
+          ),
       ],
     );
   }
@@ -11280,16 +12348,16 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     final enabled = onTap != null;
     final button = Material(
       color: const Color(0xFFF6F7F9),
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(6),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(6),
         child: Container(
           width: 24,
           height: 24,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(6),
             border: Border.all(color: const Color(0xFFF0F2F4)),
           ),
           child: Icon(
@@ -11397,7 +12465,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                         style: const TextStyle(
                           color: Color(0xFF111827),
                           fontSize: 11.2,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
@@ -11489,7 +12557,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                   title,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(color: _mcText, fontSize: 13.2, fontWeight: FontWeight.w900),
+                                  style: TextStyle(color: _mcText, fontSize: 13.2, fontWeight: FontWeight.w600),
                                 ),
                                 if (subtitle != null && subtitle.trim().isNotEmpty) ...[
                                   const SizedBox(height: 2),
@@ -11497,7 +12565,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                     subtitle,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(color: _mcSub, fontSize: 10.4, fontWeight: FontWeight.w700),
+                                    style: TextStyle(color: _mcSub, fontSize: 10.4, fontWeight: FontWeight.w600),
                                   ),
                                 ],
                               ],
@@ -11526,7 +12594,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
 
   Widget _analysisDropDown(String text) {
     final t = text.trim().isEmpty ? 'Команда' : text.trim();
-    return Container(height: 22, constraints: const BoxConstraints(maxWidth: 128), padding: const EdgeInsets.symmetric(horizontal: 8), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(5), border: Border.all(color: _mcLine)), child: Row(mainAxisSize: MainAxisSize.min, children: [Flexible(child: Text(t, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcText, fontSize: 9.5, fontWeight: FontWeight.w800))), const SizedBox(width: 4), Icon(Icons.keyboard_arrow_down_rounded, color: _mcSub, size: 14)]));
+    return Container(height: 22, constraints: const BoxConstraints(maxWidth: 128), padding: const EdgeInsets.symmetric(horizontal: 8), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(5), border: Border.all(color: _mcLine)), child: Row(mainAxisSize: MainAxisSize.min, children: [Flexible(child: Text(t, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcText, fontSize: 9.5, fontWeight: FontWeight.w600))), const SizedBox(width: 4), Icon(Icons.keyboard_arrow_down_rounded, color: _mcSub, size: 14)]));
   }
 
   Widget _analysisMatchHeader({required String title, required String opponent, required String date, required String competition, required String score}) {
@@ -11540,7 +12608,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(color: _mcPanel, border: Border.all(color: _mcLine.withOpacity(.9)), borderRadius: BorderRadius.circular(8)),
       child: Column(children: [
-        Container(height: 28, padding: const EdgeInsets.symmetric(horizontal: 10), decoration: BoxDecoration(color: _mcPanelTop, border: Border(bottom: BorderSide(color: _mcLine.withOpacity(.85)))), child: Row(children: [Icon(Icons.star_border_rounded, color: _mcSub, size: 15), const SizedBox(width: 6), Expanded(child: Text(competition.isEmpty ? 'Матч команды' : competition, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: 10.5, fontWeight: FontWeight.w800))), _analysisPanelTools(
+        Container(height: 28, padding: const EdgeInsets.symmetric(horizontal: 10), decoration: BoxDecoration(color: _mcPanelTop, border: Border(bottom: BorderSide(color: _mcLine.withOpacity(.85)))), child: Row(children: [Icon(Icons.star_border_rounded, color: _mcSub, size: 15), const SizedBox(width: 6), Expanded(child: Text(competition.isEmpty ? 'Матч команды' : competition, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: 10.5, fontWeight: FontWeight.w600))), _analysisPanelTools(
           onExpand: () => _openAnalysisPanelFullscreen(
             title: competition.isEmpty ? 'Матч команды' : competition,
             subtitle: 'Информация о матче',
@@ -11557,9 +12625,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
             child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Row(children: [Expanded(child: _analysisTeamBadge(ourTeam, Icons.shield_rounded, _mcBlue)), const SizedBox(width: 10), Container(width: 92, height: 62, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: _mcLine)), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text('$leftScore - $rightScore', style: TextStyle(color: _mcText, fontSize: 23, fontWeight: FontWeight.w900, height: 1)), const SizedBox(height: 7), Text('ЗАВЕРШЕН', style: TextStyle(color: _mcGreen, fontSize: 10.5, fontWeight: FontWeight.w900))])), const SizedBox(width: 10), Expanded(child: _analysisTeamBadge(opp, Icons.security_rounded, _mcGreen, right: true))]),
+              Row(children: [Expanded(child: _analysisTeamBadge(ourTeam, Icons.shield_rounded, _mcBlue)), const SizedBox(width: 10), Container(width: 92, height: 62, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: _mcLine)), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text('$leftScore - $rightScore', style: TextStyle(color: _mcText, fontSize: 23, fontWeight: FontWeight.w600, height: 1)), const SizedBox(height: 7), Text('ЗАВЕРШЕН', style: TextStyle(color: _mcGreen, fontSize: 10.5, fontWeight: FontWeight.w600))])), const SizedBox(width: 10), Expanded(child: _analysisTeamBadge(opp, Icons.security_rounded, _mcGreen, right: true))]),
               const SizedBox(height: 9),
-              Text([if (date.isNotEmpty) date, if (stadium.isNotEmpty) stadium, if (title.isNotEmpty) title].join(' · '), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: 10.5, fontWeight: FontWeight.w700)),
+              Text([if (date.isNotEmpty) date, if (stadium.isNotEmpty) stadium, if (title.isNotEmpty) title].join(' · '), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: 10.5, fontWeight: FontWeight.w600)),
             ]),
           ),
         ),
@@ -11598,6 +12666,56 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     final nextMotion = Map<int, _AiPlayerMotion>.from(_lastAiMotion);
     final events = List<Map<String, dynamic>>.from(_liveAiEvents);
 
+    final serverEvents = <Map<String, dynamic>>[
+      ...result.recentEvents,
+      ...result.events,
+    ];
+    for (final event in serverEvents.reversed) {
+      final eventId = _s(event['id']);
+      if (eventId.isNotEmpty && events.any((old) => _s(old['server_event_id']) == eventId)) {
+        continue;
+      }
+      final type = _s(event['event_type']);
+      final title = <String, String>{
+            'pass': 'Передача',
+            'interception': 'Перехват',
+            'shot': 'Удар',
+            'shot_on_target': 'Удар в створ',
+            'goal': 'Гол',
+            'ball_out': 'Мяч вне поля',
+            'corner_candidate': 'Возможный угловой',
+            'free_kick_candidate': 'Возможный штрафной',
+          }[type] ??
+          type.replaceAll('_', ' ');
+      events.insert(0, {
+        'server_event_id': eventId,
+        'minute': _formatMatchPlayerTime(
+          Duration(milliseconds: _i(event['time_ms'])),
+        ),
+        'title': title,
+        'subtitle': 'AI ${(100 * _d(event['confidence'])).round()}% · ${_s(event['status'])}',
+        'icon': type.contains('goal') ? Icons.sports_soccer_rounded : Icons.auto_awesome_rounded,
+        'color': type.contains('goal') ? _mcGreen : _mcBlue,
+      });
+    }
+    for (final advice in <Map<String, dynamic>>[
+      ...result.recentAdvice,
+      ...result.advice,
+    ].reversed) {
+      final adviceId = _s(advice['id']);
+      if (adviceId.isNotEmpty && events.any((old) => _s(old['server_event_id']) == adviceId)) {
+        continue;
+      }
+      events.insert(0, {
+        'server_event_id': adviceId,
+        'minute': _formatMatchPlayerTime(Duration(milliseconds: _i(advice['time_ms']))),
+        'title': _s(advice['title']).isEmpty ? 'Подсказка тренеру' : _s(advice['title']),
+        'subtitle': _s(advice['message']),
+        'icon': Icons.psychology_alt_rounded,
+        'color': _mcYellow,
+      });
+    }
+
     for (final player in result.players) {
       final trackId = player.trackId > 0 ? player.trackId : int.tryParse(player.id) ?? player.bbox.hashCode.abs();
       if (player.bbox.isEmpty) continue;
@@ -11623,6 +12741,10 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       Offset pos = rawPos;
       var speedKmh = nextSpeeds[trackId] ?? 0.0;
       var accel = nextAccels[trackId] ?? 0.0;
+      final metrics = player.metrics;
+      final hasGpsSpeed = metrics.containsKey('speed_kmh');
+      final hasGpsSprints = metrics.containsKey('sprint_count');
+      final hasGpsLoad = metrics.containsKey('load_score');
 
       // Если трек не перескочил резко, слегка сглаживаем точку на мини-карте.
       // Если скачок большой — считаем, что YOLO/track_id сменился, и начинаем новый след.
@@ -11655,13 +12777,25 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
         accel = 0.0;
       }
 
+      // Физические показатели берём из GPS/Polar. Расчёт по bbox выше остаётся
+      // только визуальным fallback, когда трекер конкретному track_id ещё не привязан.
+      if (hasGpsSpeed) speedKmh = _d(metrics['speed_kmh']);
+      if (metrics.containsKey('acceleration_mps2')) {
+        accel = _d(metrics['acceleration_mps2']);
+      }
+
       nextSpeeds[trackId] = speedKmh;
       nextAccels[trackId] = accel;
-      nextLoad[trackId] = ((nextLoad[trackId] ?? 0.0) + speedKmh * .035 + accel.abs() * .18).clamp(0.0, 100.0).toDouble();
+      nextLoad[trackId] = hasGpsLoad
+          ? _d(metrics['load_score'])
+          : ((nextLoad[trackId] ?? 0.0) + speedKmh * .035 + accel.abs() * .18)
+              .clamp(0.0, 100.0)
+              .toDouble();
+      if (hasGpsSprints) nextSprints[trackId] = _i(metrics['sprint_count']);
 
       final sprintNow = speedKmh >= 22.0;
       final prevSprint = _lastAiMotion[trackId]?.sprinting == true;
-      if (sprintNow && !prevSprint) {
+      if (!hasGpsSprints && sprintNow && !prevSprint) {
         nextSprints[trackId] = (nextSprints[trackId] ?? 0) + 1;
         final label = _liveAiPlayerLabel(trackId, player: player);
         events.insert(0, {
@@ -11725,6 +12859,10 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       'frame': result.frame,
       'time_ms': result.timestamp,
       'players_count': result.players.length,
+      'match_live_id': result.matchLiveId,
+      'source_mode': result.sourceMode,
+      'ball': result.ball,
+      'telemetry': result.telemetry,
       'players': result.players.map((p) => {
             'id': p.id,
             'track_id': p.trackId,
@@ -11736,7 +12874,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             'sprints': _liveAiSprints[p.trackId] ?? 0,
             'load': _liveAiLoad[p.trackId] ?? 0,
           }).toList(),
-      'events': _liveAiEvents.take(12).map((e) => {
+      'events': result.recentEvents.isNotEmpty
+          ? result.recentEvents.take(20).toList()
+          : _liveAiEvents.take(12).map((e) => {
             'minute': _s(e['minute']),
             'title': _s(e['title']),
             'subtitle': _s(e['subtitle']),
@@ -11761,7 +12901,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
 
   Widget _analysisTeamBadge(String name, IconData icon, Color color, {bool right = false}) {
     final logo = Container(width: 54, height: 54, decoration: BoxDecoration(shape: BoxShape.circle, color: color.withOpacity(.14), border: Border.all(color: color.withOpacity(.78), width: 2)), child: Icon(icon, color: color, size: 30));
-    final text = Flexible(child: Column(crossAxisAlignment: right ? CrossAxisAlignment.end : CrossAxisAlignment.start, children: [Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: right ? TextAlign.right : TextAlign.left, style: TextStyle(color: _mcText, fontSize: 14.5, height: 1.1, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.star_rounded, color: _mcYellow, size: 14), const SizedBox(width: 4), Text('команда', style: TextStyle(color: _mcSub, fontSize: 9.5, fontWeight: FontWeight.w700))])]));
+    final text = Flexible(child: Column(crossAxisAlignment: right ? CrossAxisAlignment.end : CrossAxisAlignment.start, children: [Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: right ? TextAlign.right : TextAlign.left, style: TextStyle(color: _mcText, fontSize: 14.5, height: 1.1, fontWeight: FontWeight.w600)), const SizedBox(height: 4), Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.star_rounded, color: _mcYellow, size: 14), const SizedBox(width: 4), Text('команда', style: TextStyle(color: _mcSub, fontSize: 9.5, fontWeight: FontWeight.w600))])]));
     return Row(mainAxisAlignment: right ? MainAxisAlignment.end : MainAxisAlignment.start, children: right ? [text, const SizedBox(width: 10), logo] : [logo, const SizedBox(width: 10), text]);
   }
 
@@ -11777,10 +12917,10 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
         return Expanded(
           child: Row(
             children: [
-              SizedBox(width: 74, child: Text('Игрок ${entry.key}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w800))),
+              SizedBox(width: 74, child: Text('Игрок ${entry.key}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600))),
               Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(value: (value / 8).clamp(0, 1), minHeight: 5, color: _mcGreen, backgroundColor: const Color(0xFFE5E7EB)))),
               const SizedBox(width: 8),
-              SizedBox(width: 28, child: Text('$value', textAlign: TextAlign.right, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w900))),
+              SizedBox(width: 28, child: Text('$value', textAlign: TextAlign.right, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600))),
             ],
           ),
         );
@@ -11801,10 +12941,10 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
         return Expanded(
           child: Row(
             children: [
-              SizedBox(width: 74, child: Text('Игрок ${entry.key}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w800))),
+              SizedBox(width: 74, child: Text('Игрок ${entry.key}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600))),
               Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(value: (value / 100).clamp(0, 1), minHeight: 5, color: color, backgroundColor: const Color(0xFFE5E7EB)))),
               const SizedBox(width: 8),
-              SizedBox(width: 36, child: Text('${value.round()}%', textAlign: TextAlign.right, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w900))),
+              SizedBox(width: 36, child: Text('${value.round()}%', textAlign: TextAlign.right, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600))),
             ],
           ),
         );
@@ -11833,10 +12973,10 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           return Expanded(
             child: Row(
               children: [
-                SizedBox(width: 82, child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w700))),
+                SizedBox(width: 82, child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600))),
                 Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(value: (v / 34).clamp(0, 1), minHeight: 4, color: v >= 22 ? _mcGreen : _mcBlue, backgroundColor: const Color(0xFFE5E7EB)))),
                 const SizedBox(width: 8),
-                SizedBox(width: 34, child: Text(v.toStringAsFixed(1), textAlign: TextAlign.right, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w900))),
+                SizedBox(width: 34, child: Text(v.toStringAsFixed(1), textAlign: TextAlign.right, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600))),
               ],
             ),
           );
@@ -11848,7 +12988,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     final values = [33.4, 32.1, 31.8, 31.2, 30.9, 30.2, 29.8, 29.5, 29.1, 28.7];
     return Column(children: List.generate(min(names.length, values.length), (index) {
       final v = values[index];
-      return Expanded(child: Row(children: [SizedBox(width: 82, child: Text(names[index], maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w700))), Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(value: (v / 36).clamp(0, 1), minHeight: 4, color: _mcBlue, backgroundColor: const Color(0xFFE5E7EB)))), const SizedBox(width: 8), SizedBox(width: 30, child: Text(v.toStringAsFixed(1), textAlign: TextAlign.right, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w900)))]));
+      return Expanded(child: Row(children: [SizedBox(width: 82, child: Text(names[index], maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600))), Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(value: (v / 36).clamp(0, 1), minHeight: 4, color: _mcBlue, backgroundColor: const Color(0xFFE5E7EB)))), const SizedBox(width: 8), SizedBox(width: 30, child: Text(v.toStringAsFixed(1), textAlign: TextAlign.right, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600)))]));
     }));
   }
 
@@ -11943,9 +13083,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                             mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcText, fontSize: compact ? 10.5 : 11.4, fontWeight: FontWeight.w900)),
+                              Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcText, fontSize: compact ? 10.5 : 11.4, fontWeight: FontWeight.w600)),
                               const SizedBox(height: 3),
-                              Text('ТТД: $total · Г: $goals · А: $assists', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: compact ? 9.0 : 9.8, fontWeight: FontWeight.w700)),
+                              Text('ТТД: $total · Г: $goals · А: $assists', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: compact ? 9.0 : 9.8, fontWeight: FontWeight.w600)),
                             ],
                           ),
                         ),
@@ -11955,7 +13095,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                           height: compact ? 24 : 28,
                           alignment: Alignment.center,
                           decoration: BoxDecoration(color: selected ? _mcGreen : Colors.white, borderRadius: BorderRadius.circular(9), border: Border.all(color: selected ? _mcGreen : _mcLine)),
-                          child: Text(rating, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: selected ? Colors.white : _mcText, fontSize: compact ? 10 : 11, fontWeight: FontWeight.w900)),
+                          child: Text(rating, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: selected ? Colors.white : _mcText, fontSize: compact ? 10 : 11, fontWeight: FontWeight.w600)),
                         ),
                       ],
                     ),
@@ -11972,7 +13112,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
   Widget _analysisStatsTable({bool compact = false}) {
     final rows = _matchStatsRows();
     final opp = _s(match?['opponent']).isEmpty ? 'Соперник' : _s(match?['opponent']);
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [Row(children: [Expanded(child: Text(teamName, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcBlue, fontSize: 10.5, fontWeight: FontWeight.w900))), Expanded(child: Text(opp, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right, style: TextStyle(color: _mcGreen, fontSize: 10.5, fontWeight: FontWeight.w900)))]), const SizedBox(height: 5), ...rows.take(compact ? 9 : rows.length).map((row) => Expanded(child: Row(children: [SizedBox(width: 38, child: Text('${row[1]}', style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w900))), Expanded(child: Text(row[0].toString(), maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: TextStyle(color: _mcSub, fontSize: 10.1, fontWeight: FontWeight.w700))), SizedBox(width: 38, child: Text('${row[2]}', textAlign: TextAlign.right, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w900)))])))]);
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [Row(children: [Expanded(child: Text(teamName, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcBlue, fontSize: 10.5, fontWeight: FontWeight.w600))), Expanded(child: Text(opp, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right, style: TextStyle(color: _mcGreen, fontSize: 10.5, fontWeight: FontWeight.w600)))]), const SizedBox(height: 5), ...rows.take(compact ? 9 : rows.length).map((row) => Expanded(child: Row(children: [SizedBox(width: 38, child: Text('${row[1]}', style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600))), Expanded(child: Text(row[0].toString(), maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: TextStyle(color: _mcSub, fontSize: 10.1, fontWeight: FontWeight.w600))), SizedBox(width: 38, child: Text('${row[2]}', textAlign: TextAlign.right, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600)))])))]);
   }
 
   Widget _analysisAiBlock({bool compact = false}) {
@@ -11981,9 +13121,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     final liveTopSpeed = _liveAiSpeedsKmh.isEmpty ? 0.0 : _liveAiSpeedsKmh.values.reduce((a, b) => a > b ? a : b);
     final liveSprints = _liveAiSprints.values.fold<int>(0, (sum, value) => sum + value);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [Container(width: compact ? 58 : 70, height: compact ? 58 : 70, alignment: Alignment.center, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: _mcGreen, width: 5), color: _mcGreen.withOpacity(.12)), child: Text('$displayScore', style: TextStyle(color: _mcGreen, fontSize: compact ? 19 : 23, fontWeight: FontWeight.w900))), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(_hasLiveAiData ? 'Live AI подключен' : 'Высокая эффективность', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcGreen, fontSize: 12.5, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text(_hasLiveAiData ? 'Кадр $_liveAiFrame · ${_liveAiPlayers.length} игроков · ${_formatMatchPlayerTime(Duration(milliseconds: _liveAiTimeMs.round()))}' : _aiCoachText(), maxLines: compact ? 3 : 4, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: 10.5, height: 1.25, fontWeight: FontWeight.w700))]))]),
+      Row(children: [Container(width: compact ? 58 : 70, height: compact ? 58 : 70, alignment: Alignment.center, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: _mcGreen, width: 5), color: _mcGreen.withOpacity(.12)), child: Text('$displayScore', style: TextStyle(color: _mcGreen, fontSize: compact ? 19 : 23, fontWeight: FontWeight.w600))), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(_hasLiveAiData ? 'Live AI подключен' : 'Высокая эффективность', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcGreen, fontSize: 12.5, fontWeight: FontWeight.w600)), const SizedBox(height: 4), Text(_hasLiveAiData ? 'Кадр $_liveAiFrame · ${_liveAiPlayers.length} игроков · ${_formatMatchPlayerTime(Duration(milliseconds: _liveAiTimeMs.round()))}' : _aiCoachText(), maxLines: compact ? 3 : 4, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: 10.5, height: 1.25, fontWeight: FontWeight.w600))]))]),
       const SizedBox(height: 10),
-      Text('Ключевые инсайты', style: TextStyle(color: _mcText, fontSize: 11.5, fontWeight: FontWeight.w900)),
+      Text('Ключевые инсайты', style: TextStyle(color: _mcText, fontSize: 11.5, fontWeight: FontWeight.w600)),
       const SizedBox(height: 6),
       if (_hasLiveAiData) ...[
         _analysisBullet('В кадре сейчас: ${_liveAiPlayers.length} игроков'),
@@ -11994,11 +13134,11 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
         _analysisBullet('Высокая интенсивность в финальной трети'),
         _analysisBullet('Компактность проседала после 60-й минуты'),
       ],
-      if (!compact) ...[const SizedBox(height: 8), Text('Рекомендации', style: TextStyle(color: _mcText, fontSize: 11.5, fontWeight: FontWeight.w900)), const SizedBox(height: 6), _analysisBullet(_aiRecommendation()), _analysisBullet('Ускорять переход в атаку коротким пасом')],
+      if (!compact) ...[const SizedBox(height: 8), Text('Рекомендации', style: TextStyle(color: _mcText, fontSize: 11.5, fontWeight: FontWeight.w600)), const SizedBox(height: 6), _analysisBullet(_aiRecommendation()), _analysisBullet('Ускорять переход в атаку коротким пасом')],
     ]);
   }
 
-  Widget _analysisBullet(String text) => Padding(padding: const EdgeInsets.only(bottom: 5), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Container(width: 4, height: 4, margin: const EdgeInsets.only(top: 6), decoration: BoxDecoration(color: _mcGreen, borderRadius: BorderRadius.circular(99))), const SizedBox(width: 7), Expanded(child: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: 10.2, height: 1.25, fontWeight: FontWeight.w700)))]));
+  Widget _analysisBullet(String text) => Padding(padding: const EdgeInsets.only(bottom: 5), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Container(width: 4, height: 4, margin: const EdgeInsets.only(top: 6), decoration: BoxDecoration(color: _mcGreen, borderRadius: BorderRadius.circular(99))), const SizedBox(width: 7), Expanded(child: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: 10.2, height: 1.25, fontWeight: FontWeight.w600)))]));
 
   Map<String, dynamic>? _firstUploadedMatchVideo({required bool tactical}) {
     final fullVideos = _videosByType('full')
@@ -12440,7 +13580,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                               style: TextStyle(
                                 color: _mcText,
                                 fontSize: 18,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -12449,7 +13589,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                               style: TextStyle(
                                 color: _mcSub,
                                 fontSize: 12,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
@@ -12504,7 +13644,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                     style: TextStyle(
                                       color: _mcText,
                                       fontSize: 12,
-                                      fontWeight: FontWeight.w900,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                 ),
@@ -12520,7 +13660,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                         style: TextStyle(
                                           color: _mcText,
                                           fontSize: 13,
-                                          fontWeight: FontWeight.w900,
+                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
                                       const SizedBox(height: 3),
@@ -12531,7 +13671,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                         style: TextStyle(
                                           color: _mcSub,
                                           fontSize: 11,
-                                          fontWeight: FontWeight.w700,
+                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
                                     ],
@@ -12617,7 +13757,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                   style: TextStyle(
                                     color: _mcText,
                                     fontSize: 18,
-                                    fontWeight: FontWeight.w900,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
@@ -12626,7 +13766,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                   style: TextStyle(
                                     color: _mcSub,
                                     fontSize: 12,
-                                    fontWeight: FontWeight.w700,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ],
@@ -12674,7 +13814,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                             foregroundColor: Colors.white,
                             elevation: 0,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                            textStyle: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                         ),
                       ),
@@ -12686,7 +13826,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                             style: TextStyle(
                               color: _mcText,
                               fontSize: 13,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                           const Spacer(),
@@ -12696,7 +13836,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                               style: TextStyle(
                                 color: _mcSub,
                                 fontSize: 10.8,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                         ],
@@ -12716,7 +13856,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                   style: TextStyle(
                                     color: _mcSub,
                                     fontSize: 12,
-                                    fontWeight: FontWeight.w700,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               )
@@ -12745,7 +13885,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                               style: TextStyle(
                                                 color: _mcBlue,
                                                 fontSize: 12,
-                                                fontWeight: FontWeight.w900,
+                                                fontWeight: FontWeight.w600,
                                               ),
                                             ),
                                             const SizedBox(width: 12),
@@ -12755,7 +13895,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                                 style: TextStyle(
                                                   color: _mcText,
                                                   fontSize: 12,
-                                                  fontWeight: FontWeight.w700,
+                                                  fontWeight: FontWeight.w600,
                                                   height: 1.25,
                                                 ),
                                               ),
@@ -12834,7 +13974,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                     style: TextStyle(
                       color: _mcOnDark,
                       fontSize: 12,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 5),
@@ -12844,7 +13984,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                     style: TextStyle(
                       color: _mcOnDarkSub,
                       fontSize: 10,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -12866,7 +14006,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                   foregroundColor: _mcControl,
                   elevation: 0,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                  textStyle: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900),
+                  textStyle: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600),
                 ),
               ),
             ),
@@ -12994,7 +14134,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                   ),
                   child: const Text(
                     'ВИДЕО',
-                    style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900),
+                    style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w600),
                   ),
                 ),
                 const SizedBox(width: 6),
@@ -13004,7 +14144,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900),
+                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -13072,7 +14212,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                   color: _mcText,
                   fontSize: 12.5,
                   height: 1.15,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -13081,7 +14221,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
               decoration: BoxDecoration(color: _mcBlue, borderRadius: BorderRadius.circular(4)),
               child: Text(
                 rating,
-                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900),
+                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
               ),
             ),
           ],
@@ -13089,7 +14229,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
         const SizedBox(height: 10),
         Text(
           'Ключевая статистика по ТТД',
-          style: TextStyle(color: _mcText, fontSize: 11, fontWeight: FontWeight.w900),
+          style: TextStyle(color: _mcText, fontSize: 11, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 5),
         Expanded(
@@ -13109,7 +14249,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
               foregroundColor: _mcText,
               side: BorderSide(color: _mcLine),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-              textStyle: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900),
+              textStyle: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600),
             ),
             child: const Text('Открыть ТТД игрока'),
           ),
@@ -13118,7 +14258,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     );
   }
 
-  Widget _analysisKeyStat(String label, String value) => Padding(padding: const EdgeInsets.only(bottom: 4), child: Row(children: [Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: 10.5, fontWeight: FontWeight.w700))), const SizedBox(width: 8), Text(value, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w900))]));
+  Widget _analysisKeyStat(String label, String value) => Padding(padding: const EdgeInsets.only(bottom: 4), child: Row(children: [Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: 10.5, fontWeight: FontWeight.w600))), const SizedBox(width: 8), Text(value, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600))]));
 
   Widget _analysisEventTimeline({required bool wide}) {
     final liveRows = _liveAiEvents.map((e) => _analysisEventLine(
@@ -13128,46 +14268,80 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           e['color'] is Color ? e['color'] as Color : _mcGreen,
         )).toList();
     final rows = liveRows.isNotEmpty ? liveRows : _timelineRows();
-    final fallback = [_analysisEventLine('12’', Icons.sports_soccer_rounded, '1-0 Бахар Ф.', _mcGreen), _analysisEventLine('27’', Icons.sports_soccer_rounded, '1-1 соперник', _mcGreen), _analysisEventLine('45+2’', Icons.sports_soccer_rounded, '2-1 Лисакович Е.', _mcGreen), _analysisEventLine('61’', Icons.crop_square_rounded, 'Жёлтая карточка', _mcYellow), _analysisEventLine('74’', Icons.swap_vert_rounded, 'Замена', _mcBlue)];
-    final list = rows.isEmpty ? fallback : rows.take(wide ? 8 : 5).toList();
-    if (!wide) return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: list.map((e) => Expanded(child: e)).toList());
-    return Row(children: [SizedBox(width: 230, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: list.take(6).map((e) => Expanded(child: e)).toList())), const SizedBox(width: 14), const Expanded(child: CustomPaint(painter: _MatchEventTimelinePainter()))]);
+    final list = rows.take(wide ? 8 : 5).toList();
+    if (list.isEmpty) {
+      return _inlineAiWaiting(
+        icon: Icons.timeline_rounded,
+        text: 'Событий пока нет. Запустите ИИ-видеоповтор или добавьте эпизоды матча.',
+      );
+    }
+    if (!wide) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: list.map((e) => Expanded(child: e)).toList(),
+      );
+    }
+    final split = (list.length / 2).ceil();
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: list.take(split).map((e) => Expanded(child: e)).toList(),
+          ),
+        ),
+        const SizedBox(width: 18),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: list.skip(split).map((e) => Expanded(child: e)).toList(),
+          ),
+        ),
+      ],
+    );
   }
 
-  Widget _analysisEventLine(String minute, IconData icon, String title, Color color) => Row(children: [SizedBox(width: 40, child: Text(minute, style: TextStyle(color: _mcText, fontSize: 11, fontWeight: FontWeight.w900))), Icon(icon, color: color, size: 15), const SizedBox(width: 8), Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: 10.8, fontWeight: FontWeight.w700)))]);
+  Widget _analysisEventLine(String minute, IconData icon, String title, Color color) => Row(children: [SizedBox(width: 40, child: Text(minute, style: TextStyle(color: _mcText, fontSize: 11, fontWeight: FontWeight.w600))), Icon(icon, color: color, size: 15), const SizedBox(width: 8), Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: 10.8, fontWeight: FontWeight.w600)))]);
 
-  Widget _analysisCoachNotes() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [Row(children: [_analysisNoteTab('Общие', true), _analysisNoteTab('Атака', false), _analysisNoteTab('Оборона', false), _analysisNoteTab('Стандарты', false)]), const SizedBox(height: 10), Expanded(child: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4), border: Border.all(color: _mcLine.withOpacity(.65))), child: Text(_coachCommentCtrl.text.trim().isEmpty ? 'Хороший контроль игры после перерыва.\n\nНужно быстрее закрывать фланги соперника при контратаках.\n\nРаботать над реализацией: много ударов мимо.' : _coachCommentCtrl.text.trim(), maxLines: 7, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: 10.5, height: 1.35, fontWeight: FontWeight.w700)))), const SizedBox(height: 8), Align(alignment: Alignment.centerRight, child: Text('Обновлено: сегодня', style: TextStyle(color: _mcSub, fontSize: 9.5, fontWeight: FontWeight.w700)))]);
+  Widget _analysisCoachNotes() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [Row(children: [_analysisNoteTab('Общие', true), _analysisNoteTab('Атака', false), _analysisNoteTab('Оборона', false), _analysisNoteTab('Стандарты', false)]), const SizedBox(height: 10), Expanded(child: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4), border: Border.all(color: _mcLine.withOpacity(.65))), child: _coachCommentCtrl.text.trim().isEmpty ? _inlineAiWaiting(icon: Icons.edit_note_rounded, text: 'Заметок тренера пока нет.') : Text(_coachCommentCtrl.text.trim(), maxLines: 7, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: 10.5, height: 1.35, fontWeight: FontWeight.w600)))), if (_coachCommentCtrl.text.trim().isNotEmpty) ...[const SizedBox(height: 8), Align(alignment: Alignment.centerRight, child: Text('Сохранено в матче', style: TextStyle(color: _mcSub, fontSize: 9.5, fontWeight: FontWeight.w600)))]]);
 
-  Widget _analysisNoteTab(String text, bool active) => Expanded(child: Container(height: 22, alignment: Alignment.center, decoration: BoxDecoration(border: Border(bottom: BorderSide(color: active ? _mcGreen : _mcLine, width: active ? 2 : 1))), child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: active ? _mcGreen : _mcSub, fontSize: 9.5, fontWeight: FontWeight.w900))));
+  Widget _analysisNoteTab(String text, bool active) => Expanded(child: Container(height: 22, alignment: Alignment.center, decoration: BoxDecoration(border: Border(bottom: BorderSide(color: active ? _mcGreen : _mcLine, width: active ? 2 : 1))), child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: active ? _mcGreen : _mcSub, fontSize: 9.5, fontWeight: FontWeight.w600))));
 
   Widget _analysisConnections() {
     final names = _analysisPlayerNames();
     final pairs = [[names[0], names.length > 1 ? names[1] : 'Седько', '24'], [names.length > 2 ? names[2] : 'Гречихо', names.length > 3 ? names[3] : 'Лисакович', '19'], [names.length > 4 ? names[4] : 'Пащенко', names.length > 5 ? names[5] : 'Коваль', '17']];
-    return Column(children: [...pairs.map((p) => Expanded(child: Row(children: [_analysisNumberCircle(p[0].toString().hashCode.abs() % 90 + 1), const SizedBox(width: 6), Expanded(child: Text(p[0], maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w800))), Icon(Icons.compare_arrows_rounded, color: _mcSub, size: 16), Expanded(child: Text(p[1], maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w800))), const SizedBox(width: 8), Text(p[2], style: TextStyle(color: _mcSub, fontSize: 10.5, fontWeight: FontWeight.w900))]))), Align(alignment: Alignment.centerLeft, child: Text('Все связи  ›', style: TextStyle(color: _mcSub, fontSize: 10.5, fontWeight: FontWeight.w800)))]);
+    return Column(children: [...pairs.map((p) => Expanded(child: Row(children: [_analysisNumberCircle(p[0].toString().hashCode.abs() % 90 + 1), const SizedBox(width: 6), Expanded(child: Text(p[0], maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600))), Icon(Icons.compare_arrows_rounded, color: _mcSub, size: 16), Expanded(child: Text(p[1], maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600))), const SizedBox(width: 8), Text(p[2], style: TextStyle(color: _mcSub, fontSize: 10.5, fontWeight: FontWeight.w600))]))), Align(alignment: Alignment.centerLeft, child: Text('Все связи  ›', style: TextStyle(color: _mcSub, fontSize: 10.5, fontWeight: FontWeight.w600)))]);
   }
 
-  Widget _analysisNumberCircle(int number) => Container(width: 22, height: 22, alignment: Alignment.center, decoration: BoxDecoration(shape: BoxShape.circle, color: _mcBlue, border: Border.all(color: Colors.white.withOpacity(.5))), child: Text('$number', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900)));
+  Widget _analysisNumberCircle(int number) => Container(width: 22, height: 22, alignment: Alignment.center, decoration: BoxDecoration(shape: BoxShape.circle, color: _mcBlue, border: Border.all(color: Colors.white.withOpacity(.5))), child: Text('$number', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w600)));
 
   Widget _matchAnalysisBottomTimeline() {
     return Container(
       height: 64,
       decoration: BoxDecoration(
-        color: _mcControl,
-        border: Border(top: BorderSide(color: _mcControlLine.withOpacity(.92))),
+        color: _mcPlayerBar,
+        border: Border(top: BorderSide(color: _mcPlayerLine)),
       ),
       child: Row(
         children: [
           const Spacer(),
           InkWell(
-            onTap: _openBottomMatchEventsSheet,
-            borderRadius: BorderRadius.circular(4),
-            child: _analysisBottomButton('События'),
+            onTap: () => _openMatchLive(video: _primaryAiVideo()),
+            borderRadius: BorderRadius.circular(6),
+            child: _analysisBottomButton(
+              'Онлайн-матч',
+              icon: Icons.sensors_rounded,
+            ),
           ),
           const SizedBox(width: 8),
           InkWell(
-            onTap: _openBottomMatchNotesSheet,
-            borderRadius: BorderRadius.circular(4),
-            child: _analysisBottomButton('Заметки'),
+            onTap: _openMatchRecordingAnalysis,
+            borderRadius: BorderRadius.circular(6),
+            child: _analysisBottomButton(
+              'Анализ записи',
+              icon: Icons.auto_awesome_motion_rounded,
+              primary: true,
+            ),
           ),
           const SizedBox(width: 18),
         ],
@@ -13178,24 +14352,38 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
 
   Widget _matchAnalysisVideoBottomTimeline() {
     final source = _activeMatchVideoSourceForBottom();
+    final compactTimeline =
+        (MediaQuery.maybeOf(context)?.size.width ?? 1200) < 1100;
 
     if (source == null) {
       return Container(
         height: 64,
         decoration: BoxDecoration(
-          color: _mcControl,
-          border: Border(top: BorderSide(color: _mcControlLine.withOpacity(.92))),
+          color: _mcPlayerBar,
+          border: Border(top: BorderSide(color: _mcPlayerLine)),
         ),
         child: Row(
           children: [
             const SizedBox(width: 24),
-            Icon(Icons.video_file_outlined, color: _mcOnDarkSub, size: 22),
+            Icon(Icons.video_file_outlined, color: _mcPlayerSub, size: 22),
             const SizedBox(width: 10),
-            Text('Видео матча не загружено', style: TextStyle(color: _mcOnDarkSub, fontSize: 11.5, fontWeight: FontWeight.w900)),
+            Text('Видео матча не загружено', style: TextStyle(color: _mcPlayerSub, fontSize: 11.5, fontWeight: FontWeight.w600)),
             const Spacer(),
-            InkWell(onTap: _openBottomMatchEventsSheet, borderRadius: BorderRadius.circular(4), child: _analysisBottomButton('События')),
+            InkWell(
+              onTap: () => _openMatchLive(),
+              borderRadius: BorderRadius.circular(6),
+              child: _analysisBottomButton('Онлайн-матч', icon: Icons.sensors_rounded),
+            ),
             const SizedBox(width: 8),
-            InkWell(onTap: _openBottomMatchNotesSheet, borderRadius: BorderRadius.circular(4), child: _analysisBottomButton('Заметки')),
+            InkWell(
+              onTap: _openMatchRecordingAnalysis,
+              borderRadius: BorderRadius.circular(6),
+              child: _analysisBottomButton(
+                'Анализ записи',
+                icon: Icons.auto_awesome_motion_rounded,
+                primary: true,
+              ),
+            ),
             const SizedBox(width: 18),
           ],
         ),
@@ -13222,13 +14410,13 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
         return Container(
           height: 64,
           decoration: BoxDecoration(
-            color: _mcControl,
-            border: Border(top: BorderSide(color: _mcControlLine.withOpacity(.92))),
+            color: _mcPlayerBar,
+            border: Border(top: BorderSide(color: _mcPlayerLine)),
           ),
           child: Row(
             children: [
               SizedBox(
-                width: 260,
+                width: 220,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -13252,14 +14440,14 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
                         child: Text(
                           '${_matchPlaybackSpeed.toStringAsFixed(_matchPlaybackSpeed == _matchPlaybackSpeed.roundToDouble() ? 0 : 2)}x',
-                          style: TextStyle(color: _mcOnDarkSub, fontSize: 11.5, fontWeight: FontWeight.w900),
+                          style: TextStyle(color: _mcPlayerSub, fontSize: 11.5, fontWeight: FontWeight.w600),
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
-              Text(_formatMatchPlayerTime(position), style: TextStyle(color: _mcOnDarkSub, fontSize: 10.5, fontWeight: FontWeight.w900)),
+              Text(_formatMatchPlayerTime(position), style: TextStyle(color: _mcPlayerSub, fontSize: 10.5, fontWeight: FontWeight.w600)),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -13277,8 +14465,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                         min: 0,
                         max: 1,
                         onChanged: hasDuration ? (newValue) { _seekBottomMatchVideoToFraction(newValue); } : null,
-                        activeColor: Colors.white,
-                        inactiveColor: Colors.white.withOpacity(.18),
+                        activeColor: _mcGreen,
+                        inactiveColor: const Color(0xFFE5E7EB),
                       ),
                     ),
                     if (!ready || _bottomVideoLoading)
@@ -13288,23 +14476,40 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                           statusText,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: _mcOnDarkSub.withOpacity(.82), fontSize: 9.5, fontWeight: FontWeight.w800),
+                          style: TextStyle(color: _mcPlayerSub.withOpacity(.82), fontSize: 9.5, fontWeight: FontWeight.w600),
                         ),
                       ),
                   ],
                 ),
               ),
               const SizedBox(width: 10),
-              Text(hasDuration ? _formatMatchPlayerTime(duration) : '00:00', style: TextStyle(color: _mcOnDarkSub, fontSize: 10.5, fontWeight: FontWeight.w900)),
+              Text(hasDuration ? _formatMatchPlayerTime(duration) : '00:00', style: TextStyle(color: _mcPlayerSub, fontSize: 10.5, fontWeight: FontWeight.w600)),
               const SizedBox(width: 14),
-              InkWell(onTap: _openBottomMatchEventsSheet, borderRadius: BorderRadius.circular(4), child: _analysisBottomButton('События')),
+              InkWell(
+                onTap: () => _openMatchLive(video: source),
+                borderRadius: BorderRadius.circular(6),
+                child: _analysisBottomButton(
+                  'Онлайн-матч',
+                  icon: Icons.sensors_rounded,
+                  compact: compactTimeline,
+                ),
+              ),
               const SizedBox(width: 8),
-              InkWell(onTap: _openBottomMatchNotesSheet, borderRadius: BorderRadius.circular(4), child: _analysisBottomButton('Заметки')),
+              InkWell(
+                onTap: _openMatchRecordingAnalysis,
+                borderRadius: BorderRadius.circular(6),
+                child: _analysisBottomButton(
+                  'Анализ записи',
+                  icon: Icons.auto_awesome_motion_rounded,
+                  primary: true,
+                  compact: compactTimeline,
+                ),
+              ),
               const SizedBox(width: 14),
               IconButton(
                 tooltip: 'Во весь экран',
                 onPressed: _openActiveMatchVideoFullscreen,
-                icon: Icon(Icons.fullscreen_rounded, color: _mcOnDark, size: 24),
+                icon: Icon(Icons.fullscreen_rounded, color: _mcPlayerText, size: 24),
               ),
               const SizedBox(width: 10),
             ],
@@ -13324,17 +14529,19 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
         ? (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0).toDouble()
         : 0.0;
     final disabled = !_aiReviewPlayback.attached || !_aiReviewPlayback.isReady;
+    final compactTimeline =
+        (MediaQuery.maybeOf(context)?.size.width ?? 1200) < 1100;
 
     return Container(
       height: 64,
       decoration: BoxDecoration(
-        color: _mcControl,
-        border: Border(top: BorderSide(color: _mcControlLine.withOpacity(.92))),
+        color: _mcPlayerBar,
+        border: Border(top: BorderSide(color: _mcPlayerLine)),
       ),
       child: Row(
         children: [
           SizedBox(
-            width: 260,
+            width: 220,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -13357,14 +14564,14 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
                     child: Text(
                       '${_aiReviewPlayback.speed.toStringAsFixed(_aiReviewPlayback.speed == _aiReviewPlayback.speed.roundToDouble() ? 0 : 2)}x',
-                      style: TextStyle(color: disabled ? _mcOnDarkSub.withOpacity(.45) : _mcOnDarkSub, fontSize: 11.5, fontWeight: FontWeight.w900),
+                      style: TextStyle(color: disabled ? _mcPlayerSub.withOpacity(.45) : _mcPlayerSub, fontSize: 11.5, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ),
               ],
             ),
           ),
-          Text(_formatMatchPlayerTime(position), style: TextStyle(color: _mcOnDarkSub, fontSize: 10.5, fontWeight: FontWeight.w900)),
+          Text(_formatMatchPlayerTime(position), style: TextStyle(color: _mcPlayerSub, fontSize: 10.5, fontWeight: FontWeight.w600)),
           const SizedBox(width: 10),
           Expanded(
             child: SliderTheme(
@@ -13378,22 +14585,39 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                 min: 0,
                 max: 1,
                 onChanged: disabled || !hasDuration ? null : (value) { _aiReviewPlayback.seekToFraction(value); },
-                activeColor: Colors.white,
-                inactiveColor: Colors.white.withOpacity(.18),
+                activeColor: _mcGreen,
+                inactiveColor: const Color(0xFFE5E7EB),
               ),
             ),
           ),
           const SizedBox(width: 10),
-          Text(_formatMatchPlayerTime(duration), style: TextStyle(color: _mcOnDarkSub, fontSize: 10.5, fontWeight: FontWeight.w900)),
+          Text(_formatMatchPlayerTime(duration), style: TextStyle(color: _mcPlayerSub, fontSize: 10.5, fontWeight: FontWeight.w600)),
           const SizedBox(width: 14),
-          InkWell(onTap: _openBottomMatchEventsSheet, borderRadius: BorderRadius.circular(4), child: _analysisBottomButton('События')),
+          InkWell(
+            onTap: () => _openMatchLive(video: _primaryAiVideo()),
+            borderRadius: BorderRadius.circular(6),
+            child: _analysisBottomButton(
+              'Онлайн-матч',
+              icon: Icons.sensors_rounded,
+              compact: compactTimeline,
+            ),
+          ),
           const SizedBox(width: 8),
-          InkWell(onTap: _openBottomMatchNotesSheet, borderRadius: BorderRadius.circular(4), child: _analysisBottomButton('Заметки')),
+          InkWell(
+            onTap: _openMatchRecordingAnalysis,
+            borderRadius: BorderRadius.circular(6),
+            child: _analysisBottomButton(
+              'Анализ записи',
+              icon: Icons.auto_awesome_motion_rounded,
+              primary: true,
+              compact: compactTimeline,
+            ),
+          ),
           const SizedBox(width: 14),
           IconButton(
             tooltip: 'Во весь экран',
             onPressed: disabled ? null : () => _aiReviewPlayback.toggleFullscreen(),
-            icon: Icon(Icons.fullscreen_rounded, color: disabled ? _mcOnDarkSub.withOpacity(.45) : _mcOnDark, size: 24),
+            icon: Icon(Icons.fullscreen_rounded, color: disabled ? _mcPlayerSub.withOpacity(.45) : _mcPlayerText, size: 24),
           ),
           const SizedBox(width: 10),
         ],
@@ -13412,20 +14636,20 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
   }) {
     final disabled = onTap == null;
 
-    // Главная Play/Pause в нижнем баннере должна читаться с первого взгляда:
-    // белая PLAY = видео на паузе, зелёная PAUSE = видео уже играет.
+    // Светлая панель повторяет управление Tracker: зелёный акцент только
+    // у главного действия, остальные кнопки остаются нейтральными.
     if (large && filled) {
       final label = active ? 'PAUSE' : 'PLAY';
       final backgroundColor = disabled
-          ? Colors.white.withOpacity(.06)
+          ? const Color(0xFFF2F4F3)
           : active
               ? _mcGreen
-              : Colors.white;
+              : const Color(0xFFEAF8F1);
       final foregroundColor = disabled
-          ? _mcOnDarkSub.withOpacity(.42)
+          ? _mcPlayerSub.withOpacity(.42)
           : active
               ? Colors.white
-              : _mcControl;
+              : _mcGreen;
 
       return InkWell(
         onTap: onTap,
@@ -13441,24 +14665,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             borderRadius: BorderRadius.circular(999),
             color: backgroundColor,
             border: Border.all(
-              width: active ? 1.5 : 1,
-              color: disabled
-                  ? Colors.white.withOpacity(.07)
-                  : active
-                      ? Colors.white.withOpacity(.34)
-                      : Colors.white.withOpacity(.18),
+              color: active ? _mcGreen : const Color(0xFFD8EEE2),
             ),
-            boxShadow: disabled
-                ? const []
-                : [
-                    BoxShadow(
-                      color: active
-                          ? _mcGreen.withOpacity(.44)
-                          : Colors.white.withOpacity(.16),
-                      blurRadius: active ? 24 : 16,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -13471,7 +14679,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                 style: TextStyle(
                   color: foregroundColor,
                   fontSize: 11,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                   letterSpacing: .65,
                 ),
               ),
@@ -13483,15 +14691,15 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
 
     final size = large ? 40.0 : 32.0;
     final backgroundColor = disabled
-        ? Colors.white.withOpacity(.05)
+        ? const Color(0xFFF5F6F6)
         : active
             ? _mcGreen
-            : (filled ? Colors.white : Colors.white.withOpacity(.06));
+            : const Color(0xFFF2F4F3);
     final iconColor = disabled
-        ? _mcOnDarkSub.withOpacity(.38)
+        ? _mcPlayerSub.withOpacity(.38)
         : active
             ? Colors.white
-            : (filled ? _mcControl : _mcOnDark);
+            : _mcPlayerText;
 
     return InkWell(
       onTap: onTap,
@@ -13506,17 +14714,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           shape: BoxShape.circle,
           color: backgroundColor,
           border: Border.all(
-            color: active ? Colors.white.withOpacity(.28) : Colors.white.withOpacity(.08),
+            color: active ? _mcGreen : _mcPlayerLine,
           ),
-          boxShadow: active
-              ? [
-                  BoxShadow(
-                    color: _mcGreen.withOpacity(.36),
-                    blurRadius: 18,
-                    offset: const Offset(0, 8),
-                  ),
-                ]
-              : const [],
         ),
         child: Icon(
           icon,
@@ -13536,21 +14735,40 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
   }
 
 
-  Widget _analysisBottomButton(String text) => Container(
-        height: 30,
+  Widget _analysisBottomButton(
+    String text, {
+    IconData? icon,
+    bool primary = false,
+    bool compact = false,
+  }) =>
+      Container(
+        height: 32,
         alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(horizontal: 15),
+        padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 12),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(.08),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Text(
-          text,
-          style: TextStyle(
-            color: _mcOnDark.withOpacity(.88),
-            fontSize: 10.5,
-            fontWeight: FontWeight.w900,
+          color: primary ? _mcGreen : const Color(0xFFEAF8F1),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: primary ? _mcGreen : const Color(0xFFD8EEE2),
           ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, color: primary ? Colors.white : _mcGreen, size: 15),
+              if (!compact) const SizedBox(width: 6),
+            ],
+            if (!compact)
+              Text(
+                text,
+                style: TextStyle(
+                  color: primary ? Colors.white : _mcGreen,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+          ],
         ),
       );
 
@@ -13590,7 +14808,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                         "Загрузка данных матча...",
                         style: TextStyle(
                           color: useWorkspace ? _mcSub : textSecondary,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
@@ -13626,17 +14844,45 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                     ],
                   );
 
+        final baseTheme = Theme.of(context);
+        final themedBody = Theme(
+          data: baseTheme.copyWith(
+            textTheme: baseTheme.textTheme.apply(
+              fontFamily: AppTypography.fontFamily,
+              bodyColor: textPrimary,
+              displayColor: textPrimary,
+            ),
+            primaryTextTheme: baseTheme.primaryTextTheme.apply(
+              fontFamily: AppTypography.fontFamily,
+              bodyColor: textPrimary,
+              displayColor: textPrimary,
+            ),
+          ),
+          child: body,
+        );
+
         if (widget.embedded) {
           return Container(
             color: Colors.white,
-            child: body,
+            child: themedBody,
           );
         }
 
-        return Scaffold(
-          backgroundColor: Colors.white,
-          body: body,
-          bottomNavigationBar: isPhone ? _buildMatchMobileBottomMenu(context) : null,
+        return Theme(
+          data: baseTheme.copyWith(
+            textTheme: baseTheme.textTheme.apply(
+              fontFamily: AppTypography.fontFamily,
+            ),
+            primaryTextTheme: baseTheme.primaryTextTheme.apply(
+              fontFamily: AppTypography.fontFamily,
+            ),
+          ),
+          child: Scaffold(
+            backgroundColor: Colors.white,
+            body: themedBody,
+            bottomNavigationBar:
+                isPhone ? _buildMatchMobileBottomMenu(context) : null,
+          ),
         );
       },
     );
@@ -13658,7 +14904,7 @@ class _MatchHistogramPainter extends CustomPainter {
     canvas.drawLine(Offset(left, top - 2), Offset(left, bottom), axis);
     canvas.drawLine(Offset(left, bottom), Offset(right + 2, bottom), axis);
     final tp = TextPainter(textDirection: TextDirection.ltr);
-    void label(String text, Offset o, {double fs = 9}) { tp.text = TextSpan(text: text, style: TextStyle(color: const Color(0xFF64748B), fontSize: fs, fontWeight: FontWeight.w700)); tp.layout(); tp.paint(canvas, o - Offset(tp.width / 2, tp.height / 2)); }
+    void label(String text, Offset o, {double fs = 9}) { tp.text = TextSpan(text: text, style: TextStyle(color: const Color(0xFF64748B), fontSize: fs, fontWeight: FontWeight.w600)); tp.layout(); tp.paint(canvas, o - Offset(tp.width / 2, tp.height / 2)); }
     for (int i = 0; i <= 4; i++) label('${i * 200}', Offset(18, bottom - chartH * i / 4));
     const labs = ['-5','-2.5','0','2.5','5'];
     for (int i = 0; i < labs.length; i++) label(labs[i], Offset(left + chartW * i / (labs.length - 1), size.height - 13));
@@ -13698,8 +14944,8 @@ class _MatchStackedBarsPainter extends CustomPainter {
       final greenH = h - redH;
       canvas.drawRect(Rect.fromLTWH(x, bottom - redH, barW, redH), Paint()..color = const Color(0xFFA9333E));
       canvas.drawRect(Rect.fromLTWH(x, top, barW, greenH), Paint()..color = const Color(0xFF0EA63B));
-      for (final pair in [[vals[i], bottom - redH / 2], [100 - vals[i], top + greenH / 2]]) { tp.text = TextSpan(text: '${pair[0]}%', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900)); tp.layout(); tp.paint(canvas, Offset(x + barW / 2 - tp.width / 2, (pair[1] as num).toDouble() - tp.height / 2)); }
-      tp.text = TextSpan(text: labels[i], style: TextStyle(color: const Color(0xFF64748B), fontSize: 9, fontWeight: FontWeight.w700)); tp.layout(); tp.paint(canvas, Offset(x + barW / 2 - tp.width / 2, size.height - 18));
+      for (final pair in [[vals[i], bottom - redH / 2], [100 - vals[i], top + greenH / 2]]) { tp.text = TextSpan(text: '${pair[0]}%', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600)); tp.layout(); tp.paint(canvas, Offset(x + barW / 2 - tp.width / 2, (pair[1] as num).toDouble() - tp.height / 2)); }
+      tp.text = TextSpan(text: labels[i], style: TextStyle(color: const Color(0xFF64748B), fontSize: 9, fontWeight: FontWeight.w600)); tp.layout(); tp.paint(canvas, Offset(x + barW / 2 - tp.width / 2, size.height - 18));
     }
   }
   @override
@@ -13725,7 +14971,7 @@ class _MatchLoadBarsPainter extends CustomPainter {
       final x = left + w * (i + .5) / vals.length - barW / 2;
       var y = bottom;
       for (int j = 0; j < colors.length; j++) { final hh = h * vals[i] / 100 / colors.length * (.72 + .1 * ((i + j) % 3)); y -= hh; canvas.drawRect(Rect.fromLTWH(x, y, barW, hh - 1), Paint()..color = colors[j].withOpacity(.82)); }
-      tp.text = TextSpan(text: labels[i], style: TextStyle(color: const Color(0xFF64748B), fontSize: 9, fontWeight: FontWeight.w700)); tp.layout(); tp.paint(canvas, Offset(x + barW / 2 - tp.width / 2, size.height - 18));
+      tp.text = TextSpan(text: labels[i], style: TextStyle(color: const Color(0xFF64748B), fontSize: 9, fontWeight: FontWeight.w600)); tp.layout(); tp.paint(canvas, Offset(x + barW / 2 - tp.width / 2, size.height - 18));
     }
   }
   @override
@@ -13884,7 +15130,7 @@ class _MatchPitchNetworkPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1;
       canvas.drawCircle(pos, radius, outline);
-      tp.text = TextSpan(text: '$id', style: const TextStyle(color: Colors.white, fontSize: 8.2, fontWeight: FontWeight.w900));
+      tp.text = TextSpan(text: '$id', style: const TextStyle(color: Colors.white, fontSize: 8.2, fontWeight: FontWeight.w600));
       tp.layout();
       tp.paint(canvas, pos - Offset(tp.width / 2, tp.height / 2));
     }
@@ -13899,7 +15145,7 @@ class _MatchPitchNetworkPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.2;
       canvas.drawCircle(o, radius, stroke);
-      tp.text = TextSpan(text: '$n', style: TextStyle(color: Colors.white, fontSize: fontSize, fontWeight: FontWeight.w900));
+      tp.text = TextSpan(text: '$n', style: TextStyle(color: Colors.white, fontSize: fontSize, fontWeight: FontWeight.w600));
       tp.layout();
       tp.paint(canvas, o - Offset(tp.width / 2, tp.height / 2));
     });
@@ -13935,7 +15181,7 @@ class _MatchEventTimelinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size){
     final mid=size.height*.54,left=18.0,right=size.width-14; final line=Paint()..color=const Color(0xFFD8E2EA)..strokeWidth=1; canvas.drawLine(Offset(left,mid),Offset(right,mid),line); final tp=TextPainter(textDirection:TextDirection.ltr);
-    for(int m=0;m<=90;m+=15){final x=left+(right-left)*m/90; canvas.drawLine(Offset(x,mid-7),Offset(x,mid+7),line); tp.text=TextSpan(text:'$m',style:TextStyle(color:const Color(0xFF64748B),fontSize:9,fontWeight:FontWeight.w700)); tp.layout(); tp.paint(canvas,Offset(x-tp.width/2,mid-27));}
+    for(int m=0;m<=90;m+=15){final x=left+(right-left)*m/90; canvas.drawLine(Offset(x,mid-7),Offset(x,mid+7),line); tp.text=TextSpan(text:'$m',style:TextStyle(color:const Color(0xFF64748B),fontSize:9,fontWeight:FontWeight.w600)); tp.layout(); tp.paint(canvas,Offset(x-tp.width/2,mid-27));}
     const ev=[12,27,33,45,61,74,81,85]; final colors=[const Color(0xFF27B84A),const Color(0xFF27B84A),const Color(0xFFE9C232),const Color(0xFF27B84A),const Color(0xFFE9C232),const Color(0xFF2097E8),const Color(0xFF2097E8),const Color(0xFFE9C232)];
     for(int i=0;i<ev.length;i++){final x=left+(right-left)*ev[i]/90; canvas.drawCircle(Offset(x,mid+(i.isEven?22:-2)),4,Paint()..color=colors[i]);}
   }
@@ -13948,9 +15194,9 @@ class _MatchBottomScrubberPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size){
     final left=10.0,right=size.width-28,y=size.height*.55; canvas.drawLine(Offset(left,y),Offset(right,y),Paint()..color=const Color(0xFFD8E2EA)..strokeWidth=2); canvas.drawLine(Offset(left,y),Offset(right*.82,y),Paint()..color=const Color(0xFF228BE6)..strokeWidth=3); final tp=TextPainter(textDirection:TextDirection.ltr);
-    for(int m=0;m<=90;m+=15){final x=left+(right-left)*m/90; canvas.drawLine(Offset(x,y-5),Offset(x,y+5),Paint()..color=const Color(0xFF94A3B8)); tp.text=TextSpan(text:'$m',style:TextStyle(color:const Color(0xFF64748B),fontSize:10,fontWeight:FontWeight.w700)); tp.layout(); tp.paint(canvas,Offset(x-tp.width/2,y+9));}
+    for(int m=0;m<=90;m+=15){final x=left+(right-left)*m/90; canvas.drawLine(Offset(x,y-5),Offset(x,y+5),Paint()..color=const Color(0xFF94A3B8)); tp.text=TextSpan(text:'$m',style:TextStyle(color:const Color(0xFF64748B),fontSize:10,fontWeight:FontWeight.w600)); tp.layout(); tp.paint(canvas,Offset(x-tp.width/2,y+9));}
     final ev=[12,30,45,61,66,74,81,85]; final colors=[const Color(0xFF94A3B8),const Color(0xFFE9C232),const Color(0xFF27B84A),const Color(0xFFE9C232),const Color(0xFF2097E8),const Color(0xFF27B84A),const Color(0xFFE9C232),const Color(0xFFD64545)]; for(int i=0;i<ev.length;i++){final x=left+(right-left)*ev[i]/90; canvas.drawCircle(Offset(x,y-14-(i%3)*6),3.2,Paint()..color=colors[i]);}
-    tp.text=TextSpan(text:'00:00',style:TextStyle(color:const Color(0xFF64748B),fontSize:11,fontWeight:FontWeight.w800)); tp.layout(); tp.paint(canvas,Offset(left,y-31)); tp.text=TextSpan(text:'90:00',style:TextStyle(color:const Color(0xFF64748B),fontSize:11,fontWeight:FontWeight.w800)); tp.layout(); tp.paint(canvas,Offset(right-tp.width,y-31));
+    tp.text=TextSpan(text:'00:00',style:TextStyle(color:const Color(0xFF64748B),fontSize:11,fontWeight:FontWeight.w600)); tp.layout(); tp.paint(canvas,Offset(left,y-31)); tp.text=TextSpan(text:'90:00',style:TextStyle(color:const Color(0xFF64748B),fontSize:11,fontWeight:FontWeight.w600)); tp.layout(); tp.paint(canvas,Offset(right-tp.width,y-31));
   }
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate)=>false;
@@ -14169,7 +15415,7 @@ class _MatchMobileMoreItem extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: active ? primary : textPrimary,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                         fontSize: 14,
                       ),
                     ),
@@ -14180,7 +15426,7 @@ class _MatchMobileMoreItem extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: textSecondary,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         fontSize: 11.5,
                       ),
                     ),
@@ -14231,13 +15477,14 @@ class _MatchDetailNavItem {
 
 
 class _MatchRailColors {
-  static const Color rail = Color(0xFFFFFFFF);
-  static const Color railPanel = Color(0xFFF8F9FA);
-  static const Color railHover = Color(0xFFF1F3F5);
-  static const Color railText = Color(0xFF374151);
-  static const Color railMuted = Color(0xFF6B7280);
-  static const Color border = Color(0xFFE5E7EB);
-  static const Color active = Color(0xFF111827);
+  static const Color rail = Color(0xFF111827);
+  static const Color railPanel = Color(0xFF1B2432);
+  static const Color railHover = Color(0xFF263244);
+  static const Color railText = Color(0xFFE5E7EB);
+  static const Color railMuted = Color(0xFFAAB4C3);
+  static const Color border = Color(0xFF2B3648);
+  static const Color active = Color(0xFFFFFFFF);
+  static const Color activeText = Color(0xFF111827);
   static const Color primaryGreen = Color(0xFF00A750);
 }
 
@@ -14267,8 +15514,8 @@ class _MatchRailButtonState extends State<_MatchRailButton> {
             ? _MatchRailColors.railHover
             : _MatchRailColors.railPanel;
     final borderColor = widget.active ? _MatchRailColors.active : _MatchRailColors.border;
-    final fg = widget.active ? Colors.white : _MatchRailColors.railText;
-    final textColor = widget.active ? Colors.white : _MatchRailColors.railMuted;
+    final fg = widget.active ? _MatchRailColors.activeText : _MatchRailColors.railText;
+    final textColor = widget.active ? _MatchRailColors.activeText : _MatchRailColors.railMuted;
     var label = widget.item.title;
     if (label == 'Основные ТТД') label = 'ТТД';
     if (label == 'Видеоанализ ИИ') label = 'ИИ';
@@ -14281,7 +15528,7 @@ class _MatchRailButtonState extends State<_MatchRailButton> {
         waitDuration: const Duration(milliseconds: 250),
         preferBelow: false,
         child: InkWell(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(8),
           onTap: widget.onTap,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
@@ -14290,7 +15537,7 @@ class _MatchRailButtonState extends State<_MatchRailButton> {
             height: 50,
             decoration: BoxDecoration(
               color: bgColor,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(8),
               border: Border.all(color: borderColor),
               boxShadow: widget.active
                   ? [
@@ -14337,7 +15584,7 @@ class _MatchRailButtonState extends State<_MatchRailButton> {
                           fontSize: 8,
                           height: .95,
                           letterSpacing: -.25,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
@@ -14383,8 +15630,8 @@ class _MatchRailUtilityButtonState extends State<_MatchRailUtilityButton> {
             ? _MatchRailColors.railHover
             : _MatchRailColors.railPanel;
     final borderColor = selected ? _MatchRailColors.active : _MatchRailColors.border;
-    final iconColor = selected ? Colors.white : _MatchRailColors.railText;
-    final textColor = selected ? Colors.white : _MatchRailColors.railMuted;
+    final iconColor = selected ? _MatchRailColors.activeText : _MatchRailColors.railText;
+    final textColor = selected ? _MatchRailColors.activeText : _MatchRailColors.railMuted;
     var label = widget.label;
     if (label.length > 7 && label.contains(':')) label = 'Счёт';
 
@@ -14397,16 +15644,16 @@ class _MatchRailUtilityButtonState extends State<_MatchRailUtilityButton> {
         preferBelow: false,
         child: Center(
           child: InkWell(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(8),
             onTap: widget.onTap,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 160),
               curve: Curves.easeOut,
-              width: 58,
+              width: 56,
               height: 50,
               decoration: BoxDecoration(
                 color: bgColor,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: borderColor),
                 boxShadow: selected
                     ? [
@@ -14453,7 +15700,7 @@ class _MatchRailUtilityButtonState extends State<_MatchRailUtilityButton> {
                             fontSize: 8,
                             height: .95,
                             letterSpacing: -.25,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -14499,7 +15746,7 @@ class _CmrToolbarButton extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: filled ? Colors.white : const Color(0xFF101828),
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
                 fontSize: 11.2,
               ),
             ),
@@ -14558,7 +15805,7 @@ class _CmrMiniPill extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontSize: 11,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 color: Color(0xFF667085),
               ),
             ),
@@ -14617,7 +15864,7 @@ class _MatchSidebarButton extends StatelessWidget {
                     color: textColor,
                     fontSize: 10.8,
                     height: 1,
-                    fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+                    fontWeight: active ? FontWeight.w600 : FontWeight.w600,
                     letterSpacing: -.12,
                   ),
                 ),
@@ -14697,7 +15944,7 @@ class _VideoTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Color(0xFF101828),
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w600,
                           fontSize: 12.8,
                           height: 1.12,
                         ),
@@ -14864,7 +16111,7 @@ class _VideoActionPill extends StatelessWidget {
                   style: TextStyle(
                     color: foreground,
                     fontSize: 11.3,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -14924,7 +16171,7 @@ class _PlayerAvatar extends StatelessWidget {
         initials.isEmpty ? "И" : initials,
         style: TextStyle(
           color: primary,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w600,
           fontSize: size * 0.28,
         ),
       ),

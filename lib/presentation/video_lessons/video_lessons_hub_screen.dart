@@ -3,41 +3,36 @@ import 'package:sportoteka/core/utils/pref_utils.dart';
 
 import '../../data/models/video_lesson_preview_data.dart';
 import '../../data/services/video_lessons_service.dart';
+import 'cmr_video_lessons_theme.dart';
+import 'add_edit_video_lesson_screen.dart';
 import 'video_lesson_detail_screen.dart';
 
-enum _VideoFilter { all, recommended, my }
-
-class VideoLessonsHubPalette {
-  static const primaryGreen = Color(0xFF00A750);
-  static const primaryGreenDark = Color(0xFF008C40);
-  static const primaryGreenLight = Color(0xFF00C060);
-
-  static const lightGreen = Color(0xFFE8F5E9);
-  static const superLightGreen = Color(0xFFF2FFF5);
-
-  static const white = Color(0xFFFFFFFF);
-  static const text = Color(0xFF1A1A1A);
-  static const textMuted = Color(0xFF666666);
-  static const textSoft = Color(0xFF9CA3AF);
-
-  static const background = Color(0xFFFFFFFF);
-  static const border = Color(0xFFE5E7EB);
-  static const gold = Color(0xFFFFC83D);
-
-  static const greenGradient = LinearGradient(
-    colors: [primaryGreen, primaryGreenDark],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
-
-  static const cardShadowSoft = [
-    BoxShadow(
-      color: Color(0x08000000),
-      blurRadius: 12,
-      offset: Offset(0, 5),
-    ),
-  ];
+class _C {
+  static const bg = CmrVideoColors.bg;
+  static const panel = CmrVideoColors.panel;
+  static const soft = CmrVideoColors.soft;
+  static const soft2 = CmrVideoColors.soft2;
+  static const text = CmrVideoColors.text;
+  static const muted = CmrVideoColors.muted;
+  static const subtle = CmrVideoColors.subtle;
+  static const line = CmrVideoColors.line;
+  static const green = CmrVideoColors.green;
+  static const greenDark = CmrVideoColors.greenDark;
+  static const greenSoft = CmrVideoColors.greenSoft;
 }
+
+class _T {
+  static TextStyle title(double size) => CmrVideoText.title(size);
+
+  static TextStyle body(double size, {Color color = _C.muted}) =>
+      CmrVideoText.body(size, color: color);
+
+  static TextStyle action({Color color = _C.text}) =>
+      CmrVideoText.action(color);
+}
+
+enum _HubSection { catalog, authors, mine }
+enum _RightPaneMode { empty, lesson, add }
 
 class VideoLessonsHubScreen extends StatefulWidget {
   const VideoLessonsHubScreen({super.key});
@@ -46,1924 +41,826 @@ class VideoLessonsHubScreen extends StatefulWidget {
   State<VideoLessonsHubScreen> createState() => _VideoLessonsHubScreenState();
 }
 
-class _VideoLessonsHubScreenState extends State<VideoLessonsHubScreen>
-    with SingleTickerProviderStateMixin {
-  final TextEditingController _searchController = TextEditingController();
-  final ScrollController _catalogScrollController = ScrollController();
-  late TabController _tabController;
+class _VideoLessonsHubScreenState extends State<VideoLessonsHubScreen> {
+  final TextEditingController _search = TextEditingController();
+  final ScrollController _scroll = ScrollController();
 
-  int currentUserId = 0;
-  bool isLoading = true;
-
-  Widget _withStableTextScale(Widget child) {
-    final media = MediaQuery.of(context);
-    final scale = media.textScaler.scale(1.0).clamp(1.0, 1.08).toDouble();
-
-    return MediaQuery(
-      data: media.copyWith(textScaler: TextScaler.linear(scale)),
-      child: child,
-    );
-  }
-  bool _isScrolled = false;
-
-  List<VideoLessonPreviewData> previewLessons = [];
-  _VideoFilter _filter = _VideoFilter.all;
+  int _currentUserId = 0;
+  bool _loading = true;
+  _HubSection _section = _HubSection.catalog;
+  _RightPaneMode _rightPaneMode = _RightPaneMode.empty;
+  VideoLessonPreviewData? _selectedLesson;
+  List<VideoLessonPreviewData> _lessons = <VideoLessonPreviewData>[];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    _tabController.addListener(() {
-      if (mounted) setState(() {});
-    });
-
-    _catalogScrollController.addListener(() {
-      final v = _catalogScrollController.offset > 8;
-      if (v != _isScrolled && mounted) {
-        setState(() => _isScrolled = v);
-      }
-    });
-
+    _search.addListener(_refresh);
     _init();
   }
 
   @override
   void dispose() {
-    _searchController.dispose();
-    _catalogScrollController.dispose();
-    _tabController.dispose();
+    _search.removeListener(_refresh);
+    _search.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
   Future<void> _init() async {
-    final id = await PrefUtils.getUserId();
-    currentUserId = id ?? 0;
+    _currentUserId = await PrefUtils.getUserId() ?? 0;
     await _loadData();
   }
 
   Future<void> _loadData() async {
     if (!mounted) return;
-
-    setState(() => isLoading = true);
-
+    setState(() => _loading = true);
     try {
-      previewLessons = await VideoLessonsService.getRandomPreviewLessons(
-        limit: 40,
-      );
+      final data = await VideoLessonsService.getRandomPreviewLessons(limit: 60);
+      if (!mounted) return;
+      setState(() {
+        _lessons = data;
+        if (_selectedLesson != null) {
+          final id = _selectedLesson!.lesson.id;
+          VideoLessonPreviewData? refreshed;
+          for (final item in data) {
+            if (item.lesson.id == id) {
+              refreshed = item;
+              break;
+            }
+          }
+          _selectedLesson = refreshed;
+          if (refreshed == null && _rightPaneMode == _RightPaneMode.lesson) {
+            _rightPaneMode = _RightPaneMode.empty;
+          }
+        }
+      });
     } catch (e) {
-      debugPrint('VideoLessonsHubScreen load error: $e');
-      previewLessons = [];
-    } finally {
       if (mounted) {
-        setState(() => isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось загрузить каталог: $e')),
+        );
       }
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
-  Future<void> _openLessonDetail(VideoLessonPreviewData item) async {
-    final lessonId = item.lesson.id;
+  List<VideoLessonPreviewData> get _visibleLessons {
+    final query = _search.text.trim().toLowerCase();
+    final source = switch (_section) {
+      _HubSection.catalog => _lessons,
+      _HubSection.authors => _uniqueAuthors,
+      _HubSection.mine => _lessons
+          .where((item) => item.lesson.userId == _currentUserId)
+          .toList(),
+    };
 
-    if (lessonId <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не удалось открыть видеоурок')),
-      );
+    if (query.isEmpty) return source;
+    return source.where((item) {
+      final author = _authorName(item).toLowerCase();
+      return item.lesson.title.toLowerCase().contains(query) ||
+          item.lesson.description.toLowerCase().contains(query) ||
+          item.folderTitle.toLowerCase().contains(query) ||
+          author.contains(query);
+    }).toList();
+  }
+
+  List<VideoLessonPreviewData> get _uniqueAuthors {
+    final result = <String, VideoLessonPreviewData>{};
+    for (final item in _lessons) {
+      final key = '${item.lesson.userId}:${_authorName(item)}';
+      result.putIfAbsent(key, () => item);
+    }
+    return result.values.toList();
+  }
+
+  String _authorName(VideoLessonPreviewData item) {
+    final value =
+        '${item.lesson.authorName ?? ''} ${item.lesson.authorSurname ?? ''}'
+            .trim();
+    return value.isEmpty ? 'Автор не указан' : value;
+  }
+
+  Future<void> _openLesson(VideoLessonPreviewData item) async {
+    if (item.lesson.id <= 0) return;
+    final desktop = MediaQuery.sizeOf(context).width >= 700;
+    if (desktop) {
+      setState(() {
+        _selectedLesson = item;
+        _rightPaneMode = _RightPaneMode.lesson;
+      });
       return;
     }
 
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
         builder: (_) => VideoLessonDetailScreen(
-          lessonId: lessonId,
+          lessonId: item.lesson.id,
           autoPlay: true,
         ),
       ),
     );
-
-    if (mounted) {
-      await _loadData();
-    }
+    await _loadData();
   }
 
-  bool _isTablet(double width) => width >= 900;
-
-  // Отдельный порог именно для плиток видео.
-  // Раньше сетка включалась только от 900 px, поэтому на планшете/узком окне
-  // экран попадал в мобильный режим и видео шли друг под другом.
-  bool _useVideoGrid(double width, Orientation orientation) {
-    return width >= 640 || (orientation == Orientation.landscape && width >= 560);
-  }
-
-  int _gridCount(double width, Orientation orientation) {
-    if (width >= 1500) return 5;
-    if (width >= 1180) return 4;
-    if (width >= 900) return 3;
-    if (width >= 640) return 2;
-    if (orientation == Orientation.landscape && width >= 560) return 2;
-    return 1;
-  }
-
-  double _gridAspectRatio(double width, Orientation orientation) {
-    if (width >= 1500) return 1.48;
-    if (width >= 1180) return 1.44;
-    if (width >= 900) return 1.4;
-    if (width >= 640) return 1.16;
-    if (orientation == Orientation.landscape && width >= 560) return 1.14;
-    return 0.84;
-  }
-
-  List<VideoLessonPreviewData> get _filteredLessons {
-    final q = _searchController.text.trim().toLowerCase();
-
-    return previewLessons.where((item) {
-      final title = item.lesson.title.toLowerCase();
-      final desc = item.lesson.description.toLowerCase();
-
-      final matchesSearch = q.isEmpty || title.contains(q) || desc.contains(q);
-
-      bool matchesFilter = true;
-      if (_filter == _VideoFilter.my) {
-        matchesFilter = item.lesson.userId == currentUserId;
-      } else if (_filter == _VideoFilter.recommended) {
-        matchesFilter = true;
-      }
-
-      return matchesSearch && matchesFilter;
-    }).toList();
-  }
-
-  List<VideoLessonPreviewData> get _authorsList {
-    // Группируем уроки по авторам для отображения в сетке
-    final Map<String, VideoLessonPreviewData> uniqueAuthors = {};
-    for (var lesson in previewLessons) {
-      final authorName = lesson.lesson.authorName?.trim() ?? '';
-      final authorSurname = lesson.lesson.authorSurname?.trim() ?? '';
-      final userId = lesson.lesson.userId;
-      
-      final authorKey = authorName.isNotEmpty || authorSurname.isNotEmpty
-          ? '${authorName}_${authorSurname}_$userId'
-          : 'user_${userId}';
-      
-      if (!uniqueAuthors.containsKey(authorKey)) {
-        uniqueAuthors[authorKey] = lesson;
-      }
-    }
-    return uniqueAuthors.values.toList();
-  }
-
-  List<VideoLessonPreviewData> get _myLessonsList {
-    return previewLessons.where((item) => item.lesson.userId == currentUserId).toList();
-  }
-
-  String _buildMeta(VideoLessonPreviewData item) {
-    final author =
-        '${item.lesson.authorName ?? ''} ${item.lesson.authorSurname ?? ''}'
-            .trim();
-
-    final parts = <String>[];
-
-    if (author.isNotEmpty) parts.add(author);
-    if (item.lesson.duration.trim().isNotEmpty) {
-      parts.add(item.lesson.duration.trim());
-    }
-
-    return parts.isEmpty ? 'Видеоурок' : parts.join(' • ');
-  }
-
-  String _buildTabletMeta(VideoLessonPreviewData item) {
-    final author =
-        '${item.lesson.authorName ?? ''} ${item.lesson.authorSurname ?? ''}'
-            .trim();
-
-    final parts = <String>[];
-
-    if (author.isNotEmpty) {
-      parts.add(author);
-    }
-
-    if (item.lesson.duration.trim().isNotEmpty) {
-      parts.add(item.lesson.duration.trim());
-    }
-
-    return parts.isEmpty ? 'Видеоурок' : parts.join(' • ');
-  }
-
-  Widget _whiteCard({
-    required Widget child,
-    EdgeInsets? padding,
-    VoidCallback? onTap,
-    BorderRadius? radius,
-  }) {
-    final r = radius ?? BorderRadius.circular(20);
-
-    final card = Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: VideoLessonsHubPalette.white,
-        borderRadius: r,
-        border: Border.all(color: VideoLessonsHubPalette.border),
-        boxShadow: VideoLessonsHubPalette.cardShadowSoft,
-      ),
-      child: child,
-    );
-
-    if (onTap == null) return card;
-
-    return InkWell(
-      borderRadius: r,
-      onTap: onTap,
-      child: card,
-    );
-  }
-
-  void _openMenuPanel() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: VideoLessonsHubPalette.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-      ),
-      builder: (_) {
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 10, 18, 22),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: VideoLessonsHubPalette.border,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                _menuTile(
-                  icon: Icons.ondemand_video_rounded,
-                  title: 'Каталог',
-                  subtitle: 'Все видеоуроки',
-                  selected: _tabController.index == 0,
-                  onTap: () {
-                    Navigator.pop(context);
-                    _tabController.animateTo(0);
-                  },
-                ),
-                _menuTile(
-                  icon: Icons.groups_rounded,
-                  title: 'Авторы',
-                  subtitle: 'Тренеры и создатели',
-                  selected: _tabController.index == 1,
-                  onTap: () {
-                    Navigator.pop(context);
-                    _tabController.animateTo(1);
-                  },
-                ),
-                _menuTile(
-                  icon: Icons.folder_rounded,
-                  title: 'Мои материалы',
-                  subtitle: 'Ваши уроки и папки',
-                  selected: _tabController.index == 2,
-                  onTap: () {
-                    Navigator.pop(context);
-                    _tabController.animateTo(2);
-                  },
-                ),
-                const SizedBox(height: 8),
-                const Divider(color: VideoLessonsHubPalette.border),
-                const SizedBox(height: 8),
-                _menuTile(
-                  icon: Icons.refresh_rounded,
-                  title: 'Обновить',
-                  subtitle: 'Перезагрузить каталог',
-                  selected: false,
-                  onTap: () async {
-                    Navigator.pop(context);
-                    await _loadData();
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _menuTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            gradient: selected ? VideoLessonsHubPalette.greenGradient : null,
-            color: selected ? null : VideoLessonsHubPalette.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color:
-                  selected ? Colors.transparent : VideoLessonsHubPalette.border,
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: selected
-                      ? Colors.white.withOpacity(0.18)
-                      : VideoLessonsHubPalette.superLightGreen,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(
-                  icon,
-                  color: selected
-                      ? Colors.white
-                      : VideoLessonsHubPalette.primaryGreen,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 15,
-                        color: selected
-                            ? Colors.white
-                            : VideoLessonsHubPalette.text,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                        color: selected
-                            ? Colors.white.withOpacity(0.85)
-                            : VideoLessonsHubPalette.textMuted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTopBar({
-    required bool isTablet,
-  }) {
-    final title = _tabController.index == 0
-        ? 'Видеоуроки'
-        : _tabController.index == 1
-            ? 'Авторы'
-            : 'Мои материалы';
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      decoration: BoxDecoration(
-        color: VideoLessonsHubPalette.white,
-        border: Border(
-          bottom: BorderSide(
-            color: _isScrolled
-                ? VideoLessonsHubPalette.border
-                : Colors.transparent,
-          ),
-        ),
-        boxShadow: _isScrolled ? VideoLessonsHubPalette.cardShadowSoft : [],
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            isTablet ? 20 : 16,
-            12,
-            isTablet ? 20 : 16,
-            12,
-          ),
-          child: Row(
-            children: [
-              if (!isTablet)
-                GestureDetector(
-                  onTap: () => Navigator.of(context).maybePop(),
-                  child: Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: VideoLessonsHubPalette.superLightGreen,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: VideoLessonsHubPalette.border,
-                      ),
-                    ),
-                    child: const Icon(
-                      Icons.arrow_back_rounded,
-                      size: 20,
-                      color: VideoLessonsHubPalette.text,
-                    ),
-                  ),
-                ),
-              if (!isTablet) const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                        color: VideoLessonsHubPalette.text,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _tabController.index == 0
-                          ? 'Каталог всех видеоуроков'
-                          : _tabController.index == 1
-                              ? 'Авторы и преподаватели'
-                              : 'Ваши загруженные материалы',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: VideoLessonsHubPalette.textMuted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              GestureDetector(
-                onTap: () {
-                  showSearch(
-                    context: context,
-                    delegate: _VideoSearchDelegate(
-                      lessons: previewLessons,
-                      onSelected: _openLessonDetail,
-                    ),
-                  );
-                },
-                child: Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: VideoLessonsHubPalette.superLightGreen,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: VideoLessonsHubPalette.border,
-                    ),
-                  ),
-                  child: const Icon(
-                    Icons.search_rounded,
-                    size: 20,
-                    color: VideoLessonsHubPalette.text,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: _openMenuPanel,
-                child: Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    gradient: VideoLessonsHubPalette.greenGradient,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(
-                    Icons.menu_rounded,
-                    size: 20,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSidebar() {
-    final items = [
-      (
-        icon: Icons.ondemand_video_rounded,
-        title: 'Каталог',
-        subtitle: 'Все видео',
-        index: 0,
-      ),
-      (
-        icon: Icons.groups_rounded,
-        title: 'Авторы',
-        subtitle: 'Сообщество',
-        index: 1,
-      ),
-      (
-        icon: Icons.folder_rounded,
-        title: 'Мои материалы',
-        subtitle: 'Ваш раздел',
-        index: 2,
-      ),
-    ];
-
-    return Container(
-      width: 240,
-      decoration: BoxDecoration(
-        color: VideoLessonsHubPalette.white,
-        border: const Border(
-          right: BorderSide(color: VideoLessonsHubPalette.border),
-        ),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 16, 14, 16),
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      VideoLessonsHubPalette.primaryGreen.withOpacity(0.14),
-                      VideoLessonsHubPalette.superLightGreen,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: VideoLessonsHubPalette.border),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 46,
-                      height: 46,
-                      decoration: BoxDecoration(
-                        gradient: VideoLessonsHubPalette.greenGradient,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: const Icon(
-                        Icons.smart_display_rounded,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Видеоуроки',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                              color: VideoLessonsHubPalette.text,
-                            ),
-                          ),
-                          SizedBox(height: 3),
-                          Text(
-                            'Каталог видео',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: VideoLessonsHubPalette.textMuted,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: ListView(
-                  children: [
-                    ...items.map((item) {
-                      final selected = _tabController.index == item.index;
-
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(16),
-                          onTap: () => _tabController.animateTo(item.index),
-                          child: Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              gradient: selected
-                                  ? VideoLessonsHubPalette.greenGradient
-                                  : null,
-                              color: selected
-                                  ? null
-                                  : VideoLessonsHubPalette.white,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: selected
-                                    ? Colors.transparent
-                                    : VideoLessonsHubPalette.border,
-                              ),
-                              boxShadow: selected
-                                  ? [
-                                      BoxShadow(
-                                        color: VideoLessonsHubPalette
-                                            .primaryGreen
-                                            .withOpacity(0.16),
-                                        blurRadius: 16,
-                                        offset: const Offset(0, 7),
-                                      ),
-                                    ]
-                                  : [],
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    color: selected
-                                        ? Colors.white.withOpacity(0.18)
-                                        : VideoLessonsHubPalette.superLightGreen,
-                                    borderRadius: BorderRadius.circular(13),
-                                  ),
-                                  child: Icon(
-                                    item.icon,
-                                    size: 20,
-                                    color: selected
-                                        ? Colors.white
-                                        : VideoLessonsHubPalette.primaryGreen,
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        item.title,
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w800,
-                                          color: selected
-                                              ? Colors.white
-                                              : VideoLessonsHubPalette.text,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        item.subtitle,
-                                        style: TextStyle(
-                                          fontSize: 10.5,
-                                          fontWeight: FontWeight.w600,
-                                          color: selected
-                                              ? Colors.white.withOpacity(0.86)
-                                              : VideoLessonsHubPalette.textMuted,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    }),
-                    const SizedBox(height: 8),
-                    _whiteCard(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Быстрые действия',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 13,
-                              color: VideoLessonsHubPalette.text,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          _sidebarAction(
-                            icon: Icons.refresh_rounded,
-                            title: 'Обновить данные',
-                            onTap: _loadData,
-                          ),
-                          const SizedBox(height: 8),
-                          _sidebarAction(
-                            icon: Icons.search_rounded,
-                            title: 'Поиск уроков',
-                            onTap: () {
-                              showSearch(
-                                context: context,
-                                delegate: _VideoSearchDelegate(
-                                  lessons: previewLessons,
-                                  onSelected: _openLessonDetail,
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _sidebarAction({
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: VideoLessonsHubPalette.background,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: VideoLessonsHubPalette.border),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 17,
-              color: VideoLessonsHubPalette.primaryGreen,
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: VideoLessonsHubPalette.text,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSearchField() {
-    return Container(
-      height: 46,
-      decoration: BoxDecoration(
-        color: VideoLessonsHubPalette.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: VideoLessonsHubPalette.border),
-        boxShadow: VideoLessonsHubPalette.cardShadowSoft,
-      ),
-      child: TextField(
-        controller: _searchController,
-        style: const TextStyle(
-          fontSize: 13,
-          height: 1.2,
-          color: VideoLessonsHubPalette.text,
-          fontWeight: FontWeight.w700,
-        ),
-        onChanged: (_) => setState(() {}),
-        decoration: InputDecoration(
-          hintText: 'Поиск по названию или описанию',
-          hintStyle: const TextStyle(
-            color: VideoLessonsHubPalette.textMuted,
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
-          ),
-          prefixIcon: const Icon(
-            Icons.search_rounded,
-            color: VideoLessonsHubPalette.textMuted,
-            size: 20,
-          ),
-          suffixIcon: _searchController.text.isEmpty
-              ? null
-              : IconButton(
-                  onPressed: () {
-                    _searchController.clear();
-                    setState(() {});
-                  },
-                  icon: const Icon(Icons.close_rounded, size: 18),
-                ),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFilterChip({
-    required String label,
-    required bool selected,
-    required VoidCallback onTap,
-    IconData? icon,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 10),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
-          decoration: BoxDecoration(
-            gradient: selected ? VideoLessonsHubPalette.greenGradient : null,
-            color: selected ? null : VideoLessonsHubPalette.white,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color:
-                  selected ? Colors.transparent : VideoLessonsHubPalette.border,
-            ),
-            boxShadow: selected ? [] : VideoLessonsHubPalette.cardShadowSoft,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (icon != null) ...[
-                Icon(
-                  icon,
-                  size: 15,
-                  color: selected
-                      ? Colors.white
-                      : VideoLessonsHubPalette.primaryGreen,
-                ),
-                const SizedBox(width: 6),
-              ],
-              Text(
-                label,
-                style: TextStyle(
-                  color:
-                      selected ? Colors.white : VideoLessonsHubPalette.text,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCatalogHeader(double width) {
-    final isTablet = _isTablet(width);
-
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-        isTablet ? 18 : 16,
-        12,
-        isTablet ? 18 : 16,
-        8,
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(child: _buildSearchField()),
-              const SizedBox(width: 10),
-              Container(
-                height: 46,
-                padding: const EdgeInsets.symmetric(horizontal: 13),
-                decoration: BoxDecoration(
-                  color: VideoLessonsHubPalette.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: VideoLessonsHubPalette.border),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.video_library_outlined,
-                      color: VideoLessonsHubPalette.primaryGreen,
-                      size: 17,
-                    ),
-                    const SizedBox(width: 7),
-                    Text(
-                      '${_filteredLessons.length}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13,
-                        color: VideoLessonsHubPalette.text,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (_tabController.index == 0) // Показываем фильтры только на вкладке каталога
-            SizedBox(
-              height: 42,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: [
-                  _buildFilterChip(
-                    label: 'Все видео',
-                    icon: Icons.apps_rounded,
-                    selected: _filter == _VideoFilter.all,
-                    onTap: () {
-                      setState(() {
-                        _filter = _VideoFilter.all;
-                      });
-                    },
-                  ),
-                  _buildFilterChip(
-                    label: 'Рекомендуемые',
-                    icon: Icons.auto_awesome_rounded,
-                    selected: _filter == _VideoFilter.recommended,
-                    onTap: () {
-                      setState(() {
-                        _filter = _VideoFilter.recommended;
-                      });
-                    },
-                  ),
-                  _buildFilterChip(
-                    label: 'Мои',
-                    icon: Icons.person_rounded,
-                    selected: _filter == _VideoFilter.my,
-                    onTap: () {
-                      setState(() {
-                        _filter = _VideoFilter.my;
-                      });
-                    },
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildThumb({
-    required VideoLessonPreviewData item,
-    BorderRadius radius = BorderRadius.zero,
-  }) {
-    final thumb = item.lesson.thumbnail;
-
-    return ClipRRect(
-      borderRadius: radius,
-      child: Stack(
-        children: [
-          AspectRatio(
-            aspectRatio: 16 / 9,
-            child: thumb.isNotEmpty
-                ? Image.network(
-                    thumb,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _buildThumbFallback(),
-                  )
-                : _buildThumbFallback(),
-          ),
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.28),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 8,
-            left: 8,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.96),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.play_circle_fill_rounded,
-                    size: 12,
-                    color: VideoLessonsHubPalette.primaryGreen,
-                  ),
-                  SizedBox(width: 4),
-                  Text(
-                    'Урок',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      color: VideoLessonsHubPalette.text,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: 8,
-            right: 8,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.74),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                item.lesson.duration.isNotEmpty ? item.lesson.duration : '00:00',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildThumbFallback() {
-    return Container(
-      color: VideoLessonsHubPalette.superLightGreen,
-      child: Center(
-        child: Container(
-          width: 62,
-          height: 62,
-          decoration: BoxDecoration(
-            gradient: VideoLessonsHubPalette.greenGradient,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: VideoLessonsHubPalette.primaryGreen.withOpacity(0.18),
-                blurRadius: 18,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: const Icon(
-            Icons.play_arrow_rounded,
-            color: Colors.white,
-            size: 34,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAuthorAvatar(String? avatar) {
-    return Container(
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: VideoLessonsHubPalette.border, width: 2),
-      ),
-      child: CircleAvatar(
-        radius: 18,
-        backgroundImage:
-            (avatar ?? '').isNotEmpty ? NetworkImage(avatar!) : null,
-        backgroundColor: VideoLessonsHubPalette.lightGreen,
-        child: (avatar ?? '').isEmpty
-            ? const Icon(
-                Icons.person,
-                color: VideoLessonsHubPalette.primaryGreen,
-                size: 18,
-              )
-            : null,
-      ),
-    );
-  }
-
-  Widget _buildSmallAuthorAvatar(String? avatar) {
-    return Container(
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: VideoLessonsHubPalette.border, width: 1.2),
-      ),
-      child: CircleAvatar(
-        radius: 13,
-        backgroundImage:
-            (avatar ?? '').isNotEmpty ? NetworkImage(avatar!) : null,
-        backgroundColor: VideoLessonsHubPalette.lightGreen,
-        child: (avatar ?? '').isEmpty
-            ? const Icon(
-                Icons.person,
-                color: VideoLessonsHubPalette.primaryGreen,
-                size: 13,
-              )
-            : null,
-      ),
-    );
-  }
-
-  Widget _buildMobileVideoItem(VideoLessonPreviewData item) {
-    final lesson = item.lesson;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-      child: _whiteCard(
-        radius: BorderRadius.circular(22),
-        onTap: () => _openLessonDetail(item),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildThumb(
-              item: item,
-              radius: const BorderRadius.vertical(top: Radius.circular(22)),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildAuthorAvatar(lesson.authorAvatar),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          lesson.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            height: 1.25,
-                            fontWeight: FontWeight.w900,
-                            color: VideoLessonsHubPalette.text,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          _buildMeta(item),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            height: 1.35,
-                            fontWeight: FontWeight.w700,
-                            color: VideoLessonsHubPalette.textMuted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      color: VideoLessonsHubPalette.background,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.more_vert_rounded,
-                      size: 18,
-                      color: VideoLessonsHubPalette.textMuted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDesktopVideoTile(VideoLessonPreviewData item) {
-    final lesson = item.lesson;
-    final titleStyle = TextStyle(
-      fontSize: 13.5,
-      height: 1.22,
-      fontWeight: FontWeight.w900,
-      color: VideoLessonsHubPalette.text,
-      letterSpacing: -0.1,
-    );
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: () => _openLessonDetail(item),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    _buildThumb(item: item),
-                    Positioned.fill(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: Colors.black.withOpacity(0.04),
-                          ),
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                      ),
-                    ),
-                    Positioned.fill(
-                      child: Center(
-                        child: Container(
-                          width: 46,
-                          height: 46,
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.46),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.play_arrow_rounded,
-                            color: Colors.white,
-                            size: 30,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildSmallAuthorAvatar(lesson.authorAvatar),
-                const SizedBox(width: 9),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        lesson.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: titleStyle,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _buildTabletMeta(item),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 11.5,
-                          height: 1.2,
-                          fontWeight: FontWeight.w700,
-                          color: VideoLessonsHubPalette.textMuted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 6),
-                SizedBox(
-                  width: 26,
-                  height: 26,
-                  child: IconButton(
-                    padding: EdgeInsets.zero,
-                    splashRadius: 18,
-                    onPressed: () => _openLessonDetail(item),
-                    icon: const Icon(
-                      Icons.more_vert_rounded,
-                      size: 18,
-                      color: VideoLessonsHubPalette.textMuted,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLoadingSkeleton({required bool tablet}) {
-    if (!tablet) {
-      return ListView.builder(
-        padding: const EdgeInsets.only(top: 12, bottom: 20),
-        itemCount: 5,
-        itemBuilder: (_, __) => Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-          child: Container(
-            decoration: BoxDecoration(
-              color: VideoLessonsHubPalette.white,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: VideoLessonsHubPalette.border),
-            ),
-            child: Column(
-              children: [
-                Container(
-                  height: 210,
-                  decoration: BoxDecoration(
-                    color: VideoLessonsHubPalette.superLightGreen,
-                    borderRadius:
-                        const BorderRadius.vertical(top: Radius.circular(22)),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          color: VideoLessonsHubPalette.superLightGreen,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          children: [
-                            Container(
-                              height: 14,
-                              decoration: BoxDecoration(
-                                color: VideoLessonsHubPalette.superLightGreen,
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Container(
-                              height: 12,
-                              width: 150,
-                              decoration: BoxDecoration(
-                                color: VideoLessonsHubPalette.superLightGreen,
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+  Future<void> _openAddLesson() async {
+    if (_currentUserId <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось определить пользователя')),
       );
+      return;
     }
 
-    return const Center(
-      child: CircularProgressIndicator(
-        color: VideoLessonsHubPalette.primaryGreen,
-      ),
-    );
-  }
+    final desktop = MediaQuery.sizeOf(context).width >= 700;
+    if (desktop) {
+      setState(() => _rightPaneMode = _RightPaneMode.add);
+      return;
+    }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: _whiteCard(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 88,
-                height: 88,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      VideoLessonsHubPalette.primaryGreen.withOpacity(0.12),
-                      VideoLessonsHubPalette.superLightGreen,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.video_library_outlined,
-                  size: 42,
-                  color: VideoLessonsHubPalette.primaryGreen,
-                ),
-              ),
-              const SizedBox(height: 18),
-              const Text(
-                'Видеоуроки не найдены',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  color: VideoLessonsHubPalette.text,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Попробуйте изменить поиск или фильтры',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
-                  color: VideoLessonsHubPalette.textMuted,
-                ),
-              ),
-            ],
-          ),
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => AddEditVideoLessonScreen(
+          folderId: 0,
+          userId: _currentUserId,
+          onUploadComplete: _loadData,
         ),
       ),
     );
+    await _loadData();
   }
 
-  // Адаптивная сетка для всех вкладок
-  Widget _buildAdaptiveGrid({
-    required List<VideoLessonPreviewData> items,
-    required bool isLoading,
-    required double width,
-    required Orientation orientation,
-    required Future<void> Function() onRefresh,
-  }) {
-    final isTablet = _isTablet(width);
-    final useGrid = _useVideoGrid(width, orientation);
-
-    if (isLoading) {
-      return _buildLoadingSkeleton(tablet: useGrid || isTablet);
-    }
-
-    if (items.isEmpty) {
-      return _buildEmptyState();
-    }
-
-    if (!useGrid) {
-      return RefreshIndicator(
-        onRefresh: onRefresh,
-        color: VideoLessonsHubPalette.primaryGreen,
-        child: ListView.builder(
-          controller: _catalogScrollController,
-          padding: const EdgeInsets.only(top: 12, bottom: 20),
-          itemCount: items.length,
-          itemBuilder: (_, index) => _buildMobileVideoItem(items[index]),
-        ),
-      );
-    }
-
-    final crossAxisCount = _gridCount(width, orientation);
-    
-    return RefreshIndicator(
-      onRefresh: onRefresh,
-      color: VideoLessonsHubPalette.primaryGreen,
-      child: GridView.builder(
-        controller: _catalogScrollController,
-        padding: const EdgeInsets.fromLTRB(22, 16, 22, 24),
-        itemCount: items.length,
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: crossAxisCount,
-          crossAxisSpacing: 18,
-          mainAxisSpacing: 26,
-          childAspectRatio: _gridAspectRatio(width, orientation),
-        ),
-        itemBuilder: (_, index) => _buildDesktopVideoTile(items[index]),
-      ),
-    );
-  }
-
-  // Вкладка каталога
-  Widget _buildCatalogTab(double width, Orientation orientation) {
-    return Container(
-      color: VideoLessonsHubPalette.background,
-      child: Column(
-        children: [
-          _buildCatalogHeader(width),
-          Expanded(
-            child: _buildAdaptiveGrid(
-              items: _filteredLessons,
-              isLoading: isLoading,
-              width: width,
-              orientation: orientation,
-              onRefresh: _loadData,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Вкладка авторов
-  Widget _buildAuthorsTab(double width, Orientation orientation) {
-    return Container(
-      color: VideoLessonsHubPalette.background,
-      child: Column(
-        children: [
-          // Заголовок для авторов (без поиска и фильтров)
-          Container(
-            padding: EdgeInsets.fromLTRB(
-              _isTablet(width) ? 18 : 16,
-              12,
-              _isTablet(width) ? 18 : 16,
-              8,
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.groups_rounded,
-                  color: VideoLessonsHubPalette.primaryGreen,
-                  size: 24,
-                ),
-                const SizedBox(width: 12),
-                const Text(
-                  'Авторы и преподаватели',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: VideoLessonsHubPalette.text,
-                  ),
-                ),
-                const Spacer(),
-                Container(
-                  height: 46,
-                  padding: const EdgeInsets.symmetric(horizontal: 13),
-                  decoration: BoxDecoration(
-                    color: VideoLessonsHubPalette.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: VideoLessonsHubPalette.border),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.person_rounded,
-                        color: VideoLessonsHubPalette.primaryGreen,
-                        size: 17,
-                      ),
-                      const SizedBox(width: 7),
-                      Text(
-                        '${_authorsList.length}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 13,
-                          color: VideoLessonsHubPalette.text,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: _buildAdaptiveGrid(
-              items: _authorsList,
-              isLoading: isLoading,
-              width: width,
-              orientation: orientation,
-              onRefresh: _loadData,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Вкладка моих материалов
-  Widget _buildMyLessonsTab(double width, Orientation orientation) {
-    return Container(
-      color: VideoLessonsHubPalette.background,
-      child: Column(
-        children: [
-          // Заголовок для моих материалов
-          Container(
-            padding: EdgeInsets.fromLTRB(
-              _isTablet(width) ? 18 : 16,
-              12,
-              _isTablet(width) ? 18 : 16,
-              8,
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.folder_rounded,
-                  color: VideoLessonsHubPalette.primaryGreen,
-                  size: 24,
-                ),
-                const SizedBox(width: 12),
-                const Text(
-                  'Мои материалы',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: VideoLessonsHubPalette.text,
-                  ),
-                ),
-                const Spacer(),
-                Container(
-                  height: 46,
-                  padding: const EdgeInsets.symmetric(horizontal: 13),
-                  decoration: BoxDecoration(
-                    color: VideoLessonsHubPalette.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: VideoLessonsHubPalette.border),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.video_library_outlined,
-                        color: VideoLessonsHubPalette.primaryGreen,
-                        size: 17,
-                      ),
-                      const SizedBox(width: 7),
-                      Text(
-                        '${_myLessonsList.length}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 13,
-                          color: VideoLessonsHubPalette.text,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: _buildAdaptiveGrid(
-              items: _myLessonsList,
-              isLoading: isLoading,
-              width: width,
-              orientation: orientation,
-              onRefresh: _loadData,
-            ),
-          ),
-        ],
-      ),
-    );
+  void _selectSection(_HubSection value) {
+    setState(() => _section = value);
+    if (_scroll.hasClients) _scroll.jumpTo(0);
   }
 
   @override
   Widget build(BuildContext context) {
-    return _withStableTextScale(
-      OrientationBuilder(
-        builder: (context, orientation) {
-        return LayoutBuilder(
+    final media = MediaQuery.of(context);
+    return CmrVideoThemeScope(
+      child: MediaQuery(
+        data: media.copyWith(
+        textScaler: TextScaler.linear(
+          media.textScaler.scale(1).clamp(1.0, 1.08).toDouble(),
+        ),
+      ),
+        child: LayoutBuilder(
           builder: (context, constraints) {
-            final width = constraints.maxWidth;
-            final isTablet = _isTablet(width);
-
-            if (isTablet) {
-              final contentWidth = width - 240;
-
-              return Scaffold(
-                backgroundColor: VideoLessonsHubPalette.background,
-                body: Row(
-                  children: [
-                    _buildSidebar(),
-                    Expanded(
-                      child: Column(
-                        children: [
-                          _buildTopBar(isTablet: true),
-                          Expanded(
-                            child: TabBarView(
-                              controller: _tabController,
-                              physics: const NeverScrollableScrollPhysics(),
-                              children: [
-                                _buildCatalogTab(contentWidth, orientation),
-                                _buildAuthorsTab(contentWidth, orientation),
-                                _buildMyLessonsTab(contentWidth, orientation),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            return Scaffold(
-              backgroundColor: VideoLessonsHubPalette.background,
-              body: Column(
-                children: [
-                  _buildTopBar(isTablet: false),
-                  Expanded(
-                    child: TabBarView(
-                      controller: _tabController,
-                      physics: const NeverScrollableScrollPhysics(),
-                      children: [
-                        _buildCatalogTab(width, orientation),
-                        _buildAuthorsTab(width, orientation),
-                        _buildMyLessonsTab(width, orientation),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            );
+            final mobile = constraints.maxWidth < 700;
+            if (mobile) return _buildMobile();
+            return _buildWorkspace(constraints.maxWidth);
           },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWorkspace(double width) {
+    final compact = width < 1050;
+    final catalogWidth = compact ? 470.0 : 540.0;
+
+    return Scaffold(
+      backgroundColor: _C.bg,
+      body: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: catalogWidth.clamp(420.0, width * .52).toDouble(),
+            child: _buildCatalogPane(mobile: false),
+          ),
+          Container(width: .65, color: _C.line),
+          Expanded(child: _buildRightPane()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobile() {
+    return Scaffold(
+      backgroundColor: _C.bg,
+      body: SafeArea(child: _buildCatalogPane(mobile: true)),
+    );
+  }
+
+  Widget _buildCatalogPane({required bool mobile}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _Toolbar(
+          mobile: mobile,
+          section: _section,
+          onBack: () => Navigator.of(context).maybePop(),
+          onRefresh: _loadData,
+          onAdd: _openAddLesson,
+        ),
+        Padding(
+          padding: EdgeInsets.fromLTRB(mobile ? 10 : 12, 9, mobile ? 10 : 12, 0),
+          child: _SearchField(controller: _search),
+        ),
+        SizedBox(
+          height: 48,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.symmetric(
+              horizontal: mobile ? 10 : 12,
+              vertical: 7,
+            ),
+            children: [
+              _SectionPill(
+                label: 'Каталог',
+                icon: Icons.video_library_outlined,
+                active: _section == _HubSection.catalog,
+                onTap: () => _selectSection(_HubSection.catalog),
+              ),
+              const SizedBox(width: 6),
+              _SectionPill(
+                label: 'Авторы',
+                icon: Icons.groups_outlined,
+                active: _section == _HubSection.authors,
+                onTap: () => _selectSection(_HubSection.authors),
+              ),
+              const SizedBox(width: 6),
+              _SectionPill(
+                label: 'Мои материалы',
+                icon: Icons.folder_outlined,
+                active: _section == _HubSection.mine,
+                onTap: () => _selectSection(_HubSection.mine),
+              ),
+            ],
+          ),
+        ),
+        Expanded(child: _buildContent(mobile: mobile)),
+      ],
+    );
+  }
+
+  Widget _buildContent({required bool mobile}) {
+    if (_loading) return _LoadingGrid(mobile: mobile);
+    final items = _visibleLessons;
+    if (items.isEmpty) {
+      return _EmptyState(onAdd: _openAddLesson);
+    }
+
+    return RefreshIndicator(
+      color: _C.green,
+      onRefresh: _loadData,
+      child: GridView.builder(
+        controller: _scroll,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(mobile ? 10 : 12, 2, mobile ? 10 : 12, mobile ? 128 : 16),
+        itemCount: items.length,
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: mobile ? 1 : 2,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 12,
+          childAspectRatio: mobile ? 1.48 : 1.03,
+        ),
+        itemBuilder: (_, index) {
+          final item = items[index];
+          return _VideoTile(
+            item: item,
+            author: _authorName(item),
+            selected: _selectedLesson?.lesson.id == item.lesson.id &&
+                _rightPaneMode == _RightPaneMode.lesson,
+            authorMode: _section == _HubSection.authors,
+            onTap: () => _openLesson(item),
           );
         },
       ),
     );
   }
+
+  Widget _buildRightPane() {
+    switch (_rightPaneMode) {
+      case _RightPaneMode.lesson:
+        final selected = _selectedLesson;
+        if (selected == null) return const _RightPlaceholder();
+        return Column(
+          children: [
+            _RightHeader(
+              title: 'Просмотр видеоурока',
+              subtitle: selected.lesson.title,
+              icon: Icons.play_circle_outline_rounded,
+              onClose: () => setState(() => _rightPaneMode = _RightPaneMode.empty),
+            ),
+            Expanded(
+              child: VideoLessonDetailScreen(
+                key: ValueKey<int>(selected.lesson.id),
+                lessonId: selected.lesson.id,
+                autoPlay: true,
+                embedded: true,
+              ),
+            ),
+          ],
+        );
+      case _RightPaneMode.add:
+        return Column(
+          children: [
+            _RightHeader(
+              title: 'Добавить урок',
+              subtitle: 'Видео и описание материала',
+              icon: Icons.add_circle_outline_rounded,
+              onClose: () => setState(() => _rightPaneMode = _RightPaneMode.empty),
+            ),
+            Expanded(
+              child: AddEditVideoLessonScreen(
+                key: const ValueKey<String>('add-video-lesson'),
+                folderId: 0,
+                userId: _currentUserId,
+                embedded: true,
+                onClose: () => setState(() => _rightPaneMode = _RightPaneMode.empty),
+                onUploadComplete: () async {
+                  await _loadData();
+                  if (mounted) {
+                    setState(() {
+                      _section = _HubSection.mine;
+                      _rightPaneMode = _RightPaneMode.empty;
+                    });
+                  }
+                },
+              ),
+            ),
+          ],
+        );
+      case _RightPaneMode.empty:
+        return const _RightPlaceholder();
+    }
+  }
 }
 
-class _VideoSearchDelegate extends SearchDelegate {
-  final List<VideoLessonPreviewData> lessons;
-  final Future<void> Function(VideoLessonPreviewData item) onSelected;
+class _Toolbar extends StatelessWidget {
+  final bool mobile;
+  final _HubSection section;
+  final VoidCallback onBack;
+  final Future<void> Function() onRefresh;
+  final VoidCallback onAdd;
 
-  _VideoSearchDelegate({
-    required this.lessons,
-    required this.onSelected,
+  const _Toolbar({
+    required this.mobile,
+    required this.section,
+    required this.onBack,
+    required this.onRefresh,
+    required this.onAdd,
   });
 
   @override
-  String? get searchFieldLabel => 'Поиск видеоуроков';
+  Widget build(BuildContext context) {
+    final subtitle = switch (section) {
+      _HubSection.catalog => 'Все видеоуроки',
+      _HubSection.authors => 'Авторы и преподаватели',
+      _HubSection.mine => 'Ваши материалы',
+    };
 
-  @override
-  ThemeData appBarTheme(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return theme.copyWith(
-      scaffoldBackgroundColor: VideoLessonsHubPalette.background,
-      appBarTheme: const AppBarTheme(
-        backgroundColor: VideoLessonsHubPalette.white,
-        foregroundColor: VideoLessonsHubPalette.text,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 12, vertical: 10),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: _C.line, width: .55)),
       ),
-      inputDecorationTheme: const InputDecorationTheme(
-        border: InputBorder.none,
-      ),
-      textTheme: theme.textTheme.copyWith(
-        titleLarge: const TextStyle(
-          color: VideoLessonsHubPalette.text,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
-
-  @override
-  List<Widget>? buildActions(BuildContext context) {
-    return [
-      if (query.isNotEmpty)
-        IconButton(
-          onPressed: () => query = '',
-          icon: const Icon(Icons.close_rounded),
-        ),
-    ];
-  }
-
-  @override
-  Widget? buildLeading(BuildContext context) {
-    return IconButton(
-      onPressed: () => close(context, null),
-      icon: const Icon(Icons.arrow_back_rounded),
-    );
-  }
-
-  @override
-  Widget buildResults(BuildContext context) {
-    return _buildSearchList(context);
-  }
-
-  @override
-  Widget buildSuggestions(BuildContext context) {
-    return _buildSearchList(context);
-  }
-
-  Widget _buildSearchList(BuildContext context) {
-    final q = query.trim().toLowerCase();
-
-    final items = lessons.where((e) {
-      final title = e.lesson.title.toLowerCase();
-      final desc = e.lesson.description.toLowerCase();
-      return q.isEmpty || title.contains(q) || desc.contains(q);
-    }).toList();
-
-    if (items.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.search_off_rounded,
-              size: 48,
-              color: VideoLessonsHubPalette.textSoft,
+      child: Row(
+        children: [
+          if (mobile) ...[
+            _IconButton(icon: Icons.arrow_back_rounded, onTap: onBack),
+            const SizedBox(width: 7),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Видеоуроки', style: _T.title(mobile ? 15.5 : 16.5)),
+                const SizedBox(height: 3),
+                Text(subtitle, style: _T.body(11.2)),
+              ],
             ),
-            SizedBox(height: 14),
+          ),
+          if (!mobile) ...[
+            _IconButton(icon: Icons.refresh_rounded, onTap: onRefresh),
+            const SizedBox(width: 6),
+          ],
+          _IconButton(icon: Icons.add_rounded, onTap: onAdd, accent: true),
+        ],
+      ),
+    );
+  }
+}
+
+class _SearchField extends StatelessWidget {
+  final TextEditingController controller;
+  const _SearchField({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 42,
+      padding: const EdgeInsets.symmetric(horizontal: 11),
+      decoration: BoxDecoration(
+        color: _C.soft,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.search_rounded, color: _C.muted, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                hintText: 'Поиск по уроку, автору или папке...',
+                border: InputBorder.none,
+                isDense: true,
+              ),
+              style: _T.body(12.5, color: _C.text),
+            ),
+          ),
+          if (controller.text.trim().isNotEmpty)
+            InkWell(
+              onTap: controller.clear,
+              borderRadius: BorderRadius.circular(99),
+              child: const Padding(
+                padding: EdgeInsets.all(4),
+                child: Icon(Icons.close_rounded, size: 17, color: _C.muted),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionPill extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _SectionPill({
+    required this.label,
+    required this.icon,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          decoration: BoxDecoration(
+            color: active ? _C.greenSoft : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 14, color: active ? _C.greenDark : _C.subtle),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: _T.action(color: active ? _C.greenDark : _C.muted),
+              ),
+              if (active) ...[
+                const SizedBox(width: 6),
+                Container(
+                  width: 5,
+                  height: 5,
+                  decoration: const BoxDecoration(
+                    color: _C.green,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _VideoTile extends StatelessWidget {
+  final VideoLessonPreviewData item;
+  final String author;
+  final bool selected;
+  final bool authorMode;
+  final VoidCallback onTap;
+
+  const _VideoTile({
+    required this.item,
+    required this.author,
+    required this.selected,
+    required this.authorMode,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final lesson = item.lesson;
+    final preview = lesson.thumbnail.trim();
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 170),
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: selected ? _C.greenSoft : Colors.white,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (preview.isNotEmpty)
+                        Image.network(
+                          preview,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const _VideoFallback(),
+                        )
+                      else
+                        const _VideoFallback(),
+                      Container(color: Colors.black.withOpacity(.08)),
+                      const Center(
+                        child: _PlayButton(),
+                      ),
+                      if (lesson.duration.trim().isNotEmpty)
+                        Positioned(
+                          right: 7,
+                          bottom: 7,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(.68),
+                              borderRadius: BorderRadius.circular(7),
+                            ),
+                            child: Text(
+                              lesson.duration.trim(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                authorMode ? author : lesson.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: _T.title(12.5),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                authorMode ? '${item.folderTitle} · открыть материалы' : '$author · ${item.folderTitle}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _T.body(10.2),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _VideoFallback extends StatelessWidget {
+  const _VideoFallback();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: _C.soft2,
+      alignment: Alignment.center,
+      child: const Icon(Icons.video_library_outlined, color: _C.subtle, size: 34),
+    );
+  }
+}
+
+class _PlayButton extends StatelessWidget {
+  const _PlayButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(.94),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: const Icon(Icons.play_arrow_rounded, color: _C.green, size: 25),
+    );
+  }
+}
+
+class _RightHeader extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final VoidCallback onClose;
+
+  const _RightHeader({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 58,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: _C.line, width: .55)),
+      ),
+      child: Row(
+        children: [
+          const CmrVideoDot(size: 7),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: _T.title(14)),
+                const SizedBox(height: 2),
+                Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _T.body(10.8)),
+              ],
+            ),
+          ),
+          const CmrVideoDotCluster(),
+          const SizedBox(width: 9),
+          _IconButton(icon: Icons.close_rounded, onTap: onClose),
+        ],
+      ),
+    );
+  }
+}
+
+class _RightPlaceholder extends StatelessWidget {
+  const _RightPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.white,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.all(24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 68,
+              height: 68,
+              decoration: BoxDecoration(
+                color: _C.soft,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: const Icon(Icons.play_lesson_outlined, color: _C.green, size: 30),
+            ),
+            const SizedBox(height: 15),
+            Text('Выберите видеоурок', style: _T.title(20)),
+            const SizedBox(height: 7),
             Text(
-              'Ничего не найдено',
-              style: TextStyle(
-                color: VideoLessonsHubPalette.textMuted,
-                fontWeight: FontWeight.w800,
+              'Каталог остаётся слева, а видео или добавление нового урока открывается в этой рабочей области.',
+              textAlign: TextAlign.center,
+              style: _T.body(12.5),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _IconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool accent;
+
+  const _IconButton({required this.icon, required this.onTap, this.accent = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: accent ? _C.greenSoft : _C.soft,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: SizedBox(
+          width: 34,
+          height: 34,
+          child: Icon(icon, size: 17, color: accent ? _C.green : _C.text),
+        ),
+      ),
+    );
+  }
+}
+
+class _LoadingGrid extends StatelessWidget {
+  final bool mobile;
+  const _LoadingGrid({required this.mobile});
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.builder(
+      padding: const EdgeInsets.fromLTRB(12, 2, 12, 16),
+      itemCount: mobile ? 4 : 8,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: mobile ? 1 : 2,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 12,
+        childAspectRatio: mobile ? 1.48 : 1.03,
+      ),
+      itemBuilder: (_, __) => Container(
+        padding: const EdgeInsets.all(7),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(color: _C.soft2, borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(height: 11, decoration: BoxDecoration(color: _C.soft2, borderRadius: BorderRadius.circular(99))),
+            const SizedBox(height: 6),
+            FractionallySizedBox(
+              widthFactor: .62,
+              child: Container(height: 9, decoration: BoxDecoration(color: _C.soft2, borderRadius: BorderRadius.circular(99))),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final VoidCallback onAdd;
+  const _EmptyState({required this.onAdd});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(22),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(color: _C.soft, borderRadius: BorderRadius.circular(16)),
+              child: const Icon(Icons.video_library_outlined, color: _C.green, size: 26),
+            ),
+            const SizedBox(height: 13),
+            Text('Видеоуроки не найдены', style: _T.title(16)),
+            const SizedBox(height: 6),
+            Text('Измените поиск или добавьте новый материал.', textAlign: TextAlign.center, style: _T.body(11.5)),
+            const SizedBox(height: 12),
+            Material(
+              color: _C.green,
+              borderRadius: BorderRadius.circular(11),
+              child: InkWell(
+                onTap: onAdd,
+                borderRadius: BorderRadius.circular(11),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+                  child: Text('Добавить урок', style: _T.action(color: Colors.white)),
+                ),
               ),
             ),
           ],
         ),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
-        final author =
-            '${item.lesson.authorName ?? ''} ${item.lesson.authorSurname ?? ''}'
-                .trim();
-
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(18),
-            onTap: () async {
-              close(context, null);
-              await onSelected(item);
-            },
-            child: Container(
-              decoration: BoxDecoration(
-                color: VideoLessonsHubPalette.white,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: VideoLessonsHubPalette.border),
-                boxShadow: VideoLessonsHubPalette.cardShadowSoft,
-              ),
-              child: ListTile(
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                leading: CircleAvatar(
-                  backgroundColor: VideoLessonsHubPalette.lightGreen,
-                  backgroundImage: (item.lesson.authorAvatar ?? '').isNotEmpty
-                      ? NetworkImage(item.lesson.authorAvatar!)
-                      : null,
-                  child: (item.lesson.authorAvatar ?? '').isEmpty
-                      ? const Icon(
-                          Icons.play_arrow_rounded,
-                          color: VideoLessonsHubPalette.primaryGreen,
-                        )
-                      : null,
-                ),
-                title: Text(
-                  item.lesson.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    color: VideoLessonsHubPalette.text,
-                  ),
-                ),
-                subtitle: Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    author.isEmpty ? 'Видеоурок' : author,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: VideoLessonsHubPalette.textMuted,
-                    ),
-                  ),
-                ),
-                trailing: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: VideoLessonsHubPalette.superLightGreen,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: const Icon(
-                    Icons.arrow_forward_ios_rounded,
-                    size: 14,
-                    color: VideoLessonsHubPalette.primaryGreen,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
+      ),
     );
   }
 }

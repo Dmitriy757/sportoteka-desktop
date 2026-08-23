@@ -4,10 +4,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
-import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 
@@ -575,7 +578,7 @@ class _TeamAttendanceJournalScreenState
       for (final player in players) {
         final playerId = int.tryParse(player["id"]?.toString() ?? "0") ?? 0;
         final name = _playerName(player);
-        final number = (player["number"] ?? "").toString();
+        final number = (player["number"] ?? player["jersey_number"] ?? "").toString();
         final position = (player["position"] ?? "").toString();
 
         String status = kStatusUnset;
@@ -630,6 +633,211 @@ class _TeamAttendanceJournalScreenState
     final needQuotes = v.contains(',') || v.contains('"') || v.contains(';');
     final escaped = v.replaceAll('"', '""');
     return needQuotes ? '"$escaped"' : escaped;
+  }
+
+  List<List<String>> _exportRows() {
+    final rows = <List<String>>[
+      const [
+        'Команда',
+        'Мероприятие',
+        'Игрок ID',
+        'ФИО',
+        'Номер',
+        'Позиция',
+        'Статус',
+        'Дата',
+      ],
+    ];
+
+    for (final player in players) {
+      final playerId = int.tryParse(player['id']?.toString() ?? '0') ?? 0;
+      final name = _playerName(player);
+      final number = (player['number'] ?? player['jersey_number'] ?? '').toString();
+      final position = (player['position'] ?? '').toString();
+
+      var status = kStatusUnset;
+      var eventDate = '';
+
+      if (selectedEventId == null) {
+        status = _getAggregatedStatus(playerId);
+        eventDate =
+            '${selectedMonth.year}-${selectedMonth.month.toString().padLeft(2, '0')}';
+      } else {
+        status = _getStatusForEvent(playerId, selectedEventId!);
+        final event = events.firstWhere(
+          (e) =>
+              (int.tryParse(e['id']?.toString() ?? '0') ?? 0) ==
+              selectedEventId,
+          orElse: () => <String, dynamic>{},
+        );
+        eventDate = (event['start_at'] ?? '').toString();
+      }
+
+      rows.add([
+        widget.teamName,
+        selectedEventTitle,
+        '$playerId',
+        name,
+        number,
+        position,
+        _getStatusFullText(status),
+        eventDate,
+      ]);
+    }
+
+    return rows;
+  }
+
+  String _escapeHtml(String value) {
+    return value
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+  }
+
+  String _exportHtml() {
+    final rows = _exportRows();
+    final exportTitle = 'Посещаемость — ${widget.teamName} — $selectedEventTitle';
+    final out = StringBuffer()
+      ..writeln('<html><head><meta charset="utf-8">')
+      ..writeln('<style>body{font-family:Arial,sans-serif;}')
+      ..writeln('table{border-collapse:collapse;width:100%;}')
+      ..writeln('th,td{border:1px solid #E2E8F0;padding:8px;font-size:11px;}')
+      ..writeln('th{background:#F2F7F4;font-weight:700;}')
+      ..writeln('.title{font-size:18px;font-weight:700;margin-bottom:12px;}')
+      ..writeln('</style></head><body>')
+      ..writeln('<div class="title">${_escapeHtml(exportTitle)}</div>')
+      ..writeln('<table>');
+
+    for (var i = 0; i < rows.length; i++) {
+      final tag = i == 0 ? 'th' : 'td';
+      out.writeln('<tr>');
+      for (final cell in rows[i]) {
+        out.writeln('<$tag>${_escapeHtml(cell)}</$tag>');
+      }
+      out.writeln('</tr>');
+    }
+
+    out.writeln('</table></body></html>');
+    return out.toString();
+  }
+
+  String _safeExportTeamName() =>
+      widget.teamName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+
+  Future<void> _exportExcel() async {
+    if (players.isEmpty) {
+      Get.snackbar('Пусто', 'Нет данных для экспорта');
+      return;
+    }
+
+    try {
+      final dir = await getTemporaryDirectory();
+      final file = File(
+        '${dir.path}/посещаемость_${_safeExportTeamName()}_${DateTime.now().millisecondsSinceEpoch}.xls',
+      );
+      await file.writeAsBytes(utf8.encode(_exportHtml()), flush: true);
+      await Share.shareXFiles(
+        [
+          XFile(
+            file.path,
+            mimeType: 'application/vnd.ms-excel',
+          ),
+        ],
+        subject: 'Посещаемость — ${widget.teamName}',
+      );
+    } catch (e) {
+      Get.snackbar('Ошибка', 'Не удалось создать Excel: $e');
+    }
+  }
+
+  Future<({pw.Font? regular, pw.Font? bold})> _loadPdfFonts() async {
+    Future<pw.Font?> load(String path) async {
+      try {
+        final data = await rootBundle.load(path);
+        return pw.Font.ttf(data);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    return (
+      regular: await load('assets/fonts/Roboto-Regular.ttf'),
+      bold: await load('assets/fonts/Roboto-Bold.ttf'),
+    );
+  }
+
+  Future<void> _exportPdf() async {
+    if (players.isEmpty) {
+      Get.snackbar('Пусто', 'Нет данных для экспорта');
+      return;
+    }
+
+    try {
+      final fonts = await _loadPdfFonts();
+      final theme = fonts.regular == null
+          ? null
+          : pw.ThemeData.withFont(
+              base: fonts.regular!,
+              bold: fonts.bold ?? fonts.regular!,
+            );
+      final rows = _exportRows();
+      final doc = pw.Document(theme: theme);
+
+      doc.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4.landscape,
+          margin: const pw.EdgeInsets.all(24),
+          build: (_) => [
+            pw.Text(
+              'Посещаемость — ${widget.teamName}',
+              style: pw.TextStyle(
+                font: fonts.bold,
+                fontSize: 16,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+            pw.SizedBox(height: 4),
+            pw.Text(
+              selectedEventTitle,
+              style: pw.TextStyle(font: fonts.regular, fontSize: 10),
+            ),
+            pw.SizedBox(height: 12),
+            pw.TableHelper.fromTextArray(
+              headers: rows.first,
+              data: rows.skip(1).toList(),
+              headerStyle: pw.TextStyle(
+                font: fonts.bold,
+                fontWeight: pw.FontWeight.bold,
+                fontSize: 7.5,
+              ),
+              cellStyle: pw.TextStyle(font: fonts.regular, fontSize: 7.5),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColor.fromInt(0xFFF2F7F4),
+              ),
+              border: pw.TableBorder.all(
+                color: const PdfColor.fromInt(0xFFE2E8F0),
+                width: .5,
+              ),
+            ),
+          ],
+        ),
+      );
+
+      final dir = await getTemporaryDirectory();
+      final file = File(
+        '${dir.path}/посещаемость_${_safeExportTeamName()}_${DateTime.now().millisecondsSinceEpoch}.pdf',
+      );
+      await file.writeAsBytes(await doc.save(), flush: true);
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'application/pdf')],
+        subject: 'Посещаемость — ${widget.teamName}',
+      );
+    } catch (e) {
+      Get.snackbar('Ошибка', 'Не удалось создать PDF: $e');
+    }
   }
 
   // ===== ВЫБОР СТАТУСА (БОКОВОЙ РЕДАКТОР) =====
@@ -969,7 +1177,7 @@ class _TeamAttendanceJournalScreenState
               });
               _loadAll();
             },
-            icon: Icon(PhosphorIcons.caretLeft(PhosphorIconsStyle.bold)),
+            icon: Icon(PhosphorIcons.caretLeft),
             style: IconButton.styleFrom(
               backgroundColor: const Color(0xFFF3F4F6),
               shape: RoundedRectangleBorder(
@@ -1010,7 +1218,7 @@ class _TeamAttendanceJournalScreenState
               });
               _loadAll();
             },
-            icon: Icon(PhosphorIcons.caretRight(PhosphorIconsStyle.bold)),
+            icon: Icon(PhosphorIcons.caretRight),
             style: IconButton.styleFrom(
               backgroundColor: const Color(0xFFF3F4F6),
               shape: RoundedRectangleBorder(
@@ -1042,7 +1250,7 @@ class _TeamAttendanceJournalScreenState
         children: [
           Row(
             children: [
-              Icon(PhosphorIcons.calendar(PhosphorIconsStyle.bold),
+              Icon(PhosphorIcons.calendar,
                   size: 20, color: eventColor),
               const SizedBox(width: 8),
               Text(
@@ -1124,8 +1332,7 @@ class _TeamAttendanceJournalScreenState
                                 child: Row(
                                   children: [
                                     Icon(
-                                      PhosphorIcons.calendarBlank(
-                                          PhosphorIconsStyle.bold),
+                                      PhosphorIcons.calendarBlank,
                                       color: selectedEventId == null
                                           ? Theme.of(context)
                                               .colorScheme
@@ -1203,8 +1410,7 @@ class _TeamAttendanceJournalScreenState
                                           Row(
                                             children: [
                                               Icon(
-                                                PhosphorIcons.calendarCheck(
-                                                    PhosphorIconsStyle.bold),
+                                                PhosphorIcons.calendarCheck,
                                                 size: 18,
                                                 color: isSelected
                                                     ? Theme.of(context)
@@ -1236,8 +1442,7 @@ class _TeamAttendanceJournalScreenState
                                           Row(
                                             children: [
                                               Icon(
-                                                PhosphorIcons.clock(
-                                                    PhosphorIconsStyle.bold),
+                                                PhosphorIcons.clock,
                                                 size: 14,
                                                 color: const Color(0xFF9CA3AF),
                                               ),
@@ -1278,10 +1483,8 @@ class _TeamAttendanceJournalScreenState
                   children: [
                     Icon(
                       selectedEventId == null
-                          ? PhosphorIcons.calendarBlank(
-                              PhosphorIconsStyle.bold)
-                          : PhosphorIcons.calendarCheck(
-                              PhosphorIconsStyle.bold),
+                          ? PhosphorIcons.calendarBlank
+                          : PhosphorIcons.calendarCheck,
                       color: eventColor,
                     ),
                     const SizedBox(width: 12),
@@ -1313,7 +1516,7 @@ class _TeamAttendanceJournalScreenState
                       ),
                     ),
                     Icon(
-                      PhosphorIcons.caretDown(PhosphorIconsStyle.bold),
+                      PhosphorIcons.caretDown,
                       color: eventColor,
                     ),
                   ],
@@ -1455,11 +1658,11 @@ class _TeamAttendanceJournalScreenState
   Widget _buildSearchAndFilters() {
     IconData viewIcon;
     if (viewMode == "list") {
-      viewIcon = PhosphorIcons.squaresFour(PhosphorIconsStyle.bold);
+      viewIcon = PhosphorIcons.squaresFour;
     } else if (viewMode == "grid") {
-      viewIcon = PhosphorIcons.table(PhosphorIconsStyle.bold);
+      viewIcon = PhosphorIcons.table;
     } else {
-      viewIcon = PhosphorIcons.list(PhosphorIconsStyle.bold);
+      viewIcon = PhosphorIcons.list;
     }
 
     return Row(
@@ -1484,7 +1687,7 @@ class _TeamAttendanceJournalScreenState
                 border: InputBorder.none,
                 hintText: "Поиск игрока...",
                 prefixIcon: Icon(
-                    PhosphorIcons.magnifyingGlass(PhosphorIconsStyle.bold)),
+                    PhosphorIcons.magnifyingGlass),
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               ),
@@ -1527,7 +1730,7 @@ class _TeamAttendanceJournalScreenState
                 ],
               ),
               child: Icon(
-                PhosphorIcons.funnel(PhosphorIconsStyle.bold),
+                PhosphorIcons.funnel,
                 color: filter == "all"
                     ? const Color(0xFF6B7280)
                     : _getStatusColor(filter),
@@ -1606,7 +1809,7 @@ class _TeamAttendanceJournalScreenState
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => Center(
                         child: Icon(
-                          PhosphorIcons.user(PhosphorIconsStyle.bold),
+                          PhosphorIcons.user,
                           size: size * 0.45,
                           color: accent,
                         ),
@@ -1614,7 +1817,7 @@ class _TeamAttendanceJournalScreenState
                     )
                   : Center(
                       child: Icon(
-                        PhosphorIcons.user(PhosphorIconsStyle.bold),
+                        PhosphorIcons.user,
                         size: size * 0.45,
                         color: accent,
                       ),
@@ -1665,7 +1868,7 @@ class _TeamAttendanceJournalScreenState
         child: Column(
           children: [
             Icon(
-              PhosphorIcons.users(PhosphorIconsStyle.bold),
+              PhosphorIcons.users,
               size: 72,
               color: const Color(0xFFD1D5DB),
             ),
@@ -2365,13 +2568,13 @@ class _TeamAttendanceJournalScreenState
     IconData viewBadgeIcon;
     if (viewMode == "list") {
       viewLabel = "Список";
-      viewBadgeIcon = PhosphorIcons.list(PhosphorIconsStyle.bold);
+      viewBadgeIcon = PhosphorIcons.list;
     } else if (viewMode == "grid") {
       viewLabel = "Сетка";
-      viewBadgeIcon = PhosphorIcons.squaresFour(PhosphorIconsStyle.bold);
+      viewBadgeIcon = PhosphorIcons.squaresFour;
     } else {
       viewLabel = "Таблица";
-      viewBadgeIcon = PhosphorIcons.table(PhosphorIconsStyle.bold);
+      viewBadgeIcon = PhosphorIcons.table;
     }
 
     return Scaffold(
@@ -2400,13 +2603,47 @@ class _TeamAttendanceJournalScreenState
             ),
           IconButton(
             onPressed: _loadAll,
-            icon: Icon(PhosphorIcons.arrowClockwise(PhosphorIconsStyle.bold)),
+            icon: Icon(PhosphorIcons.arrowClockwise),
             tooltip: "Обновить",
           ),
-          IconButton(
-            onPressed: _exportCsv,
-            icon: Icon(PhosphorIcons.fileCsv(PhosphorIconsStyle.bold)),
-            tooltip: "Экспорт CSV",
+          PopupMenuButton<String>(
+            tooltip: 'Экспорт',
+            icon: const Icon(Icons.ios_share_rounded),
+            onSelected: (value) {
+              if (value == 'pdf') {
+                _exportPdf();
+              } else if (value == 'excel') {
+                _exportExcel();
+              } else {
+                _exportCsv();
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem<String>(
+                value: 'pdf',
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(Icons.picture_as_pdf_rounded),
+                  title: Text('PDF'),
+                ),
+              ),
+              PopupMenuItem<String>(
+                value: 'excel',
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(Icons.grid_on_rounded),
+                  title: Text('Excel'),
+                ),
+              ),
+              PopupMenuItem<String>(
+                value: 'csv',
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(Icons.table_rows_rounded),
+                  title: Text('CSV'),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -2435,8 +2672,7 @@ class _TeamAttendanceJournalScreenState
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
-                          PhosphorIcons.warningCircle(
-                              PhosphorIconsStyle.bold),
+                          PhosphorIcons.warningCircle,
                           size: 64,
                           color: const Color(0xFFEF4444),
                         ),
@@ -2500,7 +2736,7 @@ class _TeamAttendanceJournalScreenState
                           child: Row(
                             children: [
                               Icon(
-                                PhosphorIcons.info(PhosphorIconsStyle.bold),
+                                PhosphorIcons.info,
                                 color: const Color(0xFFF59E0B),
                               ),
                               const SizedBox(width: 12),

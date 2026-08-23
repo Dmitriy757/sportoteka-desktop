@@ -4,22 +4,23 @@ import 'package:flutter/material.dart';
 
 import '../../data/models/video_lesson_author_model.dart';
 import '../../data/services/video_lessons_service.dart';
+import 'cmr_video_lessons_theme.dart';
 import 'video_lessons_screen.dart';
 
 class VideoLessonsAuthorsPalette {
-  static const primaryGreen = Color(0xFF00A750);
-  static const primaryGreenDark = Color(0xFF008C40);
-  static const primaryGreenLight = Color(0xFF00C060);
+  static const primaryGreen = CmrVideoColors.green;
+  static const primaryGreenDark = CmrVideoColors.greenDark;
+  static const primaryGreenLight = CmrVideoColors.green;
 
-  static const lightGreen = Color(0xFFE8F5E9);
-  static const superLightGreen = Color(0xFFF2FFF5);
+  static const lightGreen = CmrVideoColors.greenSoft;
+  static const superLightGreen = CmrVideoColors.greenSoft2;
 
-  static const white = Color(0xFFFFFFFF);
-  static const text = Color(0xFF1A1A1A);
-  static const textMuted = Color(0xFF666666);
+  static const white = CmrVideoColors.panel;
+  static const text = CmrVideoColors.text;
+  static const textMuted = CmrVideoColors.muted;
 
-  static const background = Color(0xFFF8F9FA);
-  static const border = Color(0xFFE5E7EB);
+  static const background = CmrVideoColors.bg;
+  static const border = Colors.transparent;
   static const gold = Color(0xFFFFC83D);
 
   static const greenGradient = LinearGradient(
@@ -164,15 +165,7 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
       padding: padding ?? const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: VideoLessonsAuthorsPalette.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: VideoLessonsAuthorsPalette.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 10),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(12),
       ),
       child: child,
     );
@@ -180,7 +173,7 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
     if (onTap == null) return card;
 
     return InkWell(
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(12),
       onTap: onTap,
       child: card,
     );
@@ -193,7 +186,7 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
           child: Text(
             title,
             style: const TextStyle(
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
               fontSize: 15,
               color: VideoLessonsAuthorsPalette.text,
             ),
@@ -204,7 +197,7 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
             action,
             style: const TextStyle(
               color: VideoLessonsAuthorsPalette.textMuted,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               fontSize: 12,
             ),
           ),
@@ -232,7 +225,7 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
           Text(
             text,
             style: const TextStyle(
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               fontSize: 12,
               color: VideoLessonsAuthorsPalette.textMuted,
             ),
@@ -279,8 +272,7 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: VideoLessonsAuthorsPalette.border),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -290,7 +282,7 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
               Container(
                 decoration: BoxDecoration(
                   gradient: VideoLessonsAuthorsPalette.greenGradient,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 padding: const EdgeInsets.all(10),
                 child: const Icon(
@@ -306,7 +298,7 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
                     Text(
                       'Авторы видеоуроков',
                       style: TextStyle(
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                         fontSize: 15,
                         color: VideoLessonsAuthorsPalette.text,
                       ),
@@ -316,7 +308,7 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
                       'Поиск тренеров и каталог их видеоуроков',
                       style: TextStyle(
                         color: VideoLessonsAuthorsPalette.textMuted,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                         fontSize: 12,
                       ),
                     ),
@@ -334,7 +326,7 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
                 child: Text(
                   '${_authors.length} авторов',
                   style: const TextStyle(
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                     fontSize: 12,
                     color: VideoLessonsAuthorsPalette.textMuted,
                   ),
@@ -505,7 +497,7 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                       fontSize: 15.5,
                       color: VideoLessonsAuthorsPalette.text,
                     ),
@@ -593,7 +585,7 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
           const Text(
             'Ошибка загрузки',
             style: TextStyle(
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
               color: VideoLessonsAuthorsPalette.text,
             ),
           ),
@@ -603,14 +595,14 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: VideoLessonsAuthorsPalette.textMuted,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w500,
             ),
           ),
           const SizedBox(height: 12),
           Container(
             decoration: BoxDecoration(
               gradient: VideoLessonsAuthorsPalette.greenGradient,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: TextButton(
               onPressed: _loadAll,
@@ -618,7 +610,7 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
                 'Повторить',
                 style: TextStyle(
                   color: Colors.white,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -641,7 +633,7 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
           Text(
             'Пока нет авторов видеоуроков',
             style: TextStyle(
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
               color: VideoLessonsAuthorsPalette.text,
             ),
           ),
@@ -652,9 +644,10 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: VideoLessonsAuthorsPalette.background,
-      child: RefreshIndicator(
+    return CmrVideoThemeScope(
+      child: Container(
+        color: VideoLessonsAuthorsPalette.background,
+        child: RefreshIndicator(
         onRefresh: _loadAll,
         color: VideoLessonsAuthorsPalette.primaryGreen,
         child: ListView(
@@ -691,6 +684,7 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
                 ),
             ],
           ],
+          ),
         ),
       ),
     );
@@ -736,7 +730,7 @@ class _HashChip extends StatelessWidget {
           label,
           style: TextStyle(
             color: text,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
             fontSize: 13,
           ),
         ),

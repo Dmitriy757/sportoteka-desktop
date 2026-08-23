@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:get/get.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 
@@ -44,15 +45,6 @@ class TrainingEventDetailSheet extends StatelessWidget {
       decoration: BoxDecoration(
         color: _CmrColors.surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28), bottom: Radius.circular(22)),
-        border: Border.all(color: _CmrColors.line),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(.075),
-            blurRadius: 34,
-            spreadRadius: -18,
-            offset: const Offset(0, -8),
-          ),
-        ],
       ),
       child: ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28), bottom: Radius.circular(22)),
@@ -137,11 +129,11 @@ class _CmrColors {
   static const Color canvas = Color(0xFFF7F9FA);
   static const Color line = Color(0xFFE7ECEF);
   static const Color lineStrong = Color(0xFFD7E1E6);
-  static const Color text = Color(0xFF101828);
+  static const Color text = Color(0xFF0B0F14);
   static const Color softText = Color(0xFF354052);
-  static const Color muted = Color(0xFF667085);
+  static const Color muted = Color(0xFF5F6670);
   static const Color icon = Color(0xFF6B7280);
-  static const Color green = Color(0xFF0BAA62);
+  static const Color green = Color(0xFF00A750);
   static const Color greenDark = Color(0xFF087A48);
   static const Color blue = Color(0xFF2563EB);
   static const Color cyan = Color(0xFF0891B2);
@@ -153,38 +145,27 @@ class _CmrColors {
 }
 
 class _CmrText {
-  static const String font = 'Segoe UI';
-  static const List<String> fallback = <String>[
-    'SF Pro Display',
-    'SF Pro Text',
-    'Inter',
-    'Roboto',
-    'Arial',
-  ];
-
   static TextStyle base(
     double size,
     FontWeight weight,
     Color color, {
     double height = 1.18,
-    double letterSpacing = -.08,
+    double letterSpacing = 0,
   }) {
-    return TextStyle(
-      fontFamily: font,
-      fontFamilyFallback: fallback,
+    return AppTypography.custom(
+      size: size,
+      weight: weight,
       color: color,
-      fontSize: size,
-      fontWeight: weight,
       height: height,
       letterSpacing: letterSpacing,
     );
   }
 
-  static TextStyle title(double size) => base(size, FontWeight.w700, _CmrColors.text, height: 1.10);
-  static TextStyle section(Color color) => base(12.0, FontWeight.w800, color, height: 1.08);
-  static TextStyle body() => base(11.7, FontWeight.w600, _CmrColors.softText, height: 1.35);
-  static TextStyle muted() => base(11.2, FontWeight.w600, _CmrColors.muted, height: 1.32);
-  static TextStyle chip(Color color) => base(10.4, FontWeight.w800, color, height: 1.0);
+  static TextStyle title(double size) => base(size, FontWeight.w600, _CmrColors.text, height: 1.10);
+  static TextStyle section(Color color) => base(12.0, FontWeight.w600, color, height: 1.08);
+  static TextStyle body() => base(11.7, FontWeight.w400, _CmrColors.softText, height: 1.35);
+  static TextStyle muted() => base(11.2, FontWeight.w400, _CmrColors.muted, height: 1.32);
+  static TextStyle chip(Color color) => base(10.4, FontWeight.w600, color, height: 1.0);
 }
 
 Color _eventAccent(TeamEventType type) {
@@ -507,7 +488,7 @@ class _CmrSoftAction extends StatelessWidget {
           children: [
             Icon(icon, color: color, size: 16),
             const SizedBox(width: 8),
-            Text(text, style: _CmrText.base(11.8, FontWeight.w800, color, height: 1)),
+            Text(text, style: _CmrText.base(11.8, FontWeight.w600, color, height: 1)),
           ],
         ),
       ),
@@ -549,7 +530,7 @@ class _CmrPrimaryAction extends StatelessWidget {
               child: const Icon(Icons.star_rate_rounded, color: _CmrColors.green, size: 15),
             ),
             const SizedBox(width: 9),
-            Text(text, style: _CmrText.base(12.0, FontWeight.w800, _CmrColors.greenDark, height: 1)),
+            Text(text, style: _CmrText.base(12.0, FontWeight.w600, _CmrColors.greenDark, height: 1)),
           ],
         ),
       ),

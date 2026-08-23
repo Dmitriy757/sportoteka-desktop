@@ -1,0 +1,8 @@
+SPORTOTEKA Tracker Mobile V93 build fix
+Date: 2026-08-12
+
+Fixes after macOS Flutter build:
+1) _TrackerRadarPulse now accepts Widget key via super.key.
+2) Container minHeight replaced with constraints: BoxConstraints(minHeight: 36).
+
+The AVKeyValueStatus deprecation message from video_player_avfoundation is a warning from the plugin and is not the cause of BUILD FAILED.

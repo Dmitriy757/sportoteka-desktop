@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 
 import 'package:sportoteka/presentation/training_graphics/tg_models.dart';
 import 'package:sportoteka/presentation/training_graphics/training_graphics_state.dart';
@@ -130,10 +131,9 @@ class _Section extends StatelessWidget {
   final String? trailing;
   final Widget child;
 
-  static const _surface = Color(0xFFF7F8FA);
-  static const _border = Color(0xFFE5E7EB);
-  static const _txt = Color(0xFF111827);
-  static const _txtDim = Color(0xFF6B7280);
+  static const _surface = Color(0xFFF6F8F7);
+  static const _txt = Color(0xFF111713);
+  static const _txtDim = Color(0xFF6F7A73);
 
   @override
   Widget build(BuildContext context) {
@@ -141,8 +141,7 @@ class _Section extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
         color: _surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _border),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -155,7 +154,7 @@ class _Section extends StatelessWidget {
                   style: const TextStyle(
                     color: _txt,
                     fontWeight: FontWeight.w600,
-                    fontSize: 12,
+                    fontSize: 11,
                   ),
                 ),
               ),
@@ -164,8 +163,8 @@ class _Section extends StatelessWidget {
                   trailing!,
                   style: const TextStyle(
                     color: _txtDim,
-                    fontWeight: FontWeight.w500,
-                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 10,
                   ),
                 ),
             ],
@@ -189,9 +188,10 @@ class _ToggleBtn extends StatelessWidget {
   final bool active;
   final VoidCallback onTap;
 
-  static const _border = Color(0xFFE5E7EB);
   static const _green = Color(0xFF00A750);
-  static const _txt = Color(0xFF111827);
+  static const _greenSoft = Color(0xFFEFF8F2);
+  static const _soft = Color(0xFFEEF2EF);
+  static const _txt = Color(0xFF111713);
 
   @override
   Widget build(BuildContext context) {
@@ -203,21 +203,84 @@ class _ToggleBtn extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: active ? _green.withOpacity(0.12) : Colors.white,
+          color: active ? _greenSoft : _soft,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: active ? _green : _border,
-            width: active ? 1.5 : 1,
-          ),
         ),
         child: Text(
           text,
           style: TextStyle(
             color: active ? _green : _txt,
             fontWeight: FontWeight.w600,
-            fontSize: 11,
+            fontSize: 10.2,
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ObjectEditModeBanner extends StatelessWidget {
+  const _ObjectEditModeBanner({
+    required this.pointsMode,
+    required this.onObject,
+    required this.onPoints,
+  });
+
+  final bool pointsMode;
+  final VoidCallback onObject;
+  final VoidCallback onPoints;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F8F7),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Работа с элементом',
+            style: TextStyle(
+              color: Color(0xFF111713),
+              fontWeight: FontWeight.w600,
+              fontSize: 11,
+            ),
+          ),
+          const SizedBox(height: 7),
+          const Text(
+            'Объект — перемещение, размер и поворот. Точки — изменение формы линии.',
+            style: TextStyle(
+              color: Color(0xFF6F7A73),
+              fontWeight: FontWeight.w600,
+              fontSize: 9.8,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 9),
+          Row(
+            children: [
+              Expanded(
+                child: _ToggleBtn(
+                  text: 'Объект',
+                  active: !pointsMode,
+                  onTap: onObject,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _ToggleBtn(
+                  text: 'Точки',
+                  active: pointsMode,
+                  onTap: onPoints,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -234,7 +297,7 @@ class _ColorRow extends StatelessWidget {
   final Color active;
   final ValueChanged<Color> onPick;
 
-  static const _border = Color(0xFFE5E7EB);
+  static const _border = Colors.transparent;
   static const _green = Color(0xFF00A750);
 
   @override
@@ -348,19 +411,15 @@ class _PillType extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: active ? green.withOpacity(0.12) : Colors.transparent,
+          color: active ? const Color(0xFFEFF8F2) : const Color(0xFFEEF2EF),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: active ? green : const Color(0xFFE5E7EB),
-            width: active ? 1.5 : 1,
-          ),
         ),
         child: Text(
           text,
           style: TextStyle(
             color: active ? green : const Color(0xFF111827),
             fontWeight: FontWeight.w600,
-            fontSize: 11,
+            fontSize: 10.2,
           ),
         ),
       ),
@@ -426,7 +485,6 @@ class _QuickActionCircles extends StatelessWidget {
         decoration: BoxDecoration(
           color: _panel,
           borderRadius: BorderRadius.circular(radius),
-          border: Border.all(color: _border),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(.045),
@@ -574,10 +632,9 @@ class _BasePanel extends StatelessWidget {
 
   static const _green = Color(0xFF00A750);
   static const _panel = Color(0xFFFFFFFF);
-  static const _surface = Color(0xFFFAFBFC);
-  static const _border = Color(0xFFF0F2F4);
-  static const _text = Color(0xFF0B0F14);
-  static const _muted = Color(0xFF6B7280);
+  static const _surface = Color(0xFFEFF8F2);
+  static const _text = Color(0xFF111713);
+  static const _muted = Color(0xFF6F7A73);
 
   @override
   Widget build(BuildContext context) {
@@ -586,16 +643,7 @@ class _BasePanel extends StatelessWidget {
       height: double.infinity,
       decoration: BoxDecoration(
         color: _panel,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(.055),
-            blurRadius: 38,
-            spreadRadius: -18,
-            offset: const Offset(0, 22),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
         children: [
@@ -609,7 +657,18 @@ class _BasePanel extends StatelessWidget {
                 MediaQuery.of(context).size.width < 900 ? 10 : 14,
                 16,
               ),
-              child: child,
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  activeTrackColor: const Color(0xFF198765),
+                  inactiveTrackColor: const Color(0xFFDCE5DF),
+                  thumbColor: const Color(0xFF198765),
+                  overlayColor: Colors.transparent,
+                  trackHeight: 3,
+                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                  overlayShape: SliderComponentShape.noOverlay,
+                ),
+                child: child,
+              ),
             ),
           ),
         ],
@@ -624,9 +683,7 @@ class _BasePanel extends StatelessWidget {
         return Container(
       height: narrow ? 50 : 58,
       padding: EdgeInsets.symmetric(horizontal: narrow ? 8 : 12),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: _border, width: 1)),
-      ),
+      decoration: const BoxDecoration(color: Colors.white),
       child: Row(
         children: [
           Container(
@@ -634,35 +691,21 @@ class _BasePanel extends StatelessWidget {
             height: narrow ? 30 : 34,
             decoration: BoxDecoration(
               color: _surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _border),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, size: narrow ? 15 : 17, color: _text),
           ),
           SizedBox(width: narrow ? 7 : 10),
           Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: _text,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                const Text(
-                  'панель редактора',
-                  style: TextStyle(
-                    color: _muted,
-                    fontWeight: FontWeight.w500,
-                    fontSize: 10.5,
-                  ),
-                ),
-              ],
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _text,
+                fontWeight: FontWeight.w600,
+                fontSize: 12.2,
+              ),
             ),
           ),
           _PanelCloseButton(onTap: onClose),
@@ -696,8 +739,7 @@ class _PanelCloseButton extends StatelessWidget {
             height: narrow ? 32 : 34,
             padding: EdgeInsets.symmetric(horizontal: narrow ? 8 : 10),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFFFCDD2)),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -709,8 +751,8 @@ class _PanelCloseButton extends StatelessWidget {
                   'Закрыть',
                   style: TextStyle(
                     color: Color(0xFFE11D48),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 ],
@@ -793,11 +835,14 @@ class _ObjectPanelContent extends StatefulWidget {
 }
 
 class _ObjectPanelContentState extends State<_ObjectPanelContent> {
-  static const _surface = Color(0xFFF7F8FA);
-  static const _border = Color(0xFFE5E7EB);
-  static const _txt = Color(0xFF111827);
-  static const _txtDim = Color(0xFF6B7280);
+  static const _surface = Color(0xFFF6F8F7);
+  static const _txt = Color(0xFF111713);
+  static const _txtDim = Color(0xFF6F7A73);
   static const _green = Color(0xFF00A750);
+  // CMR/Tracker: neutral cards are background-only; borders are reserved
+  // for the active state. Keeping this transparent also preserves the
+  // existing active ? _green : _border expressions below.
+  static const _border = Colors.transparent;
   static const _greenSoft = Color(0xFFF3FBF7);
 
   final List<CategoryInfo> categories = const [
@@ -934,8 +979,7 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _border),
-          ),
+            ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -950,14 +994,14 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
                 t.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: _txt, fontSize: 12, fontWeight: FontWeight.w900),
+                style: const TextStyle(color: _txt, fontSize: 11.2, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 3),
               Text(
                 t.subtitle,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: _txtDim, fontSize: 10, height: 1.2, fontWeight: FontWeight.w600),
+                style: const TextStyle(color: _txtDim, fontSize: 9.6, height: 1.2, fontWeight: FontWeight.w600),
               ),
             ],
           ),
@@ -1012,7 +1056,7 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
                       Expanded(
                         child: Text(
                           'Открыть 3D Pro с этим составом',
-                          style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900),
+                          style: TextStyle(color: Colors.white, fontSize: 11.2, fontWeight: FontWeight.w600),
                         ),
                       ),
                       Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 17),
@@ -1042,7 +1086,7 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
           Expanded(
             child: Text(
               'Загружаю игроков команды...',
-              style: TextStyle(color: _txtDim, fontSize: 11.5, fontWeight: FontWeight.w700),
+              style: TextStyle(color: _txtDim, fontSize: 10.8, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -1062,7 +1106,7 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
         widget.teamPlayersError?.trim().isNotEmpty == true
             ? 'Игроки не загрузились: ${widget.teamPlayersError}'
             : 'Игроки команды пока не загружены. Открой редактор из команды или проверь team_id.',
-        style: const TextStyle(color: _txtDim, fontSize: 11.5, height: 1.25, fontWeight: FontWeight.w700),
+        style: const TextStyle(color: _txtDim, fontSize: 10.8, height: 1.25, fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -1101,13 +1145,12 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
                   decoration: BoxDecoration(
                     color: _surface,
                     borderRadius: BorderRadius.circular(13),
-                    border: Border.all(color: _border),
-                  ),
+                        ),
                   child: avatar.isEmpty
                       ? Center(
                           child: Text(
                             number > 0 ? '$number' : _initials(name),
-                            style: const TextStyle(color: _green, fontSize: 13, fontWeight: FontWeight.w900),
+                            style: const TextStyle(color: _green, fontSize: 12, fontWeight: FontWeight.w600),
                           ),
                         )
                       : Image.network(
@@ -1116,7 +1159,7 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
                           errorBuilder: (_, __, ___) => Center(
                             child: Text(
                               number > 0 ? '$number' : _initials(name),
-                              style: const TextStyle(color: _green, fontSize: 13, fontWeight: FontWeight.w900),
+                              style: const TextStyle(color: _green, fontSize: 12, fontWeight: FontWeight.w600),
                             ),
                           ),
                         ),
@@ -1132,8 +1175,8 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: active ? _green : _txt,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 11.5,
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -1143,8 +1186,8 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: _txtDim,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 10,
                         ),
                       ),
                     ],
@@ -1265,8 +1308,7 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: _border),
-          ),
+            ),
           child: Row(
             children: [
               Container(
@@ -1289,8 +1331,8 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: _txt,
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w800,
+                        fontSize: 10.8,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -1337,8 +1379,8 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
                 borderRadius: BorderRadius.circular(14),
                 style: const TextStyle(
                   color: _txt,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 11.2,
+                  fontWeight: FontWeight.w600,
                 ),
                 items: List.generate(categories.length, (index) {
                   final c = categories[index];
@@ -1371,8 +1413,8 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
               '$count',
               style: const TextStyle(
                 color: _green,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -1418,8 +1460,7 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
                   decoration: BoxDecoration(
                     color: _surface,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: _border),
-                  ),
+                        ),
                   child: _stampThumb(asset),
                 ),
                 const SizedBox(width: 10),
@@ -1433,8 +1474,8 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: active ? _green : _txt,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 11.5,
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -1445,7 +1486,7 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
                         style: const TextStyle(
                           color: _txtDim,
                           fontWeight: FontWeight.w600,
-                          fontSize: 10.5,
+                          fontSize: 10,
                         ),
                       ),
                     ],
@@ -1510,7 +1551,7 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
           Text(
             'В этой категории пока нет объектов',
             textAlign: TextAlign.center,
-            style: TextStyle(color: _txtDim, fontSize: 12, fontWeight: FontWeight.w600),
+            style: TextStyle(color: _txtDim, fontSize: 11.2, fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -1522,8 +1563,7 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
       decoration: BoxDecoration(
         color: _surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _border),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: const Row(
         children: [
@@ -1532,7 +1572,7 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
           Expanded(
             child: Text(
               'Выберите элемент из списка вниз, затем нажмите на поле. Для ТВ-графики сначала выберите пресет.',
-              style: TextStyle(color: _txtDim, fontSize: 10.5, fontWeight: FontWeight.w600),
+              style: TextStyle(color: _txtDim, fontSize: 10, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -1603,8 +1643,35 @@ class _EditorPanelContent extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(11, 9, 11, 9),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEFF8F2),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.touch_app_rounded, size: 15, color: Color(0xFF00A750)),
+              SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  'Режим «Объект»: перетаскивайте элемент, углы меняют размер, круглая верхняя ручка поворачивает. Двумя пальцами по объекту — масштаб и поворот; вне объекта — камера.',
+                  style: TextStyle(
+                    color: Color(0xFF4F5C54),
+                    fontSize: 10,
+                    height: 1.35,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
         _buildSceneElementsList(),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         if (sel is TgLine) _LineEditor(state: state, sel: sel, colors: _colors),
         if (sel is TgStamp)
           _StampEditor(
@@ -1622,8 +1689,8 @@ class _EditorPanelContent extends StatelessWidget {
             sel: sel,
             colors: _colors,
             txt: const Color(0xFF111827),
-            border: const Color(0xFFE5E7EB),
-            surface: const Color(0xFFF7F8FA),
+            border: Colors.transparent,
+            surface: const Color(0xFFF6F8F7),
             green: const Color(0xFF00A750),
           ),
         if (sel is TgZigzag)
@@ -1637,9 +1704,8 @@ class _EditorPanelContent extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: const Color(0xFFF7F8FA),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFE5E7EB)),
+            color: const Color(0xFFF6F8F7),
+            borderRadius: BorderRadius.circular(10),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -1689,8 +1755,7 @@ class _EditorPanelContent extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
+          borderRadius: BorderRadius.circular(9),
         ),
         child: DropdownButtonHideUnderline(
           child: DropdownButton<String>(
@@ -1701,8 +1766,8 @@ class _EditorPanelContent extends StatelessWidget {
             borderRadius: BorderRadius.circular(14),
             style: const TextStyle(
               color: Color(0xFF111827),
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
+              fontSize: 11.2,
+              fontWeight: FontWeight.w600,
             ),
             items: elements.reversed.map((element) {
               return DropdownMenuItem<String>(
@@ -1777,12 +1842,7 @@ class _EditorPanelContent extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: isDestructive ? const Color(0xFFFEE2E2) : Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isDestructive
-                ? const Color(0xFFFECACA)
-                : const Color(0xFFE5E7EB),
-          ),
+          borderRadius: BorderRadius.circular(9),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -1801,7 +1861,7 @@ class _EditorPanelContent extends StatelessWidget {
                 color: isDestructive
                     ? const Color(0xFFEF4444)
                     : const Color(0xFF111827),
-                fontSize: 11,
+                fontSize: 10.5,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -1894,8 +1954,8 @@ class _ThreeDPanelContent extends StatelessWidget {
           child: Text(
             'Камера',
             style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
+              fontSize: 11.2,
+              fontWeight: FontWeight.w600,
               color: _txt,
             ),
           ),
@@ -1990,7 +2050,7 @@ class _ThreeDPanelContent extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFE5E7EB)),
+            border: Border.all(color: Colors.transparent),
           ),
           child: Row(
             children: [
@@ -2003,8 +2063,8 @@ class _ThreeDPanelContent extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: _txt,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -2038,7 +2098,7 @@ class _ThreeDPanelContent extends StatelessWidget {
               Text(
                 label,
                 style: const TextStyle(
-                  fontSize: 11,
+                  fontSize: 10.5,
                   fontWeight: FontWeight.w600,
                   color: _txt,
                 ),
@@ -2070,7 +2130,7 @@ class _ThreeDPanelContent extends StatelessWidget {
                           ? '${(value.abs() * 50).round()}°'
                           : '${(value * 30).round()}°',
                       style: TextStyle(
-                        fontSize: 10,
+                        fontSize: 9.6,
                         fontWeight: FontWeight.w600,
                         color: _green,
                       ),
@@ -2109,7 +2169,7 @@ class _ThreeDPanelContent extends StatelessWidget {
               label,
               style: TextStyle(
                 color: _green,
-                fontSize: 12,
+                fontSize: 11.2,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -2528,13 +2588,13 @@ class _StampEditor extends StatelessWidget {
             decoration: BoxDecoration(
               color: const Color(0xFFF7F8FA),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
+              border: Border.all(color: Colors.transparent),
             ),
             child: const Text(
               'SVG сохраняет оригинальные цвета',
               style: TextStyle(
                 color: Color(0xFF6B7280),
-                fontSize: 11,
+                fontSize: 10.5,
                 fontWeight: FontWeight.w600,
               ),
               textAlign: TextAlign.center,
@@ -2722,7 +2782,7 @@ class _TextEditor extends StatelessWidget {
               hintText: 'Введите текст',
               hintStyle: TextStyle(
                 color: _txtDim.withOpacity(0.5),
-                fontSize: 12,
+                fontSize: 11.2,
               ),
               filled: true,
               fillColor: Colors.white,
@@ -2735,7 +2795,7 @@ class _TextEditor extends StatelessWidget {
             ),
             style: const TextStyle(
               color: _txt,
-              fontSize: 14,
+              fontSize: 12.5,
               fontWeight: FontWeight.w500,
             ),
             maxLines: 3,
@@ -2855,8 +2915,8 @@ class _ZigzagEditor extends StatelessWidget {
   final TgZigzag sel;
   final List<Color> colors;
 
-  static const _surface = Color(0xFFF7F8FA);
-  static const _border = Color(0xFFE5E7EB);
+  static const _surface = Color(0xFFF6F8F7);
+  static const _border = Colors.transparent;
   static const _txt = Color(0xFF111827);
   static const _green = Color(0xFF00A750);
 
@@ -2870,139 +2930,18 @@ class _ZigzagEditor extends StatelessWidget {
 
     return Column(
       children: [
-        Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: inEditMode ? _green.withOpacity(0.15) : _surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: inEditMode ? _green : _border,
-              width: inEditMode ? 2 : 1,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Режим редактирования',
-                style: TextStyle(
-                  color: inEditMode ? _green : _txt,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 12,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        if (!isEditable) {
-                          state.editZigzagPoints();
-                        } else if (editableSel != null &&
-                            !editableSel.showControlPoints) {
-                          state.editZigzagPoints();
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: inEditMode ? _green : Colors.white,
-                        foregroundColor: inEditMode ? Colors.white : _green,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          side: BorderSide(
-                            color: inEditMode ? _green : _border,
-                            width: 1,
-                          ),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.edit_rounded,
-                            size: 16,
-                            color: inEditMode ? Colors.white : _green,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            inEditMode
-                                ? 'Режим активен'
-                                : 'Редактировать точки',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (inEditMode) ...[
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () {
-                          final edit = editableSel;
-                          if (edit == null) return;
-
-                          final updated = TgZigzag(
-                            id: edit.id,
-                            start: edit.start,
-                            endPoint: edit.endPoint,
-                            color: edit.color,
-                            width: edit.width,
-                            kind: edit.kind,
-                            opacity: edit.opacity,
-                            amplitude: edit.amplitude,
-                            frequency: edit.frequency,
-                            phase: edit.phase,
-                            lineEnd: edit.lineEnd,
-                            arrowSize: edit.arrowSize,
-                            locked: edit.locked,
-                            hidden: edit.hidden,
-                            layer: edit.layer,
-                            name: edit.name,
-                            createdAt: edit.createdAt,
-                          );
-
-                          state.replaceElement(
-                            updated,
-                            keepSelection: true,
-                            setTool: TgTool.select,
-                          );
-                        },
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF6B7280),
-                          side: const BorderSide(color: _border),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.check_rounded, size: 16),
-                            SizedBox(width: 6),
-                            Text(
-                              'Готово',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w900,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ),
+        _ObjectEditModeBanner(
+          pointsMode: inEditMode,
+          onObject: () {
+            if (inEditMode) {
+              state.finishEditPoints();
+            } else {
+              state.setTool(TgTool.select);
+            }
+          },
+          onPoints: () {
+            if (!inEditMode) state.editZigzagPoints();
+          },
         ),
         if (inEditMode)
           Container(
@@ -3010,8 +2949,7 @@ class _ZigzagEditor extends StatelessWidget {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: _surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _border),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Row(
               children: [
@@ -3022,8 +2960,8 @@ class _ZigzagEditor extends StatelessWidget {
                     "Перетаскивайте цветные точки на поле для изменения формы зигзага",
                     style: TextStyle(
                       color: _txt,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -3108,8 +3046,8 @@ class _WavyEditor extends StatelessWidget {
   final TgWavy sel;
   final List<Color> colors;
 
-  static const _surface = Color(0xFFF7F8FA);
-  static const _border = Color(0xFFE5E7EB);
+  static const _surface = Color(0xFFF6F8F7);
+  static const _border = Colors.transparent;
   static const _txt = Color(0xFF111827);
   static const _green = Color(0xFF00A750);
 
@@ -3123,143 +3061,18 @@ class _WavyEditor extends StatelessWidget {
 
     return Column(
       children: [
-        Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: inEditMode ? _green.withOpacity(0.15) : _surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: inEditMode ? _green : _border,
-              width: inEditMode ? 2 : 1,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Режим редактирования',
-                style: TextStyle(
-                  color: inEditMode ? _green : _txt,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 12,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        if (!isEditable) {
-                          state.editWavyPoints();
-                        } else if (editableSel != null &&
-                            !editableSel.showControlPoints) {
-                          state.editWavyPoints();
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: inEditMode ? _green : Colors.white,
-                        foregroundColor: inEditMode ? Colors.white : _green,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          side: BorderSide(
-                            color: inEditMode ? _green : _border,
-                            width: 1,
-                          ),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.edit_rounded,
-                            size: 16,
-                            color: inEditMode ? Colors.white : _green,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            inEditMode
-                                ? 'Режим активен'
-                                : 'Редактировать точки',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (inEditMode) ...[
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () {
-                          final edit = editableSel;
-                          if (edit == null) return;
-
-                          final updated = TgWavy(
-                            id: edit.id,
-                            start: edit.start,
-                            endPoint: edit.endPoint,
-                            controlPoints: edit.controlPoints,
-                            color: edit.color,
-                            width: edit.width,
-                            kind: edit.kind,
-                            opacity: edit.opacity,
-                            amplitude: edit.amplitude,
-                            wavelength: edit.wavelength,
-                            phase: edit.phase,
-                            lineEnd: edit.lineEnd,
-                            arrowSize: edit.arrowSize,
-                            cap: edit.cap,
-                            join: edit.join,
-                            dash: edit.dash,
-                            locked: edit.locked,
-                            hidden: edit.hidden,
-                            layer: edit.layer,
-                            name: edit.name,
-                            createdAt: edit.createdAt,
-                          );
-
-                          state.replaceElement(
-                            updated,
-                            keepSelection: true,
-                            setTool: TgTool.select,
-                          );
-                        },
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF6B7280),
-                          side: const BorderSide(color: _border),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.check_rounded, size: 16),
-                            SizedBox(width: 6),
-                            Text(
-                              'Готово',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w900,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ),
+        _ObjectEditModeBanner(
+          pointsMode: inEditMode,
+          onObject: () {
+            if (inEditMode) {
+              state.finishEditPoints();
+            } else {
+              state.setTool(TgTool.select);
+            }
+          },
+          onPoints: () {
+            if (!inEditMode) state.editWavyPoints();
+          },
         ),
         if (inEditMode)
           Container(
@@ -3267,8 +3080,7 @@ class _WavyEditor extends StatelessWidget {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: _surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _border),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Row(
               children: [
@@ -3279,8 +3091,8 @@ class _WavyEditor extends StatelessWidget {
                     "Перетаскивайте цветные точки на поле для изменения формы волны",
                     style: TextStyle(
                       color: _txt,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -3447,8 +3259,8 @@ class _SpringEditor extends StatelessWidget {
   final TgSpring sel;
   final List<Color> colors;
 
-  static const _surface = Color(0xFFF7F8FA);
-  static const _border = Color(0xFFE5E7EB);
+  static const _surface = Color(0xFFF6F8F7);
+  static const _border = Colors.transparent;
   static const _txt = Color(0xFF111827);
   static const _green = Color(0xFF00A750);
 
@@ -3462,139 +3274,18 @@ class _SpringEditor extends StatelessWidget {
 
     return Column(
       children: [
-        Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: inEditMode ? _green.withOpacity(0.15) : _surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: inEditMode ? _green : _border,
-              width: inEditMode ? 2 : 1,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Режим редактирования',
-                style: TextStyle(
-                  color: inEditMode ? _green : _txt,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 12,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        if (!isEditable) {
-                          state.editSpringPoints();
-                        } else if (editableSel != null &&
-                            !editableSel.showControlPoints) {
-                          state.editSpringPoints();
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: inEditMode ? _green : Colors.white,
-                        foregroundColor: inEditMode ? Colors.white : _green,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          side: BorderSide(
-                            color: inEditMode ? _green : _border,
-                            width: 1,
-                          ),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.edit_rounded,
-                            size: 16,
-                            color: inEditMode ? Colors.white : _green,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            inEditMode
-                                ? 'Режим активен'
-                                : 'Редактировать точки',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (inEditMode) ...[
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () {
-                          final edit = editableSel;
-                          if (edit == null) return;
-
-                          final updated = TgSpring(
-                            id: edit.id,
-                            start: edit.start,
-                            endPoint: edit.endPoint,
-                            color: edit.color,
-                            width: edit.width,
-                            kind: edit.kind,
-                            opacity: edit.opacity,
-                            amplitude: edit.amplitude,
-                            frequency: edit.frequency,
-                            phase: edit.phase,
-                            lineEnd: edit.lineEnd,
-                            arrowSize: edit.arrowSize,
-                            locked: edit.locked,
-                            hidden: edit.hidden,
-                            layer: edit.layer,
-                            name: edit.name,
-                            createdAt: edit.createdAt,
-                          );
-
-                          state.replaceElement(
-                            updated,
-                            keepSelection: true,
-                            setTool: TgTool.select,
-                          );
-                        },
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF6B7280),
-                          side: const BorderSide(color: _border),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.check_rounded, size: 16),
-                            SizedBox(width: 6),
-                            Text(
-                              'Готово',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w900,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ),
+        _ObjectEditModeBanner(
+          pointsMode: inEditMode,
+          onObject: () {
+            if (inEditMode) {
+              state.finishEditPoints();
+            } else {
+              state.setTool(TgTool.select);
+            }
+          },
+          onPoints: () {
+            if (!inEditMode) state.editSpringPoints();
+          },
         ),
         if (inEditMode)
           Container(
@@ -3602,8 +3293,7 @@ class _SpringEditor extends StatelessWidget {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: _surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _border),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Row(
               children: [
@@ -3614,8 +3304,8 @@ class _SpringEditor extends StatelessWidget {
                     "Перетаскивайте цветные точки на поле для изменения формы пружинки",
                     style: TextStyle(
                       color: _txt,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -3700,8 +3390,8 @@ class _SpiralEditor extends StatelessWidget {
   final TgSpiral sel;
   final List<Color> colors;
 
-  static const _surface = Color(0xFFF7F8FA);
-  static const _border = Color(0xFFE5E7EB);
+  static const _surface = Color(0xFFF6F8F7);
+  static const _border = Colors.transparent;
   static const _txt = Color(0xFF111827);
   static const _green = Color(0xFF00A750);
 
@@ -3715,141 +3405,18 @@ class _SpiralEditor extends StatelessWidget {
 
     return Column(
       children: [
-        Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: inEditMode ? _green.withOpacity(0.15) : _surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: inEditMode ? _green : _border,
-              width: inEditMode ? 2 : 1,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Режим редактирования',
-                style: TextStyle(
-                  color: inEditMode ? _green : _txt,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 12,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        if (!isEditable) {
-                          state.editSpiralPoints();
-                        } else if (editableSel != null &&
-                            !editableSel.showControlPoints) {
-                          state.editSpiralPoints();
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: inEditMode ? _green : Colors.white,
-                        foregroundColor: inEditMode ? Colors.white : _txt,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          side: BorderSide(
-                            color: inEditMode ? _green : _border,
-                            width: 1,
-                          ),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.edit_rounded,
-                            size: 16,
-                            color: inEditMode ? Colors.white : _green,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            inEditMode
-                                ? 'Режим активен'
-                                : 'Редактировать точки',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (inEditMode) ...[
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () {
-                          final edit = editableSel;
-                          if (edit == null) return;
-
-                          final updated = TgSpiral(
-                            id: edit.id,
-                            start: edit.start,
-                            endPoint: edit.endPoint,
-                            color: edit.color,
-                            width: edit.width,
-                            kind: edit.kind,
-                            opacity: edit.opacity,
-                            amplitude: edit.amplitude,
-                            turns: edit.turns,
-                            phase: edit.phase,
-                            fadeEdge: edit.fadeEdge,
-                            grow: edit.grow,
-                            lineEnd: edit.lineEnd,
-                            arrowSize: edit.arrowSize,
-                            locked: edit.locked,
-                            hidden: edit.hidden,
-                            layer: edit.layer,
-                            name: edit.name,
-                            createdAt: edit.createdAt,
-                          );
-
-                          state.replaceElement(
-                            updated,
-                            keepSelection: true,
-                            setTool: TgTool.select,
-                          );
-                        },
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF6B7280),
-                          side: const BorderSide(color: _border),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.check_rounded, size: 16),
-                            SizedBox(width: 6),
-                            Text(
-                              'Готово',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w900,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ),
+        _ObjectEditModeBanner(
+          pointsMode: inEditMode,
+          onObject: () {
+            if (inEditMode) {
+              state.finishEditPoints();
+            } else {
+              state.setTool(TgTool.select);
+            }
+          },
+          onPoints: () {
+            if (!inEditMode) state.editSpiralPoints();
+          },
         ),
         if (inEditMode)
           Container(
@@ -3857,8 +3424,7 @@ class _SpiralEditor extends StatelessWidget {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: _surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _border),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Row(
               children: [
@@ -3869,8 +3435,8 @@ class _SpiralEditor extends StatelessWidget {
                     "Перетаскивайте цветные точки на поле для изменения формы спирали",
                     style: TextStyle(
                       color: _txt,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -3983,39 +3549,18 @@ class _CurveEditor extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          child: _Section(
-            title: "Редактирование",
-            child: Row(
-              children: [
-                Expanded(
-                  child: _ToggleBtn(
-                    text: "Редактировать точки",
-                    active: sel.showControlPoints,
-                    onTap: () {
-                      if (!sel.showControlPoints) {
-                        state.editSelectedCurvePoints();
-                      }
-                    },
-                  ),
-                ),
-                if (sel.showControlPoints) ...[
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _ToggleBtn(
-                      text: "Готово",
-                      active: false,
-                      onTap: () {
-                        state.updateSelectedCurve(showControlPoints: false);
-                        state.setTool(TgTool.select);
-                      },
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
+        _ObjectEditModeBanner(
+          pointsMode: sel.showControlPoints,
+          onObject: () {
+            if (sel.showControlPoints) {
+              state.finishEditPoints();
+            } else {
+              state.setTool(TgTool.select);
+            }
+          },
+          onPoints: () {
+            if (!sel.showControlPoints) state.editSelectedCurvePoints();
+          },
         ),
         _Section(
           title: "Тип кривой",
@@ -4158,8 +3703,7 @@ class _CurveEditor extends StatelessWidget {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: border),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Row(
               children: [
@@ -4170,8 +3714,8 @@ class _CurveEditor extends StatelessWidget {
                     "Перетаскивайте точки на поле для изменения формы кривой",
                     style: TextStyle(
                       color: txt,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 11.2,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -4376,7 +3920,7 @@ class _PropColorEditor extends StatelessWidget {
                         ? Colors.black
                         : Colors.white,
                     fontWeight: FontWeight.w600,
-                    fontSize: 12,
+                    fontSize: 11,
                   ),
                 ),
               ),
@@ -4467,7 +4011,7 @@ class _TemplatesPanelContent extends StatelessWidget {
 
   static const _green = Color(0xFF00A750);
   static const _greenSoft = Color(0xFFF3FBF7);
-  static const _border = Color(0xFFE5E7EB);
+  static const _border = Colors.transparent;
   static const _txt = Color(0xFF111827);
   static const _muted = Color(0xFF6B7280);
 
@@ -4538,7 +4082,7 @@ class _TemplatesPanelContent extends StatelessWidget {
           title: 'Как пользоваться',
           child: const Text(
             'Выберите шаблон, затем поставьте элемент на поле. После выбора элемента откройте «Свойства» или «Слои» для точной настройки.',
-            style: TextStyle(color: _muted, fontSize: 11.5, height: 1.35, fontWeight: FontWeight.w500),
+            style: TextStyle(color: _muted, fontSize: 10.8, height: 1.35, fontWeight: FontWeight.w500),
           ),
         ),
       ],
@@ -4571,8 +4115,7 @@ class _TemplatesPanelContent extends StatelessWidget {
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _border),
-          ),
+            ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -4583,9 +4126,9 @@ class _TemplatesPanelContent extends StatelessWidget {
                 child: Icon(t.icon, size: 17, color: _green),
               ),
               const SizedBox(height: 8),
-              Text(t.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _txt, fontSize: 12, fontWeight: FontWeight.w900)),
+              Text(t.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _txt, fontSize: 11.2, fontWeight: FontWeight.w600)),
               const SizedBox(height: 3),
-              Text(t.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontSize: 10, height: 1.2, fontWeight: FontWeight.w600)),
+              Text(t.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontSize: 9.6, height: 1.2, fontWeight: FontWeight.w600)),
             ],
           ),
         ),
@@ -4617,8 +4160,7 @@ class _TemplatesPanelContent extends StatelessWidget {
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _border),
-          ),
+            ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -4629,9 +4171,9 @@ class _TemplatesPanelContent extends StatelessWidget {
                 child: Icon(t.icon, size: 17, color: _green),
               ),
               const SizedBox(height: 8),
-              Text(t.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _txt, fontSize: 12, fontWeight: FontWeight.w900)),
+              Text(t.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _txt, fontSize: 11.2, fontWeight: FontWeight.w600)),
               const SizedBox(height: 3),
-              Text(t.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontSize: 10, height: 1.2, fontWeight: FontWeight.w600)),
+              Text(t.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontSize: 9.6, height: 1.2, fontWeight: FontWeight.w600)),
             ],
           ),
         ),
@@ -4650,8 +4192,7 @@ class _TemplatesPanelContent extends StatelessWidget {
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _border),
-          ),
+            ),
           child: Row(
             children: [
               Icon(icon, size: 18, color: _green),
@@ -4660,9 +4201,9 @@ class _TemplatesPanelContent extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: const TextStyle(color: _txt, fontSize: 12, fontWeight: FontWeight.w800)),
+                    Text(title, style: const TextStyle(color: _txt, fontSize: 11.2, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 2),
-                    Text(subtitle, style: const TextStyle(color: _muted, fontSize: 10.5, height: 1.2, fontWeight: FontWeight.w500)),
+                    Text(subtitle, style: const TextStyle(color: _muted, fontSize: 10, height: 1.2, fontWeight: FontWeight.w500)),
                   ],
                 ),
               ),
@@ -4721,7 +4262,7 @@ class _LayersPanelContent extends StatelessWidget {
   final VoidCallback onOpenProperties;
 
   static const _green = Color(0xFF00A750);
-  static const _border = Color(0xFFE5E7EB);
+  static const _border = Colors.transparent;
   static const _txt = Color(0xFF111827);
   static const _muted = Color(0xFF6B7280);
 
@@ -4798,7 +4339,7 @@ class _LayersPanelContent extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(_elementTitle(e), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _txt, fontSize: 12, fontWeight: FontWeight.w800)),
+                      Text(_elementTitle(e), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _txt, fontSize: 11.2, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 2),
                       Text(e.layer == 'default' ? 'основной слой' : e.layer, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontSize: 10.2, fontWeight: FontWeight.w600)),
                     ],
@@ -4871,13 +4412,13 @@ class _LayersPanelContent extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(color: _txt, fontSize: 11.5, fontWeight: FontWeight.w800)),
+                Text(title, style: const TextStyle(color: _txt, fontSize: 10.8, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 2),
                 Text(layer, style: const TextStyle(color: _muted, fontSize: 9.8, fontWeight: FontWeight.w600)),
               ],
             ),
           ),
-          Text('$count', style: const TextStyle(color: _green, fontSize: 11.5, fontWeight: FontWeight.w900)),
+          Text('$count', style: const TextStyle(color: _green, fontSize: 10.8, fontWeight: FontWeight.w600)),
           const SizedBox(width: 6),
           _miniIcon(allHidden ? Icons.visibility_off : Icons.visibility, () => state.setLayerGroupHidden(layer, !allHidden)),
           _miniIcon(allLocked ? Icons.lock : Icons.lock_open, () => state.setLayerGroupLocked(layer, !allLocked)),
@@ -4929,7 +4470,7 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
   final TgState state;
 
   static const _green = Color(0xFF00A750);
-  static const _border = Color(0xFFE5E7EB);
+  static const _border = Colors.transparent;
   static const _txt = Color(0xFF111827);
   static const _muted = Color(0xFF6B7280);
 
@@ -4945,7 +4486,7 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
           trailing: 'без тайминга',
           child: const Text(
             'Тайминг убран из основного редактора. Здесь настраивается сцена: поле, камера, глубина, 3D-объекты и формат для Unity/GLB.',
-            style: TextStyle(color: _muted, fontSize: 11.5, height: 1.35, fontWeight: FontWeight.w600),
+            style: TextStyle(color: _muted, fontSize: 10.8, height: 1.35, fontWeight: FontWeight.w600),
           ),
         ),
         const SizedBox(height: 12),
@@ -4997,14 +4538,14 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
         else
           _Section(
             title: 'Выбранный объект',
-            child: const Text('Выберите элемент на поле или в списке ниже, чтобы назначить ему 3D-слой и свойства.', style: TextStyle(color: _muted, fontSize: 11.5, height: 1.35, fontWeight: FontWeight.w600)),
+            child: const Text('Выберите элемент на поле или в списке ниже, чтобы назначить ему 3D-слой и свойства.', style: TextStyle(color: _muted, fontSize: 10.8, height: 1.35, fontWeight: FontWeight.w600)),
           ),
         const SizedBox(height: 12),
         _Section(
           title: 'Объекты на схеме',
           trailing: '${elements.length}',
           child: elements.isEmpty
-              ? const Text('Пока нет объектов. Добавьте игрока, стрелку, зону или подпись.', style: TextStyle(color: _muted, fontSize: 11.5, fontWeight: FontWeight.w600))
+              ? const Text('Пока нет объектов. Добавьте игрока, стрелку, зону или подпись.', style: TextStyle(color: _muted, fontSize: 10.8, fontWeight: FontWeight.w600))
               : Column(children: elements.map((e) => _sceneObjectTile(e)).toList()),
         ),
       ],
@@ -5042,7 +4583,6 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: _border),
             ),
             child: Row(
               children: [
@@ -5057,9 +4597,9 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: const TextStyle(color: _txt, fontSize: 12, fontWeight: FontWeight.w900)),
+                      Text(title, style: const TextStyle(color: _txt, fontSize: 11.2, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 2),
-                      Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontSize: 10.5, height: 1.2, fontWeight: FontWeight.w600)),
+                      Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontSize: 10, height: 1.2, fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ),
@@ -5080,8 +4620,8 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
         children: [
           Icon(_elementIcon(e), size: 18, color: _green),
           const SizedBox(width: 8),
-          Expanded(child: Text(_elementTitle(e), style: const TextStyle(color: _txt, fontSize: 12, fontWeight: FontWeight.w900))),
-          Text(e.layer == '3d' ? '3D' : '2D', style: TextStyle(color: e.layer == '3d' ? _green : _muted, fontSize: 11, fontWeight: FontWeight.w900)),
+          Expanded(child: Text(_elementTitle(e), style: const TextStyle(color: _txt, fontSize: 11.2, fontWeight: FontWeight.w600))),
+          Text(e.layer == '3d' ? '3D' : '2D', style: TextStyle(color: e.layer == '3d' ? _green : _muted, fontSize: 10.5, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -5112,7 +4652,7 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(_elementTitle(e), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _txt, fontSize: 12, fontWeight: FontWeight.w800)),
+                      Text(_elementTitle(e), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _txt, fontSize: 11.2, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 2),
                       Text(is3d ? '3D слой / экспортируемый объект' : '2D слой / схема', style: const TextStyle(color: _muted, fontSize: 10.2, fontWeight: FontWeight.w600)),
                     ],
@@ -5128,7 +4668,7 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: is3d ? _green.withOpacity(.45) : _border),
                     ),
-                    child: Text(is3d ? '3D' : '+3D', style: TextStyle(color: is3d ? _green : _muted, fontSize: 10.5, fontWeight: FontWeight.w900)),
+                    child: Text(is3d ? '3D' : '+3D', style: TextStyle(color: is3d ? _green : _muted, fontSize: 10, fontWeight: FontWeight.w600)),
                   ),
                 ),
               ],
@@ -5146,7 +4686,7 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
       label: Text(text),
       style: TextButton.styleFrom(
         foregroundColor: _green,
-        textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+        textStyle: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600),
         padding: const EdgeInsets.symmetric(vertical: 10),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: _green.withOpacity(.28))),
       ),
@@ -5186,7 +4726,7 @@ class _ExportPanelContent extends StatelessWidget {
   final VoidCallback? onExportPng;
 
   static const _green = Color(0xFF00A750);
-  static const _border = Color(0xFFE5E7EB);
+  static const _border = Colors.transparent;
   static const _txt = Color(0xFF111827);
   static const _muted = Color(0xFF6B7280);
 
@@ -5254,9 +4794,9 @@ class _ExportPanelContent extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(title, style: const TextStyle(color: _txt, fontSize: 12, fontWeight: FontWeight.w900)),
+                    Text(title, style: const TextStyle(color: _txt, fontSize: 11.2, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 2),
-                    Text(subtitle, style: const TextStyle(color: _muted, fontSize: 10.5, height: 1.2, fontWeight: FontWeight.w600)),
+                    Text(subtitle, style: const TextStyle(color: _muted, fontSize: 10, height: 1.2, fontWeight: FontWeight.w600)),
                   ]),
                 ),
                 const Icon(Icons.chevron_right, color: _muted, size: 18),
@@ -5273,9 +4813,9 @@ class _ExportPanelContent extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: _border)),
       child: Column(children: [
-        Text(value, style: const TextStyle(color: _txt, fontSize: 13, fontWeight: FontWeight.w900)),
+        Text(value, style: const TextStyle(color: _txt, fontSize: 12, fontWeight: FontWeight.w600)),
         const SizedBox(height: 2),
-        Text(title, style: const TextStyle(color: _muted, fontSize: 9.5, fontWeight: FontWeight.w700)),
+        Text(title, style: const TextStyle(color: _muted, fontSize: 9.5, fontWeight: FontWeight.w600)),
       ]),
     );
   }
@@ -5296,8 +4836,8 @@ class _QualityRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 7),
       child: Row(
         children: [
-          Expanded(child: Text(title, style: const TextStyle(color: Color(0xFF6B7280), fontSize: 11, fontWeight: FontWeight.w600))),
-          Text(value, style: const TextStyle(color: Color(0xFF111827), fontSize: 11, fontWeight: FontWeight.w800)),
+          Expanded(child: Text(title, style: const TextStyle(color: Color(0xFF6B7280), fontSize: 10.5, fontWeight: FontWeight.w600))),
+          Text(value, style: const TextStyle(color: Color(0xFF111827), fontSize: 10.5, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -5453,8 +4993,26 @@ class _TgRightPanelState extends State<TgRightPanel> {
   @override
   Widget build(BuildContext context) {
     final safe = _panelInsets(context);
+    final baseTheme = Theme.of(context);
+    final appTextTheme = baseTheme.textTheme.apply(
+      fontFamily: AppTypography.fontFamily,
+    );
+    final appPrimaryTextTheme = baseTheme.primaryTextTheme.apply(
+      fontFamily: AppTypography.fontFamily,
+    );
 
-    return LayoutBuilder(
+    return Theme(
+      data: baseTheme.copyWith(
+        textTheme: appTextTheme,
+        primaryTextTheme: appPrimaryTextTheme,
+      ),
+      child: DefaultTextStyle.merge(
+        style: TextStyle(
+          fontFamily: AppTypography.fontFamily,
+          color: const Color(0xFF111713),
+          fontWeight: FontWeight.w500,
+        ),
+        child: LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 430 || MediaQuery.of(context).size.width < 1280 || MediaQuery.of(context).size.height < 820;
         final micro = constraints.maxWidth < 340 || MediaQuery.of(context).size.width < 900 || MediaQuery.of(context).size.height < 620;
@@ -5596,6 +5154,8 @@ class _TgRightPanelState extends State<TgRightPanel> {
       ],
     );
       },
+        ),
+      ),
     );
   }
 }

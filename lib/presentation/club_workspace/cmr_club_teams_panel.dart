@@ -2,10 +2,12 @@
 // Typography uses the centralized Sportoteka AppTypography / Inter system.
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' show FontFeature, ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 
 import 'package:sportoteka/core/theme/app_typography.dart';
 
@@ -112,6 +114,25 @@ class _CmrText {
         weight: FontWeight.w600,
         color: _CmrColors.text,
         height: 1.16,
+        letterSpacing: 0,
+      );
+
+  // Типографика левого меню в геометрии Tracker -> Аналитика.
+  static TextStyle navLabel({required bool active}) => AppTypography.custom(
+        size: 11.0,
+        weight: active ? FontWeight.w600 : FontWeight.w500,
+        color: active ? _CmrColors.greenDark : _CmrColors.text,
+        height: 1.30,
+        letterSpacing: 0,
+      );
+
+  static TextStyle navSubtitle({required bool active}) => AppTypography.custom(
+        size: 10.2,
+        weight: FontWeight.w400,
+        color: active
+            ? _CmrColors.greenDark.withOpacity(.68)
+            : _CmrColors.secondary,
+        height: 1.30,
         letterSpacing: 0,
       );
 
@@ -274,9 +295,30 @@ class _CmrDecor {
 class CmrClubTeamsPanel extends StatefulWidget {
   final int clubId;
   final String clubName;
+
+  /// Пользователь, который создаёт команду. Для кабинета клуба это обычно
+  /// тот же id, что clubId; параметр оставлен отдельным для режима тренера.
+  final int currentUserId;
+
+  /// Внешний запрос открыть CMR-форму создания команды справа.
+  final bool openCreateTeam;
+  final ValueChanged<bool>? onCreateModeChanged;
+
   final List<Map<String, dynamic>> teams;
   final int? selectedTeamId;
   final String selectedTeamName;
+
+  /// Максимальное количество команд для тарифа.
+  /// null = лимит на клиенте не показываем.
+  final int? maxTeams;
+
+  /// Максимальное количество игроков в одной команде.
+  ///
+  /// Параметр необязательный для обратной совместимости:
+  /// текущий club_basic уже передаёт maxTeams = 20, поэтому ниже
+  /// автоматически применяется правило 20 игроков / команда.
+  final int? maxPlayersPerTeam;
+
   final ValueChanged<Map<String, dynamic>> onOpenTeam;
   /// Выбор команды без перехода на другой раздел.
   /// Нужен, чтобы экран "Команды" оставался активным при клике по карточке.
@@ -301,9 +343,14 @@ class CmrClubTeamsPanel extends StatefulWidget {
     super.key,
     required this.clubId,
     required this.clubName,
+    this.currentUserId = 0,
+    this.openCreateTeam = false,
+    this.onCreateModeChanged,
     required this.teams,
     required this.selectedTeamId,
     required this.selectedTeamName,
+    this.maxTeams,
+    this.maxPlayersPerTeam,
     required this.onOpenTeam,
     this.onSelectTeam,
     required this.onCreateTeam,
@@ -328,6 +375,7 @@ class CmrClubTeamsPanel extends StatefulWidget {
 }
 
 enum _TeamsFilter { all, active, football, emptyLogo }
+enum _TeamsRightMode { overview, create }
 
 class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
   static const String apiBase = 'https://sportotekaapp.ru/api';
@@ -340,12 +388,81 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
   int? _localSelectedTeamId;
   _TeamsFilter _filter = _TeamsFilter.all;
   bool _countsLoading = false;
+  _TeamsRightMode _rightMode = _TeamsRightMode.overview;
   final Map<int, int> _playersCountByTeam = {};
   final Map<int, int> _trainersCountByTeam = {};
+
+  int? get _teamsLimit {
+    final value = widget.maxTeams;
+    return value != null && value > 0 ? value : null;
+  }
+
+  int? get _playersLimit {
+    final explicit = widget.maxPlayersPerTeam;
+    if (explicit != null && explicit > 0) return explicit;
+
+    // Обратная совместимость с текущим club_workspace_screen:
+    // для club_basic туда уже передаётся maxTeams: 20.
+    // Правило базового тарифа: 20 команд и 20 игроков в команде.
+    if (widget.maxTeams == 20) return 20;
+
+    return null;
+  }
+
+  bool get _hasPlanLimits =>
+      _teamsLimit != null || _playersLimit != null;
+
+  void _requestCreateTeam() {
+    final limit = _teamsLimit;
+    if (limit != null && limit > 0 && widget.teams.length >= limit) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Текущий тариф: можно создать до $limit команд.')),
+      );
+      return;
+    }
+
+    // Не уходим на старый экран. Форма появляется в правой CMR-панели.
+    if (_rightMode != _TeamsRightMode.create) {
+      setState(() => _rightMode = _TeamsRightMode.create);
+    }
+    widget.onCreateModeChanged?.call(true);
+  }
+
+  void _closeCreateTeam() {
+    if (!mounted) return;
+    if (_rightMode != _TeamsRightMode.overview) {
+      setState(() => _rightMode = _TeamsRightMode.overview);
+    }
+    widget.onCreateModeChanged?.call(false);
+  }
+
+  Future<void> _teamCreated(int teamId, String teamName) async {
+    await widget.onRefresh?.call();
+    if (!mounted) return;
+
+    if (_rightMode != _TeamsRightMode.overview) {
+      setState(() => _rightMode = _TeamsRightMode.overview);
+    }
+    widget.onCreateModeChanged?.call(false);
+
+    Map<String, dynamic>? created;
+    for (final team in widget.teams) {
+      final id = _teamId(team);
+      if ((teamId > 0 && id == teamId) ||
+          (teamId <= 0 && _teamName(team).trim() == teamName.trim())) {
+        created = team;
+        break;
+      }
+    }
+    if (created != null) _selectTeam(created);
+  }
 
   @override
   void initState() {
     super.initState();
+    _rightMode = widget.openCreateTeam
+        ? _TeamsRightMode.create
+        : _TeamsRightMode.overview;
     _searchC.addListener(() => setState(() {}));
     _syncSelectedIndex();
     _loadTeamCounts();
@@ -354,6 +471,13 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
   @override
   void didUpdateWidget(covariant CmrClubTeamsPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.openCreateTeam != widget.openCreateTeam) {
+      _rightMode = widget.openCreateTeam
+          ? _TeamsRightMode.create
+          : _TeamsRightMode.overview;
+    }
+
     if (oldWidget.selectedTeamId != widget.selectedTeamId ||
         oldWidget.teams.length != widget.teams.length) {
       _syncSelectedIndex();
@@ -452,7 +576,9 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
     setState(() {
       _localSelectedTeamId = teamId > 0 ? teamId : null;
       _selectedIndex = math.max(0, index);
+      _rightMode = _TeamsRightMode.overview;
     });
+    widget.onCreateModeChanged?.call(false);
 
     // Важно: обычный клик по карточке команды выбирает её как рабочую.
     // Если родитель передал onSelectTeam — остаёмся в разделе "Команды".
@@ -467,7 +593,10 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
   }
 
   void _openTeamOverview(Map<String, dynamic> team) {
-    widget.onOpenTeam(team);
+    // «Открыть обзор» теперь остаётся в этой правой панели.
+    // Родительский callback onSelectTeam синхронизирует активную команду,
+    // но старый TeamDashboardScreen больше не открывается.
+    _selectTeam(team);
   }
 
   Future<void> _openTeamPickerDialog({required bool mobile}) async {
@@ -500,7 +629,7 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
                 teams: widget.teams,
                 selectedTeamId: _activeTeamId,
                 mobile: mobile,
-                onCreateTeam: widget.onCreateTeam,
+                onCreateTeam: _requestCreateTeam,
               ),
             ),
           ),
@@ -666,13 +795,36 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
               );
 
         if (widget.teams.isEmpty) {
+          final createActive = _rightMode == _TeamsRightMode.create;
+
           return SizedBox(
             width: double.infinity,
             height: safeHeight,
             child: Container(
               decoration: _CmrDecor.workspaceBg(),
-              padding: EdgeInsets.all(width < 640 ? _CmrDecor.mobilePagePadding : 10),
-              child: _EmptyTeams(onCreateTeam: widget.onCreateTeam),
+              padding: EdgeInsets.all(
+                width < 640 ? _CmrDecor.mobilePagePadding : 10,
+              ),
+              child: IndexedStack(
+                index: createActive ? 1 : 0,
+                sizing: StackFit.expand,
+                children: [
+                  _EmptyTeams(
+                    onCreateTeam: _requestCreateTeam,
+                    maxTeams: _teamsLimit,
+                  ),
+                  _CmrCreateTeamPane(
+                    active: createActive,
+                    clubId: widget.clubId,
+                    clubName: widget.clubName,
+                    currentUserId: widget.currentUserId,
+                    currentTeamsCount: widget.teams.length,
+                    maxTeams: _teamsLimit,
+                    onCancel: _closeCreateTeam,
+                    onCreated: _teamCreated,
+                  ),
+                ],
+              ),
             ),
           );
         }
@@ -682,10 +834,18 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
         final compact = width < 880;
         final pickerMode = width < 1024;
         final selected = pickerMode ? _selectedTeamAny : _selectedTeam;
-        final displaySelectedTeamName = selected == null ? widget.selectedTeamName : _teamName(selected);
-        final listWidth = mobile ? width : math.min(480.0, math.max(320.0, width * .42));
+        final displaySelectedTeamName =
+            selected == null ? widget.selectedTeamName : _teamName(selected);
 
-        Widget detailsForSelected() {
+        final selectedPlayersCount = selected == null
+            ? 0
+            : (_playersCountByTeam[_teamId(selected)] ??
+                _teamPlayersCount(selected));
+
+        final listWidth =
+            mobile ? width : math.min(480.0, math.max(320.0, width * .42));
+
+        Widget overviewForSelected() {
           if (selected == null) {
             return _NoFilteredTeams(
               onReset: () => setState(() {
@@ -702,6 +862,7 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
             clubId: widget.clubId,
             playersCount: _playersCountByTeam[_teamId(selected)],
             trainersCount: _trainersCountByTeam[_teamId(selected)],
+            maxPlayersPerTeam: _playersLimit,
             countsLoading: _countsLoading,
             onOpenTeam: () => _openTeamOverview(selected),
             onOpenRoster: widget.onOpenRoster,
@@ -732,13 +893,36 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
           filter: _filter,
           onFilterChanged: (value) => setState(() => _filter = value),
           onSelect: _selectTeam,
-          onCreateTeam: widget.onCreateTeam,
+          onCreateTeam: _requestCreateTeam,
           onRefresh: widget.onRefresh,
+          maxTeams: _teamsLimit,
+          maxPlayersPerTeam: _playersLimit,
+          selectedPlayersCount: selectedPlayersCount,
+          countsLoading: _countsLoading,
           compact: compact,
           mobile: mobile,
         );
 
-        final details = detailsForSelected();
+        final overview = overviewForSelected();
+        final createActive = _rightMode == _TeamsRightMode.create;
+
+        final details = IndexedStack(
+          index: createActive ? 1 : 0,
+          sizing: StackFit.expand,
+          children: [
+            overview,
+            _CmrCreateTeamPane(
+              active: createActive,
+              clubId: widget.clubId,
+              clubName: widget.clubName,
+              currentUserId: widget.currentUserId,
+              currentTeamsCount: widget.teams.length,
+              maxTeams: _teamsLimit,
+              onCancel: _closeCreateTeam,
+              onCreated: _teamCreated,
+            ),
+          ],
+        );
 
         if (pickerMode) {
           return SizedBox(
@@ -767,11 +951,21 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
                         countsLoading: _countsLoading,
                         mobile: mobile,
                         onOpenPicker: () => _openTeamPickerDialog(mobile: mobile),
-                        onCreateTeam: widget.onCreateTeam,
+                        onCreateTeam: _requestCreateTeam,
                         onRefresh: widget.onRefresh,
                       ),
+                      if (_hasPlanLimits)
+                        _PlanCapacityBar(
+                          teamsUsed: widget.teams.length,
+                          maxTeams: _teamsLimit,
+                          playersUsed: selectedPlayersCount,
+                          maxPlayers: _playersLimit,
+                          playersLoading: _countsLoading && selected != null,
+                          selectedTeamName: displaySelectedTeamName,
+                          mobile: true,
+                        ),
                       const SizedBox(height: 0),
-                            Expanded(child: details),
+                      Expanded(child: details),
                           ],
                         ),
                       )
@@ -793,9 +987,21 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
                               countsLoading: _countsLoading,
                               mobile: mobile,
                               onOpenPicker: () => _openTeamPickerDialog(mobile: mobile),
-                              onCreateTeam: widget.onCreateTeam,
+                              onCreateTeam: _requestCreateTeam,
                               onRefresh: widget.onRefresh,
                             ),
+                            if (_hasPlanLimits)
+                              _PlanCapacityBar(
+                                teamsUsed: widget.teams.length,
+                                maxTeams: _teamsLimit,
+                                playersUsed: selectedPlayersCount,
+                                maxPlayers: _playersLimit,
+                                playersLoading:
+                                    _countsLoading && selected != null,
+                                selectedTeamName:
+                                    displaySelectedTeamName,
+                                mobile: false,
+                              ),
                             const SizedBox(height: 0),
                             Expanded(child: details),
                           ],
@@ -838,6 +1044,633 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
   }
 
 
+}
+
+
+
+class _CmrCreateTeamPane extends StatefulWidget {
+  final bool active;
+  final int clubId;
+  final String clubName;
+  final int currentUserId;
+  final int currentTeamsCount;
+  final int? maxTeams;
+  final VoidCallback onCancel;
+  final Future<void> Function(int teamId, String teamName) onCreated;
+
+  const _CmrCreateTeamPane({
+    required this.active,
+    required this.clubId,
+    required this.clubName,
+    required this.currentUserId,
+    required this.currentTeamsCount,
+    required this.maxTeams,
+    required this.onCancel,
+    required this.onCreated,
+  });
+
+  @override
+  State<_CmrCreateTeamPane> createState() => _CmrCreateTeamPaneState();
+}
+
+class _CmrCreateTeamPaneState extends State<_CmrCreateTeamPane> {
+  static const String _createTeamUrl = 'https://sportotekaapp.ru/api/create_team.php';
+
+  final TextEditingController _nameC = TextEditingController();
+  final ImagePicker _picker = ImagePicker();
+  Uint8List? _logoBytes;
+  String _logoName = 'team_logo.jpg';
+  bool _saving = false;
+  String? _error;
+
+  void _resetDraft() {
+    _nameC.clear();
+    _logoBytes = null;
+    _logoName = 'team_logo.jpg';
+    _error = null;
+  }
+
+  @override
+  void didUpdateWidget(covariant _CmrCreateTeamPane oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.active && widget.active && !_saving) {
+      _resetDraft();
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameC.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickLogo() async {
+    try {
+      final picked = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1200,
+        imageQuality: 88,
+      );
+      if (picked == null) return;
+      final bytes = await picked.readAsBytes();
+      if (!mounted) return;
+      setState(() {
+        _logoBytes = bytes;
+        _logoName = picked.name.trim().isEmpty ? 'team_logo.jpg' : picked.name;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = 'Не удалось выбрать логотип: $e');
+    }
+  }
+
+  Future<void> _submit() async {
+    final name = _nameC.text.trim();
+    if (name.isEmpty) {
+      setState(() => _error = 'Введите название команды');
+      return;
+    }
+
+    final limit = widget.maxTeams;
+    if (limit != null && limit > 0 && widget.currentTeamsCount >= limit) {
+      setState(() => _error = 'Лимит тарифа: до $limit команд.');
+      return;
+    }
+
+    final creatorId = widget.currentUserId > 0 ? widget.currentUserId : widget.clubId;
+    if (creatorId <= 0) {
+      setState(() => _error = 'Не удалось определить пользователя клуба');
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      final req = http.MultipartRequest('POST', Uri.parse(_createTeamUrl));
+      req.fields['team_name'] = name;
+      req.fields['coach_id'] = '$creatorId';
+      req.fields['club_id'] = '${widget.clubId}';
+      req.fields['category'] = 'Футбол';
+
+      final logoBytes = _logoBytes;
+      if (logoBytes != null && logoBytes.isNotEmpty) {
+        req.files.add(http.MultipartFile.fromBytes(
+          'logo',
+          logoBytes,
+          filename: _logoName,
+        ));
+      }
+
+      final streamed = await req.send().timeout(const Duration(seconds: 20));
+      final response = await http.Response.fromStream(streamed);
+      final decoded = _tryDecode(response.body);
+      final ok = decoded is Map &&
+          (decoded['status'] == 'success' || decoded['success'] == true);
+      if (!ok) {
+        final message = decoded is Map
+            ? _s(decoded['message'] ?? decoded['error'])
+            : '';
+        throw Exception(message.isEmpty
+            ? 'Сервер не подтвердил создание команды'
+            : message);
+      }
+
+      final teamId = decoded is Map
+          ? _intFromAny(decoded['team_id'] ?? decoded['id'] ?? decoded['teamId'])
+          : 0;
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Команда «$name» создана')),
+      );
+      await widget.onCreated(teamId, name);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = '$e'.replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final compact = width < 720;
+    final limit = widget.maxTeams;
+    final remaining = limit == null
+        ? null
+        : math.max(0, limit - widget.currentTeamsCount);
+
+    return Container(
+      color: _CmrColors.panel,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          compact ? 14 : 22,
+          compact ? 14 : 22,
+          compact ? 14 : 22,
+          compact ? 112 : 22,
+        ),
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: _CmrColors.greenSoft,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _CmrColors.greenBorder, width: .8),
+                      ),
+                      child: const Icon(Icons.add_business_rounded,
+                          color: _CmrColors.greenDark, size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Новая команда', style: _CmrText.title(compact ? 19 : 22)),
+                          const SizedBox(height: 3),
+                          Text(
+                            '${widget.clubName} · создание прямо в CMR',
+                            style: _CmrText.muted(11.5),
+                          ),
+                        ],
+                      ),
+                    ),
+                    _CmrCreateCloseButton(onTap: widget.onCancel),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                if (remaining != null)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: _CmrColors.greenSoft2,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: _CmrColors.greenBorder, width: .7),
+                    ),
+                    child: Text(
+                      'Базовая подписка: ${widget.currentTeamsCount}/$limit команд · можно создать ещё $remaining',
+                      style: _CmrText.chip(size: 11.2, color: _CmrColors.greenDark),
+                    ),
+                  ),
+                if (remaining != null) const SizedBox(height: 14),
+                Text('Название команды', style: _CmrText.section()),
+                const SizedBox(height: 7),
+                TextField(
+                  controller: _nameC,
+                  enabled: !_saving,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _submit(),
+                  decoration: InputDecoration(
+                    hintText: 'Например: U14 / 2012',
+                    hintStyle: _CmrText.muted(12),
+                    filled: true,
+                    fillColor: _CmrColors.soft,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 13),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: _CmrColors.divider.withOpacity(.65), width: .7),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: _CmrColors.green, width: 1.2),
+                    ),
+                  ),
+                  style: _CmrText.value(13.2),
+                ),
+                const SizedBox(height: 14),
+                Text('Логотип', style: _CmrText.section()),
+                const SizedBox(height: 7),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: _saving ? null : _pickLogo,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: _CmrColors.soft,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _CmrColors.divider.withOpacity(.7), width: .7),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 58,
+                            height: 58,
+                            clipBehavior: Clip.antiAlias,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: _logoBytes == null
+                                ? const Icon(Icons.shield_outlined,
+                                    color: _CmrColors.greenDark, size: 26)
+                                : Image.memory(_logoBytes!, fit: BoxFit.cover),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _logoBytes == null ? 'Добавить логотип' : 'Логотип выбран',
+                                  style: _CmrText.value(12.6),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  'PNG/JPG · можно изменить позже',
+                                  style: _CmrText.muted(10.8),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right_rounded,
+                              color: _CmrColors.subtle, size: 20),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: _CmrColors.soft,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.sports_soccer_rounded,
+                          size: 17, color: _CmrColors.greenDark),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text('Категория: Футбол', style: _CmrText.value(11.8)),
+                      ),
+                    ],
+                  ),
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(11),
+                    decoration: BoxDecoration(
+                      color: _CmrColors.redSoft,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      _error!,
+                      style: _CmrText.muted(11.2).copyWith(color: _CmrColors.red),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _CmrCreateSecondaryButton(
+                        text: 'Отмена',
+                        onTap: _saving ? null : widget.onCancel,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 2,
+                      child: _CmrCreatePrimaryButton(
+                        text: _saving ? 'Создание...' : 'Создать команду',
+                        onTap: _saving ? null : _submit,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CmrCreateCloseButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _CmrCreateCloseButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: 'Закрыть',
+      onPressed: onTap,
+      icon: const Icon(Icons.close_rounded, color: _CmrColors.muted, size: 20),
+    );
+  }
+}
+
+class _CmrCreatePrimaryButton extends StatelessWidget {
+  final String text;
+  final VoidCallback? onTap;
+  const _CmrCreatePrimaryButton({required this.text, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 44,
+      child: ElevatedButton(
+        onPressed: onTap,
+        style: ElevatedButton.styleFrom(
+          elevation: 0,
+          backgroundColor: _CmrColors.green,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: _CmrColors.green.withOpacity(.45),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+        child: Text(text, style: _CmrText.whiteAction(size: 12.2)),
+      ),
+    );
+  }
+}
+
+class _CmrCreateSecondaryButton extends StatelessWidget {
+  final String text;
+  final VoidCallback? onTap;
+  const _CmrCreateSecondaryButton({required this.text, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 44,
+      child: OutlinedButton(
+        onPressed: onTap,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: _CmrColors.text,
+          side: const BorderSide(color: _CmrColors.divider, width: .8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+        child: Text(text, style: _CmrText.action()),
+      ),
+    );
+  }
+}
+
+class _PlanCapacityBar extends StatelessWidget {
+  final int teamsUsed;
+  final int? maxTeams;
+  final int playersUsed;
+  final int? maxPlayers;
+  final bool playersLoading;
+  final String selectedTeamName;
+  final bool mobile;
+
+  const _PlanCapacityBar({
+    required this.teamsUsed,
+    required this.maxTeams,
+    required this.playersUsed,
+    required this.maxPlayers,
+    required this.playersLoading,
+    required this.selectedTeamName,
+    required this.mobile,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final items = <Widget>[];
+
+    if (maxTeams != null && maxTeams! > 0) {
+      items.add(
+        _PlanCapacityItem(
+          icon: Icons.account_tree_outlined,
+          label: 'Команды',
+          used: teamsUsed,
+          limit: maxTeams!,
+          loading: false,
+        ),
+      );
+    }
+
+    if (maxPlayers != null && maxPlayers! > 0) {
+      items.add(
+        _PlanCapacityItem(
+          icon: Icons.groups_2_outlined,
+          label: selectedTeamName.trim().isEmpty
+              ? 'Игроки'
+              : 'Игроки · $selectedTeamName',
+          used: playersUsed,
+          limit: maxPlayers!,
+          loading: playersLoading,
+        ),
+      );
+    }
+
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: EdgeInsets.fromLTRB(
+        mobile ? 10 : 12,
+        2,
+        mobile ? 10 : 12,
+        7,
+      ),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: _CmrColors.greenSoft2,
+        borderRadius: BorderRadius.circular(
+          _CmrDecor.interactiveRadius,
+        ),
+        border: Border.all(
+          color: _CmrColors.greenBorder,
+          width: .75,
+        ),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final stack = mobile && constraints.maxWidth < 420;
+
+          if (stack || items.length == 1) {
+            return Column(
+              children: [
+                for (var i = 0; i < items.length; i++) ...[
+                  items[i],
+                  if (i != items.length - 1)
+                    const SizedBox(height: 6),
+                ],
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              for (var i = 0; i < items.length; i++) ...[
+                Expanded(child: items[i]),
+                if (i != items.length - 1) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    width: .7,
+                    height: 34,
+                    color: _CmrColors.greenBorder,
+                  ),
+                  const SizedBox(width: 8),
+                ],
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _PlanCapacityItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final int used;
+  final int limit;
+  final bool loading;
+
+  const _PlanCapacityItem({
+    required this.icon,
+    required this.label,
+    required this.used,
+    required this.limit,
+    required this.loading,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final over = math.max(0, used - limit);
+    final remaining = math.max(0, limit - used);
+    final reached = over == 0 && remaining == 0;
+
+    final accent = over > 0
+        ? _CmrColors.red
+        : reached
+            ? _CmrColors.orange
+            : _CmrColors.greenDark;
+
+    final status = loading
+        ? 'считаю...'
+        : over > 0
+            ? 'превышение $over'
+            : reached
+                ? 'лимит достигнут'
+                : 'осталось $remaining';
+
+    return Row(
+      children: [
+        Container(
+          width: 31,
+          height: 31,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(
+              _CmrDecor.interactiveRadius,
+            ),
+          ),
+          child: Icon(
+            icon,
+            color: accent,
+            size: 15,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _CmrText.caption(),
+              ),
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  Text(
+                    loading ? '… / $limit' : '$used / $limit',
+                    style: _CmrText.value(12.4).copyWith(
+                      color: _CmrColors.text,
+                    ),
+                  ),
+                  const SizedBox(width: 7),
+                  Flexible(
+                    child: Text(
+                      status,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _CmrText.chip(
+                        size: 10.4,
+                        color: accent,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 
@@ -1463,6 +2296,10 @@ class _TeamsList extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onSelect;
   final VoidCallback onCreateTeam;
   final Future<void> Function()? onRefresh;
+  final int? maxTeams;
+  final int? maxPlayersPerTeam;
+  final int selectedPlayersCount;
+  final bool countsLoading;
   final bool compact;
   final bool mobile;
 
@@ -1480,6 +2317,10 @@ class _TeamsList extends StatelessWidget {
     required this.onSelect,
     required this.onCreateTeam,
     required this.onRefresh,
+    required this.maxTeams,
+    required this.maxPlayersPerTeam,
+    required this.selectedPlayersCount,
+    required this.countsLoading,
     required this.compact,
     required this.mobile,
   });
@@ -1494,7 +2335,12 @@ class _TeamsList extends StatelessWidget {
         children: [
           Container(
             padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 12, vertical: 10),
-            decoration: const BoxDecoration(color: Colors.transparent),
+            decoration: const BoxDecoration(
+              color: Colors.transparent,
+              border: Border(
+                bottom: BorderSide(color: _CmrColors.divider, width: .55),
+              ),
+            ),
             child: _TeamsListHeader(
               clubName: clubName,
               teamsCount: teamsCount,
@@ -1506,8 +2352,21 @@ class _TeamsList extends StatelessWidget {
               mobile: mobile,
             ),
           ),
+          if (maxTeams != null || maxPlayersPerTeam != null)
+            _PlanCapacityBar(
+              teamsUsed: teamsCount,
+              maxTeams: maxTeams,
+              playersUsed: selectedPlayersCount,
+              maxPlayers: maxPlayersPerTeam,
+              playersLoading: countsLoading,
+              selectedTeamName: selectedTeamName,
+              mobile: mobile,
+            ),
           Container(
-            padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 12, vertical: 8),
+            padding: EdgeInsets.symmetric(
+              horizontal: mobile ? 10 : 12,
+              vertical: 8,
+            ),
             decoration: const BoxDecoration(color: Colors.transparent),
             child: _SearchField(controller: searchC, mobile: mobile),
           ),
@@ -1523,16 +2382,19 @@ class _TeamsList extends StatelessWidget {
                 : RefreshIndicator(
                     color: _CmrColors.green,
                     onRefresh: onRefresh ?? () async {},
-                    child: ListView.builder(
+                    child: ListView.separated(
                       controller: scroll,
-                      padding: EdgeInsets.only(
-                        top: 0,
-                        bottom: mobile
+                      padding: EdgeInsets.fromLTRB(
+                        10,
+                        6,
+                        10,
+                        mobile
                             ? 104 + MediaQuery.paddingOf(context).bottom
                             : 12,
                       ),
                       physics: const AlwaysScrollableScrollPhysics(),
                       itemCount: teams.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 4),
                       itemBuilder: (_, index) {
                         final team = teams[index];
                         return _TeamTile(
@@ -1713,54 +2575,64 @@ class _TeamTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final name = _teamName(team);
-    final subtitle = _teamSubtitle(team).isEmpty ? 'Команда клуба' : _teamSubtitle(team);
+    final subtitle = _teamSubtitle(team).isEmpty
+        ? 'Команда клуба'
+        : _teamSubtitle(team);
     final logo = _teamLogo(team);
     final players = _teamPlayersCount(team);
     final trainers = _teamTrainersCount(team);
-    final meta = [
+
+    final subtitleParts = <String>[
       subtitle,
       if (players > 0) '$players игроков',
       if (trainers > 0) '$trainers тренеров',
-    ].join('  ·  ');
+    ];
 
     return Material(
       color: Colors.transparent,
+      borderRadius: BorderRadius.circular(9),
       child: InkWell(
         onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
-          constraints: BoxConstraints(minHeight: mobile ? 76 : 72),
-          padding: EdgeInsets.fromLTRB(
-            mobile ? 10 : 12,
-            9,
-            mobile ? 10 : 12,
-            9,
-          ),
+          curve: Curves.easeOutCubic,
+          constraints: const BoxConstraints(minHeight: 58),
+          padding: const EdgeInsets.fromLTRB(10, 6, 8, 6),
           decoration: BoxDecoration(
-            color: active ? _CmrColors.greenSoft2 : Colors.white,
-            border: const Border(
-              bottom: BorderSide(color: _CmrColors.divider, width: .65),
-            ),
+            color: active ? _CmrColors.greenSoft : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
           ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
-                width: 3,
-                height: mobile ? 48 : 46,
+              Container(
+                width: active ? 6.4 : 4.8,
+                height: active ? 6.4 : 4.8,
                 decoration: BoxDecoration(
-                  color: active ? _CmrColors.green : Colors.transparent,
-                  borderRadius: BorderRadius.circular(99),
+                  color: active
+                      ? _CmrColors.green
+                      : _CmrColors.secondary.withOpacity(.48),
+                  shape: BoxShape.circle,
+                  boxShadow: active
+                      ? [
+                          BoxShadow(
+                            color: _CmrColors.green.withOpacity(.16),
+                            blurRadius: 11,
+                            spreadRadius: .2,
+                          ),
+                        ]
+                      : null,
                 ),
               ),
               const SizedBox(width: 9),
               _TeamLogo(
                 url: logo,
                 name: name,
-                size: mobile ? 50 : 48,
+                size: mobile ? 40 : 38,
                 active: active,
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -1770,22 +2642,15 @@ class _TeamTile extends StatelessWidget {
                       name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _CmrText.title(mobile ? 15.0 : 14.2),
+                      style: _CmrText.navLabel(active: active),
                     ),
-                    const SizedBox(height: 5),
+                    const SizedBox(height: 3),
                     Text(
-                      meta.isEmpty ? 'Данные команды не заполнены' : meta,
-                      maxLines: 1,
+                      subtitleParts.join(' · '),
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: _CmrText.muted(mobile ? 11.6 : 10.8),
+                      style: _CmrText.navSubtitle(active: active),
                     ),
-                    if (active) ...[
-                      const SizedBox(height: 5),
-                      Text(
-                        'АКТИВНАЯ КОМАНДА',
-                        style: _CmrText.microCaps(color: _CmrColors.greenDark),
-                      ),
-                    ],
                   ],
                 ),
               ),
@@ -2025,6 +2890,7 @@ class _TeamDetails extends StatelessWidget {
   final int clubId;
   final int? playersCount;
   final int? trainersCount;
+  final int? maxPlayersPerTeam;
   final bool countsLoading;
   final VoidCallback onOpenTeam;
   final VoidCallback? onOpenRoster;
@@ -2048,6 +2914,7 @@ class _TeamDetails extends StatelessWidget {
     required this.clubId,
     required this.playersCount,
     required this.trainersCount,
+    required this.maxPlayersPerTeam,
     required this.countsLoading,
     required this.onOpenTeam,
     required this.onOpenRoster,
@@ -2075,7 +2942,21 @@ class _TeamDetails extends StatelessWidget {
     final resolvedPlayersCount = playersCount ?? _teamPlayersCount(team);
     final resolvedTrainersCount = trainersCount ?? _teamTrainersCount(team);
     final loadingPlayers = countsLoading && playersCount == null && _teamPlayersCount(team) == 0;
-    final loadingTrainers = countsLoading && trainersCount == null && _teamTrainersCount(team) == 0;
+    final loadingTrainers =
+        countsLoading &&
+        trainersCount == null &&
+        _teamTrainersCount(team) == 0;
+
+    final playersLimit =
+        maxPlayersPerTeam != null && maxPlayersPerTeam! > 0
+            ? maxPlayersPerTeam
+            : null;
+    final playersRemaining = playersLimit == null
+        ? null
+        : math.max(0, playersLimit - resolvedPlayersCount);
+    final playersOver = playersLimit == null
+        ? 0
+        : math.max(0, resolvedPlayersCount - playersLimit);
 
     final safeEvents = events.take(3).toList();
     final safeTrainings = latestTrainings.take(3).toList();
@@ -2115,7 +2996,9 @@ class _TeamDetails extends StatelessWidget {
                     active: active,
                     compact: compact,
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 14),
+                  _safeActions(compact: compact),
+                  const SizedBox(height: 16),
                   _safeKpiGrid(
                     context,
                     compact: compact,
@@ -2124,7 +3007,15 @@ class _TeamDetails extends StatelessWidget {
                         icon: Icons.groups_2_rounded,
                         value: loadingPlayers ? '...' : '$resolvedPlayersCount',
                         label: 'Игроки',
-                        hint: resolvedPlayersCount > 0 ? 'состав команды' : 'состав пустой',
+                        hint: playersLimit == null
+                            ? (resolvedPlayersCount > 0
+                                ? 'состав команды'
+                                : 'состав пустой')
+                            : (playersOver > 0
+                                ? 'лимит превышен на $playersOver'
+                                : playersRemaining == 0
+                                    ? 'лимит достигнут'
+                                    : 'можно добавить ещё $playersRemaining'),
                       ),
                       _TeamKpiData(
                         icon: Icons.badge_rounded,
@@ -2149,58 +3040,31 @@ class _TeamDetails extends StatelessWidget {
                   const SizedBox(height: 12),
                   _safeNotice(
                     compact: compact,
-                    title: 'Сводка выбранной команды',
-                    text: 'Здесь показывается обзор команды: состав, календарь, тренировки, планы, новости и контроль проблем по тестированию.',
+                    title: 'Описание команды',
+                    text: description.trim().isEmpty
+                        ? 'Описание команды пока не заполнено. Его можно добавить в настройках команды.'
+                        : description.trim(),
                   ),
                   const SizedBox(height: 12),
-                  _TeamRecentTestingBlock(
+                  _TeamLiveOverviewBlock(
+                    key: ValueKey('cmr_team_overview_${clubId}_${_teamId(team)}'),
                     clubId: clubId,
+                    fallbackClubId: clubId,
                     teamId: _teamId(team),
-                    clubName: clubName,
                     teamName: name,
-                    players: players,
+                    playersCount: resolvedPlayersCount,
+                    events: events,
+                    latestPlans: latestPlans,
+                    news: news,
+                    latestTrainings: latestTrainings,
                     latestTests: latestTests,
-                    fallbackTestsCount: testsCount,
-                    fallbackPlayersCount: resolvedPlayersCount,
+                    players: players,
+                    onOpenRoster: onOpenRoster,
+                    onOpenCalendar: onOpenCalendar,
+                    onOpenPlans: onOpenPlans,
+                    onOpenTrainings: onOpenTrainings ?? onOpenCalendar,
                     onOpenTesting: onOpenTesting,
-                  ),
-                  const SizedBox(height: 12),
-                  _safeFeedSection(
-                    compact: compact,
-                    title: 'Календарь и события',
-                    emptyTitle: 'Событий пока нет',
-                    items: safeEvents,
-                    onTap: onOpenCalendar,
-                  ),
-                  const SizedBox(height: 10),
-                  _safeFeedSection(
-                    compact: compact,
-                    title: 'Тренировки',
-                    emptyTitle: 'Тренировок пока нет',
-                    items: safeTrainings,
-                    onTap: onOpenTrainings ?? onOpenCalendar,
-                  ),
-                  const SizedBox(height: 10),
-                  _safeFeedSection(
-                    compact: compact,
-                    title: 'Планы и задания',
-                    emptyTitle: 'Планов пока нет',
-                    items: safePlans,
-                    onTap: onOpenPlans,
-                  ),
-                  const SizedBox(height: 10),
-                  _safeFeedSection(
-                    compact: compact,
-                    title: 'Лента и новости',
-                    emptyTitle: 'Лента пока пустая',
-                    items: safeNews,
-                    onTap: onOpenChats,
-                  ),
-                  const SizedBox(height: 12),
-                  _safePlayersBlock(
-                    players: safePlayers,
-                    fallbackCount: resolvedPlayersCount,
-                    compact: compact,
+                    onOpenChats: onOpenChats,
                   ),
                   const SizedBox(height: 12),
                   _safePassport(
@@ -2236,40 +3100,57 @@ class _TeamDetails extends StatelessWidget {
     ].where((e) => e.isNotEmpty).join('  ·  ');
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(2, 2, 2, 8),
+      padding: const EdgeInsets.fromLTRB(2, 4, 2, 4),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           _TeamLogo(
             url: logo,
             name: name,
-            size: compact ? 72 : 86,
+            size: compact ? 78 : 94,
             active: active,
           ),
-          const SizedBox(width: 14),
+          SizedBox(width: compact ? 14 : 18),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (active)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Text(
-                      'АКТИВНАЯ КОМАНДА',
-                      style: _CmrText.microCaps(color: _CmrColors.greenDark),
-                    ),
+                if (active) ...[
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          color: _CmrColors.green,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 7),
+                      Text(
+                        'Активная команда',
+                        style: _CmrText.chip(
+                          size: 10.8,
+                          color: _CmrColors.greenDark,
+                        ),
+                      ),
+                    ],
                   ),
+                  const SizedBox(height: 7),
+                ],
                 Text(
                   name,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: _CmrText.title(compact ? 22.0 : 25),
+                  style: _CmrText.title(compact ? 22.0 : 27.0),
                 ),
                 const SizedBox(height: 7),
                 Text(
                   meta,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: _CmrText.muted(compact ? 12.0 : 12),
+                  style: _CmrText.muted(compact ? 12.2 : 12.5),
                 ),
               ],
             ),
@@ -2279,15 +3160,51 @@ class _TeamDetails extends StatelessWidget {
     );
   }
 
-  Widget _safeKpiGrid(BuildContext context, {required bool compact, required List<_TeamKpiData> items}) {
+  Widget _safeActions({required bool compact}) {
+    final actions = <_SafeActionData>[
+      _SafeActionData(Icons.space_dashboard_outlined, 'Обзор команды', onOpenTeam),
+      _SafeActionData(Icons.groups_2_outlined, 'Состав команды', onOpenRoster),
+      _SafeActionData(Icons.badge_outlined, 'Тренеры', onOpenTrainers),
+      _SafeActionData(Icons.calendar_month_outlined, 'Календарь', onOpenCalendar),
+    ];
+
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          top: BorderSide(color: _CmrColors.divider, width: .7),
-          bottom: BorderSide(color: _CmrColors.divider, width: .7),
-        ),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: _CmrColors.soft,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          for (var i = 0; i < actions.length; i++) ...[
+            _TeamInspectorAction(
+              icon: actions[i].icon,
+              title: actions[i].title,
+              onTap: actions[i].onTap,
+              compact: compact,
+            ),
+            if (i != actions.length - 1)
+              Container(
+                height: .6,
+                margin: const EdgeInsets.only(left: 50),
+                color: _CmrColors.divider.withOpacity(.72),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _safeKpiGrid(
+    BuildContext context, {
+    required bool compact,
+    required List<_TeamKpiData> items,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 15),
+      decoration: BoxDecoration(
+        color: _CmrColors.soft,
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
@@ -2296,13 +3213,28 @@ class _TeamDetails extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(items[i].value.trim().isEmpty ? '—' : items[i].value, style: _CmrText.title(compact ? 15.8 : 15.5), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 4),
-                  Text(items[i].label, style: _CmrText.caption(), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(
+                    items[i].value.trim().isEmpty ? '—' : items[i].value,
+                    style: _CmrText.title(compact ? 16.5 : 17.0),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    items[i].label,
+                    style: _CmrText.caption(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
             ),
-            if (i != items.length - 1) Container(width: 1, height: 30, color: _CmrColors.divider),
+            if (i != items.length - 1)
+              Container(
+                width: .6,
+                height: 32,
+                color: _CmrColors.divider,
+              ),
           ],
         ],
       ),
@@ -2316,17 +3248,17 @@ class _TeamDetails extends StatelessWidget {
     required String text,
   }) {
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 14 : 12,
-        vertical: compact ? 13 : 12,
+      padding: EdgeInsets.all(compact ? 14 : 15),
+      decoration: BoxDecoration(
+        color: _CmrColors.greenSoft2,
+        borderRadius: BorderRadius.circular(12),
       ),
-      color: _CmrColors.greenSoft2,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: 3,
-            height: compact ? 42 : 36,
+            height: 34,
             decoration: BoxDecoration(
               color: _CmrColors.green,
               borderRadius: BorderRadius.circular(99),
@@ -2337,15 +3269,9 @@ class _TeamDetails extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: _CmrText.title(compact ? 15.5 : 13.2),
-                ),
-                SizedBox(height: compact ? 6 : 5),
-                Text(
-                  text,
-                  style: _CmrText.muted(compact ? 13.0 : 11.5),
-                ),
+                Text(title, style: _CmrText.title(compact ? 14.5 : 13.5)),
+                const SizedBox(height: 5),
+                Text(text, style: _CmrText.muted(compact ? 12.4 : 11.5)),
               ],
             ),
           ),
@@ -2398,14 +3324,9 @@ class _TeamDetails extends StatelessWidget {
         compact ? 14 : 12,
         compact ? 15 : 12,
       ),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          bottom: BorderSide(
-            color: _CmrColors.divider,
-            width: .7,
-          ),
-        ),
+      decoration: BoxDecoration(
+        color: _CmrColors.soft,
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2413,14 +3334,14 @@ class _TeamDetails extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 3,
-                height: compact ? 24 : 21,
-                decoration: BoxDecoration(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
                   color: _CmrColors.green,
-                  borderRadius: BorderRadius.circular(99),
+                  shape: BoxShape.circle,
                 ),
               ),
-              const SizedBox(width: 11),
+              const SizedBox(width: 9),
               Expanded(
                 child: Text(
                   title,
@@ -2494,14 +3415,9 @@ class _TeamDetails extends StatelessWidget {
           horizontal: compact ? 2 : 10,
           vertical: 10,
         ),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: Colors.white,
-          border: Border(
-            bottom: BorderSide(
-              color: _CmrColors.divider,
-              width: .55,
-            ),
-          ),
+          borderRadius: BorderRadius.circular(10),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2533,8 +3449,11 @@ class _TeamDetails extends StatelessWidget {
     final count = players.isNotEmpty ? players.length : fallbackCount;
 
     return Container(
-      padding: EdgeInsets.all(compact ? 14 : 12),
-      color: _CmrColors.panel,
+      padding: EdgeInsets.all(compact ? 14 : 15),
+      decoration: BoxDecoration(
+        color: _CmrColors.soft,
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2602,8 +3521,11 @@ class _TeamDetails extends StatelessWidget {
     required String description,
   }) {
     return Container(
-      padding: EdgeInsets.all(compact ? 14 : 12),
-      color: _CmrColors.panel,
+      padding: EdgeInsets.all(compact ? 14 : 15),
+      decoration: BoxDecoration(
+        color: _CmrColors.soft,
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2627,21 +3549,15 @@ class _TeamDetails extends StatelessWidget {
             ],
           ),
           SizedBox(height: compact ? 12 : 8),
-          Text(
-            'Команда: $name',
-            style: _CmrText.muted(compact ? 13.0 : 11.5),
+          _TeamPassportRow(label: 'Команда', value: name),
+          _TeamPassportRow(label: 'Клуб', value: clubName),
+          _TeamPassportRow(
+            label: 'Вид спорта',
+            value: sport.trim().isEmpty ? 'Не указан' : sport,
           ),
-          Text(
-            'Клуб: $clubName',
-            style: _CmrText.muted(compact ? 13.0 : 11.5),
-          ),
-          Text(
-            'Вид спорта: ${sport.trim().isEmpty ? 'не указан' : sport}',
-            style: _CmrText.muted(compact ? 13.0 : 11.5),
-          ),
-          Text(
-            'Группа: ${subtitle.trim().isEmpty ? 'не указана' : subtitle}',
-            style: _CmrText.muted(compact ? 13.0 : 11.5),
+          _TeamPassportRow(
+            label: 'Группа',
+            value: subtitle.trim().isEmpty ? 'Не указана' : subtitle,
           ),
           SizedBox(height: compact ? 10 : 8),
           Text(
@@ -2666,24 +3582,34 @@ class _TeamDetails extends StatelessWidget {
     VoidCallback? onTap, {
     bool compact = false,
   }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: compact ? 15 : 11,
-          vertical: compact ? 10 : 7,
-        ),
-        decoration: BoxDecoration(
-          color: _CmrColors.soft,
-          borderRadius: BorderRadius.circular(
-            _CmrDecor.interactiveRadius,
-          ),
-        ),
-        child: Text(
-          text,
-          style: _CmrText.action().copyWith(
-            fontSize: compact ? 12.5 : 11.2,
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Opacity(
+          opacity: onTap == null ? .5 : 1,
+          child: Container(
+            constraints: BoxConstraints(minHeight: compact ? 44 : 42),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    text,
+                    style: _CmrText.action().copyWith(
+                      fontSize: compact ? 12.5 : 11.8,
+                    ),
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: _CmrColors.subtle,
+                  size: 15,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -2697,6 +3623,99 @@ class _TeamDetails extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
         child: Text(text, style: _CmrText.action().copyWith(fontSize: 11.2)),
+      ),
+    );
+  }
+}
+
+class _TeamInspectorAction extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final VoidCallback? onTap;
+  final bool compact;
+
+  const _TeamInspectorAction({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    required this.compact,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Opacity(
+          opacity: enabled ? 1 : .45,
+          child: Container(
+            constraints: BoxConstraints(minHeight: compact ? 48 : 46),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 3,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    color: enabled
+                        ? _CmrColors.green
+                        : _CmrColors.divider,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: _CmrText.action().copyWith(
+                      fontSize: compact ? 12.6 : 12.2,
+                    ),
+                  ),
+                ),
+                Icon(
+                  enabled ? Icons.chevron_right_rounded : Icons.lock_outline_rounded,
+                  color: _CmrColors.subtle,
+                  size: 15,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TeamPassportRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _TeamPassportRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 104,
+            child: Text(label, style: _CmrText.caption()),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: _CmrText.value(11.8),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -3723,16 +4742,14 @@ class _TeamRecentTestingBlockState extends State<_TeamRecentTestingBlock> {
               Row(
                 children: [
                   Container(
-                    width: 36,
-                    height: 36,
+                    width: 7,
+                    height: 7,
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
-                      border: Border.all(color: iconColor.withOpacity(.16)),
+                      color: iconColor,
+                      shape: BoxShape.circle,
                     ),
-                    child: Icon(hasProblems ? Icons.priority_high_rounded : Icons.verified_rounded, color: iconColor, size: 18),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 9),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -3939,6 +4956,7 @@ class _TeamLiveOverviewBlock extends StatefulWidget {
   final VoidCallback? onOpenChats;
 
   const _TeamLiveOverviewBlock({
+    super.key,
     required this.clubId,
     required this.fallbackClubId,
     required this.teamId,
@@ -3999,6 +5017,9 @@ class _TeamLiveOverviewBlockState extends State<_TeamLiveOverviewBlock> {
 
     if (trainings.isEmpty) {
       trainings = events.where(_looksLikeTraining).toList();
+    }
+    if (news.isEmpty) {
+      news = await _fetchClubNews();
     }
     if (news.isEmpty) {
       news = events.where(_looksLikeNews).toList();
@@ -4099,6 +5120,44 @@ class _TeamLiveOverviewBlockState extends State<_TeamLiveOverviewBlock> {
       final resp = await http.get(uri).timeout(const Duration(seconds: 10));
       final list = _extractList(_tryDecode(resp.body), const ['plans', 'items', 'data', 'result']);
       return list.where(_belongsToSelectedTeam).toList();
+    } catch (_) {
+      return <Map<String, dynamic>>[];
+    }
+  }
+
+
+  Future<List<Map<String, dynamic>>> _fetchClubNews() async {
+    final ownerId = widget.clubId > 0 ? widget.clubId : widget.fallbackClubId;
+    if (ownerId <= 0) return <Map<String, dynamic>>[];
+
+    try {
+      final resp = await http
+          .post(
+            Uri.parse('https://sportotekaapp.ru/api/get_posts_by_user.php'),
+            headers: const {'Content-Type': 'application/json; charset=utf-8'},
+            body: jsonEncode({
+              'user_id': ownerId,
+              'visibility': 'profile',
+              'post_type': 'post',
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
+      final decoded = _tryDecode(resp.body);
+      final list = _extractList(decoded, const ['posts', 'data', 'items']);
+
+      // Посты профиля клуба/школы могут не иметь team_id. В этом случае
+      // показываем их как общую школьную ленту для выбранной команды.
+      return list.map((raw) {
+        final item = Map<String, dynamic>.from(raw);
+        final caption = _s(item['caption'] ?? item['text'] ?? item['body'] ?? item['description']);
+        if (_s(item['title']).isEmpty && caption.isNotEmpty) {
+          item['title'] = caption.length > 74 ? '${caption.substring(0, 74)}…' : caption;
+        }
+        item['description'] = _s(item['description'] ?? item['text'] ?? item['body'] ?? item['caption']);
+        item['created_at'] = item['created_at'] ?? item['date'] ?? item['published_at'];
+        item['type'] = item['type'] ?? 'news';
+        return item;
+      }).toList();
     } catch (_) {
       return <Map<String, dynamic>>[];
     }
@@ -4443,13 +5502,26 @@ class _TeamSnapshotMetricCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(data.icon, color: data.danger ? _CmrColors.orange : _CmrColors.graphite2, size: 17),
-                  const SizedBox(width: 6),
-                  const Expanded(child: SizedBox()),
-                  Icon(Icons.chevron_right_rounded, color: _CmrColors.subtle, size: 16),
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: data.danger
+                          ? _CmrColors.orange
+                          : _CmrColors.green,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (data.onTap != null)
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: _CmrColors.subtle,
+                      size: 15,
+                    ),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 9),
               Text(data.value, style: _CmrText.value(18), maxLines: 1, overflow: TextOverflow.ellipsis),
               Text(data.label, style: _CmrText.caption(), maxLines: 1, overflow: TextOverflow.ellipsis),
             ],
@@ -4612,8 +5684,15 @@ class _TeamCompactFeedBlock extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(icon, color: _CmrColors.graphite2, size: 17),
-              const SizedBox(width: 7),
+              Container(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  color: _CmrColors.green,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 8),
               Expanded(child: Text(title, style: _CmrText.value(12.8), maxLines: 1, overflow: TextOverflow.ellipsis)),
               if (onTap != null)
                 InkWell(
@@ -5193,7 +6272,12 @@ class _TeamPremiumBlock extends StatelessWidget {
 
 class _EmptyTeams extends StatelessWidget {
   final VoidCallback onCreateTeam;
-  const _EmptyTeams({required this.onCreateTeam});
+  final int? maxTeams;
+
+  const _EmptyTeams({
+    required this.onCreateTeam,
+    this.maxTeams,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -5204,13 +6288,57 @@ class _EmptyTeams extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const _IconBadge(icon: Icons.account_tree_rounded, size: 60, iconSize: 28),
+          const _IconBadge(
+            icon: Icons.account_tree_rounded,
+            size: 60,
+            iconSize: 28,
+          ),
           const SizedBox(height: 18),
-          Text('Команды ещё не добавлены', style: _CmrText.title(18), textAlign: TextAlign.center),
+          Text(
+            'Команды ещё не добавлены',
+            style: _CmrText.title(18),
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 8),
-          Text('Создайте первую команду клуба, чтобы перейти к составу, матчам, календарю и рабочим модулям.', style: _CmrText.muted(12.5), textAlign: TextAlign.center),
+          Text(
+            'Создайте первую команду клуба, чтобы перейти к составу, '
+            'матчам, календарю и рабочим модулям.',
+            style: _CmrText.muted(12.5),
+            textAlign: TextAlign.center,
+          ),
+          if (maxTeams != null && maxTeams! > 0) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 7,
+              ),
+              decoration: BoxDecoration(
+                color: _CmrColors.greenSoft2,
+                borderRadius: BorderRadius.circular(
+                  _CmrDecor.interactiveRadius,
+                ),
+                border: Border.all(
+                  color: _CmrColors.greenBorder,
+                  width: .8,
+                ),
+              ),
+              child: Text(
+                'По тарифу доступно: 0 / $maxTeams · '
+                'можно создать ещё $maxTeams',
+                style: _CmrText.chip(
+                  size: 10.8,
+                  color: _CmrColors.greenDark,
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 18),
-          _ActionButton(icon: Icons.add_rounded, text: 'Создать команду', onTap: onCreateTeam),
+          _ActionButton(
+            icon: Icons.add_rounded,
+            text: 'Создать команду',
+            onTap: onCreateTeam,
+          ),
         ],
       ),
     );
@@ -5265,6 +6393,12 @@ class _SearchField extends StatelessWidget {
       padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 12),
       child: Row(
         children: [
+          const Icon(
+            Icons.search_rounded,
+            color: _CmrColors.secondary,
+            size: 16,
+          ),
+          const SizedBox(width: 8),
           Expanded(
             child: TextField(
               controller: controller,
@@ -5361,17 +6495,6 @@ class _FilterChip extends StatelessWidget {
                   height: 1,
                 ),
               ),
-              if (selected) ...[
-                const SizedBox(width: 6),
-                Container(
-                  width: 5,
-                  height: 5,
-                  decoration: const BoxDecoration(
-                    color: _CmrColors.green,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ],
             ],
           ),
         ),

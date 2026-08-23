@@ -66,12 +66,47 @@ class TgState extends ChangeNotifier {
   });
 
   // ===== 3D параметры =====
-  bool is3DMode = false;
-  double rotationX = 0.0;
+  bool is3DMode = true;
+  double rotationX = -0.34;
   double rotationY = 0.0;
   double rotationZ = 0.0;
-  double perspective = 0.0008;
+  double perspective = 0.00135;
+  double camera3DZoom = 0.96;
   Size fieldLogicalSize = const Size(1050, 680);
+
+  // ===== Пользовательская текстура поля =====
+  // Храним изображение прямо в документе схемы, чтобы оно не зависело от
+  // локального пути на Mac/iPad и открывалось на другом устройстве.
+  String? customFieldTextureBase64;
+  String? customFieldTextureName;
+  double customFieldTextureOpacity = 0.72;
+
+  bool get hasCustomFieldTexture =>
+      customFieldTextureBase64 != null && customFieldTextureBase64!.isNotEmpty;
+
+  void setCustomFieldTexture({
+    required String base64Data,
+    required String name,
+  }) {
+    _commitUndo();
+    customFieldTextureBase64 = base64Data;
+    customFieldTextureName = name.trim().isEmpty ? 'Своя текстура' : name.trim();
+    notifyListeners();
+  }
+
+  void setCustomFieldTextureOpacity(double value) {
+    customFieldTextureOpacity = value.clamp(0.0, 1.0).toDouble();
+    notifyListeners();
+  }
+
+  void clearCustomFieldTexture() {
+    if (!hasCustomFieldTexture) return;
+    _commitUndo();
+    customFieldTextureBase64 = null;
+    customFieldTextureName = null;
+    customFieldTextureOpacity = 0.72;
+    notifyListeners();
+  }
 
   Size _normalizeFootballFieldSize(Size size) {
     // Редактор футбольной тактики работает в горизонтальной системе координат.
@@ -87,6 +122,7 @@ class TgState extends ChangeNotifier {
     double? rotationY,
     double? rotationZ,
     double? perspective,
+    double? cameraZoom,
     Size? fieldSize,
     bool notify = true,
   }) {
@@ -96,6 +132,7 @@ class TgState extends ChangeNotifier {
     if (rotationY != null) this.rotationY = rotationY;
     if (rotationZ != null) this.rotationZ = rotationZ;
     if (perspective != null) this.perspective = perspective;
+    if (cameraZoom != null) camera3DZoom = cameraZoom.clamp(.96, 1.38).toDouble();
     if (fieldSize != null) fieldLogicalSize = _normalizeFootballFieldSize(fieldSize);
 
     if (notify) notifyListeners();
@@ -111,6 +148,7 @@ class TgState extends ChangeNotifier {
       rotationX: 0.0,
       rotationY: 0.0,
       rotationZ: 0.0,
+      cameraZoom: 0.96,
     );
   }
 
@@ -498,6 +536,20 @@ class TgState extends ChangeNotifier {
   TgTool tool = TgTool.select;
 
   void setTool(TgTool t) {
+    // «Выбор» всегда означает режим трансформации объекта. Если тренер
+    // редактировал контрольные точки, скрываем их и возвращаем обычные
+    // ручки перемещения / масштаба / поворота на поле.
+    if (t == TgTool.select && tool == TgTool.editPoints) {
+      final sel = selected;
+      if (sel is TgEditableCurve ||
+          sel is TgEditableZigzag ||
+          sel is TgEditableSpring ||
+          sel is TgEditableSpiral ||
+          sel is TgEditableWavy) {
+        _finishEditableMode(sel!);
+      }
+    }
+
     tool = t;
     _preview = null;
     _panStart = null;
@@ -1675,6 +1727,18 @@ class TgState extends ChangeNotifier {
         _elements[idx] = e.copyWith(
           points: e.points.map((p) => p + delta).toList(),
         );
+      } else if (e is TgCurve) {
+        _elements[idx] = e.copyWith(
+          points: e.points.map((p) => p + delta).toList(),
+        );
+      } else if (e is TgPolyline) {
+        _elements[idx] = e.copyWith(
+          points: e.points.map((p) => p + delta).toList(),
+        );
+      } else if (e is TgZone) {
+        _elements[idx] = e.copyWith(
+          points: e.points.map((p) => p + delta).toList(),
+        );
       } else if (e is TgWavy) {
         _elements[idx] = e.copyWith(
           start: e.start + delta,
@@ -1722,107 +1786,226 @@ class TgState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void transformSelected({
+  Offset _transformGesturePoint(
+    Offset point, {
+    required Offset center,
     required Offset moveDelta,
-    required double absoluteRotation,
-    required double absoluteScaleBase,
+    required double scaleFactor,
+    required double rotationDelta,
+  }) {
+    final v = point - center;
+    final c = math.cos(rotationDelta);
+    final sn = math.sin(rotationDelta);
+    final rotated = Offset(
+      v.dx * c - v.dy * sn,
+      v.dx * sn + v.dy * c,
+    ) * scaleFactor;
+    return center + rotated + moveDelta;
+  }
+
+  List<Offset> _transformGesturePoints(
+    Iterable<Offset> points, {
+    required Offset center,
+    required Offset moveDelta,
+    required double scaleFactor,
+    required double rotationDelta,
+  }) {
+    return points
+        .map(
+          (p) => _transformGesturePoint(
+            p,
+            center: center,
+            moveDelta: moveDelta,
+            scaleFactor: scaleFactor,
+            rotationDelta: rotationDelta,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  /// Transform selected elements from the snapshot captured by
+  /// [commitOnceForGestureStart]. This is used by the on-canvas resize /
+  /// rotate handles and by two-finger object gestures.
+  void transformSelectedGesture({
+    required Offset centerScene,
+    required Offset moveDelta,
+    required double scaleFactor,
+    required double rotationDelta,
   }) {
     if (selectedIds.isEmpty) return;
     final base = _gestureBase;
     if (base == null || base.isEmpty) return;
 
-    final scaleFactor = (absoluteScaleBase / 100.0).clamp(0.25, 4.0);
+    final f = scaleFactor.clamp(0.10, 10.0).toDouble();
+
+    Offset tp(Offset p) => _transformGesturePoint(
+          p,
+          center: centerScene,
+          moveDelta: moveDelta,
+          scaleFactor: f,
+          rotationDelta: rotationDelta,
+        );
+    List<Offset> tps(Iterable<Offset> points) => _transformGesturePoints(
+          points,
+          center: centerScene,
+          moveDelta: moveDelta,
+          scaleFactor: f,
+          rotationDelta: rotationDelta,
+        );
 
     for (final id in selectedIds) {
       final idx = _elements.indexWhere((e) => e.id == id);
       if (idx < 0) continue;
-
       final b = base[id];
       if (b == null || b.locked || b.hidden) continue;
 
       if (b is TgStamp) {
         _elements[idx] = b.copyWith(
-          pos: b.pos + moveDelta,
-          rotation: absoluteRotation,
-          size: (b.size * scaleFactor).clamp(20.0, 260.0),
+          pos: tp(b.pos),
+          rotation: b.rotation + rotationDelta,
+          size: (b.size * f).clamp(16.0, 1200.0),
         );
       } else if (b is TgRect) {
         _elements[idx] = b.copyWith(
-          position: b.position + moveDelta,
-          rotation: absoluteRotation,
-          width: (b.width * scaleFactor).clamp(20.0, 2000.0),
-          height: (b.height * scaleFactor).clamp(20.0, 2000.0),
+          position: tp(b.position),
+          rotation: b.rotation + rotationDelta,
+          width: (b.width * f).clamp(12.0, 4000.0),
+          height: (b.height * f).clamp(12.0, 4000.0),
         );
       } else if (b is TgCircle) {
         _elements[idx] = b.copyWith(
-          position: b.position + moveDelta,
-          rotation: absoluteRotation,
-          radius: (b.radius * scaleFactor).clamp(10.0, 1200.0),
+          position: tp(b.position),
+          rotation: b.rotation + rotationDelta,
+          radius: (b.radius * f).clamp(6.0, 2000.0),
         );
       } else if (b is TgText) {
         _elements[idx] = b.copyWith(
-          position: b.position + moveDelta,
-          rotation: absoluteRotation,
-          size: (b.size * scaleFactor).clamp(8.0, 220.0),
+          position: tp(b.position),
+          rotation: b.rotation + rotationDelta,
+          size: (b.size * f).clamp(7.0, 320.0),
         );
       } else if (b is TgLine) {
         _elements[idx] = b.copyWith(
-          a: b.a + moveDelta,
-          b: b.b + moveDelta,
+          a: tp(b.a),
+          b: tp(b.b),
+          arrowSize: (b.arrowSize * f).clamp(5.0, 120.0),
         );
       } else if (b is TgEditableCurve) {
         _elements[idx] = b.copyWith(
-          points: b.points.map((p) => p + moveDelta).toList(),
+          points: tps(b.points),
+          arrowSize: (b.arrowSize * f).clamp(5.0, 120.0),
+        );
+      } else if (b is TgCurve) {
+        _elements[idx] = b.copyWith(
+          points: tps(b.points),
+          arrowSize: (b.arrowSize * f).clamp(5.0, 120.0),
+        );
+      } else if (b is TgPolyline) {
+        _elements[idx] = b.copyWith(
+          points: tps(b.points),
+          arrowSize: (b.arrowSize * f).clamp(5.0, 120.0),
+        );
+      } else if (b is TgZone) {
+        _elements[idx] = b.copyWith(points: tps(b.points));
+      } else if (b is TgEditableWavy) {
+        _elements[idx] = b.copyWith(
+          start: tp(b.start),
+          endPoint: tp(b.endPoint),
+          controlPoints: tps(b.controlPoints),
+          amplitude: (b.amplitude * f).clamp(2.0, 500.0),
+          wavelength: (b.wavelength * f).clamp(4.0, 1000.0),
+          arrowSize: (b.arrowSize * f).clamp(5.0, 120.0),
         );
       } else if (b is TgWavy) {
         _elements[idx] = b.copyWith(
-          start: b.start + moveDelta,
-          endPoint: b.endPoint + moveDelta,
-          controlPoints: b.controlPoints.map((p) => p + moveDelta).toList(),
+          start: tp(b.start),
+          endPoint: tp(b.endPoint),
+          controlPoints: tps(b.controlPoints),
+          amplitude: (b.amplitude * f).clamp(2.0, 500.0),
+          wavelength: (b.wavelength * f).clamp(4.0, 1000.0),
+          arrowSize: (b.arrowSize * f).clamp(5.0, 120.0),
+        );
+      } else if (b is TgEditableZigzag) {
+        _elements[idx] = b.copyWith(
+          start: tp(b.start),
+          endPoint: tp(b.endPoint),
+          controlPoints: tps(b.controlPoints),
+          amplitude: (b.amplitude * f).clamp(2.0, 500.0),
+          arrowSize: (b.arrowSize * f).clamp(5.0, 120.0),
         );
       } else if (b is TgZigzag) {
-        if (b is TgEditableZigzag) {
-          _elements[idx] = b.copyWith(
-            start: b.start + moveDelta,
-            endPoint: b.endPoint + moveDelta,
-            controlPoints: b.controlPoints.map((p) => p + moveDelta).toList(),
-          );
-        } else {
-          _elements[idx] = b.copyWith(
-            start: b.start + moveDelta,
-            endPoint: b.endPoint + moveDelta,
-          );
-        }
+        _elements[idx] = b.copyWith(
+          start: tp(b.start),
+          endPoint: tp(b.endPoint),
+          amplitude: (b.amplitude * f).clamp(2.0, 500.0),
+          arrowSize: (b.arrowSize * f).clamp(5.0, 120.0),
+        );
+      } else if (b is TgEditableSpring) {
+        _elements[idx] = b.copyWith(
+          start: tp(b.start),
+          endPoint: tp(b.endPoint),
+          controlPoints: tps(b.controlPoints),
+          amplitude: (b.amplitude * f).clamp(2.0, 500.0),
+          arrowSize: (b.arrowSize * f).clamp(5.0, 120.0),
+        );
       } else if (b is TgSpring) {
-        if (b is TgEditableSpring) {
-          _elements[idx] = b.copyWith(
-            start: b.start + moveDelta,
-            endPoint: b.endPoint + moveDelta,
-            controlPoints: b.controlPoints.map((p) => p + moveDelta).toList(),
-          );
-        } else {
-          _elements[idx] = b.copyWith(
-            start: b.start + moveDelta,
-            endPoint: b.endPoint + moveDelta,
-          );
-        }
+        _elements[idx] = b.copyWith(
+          start: tp(b.start),
+          endPoint: tp(b.endPoint),
+          amplitude: (b.amplitude * f).clamp(2.0, 500.0),
+          arrowSize: (b.arrowSize * f).clamp(5.0, 120.0),
+        );
+      } else if (b is TgEditableSpiral) {
+        _elements[idx] = b.copyWith(
+          start: tp(b.start),
+          endPoint: tp(b.endPoint),
+          controlPoints: tps(b.controlPoints),
+          amplitude: (b.amplitude * f).clamp(2.0, 500.0),
+          arrowSize: (b.arrowSize * f).clamp(5.0, 120.0),
+        );
       } else if (b is TgSpiral) {
-        if (b is TgEditableSpiral) {
-          _elements[idx] = b.copyWith(
-            start: b.start + moveDelta,
-            endPoint: b.endPoint + moveDelta,
-            controlPoints: b.controlPoints.map((p) => p + moveDelta).toList(),
-          );
-        } else {
-          _elements[idx] = b.copyWith(
-            start: b.start + moveDelta,
-            endPoint: b.endPoint + moveDelta,
-          );
-        }
+        _elements[idx] = b.copyWith(
+          start: tp(b.start),
+          endPoint: tp(b.endPoint),
+          amplitude: (b.amplitude * f).clamp(2.0, 500.0),
+          arrowSize: (b.arrowSize * f).clamp(5.0, 120.0),
+        );
       }
     }
 
     notifyListeners();
+  }
+
+  /// Backward-compatible wrapper used by older right-panel controls.
+  void transformSelected({
+    required Offset moveDelta,
+    required double absoluteRotation,
+    required double absoluteScaleBase,
+  }) {
+    final base = _gestureBase;
+    if (selectedIds.isEmpty || base == null || base.isEmpty) return;
+
+    Rect? bounds;
+    for (final e in base.values) {
+      bounds = bounds == null ? e.bounds() : bounds!.expandToInclude(e.bounds());
+    }
+    final center = (bounds ?? Rect.zero).center;
+
+    // Older code supplied an absolute rotation for simple objects. Convert it
+    // into a delta based on the first selected object where possible.
+    double baseRotation = 0.0;
+    final first = base.values.isEmpty ? null : base.values.first;
+    if (first is TgStamp) baseRotation = first.rotation;
+    if (first is TgRect) baseRotation = first.rotation;
+    if (first is TgCircle) baseRotation = first.rotation;
+    if (first is TgText) baseRotation = first.rotation;
+
+    transformSelectedGesture(
+      centerScene: center,
+      moveDelta: moveDelta,
+      scaleFactor: (absoluteScaleBase / 100.0).clamp(0.10, 10.0).toDouble(),
+      rotationDelta: absoluteRotation - baseRotation,
+    );
   }
 
   // ===== drawing / pan pipeline (for non-select tools) =====
@@ -3388,8 +3571,12 @@ class TgState extends ChangeNotifier {
       "rotation_y": rotationY,
       "rotation_z": rotationZ,
       "perspective": perspective,
+      "camera_3d_zoom": camera3DZoom,
       "field_logical_width": fieldLogicalSize.width,
       "field_logical_height": fieldLogicalSize.height,
+      "custom_field_texture_base64": customFieldTextureBase64,
+      "custom_field_texture_name": customFieldTextureName,
+      "custom_field_texture_opacity": customFieldTextureOpacity,
     };
   }
 
@@ -3444,15 +3631,26 @@ class TgState extends ChangeNotifier {
       transform.value.value = m;
     }
 
-    is3DMode = json["is_3d_mode"] == true;
-    rotationX = _asDouble(json["rotation_x"], 0.0);
+    final hasSaved3DMode = json.containsKey("is_3d_mode");
+    is3DMode = hasSaved3DMode ? json["is_3d_mode"] == true : true;
+    rotationX = _asDouble(json["rotation_x"], is3DMode ? -0.34 : 0.0);
     rotationY = _asDouble(json["rotation_y"], 0.0);
     rotationZ = _asDouble(json["rotation_z"], 0.0);
-    perspective = _asDouble(json["perspective"], 0.0008);
+    perspective = _asDouble(json["perspective"], 0.00135);
+    camera3DZoom = _asDouble(json["camera_3d_zoom"], 0.96).clamp(.96, 1.38).toDouble();
 
     final fieldW = _asDouble(json["field_logical_width"], 1050.0);
     final fieldH = _asDouble(json["field_logical_height"], 680.0);
     fieldLogicalSize = _normalizeFootballFieldSize(Size(fieldW, fieldH));
+
+    final texture = (json["custom_field_texture_base64"] ?? "").toString().trim();
+    customFieldTextureBase64 = texture.isEmpty ? null : texture;
+    final textureName = (json["custom_field_texture_name"] ?? "").toString().trim();
+    customFieldTextureName = textureName.isEmpty ? null : textureName;
+    customFieldTextureOpacity = _asDouble(
+      json["custom_field_texture_opacity"],
+      0.72,
+    ).clamp(0.0, 1.0).toDouble();
 
     _elements
       ..clear()
@@ -3505,7 +3703,11 @@ class TgState extends ChangeNotifier {
       rotationY: rotationY,
       rotationZ: rotationZ,
       perspective: perspective,
+      camera3DZoom: camera3DZoom,
       fieldLogicalSize: fieldLogicalSize,
+      customFieldTextureBase64: customFieldTextureBase64,
+      customFieldTextureName: customFieldTextureName,
+      customFieldTextureOpacity: customFieldTextureOpacity,
     );
   }
 
@@ -3534,7 +3736,11 @@ class TgState extends ChangeNotifier {
     rotationY = s.rotationY;
     rotationZ = s.rotationZ;
     perspective = s.perspective;
+    camera3DZoom = s.camera3DZoom;
     fieldLogicalSize = s.fieldLogicalSize;
+    customFieldTextureBase64 = s.customFieldTextureBase64;
+    customFieldTextureName = s.customFieldTextureName;
+    customFieldTextureOpacity = s.customFieldTextureOpacity;
 
     _preview = null;
     _panStart = null;
@@ -4167,7 +4373,11 @@ class _TgSnapshot {
     required this.rotationY,
     required this.rotationZ,
     required this.perspective,
+    required this.camera3DZoom,
     required this.fieldLogicalSize,
+    required this.customFieldTextureBase64,
+    required this.customFieldTextureName,
+    required this.customFieldTextureOpacity,
   });
 
   final List<TgElement> elements;
@@ -4194,5 +4404,9 @@ class _TgSnapshot {
   final double rotationY;
   final double rotationZ;
   final double perspective;
+  final double camera3DZoom;
   final Size fieldLogicalSize;
+  final String? customFieldTextureBase64;
+  final String? customFieldTextureName;
+  final double customFieldTextureOpacity;
 }

@@ -1,3 +1,4 @@
+import 'dart:convert';
 
 String _firstNonEmpty(Map<String, dynamic> json, List<String> keys, [String fallback = '']) {
   for (final key in keys) {
@@ -5,6 +6,18 @@ String _firstNonEmpty(Map<String, dynamic> json, List<String> keys, [String fall
     if (value.isNotEmpty && value != 'null') return value;
   }
   return fallback;
+}
+
+String _sessionGroupKeyAny(Map<String, dynamic> json, List<String> keys) {
+  final value = _firstNonEmpty(json, keys).trim();
+  if (value.isEmpty || value == '0' || value == '-' || value.toLowerCase() == 'null') return '';
+  return value;
+}
+
+double _safeTrackerMaxSpeedKmh(dynamic value) {
+  final v = value is num ? value.toDouble() : (double.tryParse('$value') ?? 0.0);
+  if (!v.isFinite || v < 0 || v > 36.0) return 0.0;
+  return v;
 }
 
 int? _intAny(Map<String, dynamic> json, List<String> keys) {
@@ -26,6 +39,9 @@ String? _photoAny(Map<String, dynamic> json) {
 class TrackerPlayerOption {
   final int id;
   final String name;
+  /// Имя только для UI. `name` остаётся каноническим/серверным значением,
+  /// чтобы не ломать сопоставление старых сессий по player_name.
+  final String? displayName;
   final String? avatar;
   final String? number;
   final String? position;
@@ -37,6 +53,7 @@ class TrackerPlayerOption {
   const TrackerPlayerOption({
     required this.id,
     required this.name,
+    this.displayName,
     this.avatar,
     this.number,
     this.position,
@@ -46,7 +63,41 @@ class TrackerPlayerOption {
   factory TrackerPlayerOption.fromJson(Map<String, dynamic> json) {
     final firstName = '${json['first_name'] ?? json['firstName'] ?? ''}'.trim();
     final lastName = '${json['last_name'] ?? json['lastName'] ?? ''}'.trim();
-    final full = _firstNonEmpty(json, const ['player_name', 'name', 'full_name', 'fullName'], '$firstName $lastName').trim();
+    // CMR convention: surname first everywhere in Tracker. Prefer structured
+    // API fields when they are available, so top chips become «Берёзкин А.»,
+    // not «Арсений Б.». Raw player_name/name stays as a fallback for legacy API.
+    final structuredFull = <String>[lastName, firstName]
+        .where((part) => part.isNotEmpty)
+        .join(' ')
+        .trim();
+    final playerNameRaw = _firstNonEmpty(json, const ['player_name']).trim();
+    final rawFull = _firstNonEmpty(
+      json,
+      const ['player_name', 'name', 'full_name', 'fullName'],
+      structuredFull,
+    ).trim();
+    final full = structuredFull.isNotEmpty ? structuredFull : rawFull;
+
+    String legacySurnameFirst(String value) {
+      final parts = value
+          .split(RegExp(r'\s+'))
+          .where((part) => part.trim().isNotEmpty)
+          .toList(growable: false);
+      if (parts.length < 2) return value.trim();
+      // get_tracker_players.php legacy player_name = «Имя Фамилия».
+      return <String>[parts.last, ...parts.take(parts.length - 1)]
+          .join(' ')
+          .trim();
+    }
+
+    final storedDisplay = _firstNonEmpty(json, const ['display_name', 'displayName']).trim();
+    final displayFull = storedDisplay.isNotEmpty
+        ? storedDisplay
+        : (structuredFull.isNotEmpty
+            ? structuredFull
+            : (playerNameRaw.isNotEmpty
+                ? legacySurnameFirst(playerNameRaw)
+                : legacySurnameFirst(rawFull)));
 
     final primaryId = _intAny(json, const ['id', 'player_id', 'playerId', 'user_id']) ?? 0;
     final identities = <int>{};
@@ -59,6 +110,7 @@ class TrackerPlayerOption {
     return TrackerPlayerOption(
       id: primaryId,
       name: full.isEmpty ? 'Игрок' : full,
+      displayName: displayFull.isEmpty ? null : displayFull,
       avatar: _photoAny(json),
       number: _firstNonEmpty(json, const ['jersey_number', 'number', 'shirt_number']).isEmpty ? null : _firstNonEmpty(json, const ['jersey_number', 'number', 'shirt_number']),
       position: '${json['position'] ?? ''}'.trim().isEmpty ? null : '${json['position']}',
@@ -69,6 +121,7 @@ class TrackerPlayerOption {
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
+        'display_name': displayName,
         'avatar': avatar,
         'number': number,
         'position': position,
@@ -100,6 +153,20 @@ class TrackerDeviceModel {
   });
 
   factory TrackerDeviceModel.fromJson(Map<String, dynamic> json) {
+    final nearbyRaw =
+        '${json['is_nearby'] ?? json['nearby'] ?? 0}' == '1' ||
+        json['is_nearby'] == true;
+    final nearbySeenAt = _trackerDeviceServerUtc(
+      json['nearby_at'] ??
+          json['last_seen_at'] ??
+          json['updated_at'] ??
+          json['created_at'],
+    );
+    final nearbyAgeSec = nearbySeenAt == null
+        ? null
+        : DateTime.now().toUtc().difference(nearbySeenAt).inSeconds;
+    final nearbyFresh =
+        nearbyAgeSec != null && nearbyAgeSec >= -15 && nearbyAgeSec <= 90;
     return TrackerDeviceModel(
       id: int.tryParse('${json['id'] ?? ''}'),
       clubId: int.tryParse('${json['club_id'] ?? json['clubId'] ?? ''}'),
@@ -108,10 +175,34 @@ class TrackerDeviceModel {
       deviceUuid: '${json['device_uuid'] ?? json['device_id'] ?? json['uuid'] ?? ''}',
       deviceName: '${json['device_name'] ?? json['name'] ?? 'Трекер'}',
       batteryPercent: int.tryParse('${json['battery_percent'] ?? ''}'),
-      isNearby: '${json['is_nearby'] ?? json['nearby'] ?? 0}' == '1' || json['is_nearby'] == true,
+      // is_nearby в старой таблице не сбрасывался после scan и оставался 1
+      // сутками. Показываем «рядом» только при свежей серверной отметке.
+      isNearby: nearbyRaw && nearbyFresh,
       playerName: _firstNonEmpty(json, const ['player_name', 'full_name', 'fullName', 'name', 'fio']).isEmpty ? null : _firstNonEmpty(json, const ['player_name', 'full_name', 'fullName', 'name', 'fio']),
     );
   }
+}
+
+DateTime? _trackerDeviceServerUtc(dynamic value) {
+  final raw = '${value ?? ''}'.trim();
+  if (raw.isEmpty || raw.toLowerCase() == 'null') return null;
+  final normalized = raw.replaceFirst(' ', 'T');
+  final parsed = DateTime.tryParse(normalized);
+  if (parsed == null) return null;
+  final hasZone =
+      RegExp(r'(Z|[+-]\d{2}:?\d{2})$', caseSensitive: false)
+          .hasMatch(normalized);
+  if (hasZone) return parsed.toUtc();
+  return DateTime.utc(
+    parsed.year,
+    parsed.month,
+    parsed.day,
+    parsed.hour,
+    parsed.minute,
+    parsed.second,
+    parsed.millisecond,
+    parsed.microsecond,
+  );
 }
 
 class TrackerSpeedSettings {
@@ -238,7 +329,7 @@ class TrackerPlayerLoadRow {
       sessionsCount: _intAny(json, const ['sessions_count', 'session_count', 'sessions']) ?? 0,
       distanceM: _d(json['distance_m'] ?? json['total_distance_m'] ?? json['distance']),
       avgSpeedKmh: _d(json['avg_speed_kmh'] ?? json['average_speed_kmh']),
-      maxSpeedKmh: _d(json['max_speed_kmh'] ?? json['top_speed_kmh']),
+      maxSpeedKmh: _safeTrackerMaxSpeedKmh(json['max_speed_kmh'] ?? json['top_speed_kmh']),
       highSpeedDistanceM: _d(json['high_speed_distance_m'] ?? json['hsr_distance_m'] ?? json['hir_distance_m'] ?? json['vhir_distance_m']),
       sprintDistanceM: _d(json['sprint_distance_m'] ?? json['spr_distance_m']),
       sprintCount: _intAny(json, const ['sprint_count', 'sprints_count', 'sprints']) ?? 0,
@@ -326,6 +417,10 @@ class TrackerSessionModel {
   final int participantsCount;
   final List<int> participantIds;
   final List<String> participantNames;
+  /// Stable server-side identifier shared by all player rows of one team
+  /// training. Older endpoints do not return it, so the analytics UI also has
+  /// a conservative time-based fallback.
+  final String sessionGroupKey;
 
   const TrackerSessionModel({
     required this.id,
@@ -358,30 +453,87 @@ class TrackerSessionModel {
     this.participantsCount = 0,
     this.participantIds = const <int>[],
     this.participantNames = const <String>[],
+    this.sessionGroupKey = '',
   });
 
   factory TrackerSessionModel.fromJson(Map<String, dynamic> json) {
-    final rawParticipants = json['players'] ?? json['participants'] ?? json['session_players'] ?? json['members'];
     final participantIds = <int>{};
     final participantNames = <String>[];
-    if (rawParticipants is List) {
-      for (final value in rawParticipants) {
-        if (value is Map) {
-          final row = Map<String, dynamic>.from(value);
-          final id = _intAny(row, const ['player_id', 'playerId', 'id', 'user_id', 'userId']);
-          if (id != null && id > 0) participantIds.add(id);
-          final name = _firstNonEmpty(row, const ['player_name', 'full_name', 'fullName', 'name', 'fio']);
-          if (name.isNotEmpty && !participantNames.contains(name)) participantNames.add(name);
-        } else {
-          final id = int.tryParse('$value');
-          if (id != null && id > 0) participantIds.add(id);
+    void addName(dynamic value) {
+      final name = '${value ?? ''}'.trim();
+      if (name.isEmpty || name == 'null') return;
+      if (!participantNames.any(
+          (existing) => existing.toLowerCase() == name.toLowerCase())) {
+        participantNames.add(name);
+      }
+    }
+
+    void addParticipants(dynamic raw) {
+      if (raw == null) return;
+      if (raw is String) {
+        final value = raw.trim();
+        if (value.isEmpty) return;
+        try {
+          addParticipants(jsonDecode(value));
+          return;
+        } catch (_) {
+          for (final part in value.split(',')) {
+            final item = part.trim();
+            final id = int.tryParse(item);
+            if (id != null && id > 0) {
+              participantIds.add(id);
+            } else {
+              addName(item);
+            }
+          }
+          return;
         }
       }
+      if (raw is Map) {
+        addParticipants(raw['items'] ??
+            raw['players'] ??
+            raw['participants'] ??
+            raw.values.toList(growable: false));
+        return;
+      }
+      if (raw is! List) return;
+      for (final value in raw) {
+        if (value is Map) {
+          final row = Map<String, dynamic>.from(value);
+          final id = _intAny(row,
+              const ['player_id', 'playerId', 'id', 'user_id', 'userId']);
+          if (id != null && id > 0) participantIds.add(id);
+          addName(_firstNonEmpty(row,
+              const ['player_name', 'full_name', 'fullName', 'name', 'fio']));
+        } else {
+          final id = int.tryParse('$value');
+          if (id != null && id > 0) {
+            participantIds.add(id);
+          } else {
+            addName(value);
+          }
+        }
+      }
+    }
+
+    for (final key in const [
+      'players',
+      'participants',
+      'session_players',
+      'members',
+      'player_ids',
+      'participant_ids',
+      'players_ids',
+      'athlete_ids',
+      'player_names',
+      'participant_names',
+    ]) {
+      addParticipants(json[key]);
     }
     final directPlayerId = _intAny(json, const ['player_id', 'playerId', 'user_id']);
     if (directPlayerId != null && directPlayerId > 0) participantIds.add(directPlayerId);
     final directPlayerName = _firstNonEmpty(json, const ['player_name', 'full_name', 'fullName', 'name', 'fio']);
-    if (directPlayerName.isNotEmpty && !participantNames.contains(directPlayerName)) participantNames.add(directPlayerName);
+    addName(directPlayerName);
     final participantsCount = _intAny(json, const [
           'players_count',
           'player_count',
@@ -401,7 +553,7 @@ class TrackerSessionModel {
       createdAt: '${json['created_at'] ?? ''}',
       processingStatus: '${json['processing_status'] ?? 'new'}',
       distanceM: _d(json['distance_m'] ?? json['total_distance_m'] ?? json['distance']),
-      maxSpeedKmh: _d(json['max_speed_kmh'] ?? json['top_speed_kmh']),
+      maxSpeedKmh: _safeTrackerMaxSpeedKmh(json['max_speed_kmh'] ?? json['top_speed_kmh']),
       avgSpeedKmh: _d(json['avg_speed_kmh']),
       metersPerMinute: _d(json['meterage_per_min'] ?? json['meters_per_minute']),
       hsrDistanceM: _d(json['hsr_distance_m'] ?? json['high_speed_distance_m']),
@@ -434,6 +586,30 @@ class TrackerSessionModel {
       participantsCount: participantsCount,
       participantIds: participantIds.toList(growable: false),
       participantNames: participantNames,
+      sessionGroupKey: _sessionGroupKeyAny(json, const [
+        'team_session_id',
+        'teamSessionId',
+        'session_group_id',
+        'sessionGroupId',
+        'group_session_id',
+        'groupSessionId',
+        'team_training_id',
+        'teamTrainingId',
+        'team_live_group_id',
+        'teamLiveGroupId',
+        'session_batch_id',
+        'sessionBatchId',
+        'training_id',
+        'trainingId',
+        'workout_id',
+        'workoutId',
+        'batch_id',
+        'batchId',
+        'live_batch_id',
+        'liveBatchId',
+        'parent_session_id',
+        'parentSessionId',
+      ]),
     );
   }
 

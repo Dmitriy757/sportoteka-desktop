@@ -1,0 +1,45 @@
+{
+  "title": "Sportoteka 3D Pro — атака 4-3-3",
+  "meta": {
+    "clubName": "ФК Гомель",
+    "opponentName": "Соперник",
+    "phase": "Опасная атака",
+    "minute": "63:20",
+    "matchId": 16,
+    "teamId": 40
+  },
+  "field": {
+    "type": "football",
+    "length": 105,
+    "width": 68,
+    "grassStyle": "broadcast",
+    "lineStyle": "tv"
+  },
+  "camera": {
+    "preset": "fifa",
+    "fov": 35
+  },
+  "lighting": {
+    "preset": "stadium_day",
+    "intensity": 1.15,
+    "shadows": true
+  },
+  "layers": [
+    { "id": "field", "name": "Поле", "visible": true, "locked": true, "opacity": 1 },
+    { "id": "players", "name": "Игроки", "visible": true, "locked": false, "opacity": 1 },
+    { "id": "ball", "name": "Мяч", "visible": true, "locked": false, "opacity": 1 },
+    { "id": "graphics", "name": "Графика", "visible": true, "locked": false, "opacity": 1 },
+    { "id": "labels", "name": "Подписи", "visible": true, "locked": false, "opacity": 1 }
+  ],
+  "objects": [
+    { "id": "home_10", "type": "player", "layerId": "players", "team": "home", "number": 10, "x": -22, "z": -12, "rotationY": 24, "scale": 1, "kitColor": "#16A34A", "modelKey": "player_home", "visible": true },
+    { "id": "home_7", "type": "player", "layerId": "players", "team": "home", "number": 7, "x": 4, "z": -18, "rotationY": 18, "scale": 1, "kitColor": "#16A34A", "modelKey": "player_home", "visible": true },
+    { "id": "home_9", "type": "player", "layerId": "players", "team": "home", "number": 9, "x": 23, "z": -30, "rotationY": -8, "scale": 1, "kitColor": "#16A34A", "modelKey": "player_home", "visible": true },
+    { "id": "away_5", "type": "player", "layerId": "players", "team": "away", "number": 5, "x": 12, "z": -7, "rotationY": -30, "scale": 1, "kitColor": "#111827", "modelKey": "player_away", "visible": true },
+    { "id": "ball_1", "type": "ball", "layerId": "ball", "x": -18, "z": -11, "scale": 1, "visible": true },
+    { "id": "pass_arrow", "type": "arrow", "layerId": "graphics", "x": -18, "z": -11, "toX": 4, "toZ": -18, "width": 1.2, "color": "#FDE047", "effect": "glow", "visible": true },
+    { "id": "run_arrow", "type": "arrow", "layerId": "graphics", "x": 11, "z": -20, "toX": 29, "toZ": -34, "width": 1, "color": "#38BDF8", "effect": "dash", "visible": true },
+    { "id": "danger_zone", "type": "zone", "layerId": "graphics", "x": 23, "z": -26, "width": 22, "length": 18, "opacity": 0.28, "color": "#22C55E", "effect": "soft_area", "visible": true },
+    { "id": "label_attack", "type": "label", "layerId": "labels", "x": -31, "y": 4, "z": -20, "label": "Опасная атака", "color": "#FFFFFF", "backgroundColor": "#0F172A", "scale": 1.2, "visible": true }
+  ]
+}

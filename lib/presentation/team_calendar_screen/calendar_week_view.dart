@@ -138,7 +138,7 @@ class _CalendarWeekViewState extends State<CalendarWeekView> {
                                     dayNames[i],
                                     style: const TextStyle(
                                       fontSize: 10.2,
-                                      fontWeight: FontWeight.w700,
+                                      fontWeight: FontWeight.w600,
                                       color: Color(0xFF6B7280),
                                     ),
                                   ),
@@ -147,7 +147,7 @@ class _CalendarWeekViewState extends State<CalendarWeekView> {
                                     "${d.day}",
                                     style: const TextStyle(
                                       fontSize: 13.2,
-                                      fontWeight: FontWeight.w700,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                   const SizedBox(height: 6),
@@ -200,14 +200,14 @@ class _CalendarWeekViewState extends State<CalendarWeekView> {
                     children: [
                       Text(
                         "${dayNames[d.weekday - 1]} • ${d.day}.${d.month.toString().padLeft(2, '0')}",
-                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.2, letterSpacing: -0.12),
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.2, letterSpacing: -0.12),
                       ),
                       const Spacer(),
                       TextButton(
                         onPressed: () => widget.onDayLongPress(d),
                         style: TextButton.styleFrom(
                           foregroundColor: const Color(0xFF067A46),
-                          textStyle: const TextStyle(fontSize: 10.8, fontWeight: FontWeight.w700),
+                          textStyle: const TextStyle(fontSize: 10.8, fontWeight: FontWeight.w600),
                           visualDensity: VisualDensity.compact,
                         ),
                         child: const Text("Добавить"),
@@ -289,7 +289,7 @@ class _DotsMini extends StatelessWidget {
                 "+$hidden",
                 style: const TextStyle(
                   fontSize: 8,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                   color: Colors.white,
                   height: 1.0,
                 ),
@@ -343,7 +343,7 @@ class _CountCircleBadge extends StatelessWidget {
           text,
           style: TextStyle(
             fontSize: 9,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w600,
             height: 1.0,
             letterSpacing: -0.2,
             color: fg,
@@ -405,7 +405,7 @@ class _WeekEventTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(e.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.4, letterSpacing: -0.12)),
+                  Text(e.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.4, letterSpacing: -0.12)),
                   const SizedBox(height: 2),
                   Text(
                     "${eventTypeLabel(e.type)} • $when",

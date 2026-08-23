@@ -9,31 +9,32 @@ import '../../data/models/video_lesson_comment_model.dart';
 import '../../data/models/video_lesson_model.dart';
 import '../../data/services/video_lessons_service.dart';
 import 'add_edit_video_lesson_screen.dart';
+import 'cmr_video_lessons_theme.dart';
 
 class VideoLessonDetailPalette {
   static const primaryGreen = Color(0xFF00A750);
-  static const primaryGreenDark = Color(0xFF008C40);
-  static const primaryGreenSoft = Color(0xFFEAF8EF);
+  static const primaryGreenDark = CmrVideoColors.greenDark;
+  static const primaryGreenSoft = CmrVideoColors.greenSoft;
 
   static const white = Color(0xFFFFFFFF);
 
   /// Общий фон страницы — белый, как просили.
-  static const background = Color(0xFFFFFFFF);
+  static const background = CmrVideoColors.panel;
 
   /// Мягкий внутренний фон для полей, комментариев и пустых состояний.
-  static const surface = Color(0xFFF6F8F7);
+  static const surface = CmrVideoColors.soft;
 
   static const card = Color(0xFFFFFFFF);
-  static const border = Color(0xFFE3E8E5);
+  static const border = Colors.transparent;
 
-  static const text = Color(0xFF151A17);
-  static const textMuted = Color(0xFF66726B);
-  static const textLight = Color(0xFF8B9690);
+  static const text = CmrVideoColors.text;
+  static const textMuted = CmrVideoColors.muted;
+  static const textLight = CmrVideoColors.subtle;
 
   static const videoBlack = Color(0xFF050505);
 
   static const greenGradient = LinearGradient(
-    colors: [primaryGreen, primaryGreenDark],
+    colors: [primaryGreen, primaryGreen],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -45,11 +46,13 @@ class VideoLessonDetailScreen extends StatefulWidget {
   /// Если экран открыт из хаба по нажатию на карточку,
   /// видео сразу начинает проигрываться как в YouTube/Rutube.
   final bool autoPlay;
+  final bool embedded;
 
   const VideoLessonDetailScreen({
     super.key,
     required this.lessonId,
     this.autoPlay = false,
+    this.embedded = false,
   });
 
   @override
@@ -105,9 +108,11 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
     final media = MediaQuery.of(context);
     final scale = media.textScaler.scale(1.0).clamp(1.0, 1.06).toDouble();
 
-    return MediaQuery(
-      data: media.copyWith(textScaler: TextScaler.linear(scale)),
-      child: child,
+    return CmrVideoThemeScope(
+      child: MediaQuery(
+        data: media.copyWith(textScaler: TextScaler.linear(scale)),
+        child: child,
+      ),
     );
   }
 
@@ -340,15 +345,7 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
       padding: padding,
       decoration: BoxDecoration(
         color: color,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: VideoLessonDetailPalette.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.025),
-            blurRadius: 14,
-            offset: const Offset(0, 7),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(12),
       ),
       child: child,
     );
@@ -362,20 +359,8 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
     return Row(
       children: [
         if (icon != null) ...[
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: VideoLessonDetailPalette.primaryGreenSoft,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              icon,
-              color: VideoLessonDetailPalette.primaryGreen,
-              size: 19,
-            ),
-          ),
-          const SizedBox(width: 10),
+          const CmrVideoDot(size: 7),
+          const SizedBox(width: 9),
         ],
         Expanded(
           child: Text(
@@ -383,7 +368,7 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
             style: const TextStyle(
               fontSize: 17,
               height: 1.12,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
               color: VideoLessonDetailPalette.text,
             ),
           ),
@@ -418,7 +403,7 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
       decoration: BoxDecoration(
         color: color.withOpacity(0.08),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(0.16)),
+        border: Border.all(color: Colors.transparent, width: 0),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -443,20 +428,8 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 30,
-          height: 30,
-          decoration: BoxDecoration(
-            gradient: VideoLessonDetailPalette.greenGradient,
-            borderRadius: BorderRadius.circular(11),
-          ),
-          child: const Icon(
-            Icons.play_arrow_rounded,
-            color: Colors.white,
-            size: 22,
-          ),
-        ),
-        const SizedBox(width: 10),
+        const CmrVideoDot(size: 7),
+        const SizedBox(width: 9),
         Flexible(
           child: Text(
             currentLesson?.title.trim().isNotEmpty == true
@@ -753,7 +726,7 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
             style: const TextStyle(
               fontSize: 24,
               height: 1.12,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
               letterSpacing: -0.3,
               color: VideoLessonDetailPalette.text,
             ),
@@ -1039,7 +1012,7 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
       decoration: BoxDecoration(
         color: VideoLessonDetailPalette.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: VideoLessonDetailPalette.border),
+        border: Border.all(color: Colors.transparent, width: 0),
       ),
       child: const Column(
         children: [
@@ -1083,7 +1056,7 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
       decoration: BoxDecoration(
         color: VideoLessonDetailPalette.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: VideoLessonDetailPalette.border),
+        border: Border.all(color: Colors.transparent, width: 0),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1330,7 +1303,7 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
         },
         child: Scaffold(
           backgroundColor: VideoLessonDetailPalette.background,
-          appBar: AppBar(
+          appBar: widget.embedded ? null : AppBar(
             elevation: 0,
             backgroundColor: VideoLessonDetailPalette.white,
             surfaceTintColor: Colors.transparent,
@@ -1346,16 +1319,16 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
                     tooltip: 'Редактировать',
                     onPressed: _editLesson,
                     icon: Container(
-                      width: 38,
-                      height: 38,
+                      width: 34,
+                      height: 34,
                       decoration: BoxDecoration(
-                        gradient: VideoLessonDetailPalette.greenGradient,
-                        borderRadius: BorderRadius.circular(13),
+                        color: CmrVideoColors.greenSoft,
+                        borderRadius: BorderRadius.circular(9),
                       ),
                       child: const Icon(
                         Icons.edit_rounded,
-                        color: Colors.white,
-                        size: 20,
+                        color: CmrVideoColors.greenDark,
+                        size: 17,
                       ),
                     ),
                   ),
@@ -1375,7 +1348,9 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
                           final isWide = width >= 980;
                           final isPhone = width < 640;
 
-                          final pagePadding = isWide
+                          final pagePadding = widget.embedded
+                              ? const EdgeInsets.fromLTRB(16, 14, 16, 22)
+                              : isWide
                               ? const EdgeInsets.fromLTRB(24, 18, 24, 30)
                               : isPhone
                                   ? const EdgeInsets.fromLTRB(12, 10, 12, 22)

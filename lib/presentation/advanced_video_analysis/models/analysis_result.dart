@@ -7,12 +7,30 @@ class AnalysisResult {
   final Map<String, dynamic> stats;
   final int frame;
   final double timestamp;
+  final Map<String, dynamic>? ball;
+  final List<Map<String, dynamic>> events;
+  final List<Map<String, dynamic>> recentEvents;
+  final List<Map<String, dynamic>> advice;
+  final List<Map<String, dynamic>> recentAdvice;
+  final Map<String, dynamic> telemetry;
+  final String matchLiveId;
+  final String sourceMode;
+  final String frameJpegBase64;
 
   AnalysisResult({
     required this.players,
     required this.stats,
     required this.frame,
     required this.timestamp,
+    this.ball,
+    this.events = const [],
+    this.recentEvents = const [],
+    this.advice = const [],
+    this.recentAdvice = const [],
+    this.telemetry = const {},
+    this.matchLiveId = '',
+    this.sourceMode = 'recording',
+    this.frameJpegBase64 = '',
   });
 
   factory AnalysisResult.fromJson(Map<String, dynamic> json) {
@@ -46,7 +64,28 @@ class AnalysisResult {
       stats: rawStats,
       frame: _asInt(normalized['frame'] ?? normalized['frame_index'] ?? normalized['frameIndex']),
       timestamp: _asDouble(normalized['time_ms'] ?? normalized['timestamp_ms'] ?? normalized['timestamp'] ?? normalized['time']),
+      ball: normalized['ball'] is Map
+          ? Map<String, dynamic>.from(normalized['ball'] as Map)
+          : null,
+      events: _mapList(normalized['events']),
+      recentEvents: _mapList(normalized['recent_events'] ?? normalized['recentEvents']),
+      advice: _mapList(normalized['advice']),
+      recentAdvice: _mapList(normalized['recent_advice'] ?? normalized['recentAdvice']),
+      telemetry: normalized['telemetry'] is Map
+          ? Map<String, dynamic>.from(normalized['telemetry'] as Map)
+          : const {},
+      matchLiveId: (normalized['match_live_id'] ?? normalized['matchLiveId'] ?? '').toString(),
+      sourceMode: (normalized['source_mode'] ?? normalized['sourceMode'] ?? 'recording').toString(),
+      frameJpegBase64: (normalized['frame_jpeg_base64'] ?? '').toString(),
     );
+  }
+
+  static List<Map<String, dynamic>> _mapList(dynamic raw) {
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList(growable: false);
   }
 
   static Map<String, dynamic> _unwrap(Map<String, dynamic> json) {

@@ -38,6 +38,61 @@ class TrackerLiveApi {
     return int.tryParse('${json['live_session_id'] ?? json['id'] ?? 0}') ?? 0;
   }
 
+  /// Перед Team Live серверное назначение должно совпадать с составом,
+  /// выбранным на планшете. replace_existing=1 атомарно переносит GPS к текущему
+  /// игроку и не даёт старой привязке сорвать всю командную транзакцию.
+  Future<void> syncTrackerBinding({
+    required int clubId,
+    required int teamId,
+    required int playerId,
+    required String deviceUuid,
+    required String deviceName,
+    int? batteryPercent,
+  }) async {
+    await _post(
+      '$apiBaseUrl/save_tracker_device.php',
+      {
+        'action': 'bind',
+        'club_id': clubId,
+        'team_id': teamId,
+        'player_id': playerId,
+        'device_uuid': deviceUuid,
+        'device_name': deviceName,
+        'battery_percent': batteryPercent,
+        'replace_existing': 1,
+      },
+      timeout: const Duration(seconds: 4),
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> startTeamLiveSessions({
+    required int clubId,
+    required int teamId,
+    int? fieldId,
+    required List<Map<String, dynamic>> bindings,
+    String activityType = 'football_field',
+    bool fieldRequired = false,
+    String? clientSessionKey,
+    int? startedAtMs,
+  }) async {
+    final json =
+        await _post('$apiBaseUrl/start_team_tracker_live_sessions.php', {
+      'club_id': clubId,
+      'team_id': teamId,
+      'field_id': fieldId,
+      'bindings': bindings,
+      'activity_type': activityType,
+      'field_required': fieldRequired ? 1 : 0,
+      'client_session_key': clientSessionKey,
+      'started_at_ms': startedAtMs,
+    }, timeout: const Duration(seconds: 4));
+    final sessions = (json['sessions'] as List? ?? const []);
+    return sessions
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList(growable: false);
+  }
+
   Future<Map<String, dynamic>> saveLivePoint(TrackerLivePointPayload payload) {
     return _post('$apiBaseUrl/save_tracker_live_point.php', payload.toJson());
   }
@@ -60,7 +115,9 @@ class TrackerLiveApi {
       'device_name': sample.deviceName,
       'bpm': sample.bpm,
       'battery_percent': sample.batteryPercent,
-      'sensor_contact': sample.sensorContactDetected == null ? null : (sample.sensorContactDetected! ? 1 : 0),
+      'sensor_contact': sample.sensorContactDetected == null
+          ? null
+          : (sample.sensorContactDetected! ? 1 : 0),
       'rr_intervals_ms': sample.rrIntervalsMs,
       'measured_at': sample.measuredAt.toIso8601String(),
     });
@@ -71,13 +128,29 @@ class TrackerLiveApi {
     int? fieldId,
   }) async {
     final json = await _get(
-      '$apiBaseUrl/get_tracker_live_state.php?team_id=$teamId${fieldId == null ? '' : '&field_id=$fieldId'}',
+      '$apiBaseUrl/get_tracker_live_state.php?team_id=$teamId'
+      '&scope=team&exclude_personal=1&personal_session=0'
+      '${fieldId == null ? '' : '&field_id=$fieldId'}',
     );
 
     final list = (json['sessions'] as List? ?? const []);
     return list
-        .map((e) => TrackerLiveSessionModel.fromJson(Map<String, dynamic>.from(e as Map)))
+        .map((e) => TrackerLiveSessionModel.fromJson(
+            Map<String, dynamic>.from(e as Map)))
         .toList();
+  }
+
+  Future<TrackerLiveEventsPage> loadTeamLiveEvents({
+    required int teamId,
+    int afterPointId = 0,
+    int limit = 500,
+  }) async {
+    final safeLimit = limit.clamp(100, 1200);
+    final json = await _get(
+      '$apiBaseUrl/get_tracker_live_events.php?team_id=$teamId'
+      '&after_point_id=$afterPointId&limit=$safeLimit',
+    );
+    return TrackerLiveEventsPage.fromJson(json);
   }
 
   Future<void> heartbeatLiveSession({
@@ -100,10 +173,92 @@ class TrackerLiveApi {
     });
   }
 
-  Future<Map<String, dynamic>> saveLiveMetricSnapshot(Map<String, dynamic> payload) {
-    return _post('$apiBaseUrl/save_tracker_metric_snapshot.php', payload);
+  Future<int> createOfflineRecoveryJob({
+    required int liveSessionId,
+    required int finalSessionId,
+    required int teamId,
+    required int playerId,
+    required String deviceUuid,
+    required String deviceName,
+    required int liveStartedMs,
+    required int liveStoppedMs,
+    required List<Map<String, dynamic>> gaps,
+  }) async {
+    final json = await _post('$apiBaseUrl/tracker_offline_recovery.php', {
+      'action': 'create_job',
+      'live_session_id': liveSessionId,
+      'final_session_id': finalSessionId,
+      'team_id': teamId,
+      'player_id': playerId,
+      'device_uuid': deviceUuid,
+      'device_name': deviceName,
+      'live_started_ms': liveStartedMs,
+      'live_stopped_ms': liveStoppedMs,
+      'gaps': gaps,
+    });
+    return int.tryParse('${json['job_id'] ?? 0}') ?? 0;
   }
 
+  Future<List<Map<String, dynamic>>> loadPendingOfflineRecoveryJobs({
+    required int teamId,
+    required String deviceUuid,
+    String? deviceName,
+    int? playerId,
+  }) async {
+    final url = '$apiBaseUrl/tracker_offline_recovery.php'
+        '?action=list_jobs'
+        '&team_id=$teamId'
+        '&device_uuid=${Uri.encodeQueryComponent(deviceUuid)}'
+        '${deviceName == null || deviceName.trim().isEmpty ? '' : '&device_name=${Uri.encodeQueryComponent(deviceName.trim())}'}'
+        '${playerId == null ? '' : '&player_id=$playerId'}';
+    final json = await _get(url);
+    return (json['jobs'] as List? ?? const <dynamic>[])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList(growable: false);
+  }
+
+  Future<void> markOfflineRecoveryWaiting({
+    required int jobId,
+    required String message,
+  }) async {
+    await _post('$apiBaseUrl/tracker_offline_recovery.php', {
+      'action': 'mark_waiting',
+      'job_id': jobId,
+      'message': message,
+    });
+  }
+
+  Future<void> uploadOfflineRecoveryChunk({
+    required int jobId,
+    required Map<String, dynamic> record,
+    required List<Map<String, dynamic>> points,
+    bool reset = false,
+  }) async {
+    await _post('$apiBaseUrl/tracker_offline_recovery.php', {
+      'action': 'upload_chunk',
+      'job_id': jobId,
+      'record': record,
+      'points': points,
+      'reset': reset ? 1 : 0,
+    }, timeout: const Duration(seconds: 60));
+  }
+
+  Future<Map<String, dynamic>> finalizeOfflineRecovery({
+    required int jobId,
+    required Map<String, dynamic> record,
+  }) async {
+    return _post('$apiBaseUrl/tracker_offline_recovery.php', {
+      'action': 'finalize',
+      'job_id': jobId,
+      'record': record,
+    }, timeout: const Duration(minutes: 5));
+  }
+
+  Future<Map<String, dynamic>> saveLiveMetricSnapshot(
+      Map<String, dynamic> payload) {
+    return _post('$apiBaseUrl/save_tracker_metric_snapshot.php', payload);
+  }
 
   Future<Map<String, dynamic>> saveLiveAsTrackerSession({
     required int clubId,
@@ -129,7 +284,6 @@ class TrackerLiveApi {
       'source': 'live',
     });
   }
-
 
   Future<List<Map<String, dynamic>>> loadMetricSnapshotsByDate({
     required int teamId,
@@ -189,18 +343,20 @@ class TrackerLiveApi {
     return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
 
-
   Future<List<Map<String, dynamic>>> loadLivePeriods({
     required int liveSessionId,
   }) async {
     try {
-      final json = await _get('$apiBaseUrl/get_tracker_session_periods.php?live_session_id=$liveSessionId&mode=live');
-      final list = (json['periods'] as List? ?? json['items'] as List? ?? const []);
+      final json = await _get(
+          '$apiBaseUrl/get_tracker_session_periods.php?live_session_id=$liveSessionId&mode=live');
+      final list =
+          (json['periods'] as List? ?? json['items'] as List? ?? const []);
       return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
     } catch (e) {
       // Старый PHP падал с Unknown column live_session_id. Периоды не должны ломать Live.
       final text = e.toString();
-      if (text.contains('live_session_id') || text.contains('get_tracker_session_periods')) {
+      if (text.contains('live_session_id') ||
+          text.contains('get_tracker_session_periods')) {
         return const <Map<String, dynamic>>[];
       }
       rethrow;
@@ -230,14 +386,18 @@ class TrackerLiveApi {
     return _decode(response.body);
   }
 
-  Future<Map<String, dynamic>> _post(String url, Map<String, dynamic> body) async {
+  Future<Map<String, dynamic>> _post(
+    String url,
+    Map<String, dynamic> body, {
+    Duration timeout = const Duration(seconds: 25),
+  }) async {
     final response = await http
         .post(
           Uri.parse(url),
           headers: {'Content-Type': 'application/json; charset=utf-8'},
           body: jsonEncode(body),
         )
-        .timeout(const Duration(seconds: 25));
+        .timeout(timeout);
     return _decode(response.body);
   }
 
@@ -245,7 +405,8 @@ class TrackerLiveApi {
     final trimmed = body.trim();
 
     if (trimmed.isEmpty) {
-      throw Exception('Сервер вернул пустой ответ. Проверьте PHP-файл и подключение db.php.');
+      throw Exception(
+          'Сервер вернул пустой ответ. Проверьте PHP-файл и подключение db.php.');
     }
 
     final start = trimmed.indexOf('{');

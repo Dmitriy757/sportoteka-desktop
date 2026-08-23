@@ -33,10 +33,7 @@ target 'Runner' do
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
 
-  # 👉 ВЫРОВНЯЕМ ML Kit ПОДЫ ПОД GoogleMLKit 5.0.0
-  pod 'MLKitPoseDetection', '1.0.0-beta12'
-  pod 'MLKitPoseDetectionAccurate', '1.0.0-beta12'
-  # (эти версии тянут MLKitCommon ~> 10.0 и MLKitVision ~> 6.0)
+  
 
   target 'RunnerTests' do
     inherit! :search_paths

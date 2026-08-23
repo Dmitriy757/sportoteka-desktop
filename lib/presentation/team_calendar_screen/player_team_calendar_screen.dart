@@ -138,7 +138,7 @@ class _PlayerTeamCalendarScreenState extends State<PlayerTeamCalendarScreen> {
             eventTypeLabel(t),
             style: const TextStyle(
               fontSize: 12,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
               color: Color(0xFF374151),
             ),
           ),
@@ -188,7 +188,7 @@ class _PlayerTeamCalendarScreenState extends State<PlayerTeamCalendarScreen> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                   color: active ? primary : const Color(0xFF111827),
                 ),
               ),
@@ -232,7 +232,7 @@ class _PlayerTeamCalendarScreenState extends State<PlayerTeamCalendarScreen> {
             "Режим игрока • VIEW",
             style: TextStyle(
               color: primary,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
               fontSize: 11,
             ),
           ),
@@ -261,7 +261,7 @@ class _PlayerTeamCalendarScreenState extends State<PlayerTeamCalendarScreen> {
           "Календарь — ${widget.teamName}",
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontWeight: FontWeight.w900),
+          style: const TextStyle(fontWeight: FontWeight.w600),
         ),
         actions: [
           IconButton(
@@ -287,7 +287,7 @@ class _PlayerTeamCalendarScreenState extends State<PlayerTeamCalendarScreen> {
                   child: Text(
                     "Только просмотр",
                     style: const TextStyle(
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                       fontSize: 13,
                       color: Color(0xFF111827),
                     ),
@@ -329,7 +329,7 @@ class _PlayerTeamCalendarScreenState extends State<PlayerTeamCalendarScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                       fontSize: 15,
                     ),
                   ),
@@ -447,7 +447,7 @@ class _SelectedDayAgendaPlayer extends StatelessWidget {
                 child: Text(
                   "События на ${dd(day)}",
                   style: const TextStyle(
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                     fontSize: 14,
                   ),
                 ),
@@ -462,7 +462,7 @@ class _SelectedDayAgendaPlayer extends StatelessWidget {
                   "только просмотр",
                   style: TextStyle(
                     fontSize: 11,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                     color: Color(0xFF6B7280),
                   ),
                 ),
@@ -491,7 +491,7 @@ class _SelectedDayAgendaPlayer extends StatelessWidget {
                   "Ещё: ${items.length - show.length}",
                   style: const TextStyle(
                     fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: Color(0xFF6B7280),
                   ),
                 ),
@@ -547,7 +547,7 @@ class _AgendaTilePlayer extends StatelessWidget {
                 children: [
                   Text(
                     e.title,
-                    style: const TextStyle(fontWeight: FontWeight.w900),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -557,7 +557,7 @@ class _AgendaTilePlayer extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 12,
                       color: Color(0xFF6B7280),
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,

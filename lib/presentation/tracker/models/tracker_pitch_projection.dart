@@ -35,6 +35,8 @@ class TrackerPitchProjector {
     final aLng = field.cornerALng;
     final bLat = field.cornerBLat;
     final bLng = field.cornerBLng;
+    final cLat = field.cornerCLat;
+    final cLng = field.cornerCLng;
     final dLat = field.cornerDLat;
     final dLng = field.cornerDLng;
 
@@ -42,6 +44,8 @@ class TrackerPitchProjector {
         aLng == null ||
         bLat == null ||
         bLng == null ||
+        cLat == null ||
+        cLng == null ||
         dLat == null ||
         dLng == null) {
       return null;
@@ -65,12 +69,40 @@ class TrackerPitchProjector {
       latitude: dLat,
       longitude: dLng,
     );
+    final c = _toLocalMeters(
+      originLat: aLat,
+      originLng: aLng,
+      latitude: cLat,
+      longitude: cLng,
+    );
 
     final den = _cross(b.x, b.y, d.x, d.y);
     if (den.abs() < 0.000001) return null;
 
-    final u = _cross(p.x, p.y, d.x, d.y) / den;
-    final v = _cross(b.x, b.y, p.x, p.y) / den;
+    // Начальное приближение — прежняя аффинная проекция A/B/D.
+    // Затем учитываем четвёртый угол C и решаем обратное билинейное
+    // преобразование. Это не растягивает реальное трапециевидное поле за
+    // границы виртуальной схемы и точно ставит все четыре угла в 0/1.
+    var u = _cross(p.x, p.y, d.x, d.y) / den;
+    var v = _cross(b.x, b.y, p.x, p.y) / den;
+    final ex = c.x - b.x - d.x;
+    final ey = c.y - b.y - d.y;
+    for (var iteration = 0; iteration < 7; iteration++) {
+      final fx = b.x * u + d.x * v + ex * u * v - p.x;
+      final fy = b.y * u + d.y * v + ey * u * v - p.y;
+      final j11 = b.x + ex * v;
+      final j12 = d.x + ex * u;
+      final j21 = b.y + ey * v;
+      final j22 = d.y + ey * u;
+      final jacobian = j11 * j22 - j12 * j21;
+      if (jacobian.abs() < 0.000001) break;
+      final deltaU = (fx * j22 - fy * j12) / jacobian;
+      final deltaV = (j11 * fy - j21 * fx) / jacobian;
+      u -= deltaU;
+      v -= deltaV;
+      if (deltaU.abs() + deltaV.abs() < 0.0000001) break;
+    }
+    if (!u.isFinite || !v.isFinite) return null;
 
     final nx = u;
     final ny = v;

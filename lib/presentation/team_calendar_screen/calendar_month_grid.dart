@@ -126,7 +126,7 @@ class CalendarMonthGrid extends StatelessWidget {
                     weekNames[i],
                     style: TextStyle(
                       fontSize: 13,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                       letterSpacing: -0.2,
                       color: isWeekend
                           ? const Color(0xFF6B7280)
@@ -232,7 +232,7 @@ class CalendarMonthGrid extends StatelessWidget {
                                               child: Text(
                                                 "${day.day}",
                                                 style: TextStyle(
-                                                  fontWeight: FontWeight.w900,
+                                                  fontWeight: FontWeight.w600,
                                                   fontSize: 14,
                                                   height: 1.0,
                                                   color: inMonth
@@ -624,7 +624,7 @@ class _CountCircleBadge extends StatelessWidget {
           text,
           style: TextStyle(
             fontSize: 9,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w600,
             height: 1.0,
             letterSpacing: -0.2,
             color: fg,
@@ -652,7 +652,7 @@ class _ExtraEventsBadge extends StatelessWidget {
         "+$count",
         style: const TextStyle(
           fontSize: 9,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w600,
           height: 1.0,
           color: Colors.white,
         ),

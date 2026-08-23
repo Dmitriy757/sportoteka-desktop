@@ -15,6 +15,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart'; // только если где-то используешь PdfPageFormat
 import 'package:share_plus/share_plus.dart';
 
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/plans/plan_exporter.dart';
 import 'package:sportoteka/presentation/plans/plan_folders_screen.dart';
@@ -29,11 +30,11 @@ class ClubDashboardPalette {
   static const lightGreen = Color(0xFFE8F5E9);
 
   static const white = Color(0xFFFFFFFF);
-  static const text = Color(0xFF1A1A1A);
-  static const textMuted = Color(0xFF666666);
-  static const textLight = Color(0xFF999999);
-  static const background = Colors.white;
-  static const border = Color(0xFFE5E7EB);
+  static const text = Color(0xFF111827);
+  static const textMuted = Color(0xFF667085);
+  static const textLight = Color(0xFF98A2B3);
+  static const background = Color(0xFFF7F9F8);
+  static const border = Colors.transparent;
 
   static const greenGradient = LinearGradient(
     colors: [primaryGreen, primaryGreenDark],
@@ -954,7 +955,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> with SingleTickerPr
 
   Future<void> _pickPlanAttachments() async {
     if (uploadingAttachments) return;
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       allowMultiple: true,
       withData: true,
       type: FileType.custom,
@@ -1882,7 +1883,7 @@ Future<void> _pickSchemesForExercise(int exerciseIndex) async {
               label,
               style: TextStyle(
                 color: primary ? Colors.white : ClubDashboardPalette.text,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w500,
                 fontSize: compact ? 11.2 : 11.7,
               ),
             ),
@@ -1953,15 +1954,24 @@ Future<void> _pickSchemesForExercise(int exerciseIndex) async {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  planId == null ? 'Новый план-конспект' : 'План-конспект',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: ClubDashboardPalette.text,
-                    fontWeight: FontWeight.w900,
-                    fontSize: embeddedCompact ? 13.6 : (compact ? 15 : 18),
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const _DetailDotCluster(compact: true),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        planId == null ? 'Новый план-конспект' : 'План-конспект',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: ClubDashboardPalette.text,
+                          fontWeight: FontWeight.w600,
+                          fontSize: embeddedCompact ? 13.2 : (compact ? 14.2 : 16),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 SizedBox(height: embeddedCompact ? 1 : 3),
                 Text(
@@ -1970,7 +1980,7 @@ Future<void> _pickSchemesForExercise(int exerciseIndex) async {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: ClubDashboardPalette.textMuted,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w500,
                     fontSize: embeddedCompact ? 10.2 : 11.5,
                   ),
                 ),
@@ -2059,6 +2069,8 @@ Future<void> _pickSchemesForExercise(int exerciseIndex) async {
         children: [
           Row(
             children: [
+              const _DetailDot(size: 6.5),
+              const SizedBox(width: 8),
               Container(
                 width: 34,
                 height: 34,
@@ -2077,7 +2089,7 @@ Future<void> _pickSchemesForExercise(int exerciseIndex) async {
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14.5),
+                      style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14.5),
                     ),
                     if ((subtitle ?? '').trim().isNotEmpty) ...[
                       const SizedBox(height: 2),
@@ -2087,7 +2099,7 @@ Future<void> _pickSchemesForExercise(int exerciseIndex) async {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: ClubDashboardPalette.textMuted,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w500,
                           fontSize: 11.5,
                         ),
                       ),
@@ -2120,13 +2132,13 @@ Future<void> _pickSchemesForExercise(int exerciseIndex) async {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: const TextStyle(color: ClubDashboardPalette.textMuted, fontSize: 10.5, fontWeight: FontWeight.w700)),
+                Text(label, style: const TextStyle(color: ClubDashboardPalette.textMuted, fontSize: 10.5, fontWeight: FontWeight.w500)),
                 const SizedBox(height: 2),
                 Text(
                   value.trim().isEmpty ? '—' : value.trim(),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900),
+                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
                 ),
               ],
             ),
@@ -2160,7 +2172,7 @@ Future<void> _pickSchemesForExercise(int exerciseIndex) async {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w500,
                         color: ClubDashboardPalette.text,
                         fontSize: compact ? 18 : 22,
                         height: 1.08,
@@ -2402,7 +2414,7 @@ Future<void> _pickSchemesForExercise(int exerciseIndex) async {
                       : const Icon(Icons.save_rounded, color: Colors.white),
                   label: Text(
                     saving ? "Сохранение..." : "Сохранить план",
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: ClubDashboardPalette.primaryGreen,
@@ -2458,23 +2470,46 @@ Future<void> _pickSchemesForExercise(int exerciseIndex) async {
 
   @override
   Widget build(BuildContext context) {
+    final baseTheme = Theme.of(context);
+    final planTextTheme = baseTheme.textTheme.apply(
+      fontFamily: AppTypography.custom(
+        size: 13,
+        weight: FontWeight.w400,
+        color: ClubDashboardPalette.text,
+      ).fontFamily,
+    );
+
+    final Widget content;
     if (widget.embedded) {
-      return Material(
+      content = Material(
         color: Colors.white,
         child: FadeTransition(
           opacity: CurvedAnimation(parent: _anim, curve: Curves.easeInOut),
           child: _buildCmrBody(embedded: true),
         ),
       );
+    } else {
+      content = Scaffold(
+        backgroundColor: ClubDashboardPalette.background,
+        body: SafeArea(
+          child: FadeTransition(
+            opacity: CurvedAnimation(parent: _anim, curve: Curves.easeInOut),
+            child: _buildCmrBody(embedded: false),
+          ),
+        ),
+      );
     }
 
-    return Scaffold(
-      backgroundColor: ClubDashboardPalette.background,
-      body: SafeArea(
-        child: FadeTransition(
-          opacity: CurvedAnimation(parent: _anim, curve: Curves.easeInOut),
-          child: _buildCmrBody(embedded: false),
+    return Theme(
+      data: baseTheme.copyWith(textTheme: planTextTheme),
+      child: DefaultTextStyle.merge(
+        style: AppTypography.custom(
+          size: 12.5,
+          weight: FontWeight.w400,
+          color: ClubDashboardPalette.text,
+          height: 1.25,
         ),
+        child: content,
       ),
     );
   }
@@ -2483,7 +2518,59 @@ Future<void> _pickSchemesForExercise(int exerciseIndex) async {
 
 /// ---------- UI widgets ----------
 
+class _DetailDot extends StatelessWidget {
+  final double size;
+  final Color color;
+  final double opacity;
+  final bool glow;
 
+  const _DetailDot({
+    this.size = 6,
+    this.color = ClubDashboardPalette.primaryGreen,
+    this.opacity = 1,
+    this.glow = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: opacity,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          boxShadow: glow
+              ? [BoxShadow(color: color.withOpacity(.16), blurRadius: size * 2, spreadRadius: .2)]
+              : null,
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailDotCluster extends StatelessWidget {
+  final bool compact;
+  const _DetailDotCluster({this.compact = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final f = compact ? .82 : 1.0;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _DetailDot(size: 3.5 * f, opacity: .22, glow: false),
+        SizedBox(width: 3 * f),
+        _DetailDot(size: 4.5 * f, opacity: .42, glow: false),
+        SizedBox(width: 3 * f),
+        _DetailDot(size: 5.5 * f, opacity: .68, glow: false),
+        SizedBox(width: 3 * f),
+        _DetailDot(size: 6.5 * f),
+      ],
+    );
+  }
+}
 
 class _CmrMiniBadge extends StatelessWidget {
   final IconData icon;
@@ -2512,7 +2599,7 @@ class _CmrMiniBadge extends StatelessWidget {
             style: const TextStyle(
               color: ClubDashboardPalette.text,
               fontSize: 11.5,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],
@@ -2610,9 +2697,9 @@ class _PlanAttachmentsCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Файлы и схемы', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+                    Text('Файлы и схемы', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
                     SizedBox(height: 2),
-                    Text('Перетащите схему, PDF, DOC или изображение', style: TextStyle(color: ClubDashboardPalette.textMuted, fontSize: 11.5, fontWeight: FontWeight.w600)),
+                    Text('Перетащите схему, PDF, DOC или изображение', style: TextStyle(color: ClubDashboardPalette.textMuted, fontSize: 11.5, fontWeight: FontWeight.w500)),
                   ],
                 ),
               ),
@@ -2666,14 +2753,14 @@ class _PlanAttachmentsCard extends StatelessWidget {
                             uploading ? 'Загрузка файлов...' : 'Перетащить или выбрать файл',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: ClubDashboardPalette.text, fontWeight: FontWeight.w900, fontSize: 12.5),
+                            style: const TextStyle(color: ClubDashboardPalette.text, fontWeight: FontWeight.w500, fontSize: 12.5),
                           ),
                           const SizedBox(height: 2),
                           const Text(
                             'PDF, DOC, Excel, PPT, PNG/JPG/WebP/SVG',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: ClubDashboardPalette.textMuted, fontSize: 10.8, fontWeight: FontWeight.w600),
+                            style: TextStyle(color: ClubDashboardPalette.textMuted, fontSize: 10.8, fontWeight: FontWeight.w500),
                           ),
                         ],
                       ),
@@ -2700,7 +2787,7 @@ class _PlanAttachmentsCard extends StatelessWidget {
                     Icon(_iconFor(name), color: _isImage(name) ? const Color(0xFF2563EB) : ClubDashboardPalette.primaryGreen, size: 20),
                     const SizedBox(width: 9),
                     Expanded(
-                      child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.2)),
+                      child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12.2)),
                     ),
                     IconButton(tooltip: 'Открыть', onPressed: () => onOpen(e), icon: const Icon(Icons.open_in_new_rounded, size: 18), visualDensity: VisualDensity.compact),
                     IconButton(tooltip: 'Удалить', onPressed: () => onDelete(e), icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18), visualDensity: VisualDensity.compact),
@@ -2746,7 +2833,7 @@ class _AttachmentCounter extends StatelessWidget {
             style: TextStyle(
               color: accent ? const Color(0xFF1D4ED8) : ClubDashboardPalette.textMuted,
               fontSize: 10.5,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],
@@ -2788,7 +2875,7 @@ class _AccountTypeCard extends StatelessWidget {
               Text(
                 isClubAccount ? "Аккаунт КЛУБА" : "Аккаунт ТРЕНЕРА",
                 style: TextStyle(
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w500,
                   fontSize: 14,
                   color: isClubAccount ? Colors.orange.shade800 : Colors.blue.shade800,
                 ),
@@ -2800,14 +2887,14 @@ class _AccountTypeCard extends StatelessWidget {
             isClubAccount
                 ? "Вы вошли под аккаунтом клуба. Все планы будут создаваться для этого клуба."
                 : "Вы вошли под аккаунтом тренера. Планы будут создаваться для выбранной команды.",
-            style: const TextStyle(fontWeight: FontWeight.w600),
+            style: const TextStyle(fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 8),
           Text(
             "Клуб: $clubName",
             style: TextStyle(
               color: isClubAccount ? Colors.orange.shade700 : Colors.blue.shade700,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],
@@ -2868,7 +2955,7 @@ class _HeaderCard extends StatelessWidget {
                         clubName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14),
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 14),
                       ),
                     ),
                     if (isRealClub) ...[
@@ -2884,7 +2971,7 @@ class _HeaderCard extends StatelessWidget {
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 8,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w500,
                             letterSpacing: 0.5,
                           ),
                         ),
@@ -2897,14 +2984,14 @@ class _HeaderCard extends StatelessWidget {
                   teamName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: Colors.white.withOpacity(0.92), fontWeight: FontWeight.w700, fontSize: 12),
+                  style: TextStyle(color: Colors.white.withOpacity(0.92), fontWeight: FontWeight.w500, fontSize: 12),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   isClubAccount ? "Клуб-аккаунт" : "Тренер: $trainerName",
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: Colors.white.withOpacity(0.92), fontWeight: FontWeight.w700, fontSize: 12),
+                  style: TextStyle(color: Colors.white.withOpacity(0.92), fontWeight: FontWeight.w500, fontSize: 12),
                 ),
               ],
             ),
@@ -2943,7 +3030,7 @@ class _RealClubInfoCard extends StatelessWidget {
               Text(
                 "Реальный клуб",
                 style: TextStyle(
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w500,
                   fontSize: 14,
                   color: Colors.green.shade800,
                 ),
@@ -2953,14 +3040,14 @@ class _RealClubInfoCard extends StatelessWidget {
           const SizedBox(height: 8),
           const Text(
             "Используется ваш реальный клуб:",
-            style: TextStyle(fontWeight: FontWeight.w700),
+            style: TextStyle(fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 4),
           Text(
             "$clubName",
             style: TextStyle(
               color: Colors.green.shade800,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w500,
               fontSize: 16,
             ),
           ),
@@ -3008,7 +3095,7 @@ class _ClubFoldersInfoCard extends StatelessWidget {
               Text(
                 "Папки клуба",
                 style: TextStyle(
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w500,
                   fontSize: 14,
                   color: Colors.blue.shade800,
                 ),
@@ -3018,7 +3105,7 @@ class _ClubFoldersInfoCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             "Клуб: $clubName",
-            style: const TextStyle(fontWeight: FontWeight.w700),
+            style: const TextStyle(fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 8),
           Text(
@@ -3033,7 +3120,7 @@ class _ClubFoldersInfoCard extends StatelessWidget {
               icon: Icon(Icons.folder_open, color: Colors.blue.shade700),
               label: Text(
                 "Посмотреть папки клуба",
-                style: TextStyle(color: Colors.blue.shade700, fontWeight: FontWeight.w800),
+                style: TextStyle(color: Colors.blue.shade700, fontWeight: FontWeight.w500),
               ),
               style: OutlinedButton.styleFrom(
                 side: BorderSide(color: Colors.blue.shade400),
@@ -3084,7 +3171,7 @@ class _FolderSelectorCard extends StatelessWidget {
             children: [
               Icon(Icons.folder_outlined, color: ClubDashboardPalette.primaryGreen, size: 20),
               SizedBox(width: 8),
-              Text("Папка для сохранения", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+              Text("Папка для сохранения", style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
             ],
           ),
           const SizedBox(height: 10),
@@ -3117,7 +3204,7 @@ class _FolderSelectorCard extends StatelessWidget {
                         Text(
                           displayName,
                           style: TextStyle(
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w500,
                             fontSize: 15,
                             color: hasFolder ? ClubDashboardPalette.text : Colors.grey.shade600,
                           ),
@@ -3128,7 +3215,7 @@ class _FolderSelectorCard extends StatelessWidget {
                             style: const TextStyle(
                               color: ClubDashboardPalette.textMuted,
                               fontSize: 11,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                       ],
@@ -3142,7 +3229,7 @@ class _FolderSelectorCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             hasFolder ? "План будет сохранён в этой папке" : "Нажмите, чтобы выбрать папку для сохранения плана",
-            style: const TextStyle(color: ClubDashboardPalette.textMuted, fontSize: 12, fontWeight: FontWeight.w600),
+            style: const TextStyle(color: ClubDashboardPalette.textMuted, fontSize: 12, fontWeight: FontWeight.w500),
           ),
         ],
       ),
@@ -3179,7 +3266,7 @@ class _ExercisesBlock extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("Упражнения", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+          const Text("Упражнения", style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
           const SizedBox(height: 10),
           if (exercises.isEmpty)
             const Text("Пока нет упражнений.", style: TextStyle(color: ClubDashboardPalette.textMuted))
@@ -3334,7 +3421,7 @@ class _ExerciseCard extends StatelessWidget {
                 child: Center(
                   child: Text(
                     "${index + 1}",
-                    style: const TextStyle(fontWeight: FontWeight.w900, color: ClubDashboardPalette.primaryGreen),
+                    style: const TextStyle(fontWeight: FontWeight.w500, color: ClubDashboardPalette.primaryGreen),
                   ),
                 ),
               ),
@@ -3344,7 +3431,7 @@ class _ExerciseCard extends StatelessWidget {
                   title.isEmpty ? "Упражнение" : title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w900),
+                  style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
               ),
               const SizedBox(width: 8),
@@ -3355,7 +3442,7 @@ class _ExerciseCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(999),
                   border: Border.all(color: ClubDashboardPalette.border),
                 ),
-                child: Text("$dur мин", style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+                child: Text("$dur мин", style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12)),
               ),
             ],
           ),
@@ -3562,7 +3649,7 @@ class _ExerciseCard extends StatelessWidget {
               label,
               style: const TextStyle(
                 color: ClubDashboardPalette.textMuted,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w500,
                 fontSize: 12,
               ),
             ),
@@ -3571,7 +3658,7 @@ class _ExerciseCard extends StatelessWidget {
               v.isEmpty ? "—" : v,
               style: TextStyle(
                 color: v.isEmpty ? Colors.grey.shade500 : ClubDashboardPalette.text,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ],
@@ -3641,7 +3728,7 @@ class _ExerciseCard extends StatelessWidget {
                         Expanded(
                           child: Text(
                             title,
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -3708,7 +3795,7 @@ class _ExerciseCard extends StatelessWidget {
                               ),
                               child: const Text(
                                 "Готово",
-                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
                               ),
                             ),
                           ),
@@ -3765,7 +3852,7 @@ class _InfoBanner extends StatelessWidget {
               text,
               style: const TextStyle(
                 color: ClubDashboardPalette.text,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w500,
                 fontSize: 12,
                 height: 1.25,
               ),
@@ -3793,7 +3880,7 @@ class _ErrorView extends StatelessWidget {
           children: [
             const Icon(Icons.wifi_off_rounded, size: 44, color: ClubDashboardPalette.primaryGreen),
             const SizedBox(height: 10),
-            Text(text, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text(text, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w500)),
             const SizedBox(height: 12),
             if (onRetry != null)
               ElevatedButton(
@@ -3882,7 +3969,7 @@ class _ExportsArchiveCard extends StatelessWidget {
               const Icon(Icons.archive_outlined, color: ClubDashboardPalette.primaryGreen),
               const SizedBox(width: 8),
               const Expanded(
-                child: Text("Архив экспортов (PDF/DOC)", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+                child: Text("Архив экспортов (PDF/DOC)", style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
               ),
               IconButton(
                 tooltip: "Обновить",
@@ -3907,7 +3994,7 @@ class _ExportsArchiveCard extends StatelessWidget {
           else if (exports.isEmpty)
             const Text(
               "Пока нет экспортов. Сделайте экспорт PDF/DOC — файл появится здесь.",
-              style: TextStyle(color: ClubDashboardPalette.textMuted, fontWeight: FontWeight.w600),
+              style: TextStyle(color: ClubDashboardPalette.textMuted, fontWeight: FontWeight.w500),
             )
           else
             Column(
@@ -3963,7 +4050,7 @@ class _ExportsArchiveCard extends StatelessWidget {
                                       name,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontWeight: FontWeight.w900),
+                                      style: const TextStyle(fontWeight: FontWeight.w500),
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
@@ -3971,7 +4058,7 @@ class _ExportsArchiveCard extends StatelessWidget {
                                       style: const TextStyle(
                                         color: ClubDashboardPalette.textMuted,
                                         fontSize: 12,
-                                        fontWeight: FontWeight.w700,
+                                        fontWeight: FontWeight.w500,
                                       ),
                                     ),
                                   ],
@@ -4044,7 +4131,7 @@ class _ExportsDateChipHeader extends StatelessWidget {
                 const SizedBox(width: 6),
                 Text(
                   title,
-                  style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF374151)),
+                  style: const TextStyle(fontWeight: FontWeight.w500, color: Color(0xFF374151)),
                 ),
                 const SizedBox(width: 8),
                 Container(
@@ -4056,7 +4143,7 @@ class _ExportsDateChipHeader extends StatelessWidget {
                   ),
                   child: Text(
                     "$count",
-                    style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF6B7280)),
+                    style: const TextStyle(fontWeight: FontWeight.w500, color: Color(0xFF6B7280)),
                   ),
                 ),
               ],

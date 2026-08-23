@@ -48,11 +48,13 @@ class _PlayerHighlightsScreenState extends State<PlayerHighlightsScreen> {
     final mediaCtrl = TextEditingController();
 
     await Get.bottomSheet(
-      Container(
+      GameZoneCmr.surface(
+        context,
+        child: Container(
         padding: const EdgeInsets.all(16),
         decoration: const BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
         ),
         child: SafeArea(
           top: false,
@@ -62,8 +64,8 @@ class _PlayerHighlightsScreenState extends State<PlayerHighlightsScreen> {
                 const Text(
                   'Добавить лучший момент',
                   style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -118,6 +120,7 @@ class _PlayerHighlightsScreenState extends State<PlayerHighlightsScreen> {
           ),
         ),
       ),
+        ),
       isScrollControlled: true,
     );
   }
@@ -140,17 +143,16 @@ class _PlayerHighlightsScreenState extends State<PlayerHighlightsScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: GzColors.divider),
-      ),
+        borderRadius: BorderRadius.circular(12),
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             h['title'] ?? '',
             style: const TextStyle(
-              fontWeight: FontWeight.w900,
-              fontSize: 17,
+              fontWeight: FontWeight.w600,
+              fontSize: 14.5,
             ),
           ),
           const SizedBox(height: 8),
@@ -165,7 +167,7 @@ class _PlayerHighlightsScreenState extends State<PlayerHighlightsScreen> {
           Text(
             'Автор: ${h['author_name'] ?? 'Игрок'}',
             style: const TextStyle(
-              fontSize: 12,
+              fontSize: 10.8,
               color: Color(0xFF9CA3AF),
             ),
           ),
@@ -175,7 +177,7 @@ class _PlayerHighlightsScreenState extends State<PlayerHighlightsScreen> {
               mediaUrl,
               style: const TextStyle(
                 color: Color(0xFF2563EB),
-                fontSize: 12,
+                fontSize: 10.8,
               ),
             ),
           ],

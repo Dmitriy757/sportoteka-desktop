@@ -9,6 +9,8 @@ import 'package:sportoteka/core/app_export.dart';
 import 'package:sportoteka/core/push/push_service.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/core/utils/validation_functions.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
+import 'package:sportoteka/presentation/my_profile_screen/my_profile_screen.dart';
 
 import 'controller/login_controller.dart';
 
@@ -29,12 +31,21 @@ class _LoginScreenState extends State<LoginScreen> {
   bool alreadyAgreed = false;
   bool _loading = false;
 
-  static const Color _green = Color(0xFF31C48D);
-  static const Color _greenDark = Color(0xFF11895F);
-  static const Color _ink = Color(0xFF111827);
-  static const Color _muted = Color(0xFF6B7280);
-  static const Color _line = Color(0xFFE5E7EB);
-  static const Color _softBg = Color(0xFFF7FAF9);
+  static const Color _bg = Color(0xFFF6F7F6);
+  static const Color _panel = Colors.white;
+  static const Color _soft = Color(0xFFF7F8F7);
+  static const Color _soft2 = Color(0xFFF2F4F2);
+
+  static const Color _text = Color(0xFF0B0F14);
+  static const Color _secondary = Color(0xFF5F6670);
+  static const Color _subtle = Color(0xFF8A9099);
+  static const Color _divider = Color(0xFFE9ECEA);
+
+  static const Color _green = Color(0xFF00A750);
+  static const Color _greenDark = Color(0xFF067A46);
+  static const Color _greenSoft = Color(0xFFF3FAF6);
+  static const Color _greenSoft2 = Color(0xFFF8FEFA);
+  static const Color _greenBorder = Color(0xFFD7F0E2);
 
   @override
   void initState() {
@@ -87,47 +98,23 @@ class _LoginScreenState extends State<LoginScreen> {
         return false;
       },
       child: Scaffold(
-        backgroundColor: _softBg,
+        backgroundColor: _bg,
         resizeToAvoidBottomInset: true,
         body: SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final bool isWide = constraints.maxWidth >= 1040;
-              final double horizontalPadding = isWide ? 32 : 18;
-              final double verticalPadding = isWide ? 30 : 18;
+              final width = constraints.maxWidth;
+              final bool desktop = width >= 980;
+              final bool tablet = width >= 700 && width < 980;
 
-              return SingleChildScrollView(
-                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                padding: EdgeInsets.symmetric(
-                  horizontal: horizontalPadding,
-                  vertical: verticalPadding,
-                ),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    minHeight: constraints.maxHeight - verticalPadding * 2,
-                  ),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 1060),
-                      child: isWide
-                          ? SizedBox(
-                              height: 620,
-                              child: Row(
-                                children: [
-                                  const Expanded(flex: 5, child: _LoginHeroPanel()),
-                                  const SizedBox(width: 22),
-                                  SizedBox(
-                                    width: 430,
-                                    child: _buildLoginCard(isWide: true),
-                                  ),
-                                ],
-                              ),
-                            )
-                          : _buildLoginCard(isWide: false),
-                    ),
-                  ),
-                ),
-              );
+              if (desktop || tablet) {
+                return _buildTabletDesktop(
+                  constraints: constraints,
+                  desktop: desktop,
+                );
+              }
+
+              return _buildMobile(constraints);
             },
           ),
         ),
@@ -135,71 +122,272 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildLoginCard({required bool isWide}) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.fromLTRB(
-        isWide ? 34 : 22,
-        isWide ? 34 : 24,
-        isWide ? 34 : 22,
-        isWide ? 30 : 24,
+  Widget _buildTabletDesktop({
+    required BoxConstraints constraints,
+    required bool desktop,
+  }) {
+    final horizontal = desktop ? 28.0 : 18.0;
+    final vertical = desktop ? 24.0 : 16.0;
+    final minHeight = desktop ? 650.0 : 620.0;
+
+    // Важно: SingleChildScrollView даёт ребёнку неограниченную высоту.
+    // Внутри экрана есть Row(crossAxisAlignment: stretch) и Spacer(),
+    // поэтому им обязательно нужна конечная высота.
+    //
+    // Делаем дочерний блок фиксированной высоты: не меньше minHeight
+    // и не меньше доступной высоты окна. Если окно ниже minHeight,
+    // внешний scroll просто позволит прокрутить экран.
+    final availableHeight =
+        (constraints.maxHeight - vertical * 2).clamp(0.0, double.infinity);
+    final contentHeight =
+        availableHeight > minHeight ? availableHeight : minHeight;
+
+    return SingleChildScrollView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: EdgeInsets.symmetric(
+        horizontal: horizontal,
+        vertical: vertical,
       ),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(isWide ? 34 : 28),
-        border: Border.all(color: Colors.white.withOpacity(0.75)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 34,
-            offset: const Offset(0, 18),
+      child: SizedBox(
+        height: contentHeight,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: desktop ? 1180 : 900,
+            ),
+            child: SizedBox(
+              height: contentHeight,
+              child: Container(
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: _panel,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: _divider.withOpacity(.82),
+                    width: .8,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(.035),
+                      blurRadius: 28,
+                      spreadRadius: -18,
+                      offset: const Offset(0, 16),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      flex: desktop ? 10 : 9,
+                      child: _buildInfoPane(desktop: desktop),
+                    ),
+                    Container(
+                      width: 1,
+                      color: _divider,
+                    ),
+                    Expanded(
+                      flex: desktop ? 11 : 10,
+                      child: _buildFormPane(
+                        desktop: desktop,
+                        mobile: false,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobile(BoxConstraints constraints) {
+    return SingleChildScrollView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: const EdgeInsets.fromLTRB(12, 14, 12, 22),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minHeight: constraints.maxHeight - 36,
+        ),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Container(
+              width: double.infinity,
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: _panel,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: _divider.withOpacity(.82),
+                  width: .8,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildMobileHeader(),
+                  Container(height: 1, color: _divider),
+                  _buildFormPane(
+                    desktop: false,
+                    mobile: true,
+                  ),
+                  Container(height: 1, color: _divider),
+                  _buildMobileBenefits(),
+                  Container(height: 1, color: _divider),
+                  _buildFooter(mobile: true),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoPane({required bool desktop}) {
+    return Container(
+      color: _panel,
+      padding: EdgeInsets.fromLTRB(
+        desktop ? 40 : 28,
+        desktop ? 34 : 28,
+        desktop ? 40 : 28,
+        desktop ? 28 : 24,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildBrand(compact: false),
+          SizedBox(height: desktop ? 72 : 52),
+          Text(
+            'Добро пожаловать\nв Sportoteka',
+            style: _titleStyle(desktop ? 30 : 27),
+          ),
+          const SizedBox(height: 12),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 390),
+            child: Text(
+              'Войдите в аккаунт. После авторизации Sportoteka откроет ваш профиль и доступные рабочие пространства.',
+              style: _bodyStyle(desktop ? 14.2 : 13.8),
+            ),
+          ),
+          SizedBox(height: desktop ? 44 : 32),
+          const _LoginBenefit(
+            icon: Icons.groups_2_outlined,
+            title: 'Управление командой',
+            subtitle: 'Состав, тренировки, календарь и развитие игроков',
+          ),
+          const SizedBox(height: 24),
+          const _LoginBenefit(
+            icon: Icons.query_stats_outlined,
+            title: 'Аналитика и отчёты',
+            subtitle: 'Метрики, тестирование, динамика и показатели',
+          ),
+          const SizedBox(height: 24),
+          const _LoginBenefit(
+            icon: Icons.verified_user_outlined,
+            title: 'Единая рабочая среда',
+            subtitle: 'Все основные модули в едином интерфейсе Sportoteka',
+          ),
+          const Spacer(),
+          _buildFooter(mobile: false),
         ],
       ),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (!isWide) ...[
-              const Center(child: _SportotekaMark(size: 62)),
-              const SizedBox(height: 18),
-            ],
-            Text(
-              'Вход в систему',
-              textAlign: isWide ? TextAlign.left : TextAlign.center,
-              style: const TextStyle(
-                color: _ink,
-                fontSize: 28,
-                height: 1.08,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.6,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Добро пожаловать в Sportoteka. Войдите, чтобы открыть профиль, клубный кабинет и рабочие модули.',
-              textAlign: isWide ? TextAlign.left : TextAlign.center,
-              style: const TextStyle(
-                color: _muted,
-                fontSize: 14.5,
-                height: 1.55,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            SizedBox(height: isWide ? 30 : 26),
-            _buildEmailField(),
-            const SizedBox(height: 14),
-            _buildPasswordField(),
-            const SizedBox(height: 14),
-            _buildAgreementBlock(),
-            const SizedBox(height: 22),
-            _buildLoginButton(),
-            const SizedBox(height: 18),
-            _buildCreateAccountRow(),
-          ],
+    );
+  }
+
+  Widget _buildMobileHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      child: _buildBrand(compact: true),
+    );
+  }
+
+  Widget _buildBrand({required bool compact}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _SportotekaMark(size: compact ? 34 : 40),
+        const SizedBox(width: 10),
+        Text(
+          'SPORTOTEKA',
+          style: AppTypography.custom(
+            size: compact ? 15.2 : 16.5,
+            weight: FontWeight.w700,
+            color: _text,
+            height: 1,
+            letterSpacing: .15,
+          ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildFormPane({
+    required bool desktop,
+    required bool mobile,
+  }) {
+    return Container(
+      color: _panel,
+      padding: EdgeInsets.fromLTRB(
+        mobile ? 16 : (desktop ? 54 : 34),
+        mobile ? 24 : (desktop ? 64 : 44),
+        mobile ? 16 : (desktop ? 54 : 34),
+        mobile ? 26 : (desktop ? 42 : 34),
+      ),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Form(
+            key: _formKey,
+            child: AutofillGroup(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Вход',
+                    style: _titleStyle(mobile ? 25 : 28),
+                  ),
+                  const SizedBox(height: 7),
+                  Text(
+                    'Введите данные вашей учётной записи',
+                    style: _bodyStyle(mobile ? 12.8 : 13.2),
+                  ),
+                  SizedBox(height: mobile ? 26 : 32),
+                  _fieldLabel('Эл. почта'),
+                  const SizedBox(height: 7),
+                  _buildEmailField(),
+                  const SizedBox(height: 18),
+                  _fieldLabel('Пароль'),
+                  const SizedBox(height: 7),
+                  _buildPasswordField(),
+                  const SizedBox(height: 16),
+                  _buildAgreementBlock(),
+                  const SizedBox(height: 22),
+                  _buildLoginButton(),
+                  const SizedBox(height: 22),
+                  _buildCreateAccountRow(),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _fieldLabel(String text) {
+    return Text(
+      text,
+      style: AppTypography.custom(
+        size: 12,
+        weight: FontWeight.w600,
+        color: _text,
+        height: 1.18,
+        letterSpacing: 0,
       ),
     );
   }
@@ -207,8 +395,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildEmailField() {
     return _LoginTextField(
       controller: controller.emailController,
-      hintText: 'Эл. почта',
-      icon: Icons.alternate_email_rounded,
+      hintText: 'Введите email',
       keyboardType: TextInputType.emailAddress,
       textInputAction: TextInputAction.next,
       autofillHints: const [AutofillHints.email],
@@ -225,8 +412,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return Obx(
       () => _LoginTextField(
         controller: controller.passwordController,
-        hintText: 'Пароль',
-        icon: Icons.lock_outline_rounded,
+        hintText: 'Введите пароль',
         obscureText: isPasswordVisible.value,
         textInputAction: TextInputAction.done,
         autofillHints: const [AutofillHints.password],
@@ -234,13 +420,16 @@ class _LoginScreenState extends State<LoginScreen> {
           if (!_loading) _submitLogin();
         },
         suffixIcon: IconButton(
-          splashRadius: 20,
-          color: _muted,
+          splashRadius: 18,
+          tooltip: isPasswordVisible.value
+              ? 'Показать пароль'
+              : 'Скрыть пароль',
+          color: _secondary,
           icon: Icon(
             isPasswordVisible.value
-                ? Icons.visibility_off_rounded
-                : Icons.visibility_rounded,
-            size: 20,
+                ? Icons.visibility_off_outlined
+                : Icons.visibility_outlined,
+            size: 18,
           ),
           onPressed: () {
             isPasswordVisible.value = !isPasswordVisible.value;
@@ -258,69 +447,68 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildAgreementBlock() {
     return Obx(
-      () => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: _line),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 28,
-              height: 28,
-              child: Checkbox(
-                value: agreedToTerms.value,
-                onChanged: _loading
-                    ? null
-                    : (value) => agreedToTerms.value = value ?? false,
-                activeColor: _greenDark,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6),
+      () => Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _loading
+              ? null
+              : () => agreedToTerms.value = !agreedToTerms.value,
+          borderRadius: BorderRadius.circular(10),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 1),
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: Checkbox(
+                      value: agreedToTerms.value,
+                      onChanged: _loading
+                          ? null
+                          : (value) =>
+                              agreedToTerms.value = value ?? false,
+                      activeColor: _green,
+                      checkColor: Colors.white,
+                      side: const BorderSide(
+                        color: _subtle,
+                        width: 1.1,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        'Я согласен с ',
+                        style: _captionStyle(),
+                      ),
+                      _LinkText(
+                        text: 'Условиями использования',
+                        onTap: () =>
+                            _openUrl('https://sportoteka.by/terms'),
+                      ),
+                      Text(' и ', style: _captionStyle()),
+                      _LinkText(
+                        text: 'Политикой конфиденциальности',
+                        onTap: () =>
+                            _openUrl('https://sportoteka.by/privacy'),
+                      ),
+                      Text('.', style: _captionStyle()),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Wrap(
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  const Text(
-                    'Я согласен с ',
-                    style: TextStyle(
-                      color: _muted,
-                      fontSize: 12.8,
-                      height: 1.45,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  _LinkText(
-                    text: 'Условиями использования',
-                    onTap: () => _openUrl('https://sportoteka.by/terms'),
-                  ),
-                  const Text(
-                    ' и ',
-                    style: TextStyle(
-                      color: _muted,
-                      fontSize: 12.8,
-                      height: 1.45,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  _LinkText(
-                    text: 'Политикой конфиденциальности',
-                    onTap: () => _openUrl('https://sportoteka.by/privacy'),
-                  ),
-                  const Text(
-                    '.',
-                    style: TextStyle(color: _muted, fontSize: 12.8),
-                  ),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -328,68 +516,55 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildLoginButton() {
     return SizedBox(
-      height: 54,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          gradient: _loading
-              ? null
-              : const LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: [_green, _greenDark],
-                ),
-          color: _loading ? const Color(0xFFCBD5E1) : null,
-          boxShadow: _loading
-              ? []
-              : [
-                  BoxShadow(
-                    color: _green.withOpacity(0.32),
-                    blurRadius: 18,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
+      height: 48,
+      child: ElevatedButton(
+        onPressed: _loading ? null : _submitLogin,
+        style: ElevatedButton.styleFrom(
+          elevation: 0,
+          backgroundColor: _green,
+          disabledBackgroundColor: _soft2,
+          foregroundColor: Colors.white,
+          disabledForegroundColor: _subtle,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(9),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
         ),
-        child: ElevatedButton(
-          onPressed: _loading ? null : _submitLogin,
-          style: ButtonStyle(
-            elevation: MaterialStateProperty.all(0),
-            backgroundColor: MaterialStateProperty.all(Colors.transparent),
-            shadowColor: MaterialStateProperty.all(Colors.transparent),
-            overlayColor: MaterialStateProperty.all(Colors.white.withOpacity(0.08)),
-            shape: MaterialStateProperty.all(
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-            ),
-          ),
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            child: _loading
-                ? const SizedBox(
-                    key: ValueKey('loader'),
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.4,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : const Row(
-                    key: ValueKey('text'),
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Войти',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
-                    ],
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 160),
+          child: _loading
+              ? const SizedBox(
+                  key: ValueKey('loader'),
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.2,
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(Colors.white),
                   ),
-          ),
+                )
+              : Row(
+                  key: const ValueKey('text'),
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Войти',
+                      style: AppTypography.custom(
+                        size: 13.2,
+                        weight: FontWeight.w700,
+                        color: Colors.white,
+                        height: 1,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 17,
+                    ),
+                  ],
+                ),
         ),
       ),
     );
@@ -399,31 +574,118 @@ class _LoginScreenState extends State<LoginScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Text(
+        Text(
           'Нет аккаунта?',
-          style: TextStyle(
-            color: _muted,
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
+          style: AppTypography.custom(
+            size: 12.2,
+            weight: FontWeight.w400,
+            color: _secondary,
+            height: 1.2,
+            letterSpacing: 0,
           ),
         ),
-        const SizedBox(width: 6),
+        const SizedBox(width: 5),
         InkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: _loading ? null : () => Get.toNamed(AppRoutes.signUpScreen),
-          child: const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          borderRadius: BorderRadius.circular(8),
+          onTap: _loading
+              ? null
+              : () => Get.toNamed(AppRoutes.signUpScreen),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 3,
+              vertical: 5,
+            ),
             child: Text(
               'Зарегистрироваться',
-              style: TextStyle(
+              style: AppTypography.custom(
+                size: 12.2,
+                weight: FontWeight.w600,
                 color: _greenDark,
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
+                height: 1.2,
+                letterSpacing: 0,
               ),
             ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildMobileBenefits() {
+    return Container(
+      color: _panel,
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: const [
+          _MobileBenefitRow(
+            icon: Icons.groups_2_outlined,
+            title: 'Управление командой',
+            subtitle: 'Состав, тренировки и календарь',
+          ),
+          SizedBox(height: 14),
+          _MobileBenefitRow(
+            icon: Icons.query_stats_outlined,
+            title: 'Аналитика и отчёты',
+            subtitle: 'Показатели, тестирование и динамика',
+          ),
+          SizedBox(height: 14),
+          _MobileBenefitRow(
+            icon: Icons.verified_user_outlined,
+            title: 'Единая рабочая среда',
+            subtitle: 'Профиль и клубные модули Sportoteka',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFooter({required bool mobile}) {
+    return Padding(
+      padding: mobile
+          ? const EdgeInsets.symmetric(horizontal: 16, vertical: 16)
+          : EdgeInsets.zero,
+      child: Text(
+        '© Sportoteka\nВсе права защищены',
+        textAlign: mobile ? TextAlign.center : TextAlign.left,
+        style: AppTypography.custom(
+          size: 10.6,
+          weight: FontWeight.w400,
+          color: _subtle,
+          height: 1.45,
+          letterSpacing: 0,
+        ),
+      ),
+    );
+  }
+
+  TextStyle _titleStyle(double size) {
+    return AppTypography.custom(
+      size: size,
+      weight: FontWeight.w600,
+      color: _text,
+      height: 1.12,
+      letterSpacing: 0,
+    );
+  }
+
+  TextStyle _bodyStyle(double size) {
+    return AppTypography.custom(
+      size: size,
+      weight: FontWeight.w400,
+      color: _secondary,
+      height: 1.48,
+      letterSpacing: 0,
+    );
+  }
+
+  TextStyle _captionStyle() {
+    return AppTypography.custom(
+      size: 11.5,
+      weight: FontWeight.w400,
+      color: _secondary,
+      height: 1.42,
+      letterSpacing: 0,
     );
   }
 
@@ -442,11 +704,17 @@ class _LoginScreenState extends State<LoginScreen> {
       final response = await http.post(
         Uri.parse('https://sportotekaapp.ru/api/login.php'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email, 'password': password}),
+        body: jsonEncode({
+          'email': email,
+          'password': password,
+        }),
       );
 
       if (response.statusCode != 200) {
-        Get.snackbar('Ошибка', 'Ошибка сервера: ${response.statusCode}');
+        Get.snackbar(
+          'Ошибка',
+          'Ошибка сервера: ${response.statusCode}',
+        );
         return;
       }
 
@@ -457,20 +725,27 @@ class _LoginScreenState extends State<LoginScreen> {
 
         final userId = int.tryParse(user['id'].toString()) ?? 0;
         if (userId == 0) {
-          Get.snackbar('Ошибка', 'Не удалось получить ID пользователя');
+          Get.snackbar(
+            'Ошибка',
+            'Не удалось получить ID пользователя',
+          );
           return;
         }
 
         final role = (user['role'] ?? '').toString().trim();
 
-        // Важно: чистим старые данные, чтобы после входа не подтягивались чужие команды.
+        // Чистим старые данные, чтобы после входа
+        // не подтягивались данные прошлого пользователя.
         await PrefUtils.clearAll();
 
         await PrefUtils.setIsSignIn(true);
         await PrefUtils.setUserId(userId);
         await PrefUtils.setRole(role);
 
-        debugPrint('✅ LOGIN SUCCESS userId=$userId -> init push');
+        debugPrint(
+          '✅ LOGIN SUCCESS userId=$userId -> init push',
+        );
+
         try {
           await PushService.instance.init(userId: userId);
           debugPrint('✅ PUSH INIT DONE');
@@ -480,254 +755,57 @@ class _LoginScreenState extends State<LoginScreen> {
 
         final pref = PrefUtils();
         await pref.init();
-        await pref.setUserFirstName((user['first_name'] ?? '').toString());
-        await pref.setUserLastName((user['last_name'] ?? '').toString());
-        await pref.setUserEmail((user['email'] ?? '').toString());
-        await pref.setUserRole((user['role'] ?? '').toString());
 
-        // После успешного входа открываем социальный профиль по умолчанию.
-        Get.offAllNamed(AppRoutes.myProfileScreen);
+        await pref.setUserFirstName(
+          (user['first_name'] ?? '').toString(),
+        );
+        await pref.setUserLastName(
+          (user['last_name'] ?? '').toString(),
+        );
+        await pref.setUserEmail(
+          (user['email'] ?? '').toString(),
+        );
+        await pref.setUserRole(
+          (user['role'] ?? '').toString(),
+        );
+
+        // На macOS не перестраиваем всё дерево маршрутов в тот же момент,
+        // когда Flutter может обновлять состояние указателя мыши.
+        // Переходим на следующий кадр и без route-анимации.
+        if (!mounted) return;
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+
+          // После входа для ВСЕХ ролей открываем главный профиль.
+          // MyProfileScreen уже определяет роль пользователя:
+          // player / coach / club / parent.
+          //
+          // Для parent/родитель основной рабочий блок ведёт в
+          // «Мои дети», где активируется Parent Key и открывается
+          // дневник привязанного игрока.
+          Get.offAll<void>(
+            () => const MyProfileScreen(),
+            transition: Transition.noTransition,
+            duration: Duration.zero,
+          );
+        });
       } else {
-        Get.snackbar('Ошибка', data['message'] ?? 'Неверный логин или пароль');
+        Get.snackbar(
+          'Ошибка',
+          data['message'] ?? 'Неверный логин или пароль',
+        );
       }
     } catch (e) {
-      Get.snackbar('Ошибка', 'Ошибка подключения: $e');
+      Get.snackbar(
+        'Ошибка',
+        'Ошибка подключения: $e',
+      );
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
-  }
-}
-
-class _LoginHeroPanel extends StatelessWidget {
-  const _LoginHeroPanel();
-
-  static const Color _heroGreen = Color(0xFF22B981);
-  static const Color _heroDark = Color(0xFF0B2F27);
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final bool compact = constraints.maxWidth < 520;
-        final double titleSize = compact ? 24 : 30;
-
-        return Container(
-          height: double.infinity,
-          padding: EdgeInsets.all(compact ? 24 : 30),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(34),
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF0B2F27),
-                Color(0xFF12684D),
-                Color(0xFF27C28A),
-              ],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.10),
-                blurRadius: 30,
-                offset: const Offset(0, 16),
-              ),
-            ],
-          ),
-          child: Stack(
-            children: [
-              Positioned(
-                right: -86,
-                top: -78,
-                child: _BlurCircle(size: 230, color: Colors.white.withOpacity(0.10)),
-              ),
-              Positioned(
-                left: -92,
-                bottom: -76,
-                child: _BlurCircle(size: 250, color: Colors.white.withOpacity(0.08)),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Row(
-                    children: [
-                      _SportotekaMark(size: 54),
-                      SizedBox(width: 14),
-                      Text(
-                        'Sportoteka',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 34),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.13),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: const Text(
-                      'Рабочее пространство клуба',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    'Все модули команды — в одном кабинете',
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: titleSize,
-                      height: 1.12,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -0.8,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    'Профиль, состав, календарь, матчи, чаты и аналитика доступны сразу после входа.',
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.80),
-                      fontSize: 14.5,
-                      height: 1.5,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: const [
-                      _HeroFeatureChip(icon: Icons.person_rounded, text: 'Профиль'),
-                      _HeroFeatureChip(icon: Icons.groups_rounded, text: 'Команды'),
-                      _HeroFeatureChip(icon: Icons.event_rounded, text: 'Календарь'),
-                      _HeroFeatureChip(icon: Icons.analytics_rounded, text: 'Аналитика'),
-                    ],
-                  ),
-                  const Spacer(),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: Colors.white.withOpacity(0.14)),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 52,
-                          height: 52,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.18),
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          child: const Icon(
-                            Icons.workspace_premium_rounded,
-                            color: Colors.white,
-                            size: 27,
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'После входа',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Откроется ваш профиль Sportoteka',
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.76),
-                                  fontSize: 13,
-                                  height: 1.35,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Container(
-                          width: 38,
-                          height: 38,
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.arrow_forward_rounded,
-                            color: _heroDark,
-                            size: 20,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _HeroFeatureChip extends StatelessWidget {
-  const _HeroFeatureChip({required this.icon, required this.text});
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.14),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: Colors.white, size: 17),
-          const SizedBox(width: 7),
-          Text(
-            text,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
 
@@ -735,7 +813,6 @@ class _LoginTextField extends StatelessWidget {
   const _LoginTextField({
     required this.controller,
     required this.hintText,
-    required this.icon,
     this.keyboardType,
     this.textInputAction,
     this.obscureText = false,
@@ -747,7 +824,6 @@ class _LoginTextField extends StatelessWidget {
 
   final TextEditingController controller;
   final String hintText;
-  final IconData icon;
   final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
   final bool obscureText;
@@ -766,43 +842,71 @@ class _LoginTextField extends StatelessWidget {
       validator: validator,
       onFieldSubmitted: onFieldSubmitted,
       autofillHints: autofillHints,
-      cursorColor: _LoginScreenState._greenDark,
-      style: const TextStyle(
-        color: _LoginScreenState._ink,
-        fontSize: 15,
-        fontWeight: FontWeight.w700,
+      cursorColor: _LoginScreenState._green,
+      style: AppTypography.custom(
+        size: 13.2,
+        weight: FontWeight.w500,
+        color: _LoginScreenState._text,
+        height: 1.2,
+        letterSpacing: 0,
       ),
       decoration: InputDecoration(
         hintText: hintText,
-        hintStyle: const TextStyle(
-          color: _LoginScreenState._muted,
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
+        hintStyle: AppTypography.custom(
+          size: 12.6,
+          weight: FontWeight.w400,
+          color: _LoginScreenState._subtle,
+          height: 1.2,
+          letterSpacing: 0,
         ),
         filled: true,
-        fillColor: const Color(0xFFF8FAFC),
-        prefixIcon: Icon(icon, color: _LoginScreenState._muted, size: 20),
+        fillColor: _LoginScreenState._panel,
         suffixIcon: suffixIcon,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 13,
+          vertical: 14,
+        ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: _LoginScreenState._line),
+          borderRadius: BorderRadius.circular(9),
+          borderSide: const BorderSide(
+            color: _LoginScreenState._divider,
+            width: .9,
+          ),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: _LoginScreenState._line),
+          borderRadius: BorderRadius.circular(9),
+          borderSide: const BorderSide(
+            color: _LoginScreenState._divider,
+            width: .9,
+          ),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: _LoginScreenState._green, width: 1.4),
+          borderRadius: BorderRadius.circular(9),
+          borderSide: const BorderSide(
+            color: _LoginScreenState._green,
+            width: 1.1,
+          ),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1.2),
+          borderRadius: BorderRadius.circular(9),
+          borderSide: const BorderSide(
+            color: Color(0xFFDC2626),
+            width: 1,
+          ),
         ),
         focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1.2),
+          borderRadius: BorderRadius.circular(9),
+          borderSide: const BorderSide(
+            color: Color(0xFFDC2626),
+            width: 1,
+          ),
+        ),
+        errorStyle: AppTypography.custom(
+          size: 10.8,
+          weight: FontWeight.w400,
+          color: const Color(0xFFDC2626),
+          height: 1.2,
+          letterSpacing: 0,
         ),
       ),
     );
@@ -810,7 +914,9 @@ class _LoginTextField extends StatelessWidget {
 }
 
 class _SportotekaMark extends StatelessWidget {
-  const _SportotekaMark({required this.size});
+  const _SportotekaMark({
+    required this.size,
+  });
 
   final double size;
 
@@ -819,92 +925,149 @@ class _SportotekaMark extends StatelessWidget {
     return Container(
       width: size,
       height: size,
+      alignment: Alignment.center,
       decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF34D399), Color(0xFF0F8A61)],
+        color: _LoginScreenState._greenSoft,
+        borderRadius: BorderRadius.circular(size * .23),
+        border: Border.all(
+          color: _LoginScreenState._greenBorder,
+          width: .8,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF31C48D).withOpacity(0.32),
-            blurRadius: 18,
-            offset: const Offset(0, 9),
-          ),
-        ],
       ),
-      child: Center(
-        child: Icon(
-          Icons.sports_soccer_rounded,
-          color: Colors.white,
-          size: size * 0.48,
-        ),
+      child: Icon(
+        Icons.sports_soccer_outlined,
+        color: _LoginScreenState._greenDark,
+        size: size * .52,
       ),
     );
   }
 }
 
-class _BlurCircle extends StatelessWidget {
-  const _BlurCircle({required this.size, required this.color});
+class _LoginBenefit extends StatelessWidget {
+  const _LoginBenefit({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
 
-  final double size;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-    );
-  }
-}
-
-class _HeroMiniMetric extends StatelessWidget {
-  const _HeroMiniMetric({required this.title, required this.value});
-
+  final IconData icon;
   final String title;
-  final String value;
+  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          width: 34,
-          height: 34,
+          width: 42,
+          height: 42,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.18),
-            borderRadius: BorderRadius.circular(12),
+            color: _LoginScreenState._greenSoft,
+            borderRadius: BorderRadius.circular(9),
+            border: Border.all(
+              color: _LoginScreenState._greenBorder,
+              width: .8,
+            ),
           ),
-          child: const Icon(Icons.check_rounded, color: Colors.white, size: 19),
+          child: Icon(
+            icon,
+            color: _LoginScreenState._greenDark,
+            size: 20,
+          ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 13),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.72),
-                  fontSize: 12,
-                  height: 1.15,
-                  fontWeight: FontWeight.w600,
+                style: AppTypography.custom(
+                  size: 12.6,
+                  weight: FontWeight.w600,
+                  color: _LoginScreenState._text,
+                  height: 1.2,
+                  letterSpacing: 0,
                 ),
               ),
+              const SizedBox(height: 4),
               Text(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
+                subtitle,
+                style: AppTypography.custom(
+                  size: 11.4,
+                  weight: FontWeight.w400,
+                  color: _LoginScreenState._secondary,
+                  height: 1.42,
+                  letterSpacing: 0,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MobileBenefitRow extends StatelessWidget {
+  const _MobileBenefitRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: _LoginScreenState._greenSoft,
+            borderRadius: BorderRadius.circular(9),
+            border: Border.all(
+              color: _LoginScreenState._greenBorder,
+              width: .8,
+            ),
+          ),
+          child: Icon(
+            icon,
+            color: _LoginScreenState._greenDark,
+            size: 18,
+          ),
+        ),
+        const SizedBox(width: 11),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: AppTypography.custom(
+                  size: 12.2,
+                  weight: FontWeight.w600,
+                  color: _LoginScreenState._text,
                   height: 1.2,
-                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                subtitle,
+                style: AppTypography.custom(
+                  size: 10.8,
+                  weight: FontWeight.w400,
+                  color: _LoginScreenState._secondary,
+                  height: 1.35,
+                  letterSpacing: 0,
                 ),
               ),
             ],
@@ -916,7 +1079,10 @@ class _HeroMiniMetric extends StatelessWidget {
 }
 
 class _LinkText extends StatelessWidget {
-  const _LinkText({required this.text, required this.onTap});
+  const _LinkText({
+    required this.text,
+    required this.onTap,
+  });
 
   final String text;
   final VoidCallback onTap;
@@ -927,12 +1093,12 @@ class _LinkText extends StatelessWidget {
       onTap: onTap,
       child: Text(
         text,
-        style: const TextStyle(
+        style: AppTypography.custom(
+          size: 11.5,
+          weight: FontWeight.w600,
           color: _LoginScreenState._greenDark,
-          fontSize: 12.8,
-          height: 1.45,
-          fontWeight: FontWeight.w800,
-          decoration: TextDecoration.underline,
+          height: 1.42,
+          letterSpacing: 0,
         ),
       ),
     );

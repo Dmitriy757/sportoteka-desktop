@@ -136,7 +136,7 @@ class _WeekTimelineViewState extends State<WeekTimelineView> {
                             child: Text(
                               "${_dowShort(d.weekday)} ${d.day}",
                               style: TextStyle(
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w600,
                                 fontSize: 12,
                                 color: active ? Theme.of(context).colorScheme.primary : const Color(0xFF111827),
                               ),
@@ -177,7 +177,7 @@ class _WeekTimelineViewState extends State<WeekTimelineView> {
                             alignment: Alignment.topCenter,
                             child: Text(
                               "${h.toString().padLeft(2, '0')}:00",
-                              style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280), fontWeight: FontWeight.w700),
+                              style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280), fontWeight: FontWeight.w600),
                             ),
                           ),
                         ));
@@ -396,7 +396,7 @@ class _EventBlockCompact extends StatelessWidget {
                     event.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: Color(0xFF111827)),
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF111827)),
                   ),
                 ),
               ),
@@ -408,7 +408,7 @@ class _EventBlockCompact extends StatelessWidget {
                 child: Text(
                   time,
                   style: TextStyle(
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                     fontSize: 11,
                     color: color.withOpacity(0.95),
                   ),

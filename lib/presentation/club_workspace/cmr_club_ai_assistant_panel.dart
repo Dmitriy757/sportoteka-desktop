@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
+import 'ai_actions/ai_workspace_action_api.dart';
 import 'models/club_ai_tactical_diagram.dart';
 import 'widgets/club_ai_tactical_diagram_card.dart';
 
@@ -20,6 +21,9 @@ class CmrClubAiAssistantPanel extends StatefulWidget {
   final int? teamId;
   final String? clubName;
   final String? teamName;
+  final bool playerOnlyMode;
+  final int? playerId;
+  final String? playerName;
 
   /// target: player_profile / tracker / report / calendar / match / testing / plans / attendance
   /// payload: ids/date/team_id/player_id/session_id/etc.
@@ -28,134 +32,121 @@ class CmrClubAiAssistantPanel extends StatefulWidget {
   /// Если не передать callback, ссылка копируется в буфер обмена.
   final void Function(String url)? onOpenPdf;
 
-  /// Для мобильного режима внутри раздела "Чаты": вернуться к списку,
-  /// не закрывая Club Workspace и нижнее меню приложения.
+  /// Для мобильного режима: вернуться к предыдущему экрану.
   final VoidCallback? onBack;
-  final String? initialPrompt;
-  final Map<String, dynamic>? initialPayload;
-  final bool autoSendInitialPrompt;
+final String? initialPrompt;
+final Map<String, dynamic>? initialPayload;
+final bool autoSendInitialPrompt;
 
-  const CmrClubAiAssistantPanel({
-    super.key,
-    required this.clubId,
-    required this.userId,
-    this.teamId,
-    this.clubName,
-    this.teamName,
-    this.onNavigate,
-    this.onOpenPdf,
-    this.onBack,
-    this.initialPrompt,
-    this.initialPayload,
-    this.autoSendInitialPrompt = false,
-  });
+const CmrClubAiAssistantPanel({
+  super.key,
+  required this.clubId,
+  required this.userId,
+  this.teamId,
+  this.clubName,
+  this.teamName,
+  this.playerOnlyMode = false,
+  this.playerId,
+  this.playerName,
+  this.onNavigate,
+  this.onOpenPdf,
+  this.onBack,
+  this.initialPrompt,
+  this.initialPayload,
+  this.autoSendInitialPrompt = false,
+});
 
   @override
   State<CmrClubAiAssistantPanel> createState() => _CmrClubAiAssistantPanelState();
 }
 
 class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
-  static const String _apiBase = 'https://sportotekaapp.ru/api';
-  static const String _askUrl = 'https://sportotekaapp.ru/api/ai/v1/assistant/chat';
-  static const String _feedbackUrl = 'https://sportotekaapp.ru/api/ai/v1/assistant/feedback';
-  static const String _personalAlertsUrl = '$_apiBase/player_get_training_notifications.php';
+  static const String _askUrl =
+      'https://sportotekaapp.ru/api/ai/v1/assistant/chat';
+  static const String _feedbackUrl =
+      'https://sportotekaapp.ru/api/ai/v1/assistant/feedback';
 
   final TextEditingController _input = TextEditingController();
   final ScrollController _scroll = ScrollController();
   final FocusNode _focus = FocusNode();
   final List<_AiMessage> _messages = <_AiMessage>[];
-  final Map<int, GlobalKey> _messageKeys = <int, GlobalKey>{};
+  final Map<_AiMessage, GlobalKey> _messageKeys = <_AiMessage, GlobalKey>{};
+  final Set<String> _confirmingActionIds = <String>{};
+  final Map<String, String> _completedActionMessages = <String, String>{};
 
+  late final String _conversationId;
+  bool _initialPromptSent = false;
   bool _sending = false;
   String? _error;
-  Timer? _alertTimer;
-  int _unreadLoadAlerts = 0;
-  final Set<String> _seenLoadAlertIds = <String>{};
 
-  static const List<String> _starterPrompts = <String>[
-    'Сделай анализ тренировки за вчера',
-    'Сделай отчет по Берёзкину за 09.07.2026',
-    'Разбери последнюю GPS/Polar тренировку команды',
-    'Дай советы тренеру по нагрузке и скорости',
-    'Покажи PDF отчета последней тренировки',
-    'Кто перегружен по пульсу и спринтам?',
-    'Что улучшить на следующей тренировке?',
-    'Почему у игрока такой спринт?',
-    'Нарисуй схему прессинга 4-3-3',
-    'Сравни игроков по нагрузке за неделю',
-    'Запомни: для U13 не ставить две скоростные тренировки подряд',
-  ];
+  List<String> get _starterPrompts {
+    if (widget.playerOnlyMode) {
+      final player = (widget.playerName ?? '').trim();
+      final prefix = player.isEmpty ? 'игрока' : player;
+      return <String>[
+        'Сделай анализ последних тренировок $prefix',
+        'Оцени нагрузку и восстановление $prefix',
+        'Покажи динамику скорости и спринтов $prefix',
+        'Разбери пульс по последним сессиям $prefix',
+        'Сравни последние тренировки $prefix',
+        'Какие риски и рекомендации есть у $prefix?',
+      ];
+    }
+    return const <String>[
+      'Сделай анализ тренировки за вчера',
+      'Сделай отчет по выбранной тренировке',
+      'Разбери последнюю GPS/Polar тренировку команды',
+      'Дай советы тренеру по нагрузке и скорости',
+      'Покажи PDF отчета последней тренировки',
+      'Кто перегружен по пульсу и спринтам?',
+      'Что улучшить на следующей тренировке?',
+      'Почему у игрока такой спринт?',
+      'Нарисуй схему прессинга 4-3-3',
+      'Сравни игроков по нагрузке за неделю',
+      'Запомни: для U13 не ставить две скоростные тренировки подряд',
+    ];
+  }
 
   @override
   void initState() {
     super.initState();
+    _conversationId = 'sportoteka:${widget.clubId}:${widget.teamId ?? 0}:'
+        '${widget.playerId ?? 0}:${DateTime.now().microsecondsSinceEpoch}';
     _messages.add(_AiMessage.assistant(
-      text:
-          'Я локальный ИИ клуба. Работаю на вашем сервере: ищу отчеты, делаю тренерский разбор по GPS/Polar, объясняю причины спринтов и рисков, строю схемы прямо в чате и запоминаю правила тренера. Напишите: «почему такой спринт у Берёзкина», «сделай анализ тренировки», «нарисуй схему прессинга 4-3-3».',
+      text: widget.playerOnlyMode
+          ? 'Я ИИ-помощник профиля игрока. В этом окне анализирую только данные ${((widget.playerName ?? '').trim().isEmpty ? 'выбранного игрока' : widget.playerName!.trim())}: тестирования, матчи, GPS/Polar-сессии, скорость, спринты, пульс и нагрузку.'
+          : 'Я локальный ИИ клуба. Работаю на вашем сервере и вижу текущий контекст экрана: выбранную команду, тренировку, игроков и пульсовую точку. Ищу отчеты, делаю разбор GPS/Polar, объясняю причины нагрузки и предлагаю действия тренеру.',
       suggestions: _starterPrompts.take(4).toList(),
     ));
-    _loadPersonalLoadAlerts();
-    _alertTimer = Timer.periodic(const Duration(seconds: 30), (_) => _loadPersonalLoadAlerts());
+
     final initial = (widget.initialPrompt ?? '').trim();
     if (initial.isNotEmpty) {
       _input.text = initial;
-      if (widget.autoSendInitialPrompt) WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _ask(initial); });
+      if (widget.autoSendInitialPrompt) {
+        _initialPromptSent = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _ask(initial);
+        });
+      }
     }
   }
 
-  Future<void> _loadPersonalLoadAlerts() async {
-    try {
-      final uri = Uri.parse(_personalAlertsUrl).replace(queryParameters: <String, String>{
-        'club_id': '${widget.clubId}',
-        if (widget.teamId != null) 'team_id': '${widget.teamId}',
-        'days': '1',
-        'limit': '30',
+  @override
+  void didUpdateWidget(covariant CmrClubAiAssistantPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final initial = (widget.initialPrompt ?? '').trim();
+    if (!_initialPromptSent &&
+        widget.autoSendInitialPrompt &&
+        initial.isNotEmpty) {
+      _initialPromptSent = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _ask(initial);
       });
-      final response = await http.get(uri).timeout(const Duration(seconds: 12));
-      if (response.statusCode < 200 || response.statusCode >= 300) return;
-      final decoded = _decodeJson(response.body);
-      final map = decoded is Map ? Map<String, dynamic>.from(decoded) : <String, dynamic>{};
-      final raw = map['notifications'] ?? map['items'] ?? map['events'] ?? const <dynamic>[];
-      if (raw is! List) return;
-      final fresh = <_AiMessage>[];
-      for (final value in raw.whereType<Map>()) {
-        final row = Map<String, dynamic>.from(value);
-        final bpm = _asInt(row['heart_rate_bpm'] ?? row['max_bpm'] ?? row['last_heart_rate_bpm']);
-        final load = double.tryParse('${row['load_score'] ?? row['player_load'] ?? row['load'] ?? 0}'.replaceAll(',', '.')) ?? 0;
-        if (bpm < 160 && load < 80) continue;
-        final playerId = _asInt(row['player_id'] ?? row['owner_user_id'] ?? row['user_id']);
-        final sessionId = _asInt(row['session_id'] ?? row['live_session_id'] ?? row['id']);
-        final id = '${sessionId}_${playerId}_${bpm}_${load.round()}';
-        if (_seenLoadAlertIds.contains(id)) continue;
-        _seenLoadAlertIds.add(id);
-        final name = '${row['player_short_name'] ?? row['player_name'] ?? row['full_name'] ?? 'Игрок'}'.trim();
-        final activity = '${row['activity_label'] ?? row['activity_type'] ?? row['mode'] ?? 'Личная тренировка'}'.trim();
-        fresh.add(_AiMessage.assistant(
-          text: 'Внимание тренеру: у $name зафиксирована высокая нагрузка.',
-          insights: <_AiInsightSection>[
-            _AiInsightSection(title: 'Сигнал нагрузки', icon: 'warning', items: <String>[
-              'Пульс: ${bpm > 0 ? '$bpm bpm' : 'нет данных'}',
-              'Load: ${load > 0 ? load.toStringAsFixed(0) : 'нет данных'}',
-              'Вид: $activity',
-              'Рекомендуется открыть отчет и проверить время в Z4–Z5.',
-            ]),
-          ],
-          cards: <_AiResultCard>[
-            _AiResultCard(type: 'report', title: '$name · высокая нагрузка', subtitle: '$activity · пульс ${bpm > 0 ? bpm : '—'} · Load ${load > 0 ? load.toStringAsFixed(0) : '—'}', badge: 'НАГРУЗКА', actionLabel: 'Открыть отчет', target: 'report', metaLine: 'ИИ-предупреждение по личной тренировке', payload: <String, dynamic>{'player_id': playerId, 'session_id': sessionId, 'team_id': widget.teamId, 'personal': true}),
-          ],
-        ));
-      }
-      if (!mounted || fresh.isEmpty) return;
-      setState(() {
-        _messages.addAll(fresh);
-        _unreadLoadAlerts += fresh.length;
-      });
-    } catch (_) {}
+    }
   }
 
   @override
   void dispose() {
-    _alertTimer?.cancel();
     _input.dispose();
     _scroll.dispose();
     _focus.dispose();
@@ -163,6 +154,35 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
   }
 
   int _asInt(dynamic v) => int.tryParse('${v ?? ''}') ?? 0;
+
+  List<int> _asIntList(dynamic value) {
+    if (value is! Iterable) return <int>[];
+    final ids = <int>{};
+    for (final item in value) {
+      final id = _asInt(item);
+      if (id > 0) ids.add(id);
+    }
+    final result = ids.toList()..sort();
+    return result;
+  }
+
+  Map<String, dynamic> _conversationMemory() {
+    final history = _messages
+        .where((message) => message.text.trim().isNotEmpty)
+        .toList(growable: false);
+    final from = math.max(0, history.length - 12);
+    return <String, dynamic>{
+      'policy': 'current_ui_context_first',
+      'client_turns': history.sublist(from).map((message) {
+        return <String, dynamic>{
+          'role': message.role == _AiRole.user ? 'user' : 'assistant',
+          'text': message.text,
+          if (message.toolSource.isNotEmpty) 'tool_source': message.toolSource,
+          if (message.verifiedData) 'verified_data': true,
+        };
+      }).toList(growable: false),
+    };
+  }
 
   dynamic _decodeJson(String body) {
     var t = body;
@@ -192,7 +212,43 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
     });
     _scrollToBottom();
 
+    _AiMessage? responseMessage;
     try {
+      final contextPayload = <String, dynamic>{
+        ...?widget.initialPayload,
+        if (widget.playerOnlyMode) 'scope': 'player_profile',
+        if (widget.playerOnlyMode) 'player_only': true,
+        if (widget.playerOnlyMode && (widget.playerId ?? 0) > 0) 'player_id': widget.playerId,
+        if (widget.playerOnlyMode && (widget.playerName ?? '').trim().isNotEmpty) 'player_name': widget.playerName!.trim(),
+      };
+      final sessionIds = _asIntList(contextPayload['session_ids']);
+      final contextSessionId = _asInt(contextPayload['session_id']);
+      if (sessionIds.isEmpty && contextSessionId > 0) {
+        sessionIds.add(contextSessionId);
+      }
+      final selectionMode = '${contextPayload['selection_mode'] ?? ''}';
+      final contextPlayerId = _asInt(contextPayload['player_id']);
+      final selectedDate = '${contextPayload['selected_date'] ?? ''}'.trim();
+      final payload = <String, dynamic>{
+        'club_id': widget.clubId,
+        'user_id': widget.userId,
+        if ((widget.teamId ?? 0) > 0) 'team_id': widget.teamId,
+        if (sessionIds.isNotEmpty) 'session_id': sessionIds.first,
+        if (sessionIds.isNotEmpty) 'session_ids': sessionIds,
+        if (selectedDate.isNotEmpty) 'selected_date': selectedDate,
+        if (widget.playerOnlyMode && (widget.playerId ?? 0) > 0)
+          'player_id': widget.playerId
+        else if (selectionMode == 'single_player' && contextPlayerId > 0)
+          'player_id': contextPlayerId,
+        'conversation_id': _conversationId,
+        'q': q,
+        'context': contextPayload,
+        'memory': _conversationMemory(),
+      };
+
+      debugPrint('[AI_CHAT] URL=$_askUrl');
+      debugPrint('[AI_CHAT] PAYLOAD=${jsonEncode(payload)}');
+
       final res = await http
           .post(
             Uri.parse(_askUrl),
@@ -200,19 +256,22 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
               'Content-Type': 'application/json; charset=utf-8',
               'Accept': 'application/json',
             },
-            body: json.encode(<String, dynamic>{
-              'club_id': widget.clubId,
-              'user_id': widget.userId,
-              if ((widget.teamId ?? 0) > 0) 'team_id': widget.teamId,
-              'q': q,
-              'context': widget.initialPayload ?? const <String, dynamic>{},
-            }),
+            body: jsonEncode(payload),
           )
           .timeout(const Duration(seconds: 30));
 
+      debugPrint('[AI_CHAT] STATUS=${res.statusCode}');
+      // Тело ответа может содержать одноразовый action_token v15.9.1.
+      // Не выводим его в debug/system logs.
+      debugPrint('[AI_CHAT] RESPONSE_BYTES=${res.bodyBytes.length}');
+
       final data = _decodeJson(res.body);
       if (res.statusCode != 200 || data is! Map || data['success'] != true) {
-        throw Exception(data is Map ? (data['message'] ?? 'Ошибка запроса') : 'HTTP ${res.statusCode}');
+        throw Exception(
+          data is Map
+              ? (data['detail'] ?? data['message'] ?? 'Ошибка запроса')
+              : 'HTTP ${res.statusCode}',
+        );
       }
 
       final cardsRaw = data['cards'] is List ? data['cards'] as List : const <dynamic>[];
@@ -233,6 +292,16 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
           .take(6)
           .toList();
 
+      final actionsRaw = data['actions'] is List
+          ? data['actions'] as List
+          : const <dynamic>[];
+      final actions = actionsRaw
+          .whereType<Map>()
+          .map((e) => AiWorkspaceAction.fromMap(Map<String, dynamic>.from(e)))
+          .where((e) => e.title.trim().isNotEmpty)
+          .take(4)
+          .toList(growable: false);
+
       final diagramsRaw = data['diagrams'] is List ? data['diagrams'] as List : const <dynamic>[];
       final diagrams = diagramsRaw
           .whereType<Map>()
@@ -241,39 +310,45 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
           .take(3)
           .toList();
       final queryId = _asInt(data['query_id']);
+      final toolSource = '${data['tool_source'] ?? ''}'.trim();
+      final verifiedData = data['verified_data'] == true;
 
       if (!mounted) return;
-      final answerIndex = _messages.length;
       setState(() {
-        _messages.add(_AiMessage.assistant(
-          text: '${data['answer'] ?? 'Нашел результаты.'}',
+        responseMessage = _AiMessage.assistant(
+          text: '${data['answer'] ?? 'Нашёл результаты.'}',
           queryId: queryId,
           insights: insights,
           cards: cards,
           diagrams: diagrams,
+          actions: actions,
           suggestions: suggestions,
-        ));
+          toolSource: toolSource,
+          verifiedData: verifiedData,
+        );
+        _messages.add(responseMessage!);
       });
-      _scrollToMessageStart(answerIndex);
     } catch (e) {
       if (!mounted) return;
-      final answerIndex = _messages.length;
       setState(() {
         _error = 'Не удалось выполнить поиск: $e';
-        _messages.add(_AiMessage.assistant(
+        responseMessage = _AiMessage.assistant(
           text:
-              'Не смог получить ответ от сервера. Можно попробовать короче: имя игрока + что ищем, например «Берёзкин отчет вчера» или «тренировки U13 за неделю».',
+              'Не смог получить ответ от сервера. Можно попробовать короче: выбранный игрок + что ищем, например «отчёт за вчера» или «тренировки U13 за неделю».',
           suggestions: const <String>[
             'Последние тренировки команды',
             'Последняя GPS-сессия',
             'Матчи за месяц',
           ],
-        ));
+        );
+        _messages.add(responseMessage!);
       });
-      _scrollToMessageStart(answerIndex);
     } finally {
       if (mounted) setState(() => _sending = false);
-      _focus.requestFocus();
+      final message = responseMessage;
+      if (message != null) {
+        _scrollToMessageStart(message);
+      }
     }
   }
 
@@ -303,6 +378,85 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
     }
   }
 
+  String _actionKey(AiWorkspaceAction action) {
+    if (action.id.trim().isNotEmpty) return action.id.trim();
+    return '${action.type}:${action.actionToken}';
+  }
+
+  Future<void> _confirmAction(AiWorkspaceAction action) async {
+    final key = _actionKey(action);
+    if (!action.canConfirm || _confirmingActionIds.contains(key)) return;
+    final teamId = _asInt(action.payload['team_id'] ?? widget.teamId);
+
+    final approved = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Подтвердить действие ИИ?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(action.title),
+            if (action.description.trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                action.description,
+                style: const TextStyle(color: _AiColors.muted),
+              ),
+            ],
+            const SizedBox(height: 14),
+            const Text(
+              'Запись будет выполнена один раз. Перед выполнением сервер повторно проверит клуб, пользователя, команду и исходное состояние.',
+              style: TextStyle(
+                color: _AiColors.text2,
+                fontSize: 12,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: _AiColors.greenDark),
+            child: const Text('Подтверждаю'),
+          ),
+        ],
+      ),
+    );
+    if (approved != true || !mounted) return;
+
+    setState(() {
+      _confirmingActionIds.add(key);
+      _error = null;
+    });
+    try {
+      final result = await AiWorkspaceActionApi.confirm(
+        clubId: widget.clubId,
+        userId: widget.userId,
+        teamId: teamId,
+        actionToken: action.actionToken,
+      );
+      if (!mounted) return;
+      final message = '${result['answer'] ?? 'Действие выполнено'}'.trim();
+      setState(() => _completedActionMessages[key] = message);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message.isEmpty ? 'Действие выполнено' : message)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = 'Действие не выполнено: $e');
+    } finally {
+      if (mounted) setState(() => _confirmingActionIds.remove(key));
+    }
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients) return;
@@ -314,14 +468,18 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
     });
   }
 
-  void _scrollToMessageStart(int index) {
+  GlobalKey _messageKey(_AiMessage message) =>
+      _messageKeys.putIfAbsent(message, GlobalKey.new);
+
+  void _scrollToMessageStart(_AiMessage message) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final target = _messageKeys[index]?.currentContext;
+      if (!mounted) return;
+      final target = _messageKey(message).currentContext;
       if (target == null) return;
       Scrollable.ensureVisible(
         target,
-        alignment: .04,
-        duration: const Duration(milliseconds: 280),
+        alignment: 0,
+        duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
       );
     });
@@ -341,41 +499,25 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
     );
   }
 
-  Future<void> _openCard(_AiResultCard card) async {
+  void _openCard(_AiResultCard card) {
     final target = card.target.trim();
     final payload = Map<String, dynamic>.from(card.payload);
     if (target.isEmpty) return;
 
-    // Основной сценарий: родительский экран открывает нужный раздел приложения
-    // и использует payload только как внутренний контекст навигации.
     if (widget.onNavigate != null) {
       widget.onNavigate!(target, payload);
       return;
     }
 
-    // Резервный сценарий для карточки отчёта: если внутренняя навигация
-    // не подключена, открываем готовый PDF вместо показа технических ID.
-    if (target == 'report' && card.hasPdf) {
-      await _openPdf(card);
-      return;
-    }
-
-    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Не удалось открыть раздел. Для ИИ-помощника не подключён обработчик навигации.',
-        ),
-      ),
+      SnackBar(content: Text('Переход: $target ${payload.isEmpty ? '' : payload}')),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      type: MaterialType.transparency,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
         final media = MediaQuery.sizeOf(context);
         final width = constraints.maxWidth.isFinite && constraints.maxWidth > 0 ? constraints.maxWidth : media.width;
         final safeHeight = constraints.maxHeight.isFinite && constraints.maxHeight > 120
@@ -384,57 +526,45 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
         final phone = width < 700;
         final tablet = width >= 700 && width < 1120;
 
-        final radius = phone ? 0.0 : 18.0;
         return SizedBox(
           width: double.infinity,
-          height: phone ? media.height : safeHeight,
+          height: safeHeight,
           child: Container(
-            decoration: phone ? const BoxDecoration(color: _AiColors.bg) : _AiDecor.workspaceBg(),
-            padding: phone ? EdgeInsets.zero : EdgeInsets.all(tablet ? 8 : 10),
+            decoration: _AiDecor.workspaceBg(),
+            padding: EdgeInsets.all(phone ? 6 : tablet ? 8 : 10),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(radius),
+              borderRadius: BorderRadius.circular(phone ? 16 : 18),
               child: Container(
-                decoration: phone ? const BoxDecoration(color: _AiColors.bg) : _AiDecor.unifiedWindow(radius: radius),
+                decoration: _AiDecor.unifiedWindow(radius: phone ? 16 : 18),
                 child: phone ? _buildPhone() : _buildDesktop(width: width),
               ),
             ),
           ),
         );
-        },
-      ),
+      },
     );
   }
 
   Widget _buildPhone() {
-    final media = MediaQuery.of(context);
-    final keyboardOpen = media.viewInsets.bottom > 0;
-    final topInset = media.viewPadding.top;
-    final bottomInset = keyboardOpen ? 0.0 : media.viewPadding.bottom;
-
     return Column(
       children: [
-        Padding(
-          padding: EdgeInsets.only(top: topInset),
-          child: _AiHeader(
-            clubName: widget.clubName,
-            teamName: widget.teamName,
-            compact: true,
-            onBack: widget.onBack,
-            unreadCount: _unreadLoadAlerts,
-            onExample: () { setState(() => _unreadLoadAlerts = 0); _ask('Найди последний отчет по игроку'); },
-          ),
+        _AiHeader(
+          clubName: widget.clubName,
+          teamName: widget.teamName,
+          compact: true,
+          onExample: () => _ask(widget.playerOnlyMode ? 'Сделай краткий анализ последних данных игрока' : 'Найди последний отчет по игроку'),
+          playerOnlyMode: widget.playerOnlyMode,
+          playerName: widget.playerName,
+          onBack: widget.onBack,
         ),
         Expanded(child: _buildChat(compact: true)),
-        Padding(
-          padding: EdgeInsets.only(bottom: bottomInset),
-          child: _buildComposer(compact: true),
-        ),
+        _buildComposer(compact: true),
       ],
     );
   }
 
   Widget _buildDesktop({required double width}) {
-    final showRail = width >= 1050;
+    final showRail = !widget.playerOnlyMode && width >= 1050;
     return Row(
       children: [
         if (showRail) ...[
@@ -448,9 +578,10 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
                 clubName: widget.clubName,
                 teamName: widget.teamName,
                 compact: false,
+                onExample: () => _ask(widget.playerOnlyMode ? 'Сделай краткий анализ последних данных игрока' : 'Покажи последнюю тренировку и отчет команды'),
+                playerOnlyMode: widget.playerOnlyMode,
+                playerName: widget.playerName,
                 onBack: widget.onBack,
-                unreadCount: _unreadLoadAlerts,
-                onExample: () { setState(() => _unreadLoadAlerts = 0); _ask('Покажи последнюю тренировку и отчет команды'); },
               ),
               Expanded(child: _buildChat(compact: false)),
               _buildComposer(compact: false),
@@ -529,20 +660,22 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
         padding: EdgeInsets.fromLTRB(compact ? 10 : 18, compact ? 10 : 16, compact ? 10 : 18, compact ? 16 : 20),
         itemCount: _messages.length + (_sending ? 1 : 0),
         itemBuilder: (context, index) {
-          final key = _messageKeys.putIfAbsent(index, GlobalKey.new);
-          if (_sending && index == _messages.length) {
-            return KeyedSubtree(key: key, child: const _AiTypingBubble());
-          }
+          if (_sending && index == _messages.length) return const _AiTypingBubble();
           final msg = _messages[index];
           return KeyedSubtree(
-            key: key,
+            key: _messageKey(msg),
             child: _AiBubble(
               message: msg,
               compact: compact,
               onSuggestion: _ask,
-              onOpenCard: (card) { _openCard(card); },
+              onOpenCard: _openCard,
               onOpenPdf: _openPdf,
               onFeedback: _sendFeedback,
+              onConfirmAction: (action) => unawaited(_confirmAction(action)),
+              isActionBusy: (action) =>
+                  _confirmingActionIds.contains(_actionKey(action)),
+              actionResult: (action) =>
+                  _completedActionMessages[_actionKey(action)] ?? '',
             ),
           );
         },
@@ -595,9 +728,11 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
                           maxLines: compact ? 3 : 4,
                           textInputAction: TextInputAction.send,
                           onSubmitted: (_) => _ask(),
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             border: InputBorder.none,
-                            hintText: 'Спросите: почему такой спринт, сделай анализ, нарисуй схему...',
+                            hintText: widget.playerOnlyMode
+                                ? 'Спросите о нагрузке, пульсе, скорости или тестах игрока...'
+                                : 'Спросите: почему такой спринт, сделай анализ, нарисуй схему...',
                             isDense: true,
                           ),
                           style: _AiText.value(compact ? 12.5 : 13.2),
@@ -635,18 +770,21 @@ class _AiHeader extends StatelessWidget {
   final String? clubName;
   final String? teamName;
   final bool compact;
-  final VoidCallback? onBack;
   final VoidCallback onExample;
-  final int unreadCount;
+  final bool playerOnlyMode;
+  final String? playerName;
+  final VoidCallback? onBack;
 
-  const _AiHeader({required this.clubName, required this.teamName, required this.compact, this.onBack, required this.onExample, this.unreadCount = 0});
+  const _AiHeader({required this.clubName, required this.teamName, required this.compact, required this.onExample, this.playerOnlyMode = false, this.playerName, this.onBack});
 
   @override
   Widget build(BuildContext context) {
-    final scope = [
-      if ((clubName ?? '').trim().isNotEmpty) clubName!.trim(),
-      if ((teamName ?? '').trim().isNotEmpty) teamName!.trim(),
-    ].join(' · ');
+    final scope = playerOnlyMode
+        ? ((playerName ?? '').trim().isEmpty ? 'Только выбранный игрок' : 'Только ${playerName!.trim()}')
+        : [
+            if ((clubName ?? '').trim().isNotEmpty) clubName!.trim(),
+            if ((teamName ?? '').trim().isNotEmpty) teamName!.trim(),
+          ].join(' · ');
 
     return Container(
       padding: EdgeInsets.fromLTRB(compact ? 10 : 14, compact ? 9 : 11, compact ? 10 : 14, compact ? 9 : 11),
@@ -656,10 +794,6 @@ class _AiHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          if (onBack != null) ...[
-            _AiCircleAction(icon: Icons.arrow_back_rounded, onTap: onBack!),
-            const SizedBox(width: 8),
-          ],
           Container(
             width: compact ? 35 : 38,
             height: compact ? 35 : 38,
@@ -674,7 +808,7 @@ class _AiHeader extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Flexible(child: Text('ИИ помощник', maxLines: 1, overflow: TextOverflow.ellipsis, style: _AiText.title(compact ? 15 : 15.8))),
+                    Flexible(child: Text(playerOnlyMode ? 'ИИ игрока' : 'ИИ помощник', maxLines: 1, overflow: TextOverflow.ellipsis, style: _AiText.title(compact ? 15 : 15.8))),
                     const SizedBox(width: 7),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
@@ -689,9 +823,9 @@ class _AiHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          if (unreadCount > 0) ...[
-            Container(padding: const EdgeInsets.symmetric(horizontal:8,vertical:5), decoration: BoxDecoration(color: const Color(0xFFFFECEC), borderRadius: BorderRadius.circular(9), border: Border.all(color: const Color(0xFFFFCACA))), child: Row(mainAxisSize:MainAxisSize.min,children:[const Icon(Icons.warning_amber_rounded,color:Color(0xFFE11D48),size:14),const SizedBox(width:4),Text('$unreadCount',style:const TextStyle(color:Color(0xFFE11D48),fontWeight:FontWeight.w900,fontSize:10))])),
-            const SizedBox(width:6),
+          if (onBack != null) ...[
+            _AiCircleAction(icon: Icons.close_rounded, onTap: onBack!),
+            const SizedBox(width: 6),
           ],
           if (!compact)
             _AiHeaderAction(icon: Icons.bolt_rounded, text: 'Пример', onTap: onExample)
@@ -710,8 +844,21 @@ class _AiBubble extends StatelessWidget {
   final ValueChanged<_AiResultCard> onOpenCard;
   final ValueChanged<_AiResultCard> onOpenPdf;
   final void Function(_AiMessage message, int rating) onFeedback;
+  final ValueChanged<AiWorkspaceAction> onConfirmAction;
+  final bool Function(AiWorkspaceAction action) isActionBusy;
+  final String Function(AiWorkspaceAction action) actionResult;
 
-  const _AiBubble({required this.message, required this.compact, required this.onSuggestion, required this.onOpenCard, required this.onOpenPdf, required this.onFeedback});
+  const _AiBubble({
+    required this.message,
+    required this.compact,
+    required this.onSuggestion,
+    required this.onOpenCard,
+    required this.onOpenPdf,
+    required this.onFeedback,
+    required this.onConfirmAction,
+    required this.isActionBusy,
+    required this.actionResult,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -726,6 +873,13 @@ class _AiBubble extends StatelessWidget {
           child: Column(
             crossAxisAlignment: user ? CrossAxisAlignment.end : CrossAxisAlignment.start,
             children: [
+              if (!user && (message.verifiedData || message.toolSource.isNotEmpty)) ...[
+                _AiVerifiedBadge(
+                  verified: message.verifiedData,
+                  toolSource: message.toolSource,
+                ),
+                const SizedBox(height: 6),
+              ],
               Container(
                 padding: EdgeInsets.fromLTRB(compact ? 11 : 13, compact ? 9 : 11, compact ? 11 : 13, compact ? 9 : 11),
                 decoration: user ? _AiDecor.userBubble() : _AiDecor.aiBubble(),
@@ -742,6 +896,19 @@ class _AiBubble extends StatelessWidget {
                 const SizedBox(height: 8),
                 for (final diagram in message.diagrams.take(3)) ...[
                   ClubAiTacticalDiagramCard(diagram: diagram, compact: compact),
+                  const SizedBox(height: 7),
+                ],
+              ],
+              if (!user && message.actions.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                for (final action in message.actions.take(4)) ...[
+                  _AiActionCard(
+                    action: action,
+                    compact: compact,
+                    busy: isActionBusy(action),
+                    completedMessage: actionResult(action),
+                    onConfirm: () => onConfirmAction(action),
+                  ),
                   const SizedBox(height: 7),
                 ],
               ],
@@ -772,6 +939,178 @@ class _AiBubble extends StatelessWidget {
   }
 }
 
+
+class _AiActionCard extends StatelessWidget {
+  const _AiActionCard({
+    required this.action,
+    required this.compact,
+    required this.busy,
+    required this.completedMessage,
+    required this.onConfirm,
+  });
+
+  final AiWorkspaceAction action;
+  final bool compact;
+  final bool busy;
+  final String completedMessage;
+  final VoidCallback onConfirm;
+
+  @override
+  Widget build(BuildContext context) {
+    final completed = completedMessage.trim().isNotEmpty;
+    final canConfirm = action.canConfirm && !busy && !completed;
+    return Container(
+      padding: EdgeInsets.all(compact ? 10 : 12),
+      decoration: BoxDecoration(
+        color: completed ? _AiColors.greenSoft : const Color(0xFFFFFBF4),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: completed ? _AiColors.greenBorder : const Color(0xFFF3DFC0),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 31,
+                height: 31,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: completed
+                      ? const Color(0xFFE4F7EB)
+                      : const Color(0xFFFFF0D8),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  completed ? Icons.check_rounded : Icons.lock_clock_rounded,
+                  color: completed ? _AiColors.greenDark : _AiColors.orange,
+                  size: 17,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      action.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: _AiText.title(compact ? 12.3 : 13),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      completed
+                          ? 'Выполнено безопасно'
+                          : 'Нужно явное подтверждение',
+                      style: _AiText.chip(
+                        size: 9.8,
+                        color: completed
+                            ? _AiColors.greenDark
+                            : _AiColors.orange,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (action.description.trim().isNotEmpty) ...[
+            const SizedBox(height: 9),
+            Text(action.description, style: _AiText.muted(compact ? 10.5 : 11)),
+          ],
+          if (completed) ...[
+            const SizedBox(height: 8),
+            Text(completedMessage, style: _AiText.value(compact ? 10.5 : 11)),
+          ] else ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: canConfirm ? onConfirm : null,
+                style: FilledButton.styleFrom(
+                  backgroundColor: _AiColors.graphite,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(0, 40),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                ),
+                icon: busy
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.verified_user_rounded, size: 16),
+                label: Text(busy ? 'Проверяю...' : 'Проверить и подтвердить'),
+              ),
+            ),
+            if (!action.canConfirm) ...[
+              const SizedBox(height: 7),
+              Text(
+                'Предпросмотр устарел или не содержит одноразового токена. Сформируйте действие заново.',
+                style: _AiText.muted(9.8),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+
+class _AiVerifiedBadge extends StatelessWidget {
+  final bool verified;
+  final String toolSource;
+
+  const _AiVerifiedBadge({
+    required this.verified,
+    required this.toolSource,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = verified
+        ? 'Проверено по данным клуба'
+        : 'Ответ Assistant Brain';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: verified ? _AiColors.greenSoft : Colors.white.withOpacity(.82),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: verified ? _AiColors.greenBorder : _AiColors.line,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            verified ? Icons.verified_rounded : Icons.auto_awesome_rounded,
+            size: 14,
+            color: _AiColors.greenDark,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            toolSource.isEmpty ? label : '$label · $toolSource',
+            style: _AiText.chip(
+              size: 10.2,
+              color: _AiColors.greenDark,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _AiInsightSectionTile extends StatelessWidget {
   final _AiInsightSection section;
@@ -1239,14 +1578,50 @@ class _AiMessage {
   final List<_AiInsightSection> insights;
   final List<_AiResultCard> cards;
   final List<ClubAiTacticalDiagram> diagrams;
+  final List<AiWorkspaceAction> actions;
   final List<String> suggestions;
+  final String toolSource;
+  final bool verifiedData;
 
-  const _AiMessage._({required this.role, required this.text, this.queryId = 0, this.insights = const <_AiInsightSection>[], this.cards = const <_AiResultCard>[], this.diagrams = const <ClubAiTacticalDiagram>[], this.suggestions = const <String>[]});
+  const _AiMessage._({
+    required this.role,
+    required this.text,
+    this.queryId = 0,
+    this.insights = const <_AiInsightSection>[],
+    this.cards = const <_AiResultCard>[],
+    this.diagrams = const <ClubAiTacticalDiagram>[],
+    this.actions = const <AiWorkspaceAction>[],
+    this.suggestions = const <String>[],
+    this.toolSource = '',
+    this.verifiedData = false,
+  });
 
-  factory _AiMessage.user(String text) => _AiMessage._(role: _AiRole.user, text: text);
+  factory _AiMessage.user(String text) =>
+      _AiMessage._(role: _AiRole.user, text: text);
 
-  factory _AiMessage.assistant({required String text, int queryId = 0, List<_AiInsightSection> insights = const <_AiInsightSection>[], List<_AiResultCard> cards = const <_AiResultCard>[], List<ClubAiTacticalDiagram> diagrams = const <ClubAiTacticalDiagram>[], List<String> suggestions = const <String>[]}) {
-    return _AiMessage._(role: _AiRole.assistant, text: text, queryId: queryId, insights: insights, cards: cards, diagrams: diagrams, suggestions: suggestions);
+  factory _AiMessage.assistant({
+    required String text,
+    int queryId = 0,
+    List<_AiInsightSection> insights = const <_AiInsightSection>[],
+    List<_AiResultCard> cards = const <_AiResultCard>[],
+    List<ClubAiTacticalDiagram> diagrams = const <ClubAiTacticalDiagram>[],
+    List<AiWorkspaceAction> actions = const <AiWorkspaceAction>[],
+    List<String> suggestions = const <String>[],
+    String toolSource = '',
+    bool verifiedData = false,
+  }) {
+    return _AiMessage._(
+      role: _AiRole.assistant,
+      text: text,
+      queryId: queryId,
+      insights: insights,
+      cards: cards,
+      diagrams: diagrams,
+      actions: actions,
+      suggestions: suggestions,
+      toolSource: toolSource,
+      verifiedData: verifiedData,
+    );
   }
 }
 
@@ -1322,13 +1697,13 @@ class _AiText {
   static const String _family = 'Segoe UI';
   static const List<String> _fallback = <String>['SF Pro Display', 'SF Pro Text', 'Inter', 'Roboto', 'Arial'];
 
-  static double _compact(double size) => size <= 10 ? size + .8 : size + .5;
+  static double _compact(double size) => size <= 10 ? size : size - .75;
 
   static TextStyle _base({required double size, required FontWeight weight, required Color color, double height = 1.18, double letterSpacing = -0.08, List<FontFeature>? features}) {
     return TextStyle(fontFamily: _family, fontFamilyFallback: _fallback, color: color, fontSize: _compact(size), fontWeight: weight, height: height, letterSpacing: letterSpacing, fontFeatures: features);
   }
 
-  static TextStyle title(double size) => _base(size: size, weight: FontWeight.w600, color: _AiColors.text, height: 1.08, letterSpacing: -0.38);
+  static TextStyle title(double size) => _base(size: size, weight: FontWeight.w700, color: _AiColors.text, height: 1.08, letterSpacing: -0.38);
   static TextStyle value(double size) => _base(size: size, weight: FontWeight.w600, color: _AiColors.text2, height: 1.28, letterSpacing: -0.08, features: const [FontFeature.tabularFigures()]);
   static TextStyle userText(double size) => _base(size: size, weight: FontWeight.w600, color: Colors.white, height: 1.28, letterSpacing: -0.08);
   static TextStyle muted(double size) => _base(size: size, weight: FontWeight.w500, color: _AiColors.muted, height: 1.34, letterSpacing: -0.05);
@@ -1339,7 +1714,6 @@ class _AiText {
 }
 
 class _AiColors {
-  static const Color bg = Color(0xFFF6F7F9);
   static const Color soft = Color(0xFFFAFBFC);
   static const Color soft2 = Color(0xFFF6F7F9);
   static const Color text = Color(0xFF0B0F14);

@@ -63,11 +63,13 @@ class _PlayerBattlesScreenState extends State<PlayerBattlesScreen> {
     final ctrl = TextEditingController();
 
     await Get.bottomSheet(
-      Container(
+      GameZoneCmr.surface(
+        context,
+        child: Container(
         padding: const EdgeInsets.all(16),
         decoration: const BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
         ),
         child: SafeArea(
           top: false,
@@ -77,8 +79,8 @@ class _PlayerBattlesScreenState extends State<PlayerBattlesScreen> {
               const Text(
                 'Отправить результат',
                 style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
                 ),
               ),
               const SizedBox(height: 12),
@@ -87,9 +89,9 @@ class _PlayerBattlesScreenState extends State<PlayerBattlesScreen> {
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
                   hintText: 'Например: 25',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
+                  border: InputBorder.none,
+                filled: true,
+                fillColor: GzColors.soft,
                 ),
               ),
               const SizedBox(height: 12),
@@ -123,6 +125,7 @@ class _PlayerBattlesScreenState extends State<PlayerBattlesScreen> {
           ),
         ),
       ),
+        ),
       isScrollControlled: true,
     );
   }
@@ -132,7 +135,7 @@ class _PlayerBattlesScreenState extends State<PlayerBattlesScreen> {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: GzColors.soft,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
         children: [
@@ -140,14 +143,14 @@ class _PlayerBattlesScreenState extends State<PlayerBattlesScreen> {
             name,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 6),
           Text(
             '$score',
             style: const TextStyle(
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
               fontSize: 24,
             ),
           ),
@@ -165,17 +168,16 @@ class _PlayerBattlesScreenState extends State<PlayerBattlesScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: GzColors.divider),
-      ),
+        borderRadius: BorderRadius.circular(12),
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             b['title'] ?? '',
             style: const TextStyle(
-              fontWeight: FontWeight.w900,
-              fontSize: 17,
+              fontWeight: FontWeight.w600,
+              fontSize: 14.5,
             ),
           ),
           const SizedBox(height: 8),
@@ -197,7 +199,7 @@ class _PlayerBattlesScreenState extends State<PlayerBattlesScreen> {
                 child: Text(
                   'VS',
                   style: TextStyle(
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                     fontSize: 20,
                   ),
                 ),
@@ -216,11 +218,11 @@ class _PlayerBattlesScreenState extends State<PlayerBattlesScreen> {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: GzColors.greenSoft,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: const Text(
                 'Победитель определён',
-                style: TextStyle(fontWeight: FontWeight.w800),
+                style: TextStyle(fontWeight: FontWeight.w600),
               ),
             )
           else
