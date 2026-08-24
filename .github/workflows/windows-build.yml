@@ -21,7 +21,14 @@ jobs:
         with:
           flutter-version: '3.47.0'
           channel: stable
-          cache: true
+          cache: false
+
+      - name: Verify Flutter and Dart versions
+        shell: pwsh
+        run: |
+          flutter --version
+          dart --version
+          where.exe flutter
 
       - name: Flutter doctor
         run: flutter doctor -v
