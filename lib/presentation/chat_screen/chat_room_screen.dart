@@ -15,22 +15,23 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:mime/mime.dart';
 import 'package:shimmer/shimmer.dart';
 
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/presentation/my_profile_screen/my_profile_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/edit_group_chat_screen.dart';
 import 'package:sportoteka/call/audio_call_screen.dart';
 
 class _WinChatColors {
-  static const Color bg = Color(0xFFF6F7F9);
+  static const Color bg = Colors.white;
   static const Color panel = Colors.white;
   static const Color glass = Color(0xF7FFFFFF);
-  static const Color soft = Color(0xFFFAFBFC);
-  static const Color soft2 = Color(0xFFF6F7F9);
+  static const Color soft = Color(0xFFF7F9F8);
+  static const Color soft2 = Color(0xFFF2F5F3);
   static const Color text = Color(0xFF0B0F14);
   static const Color muted = Color(0xFF6B7280);
   static const Color graphite = Color(0xFF111827);
   static const Color graphite2 = Color(0xFF1F2937);
   static const Color green = Color(0xFF00A750);
-  static const Color greenSoft = Color(0xFFF3FBF7);
+  static const Color greenSoft = Color(0xFFF3FAF6);
   static const Color blue = Color(0xFF2563EB);
   static const Color blueSoft = Color(0xFFF4F7FF);
   static const Color cyan = Color(0xFF06B6D4);
@@ -44,84 +45,126 @@ class _WinChatColors {
   static const Color red = Color(0xFFD92D20);
   static const Color greenDark = Color(0xFF067A46);
   static const Color greenBorder = Color(0xFFD7F0E2);
-  static const Color line = Color(0xFFEFF1F4);
+  static const Color line = Color(0xFFEDF0EE);
 }
 
-Color _messageAccent(int index) {
-  const colors = <Color>[
-    _WinChatColors.green,
-    _WinChatColors.blue,
-    _WinChatColors.cyan,
-    _WinChatColors.violet,
-    _WinChatColors.pink,
-    _WinChatColors.amber,
-  ];
-  return colors[index.abs() % colors.length];
-}
+Color _messageAccent(int index) =>
+    _WinChatColors.greenDark;
 
-Color _messageAccentSoft(int index) {
-  const colors = <Color>[
-    _WinChatColors.greenSoft,
-    _WinChatColors.blueSoft,
-    _WinChatColors.cyanSoft,
-    _WinChatColors.violetSoft,
-    _WinChatColors.pinkSoft,
-    _WinChatColors.amberSoft,
-  ];
-  return colors[index.abs() % colors.length];
-}
+Color _messageAccentSoft(int index) =>
+    _WinChatColors.soft;
 
 class _WinChatText {
-  static const String family = 'Segoe UI';
-  static const List<String> fallback = <String>[
-    'SF Pro Display',
-    'SF Pro Text',
-    'Inter',
-    'Roboto',
-    'Arial',
-  ];
-
-  static double compact(double size) => size <= 10 ? size + .8 : size + .65;
-
-  static TextStyle title(double size) => TextStyle(
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        color: _WinChatColors.text,
-        fontSize: compact(size),
-        fontWeight: FontWeight.w600,
-        letterSpacing: -.25,
-        height: 1.08,
-      );
-
-  static TextStyle body(double size,
-          {Color color = _WinChatColors.text,
-          FontWeight weight = FontWeight.w500}) =>
-      TextStyle(
-        fontFamily: family,
-        fontFamilyFallback: fallback,
+  static TextStyle title(
+    double size, {
+    Color color = _WinChatColors.text,
+    FontWeight weight = FontWeight.w600,
+  }) =>
+      AppTypography.custom(
+        size: size,
+        weight: weight,
         color: color,
-        fontSize: compact(size),
-        fontWeight: weight,
-        letterSpacing: -.05,
-        height: 1.32,
+        height: 1.12,
       );
 
-  static TextStyle caption({Color color = _WinChatColors.muted}) =>
-      const TextStyle(
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        color: _WinChatColors.muted,
-        fontSize: 11.8,
-        fontWeight: FontWeight.w600,
-        letterSpacing: .05,
-        height: 1.12,
-        fontFeatures: const [FontFeature.tabularFigures()],
-      ).copyWith(color: color);
+  static TextStyle body(
+    double size, {
+    Color color = _WinChatColors.text,
+    FontWeight weight = FontWeight.w400,
+  }) =>
+      AppTypography.custom(
+        size: size,
+        weight: weight,
+        color: color,
+        height: 1.25,
+      );
+
+  static TextStyle caption({
+    Color color = _WinChatColors.muted,
+  }) =>
+      AppTypography.custom(
+        size: 9.6,
+        weight: FontWeight.w500,
+        color: color,
+        height: 1.15,
+      );
 }
+
+class _RoomDot extends StatelessWidget {
+  final Color color;
+  final double size;
+  final double opacity;
+
+  const _RoomDot({
+    required this.color,
+    required this.size,
+    this.opacity = 1,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: opacity,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+        ),
+      ),
+    );
+  }
+}
+
+class _RoomDots extends StatelessWidget {
+  final Color color;
+  final bool compact;
+
+  const _RoomDots({
+    this.color = _WinChatColors.green,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scale = compact ? .76 : 1.0;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        _RoomDot(
+          color: color,
+          size: 3.4 * scale,
+          opacity: .32,
+        ),
+        SizedBox(width: 3 * scale),
+        _RoomDot(
+          color: color,
+          size: 4.4 * scale,
+          opacity: .55,
+        ),
+        SizedBox(width: 3 * scale),
+        _RoomDot(
+          color: color,
+          size: 5.4 * scale,
+          opacity: .78,
+        ),
+        SizedBox(width: 3 * scale),
+        _RoomDot(
+          color: color,
+          size: 6.4 * scale,
+        ),
+      ],
+    );
+  }
+}
+
+
 
 class _WinChatDecor {
   static BoxDecoration workspaceBg() => const BoxDecoration(
-        color: Color(0xFFF1F3F5),
+        color: Color(0xFFF7F9F8),
       );
 
   static BoxDecoration inputBar() => const BoxDecoration(
@@ -437,6 +480,44 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
     ]) {
       final value = (member[key] ?? '').toString().trim();
       if (value.isNotEmpty && value.toLowerCase() != 'null') return value;
+    }
+    return '';
+  }
+
+  String _memberPhoto(
+    Map<String, dynamic> member,
+  ) {
+    final raw = (
+      member['photo'] ??
+      member['photo_url'] ??
+      member['avatar'] ??
+      member['avatar_url'] ??
+      ''
+    ).toString().trim();
+
+    if (raw.isEmpty ||
+        raw.toLowerCase() == 'null') {
+      return '';
+    }
+
+    if (raw.startsWith('http://') ||
+        raw.startsWith('https://')) {
+      return raw;
+    }
+
+    if (raw.startsWith('/')) {
+      return 'https://sportotekaapp.ru$raw';
+    }
+
+    return 'https://sportotekaapp.ru/uploads/$raw';
+  }
+
+  String get _peerPhoto {
+    for (final member in members) {
+      final id = _memberUserId(member);
+      if (id > 0 && id != widget.userId) {
+        return _memberPhoto(member);
+      }
     }
     return '';
   }
@@ -1454,20 +1535,43 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                         ),
                       );
                     },
-                    child: CircleAvatar(
-                      radius: 16,
-                      backgroundImage: msg['avatar_url'] != null
-                          ? NetworkImage(msg['avatar_url'])
-                          : null,
-                      backgroundColor: bubbleAccent,
-                      child: msg['avatar_url'] == null
-                          ? Text(
-                              (msg['first_name'] ?? 'U')
-                                  .toString()
-                                  .substring(0, 1),
-                              style: const TextStyle(color: Colors.white),
+                    child: Container(
+                      width: 30,
+                      height: 30,
+                      clipBehavior: Clip.antiAlias,
+                      decoration: BoxDecoration(
+                        color: _WinChatColors.greenSoft,
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      child: msg['avatar_url'] != null
+                          ? Image.network(
+                              msg['avatar_url'],
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Center(
+                                child: Text(
+                                  (msg['first_name'] ?? 'П')
+                                      .toString()
+                                      .substring(0, 1)
+                                      .toUpperCase(),
+                                  style: _WinChatText.title(
+                                    10.2,
+                                    color: _WinChatColors.greenDark,
+                                  ),
+                                ),
+                              ),
                             )
-                          : null,
+                          : Center(
+                              child: Text(
+                                (msg['first_name'] ?? 'П')
+                                    .toString()
+                                    .substring(0, 1)
+                                    .toUpperCase(),
+                                style: _WinChatText.title(
+                                  10.2,
+                                  color: _WinChatColors.greenDark,
+                                ),
+                              ),
+                            ),
                     ),
                   ),
                 ),
@@ -1482,10 +1586,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                         padding: const EdgeInsets.only(bottom: 4),
                         child: Text(
                           senderName,
-                          style: TextStyle(
-                            fontSize: 11.4,
-                            fontWeight: FontWeight.w600,
+                          style: _WinChatText.body(
+                            10.0,
                             color: bubbleAccent,
+                            weight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -1501,9 +1605,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                           padding: const EdgeInsets.symmetric(
                               horizontal: 11, vertical: 7),
                           decoration: BoxDecoration(
-                            color:
-                                isMine ? const Color(0xFFE2F7EA) : Colors.white,
-                            borderRadius: BorderRadius.circular(16),
+                            color: isMine
+                                ? _WinChatColors.greenSoft
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(11),
                             border: null,
                             boxShadow: null,
                           ),
@@ -1639,13 +1744,11 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                                       )
                                     ];
                                   } else {
-                                    final style = TextStyle(
-                                      fontFamily: _WinChatText.family,
-                                      fontFamilyFallback: _WinChatText.fallback,
-                                      fontSize: 13.4,
-                                      fontWeight: FontWeight.w500,
-                                      height: 1.25,
+                                    final style =
+                                        _WinChatText.body(
+                                      11.3,
                                       color: _WinChatColors.text,
+                                      weight: FontWeight.w500,
                                     );
                                     if (searchQuery.isNotEmpty &&
                                         text.toLowerCase().contains(
@@ -1729,126 +1832,139 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final compact = width < 520;
+
     final messagePadding = EdgeInsets.fromLTRB(
-        compact ? 7 : 12, compact ? 6 : 10, compact ? 7 : 12, compact ? 8 : 12);
+      compact ? 7 : 12,
+      compact ? 7 : 10,
+      compact ? 7 : 12,
+      compact ? 9 : 12,
+    );
+
+    final peerPhoto = _peerPhoto;
 
     return Scaffold(
       extendBody: true,
       resizeToAvoidBottomInset: true,
-      backgroundColor: const Color(0xFFF1F3F5),
+      backgroundColor: Colors.white,
       appBar: widget.embedded
           ? null
           : AppBar(
-              toolbarHeight: compact ? 54 : 60,
+              toolbarHeight: compact ? 54 : 58,
               automaticallyImplyLeading: false,
               elevation: 0,
               scrolledUnderElevation: 0,
-              backgroundColor: const Color(0xFFF1F3F5),
+              backgroundColor: Colors.white,
               surfaceTintColor: Colors.transparent,
               systemOverlayStyle: SystemUiOverlayStyle.dark,
-              leadingWidth: 48,
-              leading: IconButton(
-                tooltip: 'Назад',
-                padding: EdgeInsets.zero,
-                constraints:
-                    const BoxConstraints.tightFor(width: 40, height: 40),
-                icon: Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
+              leadingWidth: 46,
+              leading: Center(
+                child: Material(
+                  color: _WinChatColors.soft,
+                  borderRadius: BorderRadius.circular(9),
+                  child: InkWell(
+                    onTap: () => Navigator.pop(context),
+                    borderRadius: BorderRadius.circular(9),
+                    child: const SizedBox(
+                      width: 32,
+                      height: 32,
+                      child: Icon(
+                        Icons.chevron_left_rounded,
+                        size: 18,
+                        color: _WinChatColors.graphite,
+                      ),
+                    ),
                   ),
-                  child: const Icon(Icons.arrow_back_rounded,
-                      color: Color(0xFF0B0F14), size: 19),
                 ),
-                onPressed: () => Navigator.pop(context),
               ),
               titleSpacing: 0,
               title: searchMode
                   ? Container(
-                      height: 34,
+                      height: 36,
                       margin: const EdgeInsets.only(right: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(13),
-                        border: null,
+                        color: _WinChatColors.soft,
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      alignment: Alignment.center,
-                      child: TextField(
-                        controller: _searchController,
-                        autofocus: true,
-                        textInputAction: TextInputAction.search,
-                        onChanged: _onSearchChanged,
-                        onSubmitted: _onSearchChanged,
-                        style: const TextStyle(
-                            fontSize: 13.2,
-                            fontWeight: FontWeight.w500,
-                            height: 1.15),
-                        decoration: const InputDecoration(
-                          hintText: 'Поиск',
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding: EdgeInsets.zero,
-                        ),
+                      child: Row(
+                        children: <Widget>[
+                          const _RoomDots(
+                            color: _WinChatColors.muted,
+                            compact: true,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: _searchController,
+                              autofocus: true,
+                              textInputAction: TextInputAction.search,
+                              onChanged: _onSearchChanged,
+                              onSubmitted: _onSearchChanged,
+                              style: _WinChatText.body(
+                                11.1,
+                                color: _WinChatColors.text,
+                                weight: FontWeight.w500,
+                              ),
+                              decoration: InputDecoration(
+                                hintText: 'Поиск',
+                                hintStyle: _WinChatText.body(
+                                  10.8,
+                                  color: _WinChatColors.muted,
+                                ),
+                                border: InputBorder.none,
+                                isDense: true,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     )
                   : Row(
-                      children: [
+                      children: <Widget>[
                         Container(
                           width: 38,
                           height: 38,
-                          alignment: Alignment.center,
+                          clipBehavior: Clip.antiAlias,
                           decoration: BoxDecoration(
-                            color: _WinChatColors.greenSoft,
-                            shape: BoxShape.circle,
+                            color: _WinChatColors.soft,
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                          child: Icon(
-                            members.length > 2
-                                ? Icons.groups_rounded
-                                : Icons.person_rounded,
-                            color: _WinChatColors.greenDark,
-                            size: 17,
-                          ),
+                          child: peerPhoto.isNotEmpty
+                              ? Image.network(
+                                  peerPhoto,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) =>
+                                      const Center(
+                                    child: _RoomDots(compact: true),
+                                  ),
+                                )
+                              : const Center(
+                                  child: _RoomDots(compact: true),
+                                ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 9),
                         Expanded(
                           child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
+                            children: <Widget>[
                               Text(
                                 _chatTitle,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontFamily: _WinChatText.family,
-                                  fontFamilyFallback: _WinChatText.fallback,
-                                  color: _WinChatColors.text,
-                                  fontSize: 16.4,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: -.25,
-                                  height: 1.05,
+                                style: _WinChatText.title(
+                                  compact ? 13.2 : 14.2,
                                 ),
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                members.isEmpty
-                                    ? 'чат'
-                                    : (members.length == 1
-                                        ? '1 участник'
-                                        : '${members.length} участников'),
+                                members.length > 2
+                                    ? '${members.length} участников'
+                                    : 'Личная переписка',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontFamily: _WinChatText.family,
-                                  fontFamilyFallback: _WinChatText.fallback,
-                                  color: _WinChatColors.muted,
-                                  fontSize: 10.2,
-                                  fontWeight: FontWeight.w600,
-                                  height: 1.0,
-                                ),
+                                style: _WinChatText.caption(),
                               ),
                             ],
                           ),
@@ -1856,96 +1972,87 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                       ],
                     ),
               actions: searchMode
-                  ? [
+                  ? <Widget>[
                       Center(
-                        child: Padding(
-                          padding: const EdgeInsets.only(right: 4),
-                          child: Text(
-                            searchHits.isEmpty
-                                ? '0/0'
-                                : '${(currentHit >= 0 ? currentHit + 1 : 0)}/${searchHits.length}',
-                            style: const TextStyle(
-                                color: _WinChatColors.graphite,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700),
+                        child: Text(
+                          searchHits.isEmpty
+                              ? '0/0'
+                              : '${currentHit >= 0 ? currentHit + 1 : 0}/${searchHits.length}',
+                          style: _WinChatText.body(
+                            10.0,
+                            color: _WinChatColors.muted,
+                            weight: FontWeight.w600,
                           ),
                         ),
                       ),
                       IconButton(
-                        tooltip: 'Предыдущее',
-                        constraints: const BoxConstraints.tightFor(
-                            width: 36, height: 52),
-                        icon: const Icon(Icons.keyboard_arrow_up_rounded,
-                            color: _WinChatColors.graphite, size: 22),
+                        icon: const Icon(
+                          Icons.keyboard_arrow_up_rounded,
+                          size: 18,
+                        ),
                         onPressed: searchHits.isEmpty ? null : _prevHit,
                       ),
                       IconButton(
-                        tooltip: 'Следующее',
-                        constraints: const BoxConstraints.tightFor(
-                            width: 36, height: 52),
-                        icon: const Icon(Icons.keyboard_arrow_down_rounded,
-                            color: _WinChatColors.graphite, size: 22),
+                        icon: const Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 18,
+                        ),
                         onPressed: searchHits.isEmpty ? null : _nextHit,
                       ),
                       IconButton(
-                        tooltip: 'Закрыть поиск',
-                        constraints: const BoxConstraints.tightFor(
-                            width: 36, height: 46),
-                        icon: const Icon(Icons.close_rounded,
-                            color: _WinChatColors.graphite, size: 21),
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          size: 18,
+                        ),
                         onPressed: _toggleSearch,
                       ),
                     ]
-                  : [
-                      IconButton(
+                  : <Widget>[
+                      _RoomHeaderIcon(
                         tooltip: 'Поиск',
-                        constraints: const BoxConstraints.tightFor(
-                            width: 36, height: 46),
-                        icon: const Icon(Icons.search_rounded,
-                            color: Color(0xFF0B0F14), size: 22),
-                        onPressed: _toggleSearch,
+                        icon: Icons.search_rounded,
+                        onTap: _toggleSearch,
                       ),
-                      IconButton(
+                      _RoomHeaderIcon(
                         tooltip: 'Аудиозвонок',
-                        constraints: const BoxConstraints.tightFor(
-                            width: 36, height: 46),
-                        icon: const Icon(Icons.call_rounded,
-                            color: Color(0xFF0B0F14), size: 21),
-                        onPressed: _startAudioCall,
+                        icon: Icons.call_rounded,
+                        onTap: _startAudioCall,
                       ),
-                      IconButton(
-                        tooltip: 'Участники',
-                        constraints: const BoxConstraints.tightFor(
-                            width: 38, height: 46),
-                        icon: const Icon(Icons.group_rounded,
-                            color: Color(0xFF0B0F14), size: 22),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => EditGroupChatScreen(
-                                chatId: widget.chatId,
-                                currentUserId: widget.userId,
-                                chatName: _chatTitle,
+                      if (members.length > 2)
+                        _RoomHeaderIcon(
+                          tooltip: 'Участники',
+                          icon: Icons.group_rounded,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => EditGroupChatScreen(
+                                  chatId: widget.chatId,
+                                  currentUserId: widget.userId,
+                                  chatName: _chatTitle,
+                                ),
                               ),
-                            ),
-                          ).then((_) => _loadMembers());
-                        },
-                      ),
-                      const SizedBox(width: 4),
+                            ).then((_) => _loadMembers());
+                          },
+                        ),
+                      const SizedBox(width: 5),
                     ],
-              bottom: PreferredSize(
-                preferredSize: const Size.fromHeight(1),
-                child: const SizedBox(height: 1),
+              bottom: const PreferredSize(
+                preferredSize: Size.fromHeight(1),
+                child: Divider(
+                  height: 1,
+                  thickness: .6,
+                  color: _WinChatColors.line,
+                ),
               ),
             ),
       body: Column(
-        children: [
+        children: <Widget>[
           _buildEditChip(),
           _buildReplyChip(),
           Expanded(
             child: Stack(
-              children: [
+              children: <Widget>[
                 Container(
                   decoration: _WinChatDecor.workspaceBg(),
                   child: isLoading
@@ -1961,7 +2068,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                         )
                       : ListView.builder(
                           physics: const BouncingScrollPhysics(
-                              parent: AlwaysScrollableScrollPhysics()),
+                            parent: AlwaysScrollableScrollPhysics(),
+                          ),
                           controller: _scrollController,
                           padding: messagePadding,
                           itemCount: messages.length,
@@ -1970,68 +2078,100 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                           cacheExtent: 1000,
                           itemBuilder: (context, index) {
                             final currentMessage = messages[index];
-                            final currentDate =
-                                _safeParseDate(currentMessage['created_at'])
-                                    .toLocal();
+                            final currentDate = _safeParseDate(
+                              currentMessage['created_at'],
+                            ).toLocal();
+
                             final previousMessage =
                                 index > 0 ? messages[index - 1] : null;
+
                             final prevDate = previousMessage != null
-                                ? _safeParseDate(previousMessage['created_at'])
-                                    .toLocal()
+                                ? _safeParseDate(
+                                    previousMessage['created_at'],
+                                  ).toLocal()
                                 : null;
+
                             final isSameUser = previousMessage != null &&
                                 previousMessage['sender_id'] ==
                                     currentMessage['sender_id'];
+
                             final messageWidget = _buildMessage(
                               currentMessage,
                               showAvatarAndName: !isSameUser,
                             );
 
                             if (prevDate == null ||
-                                !DateUtils.isSameDay(currentDate, prevDate)) {
+                                !DateUtils.isSameDay(
+                                  currentDate,
+                                  prevDate,
+                                )) {
                               return Column(
-                                children: [
-                                  Container(
-                                    margin: const EdgeInsets.only(
-                                        bottom: 5, top: 2),
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 4, horizontal: 11),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(16),
+                                children: <Widget>[
+                                  Padding(
+                                    padding: const EdgeInsets.only(
+                                      bottom: 5,
+                                      top: 3,
                                     ),
-                                    child: Text(
-                                      DateFormat.yMMMMd('ru_RU')
-                                          .format(currentDate),
-                                      style: const TextStyle(
-                                          color: Color(0xFF6B7280),
-                                          fontSize: 10.6,
-                                          fontWeight: FontWeight.w600),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: <Widget>[
+                                        const _RoomDot(
+                                          color: _WinChatColors.muted,
+                                          size: 3.5,
+                                          opacity: .45,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          DateFormat.yMMMMd('ru_RU')
+                                              .format(currentDate),
+                                          style: _WinChatText.caption(),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        const _RoomDot(
+                                          color: _WinChatColors.muted,
+                                          size: 3.5,
+                                          opacity: .45,
+                                        ),
+                                      ],
                                     ),
                                   ),
                                   messageWidget,
                                 ],
                               );
                             }
+
                             return messageWidget;
                           },
                         ),
                 ),
                 Positioned(
-                  bottom: compact ? 10 : 16,
-                  right: compact ? 10 : 16,
+                  bottom: compact ? 8 : 12,
+                  right: compact ? 8 : 12,
                   child: ValueListenableBuilder<bool>(
                     valueListenable: _showScrollToBottomVN,
                     builder: (_, visible, __) {
                       return IgnorePointer(
                         ignoring: !visible,
                         child: AnimatedOpacity(
-                          opacity: visible ? 1.0 : 0.0,
-                          duration: const Duration(milliseconds: 200),
-                          child: FloatingActionButton.small(
-                            backgroundColor: _WinChatColors.green,
-                            onPressed: _scrollToBottom,
-                            child: const Icon(Icons.arrow_downward, size: 18),
+                          opacity: visible ? 1 : 0,
+                          duration: const Duration(milliseconds: 180),
+                          child: Material(
+                            color: _WinChatColors.greenSoft,
+                            borderRadius: BorderRadius.circular(10),
+                            child: InkWell(
+                              onTap: _scrollToBottom,
+                              borderRadius: BorderRadius.circular(10),
+                              child: const SizedBox(
+                                width: 34,
+                                height: 34,
+                                child: Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  size: 18,
+                                  color: _WinChatColors.greenDark,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       );
@@ -2044,81 +2184,84 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
           SafeArea(
             top: false,
             child: Container(
-              decoration: _WinChatDecor.inputBar(),
-              padding: EdgeInsets.fromLTRB(compact ? 6 : 10, compact ? 4 : 6,
-                  compact ? 6 : 10, compact ? 4 : 6),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(
+                  top: BorderSide(
+                    color: _WinChatColors.line,
+                    width: .6,
+                  ),
+                ),
+              ),
+              padding: EdgeInsets.fromLTRB(
+                compact ? 6 : 9,
+                6,
+                compact ? 6 : 9,
+                6,
+              ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  IconButton(
-                    visualDensity: compact
-                        ? VisualDensity.compact
-                        : VisualDensity.standard,
-                    icon: const Icon(Icons.attach_file,
-                        color: _WinChatColors.muted),
-                    onPressed: _pickImage,
+                children: <Widget>[
+                  _RoomInputAction(
+                    icon: Icons.attach_file_rounded,
+                    onTap: _pickImage,
                   ),
+                  const SizedBox(width: 5),
                   Expanded(
                     child: Container(
+                      constraints: const BoxConstraints(minHeight: 38),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF1F3F5),
-                        borderRadius: BorderRadius.circular(22),
+                        color: _WinChatColors.soft,
+                        borderRadius: BorderRadius.circular(11),
                       ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: TextField(
-                              focusNode: _inputFocus,
-                              controller: _controller,
-                              minLines: 1,
-                              maxLines: 4,
-                              decoration: InputDecoration(
-                                hintText: editingMessageId != null
-                                    ? 'Изменить сообщение…'
-                                    : (replyingToId != null
-                                        ? 'Ответить…'
-                                        : 'Написать сообщение…'),
-                                border: InputBorder.none,
-                                contentPadding: EdgeInsets.symmetric(
-                                    vertical: compact ? 6 : 8),
-                              ),
-                              style: const TextStyle(
-                                  fontSize: 13.2,
-                                  height: 1.2,
-                                  fontWeight: FontWeight.w500),
-                              onChanged: (v) => setState(
-                                  () => isTyping = v.trim().isNotEmpty),
-                              onSubmitted: (_) => _sendMessage(),
-                            ),
+                      child: TextField(
+                        focusNode: _inputFocus,
+                        controller: _controller,
+                        minLines: 1,
+                        maxLines: 4,
+                        decoration: InputDecoration(
+                          hintText: editingMessageId != null
+                              ? 'Изменить сообщение…'
+                              : (replyingToId != null
+                                  ? 'Ответить…'
+                                  : 'Сообщение…'),
+                          hintStyle: _WinChatText.body(
+                            10.8,
+                            color: _WinChatColors.muted,
                           ),
-                          if (isTyping)
-                            IconButton(
-                              visualDensity: compact
-                                  ? VisualDensity.compact
-                                  : VisualDensity.standard,
-                              icon: const Icon(Icons.send,
-                                  color: _WinChatColors.green),
-                              onPressed: _sendMessage,
-                            ),
-                        ],
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding:
+                              const EdgeInsets.symmetric(vertical: 9),
+                        ),
+                        style: _WinChatText.body(
+                          11.3,
+                          color: _WinChatColors.text,
+                          weight: FontWeight.w500,
+                        ),
+                        onChanged: (v) => setState(
+                          () => isTyping = v.trim().isNotEmpty,
+                        ),
+                        onSubmitted: (_) => _sendMessage(),
                       ),
                     ),
                   ),
-                  if (!isTyping)
+                  const SizedBox(width: 5),
+                  if (isTyping)
+                    _RoomSendAction(onTap: _sendMessage)
+                  else
                     GestureDetector(
                       onLongPressStart: (_) => _startRecording(),
                       onLongPressEnd: (_) => _stopRecording(),
-                      child: IconButton(
-                        visualDensity: compact
-                            ? VisualDensity.compact
-                            : VisualDensity.standard,
-                        icon: Icon(isRecording ? Icons.mic_off : Icons.mic),
+                      child: _RoomInputAction(
+                        icon: isRecording
+                            ? Icons.mic_off_rounded
+                            : Icons.mic_none_rounded,
                         color: isRecording
                             ? _WinChatColors.red
                             : _WinChatColors.muted,
-                        onPressed: () {},
+                        onTap: () {},
                       ),
                     ),
                 ],
@@ -2142,6 +2285,109 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
     // TODO: Отправка на сервер (multipart как _sendImage)
   }
 }
+
+class _RoomHeaderIcon extends StatelessWidget {
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _RoomHeaderIcon({
+    required this.tooltip,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: Tooltip(
+        message: tooltip,
+        child: Material(
+          color: _WinChatColors.soft,
+          borderRadius: BorderRadius.circular(9),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(9),
+            child: SizedBox(
+              width: 32,
+              height: 32,
+              child: Icon(
+                icon,
+                size: 16,
+                color: _WinChatColors.graphite,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RoomInputAction extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _RoomInputAction({
+    required this.icon,
+    required this.onTap,
+    this.color = _WinChatColors.muted,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _WinChatColors.soft,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: SizedBox(
+          width: 36,
+          height: 36,
+          child: Icon(
+            icon,
+            size: 17,
+            color: color,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RoomSendAction extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _RoomSendAction({
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _WinChatColors.greenSoft,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: const SizedBox(
+          width: 36,
+          height: 36,
+          child: Center(
+            child: _RoomDots(
+              color: _WinChatColors.greenDark,
+              compact: true,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 
 // ====================== Fullscreen Image ======================
 

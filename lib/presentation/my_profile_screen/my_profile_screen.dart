@@ -769,6 +769,10 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
   // содержимое меняется справа без перехода на новый экран.
   String _profileWorkspaceSection = 'posts';
 
+  // Подключим к API важных уведомлений на следующем этапе.
+  // Пока 0 = без badge, но сам фирменный знак уже работает.
+  int _importantNotificationCount = 0;
+
   // Мобильные окна поверх профиля. Так нижний Instagram-dock не исчезает
   // при открытии ленты, Reels, чата, сервисов и рабочей зоны.
   Widget? _mobileWindowChild;
@@ -811,6 +815,12 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
   List<_UserShort> _followings = [];
   bool _loadingFollowers = false;
   bool _loadingFollowings = false;
+
+  // Социальные списки: состояние подписки текущего пользователя
+  // на людей из списков "Подписчики / Подписки".
+  final Map<int, bool> _socialFollowingState = <int, bool>{};
+  final Set<int> _socialFollowingLoaded = <int>{};
+  final Set<int> _socialFollowingBusy = <int>{};
   static const bool _enableSportotekaAi = false;
   final Random _rnd = Random();
   int _aiCardSeed = 1;
@@ -940,11 +950,20 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     if (value.contains('лента') || value.contains('feed') || value.contains('новост')) {
       return 'feed';
     }
-    if (value.contains('reels') || value.contains('рилс') || value.contains('видео')) {
+    if (value.contains('видеоурок') || value.contains('обучен')) {
+      return 'lessons';
+    }
+    if (value.contains('reels') || value.contains('рилс') || value.contains('эфир')) {
       return 'reels';
     }
     if (value.contains('чат') || value.contains('сообщ')) {
       return 'chat';
+    }
+    if (value.contains('поиск')) {
+      return 'search';
+    }
+    if (value.contains('площад')) {
+      return 'venues';
     }
     if (value.contains('трек') || value.contains('трениров') || value.contains('tracking')) {
       return 'tracker';
@@ -1194,6 +1213,17 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     _openProPanel();
   }
 
+  void _goToWorkspaceHub() {
+    if (!mounted) return;
+
+    // Возвращаемся именно на экран выбора доступного рабочего пространства,
+    // не открывая напрямую кабинет клуба/тренера из личного профиля.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Get.offAllNamed(AppRoutes.workspaceHubScreen);
+    });
+  }
+
   Future<void> _openMainChat() async {
     final myId = await PrefUtils.getUserId() ?? 0;
     if (!mounted || myId <= 0) return;
@@ -1209,17 +1239,14 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
       return;
     }
 
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => ChatScreen(userId: myId)),
+    _openCmrWindow(
+      title: 'Чаты',
+      icon: Icons.forum_rounded,
+      maxWidth: 1180,
+      maxHeight: 800,
+      child: ChatScreen(userId: myId),
     );
-
-    if (!mounted) return;
-    setState(() {
-      _mobileWindowChild = null;
-      _mobileWindowTitle = '';
-      _mobileWindowIcon = Icons.apps_rounded;
-      _mobileDockKey = 'profile';
-    });
+    if (mounted) setState(() => _mobileDockKey = 'chat');
   }
 
   Future<void> _openProPanel() async {
@@ -1300,15 +1327,18 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
       return;
     }
 
-    // Телефон: обычный полноэкранный переход.
-    Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => const SportCommunityScreen(
-          sportName: 'Футбол',
-          embedded: false,
-        ),
+    // Телефон: открываем внутри личной оболочки, чтобы нижнее меню не исчезало.
+    _openCmrWindow(
+      title: 'Соцлента и новости',
+      icon: Icons.dynamic_feed_rounded,
+      maxWidth: 720,
+      maxHeight: 820,
+      child: const SportCommunityScreen(
+        sportName: 'Футбол',
+        embedded: true,
       ),
     );
+    if (mounted) setState(() => _mobileDockKey = 'feed');
   }
   void _openHomeServices() => _openServicesWindow();
   void _openHomeTips() => _openTipsWindow();
@@ -1323,74 +1353,97 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     );
   }
 
-  void _openMobileSearchWindow() {
+  Future<void> _openPeopleSearchWindow() async {
+    final myUserId = await PrefUtils.getUserId() ?? 0;
+    if (!mounted) return;
     _openCmrWindow(
-      title: 'Поиск',
+      title: 'Поиск людей',
       icon: Icons.search_rounded,
-      maxWidth: 760,
-      maxHeight: 760,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              height: 44,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF6F7F9),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE9EEF3)),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.search_rounded, size: 20, color: Color(0xFF667085)),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      decoration: InputDecoration(
-                        isDense: true,
-                        border: InputBorder.none,
-                        hintText: 'Поиск по Спортотеке',
-                        hintStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF98A2B3)),
-                      ),
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF111827)),
-                    ),
-                  ),
-                ],
+      maxWidth: 860,
+      maxHeight: 800,
+      child: _ProfilePeopleSearchPanel(
+        apiBase: _apiBase,
+        myUserId: myUserId,
+        onOpenUser: (userId) {
+          if (!mounted || userId <= 0) return;
+          Navigator.of(context).push<void>(
+            MaterialPageRoute<void>(
+              builder: (_) => MyProfileScreen(
+                userId: userId,
+                publicView: true,
               ),
             ),
-            const SizedBox(height: 14),
-            Text('Быстрый переход', style: _flagshipTitle(13.5)),
-            const SizedBox(height: 10),
-            _buildSettingsRow(
-              icon: Icons.newspaper_rounded,
-              title: 'Соцлента и новости',
-              subtitle: 'общие новости сообщества',
-              onTap: _openCommunityFeedHome,
-            ),
-            _buildSettingsRow(
-              icon: Icons.groups_rounded,
-              title: 'Команды / CMR',
-              subtitle: 'команды, составы и рабочий режим',
-              onTap: _openTeamsWindow,
-            ),
-            _buildSettingsRow(
-              icon: Icons.play_circle_fill_rounded,
-              title: 'Reels сообщества',
-              subtitle: 'короткие спортивные видео',
-              onTap: _openGlobalReels,
-            ),
-            _buildSettingsRow(
-              icon: _primaryZoneIcon,
-              title: _primaryZoneTitle,
-              subtitle: _primaryZoneSubtitle,
-              strong: true,
-              onTap: _openPrimaryArea,
-            ),
-          ],
-        ),
+          );
+        },
       ),
+    );
+  }
+
+  // Старое имя оставляем как alias, чтобы внешние вызовы/старые участки файла
+  // не сломались после перехода на полноценный поиск пользователей.
+  void _openMobileSearchWindow() {
+    _openPeopleSearchWindow();
+  }
+
+  void _openComingSoonSection({
+    required String title,
+    required String description,
+    required IconData icon,
+    required List<String> features,
+  }) {
+    _openCmrWindow(
+      title: title,
+      icon: icon,
+      maxWidth: 760,
+      maxHeight: 720,
+      child: _ProfileComingSoonPanel(
+        title: title,
+        description: description,
+        icon: icon,
+        features: features,
+      ),
+    );
+  }
+
+  void _openNearbyGamesWindow() {
+    _openComingSoonSection(
+      title: 'Игры рядом',
+      description: 'Раздел дополняется. Здесь появится поиск открытых игр, спаррингов и команд, которым нужны игроки.',
+      icon: Icons.sports_soccer_rounded,
+      features: const [
+        'Открытые игры и спарринги рядом',
+        'Поиск игроков на матч или тренировку',
+        'Создание своей игры и набор участников',
+        'Переход в чат с организатором',
+      ],
+    );
+  }
+
+  void _openNearbyTrainingsWindow() {
+    _openComingSoonSection(
+      title: 'Тренировки рядом',
+      description: 'Раздел дополняется. В нём тренеры и клубы смогут публиковать открытые индивидуальные и групповые тренировки.',
+      icon: Icons.directions_run_rounded,
+      features: const [
+        'Индивидуальные тренировки',
+        'Групповые занятия',
+        'Фильтры по тренеру, возрасту и локации',
+        'Запись и сообщение тренеру',
+      ],
+    );
+  }
+
+  void _openSavedWindow() {
+    _openComingSoonSection(
+      title: 'Сохранённое',
+      description: 'Раздел дополняется. Здесь будут собраны материалы, которые пользователь сохранил для быстрого доступа.',
+      icon: Icons.bookmark_border_rounded,
+      features: const [
+        'Видеоуроки',
+        'Публикации и Reels',
+        'Тренеры и пользователи',
+        'Площадки',
+      ],
     );
   }
 
@@ -1688,7 +1741,64 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
       icon: Icons.stadium_rounded,
       maxWidth: 1120,
       maxHeight: 800,
-      child: BookingScreen(userId: userId),
+      child: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+            padding: const EdgeInsets.fromLTRB(13, 11, 13, 11),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF3FAF6),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: const Icon(
+                    Icons.auto_awesome_rounded,
+                    size: 18,
+                    color: Color(0xFF067A46),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Раздел дополняется',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF111827),
+                        ),
+                      ),
+                      SizedBox(height: 3),
+                      Text(
+                        'Каталог площадок уже доступен. Далее добавим свободные слоты, онлайн-бронирование, оплату и открытые тренировки.',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          height: 1.35,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF667085),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(child: BookingScreen(userId: userId)),
+        ],
+      ),
     );
   }
 
@@ -2209,7 +2319,16 @@ void initState() {
         final data = jsonDecode(response.body);
         final ok = (data is Map) && (data['status'] == 'success' || data['status'] == 'subscribed' || data['status'] == 'unsubscribed' || data['success'] == true);
         if (ok) {
-          if (mounted) setState(() => isFollowing = !isFollowing);
+          if (mounted) {
+            setState(() {
+              isFollowing = !isFollowing;
+              final viewedId = widget.userId ?? 0;
+              if (viewedId > 0) {
+                _socialFollowingState[viewedId] = isFollowing;
+                _socialFollowingLoaded.add(viewedId);
+              }
+            });
+          }
           await _loadFollowersData();
           _followers.clear();
           _followings.clear();
@@ -2808,6 +2927,174 @@ void initState() {
     );
   }
 
+  String _socialRoleLabel(String? rawRole) {
+    final roleValue = (rawRole ?? '').trim().toLowerCase();
+    if (roleValue.isEmpty) return '';
+
+    if (roleValue == 'player' || roleValue.contains('игрок')) {
+      return 'Игрок';
+    }
+    if (roleValue == 'coach' ||
+        roleValue == 'trainer' ||
+        roleValue.contains('тренер')) {
+      return 'Тренер';
+    }
+    if (roleValue == 'club' || roleValue.contains('клуб')) {
+      return 'Клуб';
+    }
+    if (roleValue == 'parent' || roleValue.contains('родител')) {
+      return 'Родитель';
+    }
+
+    final raw = (rawRole ?? '').trim();
+    if (raw.isEmpty) return '';
+    return raw[0].toUpperCase() + raw.substring(1);
+  }
+
+  Future<void> _ensureSocialFollowingState(int targetUserId) async {
+    if (targetUserId <= 0 ||
+        _socialFollowingLoaded.contains(targetUserId) ||
+        _socialFollowingBusy.contains(targetUserId)) {
+      return;
+    }
+
+    final myId = await PrefUtils.getUserId() ?? 0;
+    if (myId <= 0) return;
+
+    if (myId == targetUserId) {
+      if (!mounted) return;
+      setState(() {
+        _socialFollowingState[targetUserId] = false;
+        _socialFollowingLoaded.add(targetUserId);
+      });
+      return;
+    }
+
+    _socialFollowingBusy.add(targetUserId);
+
+    try {
+      final response = await http.post(
+        Uri.parse('$_apiBase/check_following.php'),
+        body: <String, String>{
+          'follower_id': myId.toString(),
+          'following_id': targetUserId.toString(),
+        },
+      );
+
+      bool following = false;
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        following = data is Map && data['following'] == true;
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _socialFollowingState[targetUserId] = following;
+        _socialFollowingLoaded.add(targetUserId);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _socialFollowingState[targetUserId] = false;
+        _socialFollowingLoaded.add(targetUserId);
+      });
+    } finally {
+      _socialFollowingBusy.remove(targetUserId);
+    }
+  }
+
+  Future<void> _toggleSocialFollowing(int targetUserId) async {
+    if (targetUserId <= 0 ||
+        _socialFollowingBusy.contains(targetUserId)) {
+      return;
+    }
+
+    final myId = await PrefUtils.getUserId() ?? 0;
+    if (myId <= 0 || myId == targetUserId) return;
+
+    if (!_socialFollowingLoaded.contains(targetUserId)) {
+      await _ensureSocialFollowingState(targetUserId);
+    }
+
+    final currentlyFollowing =
+        _socialFollowingState[targetUserId] == true;
+
+    if (mounted) {
+      setState(() => _socialFollowingBusy.add(targetUserId));
+    } else {
+      _socialFollowingBusy.add(targetUserId);
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse(
+          currentlyFollowing
+              ? '$_apiBase/unsubscribe.php'
+              : '$_apiBase/subscribe.php',
+        ),
+        body: <String, String>{
+          'follower_id': myId.toString(),
+          'following_id': targetUserId.toString(),
+        },
+      );
+
+      if (response.statusCode != 200) return;
+
+      final data = jsonDecode(response.body);
+      final ok = data is Map &&
+          (data['status'] == 'success' ||
+              data['status'] == 'subscribed' ||
+              data['status'] == 'unsubscribed' ||
+              data['success'] == true);
+
+      if (!ok || !mounted) return;
+
+      setState(() {
+        _socialFollowingState[targetUserId] =
+            !currentlyFollowing;
+        _socialFollowingLoaded.add(targetUserId);
+      });
+
+      await _loadFollowersData();
+
+      if (widget.userId == targetUserId) {
+        await _checkIfFollowing();
+      }
+    } catch (_) {
+      // Оставляем текущее состояние — список не должен прыгать при сетевой ошибке.
+    } finally {
+      if (mounted) {
+        setState(() => _socialFollowingBusy.remove(targetUserId));
+      } else {
+        _socialFollowingBusy.remove(targetUserId);
+      }
+    }
+  }
+
+  void _openSocialUserProfile(
+    BuildContext sheetContext,
+    _UserShort user,
+  ) {
+    final userId = user.id ?? 0;
+    if (userId <= 0) return;
+
+    Navigator.of(sheetContext).pop();
+
+    Navigator.of(context)
+        .push<void>(
+          MaterialPageRoute<void>(
+            builder: (_) => MyProfileScreen(
+              userId: userId,
+              publicView: true,
+            ),
+          ),
+        )
+        .then((_) async {
+      await _loadFollowersData();
+      await _checkIfFollowing();
+    });
+  }
+
   Future<void> _fetchFollowersList() async {
     if (_loadingFollowers) return;
     if (mounted) setState(() => _loadingFollowers = true);
@@ -2870,106 +3157,570 @@ void initState() {
     }
   }
 
-  void _openUsersModal({required bool showFollowers}) async {
+  void _openUsersModal({
+    required bool showFollowers,
+  }) async {
     if (showFollowers) {
       await _fetchFollowersList();
     } else {
       await _fetchFollowingsList();
     }
+
     if (!mounted) return;
 
-    showModalBottomSheet(
+    final searchController = TextEditingController();
+
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) {
-        final title = showFollowers ? 'Подписчики' : 'Подписки';
-        final loading = showFollowers ? _loadingFollowers : _loadingFollowings;
-        final items = showFollowers ? _followers : _followings;
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(.24),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            final allItems =
+                showFollowers ? _followers : _followings;
 
-        return Container(
-          height: MediaQuery.of(ctx).size.height * 0.85,
-          decoration: const BoxDecoration(borderRadius: BorderRadius.vertical(top: Radius.circular(20)), color: Colors.white),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Expanded(child: Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black), textAlign: TextAlign.center)),
-                    IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close, size: 24, color: Colors.black)),
+            final query =
+                searchController.text.trim().toLowerCase();
+
+            final items = query.isEmpty
+                ? allItems
+                : allItems.where((user) {
+                    final haystack = <String>[
+                      user.fullName,
+                      user.username ?? '',
+                      user.role ?? '',
+                      user.teamName ?? '',
+                      user.clubName ?? '',
+                    ].join(' ').toLowerCase();
+                    return haystack.contains(query);
+                  }).toList();
+
+            final loading =
+                showFollowers ? _loadingFollowers : _loadingFollowings;
+
+            final viewportHeight =
+                MediaQuery.sizeOf(sheetContext).height;
+            final viewportWidth =
+                MediaQuery.sizeOf(sheetContext).width;
+
+            final isPhone = viewportWidth < 720;
+
+            Widget dots({
+              Color color = const Color(0xFF00A750),
+              bool compact = true,
+            }) {
+              final values = compact
+                  ? const <List<double>>[
+                      <double>[3.0, .34],
+                      <double>[3.8, .48],
+                      <double>[4.6, .68],
+                      <double>[5.4, 1],
+                    ]
+                  : const <List<double>>[
+                      <double>[3.5, .34],
+                      <double>[4.5, .48],
+                      <double>[5.5, .68],
+                      <double>[6.5, 1],
+                    ];
+
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  for (int i = 0; i < values.length; i++) ...[
+                    Container(
+                      width: values[i][0],
+                      height: values[i][0],
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(values[i][1]),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    if (i != values.length - 1)
+                      const SizedBox(width: 3),
                   ],
+                ],
+              );
+            }
+
+            Widget avatar(_UserShort user) {
+              final hasPhoto =
+                  (user.photoUrl ?? '').trim().isNotEmpty;
+
+              return Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFFF1F4F2),
+                  border: Border.all(
+                    color: const Color(0xFFEEF1EF),
+                    width: .8,
+                  ),
                 ),
-              ),
-              const Divider(height: 1),
-              if (loading)
-                const Expanded(child: Center(child: CircularProgressIndicator(color: ProfilePalette.primaryGreen)))
-              else if (items.isEmpty)
-                Expanded(
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                clipBehavior: Clip.antiAlias,
+                child: hasPhoto
+                    ? Image.network(
+                        user.photoUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Center(
+                          child: Text(
+                            user.initials,
+                            style: AppTypography.custom(
+                              size: 12,
+                              weight: FontWeight.w600,
+                              color: const Color(0xFF067A46),
+                              height: 1,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                        ),
+                      )
+                    : Center(
+                        child: Text(
+                          user.initials,
+                          style: AppTypography.custom(
+                            size: 12,
+                            weight: FontWeight.w600,
+                            color: const Color(0xFF067A46),
+                            height: 1,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ),
+              );
+            }
+
+            String secondaryLine(_UserShort user) {
+              final parts = <String>[];
+
+              final username = (user.username ?? '').trim();
+              if (username.isNotEmpty) {
+                parts.add(username.startsWith('@')
+                    ? username
+                    : '@$username');
+              }
+
+              final roleLabel =
+                  _socialRoleLabel(user.role);
+              if (roleLabel.isNotEmpty) {
+                parts.add(roleLabel);
+              }
+
+              final team = (user.teamName ?? '').trim();
+              final club = (user.clubName ?? '').trim();
+
+              if (team.isNotEmpty) {
+                parts.add(team);
+              } else if (club.isNotEmpty) {
+                parts.add(club);
+              }
+
+              return parts.join(' · ');
+            }
+
+            Widget followButton(_UserShort user) {
+              final targetId = user.id ?? 0;
+              if (targetId <= 0) {
+                return const SizedBox.shrink();
+              }
+
+              final myIdFuture = PrefUtils.getUserId();
+
+              return FutureBuilder<int?>(
+                future: myIdFuture,
+                builder: (context, snapshot) {
+                  final myId = snapshot.data ?? 0;
+
+                  if (myId == targetId) {
+                    return Container(
+                      height: 32,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 11,
+                      ),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF7F9F8),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'Вы',
+                        style: AppTypography.custom(
+                          size: 9.2,
+                          weight: FontWeight.w600,
+                          color: const Color(0xFF667085),
+                          height: 1,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    );
+                  }
+
+                  final loaded =
+                      _socialFollowingLoaded.contains(targetId);
+                  final busy =
+                      _socialFollowingBusy.contains(targetId);
+                  final following =
+                      _socialFollowingState[targetId] == true;
+
+                  if (!loaded && !busy) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) async {
+                      await _ensureSocialFollowingState(targetId);
+                      if (sheetContext.mounted) {
+                        setSheetState(() {});
+                      }
+                    });
+                  }
+
+                  if (!loaded || busy) {
+                    return Container(
+                      width: 86,
+                      height: 32,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF7F9F8),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const SizedBox(
+                        width: 13,
+                        height: 13,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.7,
+                          color: Color(0xFF00A750),
+                        ),
+                      ),
+                    );
+                  }
+
+                  return Material(
+                    color: following
+                        ? const Color(0xFFF1F3F2)
+                        : const Color(0xFF00A750),
+                    borderRadius: BorderRadius.circular(8),
+                    child: InkWell(
+                      onTap: () async {
+                        await _toggleSocialFollowing(targetId);
+                        if (sheetContext.mounted) {
+                          setSheetState(() {});
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        height: 32,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 11,
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          following
+                              ? 'Вы подписаны'
+                              : 'Подписаться',
+                          style: AppTypography.custom(
+                            size: 9.1,
+                            weight: FontWeight.w600,
+                            color: following
+                                ? const Color(0xFF344054)
+                                : Colors.white,
+                            height: 1,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              );
+            }
+
+            Widget row(_UserShort user) {
+              final secondary = secondaryLine(user);
+
+              return Material(
+                color: Colors.white,
+                child: InkWell(
+                  onTap: () =>
+                      _openSocialUserProfile(sheetContext, user),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      14,
+                      8,
+                      12,
+                      8,
+                    ),
+                    child: Row(
                       children: [
-                        Icon(showFollowers ? Icons.people_outline : Icons.person_outline, size: 64, color: Colors.grey.shade400),
-                        const SizedBox(height: 16),
-                        Text(showFollowers ? 'Пока нет подписчиков' : 'Пока нет подписок', style: const TextStyle(fontSize: 16, color: Colors.grey)),
+                        avatar(user),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                user.fullName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.custom(
+                                  size: 11.2,
+                                  weight: FontWeight.w600,
+                                  color: const Color(0xFF0B0F14),
+                                  height: 1.15,
+                                  letterSpacing: 0,
+                                ),
+                              ),
+                              if (secondary.isNotEmpty) ...[
+                                const SizedBox(height: 3),
+                                Text(
+                                  secondary,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.custom(
+                                    size: 9.2,
+                                    weight: FontWeight.w400,
+                                    color: const Color(0xFF7A828D),
+                                    height: 1.15,
+                                    letterSpacing: 0,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        followButton(user),
                       ],
                     ),
                   ),
-                )
-              else
-                Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: items.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      final u = items[index];
-                      final hasPhoto = (u.photoUrl ?? '').trim().isNotEmpty;
+                ),
+              );
+            }
 
-                      return ListTile(
-                        leading: CircleAvatar(
-                          radius: 22,
-                          backgroundColor: ProfilePalette.primaryGreen.withOpacity(0.1),
-                          backgroundImage: hasPhoto ? NetworkImage(u.photoUrl ?? '') : null,
-                          child: !hasPhoto
-                              ? Text(
-                                  u.fullName.isNotEmpty ? u.fullName[0].toUpperCase() : 'П',
-                                  style: const TextStyle(color: ProfilePalette.primaryGreen, fontWeight: FontWeight.bold, fontSize: 16),
-                                )
-                              : null,
+            return Align(
+              alignment: Alignment.bottomCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: isPhone ? double.infinity : 560,
+                ),
+                child: Container(
+                  height: viewportHeight * (isPhone ? .88 : .82),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(isPhone ? 18 : 16),
+                    ),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    children: [
+                      if (isPhone)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Container(
+                            width: 38,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFD8DDDA),
+                              borderRadius:
+                                  BorderRadius.circular(99),
+                            ),
+                          ),
                         ),
-                        title: Text(u.fullName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black)),
-                        subtitle: u.role?.isNotEmpty == true ? Text(u.role ?? '', style: const TextStyle(fontSize: 14, color: Colors.grey)) : null,
-                        trailing: (u.id != null)
-                            ? OutlinedButton(
-                                onPressed: () {
-                                  Navigator.pop(context);
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(builder: (_) => MyProfileScreen(userId: u.id, publicView: true)),
-                                  ).then((_) {
-                                    _loadFollowersData();
-                                    _checkIfFollowing();
-                                  });
-                                },
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: ProfilePalette.primaryGreen,
-                                  side: const BorderSide(color: ProfilePalette.primaryGreen),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                          14,
+                          9,
+                          10,
+                          7,
+                        ),
+                        child: Row(
+                          children: [
+                            dots(
+                              color: showFollowers
+                                  ? const Color(0xFF00A750)
+                                  : const Color(0xFFF59E0B),
+                            ),
+                            const SizedBox(width: 9),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    showFollowers
+                                        ? 'Подписчики'
+                                        : 'Подписки',
+                                    style: AppTypography.custom(
+                                      size: 12.4,
+                                      weight: FontWeight.w600,
+                                      color: const Color(0xFF0B0F14),
+                                      height: 1.1,
+                                      letterSpacing: 0,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 1),
+                                  Text(
+                                    '${allItems.length} ${showFollowers ? 'подписчиков' : 'подписок'}',
+                                    style: AppTypography.custom(
+                                      size: 9.2,
+                                      weight: FontWeight.w400,
+                                      color: const Color(0xFF7A828D),
+                                      height: 1.1,
+                                      letterSpacing: 0,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            InkWell(
+                              onTap: () =>
+                                  Navigator.of(sheetContext).pop(),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                width: 32,
+                                height: 32,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF7F9F8),
+                                  borderRadius:
+                                      BorderRadius.circular(8),
                                 ),
-                                child: const Text('Посмотреть'),
-                              )
-                            : null,
-                      );
-                    },
+                                child: const Icon(
+                                  Icons.close_rounded,
+                                  size: 16,
+                                  color: Color(0xFF5F6670),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                          14,
+                          0,
+                          14,
+                          7,
+                        ),
+                        child: TextField(
+                          controller: searchController,
+                          onChanged: (_) => setSheetState(() {}),
+                          style: AppTypography.custom(
+                            size: 10.2,
+                            weight: FontWeight.w400,
+                            color: const Color(0xFF0B0F14),
+                            height: 1.15,
+                            letterSpacing: 0,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Поиск',
+                            hintStyle: AppTypography.custom(
+                              size: 10.2,
+                              weight: FontWeight.w400,
+                              color: const Color(0xFF98A2B3),
+                              height: 1.15,
+                              letterSpacing: 0,
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.search_rounded,
+                              size: 17,
+                              color: Color(0xFF7A828D),
+                            ),
+                            filled: true,
+                            fillColor: const Color(0xFFF5F7F6),
+                            contentPadding:
+                                const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 9,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius:
+                                  BorderRadius.circular(9),
+                              borderSide: BorderSide.none,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius:
+                                  BorderRadius.circular(9),
+                              borderSide: BorderSide.none,
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius:
+                                  BorderRadius.circular(9),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const Divider(
+                        height: 1,
+                        thickness: .6,
+                        color: Color(0xFFEEF1EF),
+                      ),
+                      if (loading)
+                        const Expanded(
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Color(0xFF00A750),
+                            ),
+                          ),
+                        )
+                      else if (items.isEmpty)
+                        Expanded(
+                          child: Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  dots(
+                                    color: showFollowers
+                                        ? const Color(0xFF00A750)
+                                        : const Color(0xFFF59E0B),
+                                    compact: false,
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    query.isNotEmpty
+                                        ? 'Ничего не найдено'
+                                        : showFollowers
+                                            ? 'Пока нет подписчиков'
+                                            : 'Пока нет подписок',
+                                    style: AppTypography.custom(
+                                      size: 11.2,
+                                      weight: FontWeight.w600,
+                                      color: const Color(0xFF344054),
+                                      height: 1.2,
+                                      letterSpacing: 0,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        Expanded(
+                          child: ListView.builder(
+                            padding:
+                                const EdgeInsets.only(bottom: 16),
+                            itemCount: items.length,
+                            itemBuilder: (_, index) =>
+                                row(items[index]),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-            ],
-          ),
+              ),
+            );
+          },
         );
       },
     );
+
+    searchController.dispose();
   }
 
   void _onEditProfile() {
@@ -3372,31 +4123,47 @@ void initState() {
 
     final apps = <Widget>[
       button(
-        icon: Icons.account_tree_rounded,
-        tooltip: 'Кабинет',
-        active: _profileWorkspaceSection == 'posts',
-        onTap: () => _selectProfileWorkspaceSection('posts'),
+        icon: Icons.home_rounded,
+        tooltip: 'Главная',
+        active: _profileWorkspaceSection == 'posts' && _mobileDockKey == 'profile',
+        onTap: () {
+          _closeMobileWindow(dockKey: 'profile');
+          _selectProfileWorkspaceSection('posts');
+        },
       ),
       button(
         icon: Icons.dynamic_feed_rounded,
-        tooltip: 'Соцлента',
-        active: _mobileDockKey == 'feed' &&
-            _profileWorkspaceSection == 'embedded',
+        tooltip: 'Лента',
+        active: _mobileDockKey == 'feed',
         onTap: _openCommunityFeedHome,
       ),
-      button(icon: Icons.groups_2_rounded, tooltip: 'Команды', onTap: _openTeamsWindow),
-      button(icon: Icons.badge_rounded, tooltip: 'Профиль', onTap: () => _selectProfileWorkspaceSection('profile')),
-      button(icon: Icons.sports_soccer_rounded, tooltip: 'Площадки', onTap: _openHomeServices),
-      button(icon: Icons.calendar_month_rounded, tooltip: 'Расписание', onTap: _openScheduleWindow),
-      button(icon: Icons.folder_copy_rounded, tooltip: 'Сервисы', onTap: _openServicesWindow),
-      button(icon: Icons.play_circle_outline_rounded, tooltip: 'Видеоуроки', onTap: _openVideoLessonsWindow),
       button(
-        icon: Icons.sensors_rounded,
-        tooltip: 'Трекер / тренировки',
-        active: _mobileDockKey == 'tracker',
-        onTap: _openTrainingQuickMenu,
+        icon: Icons.search_rounded,
+        tooltip: 'Поиск людей',
+        active: _mobileDockKey == 'search',
+        onTap: _openPeopleSearchWindow,
       ),
-      button(icon: Icons.forum_rounded, tooltip: 'Чат', onTap: _openMainChat),
+      button(
+        icon: Icons.play_circle_outline_rounded,
+        tooltip: 'Видеоуроки',
+        onTap: _openVideoLessonsWindow,
+      ),
+      button(
+        icon: Icons.stadium_outlined,
+        tooltip: 'Площадки',
+        onTap: _openVenuesWindow,
+      ),
+      button(
+        icon: Icons.forum_rounded,
+        tooltip: 'Чаты',
+        active: _mobileDockKey == 'chat',
+        onTap: _openMainChat,
+      ),
+      button(
+        icon: Icons.person_outline_rounded,
+        tooltip: 'Профиль',
+        onTap: () => _selectProfileWorkspaceSection('profile'),
+      ),
     ];
 
     return Center(
@@ -3434,7 +4201,51 @@ void initState() {
                 color: Colors.transparent,
                 borderRadius: BorderRadius.circular(16),
                 child: InkWell(
-                  onTap: _openProfileHomeMoreSheet,
+                  onTap: _goToWorkspaceHub,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: compact ? 44 : 118,
+                    height: 44,
+                    padding: EdgeInsets.symmetric(horizontal: compact ? 0 : 11),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3FAF6),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFD7F0E2)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: compact
+                          ? MainAxisAlignment.center
+                          : MainAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.account_tree_outlined,
+                          color: Color(0xFF067A46),
+                          size: 20,
+                        ),
+                        if (!compact) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            'Workspace',
+                            style: AppTypography.custom(
+                              size: 10.8,
+                              weight: FontWeight.w600,
+                              color: const Color(0xFF067A46),
+                              height: 1.1,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+                child: InkWell(
+                  onTap: _openPeopleSearchWindow,
                   borderRadius: BorderRadius.circular(16),
                   child: Container(
                     width: compact ? 44 : 132,
@@ -3454,12 +4265,14 @@ void initState() {
                             color: Color(0xFF344054), size: 21),
                         if (!compact) ...[
                           const SizedBox(width: 9),
-                          const Text(
+                          Text(
                             'Поиск',
-                            style: TextStyle(
-                              color: Color(0xFF667085),
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w600,
+                            style: AppTypography.custom(
+                              size: 11.8,
+                              weight: FontWeight.w500,
+                              color: const Color(0xFF667085),
+                              height: 1.15,
+                              letterSpacing: 0,
                             ),
                           ),
                         ],
@@ -3867,12 +4680,12 @@ void initState() {
 
   Widget _buildProfileDesktopShortcuts() {
     final items = <({IconData icon, String title, VoidCallback tap})>[
-      (icon: Icons.grid_on_rounded, title: 'Публикации', tap: () => _selectProfileWorkspaceSection('posts')),
-      (icon: Icons.newspaper_rounded, title: 'Соцлента', tap: _openCommunityFeedHome),
-      (icon: Icons.play_circle_outline_rounded, title: 'Reels', tap: _openGlobalReels),
-      (icon: Icons.groups_rounded, title: 'Команды', tap: _openTeamsWindow),
-      (icon: Icons.sensors_rounded, title: 'Трекер', tap: _openTrainingQuickMenu),
+      (icon: Icons.dynamic_feed_rounded, title: 'Лента', tap: _openCommunityFeedHome),
+      (icon: Icons.search_rounded, title: 'Поиск', tap: _openPeopleSearchWindow),
+      (icon: Icons.school_outlined, title: 'Уроки', tap: _openVideoLessonsWindow),
+      (icon: Icons.stadium_outlined, title: 'Площадки', tap: _openVenuesWindow),
       (icon: Icons.forum_outlined, title: 'Чаты', tap: _openMainChat),
+      (icon: Icons.person_outline_rounded, title: 'Профиль', tap: () => _selectProfileWorkspaceSection('profile')),
     ];
     return Column(
       children: items.map((item) => Padding(
@@ -3895,8 +4708,19 @@ void initState() {
                   child: Icon(item.icon, color: const Color(0xFF16794B), size: 24),
                 ),
                 const SizedBox(height: 5),
-                Text(item.title, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: Color(0xFF344054))),
+                Text(
+                  item.title,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.custom(
+                    size: 9.2,
+                    weight: FontWeight.w600,
+                    color: const Color(0xFF344054),
+                    height: 1.12,
+                    letterSpacing: 0,
+                  ),
+                ),
               ],
             ),
           ),
@@ -3906,77 +4730,11 @@ void initState() {
   }
 
   Widget _buildProfileDesktopDock() {
-    final actions = <({IconData icon, String key, VoidCallback tap})>[
-      (icon: Icons.home_rounded, key: 'profile', tap: () => _selectProfileWorkspaceSection('posts')),
-      (icon: Icons.dynamic_feed_rounded, key: 'feed', tap: _openCommunityFeedHome),
-      (icon: Icons.play_circle_outline_rounded, key: 'reels', tap: _openGlobalReels),
-      (icon: Icons.sensors_rounded, key: 'tracker', tap: _openTrainingQuickMenu),
-      (icon: Icons.forum_outlined, key: 'chat', tap: _openMainChat),
-      (icon: Icons.grid_view_rounded, key: 'more', tap: _openProfileHomeMoreSheet),
-    ];
-    return Center(
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: math.min(MediaQuery.of(context).size.width - 28, 1040.0),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(30),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-            child: Container(
-              height: 56,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(.96),
-                borderRadius: BorderRadius.circular(30),
-                border: Border.all(color: const Color(0xFFE3E8EF), width: 1),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(.12),
-                    blurRadius: 24,
-                    spreadRadius: -10,
-                    offset: const Offset(0, 12),
-                  ),
-                  BoxShadow(
-                    color: Colors.black.withOpacity(.04),
-                    blurRadius: 8,
-                    spreadRadius: -5,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: actions.map((action) {
-                final active = _mobileDockKey == action.key;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 2.5),
-                  child: InkWell(
-                    onTap: action.tap,
-                    borderRadius: BorderRadius.circular(17),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      width: active ? 46 : 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: active ? const Color(0xFFF0F2F5) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
-                          color: active ? const Color(0xFFE3E8EF) : Colors.transparent,
-                        ),
-                      ),
-                      child: Icon(action.icon, size: 21, color: const Color(0xFF344054)),
-                    ),
-                  ),
-                );
-              }).toList(),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+    // На ПК используем тот же нижний flagship-taskbar, что и на планшете.
+    // Так навигация и «Ещё» выглядят одинаково на больших экранах.
+    return _buildProfileTabletTaskbar();
   }
+
 
   Widget _buildFlagshipPhoneOrTabletBody({
     required double width,
@@ -4016,9 +4774,19 @@ void initState() {
       _desktopRightPaneChild = null;
       _desktopRightPaneTitle = '';
       _openedProfilePost = null;
-      if (section == 'posts') _mode = _ProfileFeedMode.posts;
-      if (section == 'feed') _mode = _ProfileFeedMode.feed;
-      if (section == 'reels') _mode = _ProfileFeedMode.reels;
+      if (section == 'posts') {
+        _mode = _ProfileFeedMode.posts;
+        _mobileDockKey = 'profile';
+      }
+      if (section == 'feed') {
+        _mode = _ProfileFeedMode.feed;
+        _mobileDockKey = 'feed';
+      }
+      if (section == 'reels') {
+        _mode = _ProfileFeedMode.reels;
+        _mobileDockKey = 'reels';
+      }
+      if (section == 'profile') _mobileDockKey = 'account';
     });
   }
 
@@ -4242,7 +5010,7 @@ void initState() {
                   const Padding(
                     padding: EdgeInsets.fromLTRB(10, 14, 10, 6),
                     child: Text(
-                      'РАБОЧАЯ ЗОНА',
+                      'ЛИЧНОЕ',
                       style: TextStyle(
                         fontSize: 8.5,
                         fontWeight: FontWeight.w900,
@@ -4252,25 +5020,39 @@ void initState() {
                     ),
                   ),
                   item(
-                    id: 'workspace',
-                    title: _primaryZoneTitle,
-                    subtitle: _primaryZoneSubtitle,
-                    icon: _primaryZoneIcon,
-                    onTap: _openPrimaryArea,
-                  ),
-                  item(
                     id: 'community',
-                    title: 'Соцлента',
-                    subtitle: 'новости сообщества',
+                    title: 'Лента',
+                    subtitle: 'новости и публикации сообщества',
                     icon: Icons.newspaper_rounded,
                     onTap: _openCommunityFeedHome,
                   ),
                   item(
-                    id: 'teams',
-                    title: 'Команды / CMR',
-                    subtitle: 'составы и рабочий режим',
-                    icon: Icons.groups_rounded,
-                    onTap: _openTeamsWindow,
+                    id: 'search',
+                    title: 'Поиск людей',
+                    subtitle: 'игроки, тренеры и пользователи',
+                    icon: Icons.person_search_outlined,
+                    onTap: _openPeopleSearchWindow,
+                  ),
+                  item(
+                    id: 'lessons',
+                    title: 'Видеоуроки',
+                    subtitle: 'обучение и спортивные материалы',
+                    icon: Icons.school_outlined,
+                    onTap: _openVideoLessonsWindow,
+                  ),
+                  item(
+                    id: 'venues',
+                    title: 'Площадки',
+                    subtitle: 'каталог и бронирование',
+                    icon: Icons.stadium_outlined,
+                    onTap: _openVenuesWindow,
+                  ),
+                  item(
+                    id: 'chat',
+                    title: 'Чаты',
+                    subtitle: 'личные сообщения и группы',
+                    icon: Icons.forum_outlined,
+                    onTap: _openMainChat,
                   ),
                   const Padding(
                     padding: EdgeInsets.fromLTRB(10, 14, 10, 6),
@@ -4337,6 +5119,11 @@ void initState() {
         subtitle = 'Короткие спортивные видео';
         icon = Icons.play_circle_outline_rounded;
         break;
+      case 'profile':
+        title = 'Мой профиль';
+        subtitle = 'Профиль, публикации и личная информация';
+        icon = Icons.person_outline_rounded;
+        break;
       case 'settings':
         title = 'Настройки профиля';
         subtitle = 'Данные аккаунта, доступ и управление';
@@ -4392,10 +5179,6 @@ void initState() {
               ],
             ),
           ),
-          if (isOwnProfile)
-            _buildTinyAction(Icons.add_rounded, 'Создать', _openCreateMenuSheet),
-          if (isOwnProfile)
-            _buildTinyAction(Icons.more_horiz_rounded, 'Меню', _openProfileSettingsSheet),
         ],
       ),
     );
@@ -4420,6 +5203,19 @@ void initState() {
       return const SportCommunityScreen(
         sportName: 'Футбол',
         embedded: true,
+      );
+    }
+
+    if (_profileWorkspaceSection == 'profile') {
+      return SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: EdgeInsets.all(compact ? 12 : 16),
+        child: Column(
+          children: [
+            _buildFlagshipProfileCard(),
+            SizedBox(height: compact ? 20 : 8),
+          ],
+        ),
       );
     }
 
@@ -4846,61 +5642,239 @@ void initState() {
 
   PreferredSizeWidget _buildFlagshipMobileAppBar(bool isVisitor) {
     return AppBar(
+      toolbarHeight: 44,
       backgroundColor: Colors.white,
       elevation: 0,
       surfaceTintColor: Colors.white,
       automaticallyImplyLeading: false,
       centerTitle: false,
-      titleSpacing: 14,
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            fullName,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: _flagshipTitle(16.2, weight: FontWeight.w700),
-          ),
-          if (isOwnProfile)
-            Text(
-              _activeWorkspaceName.isEmpty ? _roleLabel : _activeWorkspaceName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: _flagshipText(
-                10.2,
-                color: const Color(0xFF667085),
-                weight: FontWeight.w500,
-              ),
-            ),
-        ],
+      titleSpacing: 12,
+      title: Text(
+        fullName,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: _flagshipTitle(
+          14.6,
+          weight: FontWeight.w600,
+        ),
       ),
       actions: [
-        if (isOwnProfile)
-          IconButton(
-            icon: const Text(
-              '+',
-              style: TextStyle(
-                color: Color(0xFF111827),
-                fontSize: 25,
-                fontWeight: FontWeight.w400,
-                height: 1,
-              ),
-            ),
-            tooltip: 'Создать',
-            onPressed: _openCreateMenuSheet,
-          ),
-        if (isOwnProfile)
-          IconButton(
-            icon: const Icon(
-              Icons.more_horiz_rounded,
-              color: Color(0xFF111827),
-              size: 22,
-            ),
-            tooltip: 'Меню',
-            onPressed: _openProfileSettingsSheet,
+        if (!isVisitor)
+          Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: _buildImportantNotificationButton(),
           ),
       ],
+    );
+  }
+
+  Widget _buildFlagshipDotCluster({
+    Color color = const Color(0xFF00A750),
+    bool compact = false,
+  }) {
+    final values = compact
+        ? const <List<double>>[
+            <double>[3.0, .34],
+            <double>[3.8, .48],
+            <double>[4.6, .68],
+            <double>[5.4, 1],
+          ]
+        : const <List<double>>[
+            <double>[3.5, .34],
+            <double>[4.5, .48],
+            <double>[5.5, .68],
+            <double>[6.5, 1],
+          ];
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        for (int i = 0; i < values.length; i++) ...[
+          Container(
+            width: values[i][0],
+            height: values[i][0],
+            decoration: BoxDecoration(
+              color: color.withOpacity(values[i][1]),
+              shape: BoxShape.circle,
+            ),
+          ),
+          if (i != values.length - 1)
+            const SizedBox(width: 3),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildImportantNotificationButton() {
+    final hasImportant = _importantNotificationCount > 0;
+
+    return Tooltip(
+      message: 'Важные уведомления',
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(9),
+        child: InkWell(
+          onTap: _openImportantNotifications,
+          borderRadius: BorderRadius.circular(9),
+          child: SizedBox(
+            width: 34,
+            height: 34,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Center(
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CustomPaint(
+                      painter: _FlagshipNotificationPainter(
+                        color: const Color(0xFF111827),
+                      ),
+                    ),
+                  ),
+                ),
+                if (hasImportant)
+                  Positioned(
+                    top: 5,
+                    right: 5,
+                    child: Container(
+                      width: 7,
+                      height: 7,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFD92D20),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openImportantNotifications() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(.22),
+      builder: (sheetContext) {
+        return SafeArea(
+          top: false,
+          child: Container(
+            margin: const EdgeInsets.only(top: 72),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(
+                top: Radius.circular(16),
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
+                  child: Row(
+                    children: [
+                      _buildFlagshipDotCluster(
+                        color: const Color(0xFF00A750),
+                        compact: true,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Важные уведомления',
+                              style: _flagshipTitle(
+                                12.6,
+                                weight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 1),
+                            Text(
+                              'Только события, которые требуют внимания',
+                              style: _flagshipText(
+                                9.0,
+                                color: const Color(0xFF7A828D),
+                                weight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Material(
+                        color: const Color(0xFFF7F9F8),
+                        borderRadius: BorderRadius.circular(8),
+                        child: InkWell(
+                          onTap: () => Navigator.of(sheetContext).pop(),
+                          borderRadius: BorderRadius.circular(8),
+                          child: const SizedBox(
+                            width: 30,
+                            height: 30,
+                            child: Icon(
+                              Icons.close_rounded,
+                              size: 15,
+                              color: Color(0xFF667085),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(
+                  height: 1,
+                  thickness: .6,
+                  color: Color(0xFFEEF1EF),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 26, 18, 30),
+                  child: Column(
+                    children: [
+                      SizedBox(
+                        width: 26,
+                        height: 26,
+                        child: CustomPaint(
+                          painter: _FlagshipNotificationPainter(
+                            color: const Color(0xFF98A2B3),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Пока важных уведомлений нет',
+                        textAlign: TextAlign.center,
+                        style: _flagshipText(
+                          10.6,
+                          color: const Color(0xFF344054),
+                          weight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Позже сюда подключим сообщения, новые подписки, '
+                        'приглашения, события клуба и другие важные действия.',
+                        textAlign: TextAlign.center,
+                        style: _flagshipText(
+                          9.2,
+                          color: const Color(0xFF7A828D),
+                          weight: FontWeight.w400,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -4992,34 +5966,23 @@ void initState() {
     }
 
     return [
-        _ProfileFlagshipAction(
-          _primaryZoneTitle,
-          _primaryZoneSubtitle,
-          _primaryZoneIcon,
-          _openPrimaryArea,
-          group: 'Рабочая зона',
-          primary: true,
-        ),
-
-        // Личные публикации остаются внутри профиля, а общие разделы открываются окнами поверх профиля.
-        _ProfileFlagshipAction('Соцлента и новости', 'общие новости сообщества', Icons.newspaper_rounded, _openCommunityFeedHome, group: 'Основное'),
-        _ProfileFlagshipAction('Команды / CMR', 'команды и рабочий режим', Icons.groups_rounded, _openTeamsWindow, group: 'Основное'),
-        _ProfileFlagshipAction('Расписание', 'календарь занятий и матчей', Icons.calendar_month_rounded, _openScheduleWindow, group: 'Основное'),
-        _ProfileFlagshipAction('Мероприятия', 'сборы и активности', Icons.event_rounded, _openEventsWindow, group: 'Основное'),
-
-        _ProfileFlagshipAction('Видеоуроки', 'папки и обучение', Icons.school_rounded, _openVideoLessonsWindow, group: 'Медиа'),
-        _ProfileFlagshipAction('Reels / Эфир', 'общие видео сообщества', Icons.live_tv_rounded, _openGlobalReels, group: 'Медиа'),
-        _ProfileFlagshipAction('Советы', 'подсказки и инструкции', Icons.tips_and_updates_rounded, _openTipsWindow, group: 'Медиа'),
-
-        _ProfileFlagshipAction('Сервисы', 'дополнительные инструменты', Icons.apps_rounded, _openServicesWindow, group: 'Сервисы'),
-        _ProfileFlagshipAction('Площадки', 'бронирование объектов', Icons.stadium_rounded, _openVenuesWindow, group: 'Сервисы'),
-        _ProfileFlagshipAction('Билеты', 'матчи и посещение', Icons.confirmation_number_rounded, _openTicketsWindow, group: 'Сервисы'),
-
-        _ProfileFlagshipAction('Посты профиля', 'сетка публикаций', Icons.grid_on_rounded, () => _selectProfileWorkspaceSection('posts'), group: 'Аккаунт'),
-        _ProfileFlagshipAction('Лента профиля', 'публикации пользователя', Icons.article_outlined, () => setState(() => _mode = _ProfileFeedMode.feed), group: 'Аккаунт'),
-        _ProfileFlagshipAction('Чат', 'сообщения и группы', Icons.forum_rounded, _openMainChat, group: 'Аккаунт'),
         if (isOwnProfile)
-          _ProfileFlagshipAction(isClubRole ? 'Логотип / аватар' : 'Аватарка', _profileMediaEditSubtitle, Icons.add_a_photo_outlined, _openProfileMediaPickerSheet, group: 'Аккаунт'),
+          _ProfileFlagshipAction('К выбору Workspace', 'выбрать личный или рабочий кабинет', Icons.account_tree_outlined, _goToWorkspaceHub, group: 'Навигация', primary: true),
+        _ProfileFlagshipAction('Лента', 'новости и публикации сообщества', Icons.dynamic_feed_rounded, _openCommunityFeedHome, group: 'Основное'),
+        _ProfileFlagshipAction('Поиск людей', 'игроки, тренеры и пользователи', Icons.person_search_outlined, _openPeopleSearchWindow, group: 'Основное'),
+        _ProfileFlagshipAction('Чаты', 'личные сообщения и группы', Icons.forum_rounded, _openMainChat, group: 'Основное'),
+
+        _ProfileFlagshipAction('Видеоуроки', 'обучение и спортивные материалы', Icons.school_rounded, _openVideoLessonsWindow, group: 'Обучение'),
+        _ProfileFlagshipAction('Сохранённое · скоро', 'уроки, публикации, люди и площадки', Icons.bookmark_border_rounded, _openSavedWindow, group: 'Обучение'),
+
+        _ProfileFlagshipAction('Площадки', 'каталог доступен · раздел дополняется', Icons.stadium_rounded, _openVenuesWindow, group: 'Сервисы'),
+        _ProfileFlagshipAction('Игры рядом · скоро', 'открытые игры, спарринги и поиск игроков', Icons.sports_soccer_rounded, _openNearbyGamesWindow, group: 'Сервисы'),
+        _ProfileFlagshipAction('Тренировки рядом · скоро', 'открытые занятия тренеров и клубов', Icons.directions_run_rounded, _openNearbyTrainingsWindow, group: 'Сервисы'),
+
+        _ProfileFlagshipAction('Публикации профиля', 'фото и посты пользователя', Icons.grid_on_rounded, () => _selectProfileWorkspaceSection('posts'), group: 'Профиль'),
+        _ProfileFlagshipAction('Reels профиля', 'короткие видео пользователя', Icons.play_circle_outline_rounded, () => setState(() => _mode = _ProfileFeedMode.reels), group: 'Профиль'),
+        if (isOwnProfile)
+          _ProfileFlagshipAction(isClubRole ? 'Логотип / аватар' : 'Аватарка', _profileMediaEditSubtitle, Icons.add_a_photo_outlined, _openProfileMediaPickerSheet, group: 'Профиль'),
         _ProfileFlagshipAction('Настройки', 'профиль и доступ', Icons.settings_outlined, _openProfileSettingsSheet, group: 'Аккаунт'),
         _ProfileFlagshipAction('PRO подписка', 'расширенные возможности', Icons.workspace_premium_rounded, _openSubscriptionWindow, group: 'Аккаунт', pro: true),
         if (isOwnProfile)
@@ -5476,6 +6439,11 @@ void initState() {
 
   Widget _buildFlagshipProfileCard() {
     final hasAvatar = photo != null && photo!.trim().isNotEmpty;
+    final width = MediaQuery.sizeOf(context).width;
+    // На мобильном и свой, и чужой профиль используют
+    // одну компактную social-шапку.
+    final compactSocial = width < 720;
+
     final infoLine = [
       if ((playerClubName ?? '').trim().isNotEmpty)
         (playerClubName ?? '').trim(),
@@ -5483,67 +6451,82 @@ void initState() {
         (playerTeamName ?? '').trim(),
       if ((location ?? '').trim().isNotEmpty)
         (location ?? '').trim(),
-    ].join('  ·  ');
+    ].join(' · ');
+
+    final avatarSize = compactSocial ? 76.0 : 92.0;
 
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+      padding: EdgeInsets.fromLTRB(
+        compactSocial ? 12 : 14,
+        compactSocial ? 8 : 12,
+        compactSocial ? 12 : 14,
+        compactSocial ? 8 : 10,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildFlagshipAvatar(size: 92, hasAvatar: hasAvatar),
-              const SizedBox(width: 12),
+              _buildFlagshipAvatar(
+                size: avatarSize,
+                hasAvatar: hasAvatar,
+              ),
+              SizedBox(width: compactSocial ? 10 : 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (isClubRole || isCoachRole || isPlayer || isParentRole)
+                    if (isClubRole ||
+                        isCoachRole ||
+                        isPlayer ||
+                        isParentRole)
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
+                        padding: EdgeInsets.only(
+                          bottom: compactSocial ? 3 : 6,
+                        ),
                         child: Text(
                           _roleLabel.toUpperCase(),
                           style: _flagshipText(
-                            8.8,
+                            compactSocial ? 8.0 : 8.8,
                             color: const Color(0xFF067A46),
-                            weight: FontWeight.w800,
-                          ).copyWith(letterSpacing: .35),
+                            weight: FontWeight.w600,
+                          ).copyWith(letterSpacing: .24),
                         ),
                       ),
                     Text(
                       fullName,
-                      maxLines: 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: _flagshipTitle(
-                        20.5,
-                        weight: FontWeight.w700,
+                        compactSocial ? 16.6 : 20.5,
+                        weight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 7),
+                    SizedBox(height: compactSocial ? 3 : 7),
                     Text(
                       _activeWorkspaceName.isEmpty
                           ? 'Sportoteka'
                           : _activeWorkspaceName,
-                      maxLines: 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: _flagshipText(
-                        11.5,
+                        compactSocial ? 10.2 : 11.5,
                         color: const Color(0xFF667085),
-                        weight: FontWeight.w500,
+                        weight: FontWeight.w400,
                       ),
                     ),
                     if (infoLine.isNotEmpty) ...[
-                      const SizedBox(height: 7),
+                      SizedBox(height: compactSocial ? 3 : 7),
                       Text(
                         infoLine,
-                        maxLines: 2,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: _flagshipText(
-                          10.6,
+                          compactSocial ? 9.4 : 10.6,
                           color: const Color(0xFF8A94A6),
-                          weight: FontWeight.w500,
+                          weight: FontWeight.w400,
                         ),
                       ),
                     ],
@@ -5553,69 +6536,100 @@ void initState() {
             ],
           ),
           if ((bio ?? '').trim().isNotEmpty) ...[
-            const SizedBox(height: 13),
+            SizedBox(height: compactSocial ? 8 : 13),
             Text(
               (bio ?? '').trim(),
-              maxLines: 4,
+              maxLines: compactSocial ? 2 : 4,
               overflow: TextOverflow.ellipsis,
               style: _flagshipText(
-                11.6,
+                compactSocial ? 10.3 : 11.6,
                 color: const Color(0xFF1F2937),
-                weight: FontWeight.w500,
-                height: 1.32,
+                weight: FontWeight.w400,
+                height: compactSocial ? 1.24 : 1.32,
               ),
             ),
           ],
-          const SizedBox(height: 15),
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 11),
+          SizedBox(height: compactSocial ? 8 : 15),
+          Padding(
+            padding: EdgeInsets.symmetric(
+              vertical: compactSocial ? 4 : 11,
+            ),
             child: Row(
               children: [
-                Expanded(child: _buildFlagshipStat(userPosts.length, 'Посты', Icons.grid_on_rounded)),
-                Expanded(child: _buildFlagshipStat(userReels.length, 'Reels', Icons.play_circle_fill_rounded)),
+                Expanded(
+                  child: _buildFlagshipStat(
+                    userPosts.length,
+                    'Посты',
+                    Icons.grid_on_rounded,
+                    compact: compactSocial,
+                  ),
+                ),
+                Expanded(
+                  child: _buildFlagshipStat(
+                    userReels.length,
+                    'Reels',
+                    Icons.play_circle_fill_rounded,
+                    compact: compactSocial,
+                  ),
+                ),
                 Expanded(
                   child: GestureDetector(
-                    onTap: () => _openUsersModal(showFollowers: true),
+                    onTap: () =>
+                        _openUsersModal(showFollowers: true),
                     child: _buildFlagshipStat(
                       followersCount,
                       'Подписчики',
                       Icons.people_rounded,
+                      compact: compactSocial,
                     ),
                   ),
                 ),
                 Expanded(
                   child: GestureDetector(
-                    onTap: () => _openUsersModal(showFollowers: false),
+                    onTap: () =>
+                        _openUsersModal(showFollowers: false),
                     child: _buildFlagshipStat(
                       followingsCount,
                       'Подписки',
                       Icons.person_add_alt_rounded,
+                      compact: compactSocial,
                     ),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 13),
+          SizedBox(height: compactSocial ? 7 : 13),
           Row(
             children: [
               Expanded(
                 child: _buildFlagshipSmallButton(
                   label: isOwnProfile
                       ? 'Редактировать'
-                      : (isFollowing ? 'Вы подписаны' : 'Подписаться'),
-                  icon: Icons.edit_note_rounded,
+                      : (isFollowing
+                          ? 'Отписаться'
+                          : 'Подписаться'),
+                  icon: Icons.person_add_alt_1_rounded,
                   onTap: isOwnProfile
                       ? _openProfileSettingsSheet
                       : _toggleFollow,
+                  primary:
+                      !isOwnProfile && !isFollowing,
+                  compact: compactSocial,
                 ),
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: compactSocial ? 6 : 7),
               Expanded(
                 child: _buildFlagshipSmallButton(
-                  label: isOwnProfile ? _primaryZoneTitle : 'Написать',
-                  icon: Icons.arrow_forward_rounded,
-                  onTap: isOwnProfile ? _openPrimaryArea : _openPrivateChat,
+                  label: isOwnProfile
+                      ? _primaryZoneTitle
+                      : 'Написать',
+                  icon: Icons.chat_bubble_outline_rounded,
+                  onTap: isOwnProfile
+                      ? _openPrimaryArea
+                      : _openPrivateChat,
+                  primary: isOwnProfile,
+                  compact: compactSocial,
                 ),
               ),
             ],
@@ -5716,24 +6730,28 @@ void initState() {
   Widget _buildFlagshipStat(
     int value,
     String label,
-    IconData icon,
-  ) {
+    IconData icon, {
+    bool compact = false,
+  }) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           value.toString(),
-          style: _flagshipTitle(14.6, weight: FontWeight.w700),
+          style: _flagshipTitle(
+            compact ? 13.2 : 14.6,
+            weight: FontWeight.w600,
+          ),
         ),
-        const SizedBox(height: 4),
+        SizedBox(height: compact ? 2 : 4),
         Text(
           label,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: _flagshipText(
-            9.3,
+            compact ? 8.5 : 9.3,
             color: const Color(0xFF8A94A6),
-            weight: FontWeight.w500,
+            weight: FontWeight.w400,
           ),
         ),
       ],
@@ -5744,29 +6762,67 @@ void initState() {
     required String label,
     required IconData icon,
     required VoidCallback onTap,
+    bool primary = false,
+    bool compact = false,
   }) {
-    final primary = label == _primaryZoneTitle;
+    final isFollowAction =
+        label == 'Подписаться' || label == 'Отписаться';
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(10),
-      onTap: onTap,
-      child: Container(
-        height: 36,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: primary
-              ? const Color(0xFF00A750)
-              : const Color(0xFFF5F6F5),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: _flagshipText(
-            10.6,
-            color: primary ? Colors.white : const Color(0xFF111827),
-            weight: FontWeight.w700,
+    final background = primary
+        ? const Color(0xFF00A750)
+        : isFollowAction && label == 'Отписаться'
+            ? const Color(0xFFF1F3F2)
+            : const Color(0xFFF5F6F5);
+
+    final foreground = primary
+        ? Colors.white
+        : const Color(0xFF111827);
+
+    return Material(
+      color: background,
+      borderRadius:
+          BorderRadius.circular(compact ? 8 : 9),
+      child: InkWell(
+        borderRadius:
+            BorderRadius.circular(compact ? 8 : 9),
+        onTap: onTap,
+        child: Container(
+          height: compact ? 32 : 36,
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 8 : 10,
+          ),
+          alignment: Alignment.center,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (!isOwnProfile) ...[
+                Container(
+                  width: 4.2,
+                  height: 4.2,
+                  decoration: BoxDecoration(
+                    color: primary
+                        ? Colors.white
+                        : isFollowAction
+                            ? const Color(0xFF00A750)
+                            : const Color(0xFF667085),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                SizedBox(width: compact ? 5 : 6),
+              ],
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _flagshipText(
+                    compact ? 9.5 : 10.2,
+                    color: foreground,
+                    weight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -6005,22 +7061,6 @@ void initState() {
                     style: _flagshipTitle(14.2, weight: FontWeight.w700),
                   ),
                 ),
-                if (isOwnProfile)
-                  InkWell(
-                    onTap: _openCreateMenuSheet,
-                    child: const Padding(
-                      padding: EdgeInsets.all(6),
-                      child: Text(
-                        '+',
-                        style: TextStyle(
-                          fontSize: 23,
-                          fontWeight: FontWeight.w400,
-                          height: 1,
-                          color: Color(0xFF111827),
-                        ),
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
@@ -6033,13 +7073,44 @@ void initState() {
   }
 
   Widget _buildFlagshipMobileProfile() {
-    // На телефоне профиль сразу открывается с публикаций: без верхней карточки,
-    // статистики и блока кабинета. Нижний dock остаётся постоянным.
+    // Публичный профиль должен начинаться как социальный профиль:
+    // avatar / имя / статистика / Подписаться-Отписаться / Написать,
+    // а уже потом публикации.
+    if (_isPublicProfileView) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildFlagshipProfileCard(),
+          const SizedBox(height: 4),
+          _buildFlagshipContentWindow(),
+          SizedBox(
+            height: MediaQuery.paddingOf(context).bottom + 28,
+          ),
+        ],
+      );
+    }
+
+    if (_profileWorkspaceSection == 'profile') {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildFlagshipProfileCard(),
+          SizedBox(height: MediaQuery.paddingOf(context).bottom + 116),
+        ],
+      );
+    }
+
+    // Своя мобильная главная тоже остаётся социальной:
+    // профиль + подписчики/подписки + публикации.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        _buildFlagshipProfileCard(),
+        const SizedBox(height: 2),
         _buildFlagshipContentWindow(),
-        SizedBox(height: MediaQuery.paddingOf(context).bottom + 116),
+        SizedBox(
+          height: MediaQuery.paddingOf(context).bottom + 28,
+        ),
       ],
     );
   }
@@ -6202,18 +7273,20 @@ void initState() {
   Widget _buildSocialBottomBar() {
     final bottom = MediaQuery.of(context).padding.bottom;
     final width = MediaQuery.of(context).size.width;
-    final side = width >= 720
-        ? max(14.0, (width - 520.0) / 2)
-        : (width < 380 ? 10.0 : 14.0);
-    final bottomInset = bottom > 0 ? min(14.0, bottom * .40) : 6.0;
+    final horizontal = width < 380 ? 10.0 : 14.0;
 
-    Widget dockIcon({
+   final bottomInset = bottom > 0
+    ? math.min(14.0, bottom * .40)
+    : 6.0;
+
+    Widget dockItem({
       required String keyName,
       required IconData icon,
       required VoidCallback onTap,
       int badge = 0,
     }) {
       final active = _mobileDockKey == keyName;
+
       return Expanded(
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
@@ -6225,7 +7298,9 @@ void initState() {
               width: active ? 44 : 34,
               height: 36,
               decoration: BoxDecoration(
-                color: active ? const Color(0xFFECFDF3) : Colors.transparent,
+                color: active
+                    ? const Color(0xB8EAF8F0)
+                    : Colors.transparent,
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Stack(
@@ -6235,24 +7310,37 @@ void initState() {
                   Icon(
                     icon,
                     size: active ? 22 : 21,
-                    color: active ? const Color(0xFF00A750) : const Color(0xFF344054),
+                    color: active
+                        ? const Color(0xFF111827)
+                        : const Color(0xFF344054),
                   ),
                   if (badge > 0)
                     Positioned(
                       top: 1,
                       right: active ? 6 : 0,
                       child: Container(
-                        constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
                         padding: const EdgeInsets.symmetric(horizontal: 4),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFF0050),
                           borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: Colors.white, width: 1.6),
+                          border: Border.all(
+                            color: Colors.white,
+                            width: 1.6,
+                          ),
                         ),
-                        child: Center(
-                          child: Text(
-                            badge > 99 ? '99+' : '$badge',
-                            style: AppTypography.custom(size: 8.5, weight: FontWeight.w600, color: Colors.white, height: 1),
+                        alignment: Alignment.center,
+                        child: Text(
+                          badge > 99 ? '99+' : '$badge',
+                          style: AppTypography.custom(
+                            size: 8.5,
+                            weight: FontWeight.w900,
+                            color: Colors.white,
+                            height: 1,
+                            letterSpacing: 0,
                           ),
                         ),
                       ),
@@ -6269,54 +7357,83 @@ void initState() {
       top: false,
       bottom: false,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(side, 0, side, bottomInset),
+        padding: EdgeInsets.fromLTRB(
+          horizontal,
+          0,
+          horizontal,
+          bottomInset,
+        ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(24),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            filter: ImageFilter.blur(sigmaX: 26, sigmaY: 26),
             child: Container(
               height: 52,
               padding: const EdgeInsets.symmetric(horizontal: 7),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(.94),
+                color: Colors.white.withOpacity(.72),
                 borderRadius: BorderRadius.circular(24),
-                boxShadow: const [],
+                border: Border.all(
+                  color: Colors.white.withOpacity(.92),
+                  width: .9,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(.10),
+                    blurRadius: 30,
+                    spreadRadius: -12,
+                    offset: const Offset(0, 14),
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withOpacity(.04),
+                    blurRadius: 8,
+                    spreadRadius: -5,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
               ),
               child: Row(
                 children: [
-                  dockIcon(
+                  dockItem(
                     keyName: 'profile',
-                    icon: Icons.home_rounded,
+                    icon: Icons.home_outlined,
                     onTap: () {
                       _closeMobileWindow(dockKey: 'profile');
-                      if (mounted) _selectProfileWorkspaceSection('posts');
+                      if (mounted) {
+                        _selectProfileWorkspaceSection('posts');
+                      }
                     },
                   ),
-                  dockIcon(
+                  dockItem(
                     keyName: 'feed',
-                    icon: Icons.dynamic_feed_rounded,
+                    icon: Icons.dynamic_feed_outlined,
                     onTap: _openCommunityFeedHome,
                   ),
-                  dockIcon(
-                    keyName: 'reels',
-                    icon: Icons.play_circle_outline_rounded,
-                    onTap: _openGlobalReels,
+                  dockItem(
+                    keyName: 'search',
+                    icon: Icons.search_rounded,
+                    onTap: () {
+                      if (mounted) {
+                        setState(() => _mobileDockKey = 'search');
+                      }
+                      _openPeopleSearchWindow();
+                    },
                   ),
-                  dockIcon(
-                    keyName: 'tracker',
-                    icon: Icons.sensors_rounded,
-                    onTap: _openTrainingQuickMenu,
-                  ),
-                  dockIcon(
+                  dockItem(
                     keyName: 'chat',
                     icon: Icons.forum_outlined,
                     badge: 1,
                     onTap: _openMainChat,
                   ),
-                  dockIcon(
+                  dockItem(
                     keyName: 'more',
                     icon: Icons.grid_view_rounded,
-                    onTap: _openProfileHomeMoreSheet,
+                    onTap: () {
+                      if (mounted) {
+                        setState(() => _mobileDockKey = 'more');
+                      }
+                      _openProfileHomeMoreSheet();
+                    },
                   ),
                 ],
               ),
@@ -6328,24 +7445,31 @@ void initState() {
   }
 
 
-
   void _openProfileHomeMoreSheet() {
     final actions = <_ProfileFlagshipAction>[
-      _ProfileFlagshipAction(_primaryZoneTitle, _primaryZoneSubtitle, _primaryZoneIcon, _openPrimaryArea, group: 'Рабочая зона', primary: true),
-      _ProfileFlagshipAction('Трекер / тренировки', 'быстрый выбор личного или командного режима', Icons.sensors_rounded, _openTrainingQuickMenu, group: 'Рабочая зона'),
-      _ProfileFlagshipAction('Соцлента и новости', 'общие новости сообщества', Icons.dynamic_feed_rounded, _openCommunityFeedHome, group: 'Основное'),
-      _ProfileFlagshipAction('Чат', 'сообщения и группы', Icons.forum_rounded, _openMainChat, group: 'Аккаунт'),
-      _ProfileFlagshipAction('Команды / CMR', 'команды, составы и рабочий режим', Icons.groups_rounded, _openTeamsWindow, group: 'Основное'),
-      _ProfileFlagshipAction('Расписание', 'календарь занятий и матчей', Icons.calendar_month_rounded, _openScheduleWindow, group: 'Основное'),
-      _ProfileFlagshipAction('Мероприятия', 'события, сборы и активности', Icons.event_rounded, _openEventsWindow, group: 'Основное'),
-      _ProfileFlagshipAction('Видеоуроки', 'папки, обучение и материалы', Icons.school_rounded, _openVideoLessonsWindow, group: 'Медиа'),
-      _ProfileFlagshipAction('Советы', 'подсказки и инструкции', Icons.tips_and_updates_rounded, _openTipsWindow, group: 'Медиа'),
-      _ProfileFlagshipAction('Сервисы', 'дополнительные инструменты', Icons.apps_rounded, _openServicesWindow, group: 'Сервисы'),
-      _ProfileFlagshipAction('Площадки', 'бронирование и объекты', Icons.stadium_rounded, _openVenuesWindow, group: 'Сервисы'),
-      _ProfileFlagshipAction('Билеты', 'заявки и посещение матчей', Icons.confirmation_number_rounded, _openTicketsWindow, group: 'Сервисы'),
-      _ProfileFlagshipAction('PRO подписка', 'расширенные возможности', Icons.workspace_premium_rounded, _openSubscriptionWindow, group: 'Аккаунт', pro: true),
+      if (isOwnProfile)
+        _ProfileFlagshipAction('К выбору Workspace', 'выбрать личный или рабочий кабинет', Icons.account_tree_outlined, _goToWorkspaceHub, group: 'Навигация', primary: true),
+
+      if (isOwnProfile)
+        _ProfileFlagshipAction('Новый пост', 'фото, текст и публикация в профиль', Icons.add_photo_alternate_outlined, _openCreatePostModal, group: 'Создать'),
+      if (isOwnProfile)
+        _ProfileFlagshipAction('Новый Reels', 'короткое спортивное видео', Icons.movie_creation_outlined, () { _openUploadReels(); }, group: 'Создать'),
+
+      _ProfileFlagshipAction('Лента', 'новости и публикации сообщества', Icons.dynamic_feed_rounded, _openCommunityFeedHome, group: 'Основное'),
+      _ProfileFlagshipAction('Поиск людей', 'игроки, тренеры и пользователи', Icons.person_search_outlined, _openPeopleSearchWindow, group: 'Основное'),
+      _ProfileFlagshipAction('Чаты', 'личные сообщения и группы', Icons.forum_rounded, _openMainChat, group: 'Основное'),
+      _ProfileFlagshipAction('Reels', 'короткие видео сообщества', Icons.play_circle_outline_rounded, _openGlobalReels, group: 'Основное'),
+
+      _ProfileFlagshipAction('Видеоуроки', 'обучение и спортивные материалы', Icons.school_rounded, _openVideoLessonsWindow, group: 'Обучение'),
+      _ProfileFlagshipAction('Сохранённое · скоро', 'ваши сохранённые материалы', Icons.bookmark_border_rounded, _openSavedWindow, group: 'Обучение'),
+
+      _ProfileFlagshipAction('Площадки', 'каталог доступен · раздел дополняется', Icons.stadium_rounded, _openVenuesWindow, group: 'Сервисы'),
+      _ProfileFlagshipAction('Игры рядом · скоро', 'открытые игры и поиск игроков', Icons.sports_soccer_rounded, _openNearbyGamesWindow, group: 'Сервисы'),
+      _ProfileFlagshipAction('Тренировки рядом · скоро', 'открытые занятия тренеров и клубов', Icons.directions_run_rounded, _openNearbyTrainingsWindow, group: 'Сервисы'),
+
       if (isOwnProfile)
         _ProfileFlagshipAction(isClubRole ? 'Логотип / аватар' : 'Аватарка', _profileMediaEditSubtitle, Icons.add_a_photo_outlined, _openProfileMediaPickerSheet, group: 'Аккаунт'),
+      _ProfileFlagshipAction('PRO подписка', 'расширенные возможности', Icons.workspace_premium_rounded, _openSubscriptionWindow, group: 'Аккаунт', pro: true),
       _ProfileFlagshipAction('Настройки', 'профиль и доступ', Icons.settings_outlined, _openProfileSettingsSheet, group: 'Аккаунт'),
       if (isOwnProfile)
         _ProfileFlagshipAction('Выйти из профиля', 'завершить текущую сессию', Icons.logout_rounded, _logoutFromProfile, group: 'Аккаунт'),
@@ -6355,14 +7479,16 @@ void initState() {
 
     final width = MediaQuery.sizeOf(context).width;
 
-    // Телефон сохраняет компактное окно поверх профиля.
+    // Телефон: меню в той же визуальной модели, что Club Workspace —
+    // плавающий белый лист, без карточочных обводок и лишней рамки окна.
     if (width < 720) {
-      _openCmrWindow(
-        title: 'Все разделы',
-        icon: Icons.grid_view_rounded,
-        maxWidth: 520,
-        maxHeight: 760,
-        child: _buildProfileHomeMoreWindowContent(actions),
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        barrierColor: Colors.black.withOpacity(.22),
+        builder: (sheetContext) =>
+            _buildProfileMobileMoreSheet(sheetContext, actions),
       );
       return;
     }
@@ -6405,6 +7531,316 @@ void initState() {
           ),
         );
       },
+    );
+  }
+
+
+  Widget _buildProfileMobileMoreSheet(
+    BuildContext sheetContext,
+    List<_ProfileFlagshipAction> actions,
+  ) {
+    final grouped = <String, List<_ProfileFlagshipAction>>{};
+    for (final action in actions) {
+      grouped
+          .putIfAbsent(action.group, () => <_ProfileFlagshipAction>[])
+          .add(action);
+    }
+
+    final height = MediaQuery.of(sheetContext).size.height;
+    final bottom = MediaQuery.of(sheetContext).padding.bottom;
+    const orderedGroups = <String>[
+      'Навигация',
+      'Создать',
+      'Основное',
+      'Обучение',
+      'Сервисы',
+      'Профиль',
+      'Аккаунт',
+    ];
+
+    Widget actionTile(_ProfileFlagshipAction action) {
+      final danger = action.danger;
+      final active = action.primary;
+      final accent = danger
+          ? const Color(0xFFE11D48)
+          : active
+              ? const Color(0xFF067A46)
+              : const Color(0xFF344054);
+
+      return Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(15),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(15),
+          onTap: () {
+            Navigator.of(sheetContext).pop();
+            Future<void>.delayed(
+              const Duration(milliseconds: 80),
+              action.onTap,
+            );
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 170),
+            width: double.infinity,
+            constraints: const BoxConstraints(minHeight: 50),
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+            decoration: BoxDecoration(
+              color: active
+                  ? const Color(0xFFF3FAF6)
+                  : danger
+                      ? const Color(0xFFFFF7F8)
+                      : Colors.transparent,
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: active
+                        ? const Color(0xFFEAF8F0)
+                        : danger
+                            ? const Color(0xFFFFECEF)
+                            : const Color(0xFFF7F9F8),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Icon(action.icon, size: 18, color: accent),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              action.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.custom(
+                                size: 11.4,
+                                weight: FontWeight.w600,
+                                color: danger
+                                    ? const Color(0xFFE11D48)
+                                    : active
+                                        ? const Color(0xFF067A46)
+                                        : const Color(0xFF111827),
+                                height: 1.15,
+                                letterSpacing: 0,
+                              ),
+                            ),
+                          ),
+                          if (action.pro) ...[
+                            const SizedBox(width: 5),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFF7ED),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                'PRO',
+                                style: AppTypography.custom(
+                                  size: 8.2,
+                                  weight: FontWeight.w600,
+                                  color: const Color(0xFFEA580C),
+                                  height: 1,
+                                  letterSpacing: 0,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        action.subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.custom(
+                          size: 9.7,
+                          weight: FontWeight.w400,
+                          color: danger
+                              ? const Color(0xFFBE123C)
+                              : const Color(0xFF667085),
+                          height: 1.2,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: danger
+                      ? const Color(0xFFE11D48)
+                      : const Color(0xFF98A2B3),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    Widget section(String title, List<_ProfileFlagshipAction> items) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(9, 5, 9, 5),
+              child: Text(
+                title.toUpperCase(),
+                style: AppTypography.custom(
+                  size: 8.4,
+                  weight: FontWeight.w700,
+                  color: const Color(0xFF98A2B3),
+                  height: 1.1,
+                  letterSpacing: .45,
+                ),
+              ),
+            ),
+            ...items.map(
+              (action) => Padding(
+                padding: const EdgeInsets.only(bottom: 3),
+                child: actionTile(action),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      constraints: BoxConstraints(maxHeight: height * .88),
+      margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+      padding: EdgeInsets.fromLTRB(14, 10, 14, 14 + bottom),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.16),
+            blurRadius: 28,
+            offset: const Offset(0, 14),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 42,
+            height: 5,
+            decoration: BoxDecoration(
+              color: const Color(0xFFD0D5DD),
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 2, 4, 10),
+            child: Row(
+              children: [
+                _buildSmallAvatarForSheet(),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        fullName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.custom(
+                          size: 12.6,
+                          weight: FontWeight.w600,
+                          color: const Color(0xFF111827),
+                          height: 1.15,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _enteredAsText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.custom(
+                          size: 9.8,
+                          weight: FontWeight.w400,
+                          color: const Color(0xFF667085),
+                          height: 1.15,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFECFDF3),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    _roleLabel.toUpperCase(),
+                    style: AppTypography.custom(
+                      size: 8.6,
+                      weight: FontWeight.w600,
+                      color: const Color(0xFF00A750),
+                      height: 1,
+                      letterSpacing: .15,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Меню',
+                  style: AppTypography.custom(
+                    size: 13.2,
+                    weight: FontWeight.w600,
+                    color: const Color(0xFF111827),
+                    height: 1.1,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          Flexible(
+            child: ListView(
+              shrinkWrap: true,
+              padding: EdgeInsets.zero,
+              physics: const BouncingScrollPhysics(),
+              children: [
+                for (final group in orderedGroups)
+                  if ((grouped[group] ?? const <_ProfileFlagshipAction>[])
+                      .isNotEmpty)
+                    section(group, grouped[group]!),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -6472,10 +7908,12 @@ void initState() {
                             action.title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w900,
+                            style: AppTypography.custom(
+                              size: 11.4,
+                              weight: FontWeight.w600,
                               color: titleColor,
+                              height: 1.15,
+                              letterSpacing: 0,
                             ),
                           ),
                         ),
@@ -6483,7 +7921,16 @@ void initState() {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                             decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(999)),
-                            child: const Text('PRO', style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.w900, color: Color(0xFFEA580C))),
+                            child: Text(
+                              'PRO',
+                              style: AppTypography.custom(
+                                size: 8.2,
+                                weight: FontWeight.w600,
+                                color: const Color(0xFFEA580C),
+                                height: 1,
+                                letterSpacing: 0,
+                              ),
+                            ),
                           ),
                       ],
                     ),
@@ -6492,10 +7939,12 @@ void initState() {
                       action.subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: action.primary ? Colors.white.withOpacity(.68) : const Color(0xFF667085),
+                      style: AppTypography.custom(
+                        size: 9.7,
+                        weight: FontWeight.w400,
+                        color: action.primary ? Colors.white.withOpacity(.72) : const Color(0xFF667085),
+                        height: 1.2,
+                        letterSpacing: 0,
                       ),
                     ),
                   ],
@@ -6518,7 +7967,13 @@ void initState() {
               padding: const EdgeInsets.only(left: 4, bottom: 7),
               child: Text(
                 title.toUpperCase(),
-                style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w900, color: Color(0xFF98A2B3), letterSpacing: .6),
+                style: AppTypography.custom(
+                  size: 8.4,
+                  weight: FontWeight.w700,
+                  color: const Color(0xFF98A2B3),
+                  height: 1.1,
+                  letterSpacing: .45,
+                ),
               ),
             ),
             ...items.map((a) => Padding(padding: const EdgeInsets.only(bottom: 8), child: compactTile(a))),
@@ -6527,7 +7982,7 @@ void initState() {
       );
     }
 
-    final orderedGroups = ['Рабочая зона', 'Основное', 'Медиа', 'Сервисы', 'Аккаунт'];
+    final orderedGroups = ['Навигация', 'Создать', 'Основное', 'Обучение', 'Сервисы', 'Профиль', 'Аккаунт'];
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
@@ -6549,16 +8004,47 @@ void initState() {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(fullName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Color(0xFF111827))),
+                      Text(
+                        fullName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.custom(
+                          size: 12.6,
+                          weight: FontWeight.w600,
+                          color: const Color(0xFF111827),
+                          height: 1.15,
+                          letterSpacing: 0,
+                        ),
+                      ),
                       const SizedBox(height: 2),
-                      Text(_enteredAsText, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF667085))),
+                      Text(
+                        _enteredAsText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.custom(
+                          size: 9.8,
+                          weight: FontWeight.w400,
+                          color: const Color(0xFF667085),
+                          height: 1.15,
+                          letterSpacing: 0,
+                        ),
+                      ),
                     ],
                   ),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                   decoration: BoxDecoration(color: const Color(0xFFECFDF3), borderRadius: BorderRadius.circular(999)),
-                  child: Text(_roleLabel.toUpperCase(), style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Color(0xFF00A750))),
+                  child: Text(
+                    _roleLabel.toUpperCase(),
+                    style: AppTypography.custom(
+                      size: 8.6,
+                      weight: FontWeight.w600,
+                      color: const Color(0xFF00A750),
+                      height: 1,
+                      letterSpacing: .15,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -6827,6 +8313,13 @@ void initState() {
 
 
   void _openCreateMenuSheet() {
+    final width = MediaQuery.sizeOf(context).width;
+    if (width >= 720) {
+      // На планшете/ПК создание находится внутри общего flagship-меню «Ещё».
+      _openProfileHomeMoreSheet();
+      return;
+    }
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -6853,13 +8346,6 @@ void initState() {
                   subtitle: 'Короткое спортивное видео',
                   onTap: () { Navigator.pop(context); _openUploadReels(); },
                 ),
-                _buildSettingsRow(
-                  icon: _primaryZoneIcon,
-                  title: _primaryZoneTitle,
-                  subtitle: _primaryZoneSubtitle,
-                  strong: true,
-                  onTap: () { Navigator.pop(context); _openPrimaryArea(); },
-                ),
               ],
             ),
           ),
@@ -6869,104 +8355,170 @@ void initState() {
   }
 
   void _openProfileSettingsSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) {
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+    final width = MediaQuery.sizeOf(context).width;
+    if (width >= 720) {
+      _selectProfileWorkspaceSection('settings');
+      return;
+    }
+
+    _openCmrWindow(
+      title: 'Настройки',
+      icon: Icons.settings_outlined,
+      maxWidth: 560,
+      maxHeight: 780,
+      child: _buildMobileAccountSettingsContent(),
+    );
+    if (mounted) setState(() => _mobileDockKey = 'more');
+  }
+
+  Widget _buildMobileAccountSettingsContent() {
+    return Container(
+      color: Colors.white,
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(14, 16, 14, 100),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Center(child: Container(width: 42, height: 4, decoration: BoxDecoration(color: const Color(0xFFE5E7EB), borderRadius: BorderRadius.circular(999)))),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    _buildSmallAvatarForSheet(),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(fullName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF111827))),
-                          const SizedBox(height: 2),
-                          Text(_enteredAsText, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF667085))),
-                        ],
+                _buildSmallAvatarForSheet(),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        fullName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.custom(
+                          size: 13.2,
+                          weight: FontWeight.w600,
+                          color: const Color(0xFF111827),
+                          height: 1.15,
+                          letterSpacing: 0,
+                        ),
                       ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-                      decoration: BoxDecoration(color: const Color(0xFFECFDF3), borderRadius: BorderRadius.circular(999)),
-                      child: Text(_roleLabel.toUpperCase(), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF00A750))),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _buildSettingsRow(
-                  icon: _primaryZoneIcon,
-                  title: _primaryZoneTitle,
-                  subtitle: _primaryZoneSubtitle,
-                  strong: true,
-                  onTap: () { Navigator.pop(context); _openPrimaryArea(); },
-                ),
-                _buildSettingsRow(
-                  icon: Icons.camera_alt_outlined,
-                  title: _profileMediaEditTitle,
-                  subtitle: _profileMediaEditSubtitle,
-                  onTap: () { Navigator.pop(context); _openProfileMediaPickerSheet(); },
-                ),
-                _buildSettingsRow(
-                  icon: Icons.notifications_none_rounded,
-                  title: 'Уведомления',
-                  subtitle: 'Матчи, тренировки, чаты и события клуба',
-                  onTap: () {
-                    Navigator.pop(context);
-                    Get.snackbar('Скоро', 'Здесь можно открыть экран уведомлений', snackPosition: SnackPosition.BOTTOM);
-                  },
-                ),
-                _buildSettingsRow(
-                  icon: Icons.privacy_tip_outlined,
-                  title: 'Приватность и доступ',
-                  subtitle: 'Кто видит профиль, медиа и данные команды',
-                  onTap: () {
-                    Navigator.pop(context);
-                    Get.snackbar('Скоро', 'Раздел приватности можно подключить отдельным экраном', snackPosition: SnackPosition.BOTTOM);
-                  },
-                ),
-                if (isOwnProfile) ...[
-                  const SizedBox(height: 4),
-                  _buildSettingsRow(
-                    icon: Icons.logout_rounded,
-                    title: 'Выйти из профиля',
-                    subtitle: 'Завершить текущую сессию и открыть вход',
-                    onTap: () {
-                      Navigator.pop(context);
-                      _logoutFromProfile();
-                    },
+                      const SizedBox(height: 3),
+                      Text(
+                        _enteredAsText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.custom(
+                          size: 9.8,
+                          weight: FontWeight.w400,
+                          color: const Color(0xFF667085),
+                          height: 1.2,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ],
                   ),
-                  _buildSettingsRow(
-                    icon: Icons.delete_forever_rounded,
-                    title: 'Удалить профиль',
-                    subtitle: 'Удаление аккаунта через кодовое слово УДАЛИТЬ',
-                    danger: true,
-                    onTap: () {
-                      Navigator.pop(context);
-                      _deleteOwnProfileWithConfirmation();
-                    },
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3FAF6),
+                    borderRadius: BorderRadius.circular(999),
                   ),
-                ],
+                  child: Text(
+                    _roleLabel.toUpperCase(),
+                    style: AppTypography.custom(
+                      size: 8.5,
+                      weight: FontWeight.w600,
+                      color: const Color(0xFF067A46),
+                      height: 1,
+                      letterSpacing: .1,
+                    ),
+                  ),
+                ),
               ],
             ),
-          ),
-        );
-      },
+            const SizedBox(height: 20),
+            Text(
+              'АККАУНТ',
+              style: AppTypography.custom(
+                size: 8.6,
+                weight: FontWeight.w600,
+                color: const Color(0xFF98A2B3),
+                height: 1,
+                letterSpacing: .45,
+              ),
+            ),
+            const SizedBox(height: 8),
+            _buildSettingsRow(
+              icon: Icons.account_tree_outlined,
+              title: 'К выбору Workspace',
+              subtitle: 'Выбрать личный или рабочий кабинет',
+              strong: true,
+              onTap: _goToWorkspaceHub,
+            ),
+            _buildSettingsRow(
+              icon: Icons.camera_alt_outlined,
+              title: _profileMediaEditTitle,
+              subtitle: _profileMediaEditSubtitle,
+              onTap: _openProfileMediaPickerSheet,
+            ),
+            _buildSettingsRow(
+              icon: Icons.notifications_none_rounded,
+              title: 'Уведомления',
+              subtitle: 'Матчи, тренировки, чаты и события',
+              onTap: () => Get.snackbar(
+                'Уведомления',
+                'Раздел подключим отдельным экраном.',
+                snackPosition: SnackPosition.BOTTOM,
+              ),
+            ),
+            _buildSettingsRow(
+              icon: Icons.privacy_tip_outlined,
+              title: 'Приватность и доступ',
+              subtitle: 'Видимость профиля и личных данных',
+              onTap: () => Get.snackbar(
+                'Приватность',
+                'Раздел подключим отдельным экраном.',
+                snackPosition: SnackPosition.BOTTOM,
+              ),
+            ),
+            _buildSettingsRow(
+              icon: Icons.workspace_premium_rounded,
+              title: 'PRO подписка',
+              subtitle: 'Управление возможностями аккаунта',
+              onTap: _openSubscriptionWindow,
+            ),
+            if (isOwnProfile) ...[
+              const SizedBox(height: 10),
+              Text(
+                'СЕССИЯ',
+                style: AppTypography.custom(
+                  size: 8.6,
+                  weight: FontWeight.w600,
+                  color: const Color(0xFF98A2B3),
+                  height: 1,
+                  letterSpacing: .45,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _buildSettingsRow(
+                icon: Icons.logout_rounded,
+                title: 'Выйти из профиля',
+                subtitle: 'Завершить текущую сессию',
+                onTap: _logoutFromProfile,
+              ),
+              _buildSettingsRow(
+                icon: Icons.delete_forever_rounded,
+                title: 'Удалить профиль',
+                subtitle: 'Безвозвратное удаление аккаунта',
+                danger: true,
+                onTap: _deleteOwnProfileWithConfirmation,
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
+
 
   Widget _buildSmallAvatarForSheet() {
     final hasAvatar = (photo ?? '').trim().isNotEmpty;
@@ -7053,10 +8605,12 @@ void initState() {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
+                    style: AppTypography.custom(
+                      size: 11.8,
+                      weight: strong ? FontWeight.w600 : FontWeight.w500,
                       color: titleColor,
-                      fontSize: 12.4,
-                      fontWeight: FontWeight.w700,
+                      height: 1.15,
+                      letterSpacing: 0,
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -7064,11 +8618,12 @@ void initState() {
                     subtitle,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
+                    style: AppTypography.custom(
+                      size: 9.7,
+                      weight: FontWeight.w400,
                       color: subtitleColor,
-                      fontSize: 10.7,
-                      fontWeight: FontWeight.w500,
-                      height: 1.15,
+                      height: 1.2,
+                      letterSpacing: 0,
                     ),
                   ),
                 ],
@@ -7077,10 +8632,12 @@ void initState() {
             const SizedBox(width: 8),
             Text(
               strong ? 'Открыть' : '',
-              style: const TextStyle(
-                color: Color(0xFF067A46),
-                fontSize: 9.6,
-                fontWeight: FontWeight.w700,
+              style: AppTypography.custom(
+                size: 9.2,
+                weight: FontWeight.w600,
+                color: const Color(0xFF067A46),
+                height: 1,
+                letterSpacing: 0,
               ),
             ),
           ],
@@ -8226,7 +9783,7 @@ class _ProfileFullModulesMenuOverlay extends StatelessWidget {
     final width = media.size.width;
     final height = media.size.height;
     final compact = width < 720;
-    final columns = compact ? 4 : width >= 1180 ? 7 : 6;
+    final columns = compact ? 4 : 6;
     final menuWidth = min(compact ? width - 22 : 760.0, width - 32);
     final maxHeight = max(320.0, min(height - 118, compact ? 560.0 : 600.0));
 
@@ -8276,11 +9833,12 @@ class _ProfileFullModulesMenuOverlay extends StatelessWidget {
                                   title.trim().isEmpty ? 'Мой профиль' : title.trim(),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Color(0xFF111827),
-                                    fontSize: 15.5,
-                                    height: 1,
-                                    fontWeight: FontWeight.w600,
+                                  style: AppTypography.custom(
+                                    size: 14.2,
+                                    weight: FontWeight.w600,
+                                    color: const Color(0xFF111827),
+                                    height: 1.1,
+                                    letterSpacing: 0,
                                   ),
                                 ),
                                 const SizedBox(height: 5),
@@ -8288,11 +9846,12 @@ class _ProfileFullModulesMenuOverlay extends StatelessWidget {
                                   subtitle.trim().isEmpty ? 'Sportoteka Workspace' : subtitle.trim(),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Color(0xFF667085),
-                                    fontSize: 11.5,
-                                    height: 1,
-                                    fontWeight: FontWeight.w600,
+                                  style: AppTypography.custom(
+                                    size: 10.4,
+                                    weight: FontWeight.w400,
+                                    color: const Color(0xFF667085),
+                                    height: 1.1,
+                                    letterSpacing: 0,
                                   ),
                                 ),
                               ],
@@ -8312,10 +9871,12 @@ class _ProfileFullModulesMenuOverlay extends StatelessWidget {
                                 const SizedBox(width: 4),
                                 Text(
                                   '${actions.length} разделов',
-                                  style: const TextStyle(
-                                    color: Color(0xFF667085),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
+                                  style: AppTypography.custom(
+                                    size: 10,
+                                    weight: FontWeight.w500,
+                                    color: const Color(0xFF667085),
+                                    height: 1,
+                                    letterSpacing: 0,
                                   ),
                                 ),
                               ],
@@ -8367,19 +9928,21 @@ class _ProfileFullModulesMenuOverlay extends StatelessWidget {
                           borderRadius: BorderRadius.circular(18),
                           border: Border.all(color: const Color(0xFFEFF2F5)),
                         ),
-                        child: const Row(
+                        child: Row(
                           children: [
-                            Icon(Icons.search_rounded, color: Color(0xFF667085), size: 18),
-                            SizedBox(width: 8),
+                            const Icon(Icons.search_rounded, color: Color(0xFF667085), size: 18),
+                            const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Для быстрого поиска нажмите кнопку «Поиск» рядом с меню',
+                                'Для быстрого поиска используйте кнопку «Поиск» в нижнем меню',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Color(0xFF667085),
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w600,
+                                style: AppTypography.custom(
+                                  size: 10.2,
+                                  weight: FontWeight.w400,
+                                  color: const Color(0xFF667085),
+                                  height: 1.15,
+                                  letterSpacing: 0,
                                 ),
                               ),
                             ),
@@ -8508,11 +10071,12 @@ class _ProfileModuleMenuTile extends StatelessWidget {
                   maxLines: 2,
                   textAlign: TextAlign.center,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: AppTypography.custom(
+                    size: 10.7,
+                    weight: FontWeight.w500,
                     color: danger ? const Color(0xFFD92D20) : const Color(0xFF172033),
-                    fontSize: 11.5,
-                    height: 1.05,
-                    fontWeight: FontWeight.w600,
+                    height: 1.08,
+                    letterSpacing: 0,
                   ),
                 ),
               ),
@@ -8527,6 +10091,443 @@ class _ProfileModuleMenuTile extends StatelessWidget {
                   ),
                 ),
               ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+class _ProfilePeopleSearchPanel extends StatefulWidget {
+  const _ProfilePeopleSearchPanel({
+    required this.apiBase,
+    required this.myUserId,
+    required this.onOpenUser,
+  });
+
+  final String apiBase;
+  final int myUserId;
+  final ValueChanged<int> onOpenUser;
+
+  @override
+  State<_ProfilePeopleSearchPanel> createState() => _ProfilePeopleSearchPanelState();
+}
+
+class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
+  final TextEditingController _controller = TextEditingController();
+  Timer? _debounce;
+  bool _loading = false;
+  String _filter = 'all';
+  String? _error;
+  List<Map<String, dynamic>> _results = const [];
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onChanged(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 380), _search);
+  }
+
+  Future<void> _search() async {
+    final query = _controller.text.trim();
+    if (query.length < 2) {
+      if (!mounted) return;
+      setState(() {
+        _results = const [];
+        _error = null;
+        _loading = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final uri = Uri.parse('${widget.apiBase}/search_users.php').replace(
+        queryParameters: <String, String>{
+          'q': query,
+          if (widget.myUserId > 0) 'exclude_id': widget.myUserId.toString(),
+          if (widget.myUserId > 0) 'exclude': widget.myUserId.toString(),
+        },
+      );
+
+      http.Response response = await http.get(uri).timeout(const Duration(seconds: 12));
+      if (response.statusCode == 405) {
+        response = await http.post(
+          Uri.parse('${widget.apiBase}/search_users.php'),
+          body: <String, String>{
+            'q': query,
+            if (widget.myUserId > 0) 'exclude_id': widget.myUserId.toString(),
+            if (widget.myUserId > 0) 'exclude': widget.myUserId.toString(),
+          },
+        ).timeout(const Duration(seconds: 12));
+      }
+
+      if (response.statusCode != 200) {
+        throw Exception('HTTP ${response.statusCode}');
+      }
+
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      final raw = _extractUsers(decoded);
+      final parsed = raw.map(_normalizeUser).where((e) => (e['id'] as int) > 0).where(_matchesFilter).toList();
+
+      if (!mounted) return;
+      setState(() => _results = parsed);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _results = const [];
+        _error = 'Поиск временно недоступен. Попробуйте ещё раз чуть позже.';
+      });
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  List<Map<String, dynamic>> _extractUsers(dynamic data) {
+    if (data is List) {
+      return data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    }
+    if (data is Map) {
+      final map = Map<String, dynamic>.from(data);
+      for (final key in const ['users', 'data', 'results', 'items', 'list']) {
+        final value = map[key];
+        if (value is List) {
+          return value.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+        }
+        if (value is Map) {
+          final nested = Map<String, dynamic>.from(value);
+          for (final nestedKey in const ['users', 'data', 'results', 'items', 'list']) {
+            final nestedValue = nested[nestedKey];
+            if (nestedValue is List) {
+              return nestedValue.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+            }
+          }
+        }
+      }
+    }
+    return const [];
+  }
+
+  Map<String, dynamic> _normalizeUser(Map<String, dynamic> raw) {
+    int asInt(dynamic value) => value is num ? value.toInt() : int.tryParse('${value ?? ''}') ?? 0;
+    String clean(dynamic value) {
+      final v = '${value ?? ''}'.trim();
+      return v.toLowerCase() == 'null' ? '' : v;
+    }
+
+    final first = clean(raw['first_name'] ?? raw['firstname'] ?? raw['firstName']);
+    final last = clean(raw['last_name'] ?? raw['lastname'] ?? raw['lastName']);
+    final fallbackName = clean(raw['full_name'] ?? raw['fullName'] ?? raw['name']);
+    final fullName = '$first $last'.trim().isNotEmpty ? '$first $last'.trim() : fallbackName;
+    var photo = clean(raw['photo_url'] ?? raw['avatar_url'] ?? raw['photoUrl'] ?? raw['photo'] ?? raw['avatar']);
+    if (photo.isNotEmpty && !photo.startsWith('http://') && !photo.startsWith('https://')) {
+      photo = 'https://sportotekaapp.ru/uploads/${photo.replaceFirst(RegExp(r'^/+'), '')}';
+    }
+
+    return <String, dynamic>{
+      'id': asInt(raw['id'] ?? raw['user_id'] ?? raw['userId']),
+      'name': fullName.isEmpty ? 'Пользователь' : fullName,
+      'role': clean(raw['role'] ?? raw['user_role'] ?? raw['type']),
+      'team': clean(raw['team_name'] ?? raw['teamName']),
+      'club': clean(raw['club_name'] ?? raw['clubName']),
+      'photo': photo,
+    };
+  }
+
+  bool _matchesFilter(Map<String, dynamic> user) {
+    if (_filter == 'all') return true;
+    final role = '${user['role'] ?? ''}'.toLowerCase();
+    if (role.trim().isEmpty) return true;
+    if (_filter == 'player') return role.contains('player') || role.contains('игрок');
+    if (_filter == 'coach') {
+      return role.contains('coach') || role.contains('trainer') || role.contains('тренер');
+    }
+    return true;
+  }
+
+  String _roleLabel(String role) {
+    final value = role.toLowerCase();
+    if (value.contains('coach') || value.contains('trainer') || value.contains('тренер')) return 'Тренер';
+    if (value.contains('player') || value.contains('игрок')) return 'Игрок';
+    if (value.contains('club') || value.contains('клуб')) return 'Клуб';
+    if (value.contains('parent') || value.contains('родител')) return 'Родитель';
+    return role.trim().isEmpty ? 'Пользователь' : role.trim();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            height: 46,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF6F7F9),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.search_rounded, size: 20, color: Color(0xFF667085)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    autofocus: true,
+                    onChanged: _onChanged,
+                    onSubmitted: (_) => _search(),
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      border: InputBorder.none,
+                      hintText: 'Имя игрока, тренера или пользователя',
+                      hintStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF98A2B3)),
+                    ),
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF111827)),
+                  ),
+                ),
+                if (_controller.text.isNotEmpty)
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    onPressed: () {
+                      _controller.clear();
+                      setState(() {
+                        _results = const [];
+                        _error = null;
+                      });
+                    },
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _filterChip('all', 'Все'),
+              const SizedBox(width: 7),
+              _filterChip('player', 'Игроки'),
+              const SizedBox(width: 7),
+              _filterChip('coach', 'Тренеры'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Expanded(child: _buildBody()),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterChip(String value, String label) {
+    final active = _filter == value;
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: () {
+        setState(() => _filter = value);
+        if (_controller.text.trim().length >= 2) _search();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFF111827) : const Color(0xFFF6F7F9),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 10.8,
+            fontWeight: FontWeight.w600,
+            color: active ? Colors.white : const Color(0xFF667085),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF00A750), strokeWidth: 2.2));
+    }
+    if (_error != null) {
+      return _emptyState(Icons.cloud_off_outlined, 'Поиск временно недоступен', _error!);
+    }
+    if (_controller.text.trim().length < 2) {
+      return _emptyState(
+        Icons.person_search_outlined,
+        'Найдите людей в Sportoteka',
+        'Введите минимум 2 символа. Можно отдельно искать игроков и тренеров.',
+      );
+    }
+    if (_results.isEmpty) {
+      return _emptyState(Icons.search_off_rounded, 'Ничего не найдено', 'Попробуйте другое имя или переключите категорию.');
+    }
+
+    return ListView.separated(
+      physics: const BouncingScrollPhysics(),
+      itemCount: _results.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 6),
+      itemBuilder: (context, index) {
+        final user = _results[index];
+        final photo = '${user['photo'] ?? ''}'.trim();
+        final team = '${user['team'] ?? ''}'.trim();
+        final club = '${user['club'] ?? ''}'.trim();
+        final contextLine = [if (club.isNotEmpty) club, if (team.isNotEmpty) team].join(' · ');
+        return Material(
+          color: const Color(0xFFF8F9FA),
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () => widget.onOpenUser(user['id'] as int),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: const Color(0xFFF1FBF6),
+                    backgroundImage: photo.isNotEmpty ? NetworkImage(photo) : null,
+                    child: photo.isEmpty
+                        ? Text(
+                            '${user['name'] ?? 'П'}'.substring(0, 1).toUpperCase(),
+                            style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF067A46)),
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${user['name']}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          [_roleLabel('${user['role'] ?? ''}'), if (contextLine.isNotEmpty) contextLine].join(' · '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 10.3, fontWeight: FontWeight.w500, color: Color(0xFF667085)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded, color: Color(0xFF98A2B3), size: 20),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _emptyState(IconData icon, String title, String subtitle) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 410),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 66,
+              height: 66,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1FBF6),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(icon, color: const Color(0xFF067A46), size: 29),
+            ),
+            const SizedBox(height: 14),
+            Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+            const SizedBox(height: 6),
+            Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11.3, height: 1.4, fontWeight: FontWeight.w500, color: Color(0xFF667085))),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileComingSoonPanel extends StatelessWidget {
+  const _ProfileComingSoonPanel({
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.features,
+  });
+
+  final String title;
+  final String description;
+  final IconData icon;
+  final List<String> features;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.all(18),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  width: 58,
+                  height: 58,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1FBF6),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Icon(icon, color: const Color(0xFF067A46), size: 27),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'РАЗДЕЛ ДОПОЛНЯЕТСЯ',
+                style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, letterSpacing: .65, color: Color(0xFF00A750)),
+              ),
+              const SizedBox(height: 7),
+              Text(title, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+              const SizedBox(height: 8),
+              Text(description, style: const TextStyle(fontSize: 12, height: 1.48, fontWeight: FontWeight.w500, color: Color(0xFF667085))),
+              const SizedBox(height: 18),
+              ...features.map(
+                (feature) => Padding(
+                  padding: const EdgeInsets.only(bottom: 9),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 22,
+                        height: 22,
+                        decoration: const BoxDecoration(color: Color(0xFFF3FAF6), shape: BoxShape.circle),
+                        child: const Icon(Icons.check_rounded, size: 13, color: Color(0xFF067A46)),
+                      ),
+                      const SizedBox(width: 9),
+                      Expanded(child: Text(feature, style: const TextStyle(fontSize: 11.3, fontWeight: FontWeight.w600, color: Color(0xFF344054)))),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -8565,36 +10566,181 @@ class _ProfileShortcut {
   const _ProfileShortcut(this.title, this.icon, this.onTap);
 }
 
+class _FlagshipNotificationPainter extends CustomPainter {
+  final Color color;
+
+  const _FlagshipNotificationPainter({
+    required this.color,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.7
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final centerX = size.width / 2;
+
+    final bell = Path()
+      ..moveTo(size.width * .24, size.height * .66)
+      ..quadraticBezierTo(
+        size.width * .31,
+        size.height * .57,
+        size.width * .31,
+        size.height * .42,
+      )
+      ..quadraticBezierTo(
+        size.width * .31,
+        size.height * .19,
+        centerX,
+        size.height * .18,
+      )
+      ..quadraticBezierTo(
+        size.width * .69,
+        size.height * .19,
+        size.width * .69,
+        size.height * .42,
+      )
+      ..quadraticBezierTo(
+        size.width * .69,
+        size.height * .57,
+        size.width * .76,
+        size.height * .66,
+      )
+      ..lineTo(size.width * .24, size.height * .66);
+
+    canvas.drawPath(bell, stroke);
+
+    canvas.drawLine(
+      Offset(size.width * .19, size.height * .73),
+      Offset(size.width * .81, size.height * .73),
+      stroke,
+    );
+
+    canvas.drawArc(
+      Rect.fromCenter(
+        center: Offset(centerX, size.height * .77),
+        width: size.width * .24,
+        height: size.height * .20,
+      ),
+      0,
+      3.14159,
+      false,
+      stroke,
+    );
+
+    // Небольшая фирменная нижняя точка вместо стандартного bell-clapper.
+    canvas.drawCircle(
+      Offset(centerX, size.height * .90),
+      size.width * .055,
+      Paint()..color = const Color(0xFF00A750),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _FlagshipNotificationPainter oldDelegate) {
+    return oldDelegate.color != color;
+  }
+}
+
 class _UserShort {
   final int? id;
   final String fullName;
+  final String? username;
   final String? role;
   final String? photoUrl;
+  final String? teamName;
+  final String? clubName;
 
-  _UserShort({this.id, required this.fullName, this.role, this.photoUrl});
+  _UserShort({
+    this.id,
+    required this.fullName,
+    this.username,
+    this.role,
+    this.photoUrl,
+    this.teamName,
+    this.clubName,
+  });
+
+  String get initials {
+    final parts = fullName
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((e) => e.isNotEmpty)
+        .toList();
+
+    if (parts.isEmpty) return 'S';
+    if (parts.length == 1) {
+      return parts.first.characters.first.toUpperCase();
+    }
+
+    return '${parts.first.characters.first}${parts.last.characters.first}'
+        .toUpperCase();
+  }
 
   factory _UserShort.fromJson(dynamic json) {
     final m = (json as Map).cast<String, dynamic>();
 
-    final first = (m['first_name'] ?? '').toString().trim();
-    final last = (m['last_name'] ?? '').toString().trim();
+    final first =
+        (m['first_name'] ?? m['firstName'] ?? '').toString().trim();
+    final last =
+        (m['last_name'] ?? m['lastName'] ?? '').toString().trim();
 
     String? normalize(dynamic raw) {
       if (raw == null) return null;
       final s = raw.toString().trim();
       if (s.isEmpty || s.toLowerCase() == 'null') return null;
-      if (s.startsWith('http://') || s.startsWith('https://')) return s;
+      if (s.startsWith('http://') || s.startsWith('https://')) {
+        return s;
+      }
       return 'https://sportotekaapp.ru/uploads/$s';
     }
 
-    final photo = normalize(m['photo_url']) ?? normalize(m['photo']);
+    String? optional(dynamic raw) {
+      final value = (raw ?? '').toString().trim();
+      if (value.isEmpty || value.toLowerCase() == 'null') {
+        return null;
+      }
+      return value;
+    }
+
+    final photo =
+        normalize(m['photo_url']) ??
+        normalize(m['photo_urls']) ??
+        normalize(m['photo']);
 
     final name = '$first $last'.trim();
+
     return _UserShort(
-      id: (m['id'] is int) ? m['id'] as int : int.tryParse(m['id']?.toString() ?? ''),
-      fullName: name.isEmpty ? 'Пользователь' : name,
-      role: (m['role'] ?? '').toString(),
+      id: (m['id'] is int)
+          ? m['id'] as int
+          : int.tryParse(
+              (m['id'] ?? m['user_id'] ?? '').toString(),
+            ),
+      fullName: name.isEmpty
+          ? optional(m['full_name']) ?? 'Пользователь'
+          : name,
+      username: optional(
+        m['username'] ??
+            m['user_name'] ??
+            m['nickname'] ??
+            m['login'],
+      ),
+      role: optional(m['role']),
       photoUrl: photo,
+      teamName: optional(
+        m['team_name'] ??
+            m['player_team_name'] ??
+            m['team'],
+      ),
+      clubName: optional(
+        m['club_name'] ??
+            m['player_club_name'] ??
+            m['club'],
+      ),
     );
   }
 }

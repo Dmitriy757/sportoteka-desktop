@@ -36,6 +36,8 @@ import 'package:sportoteka/presentation/team_video_analysis/cmr_video_analysis_p
 import 'package:sportoteka/presentation/team_attendance_screen/cmr_attendance_panel.dart';
 import 'package:sportoteka/presentation/team_matches_screen/cmr_team_matches_panel.dart';
 import 'package:sportoteka/presentation/testing/cmr_testing_panel.dart';
+import 'package:sportoteka/presentation/trainer_profile_screen/trainer_cabinet_panel.dart';
+import 'package:sportoteka/presentation/trainer_profile_screen/trainer_self_profile_panel.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_club_trainers_panel.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_club_teams_panel.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_club_roster_panel.dart';
@@ -205,7 +207,9 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   int currentUserId = 0;
   int clubId = 0;
   int trainerWorkspaceId = 0;
+  String trainerWorkspaceName = '';
   bool trainerAssignedMode = false;
+  bool _showOwnTrainerProfile = false;
 
   bool loading = true;
   bool refreshing = false;
@@ -325,6 +329,14 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   Future<void> _boot() async {
     currentUserId = await PrefUtils.getUserId() ?? 0;
 
+    final trainerFirstName =
+        (await PrefUtils.getUserFirstName()).trim();
+    final trainerLastName =
+        (await PrefUtils.getUserLastName()).trim();
+
+    trainerWorkspaceName =
+        '$trainerFirstName $trainerLastName'.trim();
+
     final args = Get.arguments;
     if (args is Map) {
       final mode =
@@ -352,6 +364,12 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     }
 
     if (trainerWorkspaceId <= 0) trainerWorkspaceId = currentUserId;
+
+    // Сам тренер входит сразу в персональный обзор,
+    // а не в общий список команд клуба.
+    if (trainerAssignedMode) {
+      selectedSection = ClubSection.overview;
+    }
 
     // Для клуба clubId = userId, для тренера clubId берём из первой назначенной команды.
     if (!trainerAssignedMode && clubId <= 0) clubId = currentUserId;
@@ -786,6 +804,9 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         'team_id': selectedTeamId.toString(),
       if (trainerAssignedMode && trainerWorkspaceId > 0)
         'trainer_id': trainerWorkspaceId.toString(),
+      if (trainerAssignedMode &&
+          trainerWorkspaceName.trim().isNotEmpty)
+        'trainer_name': trainerWorkspaceName.trim(),
     };
 
     if (!params.containsKey('club_id') && !params.containsKey('team_id')) {
@@ -1670,9 +1691,6 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     };
 
     switch (section) {
-      case ClubSection.graphics:
-        _openFullGraphics();
-        break;
       case ClubSection.tracker:
         _selectWorkspaceSection(ClubSection.tracker);
         break;
@@ -1828,11 +1846,21 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     _selectWorkspaceSection(section);
   }
 
-  List<_FullMenuItem> get _fullMenuItems => const [
-        _FullMenuItem(ClubSection.teams, Icons.account_tree_rounded, 'Команды',
-            'Список команд клуба'),
-        _FullMenuItem(ClubSection.trainers, Icons.badge_rounded, 'Тренеры',
-            'Специалисты и назначения'),
+  List<_FullMenuItem> get _fullMenuItems => [
+        const _FullMenuItem(
+          ClubSection.teams,
+          Icons.account_tree_rounded,
+          'Команды',
+          'Список команд клуба',
+        ),
+        _FullMenuItem(
+          ClubSection.trainers,
+          Icons.badge_rounded,
+          'Тренеры',
+          trainerAssignedMode
+              ? 'Коллеги · просмотр профилей · чат'
+              : 'Специалисты и назначения',
+        ),
         _FullMenuItem(ClubSection.roster, Icons.groups_2_rounded, 'Состав',
             'Игроки и профили'),
         _FullMenuItem(ClubSection.matches, Icons.sports_soccer_rounded, 'Матчи',
@@ -1909,14 +1937,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   }
 
   void _openFullGraphics() {
-    final activeTeamId = _activeTeamIdOrNull;
-    if (activeTeamId == null) {
-      Get.snackbar('Команда', 'Сначала выберите команду');
-      return;
-    }
-
     Get.to(() => TrainingGraphicsScreen(
-          teamId: activeTeamId,
+          teamId: selectedTeamId,
           teamName: selectedTeamName,
           clubId: clubId,
           clubName: clubName,
@@ -2184,9 +2206,9 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   }
 
   void _selectWorkspaceSection(ClubSection section) {
-    if (section == ClubSection.graphics) {
-      _openFullGraphics();
-      return;
+    if (section == ClubSection.trainers ||
+        section == ClubSection.teamTrainers) {
+      _showOwnTrainerProfile = false;
     }
 
     if (section != ClubSection.teams && _openCreateTeamInline) {
@@ -2207,11 +2229,6 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   }
 
   void _activateInlineSection(ClubSection section) {
-    if (section == ClubSection.graphics) {
-      _openFullGraphics();
-      return;
-    }
-
     if (!_canOpenWorkspaceSection(section)) return;
 
     // Повторное нажатие на «Чаты» всегда возвращает к общему списку.
@@ -2302,11 +2319,6 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   }
 
   void _openModuleWindow(ClubSection section) {
-    if (section == ClubSection.graphics) {
-      _openFullGraphics();
-      return;
-    }
-
     if (section == ClubSection.settings) {
       _openWorkspaceSettings();
       return;
@@ -2603,7 +2615,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         ),
       ),
       title: Text(
-        trainerAssignedMode ? 'Панель тренера' : 'Кабинет клуба',
+        trainerAssignedMode ? 'Мой кабинет тренера' : 'Кабинет клуба',
         style: TextStyle(
           fontSize: fontSize,
           fontWeight: FontWeight.w700,
@@ -3678,7 +3690,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     required double fontSize,
   }) {
     return InkWell(
-      onTap: () => _selectWorkspaceSection(section),
+      onTap: () => setState(() => selectedSection = section),
       borderRadius: BorderRadius.circular(18),
       child: Container(
         decoration: _mobileCardDecoration(radius: 18),
@@ -3927,11 +3939,20 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       builder: (sheetContext) {
         return _MobileMoreBottomSheet(
           clubName: clubName,
+          clubLogo: clubLogo,
           selectedTeamName: selectedTeamName,
+          trainerMode: trainerAssignedMode,
           hasTeam: _hasTeam,
           currentSection: selectedSection,
           groups: _clubWorkspaceNavGroups,
           hasActiveSubscription: hasActiveSubscription,
+          onWorkspace: () {
+            Navigator.of(sheetContext).pop();
+            Future<void>.delayed(
+              const Duration(milliseconds: 80),
+              _goHomeFromWorkspace,
+            );
+          },
           onSelect: (section) {
             Navigator.of(sheetContext).pop();
             _openGameModule(section);
@@ -4629,7 +4650,9 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       case 'training_graphics':
       case 'graphics':
       case 'tactical_board':
-        _openFullGraphics();
+        setState(() {
+          selectedSection = ClubSection.graphics;
+        });
         return;
 
       case 'calendar':
@@ -4733,6 +4756,44 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
           ],
         );
       case ClubSection.overview:
+        if (trainerAssignedMode) {
+          return TrainerCabinetPanel(
+            clubName: clubName,
+            teams: teams,
+            events: events,
+            latestPlans: latestPlans,
+            players: players,
+            onOpenProfile: () {
+              if (!mounted) return;
+              setState(() {
+                _showOwnTrainerProfile = true;
+                selectedSection =
+                    ClubSection.trainers;
+              });
+            },
+            onOpenTrainers: () {
+              if (!mounted) return;
+              setState(() {
+                _showOwnTrainerProfile = false;
+                selectedSection =
+                    ClubSection.trainers;
+              });
+            },
+            onOpenTeams: () =>
+                setState(() => selectedSection = ClubSection.teams),
+            onOpenCalendar: () =>
+                setState(() => selectedSection = ClubSection.calendar),
+            onOpenPlans: () =>
+                setState(() => selectedSection = ClubSection.plans),
+            onOpenTesting: () =>
+                setState(() => selectedSection = ClubSection.testing),
+            onOpenChats: () =>
+                setState(() => selectedSection = ClubSection.chat),
+            onOpenReports: () =>
+                setState(() => selectedSection = ClubSection.tracker),
+          );
+        }
+
         return CmrClubOverviewPanel(
           clubId: clubId,
           clubName: clubName,
@@ -4871,6 +4932,30 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         );
       case ClubSection.trainers:
       case ClubSection.teamTrainers:
+        if (trainerAssignedMode &&
+            _showOwnTrainerProfile) {
+          return TrainerSelfProfilePanel(
+            trainerId: trainerWorkspaceId > 0
+                ? trainerWorkspaceId
+                : currentUserId,
+            clubId: clubId,
+            clubName: clubName,
+            teams: teams,
+            onBackToList: () {
+              if (!mounted) return;
+              setState(() {
+                _showOwnTrainerProfile = false;
+                selectedSection =
+                    ClubSection.trainers;
+              });
+            },
+            onChanged: () async {
+              await _safeLoad(_loadTeams);
+              if (mounted) setState(() {});
+            },
+          );
+        }
+
         return CmrClubTrainersPanel(
           clubId: clubId,
           clubName: clubName,
@@ -4936,7 +5021,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
           hasTeam: _hasTeam,
           onOpenPlans: () =>
               setState(() => selectedSection = ClubSection.plans),
-          onOpenGraphics: _openFullGraphics,
+          onOpenGraphics: () =>
+              setState(() => selectedSection = ClubSection.graphics),
           onOpenCalendar: () =>
               setState(() => selectedSection = ClubSection.calendar),
           onOpenFullTeam: _openFullTeamDashboard,
@@ -4945,18 +5031,29 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         return _TeamGuard(
             hasTeam: _hasTeam,
             child: CmrPlansPanel(
-                clubId: clubId,
-                clubName: clubName,
-                teamId: selectedTeamId,
-                teamName: selectedTeamName));
+              clubId: clubId,
+              clubName: clubName,
+              teamId: selectedTeamId,
+              teamName: selectedTeamName,
+              trainerId: trainerAssignedMode
+                  ? trainerWorkspaceId
+                  : 0,
+              trainerName: trainerAssignedMode
+                  ? trainerWorkspaceName
+                  : '',
+            ));
       case ClubSection.graphics:
-        final graphicsTeamId = _activeTeamIdOrNull;
-        if (graphicsTeamId == null) return const _NeedTeam();
-        return TrainingGraphicsScreen(
-          teamId: graphicsTeamId,
-          teamName: selectedTeamName,
-          clubId: clubId,
-          clubName: clubName,
+        return _TeamModulePanel(
+          hasTeam: _hasTeam,
+          title: 'Графический редактор',
+          subtitle: 'Тактические схемы, упражнения и визуальные конспекты.',
+          icon: Icons.draw_rounded,
+          primaryText: 'Открыть редактор',
+          onPrimary: _openFullGraphics,
+          quickActions: [
+            _ModuleQuickAction('Планы', Icons.folder_copy_rounded,
+                () => setState(() => selectedSection = ClubSection.plans)),
+          ],
         );
       case ClubSection.tracker:
         if (!_hasTeam || selectedTeamId == null || selectedTeamId! <= 0) {
@@ -5050,7 +5147,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
           quickActions: [
             _ModuleQuickAction('Планы', Icons.folder_copy_rounded,
                 () => setState(() => selectedSection = ClubSection.plans)),
-            _ModuleQuickAction('Графика', Icons.draw_rounded, _openFullGraphics),
+            _ModuleQuickAction('Графика', Icons.draw_rounded,
+                () => setState(() => selectedSection = ClubSection.graphics)),
             _ModuleQuickAction('Состав', Icons.groups_2_rounded,
                 () => setState(() => selectedSection = ClubSection.roster)),
           ],
@@ -12977,20 +13075,26 @@ class _TrainingsPanel extends StatelessWidget {
 
 class _MobileMoreBottomSheet extends StatelessWidget {
   final String clubName;
+  final String? clubLogo;
   final String selectedTeamName;
+  final bool trainerMode;
   final bool hasTeam;
   final ClubSection currentSection;
   final List<_NavGroup> groups;
   final bool hasActiveSubscription;
+  final VoidCallback onWorkspace;
   final ValueChanged<ClubSection> onSelect;
 
   const _MobileMoreBottomSheet({
     required this.clubName,
+    required this.clubLogo,
     required this.selectedTeamName,
+    required this.trainerMode,
     required this.hasTeam,
     required this.currentSection,
     required this.groups,
     required this.hasActiveSubscription,
+    required this.onWorkspace,
     required this.onSelect,
   });
 
@@ -13004,6 +13108,11 @@ class _MobileMoreBottomSheet extends StatelessWidget {
 
     if (itemSection == ClubSection.trainers &&
         currentSection == ClubSection.teamTrainers) {
+      return true;
+    }
+
+    if (itemSection == ClubSection.teams &&
+        currentSection == ClubSection.teamDashboard) {
       return true;
     }
 
@@ -13030,21 +13139,420 @@ class _MobileMoreBottomSheet extends StatelessWidget {
         section == ClubSection.miniGames;
   }
 
+  String get _safeClubName {
+    final value = clubName.trim();
+    return value.isEmpty ? 'SPORTOTEKA' : value;
+  }
+
+  String get _contextLine {
+    final team = selectedTeamName.trim();
+
+    if (trainerMode) {
+      if (hasTeam &&
+          team.isNotEmpty &&
+          team != 'Команда не выбрана') {
+        return 'Вы вошли как тренер · $team';
+      }
+      return 'Вы вошли как тренер';
+    }
+
+    return 'Вы вошли как клуб';
+  }
+
+  String get _roleLabel =>
+      trainerMode ? 'ТРЕНЕР' : 'КЛУБ';
+
+  TextStyle _titleStyle({
+    required bool active,
+  }) {
+    return AppTypography.custom(
+      size: 11.4,
+      weight: FontWeight.w600,
+      color: active
+          ? const Color(0xFF067A46)
+          : const Color(0xFF111827),
+      height: 1.15,
+      letterSpacing: 0,
+    );
+  }
+
+  TextStyle _subtitleStyle({
+    required bool active,
+    required bool disabled,
+  }) {
+    return AppTypography.custom(
+      size: 9.7,
+      weight: FontWeight.w400,
+      color: disabled
+          ? const Color(0xFF98A2B3)
+          : active
+              ? const Color(0xFF667085)
+              : const Color(0xFF667085),
+      height: 1.2,
+      letterSpacing: 0,
+    );
+  }
+
+  Widget _workspaceTile() {
+    const accent = Color(0xFF067A46);
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(15),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(15),
+        onTap: onWorkspace,
+        child: Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(
+            minHeight: 50,
+          ),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 9,
+            vertical: 6,
+          ),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF3FAF6),
+            borderRadius: BorderRadius.circular(15),
+          ),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 32,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF8F0),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: const Icon(
+                  Icons.account_tree_outlined,
+                  size: 18,
+                  color: accent,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'К выбору Workspace',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.custom(
+                        size: 11.4,
+                        weight: FontWeight.w600,
+                        color: accent,
+                        height: 1.15,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'выбрать личный или рабочий кабинет',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.custom(
+                        size: 9.7,
+                        weight: FontWeight.w400,
+                        color: const Color(0xFF667085),
+                        height: 1.2,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: Color(0xFF98A2B3),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _moduleTile(_NavItem item) {
+    final active = _sectionIsActive(item.section);
+    final needsTeam =
+        _needsTeam(item.section) && !hasTeam;
+    final locked =
+        item.pro && !hasActiveSubscription;
+
+    final opacity = needsTeam ? .48 : 1.0;
+    final accent = active
+        ? const Color(0xFF067A46)
+        : const Color(0xFF344054);
+
+    return Opacity(
+      opacity: opacity,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(15),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(15),
+          onTap: () {
+            if (needsTeam) {
+              Get.snackbar(
+                'Команда',
+                'Сначала выберите активную команду',
+              );
+              return;
+            }
+            onSelect(item.section);
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 170),
+            width: double.infinity,
+            constraints: const BoxConstraints(
+              minHeight: 50,
+            ),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 9,
+              vertical: 6,
+            ),
+            decoration: BoxDecoration(
+              color: active
+                  ? const Color(0xFFF3FAF6)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: Row(
+              children: <Widget>[
+                Container(
+                  width: 32,
+                  height: 32,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: active
+                        ? const Color(0xFFEAF8F0)
+                        : const Color(0xFFF7F9F8),
+                    borderRadius:
+                        BorderRadius.circular(11),
+                  ),
+                  child: Icon(
+                    item.icon,
+                    size: 18,
+                    color: accent,
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: Text(
+                              item.label,
+                              maxLines: 1,
+                              overflow:
+                                  TextOverflow.ellipsis,
+                              style: _titleStyle(
+                                active: active,
+                              ),
+                            ),
+                          ),
+                          if (item.pro) ...<Widget>[
+                            const SizedBox(width: 5),
+                            Container(
+                              padding:
+                                  const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: locked
+                                    ? const Color(0xFFFFF7ED)
+                                    : const Color(0xFFECFDF3),
+                                borderRadius:
+                                    BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                'PRO',
+                                style:
+                                    AppTypography.custom(
+                                  size: 8.2,
+                                  weight:
+                                      FontWeight.w600,
+                                  color: locked
+                                      ? const Color(
+                                          0xFFEA580C,
+                                        )
+                                      : const Color(
+                                          0xFF00A750,
+                                        ),
+                                  height: 1,
+                                  letterSpacing: 0,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        needsTeam
+                            ? 'Сначала выберите команду'
+                            : item.subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _subtitleStyle(
+                          active: active,
+                          disabled: needsTeam,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 6),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: Color(0xFF98A2B3),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        9,
+        5,
+        9,
+        5,
+      ),
+      child: Text(
+        title.toUpperCase(),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: AppTypography.custom(
+          size: 8.4,
+          weight: FontWeight.w700,
+          color: const Color(0xFF98A2B3),
+          height: 1.1,
+          letterSpacing: .45,
+        ),
+      ),
+    );
+  }
+
+  Widget _header() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        4,
+        2,
+        4,
+        10,
+      ),
+      child: Row(
+        children: <Widget>[
+          _LogoBox(
+            url: clubLogo,
+            size: 40,
+            bgColor: const Color(0xFFF7F9F8),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  _safeClubName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.custom(
+                    size: 12.6,
+                    weight: FontWeight.w600,
+                    color: const Color(0xFF111827),
+                    height: 1.15,
+                    letterSpacing: 0,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _contextLine,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.custom(
+                    size: 9.8,
+                    weight: FontWeight.w400,
+                    color: const Color(0xFF667085),
+                    height: 1.15,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 5,
+            ),
+            decoration: BoxDecoration(
+              color: const Color(0xFFECFDF3),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              _roleLabel,
+              style: AppTypography.custom(
+                size: 8.6,
+                weight: FontWeight.w600,
+                color: const Color(0xFF00A750),
+                height: 1,
+                letterSpacing: .15,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final h = MediaQuery.of(context).size.height;
-    final bottom = MediaQuery.of(context).padding.bottom;
-    final totalItems =
-        groups.fold<int>(0, (sum, group) => sum + group.items.length);
+    final height =
+        MediaQuery.of(context).size.height;
+    final bottom =
+        MediaQuery.of(context).padding.bottom;
 
     return Container(
-      constraints: BoxConstraints(maxHeight: h * .88),
-      margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-      padding: EdgeInsets.fromLTRB(14, 10, 14, 14 + bottom),
+      constraints: BoxConstraints(
+        maxHeight: height * .88,
+      ),
+      margin: const EdgeInsets.fromLTRB(
+        10,
+        0,
+        10,
+        10,
+      ),
+      padding: EdgeInsets.fromLTRB(
+        14,
+        10,
+        14,
+        14 + bottom,
+      ),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(28),
-        boxShadow: [
+        boxShadow: <BoxShadow>[
           BoxShadow(
             color: Colors.black.withOpacity(.16),
             blurRadius: 28,
@@ -13054,309 +13562,95 @@ class _MobileMoreBottomSheet extends StatelessWidget {
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        children: [
+        children: <Widget>[
           Container(
             width: 42,
             height: 5,
             decoration: BoxDecoration(
               color: const Color(0xFFD0D5DD),
-              borderRadius: BorderRadius.circular(999),
+              borderRadius:
+                  BorderRadius.circular(999),
             ),
           ),
           const SizedBox(height: 12),
-          _MobileMoreHeaderCard(
-            clubName: clubName,
-            selectedTeamName: selectedTeamName,
-            hasTeam: hasTeam,
-            hasActiveSubscription: hasActiveSubscription,
-          ),
-          const SizedBox(height: 10),
+          _header(),
           Row(
-            children: [
-              const Expanded(
+            children: <Widget>[
+              Expanded(
                 child: Text(
-                  'Меню клуба',
-                  style: TextStyle(
-                    color: _C.text,
-                    fontSize: 16,
+                  'Меню',
+                  style: AppTypography.custom(
+                    size: 13.2,
+                    weight: FontWeight.w600,
+                    color: const Color(0xFF111827),
                     height: 1.1,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: _C.primaryGreen.withOpacity(.10),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  '$totalItems',
-                  style: const TextStyle(
-                    color: _C.primaryGreen,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 7),
           Flexible(
-            child: ListView.builder(
+            child: ListView(
               shrinkWrap: true,
               padding: EdgeInsets.zero,
-              physics: const BouncingScrollPhysics(),
-              itemCount: groups.length,
-              itemBuilder: (context, groupIndex) {
-                final group = groups[groupIndex];
-                return Padding(
-                  padding: EdgeInsets.only(top: groupIndex == 0 ? 0 : 10),
+              physics:
+                  const BouncingScrollPhysics(),
+              children: <Widget>[
+                Padding(
+                  padding:
+                      const EdgeInsets.only(
+                    bottom: 10,
+                  ),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _SidebarSectionTitle(title: group.title),
-                      const SizedBox(height: 5),
-                      ...group.items.map((item) {
-                        final active = _sectionIsActive(item.section);
-                        final needsTeam = _needsTeam(item.section) && !hasTeam;
-                        final locked = item.pro && !hasActiveSubscription;
-
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 5),
-                          child: _MobileMoreTile(
-                            item: item,
-                            active: active,
-                            disabled: needsTeam,
-                            locked: locked,
-                            onTap: () {
-                              if (needsTeam) {
-                                Get.snackbar('Команда',
-                                    'Сначала выберите активную команду');
-                                return;
-                              }
-                              onSelect(item.section);
-                            },
-                          ),
-                        );
-                      }),
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: <Widget>[
+                      _sectionTitle('Навигация'),
+                      Padding(
+                        padding:
+                            const EdgeInsets.only(
+                          bottom: 3,
+                        ),
+                        child: _workspaceTile(),
+                      ),
                     ],
                   ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MobileMoreHeaderCard extends StatelessWidget {
-  final String clubName;
-  final String selectedTeamName;
-  final bool hasTeam;
-  final bool hasActiveSubscription;
-
-  const _MobileMoreHeaderCard({
-    required this.clubName,
-    required this.selectedTeamName,
-    required this.hasTeam,
-    required this.hasActiveSubscription,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(.035),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: _C.primaryGreen.withOpacity(.10),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(
-              Icons.dashboard_customize_rounded,
-              color: _C.primaryGreen,
-              size: 24,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  clubName.trim().isEmpty
-                      ? 'Рабочая зона клуба'
-                      : clubName.trim(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _C.text,
-                    fontSize: 17,
-                    height: 1.08,
-                    fontWeight: FontWeight.w600,
-                  ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  hasTeam
-                      ? 'Активная команда: $selectedTeamName'
-                      : 'Выберите команду для командных модулей',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _C.muted,
-                    fontSize: 12,
-                    height: 1.15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          _ProStatusPill(active: hasActiveSubscription),
-        ],
-      ),
-    );
-  }
-}
-
-class _MobileMoreTile extends StatelessWidget {
-  final _NavItem item;
-  final bool active;
-  final bool disabled;
-  final bool locked;
-  final VoidCallback onTap;
-
-  const _MobileMoreTile({
-    required this.item,
-    required this.active,
-    required this.disabled,
-    required this.locked,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final opacity = disabled ? .48 : 1.0;
-    final accent = active ? _C.primaryGreen : _C.accentForSection(item.section);
-    final bgColor = active ? accent.withOpacity(.08) : Colors.transparent;
-    final iconBgColor = active ? accent.withOpacity(.12) : _C.soft2;
-    final iconColor = active ? accent : _C.muted;
-    final titleColor = active ? accent : _C.graphite;
-
-    return Opacity(
-      opacity: opacity,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
-        width: double.infinity,
-        constraints: const BoxConstraints(minHeight: 50),
-        decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(15),
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(15),
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-              child: Row(
-                children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 160),
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: iconBgColor,
-                      borderRadius: BorderRadius.circular(11),
+                for (final group in groups)
+                  Padding(
+                    padding:
+                        const EdgeInsets.only(
+                      bottom: 10,
                     ),
-                    child: Icon(item.icon, size: 18, color: iconColor),
-                  ),
-                  const SizedBox(width: 9),
-                  Expanded(
                     child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                item.label,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: _WorkspaceText.rowTitle.copyWith(
-                                  fontSize: 12.8,
-                                  fontWeight: active
-                                      ? FontWeight.w600
-                                      : FontWeight.w600,
-                                  color: titleColor,
-                                  height: 1.05,
-                                ),
-                              ),
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                      children: <Widget>[
+                        _sectionTitle(group.title),
+                        ...group.items.map(
+                          (item) => Padding(
+                            padding:
+                                const EdgeInsets.only(
+                              bottom: 3,
                             ),
-                            if (item.pro) ...[
-                              const SizedBox(width: 5),
-                              _ProCornerBadge(active: !locked),
-                            ],
-                          ],
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          disabled ? 'Сначала выберите команду' : item.subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: _WorkspaceText.caption.copyWith(
-                            fontSize: 10.0,
-                            fontWeight: FontWeight.w600,
-                            color: active ? _C.muted : _C.lightMuted,
-                            height: 1.05,
+                            child:
+                                _moduleTile(item),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  if (active) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      width: 4,
-                      height: 26,
-                      decoration: BoxDecoration(
-                        color: _C.primaryGreen,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+              ],
             ),
           ),
-        ),
+        ],
       ),
     );
   }
 }
+
 
 class _TrainersModuleContent extends StatefulWidget {
   final List<Map<String, dynamic>> trainers;

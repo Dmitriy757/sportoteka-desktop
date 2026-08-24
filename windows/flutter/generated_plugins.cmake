@@ -3,7 +3,6 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
-  agora_rtc_engine
   connectivity_plus
   desktop_drop
   emoji_picker_flutter
@@ -11,7 +10,6 @@ list(APPEND FLUTTER_PLUGIN_LIST
   firebase_core
   flutter_webrtc
   geolocator_windows
-  iris_method_channel
   livekit_client
   permission_handler_windows
   printing

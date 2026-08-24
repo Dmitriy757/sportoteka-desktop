@@ -24,6 +24,11 @@ class CmrPlansPanel extends StatefulWidget {
   final int? teamId;
   final String teamName;
 
+  /// Текущий тренер Workspace.
+  /// Для клубного аккаунта остаётся 0 / пустая строка.
+  final int trainerId;
+  final String trainerName;
+
   /// ВАЖНО:
   /// Используй это, чтобы кнопка назад возвращала не в профиль,
   /// а обратно в меню CMR.
@@ -35,6 +40,8 @@ class CmrPlansPanel extends StatefulWidget {
     required this.clubName,
     required this.teamId,
     required this.teamName,
+    this.trainerId = 0,
+    this.trainerName = '',
     this.onBackToMenu,
   });
 
@@ -87,6 +94,30 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
   bool _suppressFolderHistory = false;
 
   int get _activeFolderId => selectedFolderId ?? 0;
+
+  int get _effectiveTrainerId {
+    if (widget.trainerId > 0) return widget.trainerId;
+
+    final plan = selectedPlan;
+    return _asInt(
+      plan?['trainer_id'] ??
+          plan?['coach_id'] ??
+          plan?['trainerId'] ??
+          plan?['coachId'],
+    );
+  }
+
+  String get _effectiveTrainerName {
+    final fromWidget = widget.trainerName.trim();
+    if (fromWidget.isNotEmpty) return fromWidget;
+
+    final plan = selectedPlan;
+    return _asStr(
+      plan?['trainer_name'] ??
+          plan?['trainer'] ??
+          plan?['coach_name'],
+    );
+  }
 
   int _asInt(dynamic v) {
     if (v is int) return v;
@@ -1862,6 +1893,10 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
       'club_name': widget.clubName,
       'team_id': widget.teamId ?? 0,
       'team_name': widget.teamName,
+      'trainer_id': widget.trainerId,
+      'coach_id': widget.trainerId,
+      'trainer_name': widget.trainerName.trim(),
+      'trainer': widget.trainerName.trim(),
       'folder_id': folderId,
       'folder_title': folderTitle,
       'folder_name': folderTitle,
@@ -2286,7 +2321,17 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
         'id': planId,
         'plan_id': planId,
         'club_id': widget.clubId,
+        'club_name': widget.clubName,
         'team_id': widget.teamId ?? _asInt(plan['team_id']),
+        'team_name': widget.teamName,
+        if (_effectiveTrainerId > 0) ...<String, dynamic>{
+          'trainer_id': _effectiveTrainerId,
+          'coach_id': _effectiveTrainerId,
+        },
+        if (_effectiveTrainerName.isNotEmpty) ...<String, dynamic>{
+          'trainer_name': _effectiveTrainerName,
+          'trainer': _effectiveTrainerName,
+        },
         'folder_id': _asInt(plan['folder_id']) > 0 ? _asInt(plan['folder_id']) : _activeFolderId,
         'theme': title,
         'cycle_title': _asStr(plan['cycle_title']),
@@ -2379,8 +2424,21 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
     final plan = selectedPlan;
     if (plan == null) return;
 
-    final planId = _asInt(plan['id']);
-    if (planId <= 0) return;
+    final planId = _asInt(
+      plan['id'] ?? plan['plan_id'],
+    );
+    final creating = planId <= 0;
+
+    final activeTeamId =
+        widget.teamId ?? _asInt(plan['team_id']);
+
+    if (activeTeamId <= 0) {
+      Get.snackbar(
+        'План',
+        'Не выбрана команда для плана',
+      );
+      return;
+    }
 
     setState(() => saving = true);
 
@@ -2389,9 +2447,21 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
         'id': planId,
         'plan_id': planId,
         'club_id': widget.clubId,
-        'team_id': widget.teamId ?? _asInt(plan['team_id']),
+        'club_name': widget.clubName,
+        'team_id': activeTeamId,
+        'team_name': widget.teamName,
+        if (_effectiveTrainerId > 0) ...<String, dynamic>{
+          'trainer_id': _effectiveTrainerId,
+          'coach_id': _effectiveTrainerId,
+        },
+        if (_effectiveTrainerName.isNotEmpty) ...<String, dynamic>{
+          'trainer_name': _effectiveTrainerName,
+          'trainer': _effectiveTrainerName,
+        },
         'folder_id': _asInt(plan['folder_id']) > 0 ? _asInt(plan['folder_id']) : _activeFolderId,
-        'theme': themeCtrl.text.trim(),
+        'theme': themeCtrl.text.trim().isEmpty
+            ? 'Новый план'
+            : themeCtrl.text.trim(),
         'cycle_title': cycleCtrl.text.trim(),
         'description': descriptionCtrl.text.trim(),
         'plan_description': descriptionCtrl.text.trim(),
@@ -2416,12 +2486,37 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
             : 'Не удалось сохранить';
       }
 
+      final savedPlanId = _asInt(
+        data['plan_id'] ??
+            data['id'] ??
+            planId,
+      );
+
+      if (savedPlanId <= 0) {
+        throw 'Сервер не вернул plan_id';
+      }
+
       if (!mounted) return;
 
-      setState(() => editMode = false);
+      setState(() {
+        selectedPlan = <String, dynamic>{
+          ...plan,
+          ...payload,
+          'id': savedPlanId,
+          'plan_id': savedPlanId,
+          '_is_local_draft': false,
+        };
+        editMode = false;
+      });
 
       await _loadPlansForTeam();
-      Get.snackbar('Готово', 'План сохранён');
+
+      Get.snackbar(
+        'Готово',
+        creating
+            ? 'План создан и привязан к тренеру'
+            : 'План сохранён',
+      );
     } catch (e) {
       Get.snackbar(
         'Сохранение',

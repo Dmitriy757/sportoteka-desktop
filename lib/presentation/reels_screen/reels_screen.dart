@@ -12,14 +12,15 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
 
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/reels_screen/upload_reel_screen.dart';
 import 'package:sportoteka/presentation/my_profile_screen/my_profile_screen.dart';
@@ -747,9 +748,9 @@ class _ReelsScreenState extends State<ReelsScreen>
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.black,
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
       ),
       builder: (ctx) {
         return SafeArea(
@@ -797,29 +798,40 @@ class _ReelsScreenState extends State<ReelsScreen>
                         width: 40,
                         height: 4,
                         decoration: BoxDecoration(
-                          color: Colors.white24,
+                          color: Color(0xFFD0D5DD),
                           borderRadius: BorderRadius.circular(999),
                         ),
                       ),
                       const SizedBox(height: 10),
-                      Text(
-                        "Комментарии (${items.length})",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 16,
-                        ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _brandDots(
+                            color: Color(0xFF00A750),
+                            compact: true,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            "Комментарии (${items.length})",
+                            style: _uiText(
+                              13.2,
+                              weight: FontWeight.w600,
+                              color: Color(0xFF0B0F14),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 10),
                       Expanded(
                         child: loading
                             ? const Center(
                                 child: CircularProgressIndicator(
-                                    color: Colors.white),
+                                    color: Color(0xFF00A750),
+                                    strokeWidth: 2),
                               )
                             : RefreshIndicator(
-                                color: Colors.white,
-                                backgroundColor: Colors.black,
+                                color: Color(0xFF00A750),
+                                backgroundColor: Colors.white,
                                 onRefresh: refresh,
                                 child: (items.isEmpty)
                                     ? ListView(
@@ -829,7 +841,7 @@ class _ReelsScreenState extends State<ReelsScreen>
                                             child: Text(
                                               "Пока нет комментариев",
                                               style:
-                                                  TextStyle(color: Colors.white70),
+                                                  TextStyle(color: Color(0xFF5F6670)),
                                             ),
                                           ),
                                         ],
@@ -839,7 +851,7 @@ class _ReelsScreenState extends State<ReelsScreen>
                                             12, 8, 12, 8),
                                         itemCount: items.length,
                                         separatorBuilder: (_, __) =>
-                                            const Divider(color: Colors.white12),
+                                            const Divider(color: Color(0xFFEEF1EF)),
                                         itemBuilder: (_, i) {
                                           final c = items[i];
 
@@ -889,10 +901,10 @@ class _ReelsScreenState extends State<ReelsScreen>
                                             background: Container(
                                               padding: const EdgeInsets.only(left: 16),
                                               alignment: Alignment.centerLeft,
-                                              color: Colors.white10,
+                                              color: Color(0xFFF7F9F8),
                                               child: const Icon(
                                                 Icons.reply_rounded,
-                                                color: Colors.white70,
+                                                color: Color(0xFF5F6670),
                                               ),
                                             ),
                                             child: InkWell(
@@ -904,7 +916,7 @@ class _ReelsScreenState extends State<ReelsScreen>
                                                 children: [
                                                   CircleAvatar(
                                                     radius: 16,
-                                                    backgroundColor: Colors.white10,
+                                                    backgroundColor: Color(0xFFF7F9F8),
                                                     backgroundImage: avatar.isNotEmpty
                                                         ? NetworkImage(
                                                             _normalizeMediaUrl(avatar),
@@ -913,12 +925,12 @@ class _ReelsScreenState extends State<ReelsScreen>
                                                     child: avatar.isEmpty
                                                         ? const Icon(
                                                             Icons.person,
-                                                            color: Colors.white70,
+                                                            color: Color(0xFF5F6670),
                                                             size: 18,
                                                           )
                                                         : null,
                                                   ),
-                                                  const SizedBox(width: 10),
+                                                  const SizedBox(width: 8),
                                                   Expanded(
                                                     child: Column(
                                                       crossAxisAlignment:
@@ -930,8 +942,8 @@ class _ReelsScreenState extends State<ReelsScreen>
                                                               child: Text(
                                                                 username,
                                                                 style: const TextStyle(
-                                                                  color: Colors.white,
-                                                                  fontWeight: FontWeight.w700,
+                                                                  color: Color(0xFF0B0F14),
+                                                                  fontWeight: FontWeight.w600,
                                                                 ),
                                                               ),
                                                             ),
@@ -939,16 +951,17 @@ class _ReelsScreenState extends State<ReelsScreen>
                                                               Text(
                                                                 timeText,
                                                                 style: const TextStyle(
-                                                                  color: Colors.white38,
+                                                                  color: Color(0xFF98A2B3),
                                                                   fontSize: 12,
                                                                 ),
                                                               ),
                                                             if (isMine)
                                                               PopupMenuButton<String>(
-                                                                color: Colors.black87,
+                                                                color: Colors.white,
+                                                                surfaceTintColor: Colors.white,
                                                                 icon: const Icon(
                                                                   Icons.more_horiz,
-                                                                  color: Colors.white54,
+                                                                  color: Color(0xFF667085),
                                                                   size: 18,
                                                                 ),
                                                                 onSelected: (v) async {
@@ -977,7 +990,7 @@ class _ReelsScreenState extends State<ReelsScreen>
                                                                     child: Text(
                                                                       'Удалить',
                                                                       style: TextStyle(
-                                                                          color: Colors.white),
+                                                                          color: Color(0xFF0B0F14)),
                                                                     ),
                                                                   ),
                                                                 ],
@@ -994,12 +1007,12 @@ class _ReelsScreenState extends State<ReelsScreen>
                                                             padding: const EdgeInsets.symmetric(
                                                                 horizontal: 10, vertical: 8),
                                                             decoration: BoxDecoration(
-                                                              color: Colors.white10,
+                                                              color: Color(0xFFF7F9F8),
                                                               borderRadius:
                                                                   BorderRadius.circular(12),
                                                               border: const Border(
                                                                 left: BorderSide(
-                                                                    color: Colors.white30,
+                                                                    color: Color(0xFF98A2B3),
                                                                     width: 3),
                                                               ),
                                                             ),
@@ -1012,8 +1025,8 @@ class _ReelsScreenState extends State<ReelsScreen>
                                                                       ? "Комментарий"
                                                                       : replyUsername,
                                                                   style: const TextStyle(
-                                                                    color: Colors.white,
-                                                                    fontWeight: FontWeight.w700,
+                                                                    color: Color(0xFF0B0F14),
+                                                                    fontWeight: FontWeight.w600,
                                                                     fontSize: 12,
                                                                   ),
                                                                 ),
@@ -1023,7 +1036,7 @@ class _ReelsScreenState extends State<ReelsScreen>
                                                                   maxLines: 2,
                                                                   overflow: TextOverflow.ellipsis,
                                                                   style: const TextStyle(
-                                                                    color: Colors.white70,
+                                                                    color: Color(0xFF5F6670),
                                                                     fontSize: 12,
                                                                   ),
                                                                 ),
@@ -1033,7 +1046,7 @@ class _ReelsScreenState extends State<ReelsScreen>
                                                         Text(
                                                           text,
                                                           style: const TextStyle(
-                                                            color: Colors.white70,
+                                                            color: Color(0xFF5F6670),
                                                           ),
                                                         ),
                                                       ],
@@ -1054,10 +1067,10 @@ class _ReelsScreenState extends State<ReelsScreen>
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 10),
                           decoration: BoxDecoration(
-                            color: Colors.white10,
+                            color: Color(0xFFF7F9F8),
                             borderRadius: BorderRadius.circular(14),
                             border: const Border(
-                              left: BorderSide(color: Colors.white30, width: 3),
+                              left: BorderSide(color: Color(0xFF98A2B3), width: 3),
                             ),
                           ),
                           child: Row(
@@ -1069,8 +1082,8 @@ class _ReelsScreenState extends State<ReelsScreen>
                                     Text(
                                       "Ответ: ${_replyTarget!.username}",
                                       style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF0B0F14),
+                                        fontWeight: FontWeight.w600,
                                         fontSize: 12,
                                       ),
                                     ),
@@ -1080,7 +1093,7 @@ class _ReelsScreenState extends State<ReelsScreen>
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
-                                        color: Colors.white70,
+                                        color: Color(0xFF5F6670),
                                         fontSize: 12,
                                       ),
                                     ),
@@ -1089,7 +1102,7 @@ class _ReelsScreenState extends State<ReelsScreen>
                               ),
                               IconButton(
                                 icon: const Icon(Icons.close_rounded,
-                                    color: Colors.white70),
+                                    color: Color(0xFF5F6670)),
                                 onPressed: () {
                                   _replyTarget = null;
                                   setLocal(() {});
@@ -1101,22 +1114,22 @@ class _ReelsScreenState extends State<ReelsScreen>
                       Container(
                         padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
                         decoration: const BoxDecoration(
-                          border: Border(top: BorderSide(color: Colors.white12)),
+                          border: Border(top: BorderSide(color: Color(0xFFEEF1EF))),
                         ),
                         child: Row(
                           children: [
                             Expanded(
                               child: TextField(
                                 controller: textCtrl,
-                                style: const TextStyle(color: Colors.white),
+                                style: const TextStyle(color: Color(0xFF0B0F14)),
                                 decoration: InputDecoration(
                                   hintText: _replyTarget == null
                                       ? "Добавить комментарий..."
                                       : "Ответить...",
                                   hintStyle:
-                                      const TextStyle(color: Colors.white54),
+                                      const TextStyle(color: Color(0xFF667085)),
                                   filled: true,
-                                  fillColor: Colors.white10,
+                                  fillColor: Color(0xFFF7F9F8),
                                   contentPadding: const EdgeInsets.symmetric(
                                       horizontal: 12, vertical: 10),
                                   border: OutlineInputBorder(
@@ -1127,10 +1140,12 @@ class _ReelsScreenState extends State<ReelsScreen>
                               ),
                             ),
                             const SizedBox(width: 10),
-                            IconButton(
-                              icon: const Icon(Icons.send_rounded,
-                                  color: Colors.white),
-                              onPressed: () async {
+                            Material(
+                              color: Color(0xFFF3FAF6),
+                              borderRadius: BorderRadius.circular(8),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(8),
+                                onTap: () async {
                                 final text = textCtrl.text.trim();
                                 if (text.isEmpty) return;
 
@@ -1185,6 +1200,31 @@ class _ReelsScreenState extends State<ReelsScreen>
                                   });
                                 }
                               },
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 9,
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      _statusDot(
+                                        Color(0xFF00A750),
+                                        size: 4.5,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Отправить',
+                                        style: _uiText(
+                                          9.6,
+                                          weight: FontWeight.w600,
+                                          color: Color(0xFF067A46),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             ),
                           ],
                         ),
@@ -1200,11 +1240,95 @@ class _ReelsScreenState extends State<ReelsScreen>
     );
   }
 
+  TextStyle _uiText(
+    double size, {
+    FontWeight weight = FontWeight.w400,
+    Color color = const Color(0xFF0B0F14),
+    double height = 1.2,
+  }) {
+    return AppTypography.custom(
+      size: size,
+      weight: weight,
+      color: color,
+      height: height,
+      letterSpacing: 0,
+    );
+  }
+
+  Widget _brandDots({
+    Color color = const Color(0xFF00A750),
+    bool compact = false,
+  }) {
+    final values = compact
+        ? const <List<double>>[
+            <double>[3.0, .34],
+            <double>[3.8, .48],
+            <double>[4.6, .68],
+            <double>[5.4, 1],
+          ]
+        : const <List<double>>[
+            <double>[3.5, .34],
+            <double>[4.5, .48],
+            <double>[5.5, .68],
+            <double>[6.5, 1],
+          ];
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        for (int i = 0; i < values.length; i++) ...[
+          Container(
+            width: values[i][0],
+            height: values[i][0],
+            decoration: BoxDecoration(
+              color: color.withOpacity(values[i][1]),
+              shape: BoxShape.circle,
+              boxShadow: values[i][1] >= .95
+                  ? [
+                      BoxShadow(
+                        color: color.withOpacity(.20),
+                        blurRadius: 8,
+                      ),
+                    ]
+                  : null,
+            ),
+          ),
+          if (i != values.length - 1)
+            const SizedBox(width: 3),
+        ],
+      ],
+    );
+  }
+
+  Widget _statusDot(
+    Color color, {
+    double size = 5,
+    bool glow = false,
+  }) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        boxShadow: glow
+            ? [
+                BoxShadow(
+                  color: color.withOpacity(.24),
+                  blurRadius: size * 2,
+                ),
+              ]
+            : null,
+      ),
+    );
+  }
+
   // ===== TOP BAR =====
   Widget _buildTopBar(BuildContext context) {
     final mq = MediaQuery.of(context);
     final isLandscape = mq.orientation == Orientation.landscape;
-    final iconSize = isLandscape ? 18.0 : 20.0;
+    final isMobileTopBar = !isLandscape && mq.size.width < 900;
 
     return Positioned(
       top: 0,
@@ -1213,50 +1337,63 @@ class _ReelsScreenState extends State<ReelsScreen>
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          padding: EdgeInsets.fromLTRB(
+            isLandscape ? 10 : 12,
+            8,
+            isLandscape ? 10 : 12,
+            8,
+          ),
           child: Row(
             children: [
-              IconButton(
-                splashRadius: 18,
-                icon: Icon(Icons.arrow_back_ios_new_rounded,
-                    color: Colors.white, size: iconSize),
-                onPressed: () => Navigator.maybePop(context),
+              if (!isMobileTopBar) ...[
+                Material(
+                  color: Colors.black.withOpacity(.26),
+                  borderRadius: BorderRadius.circular(9),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(9),
+                    onTap: () => Navigator.maybePop(context),
+                    child: const SizedBox(
+                      width: 34,
+                      height: 34,
+                      child: Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        color: Colors.white,
+                        size: 14,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 9),
+              ],
+              _brandDots(
+                color: const Color(0xFF00A750),
+                compact: true,
               ),
-              const SizedBox(width: 4),
-              const Text(
-                "Reels",
-                style: TextStyle(
+              const SizedBox(width: 8),
+              Text(
+                'REELS',
+                style: _uiText(
+                  isLandscape ? 11.5 : 12.2,
+                  weight: FontWeight.w600,
                   color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 20,
                 ),
               ),
               const Spacer(),
-              IconButton(
-                splashRadius: 18,
-                tooltip: _fitModeContain ? "FIT (вписать)" : "COVER (заполнить)",
-                icon: Icon(
-                  _fitModeContain
-                      ? Icons.fullscreen_exit_rounded
-                      : Icons.fullscreen_rounded,
-                  color: Colors.white,
-                  size: iconSize + 2,
-                ),
-                onPressed: () {
+              _topAction(
+                label: _fitModeContain ? 'FIT' : 'FILL',
+                active: _userForcedFitMode,
+                onTap: () {
                   setState(() {
                     _fitModeContain = !_fitModeContain;
                     _userForcedFitMode = true;
                   });
                 },
               ),
-              IconButton(
-                splashRadius: 18,
-                icon: Icon(
-                  _muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
-                  color: Colors.white,
-                  size: iconSize + 2,
-                ),
-                onPressed: () async {
+              const SizedBox(width: 6),
+              _topAction(
+                label: _muted ? 'Без звука' : 'Звук',
+                active: !_muted,
+                onTap: () async {
                   setState(() => _muted = !_muted);
                   final c = _controllers[_currentPage];
                   if (c != null && c.value.isInitialized) {
@@ -1264,11 +1401,11 @@ class _ReelsScreenState extends State<ReelsScreen>
                   }
                 },
               ),
-              IconButton(
-                splashRadius: 18,
-                icon: Icon(Icons.add_a_photo_rounded,
-                    color: Colors.white, size: iconSize + 2),
-                onPressed: () async {
+              const SizedBox(width: 6),
+              _topAction(
+                label: 'Добавить',
+                active: true,
+                onTap: () async {
                   await Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -1286,18 +1423,78 @@ class _ReelsScreenState extends State<ReelsScreen>
     );
   }
 
+  Widget _topAction({
+    required String label,
+    required bool active,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: active
+          ? const Color(0xFF00A750).withOpacity(.88)
+          : Colors.black.withOpacity(.26),
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 8,
+            vertical: 7,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _statusDot(
+                active ? Colors.white : Colors.white54,
+                size: 4,
+                glow: false,
+              ),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: _uiText(
+                  9,
+                  weight: FontWeight.w600,
+                  color: active ? Colors.white : Colors.white70,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // ===== UI =====
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
       body: isLoading
-          ? const Center(child: CircularProgressIndicator(color: Colors.white))
+          ? const Center(
+              child: CircularProgressIndicator(
+                color: Color(0xFF00A750),
+                strokeWidth: 2,
+              ),
+            )
           : (reels.isEmpty
-              ? const Center(
-                  child: Text(
-                    'Пока нет видео',
-                    style: TextStyle(color: Colors.white70),
+              ? Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _brandDots(
+                        color: const Color(0xFF00A750),
+                        compact: true,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Пока нет видео',
+                        style: _uiText(
+                          10.4,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
                   ),
                 )
               : Stack(
@@ -1355,9 +1552,35 @@ class _ReelsScreenState extends State<ReelsScreen>
                         final bottomSafe = mq.padding.bottom;
                         final topSafe = mq.padding.top;
 
-                        final overlayBottom = (isLandscape ? 14.0 : 78.0) + bottomSafe;
-                        final actionGap = isLandscape ? 12.0 : 18.0;
-                        final actionIcon = isLandscape ? 20.0 : 22.0;
+                        // На мобильном Reels живёт внутри общего shell,
+                        // а нижняя навигация рисуется поверх контента.
+                        // bottomSafe здесь недостаточен: он учитывает системную
+                        // safe-area, но не высоту самой панели приложения.
+                        //
+                        // Держим overlay почти у нижней кромки,
+                        // но всё ещё выше нижней навигации приложения.
+                        final isMobileShell =
+                            !isLandscape && mq.size.width < 900;
+
+                        final mobileBottomMenuReserve = isMobileShell
+                            ? (mq.size.height * 0.085)
+                                .clamp(52.0, 76.0)
+                                .toDouble()
+                            : 0.0;
+
+                        final overlayBottom = isLandscape
+                            ? 4.0 + bottomSafe
+                            : mobileBottomMenuReserve +
+                                bottomSafe +
+                                4.0;
+                        final actionGap = isLandscape
+                            ? 10.0
+                            : (mq.size.height < 520
+                                ? 7.0
+                                : mq.size.height < 760
+                                    ? 9.0
+                                    : 12.0);
+                        final actionIcon = isLandscape ? 18.0 : 20.0;
 
                         final bool liked = reel['liked'] == true;
                         final int authorId = _toInt(reel['user_id']);
@@ -1452,23 +1675,33 @@ class _ReelsScreenState extends State<ReelsScreen>
                               left: 14,
                               right: 14,
                               bottom: overlayBottom,
-                              child: SafeArea(
-                                top: false,
-                                left: false,
-                                right: false,
+                              child: Padding(
+                                padding: EdgeInsets.only(
+                                  bottom: bottomSafe > 0 ? 1 : 0,
+                                ),
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
                                     Expanded(
-                                      child: _BottomCaption(
-                                        avatarUrl: authorAvatar,
-                                        username: authorName,
-                                        description:
-                                            (reel['description'] ?? '').toString(),
-                                        onOpenProfile: () => _openUserProfile(authorId),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          _BottomCaption(
+                                            avatarUrl: authorAvatar,
+                                            username: authorName,
+                                            description:
+                                                (reel['description'] ?? '').toString(),
+                                            onOpenProfile: () => _openUserProfile(authorId),
+                                          ),
+                                          const SizedBox(height: 3),
+                                          _ShareInlineAction(
+                                            onTap: () => _shareReel(index),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    const SizedBox(width: 10),
+                                    const SizedBox(width: 8),
                                     _RightActionsColumn(
                                       liked: liked,
                                       likes: (reel['likes'] ?? 0).toString(),
@@ -1478,7 +1711,6 @@ class _ReelsScreenState extends State<ReelsScreen>
                                       gap: actionGap,
                                       onLike: () => _toggleLike(index),
                                       onComments: () => _openCommentsSheet(index),
-                                      onShare: () => _shareReel(index),
                                     ),
                                   ],
                                 ),
@@ -1492,8 +1724,12 @@ class _ReelsScreenState extends State<ReelsScreen>
                                 child: Container(
                                   padding: const EdgeInsets.all(14),
                                   decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.35),
+                                    color: Colors.white.withOpacity(0.12),
                                     shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white.withOpacity(0.16),
+                                      width: .9,
+                                    ),
                                   ),
                                   child: const Icon(
                                     Icons.play_arrow_rounded,
@@ -1551,6 +1787,71 @@ class _ReelsScreenState extends State<ReelsScreen>
   }
 }
 
+
+
+
+class _GlassSurface extends StatelessWidget {
+  final Widget child;
+  final double radius;
+  final EdgeInsetsGeometry? padding;
+  final VoidCallback? onTap;
+
+  const _GlassSurface({
+    required this.child,
+    this.radius = 12,
+    this.padding,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final inner = ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(
+          sigmaX: 14,
+          sigmaY: 14,
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(.10),
+            borderRadius: BorderRadius.circular(radius),
+            border: Border.all(
+              color: Colors.white.withOpacity(.16),
+              width: .85,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(.16),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: padding == null
+              ? child
+              : Padding(
+                  padding: padding!,
+                  child: child,
+                ),
+        ),
+      ),
+    );
+
+    if (onTap == null) return inner;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(radius),
+        child: inner,
+      ),
+    );
+  }
+}
+
+
 class _RightActionsColumn extends StatelessWidget {
   final bool liked;
   final String likes;
@@ -1561,7 +1862,6 @@ class _RightActionsColumn extends StatelessWidget {
 
   final VoidCallback onLike;
   final VoidCallback onComments;
-  final VoidCallback onShare;
 
   const _RightActionsColumn({
     required this.liked,
@@ -1572,82 +1872,292 @@ class _RightActionsColumn extends StatelessWidget {
     required this.gap,
     required this.onLike,
     required this.onComments,
-    required this.onShare,
   });
 
   @override
   Widget build(BuildContext context) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        _ActionBtn(
-          icon: Icons.favorite_rounded,
-          count: likes,
-          color: liked ? Colors.redAccent : Colors.white,
-          iconSize: iconSize,
+        _ActionMetric(
+          kind: _MetricIconKind.like,
+          label: likes,
+          accentColor: liked
+              ? const Color(0xFFD92D20)
+              : Colors.white70,
           onTap: onLike,
+          active: liked,
+          compact: true,
         ),
         SizedBox(height: gap),
-        _ActionBtn(
-          icon: Icons.mode_comment_rounded,
-          count: comments,
-          iconSize: iconSize,
+        _ActionMetric(
+          kind: _MetricIconKind.comment,
+          label: comments,
+          accentColor: const Color(0xFF00A750),
           onTap: onComments,
+          compact: true,
         ),
         SizedBox(height: gap),
-        _ActionBtn(
-          icon: Icons.visibility_rounded,
-          count: views,
-          iconSize: iconSize,
-          onTap: null,
-        ),
-        SizedBox(height: gap),
-        _ActionBtn(
-          icon: Icons.send_rounded,
-          iconSize: iconSize,
-          onTap: onShare,
+        _ActionMetric(
+          kind: _MetricIconKind.view,
+          label: views,
+          accentColor: const Color(0xFFF59E0B),
+          compact: true,
         ),
       ],
     );
   }
 }
 
-class _ActionBtn extends StatelessWidget {
-  final IconData icon;
-  final String? count;
-  final double iconSize;
-  final VoidCallback? onTap;
-  final Color? color;
+enum _MetricIconKind {
+  like,
+  comment,
+  view,
+  share,
+}
 
-  const _ActionBtn({
-    required this.icon,
-    this.count,
-    required this.iconSize,
+class _ActionMetric extends StatelessWidget {
+  final _MetricIconKind kind;
+  final String label;
+  final Color accentColor;
+  final VoidCallback? onTap;
+  final bool active;
+  final bool wide;
+  final bool compact;
+
+  const _ActionMetric({
+    required this.kind,
+    required this.label,
+    required this.accentColor,
     this.onTap,
-    this.color,
+    this.active = false,
+    this.wide = false,
+    this.compact = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
+    final child = _GlassSurface(
+      radius: compact ? 11 : 12,
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-        child: Column(
+      child: Container(
+        constraints: BoxConstraints(
+          minWidth: compact ? 52 : (wide ? 102 : 58),
+        ),
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 8 : 9,
+          vertical: compact ? 7 : 8,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: color ?? Colors.white, size: iconSize),
-            if ((count ?? '').isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  count!,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
+            SizedBox(
+              width: compact ? 12 : 13,
+              height: compact ? 12 : 13,
+              child: CustomPaint(
+                painter: _MetricIconPainter(
+                  kind: kind,
+                  color: accentColor,
+                  active: active,
                 ),
               ),
+            ),
+            SizedBox(width: compact ? 6 : 7),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.custom(
+                  size: compact ? 9.2 : 9.6,
+                  weight: FontWeight.w600,
+                  color: Colors.white,
+                  height: 1.05,
+                  letterSpacing: 0,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    return child;
+  }
+}
+
+class _MetricIconPainter extends CustomPainter {
+  final _MetricIconKind kind;
+  final Color color;
+  final bool active;
+
+  const _MetricIconPainter({
+    required this.kind,
+    required this.color,
+    required this.active,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final fill = Paint()
+      ..color = active ? color.withOpacity(.18) : Colors.transparent
+      ..style = PaintingStyle.fill;
+
+    switch (kind) {
+      case _MetricIconKind.like:
+        final path = Path()
+          ..moveTo(size.width * 0.50, size.height * 0.88)
+          ..cubicTo(
+            size.width * 0.16,
+            size.height * 0.64,
+            size.width * 0.03,
+            size.height * 0.42,
+            size.width * 0.10,
+            size.height * 0.24,
+          )
+          ..cubicTo(
+            size.width * 0.18,
+            size.height * 0.05,
+            size.width * 0.40,
+            size.height * 0.08,
+            size.width * 0.50,
+            size.height * 0.24,
+          )
+          ..cubicTo(
+            size.width * 0.60,
+            size.height * 0.08,
+            size.width * 0.82,
+            size.height * 0.05,
+            size.width * 0.90,
+            size.height * 0.24,
+          )
+          ..cubicTo(
+            size.width * 0.97,
+            size.height * 0.42,
+            size.width * 0.84,
+            size.height * 0.64,
+            size.width * 0.50,
+            size.height * 0.88,
+          )
+          ..close();
+        if (active) {
+          canvas.drawPath(path, fill);
+        }
+        canvas.drawPath(path, stroke);
+        break;
+
+      case _MetricIconKind.comment:
+        final bubble = RRect.fromRectAndRadius(
+          Rect.fromLTWH(
+            size.width * 0.12,
+            size.height * 0.14,
+            size.width * 0.76,
+            size.height * 0.58,
+          ),
+          Radius.circular(size.width * 0.18),
+        );
+        canvas.drawRRect(bubble, stroke);
+
+        final tail = Path()
+          ..moveTo(size.width * 0.38, size.height * 0.72)
+          ..lineTo(size.width * 0.28, size.height * 0.90)
+          ..lineTo(size.width * 0.52, size.height * 0.76);
+        canvas.drawPath(tail, stroke);
+        break;
+
+      case _MetricIconKind.view:
+        final eye = Path()
+          ..moveTo(size.width * 0.08, size.height * 0.50)
+          ..quadraticBezierTo(
+            size.width * 0.50,
+            size.height * 0.08,
+            size.width * 0.92,
+            size.height * 0.50,
+          )
+          ..quadraticBezierTo(
+            size.width * 0.50,
+            size.height * 0.92,
+            size.width * 0.08,
+            size.height * 0.50,
+          )
+          ..close();
+        canvas.drawPath(eye, stroke);
+        canvas.drawCircle(
+          Offset(size.width * 0.50, size.height * 0.50),
+          size.width * 0.13,
+          Paint()..color = color,
+        );
+        break;
+
+      case _MetricIconKind.share:
+        final path = Path()
+          ..moveTo(size.width * 0.18, size.height * 0.78)
+          ..lineTo(size.width * 0.80, size.height * 0.18)
+          ..moveTo(size.width * 0.44, size.height * 0.18)
+          ..lineTo(size.width * 0.80, size.height * 0.18)
+          ..lineTo(size.width * 0.80, size.height * 0.54);
+        canvas.drawPath(path, stroke);
+        break;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _MetricIconPainter oldDelegate) {
+    return oldDelegate.kind != kind ||
+        oldDelegate.color != color ||
+        oldDelegate.active != active;
+  }
+}
+
+class _ShareInlineAction extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _ShareInlineAction({
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassSurface(
+      radius: 11,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 9,
+          vertical: 7,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              width: 12,
+              height: 12,
+              child: CustomPaint(
+                painter: _MetricIconPainter(
+                  kind: _MetricIconKind.share,
+                  color: Color(0xFF00A750),
+                  active: false,
+                ),
+              ),
+            ),
+            const SizedBox(width: 7),
+            Text(
+              'Поделиться',
+              style: AppTypography.custom(
+                size: 9.4,
+                weight: FontWeight.w600,
+                color: Colors.white,
+                height: 1.05,
+                letterSpacing: 0,
+              ),
+            ),
           ],
         ),
       ),
@@ -1675,53 +2185,80 @@ class _BottomCaption extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        InkWell(
-          onTap: onOpenProfile,
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: Colors.white10,
-                  backgroundImage:
-                      normalizedAvatar.isNotEmpty ? NetworkImage(normalizedAvatar) : null,
-                  child: normalizedAvatar.isEmpty
-                      ? const Icon(Icons.person, color: Colors.white70, size: 18)
-                      : null,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    username,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onOpenProfile,
+            borderRadius: BorderRadius.circular(9),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                children: [
+                  if (normalizedAvatar.isNotEmpty)
+                    CircleAvatar(
+                      radius: 14,
+                      backgroundColor: Colors.white12,
+                      backgroundImage: NetworkImage(normalizedAvatar),
+                    )
+                  else
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        for (final item in const <List<double>>[
+                          <double>[3.0, .34],
+                          <double>[3.8, .48],
+                          <double>[4.6, .68],
+                          <double>[5.4, 1],
+                        ]) ...[
+                          Container(
+                            width: item[0],
+                            height: item[0],
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00A750)
+                                  .withOpacity(item[1]),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 3),
+                        ],
+                      ],
+                    ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      username.isEmpty ? 'Пользователь' : username,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.custom(
+                        size: 11.6,
+                        weight: FontWeight.w600,
+                        color: Colors.white,
+                        height: 1.15,
+                        letterSpacing: 0,
+                      ),
                     ),
                   ),
-                ),
-                const Icon(Icons.chevron_right_rounded, color: Colors.white70),
-              ],
+                ],
+              ),
             ),
           ),
         ),
-        const SizedBox(height: 10),
-        if (description.trim().isNotEmpty)
+        if (description.trim().isNotEmpty) ...[
+          const SizedBox(height: 7),
           Text(
             description,
-            style: const TextStyle(
+            style: AppTypography.custom(
+              size: 10.4,
+              weight: FontWeight.w400,
               color: Colors.white,
-              fontSize: 14.8,
-              height: 1.25,
-              fontWeight: FontWeight.w500,
+              height: 1.32,
+              letterSpacing: 0,
             ),
-            maxLines: 3,
+            maxLines: MediaQuery.of(context).size.height < 520 ? 2 : 3,
             overflow: TextOverflow.ellipsis,
           ),
+        ],
       ],
     );
   }
@@ -1746,7 +2283,7 @@ class _MiniProgressBar extends StatelessWidget {
       alignment: Alignment.centerLeft,
       child: FractionallySizedBox(
         widthFactor: v,
-        child: Container(height: 3, color: Colors.white54),
+        child: Container(height: 3, color: const Color(0xFF00A750)),
       ),
     );
   }

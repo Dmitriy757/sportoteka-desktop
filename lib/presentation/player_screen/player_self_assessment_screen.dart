@@ -1,9 +1,184 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:sportoteka/core/theme/app_typography.dart';
 
 import 'package:sportoteka/presentation/player_screen/player_id_resolver.dart';
 import 'package:sportoteka/presentation/player_screen/widgets/player_self_rating_sheet.dart';
+
+
+class _SaColors {
+  static const Color green =
+      Color(0xFF00A750);
+  static const Color greenDark =
+      Color(0xFF067A46);
+  static const Color greenSoft =
+      Color(0xFFF3FAF6);
+  static const Color text =
+      Color(0xFF0B0F14);
+  static const Color muted =
+      Color(0xFF667085);
+  static const Color muted2 =
+      Color(0xFF98A2B3);
+  static const Color soft =
+      Color(0xFFF7F9F8);
+  static const Color line =
+      Color(0xFFEDF0EE);
+  static const Color amber =
+      Color(0xFFF59E0B);
+  static const Color red =
+      Color(0xFFD92D20);
+}
+
+class _SaText {
+  static TextStyle title(
+    double size,
+  ) =>
+      AppTypography.custom(
+        size: size,
+        weight: FontWeight.w600,
+        color: _SaColors.text,
+        height: 1.12,
+      );
+
+  static TextStyle body(
+    double size, {
+    Color color =
+        _SaColors.muted,
+    FontWeight weight =
+        FontWeight.w400,
+  }) =>
+      AppTypography.custom(
+        size: size,
+        weight: weight,
+        color: color,
+        height: 1.22,
+      );
+}
+
+class _SaDot extends StatelessWidget {
+  final Color color;
+  final double size;
+  final double opacity;
+
+  const _SaDot({
+    required this.color,
+    required this.size,
+    this.opacity = 1,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: opacity,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+        ),
+      ),
+    );
+  }
+}
+
+class _SaDots extends StatelessWidget {
+  final Color color;
+  final bool compact;
+
+  const _SaDots({
+    this.color = _SaColors.green,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scale =
+        compact ? .76 : 1.0;
+    return Row(
+      mainAxisSize:
+          MainAxisSize.min,
+      children: <Widget>[
+        _SaDot(
+          color: color,
+          size: 3.4 * scale,
+          opacity: .32,
+        ),
+        SizedBox(width: 3 * scale),
+        _SaDot(
+          color: color,
+          size: 4.4 * scale,
+          opacity: .55,
+        ),
+        SizedBox(width: 3 * scale),
+        _SaDot(
+          color: color,
+          size: 5.4 * scale,
+          opacity: .78,
+        ),
+        SizedBox(width: 3 * scale),
+        _SaDot(
+          color: color,
+          size: 6.4 * scale,
+        ),
+      ],
+    );
+  }
+}
+
+class _SaAction extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _SaAction({
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _SaColors.greenSoft,
+      borderRadius:
+          BorderRadius.circular(9),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius:
+            BorderRadius.circular(9),
+        child: Container(
+          height: 32,
+          padding:
+              const EdgeInsets.symmetric(
+            horizontal: 9,
+          ),
+          child: Row(
+            mainAxisSize:
+                MainAxisSize.min,
+            children: <Widget>[
+              const _SaDot(
+                color:
+                    _SaColors.green,
+                size: 5,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: _SaText.body(
+                  8.8,
+                  color:
+                      _SaColors.greenDark,
+                  weight:
+                      FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 enum _RateFilter { all, unrated, rated }
 
@@ -12,6 +187,7 @@ class PlayerSelfAssessmentScreen extends StatefulWidget {
   final int? userId;
   final int? playerId;
   final bool readOnly;
+  final bool embedded;
 
   const PlayerSelfAssessmentScreen({
     super.key,
@@ -19,6 +195,7 @@ class PlayerSelfAssessmentScreen extends StatefulWidget {
     this.userId,
     this.playerId,
     this.readOnly = false,
+    this.embedded = false,
   });
 
   @override
@@ -233,39 +410,52 @@ class _PlayerSelfAssessmentScreenState extends State<PlayerSelfAssessmentScreen>
 
   // ===================== UI (как TeamCalendarScreen) =====================
 
-  static const Color _bg = Color(0xFFF3F5F8);
+  static const Color _bg = Colors.white;
 
   Widget _card({required Widget child, EdgeInsets padding = const EdgeInsets.all(12)}) {
     return Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        color: _SaColors.soft,
+        borderRadius: BorderRadius.circular(10),
       ),
       child: child,
     );
   }
 
-  Widget _pill(String text, bool active, VoidCallback onTap, {required Color primary}) {
+  Widget _pill(
+    String text,
+    bool active,
+    VoidCallback onTap, {
+    required Color primary,
+  }) {
     return Expanded(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: active ? primary.withOpacity(0.14) : Colors.transparent,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: active ? primary : const Color(0xFFE5E7EB)),
-          ),
-          child: Center(
-            child: Text(
-              text,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-                color: active ? primary : const Color(0xFF111827),
+      child: Material(
+        color: active
+            ? _SaColors.greenSoft
+            : _SaColors.soft,
+        borderRadius:
+            BorderRadius.circular(9),
+        child: InkWell(
+          borderRadius:
+              BorderRadius.circular(9),
+          onTap: onTap,
+          child: SizedBox(
+            height: 34,
+            child: Center(
+              child: Text(
+                text,
+                maxLines: 1,
+                overflow:
+                    TextOverflow.ellipsis,
+                style: _SaText.body(
+                  9.2,
+                  color: active
+                      ? _SaColors.greenDark
+                      : _SaColors.muted,
+                  weight:
+                      FontWeight.w600,
+                ),
               ),
             ),
           ),
@@ -406,369 +596,508 @@ class _PlayerSelfAssessmentScreenState extends State<PlayerSelfAssessmentScreen>
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
+  Widget _assessmentTile(
+    Map<String, dynamic> event, {
+    bool closeSheetFirst = false,
+  }) {
+    final eventId =
+        _asInt(event['id']);
+    final title =
+        _eventTitle(event);
+    final date =
+        _eventDate(event);
+    final mine =
+        myByEventId[eventId];
+    final rated = mine != null;
+    final rating = rated
+        ? _asInt(mine['rating'])
+        : 0;
 
-    final filtered = _filteredList();
-    final show = filtered.take(6).toList();
-
-    int countRated() {
-      int n = 0;
-      for (final e in pastEvents) {
-        if (myByEventId.containsKey(_asInt(e["id"]))) n++;
-      }
-      return n;
-    }
-
-    final ratedCount = countRated();
-    final totalCount = pastEvents.length;
-    final unratedCount = (totalCount - ratedCount).clamp(0, totalCount);
-
-    return Scaffold(
-      backgroundColor: _bg,
-      appBar: AppBar(
-        backgroundColor: _bg,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        title: const Text("Самооценка", style: TextStyle(fontWeight: FontWeight.w900)),
-        actions: [
-          IconButton(onPressed: _loadEventsAndMy, icon: const Icon(Icons.refresh)),
-        ],
-      ),
-      body: loading
-          ? const Center(child: CircularProgressIndicator())
-          : (error != null)
-              ? Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                  child: _card(
-                    child: Row(
-                      children: [
-                        const Icon(Icons.error_outline, color: Colors.red),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            error!,
-                            style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w800),
-                          ),
-                        ),
-                      ],
+    return Material(
+      color: _SaColors.soft,
+      borderRadius:
+          BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius:
+            BorderRadius.circular(10),
+        onTap: () async {
+          if (closeSheetFirst) {
+            Navigator.pop(context);
+            await Future<void>.delayed(
+              const Duration(
+                milliseconds: 80,
+              ),
+            );
+          }
+          await _openEvent(event);
+        },
+        onLongPress: () =>
+            _openActionsSheet(event),
+        child: Container(
+          constraints:
+              const BoxConstraints(
+            minHeight: 58,
+          ),
+          padding:
+              const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 9,
+          ),
+          child: Row(
+            children: <Widget>[
+              _SaDot(
+                color: rated
+                    ? _SaColors.green
+                    : _SaColors.amber,
+                size: 6,
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow:
+                          TextOverflow.ellipsis,
+                      style:
+                          _SaText.title(10.5),
                     ),
-                  ),
-                )
-              : ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                  children: [
-                    // Header card
-                    _card(
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: primary.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: Icon(Icons.stars_rounded, color: primary),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text("Прошедшие тренировки",
-                                    style: TextStyle(fontWeight: FontWeight.w900)),
-                                const SizedBox(height: 2),
-                                Text(
-                                  "Оценено: $ratedCount • Не оценено: $unratedCount",
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Color(0xFF6B7280),
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                    const SizedBox(height: 3),
+                    Text(
+                      date,
+                      maxLines: 1,
+                      overflow:
+                          TextOverflow.ellipsis,
+                      style:
+                          _SaText.body(8.7),
                     ),
-
-                    const SizedBox(height: 10),
-
-                    // Filter pills (как в календаре)
-                    _card(
-                      child: Row(
-                        children: [
-                          _pill("Все ($totalCount)", filter == _RateFilter.all, () {
-                            if (filter == _RateFilter.all) return;
-                            setState(() => filter = _RateFilter.all);
-                          }, primary: primary),
-                          const SizedBox(width: 10),
-                          _pill("Не оценено ($unratedCount)", filter == _RateFilter.unrated, () {
-                            if (filter == _RateFilter.unrated) return;
-                            setState(() => filter = _RateFilter.unrated);
-                          }, primary: primary),
-                          const SizedBox(width: 10),
-                          _pill("Оценено ($ratedCount)", filter == _RateFilter.rated, () {
-                            if (filter == _RateFilter.rated) return;
-                            setState(() => filter = _RateFilter.rated);
-                          }, primary: primary),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    if (filtered.isEmpty)
-                      _card(
-                        child: const Row(
-                          children: [
-                            Icon(Icons.inbox_outlined, color: Color(0xFF6B7280)),
-                            SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                "Ничего не найдено по выбранному фильтру",
-                                style: TextStyle(color: Color(0xFF6B7280), fontWeight: FontWeight.w700),
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else ...[
-                      ...show.map((e) {
-                        final eid = _asInt(e["id"]);
-                        final title = _eventTitle(e);
-                        final date = _eventDate(e);
-
-                        final mine = myByEventId[eid];
-                        final rated = mine != null;
-                        final rt = rated ? _asInt(mine["rating"]) : 0;
-
-                        return InkWell(
-                          onTap: () => _openEvent(e),
-                          onLongPress: () => _openActionsSheet(e),
-                          borderRadius: BorderRadius.circular(16),
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 10),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 44,
-                                  height: 44,
-                                  decoration: BoxDecoration(
-                                    color: rated ? primary.withOpacity(0.12) : const Color(0xFFEEF2FF),
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  child: Icon(
-                                    rated ? Icons.check_circle_outline_rounded : Icons.fitness_center_outlined,
-                                    color: rated ? primary : const Color(0xFF4F46E5),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        title,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w900,
-                                          color: Color(0xFF111827),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        date,
-                                        style: const TextStyle(
-                                          color: Color(0xFF6B7280),
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                if (rated)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: primary.withOpacity(0.12),
-                                      borderRadius: BorderRadius.circular(999),
-                                      border: Border.all(color: primary.withOpacity(0.35)),
-                                    ),
-                                    child: Text(
-                                      "★ $rt/5",
-                                      style: TextStyle(color: primary, fontWeight: FontWeight.w900, fontSize: 12),
-                                    ),
-                                  )
-                                else
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: primary,
-                                      borderRadius: BorderRadius.circular(999),
-                                    ),
-                                    child: const Text(
-                                      "Оценить",
-                                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }),
-
-                      if (filtered.length > show.length) ...[
-                        const SizedBox(height: 2),
-                        _card(
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: TextButton(
-                              onPressed: () => _showAllSheet(filtered),
-                              child: Text("Показать все (${filtered.length})"),
-                            ),
-                          ),
-                        ),
-                      ]
-                    ],
                   ],
                 ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                rated
+                    ? '$rating / 5'
+                    : 'Оценить',
+                style: _SaText.body(
+                  9,
+                  color: rated
+                      ? _SaColors.greenDark
+                      : _SaColors.amber,
+                  weight:
+                      FontWeight.w600,
+                ),
+              ),
+              const SizedBox(width: 4),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 16,
+                color:
+                    _SaColors.muted2,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
-  Future<void> _showAllSheet(List<Map<String, dynamic>> list) async {
-    final pad = MediaQuery.of(context).viewInsets.bottom;
-    final primary = Theme.of(context).colorScheme.primary;
+  @override
+  Widget build(BuildContext context) {
+    final filtered =
+        _filteredList();
 
-    await showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) {
-        return Container(
-          padding: EdgeInsets.fromLTRB(14, 14, 14, 14 + pad),
-          decoration: const BoxDecoration(
-            color: _bg,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+    int countRated() {
+      var count = 0;
+      for (final event
+          in pastEvents) {
+        if (myByEventId.containsKey(
+          _asInt(event['id']),
+        )) {
+          count++;
+        }
+      }
+      return count;
+    }
+
+    final ratedCount =
+        countRated();
+    final totalCount =
+        pastEvents.length;
+    final unratedCount =
+        (totalCount - ratedCount)
+            .clamp(0, totalCount);
+
+    Widget content() {
+      if (loading) {
+        return const Center(
+          child:
+              CircularProgressIndicator(
+            strokeWidth: 2,
+            color: _SaColors.green,
           ),
-          child: SafeArea(
-            top: false,
+        );
+      }
+
+      if (error != null) {
+        return Center(
+          child: Padding(
+            padding:
+                const EdgeInsets.all(18),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 44,
-                  height: 5,
-                  decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(99)),
+              mainAxisSize:
+                  MainAxisSize.min,
+              children: <Widget>[
+                const _SaDots(
+                  color:
+                      _SaColors.red,
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        "Все тренировки (${list.length})",
-                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                const SizedBox(
+                  height: 10,
+                ),
+                Text(
+                  'Не удалось загрузить',
+                  style:
+                      _SaText.title(11.5),
+                ),
+                const SizedBox(
+                  height: 4,
+                ),
+                Text(
+                  error!,
+                  textAlign:
+                      TextAlign.center,
+                  style:
+                      _SaText.body(9),
+                ),
+                const SizedBox(
+                  height: 10,
+                ),
+                _SaAction(
+                  label: 'Повторить',
+                  onTap:
+                      _loadEventsAndMy,
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+
+      return ListView(
+        padding:
+            const EdgeInsets.fromLTRB(
+          12,
+          10,
+          12,
+          20,
+        ),
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              const _SaDots(),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Самооценка',
+                      style:
+                          _SaText.title(
+                        13,
                       ),
                     ),
-                    TextButton(onPressed: () => Navigator.pop(context), child: const Text("Закрыть")),
+                    const SizedBox(
+                      height: 2,
+                    ),
+                    Text(
+                      '$ratedCount оценено · $unratedCount ожидают оценки',
+                      style:
+                          _SaText.body(
+                        8.8,
+                      ),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 10),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 560),
-                  child: ListView.builder(
-                    itemCount: list.length,
-                    itemBuilder: (_, i) {
-                      final e = list[i];
-                      final eid = _asInt(e["id"]);
-                      final title = _eventTitle(e);
-                      final date = _eventDate(e);
-                      final mine = myByEventId[eid];
-                      final rated = mine != null;
-                      final rt = rated ? _asInt(mine["rating"]) : 0;
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: <Widget>[
+              _pill(
+                'Все $totalCount',
+                filter ==
+                    _RateFilter.all,
+                () => setState(
+                  () => filter =
+                      _RateFilter.all,
+                ),
+                primary:
+                    _SaColors.green,
+              ),
+              const SizedBox(width: 6),
+              _pill(
+                'Не оценено $unratedCount',
+                filter ==
+                    _RateFilter.unrated,
+                () => setState(
+                  () => filter =
+                      _RateFilter.unrated,
+                ),
+                primary:
+                    _SaColors.green,
+              ),
+              const SizedBox(width: 6),
+              _pill(
+                'Оценено $ratedCount',
+                filter ==
+                    _RateFilter.rated,
+                () => setState(
+                  () => filter =
+                      _RateFilter.rated,
+                ),
+                primary:
+                    _SaColors.green,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (filtered.isEmpty)
+            Container(
+              padding:
+                  const EdgeInsets
+                      .symmetric(
+                horizontal: 14,
+                vertical: 22,
+              ),
+              decoration:
+                  BoxDecoration(
+                color:
+                    _SaColors.soft,
+                borderRadius:
+                    BorderRadius.circular(
+                  10,
+                ),
+              ),
+              child: Column(
+                children: <Widget>[
+                  const _SaDots(
+                    color:
+                        _SaColors.muted2,
+                  ),
+                  const SizedBox(
+                    height: 9,
+                  ),
+                  Text(
+                    'Ничего не найдено',
+                    style:
+                        _SaText.title(
+                      10.8,
+                    ),
+                  ),
+                  const SizedBox(
+                    height: 3,
+                  ),
+                  Text(
+                    'Измените выбранный фильтр',
+                    style:
+                        _SaText.body(
+                      8.8,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            ...filtered.map(
+              (event) => Padding(
+                padding:
+                    const EdgeInsets.only(
+                  bottom: 5,
+                ),
+                child:
+                    _assessmentTile(
+                  event,
+                ),
+              ),
+            ),
+        ],
+      );
+    }
 
-                      return InkWell(
-                        onTap: () async {
-                          Navigator.pop(context);
-                          await _openEvent(e);
-                        },
-                        onLongPress: () => _openActionsSheet(e),
-                        borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 44,
-                                height: 44,
-                                decoration: BoxDecoration(
-                                  color: rated ? primary.withOpacity(0.12) : const Color(0xFFEEF2FF),
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: Icon(
-                                  rated ? Icons.check_circle_outline_rounded : Icons.fitness_center_outlined,
-                                  color: rated ? primary : const Color(0xFF4F46E5),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(title,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF111827))),
-                                    const SizedBox(height: 4),
-                                    Text(date,
-                                        style: const TextStyle(
-                                          color: Color(0xFF6B7280),
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 12,
-                                        )),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              if (rated)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: primary.withOpacity(0.12),
-                                    borderRadius: BorderRadius.circular(999),
-                                    border: Border.all(color: primary.withOpacity(0.35)),
-                                  ),
-                                  child: Text("★ $rt/5",
-                                      style: TextStyle(color: primary, fontWeight: FontWeight.w900, fontSize: 12)),
-                                )
-                              else
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  decoration: BoxDecoration(color: primary, borderRadius: BorderRadius.circular(999)),
-                                  child: const Text("Оценить",
-                                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12)),
-                                ),
-                            ],
-                          ),
+    return Scaffold(
+      backgroundColor:
+          Colors.white,
+      appBar: widget.embedded
+          ? null
+          : AppBar(
+              toolbarHeight: 56,
+              elevation: 0,
+              scrolledUnderElevation: 0,
+              backgroundColor:
+                  Colors.white,
+              surfaceTintColor:
+                  Colors.transparent,
+              titleSpacing: 12,
+              title: Row(
+                children: <Widget>[
+                  const _SaDots(),
+                  const SizedBox(
+                    width: 9,
+                  ),
+                  Text(
+                    'Самооценка',
+                    style:
+                        _SaText.title(
+                      13.5,
+                    ),
+                  ),
+                ],
+              ),
+              actions: <Widget>[
+                _SaAction(
+                  label: 'Обновить',
+                  onTap:
+                      _loadEventsAndMy,
+                ),
+                const SizedBox(
+                  width: 10,
+                ),
+              ],
+              bottom:
+                  const PreferredSize(
+                preferredSize:
+                    Size.fromHeight(1),
+                child: Divider(
+                  height: 1,
+                  thickness: .6,
+                  color:
+                      _SaColors.line,
+                ),
+              ),
+            ),
+      body: content(),
+    );
+  }
+
+  Future<void> _showAllSheet(
+    List<Map<String, dynamic>> list,
+  ) async {
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor:
+          Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) {
+        return SafeArea(
+          top: false,
+          child: Container(
+            constraints:
+                BoxConstraints(
+              maxHeight:
+                  MediaQuery.sizeOf(
+                            context,
+                          )
+                          .height *
+                      .82,
+            ),
+            padding:
+                const EdgeInsets.fromLTRB(
+              12,
+              10,
+              12,
+              16,
+            ),
+            decoration:
+                const BoxDecoration(
+              color: Colors.white,
+              borderRadius:
+                  BorderRadius.vertical(
+                top:
+                    Radius.circular(20),
+              ),
+            ),
+            child: Column(
+              children: <Widget>[
+                Container(
+                  width: 42,
+                  height: 4,
+                  decoration:
+                      BoxDecoration(
+                    color:
+                        _SaColors.line,
+                    borderRadius:
+                        BorderRadius.circular(
+                      999,
+                    ),
+                  ),
+                ),
+                const SizedBox(
+                  height: 10,
+                ),
+                Row(
+                  children: <Widget>[
+                    const _SaDots(
+                      compact: true,
+                    ),
+                    const SizedBox(
+                      width: 8,
+                    ),
+                    Expanded(
+                      child: Text(
+                        'Все тренировки (${list.length})',
+                        style:
+                            _SaText.title(
+                          11.5,
                         ),
-                      );
-                    },
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () =>
+                          Navigator.pop(
+                        context,
+                      ),
+                      child: Text(
+                        'Закрыть',
+                        style:
+                            _SaText.body(
+                          9,
+                          color:
+                              _SaColors
+                                  .greenDark,
+                          weight:
+                              FontWeight
+                                  .w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(
+                  height: 8,
+                ),
+                Expanded(
+                  child: ListView.separated(
+                    itemCount:
+                        list.length,
+                    separatorBuilder:
+                        (_, __) =>
+                            const SizedBox(
+                      height: 5,
+                    ),
+                    itemBuilder:
+                        (_, index) =>
+                            _assessmentTile(
+                      list[index],
+                      closeSheetFirst:
+                          true,
+                    ),
                   ),
                 ),
               ],
@@ -778,4 +1107,5 @@ class _PlayerSelfAssessmentScreenState extends State<PlayerSelfAssessmentScreen>
       },
     );
   }
+
 }

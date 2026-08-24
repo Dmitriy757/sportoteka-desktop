@@ -13,19 +13,19 @@ import 'package:sportoteka/presentation/community_screen/post_blocks.dart';
 
 class FeedPalette {
   static const primaryGreen = Color(0xFF00A750);
-  static const primaryGreenDark = Color(0xFF008C40);
+  static const primaryGreenDark = Color(0xFF067A46);
   static const primaryGreenLight = Color(0xFF00C060);
 
   static const lightGreen = Color(0xFFE8F5E9);
   static const superLightGreen = Color(0xFFF2FFF5);
 
   static const white = Color(0xFFFFFFFF);
-  static const text = Color(0xFF1A1A1A);
-  static const textMuted = Color(0xFF666666);
+  static const text = Color(0xFF0B0F14);
+  static const textMuted = Color(0xFF667085);
 
   static const background = Color(0xFFFFFFFF);
-  static const border = Color(0xFFE9ECEA);
-  static const soft = Color(0xFFF7F8F7);
+  static const border = Color(0xFFF0F2F1);
+  static const soft = Color(0xFFF7F9F8);
   static const greenSoft = Color(0xFFF3FAF6);
   static const greenBorder = Color(0xFFD7F0E2);
   static const graphite = Color(0xFF111827);
@@ -477,6 +477,88 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
     );
   }
 
+  Widget _statusDot({
+    required Color color,
+    double size = 5,
+    bool glow = true,
+  }) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        boxShadow: glow
+            ? [
+                BoxShadow(
+                  color: color.withOpacity(.16),
+                  blurRadius: size * 1.8,
+                  spreadRadius: .2,
+                ),
+              ]
+            : null,
+      ),
+    );
+  }
+
+  Color _postAccent(Map<String, dynamic> post) {
+    final hasVideo = post['hasVideo'] == true;
+    final image = _safeStr(post['imageUrl']).trim();
+    final text = _safeStr(post['text']).toLowerCase();
+    if (hasVideo) return const Color(0xFFF59E0B);
+    if (image.isNotEmpty) return const Color(0xFFF59E0B);
+    if (text.contains('http://') || text.contains('https://')) {
+      return FeedPalette.primaryGreenDark;
+    }
+    return FeedPalette.primaryGreen;
+  }
+
+  String _postKind(Map<String, dynamic> post) {
+    final hasVideo = post['hasVideo'] == true;
+    final image = _safeStr(post['imageUrl']).trim();
+    final text = _safeStr(post['text']).toLowerCase();
+    if (hasVideo) return 'Видео';
+    if (image.isNotEmpty) return 'Фото';
+    if (text.contains('http://') || text.contains('https://')) {
+      return 'Ссылка';
+    }
+    return 'Текст';
+  }
+
+  Widget _brandDots({Color color = FeedPalette.primaryGreen}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        for (final item in const <(double, double)>[
+          (3.5, .34),
+          (4.5, .48),
+          (5.5, .68),
+          (6.5, 1.0),
+        ]) ...[
+          Container(
+            width: item.$1,
+            height: item.$1,
+            decoration: BoxDecoration(
+              color: color.withOpacity(item.$2),
+              shape: BoxShape.circle,
+              boxShadow: item.$2 >= .9
+                  ? [
+                      BoxShadow(
+                        color: color.withOpacity(.16),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
+            ),
+          ),
+          const SizedBox(width: 3),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -597,24 +679,7 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
         final workspace = Container(
           color: Colors.white,
           padding: EdgeInsets.zero,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(mobile ? 18 : 20),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(mobile ? 18 : 20),
-                boxShadow: mobile
-                    ? null
-                    : [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(.035),
-                          blurRadius: 28,
-                          spreadRadius: -18,
-                          offset: const Offset(0, 16),
-                        ),
-                      ],
-              ),
-              child: supportsSidePanel
+          child: supportsSidePanel
                   ? Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -626,12 +691,12 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
                             // вспомогательной колонки: граница уходит левее,
                             // поэтому тексту, фото и видео хватает места.
                             width: width >= 1400
-                                ? 720
+                                ? 560
                                 : width >= 1180
-                                    ? 620
+                                    ? 520
                                     : width >= 900
-                                        ? 540
-                                        : (width * .62).clamp(390.0, 500.0),
+                                        ? 480
+                                        : (width * .58).clamp(390.0, 460.0),
                             child: ClipRect(child: sidePanel),
                           ),
                         ] else if (desktop) ...[
@@ -644,8 +709,6 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
                       ],
                     )
                   : (sidePanel ?? core),
-            ),
-          ),
         );
 
         if (widget.embedded) return workspace;
@@ -778,7 +841,6 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: FeedPalette.border),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -818,11 +880,23 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
                         style: _title(10.8, weight: FontWeight.w600),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        author.isEmpty ? widget.sportName : author,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: _text(9.4),
+                      Row(
+                        children: [
+                          _statusDot(
+                            color: _postAccent(post),
+                            size: 4.5,
+                            glow: false,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              author.isEmpty ? widget.sportName : author,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _text(9.4),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -1014,34 +1088,35 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
 
   Widget _buildHeaderCard() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+      padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-              ),
+        color: FeedPalette.soft,
+        borderRadius: BorderRadius.circular(10),
+      ),
       child: Row(
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(color: FeedPalette.greenSoft, borderRadius: BorderRadius.circular(12)),
-            child: const Icon(Icons.public_rounded, color: FeedPalette.primaryGreen, size: 20),
-          ),
-          const SizedBox(width: 11),
+          _brandDots(),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Соцлента и новости', style: _title(14.5)),
-                const SizedBox(height: 3),
-                Text('Публикации игроков, тренеров и клубов', style: _text(11.2)),
+                Text('Соцлента и новости', style: _title(13.6)),
+                const SizedBox(height: 2),
+                Text(
+                  'Публикации игроков, тренеров и клубов',
+                  style: _text(10.2),
+                ),
               ],
             ),
           ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-            decoration: BoxDecoration(color: FeedPalette.soft, borderRadius: BorderRadius.circular(9)),
-            child: Text('${posts.length}', style: _title(11.5)),
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text('${posts.length}', style: _title(10.6)),
           ),
         ],
       ),
@@ -1050,32 +1125,46 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
 
   Widget _buildCreatePostCard() {
     return Material(
-      color: Colors.transparent,
+      color: FeedPalette.greenSoft,
+      borderRadius: BorderRadius.circular(10),
       child: InkWell(
         onTap: _openCreateEditor,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(10),
         child: Container(
-          constraints: const BoxConstraints(minHeight: 58),
+          constraints: const BoxConstraints(minHeight: 56),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-                      ),
           child: Row(
             children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(11)),
-                child: const Icon(Icons.edit_outlined, color: FeedPalette.primaryGreen, size: 18),
-              ),
+              _brandDots(color: FeedPalette.primaryGreenDark),
               const SizedBox(width: 10),
-              Expanded(child: Text('Поделитесь новостью, фото или видео…', style: _text(12.2, weight: FontWeight.w500))),
+              Expanded(
+                child: Text(
+                  'Добавить публикацию, фото или видео…',
+                  style: _text(
+                    11.2,
+                    weight: FontWeight.w500,
+                    color: FeedPalette.text,
+                  ),
+                ),
+              ),
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                decoration: BoxDecoration(color: FeedPalette.graphite, borderRadius: BorderRadius.circular(9)),
-                child: Text('Создать', style: _text(10.8, weight: FontWeight.w600, color: Colors.white)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: FeedPalette.primaryGreen,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'Создать',
+                  style: _text(
+                    10.2,
+                    weight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
               ),
             ],
           ),
@@ -1154,16 +1243,40 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
+                          horizontal: 9,
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          gradient: FeedPalette.greenGradient,
-                          borderRadius: BorderRadius.circular(999),
+                          color: FeedPalette.greenSoft,
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Text(
-                          widget.sportName,
-                          style: _text(10.5, weight: FontWeight.w600, color: Colors.white),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _statusDot(
+                              color: _postAccent(post),
+                              size: 4.5,
+                              glow: false,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              widget.sportName,
+                              style: _text(
+                                9.6,
+                                weight: FontWeight.w600,
+                                color: FeedPalette.primaryGreenDark,
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              '· ${_postKind(post)}',
+                              style: _text(
+                                9.2,
+                                weight: FontWeight.w500,
+                                color: FeedPalette.textMuted,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -1176,15 +1289,14 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        width: 4,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          gradient: FeedPalette.greenGradient,
-                          borderRadius: BorderRadius.circular(4),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: _statusDot(
+                          color: _postAccent(post),
+                          size: 6,
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 9),
                       Expanded(
                         child: Text(
                           title,
@@ -1277,6 +1389,14 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            _statusDot(
+                              color: liked
+                                  ? const Color(0xFFD92D20)
+                                  : const Color(0xFF8A9099),
+                              size: 4.5,
+                              glow: liked,
+                            ),
+                            const SizedBox(width: 6),
                             AnimatedSwitcher(
                               duration: const Duration(milliseconds: 160),
                               transitionBuilder: (child, anim) =>
@@ -1315,6 +1435,14 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            _statusDot(
+                              color: comments > 0
+                                  ? FeedPalette.primaryGreenDark
+                                  : const Color(0xFF8A9099),
+                              size: 4.5,
+                              glow: false,
+                            ),
+                            const SizedBox(width: 6),
                             const Icon(
                               Icons.comment_outlined,
                               size: 18,
@@ -1450,7 +1578,7 @@ class _AvatarCircle extends StatelessWidget {
               initial,
               style: const TextStyle(
                 color: FeedPalette.primaryGreen,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w600,
               ),
             ),
     );
