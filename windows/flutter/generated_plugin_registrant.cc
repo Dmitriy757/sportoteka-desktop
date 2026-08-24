@@ -6,7 +6,6 @@
 
 #include "generated_plugin_registrant.h"
 
-#include <agora_rtc_engine/agora_rtc_engine_plugin.h>
 #include <connectivity_plus/connectivity_plus_windows_plugin.h>
 #include <desktop_drop/desktop_drop_plugin.h>
 #include <emoji_picker_flutter/emoji_picker_flutter_plugin_c_api.h>
@@ -14,7 +13,6 @@
 #include <firebase_core/firebase_core_plugin_c_api.h>
 #include <flutter_webrtc/flutter_web_r_t_c_plugin.h>
 #include <geolocator_windows/geolocator_windows.h>
-#include <iris_method_channel/iris_method_channel_plugin_c_api.h>
 #include <livekit_client/live_kit_plugin.h>
 #include <permission_handler_windows/permission_handler_windows_plugin.h>
 #include <printing/printing_plugin.h>
@@ -24,8 +22,6 @@
 #include <video_player_win/video_player_win_plugin_c_api.h>
 
 void RegisterPlugins(flutter::PluginRegistry* registry) {
-  AgoraRtcEnginePluginRegisterWithRegistrar(
-      registry->GetRegistrarForPlugin("AgoraRtcEnginePlugin"));
   ConnectivityPlusWindowsPluginRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("ConnectivityPlusWindowsPlugin"));
   DesktopDropPluginRegisterWithRegistrar(
@@ -40,8 +36,6 @@ void RegisterPlugins(flutter::PluginRegistry* registry) {
       registry->GetRegistrarForPlugin("FlutterWebRTCPlugin"));
   GeolocatorWindowsRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("GeolocatorWindows"));
-  IrisMethodChannelPluginCApiRegisterWithRegistrar(
-      registry->GetRegistrarForPlugin("IrisMethodChannelPluginCApi"));
   LiveKitPluginRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("LiveKitPlugin"));
   PermissionHandlerWindowsPluginRegisterWithRegistrar(

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:video_player/video_player.dart';
 
+import 'package:sportoteka/core/theme/app_typography.dart';
+
 class UserReelsScreen extends StatefulWidget {
   final int userId;
   final int initialIndex;
@@ -55,6 +57,76 @@ class _UserReelsScreenState extends State<UserReelsScreen> {
     return int.tryParse(v.toString().replaceAll(RegExp('[^0-9]'), '')) ?? 0;
   }
 
+  String _normalizeMediaUrl(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) return '';
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      return value;
+    }
+    if (value.startsWith('/')) {
+      return 'https://sportotekaapp.ru$value';
+    }
+    return 'https://sportotekaapp.ru/$value';
+  }
+
+  TextStyle _t(
+    double size, {
+    FontWeight weight = FontWeight.w400,
+    Color color = Colors.white,
+    double height = 1.2,
+  }) {
+    return AppTypography.custom(
+      size: size,
+      weight: weight,
+      color: color,
+      height: height,
+      letterSpacing: 0,
+    );
+  }
+
+  Widget _dot(
+    Color color, {
+    double size = 5,
+  }) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+
+  Widget _brandDots({
+    Color color = const Color(0xFF00A750),
+  }) {
+    const values = <List<double>>[
+      <double>[3.0, .34],
+      <double>[3.8, .48],
+      <double>[4.6, .68],
+      <double>[5.4, 1],
+    ];
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        for (int i = 0; i < values.length; i++) ...[
+          Container(
+            width: values[i][0],
+            height: values[i][0],
+            decoration: BoxDecoration(
+              color: color.withOpacity(values[i][1]),
+              shape: BoxShape.circle,
+            ),
+          ),
+          if (i != values.length - 1)
+            const SizedBox(width: 3),
+        ],
+      ],
+    );
+  }
+
   List<Map<String, dynamic>> _parseReels(dynamic jsonAny) {
     List raw;
     if (jsonAny is Map) {
@@ -86,8 +158,8 @@ class _UserReelsScreenState extends State<UserReelsScreen> {
           return {
             'id': _toInt(m['id'] ?? m['reel_id'] ?? 0),
             'user_id': _toInt(m['user_id'] ?? m['author_id'] ?? 0),
-            'video_url': video,
-            'thumbnail': thumb,
+            'video_url': _normalizeMediaUrl(video),
+            'thumbnail': _normalizeMediaUrl(thumb),
             'username': (m['username'] ?? '').toString(),
             'user_avatar': (m['user_avatar'] ?? '').toString(),
             'description': (m['description'] ?? m['caption'] ?? '').toString(),
@@ -123,10 +195,19 @@ class _UserReelsScreenState extends State<UserReelsScreen> {
       // ✅ на всякий — фильтруем именно по userId (если сервер не фильтрует)
       reels = parsed.where((m) => (m['user_id'] ?? 0) == widget.userId).toList();
 
+      if (reels.isNotEmpty) {
+        _currentPage = _currentPage.clamp(0, reels.length - 1).toInt();
+      } else {
+        _currentPage = 0;
+      }
+
       if (!mounted) return;
       setState(() => loading = false);
 
       if (reels.isNotEmpty) {
+        if (_pageController.hasClients) {
+          _pageController.jumpToPage(_currentPage);
+        }
         await _ensureController(_currentPage, autoplay: true);
         _ensureController(_currentPage + 1);
       }
@@ -176,146 +257,276 @@ class _UserReelsScreenState extends State<UserReelsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Text(
-          widget.title,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
-        ),
-      ),
       body: loading
-          ? const Center(child: CircularProgressIndicator(color: Colors.white))
-          : (reels.isEmpty
-              ? const Center(
-                  child: Text("Пока нет Reels", style: TextStyle(color: Colors.white70)),
+          ? const Center(
+              child: CircularProgressIndicator(
+                color: Color(0xFF00A750),
+                strokeWidth: 2,
+              ),
+            )
+          : reels.isEmpty
+              ? Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _brandDots(),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Пока нет Reels',
+                        style: _t(
+                          10.4,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
+                  ),
                 )
-              : PageView.builder(
-                  controller: _pageController,
-                  scrollDirection: Axis.vertical,
-                  itemCount: reels.length,
-                  onPageChanged: (index) async {
-                    _currentPage = index;
+              : Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    PageView.builder(
+                      controller: _pageController,
+                      scrollDirection: Axis.vertical,
+                      itemCount: reels.length,
+                      onPageChanged: (index) async {
+                        _currentPage = index;
 
-                    await _ensureController(index, autoplay: true);
-                    _ensureController(index + 1);
-                    _ensureController(index - 1);
+                        await _ensureController(
+                          index,
+                          autoplay: true,
+                        );
+                        _ensureController(index + 1);
+                        _ensureController(index - 1);
 
-                    _controllers.forEach((i, c) {
-                      if (i == index) {
-                        if (!c.value.isPlaying) c.play();
-                      } else {
-                        if (c.value.isPlaying) c.pause();
-                      }
-                    });
+                        _controllers.forEach((i, c) {
+                          if (i == index) {
+                            if (!c.value.isPlaying) c.play();
+                          } else {
+                            if (c.value.isPlaying) c.pause();
+                          }
+                        });
 
-                    _trimControllersKeepAround(index);
-                    if (mounted) setState(() {});
-                  },
-                  itemBuilder: (context, index) {
-                    final reel = reels[index];
-                    final controller = _controllers[index];
+                        _trimControllersKeepAround(index);
+                        if (mounted) setState(() {});
+                      },
+                      itemBuilder: (context, index) {
+                        final reel = reels[index];
+                        final controller = _controllers[index];
 
-                    return Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        // видео / превью
-                        if (controller != null && controller.value.isInitialized)
-                          GestureDetector(
-                            onTap: () {
-                              controller.value.isPlaying ? controller.pause() : controller.play();
-                              setState(() {});
-                            },
-                            child: FittedBox(
-                              fit: BoxFit.cover,
-                              child: SizedBox(
-                                width: controller.value.size.width,
-                                height: controller.value.size.height,
-                                child: VideoPlayer(controller),
-                              ),
-                            ),
-                          )
-                        else
-                          Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              if ((reel['thumbnail'] ?? '').toString().trim().isNotEmpty)
-                                Image.network(
-                                  reel['thumbnail'],
+                        return Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            if (controller != null &&
+                                controller.value.isInitialized)
+                              GestureDetector(
+                                onTap: () {
+                                  controller.value.isPlaying
+                                      ? controller.pause()
+                                      : controller.play();
+                                  setState(() {});
+                                },
+                                child: FittedBox(
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => const SizedBox(),
+                                  child: SizedBox(
+                                    width: controller.value.size.width,
+                                    height: controller.value.size.height,
+                                    child: VideoPlayer(controller),
+                                  ),
                                 ),
-                              const Center(
-                                child: CircularProgressIndicator(color: Colors.white),
-                              ),
-                            ],
-                          ),
-
-                        // градиент
-                        Positioned.fill(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.transparent,
-                                  Colors.black.withOpacity(0.25),
-                                  Colors.black.withOpacity(0.75),
+                              )
+                            else
+                              Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  if ((reel['thumbnail'] ?? '')
+                                      .toString()
+                                      .trim()
+                                      .isNotEmpty)
+                                    Image.network(
+                                      reel['thumbnail'],
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) =>
+                                          const SizedBox(),
+                                    ),
+                                  const Center(
+                                    child: CircularProgressIndicator(
+                                      color: Color(0xFF00A750),
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
                                 ],
-                                stops: const [0.0, 0.6, 1.0],
+                              ),
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        Colors.black.withOpacity(.30),
+                                        Colors.transparent,
+                                        Colors.black.withOpacity(.76),
+                                      ],
+                                      stops: const [0, .48, 1],
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ),
-
-                        // описание
-                        Positioned(
-                          left: 16,
-                          right: 16,
-                          bottom: 40,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                (reel['description'] ?? '').toString(),
-                                style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.25),
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 10),
-                              Row(
+                            Positioned(
+                              left: 14,
+                              right: 14,
+                              bottom: 34,
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
                                 children: [
-                                  _pill("${reel['likes'] ?? 0} ❤"),
-                                  const SizedBox(width: 8),
-                                  _pill("${reel['comments'] ?? 0} 💬"),
-                                  const SizedBox(width: 8),
-                                  _pill("${reel['views'] ?? 0} 👁"),
+                                  if ((reel['description'] ?? '')
+                                      .toString()
+                                      .trim()
+                                      .isNotEmpty)
+                                    Text(
+                                      (reel['description'] ?? '').toString(),
+                                      style: _t(
+                                        10.7,
+                                        color: Colors.white,
+                                        height: 1.3,
+                                      ),
+                                      maxLines: 3,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  const SizedBox(height: 9),
+                                  Wrap(
+                                    spacing: 6,
+                                    runSpacing: 6,
+                                    children: [
+                                      _metric(
+                                        '${reel['likes'] ?? 0}',
+                                        const Color(0xFFD92D20),
+                                      ),
+                                      _metric(
+                                        '${reel['comments'] ?? 0}',
+                                        const Color(0xFF00A750),
+                                      ),
+                                      _metric(
+                                        '${reel['views'] ?? 0}',
+                                        const Color(0xFFF59E0B),
+                                      ),
+                                    ],
+                                  ),
                                 ],
+                              ),
+                            ),
+                            if (controller != null &&
+                                controller.value.isInitialized &&
+                                !controller.value.isPlaying)
+                              Center(
+                                child: Container(
+                                  width: 48,
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(.28),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.play_arrow_rounded,
+                                    color: Colors.white,
+                                    size: 30,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      child: SafeArea(
+                        bottom: false,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                            10,
+                            8,
+                            12,
+                            8,
+                          ),
+                          child: Row(
+                            children: [
+                              Material(
+                                color: Colors.black.withOpacity(.26),
+                                borderRadius: BorderRadius.circular(9),
+                                child: InkWell(
+                                  onTap: () => Navigator.maybePop(context),
+                                  borderRadius: BorderRadius.circular(9),
+                                  child: const SizedBox(
+                                    width: 34,
+                                    height: 34,
+                                    child: Icon(
+                                      Icons.arrow_back_ios_new_rounded,
+                                      color: Colors.white,
+                                      size: 14,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 9),
+                              _brandDots(),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  widget.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: _t(
+                                    11.6,
+                                    weight: FontWeight.w600,
+                                  ),
+                                ),
                               ),
                             ],
                           ),
                         ),
-                      ],
-                    );
-                  },
-                )),
+                      ),
+                    ),
+                  ],
+                ),
     );
   }
 
-  Widget _pill(String text) {
+  Widget _metric(
+    String text,
+    Color color,
+  ) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.14),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withOpacity(0.18)),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 6,
       ),
-      child: Text(
-        text,
-        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(.28),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _dot(
+            color,
+            size: 4.5,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: _t(
+              9.3,
+              weight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
+
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:video_player/video_player.dart';
 
 class AppVideoPlayerScreen extends StatefulWidget {
@@ -160,7 +161,7 @@ class _AppVideoPlayerScreenState extends State<AppVideoPlayerScreen> {
               "Не удалось открыть видео",
               style: TextStyle(
                 fontSize: 18,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w600,
                 color: Colors.white,
               ),
               textAlign: TextAlign.center,
@@ -193,7 +194,7 @@ class _AppVideoPlayerScreenState extends State<AppVideoPlayerScreen> {
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             color: Colors.white,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),

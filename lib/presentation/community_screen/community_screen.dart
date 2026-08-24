@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'sport_community_screen.dart';
 
 class CommunityScreen extends StatefulWidget {
@@ -130,9 +131,71 @@ class _CommunityScreenState extends State<CommunityScreen> {
     });
   }
 
+  TextStyle _title(
+    double size, {
+    FontWeight weight = FontWeight.w600,
+    Color color = const Color(0xFF0B0F14),
+  }) {
+    return AppTypography.custom(
+      size: size,
+      weight: weight,
+      color: color,
+      height: 1.18,
+      letterSpacing: 0,
+    );
+  }
+
+  TextStyle _text(
+    double size, {
+    FontWeight weight = FontWeight.w400,
+    Color color = const Color(0xFF5F6670),
+  }) {
+    return AppTypography.custom(
+      size: size,
+      weight: weight,
+      color: color,
+      height: 1.28,
+      letterSpacing: 0,
+    );
+  }
+
+  Widget _brandDots({Color color = const Color(0xFF00A750)}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        for (final item in const <(double, double)>[
+          (3.5, .34),
+          (4.5, .48),
+          (5.5, .68),
+          (6.5, 1.0),
+        ]) ...[
+          Container(
+            width: item.$1,
+            height: item.$1,
+            decoration: BoxDecoration(
+              color: color.withOpacity(item.$2),
+              shape: BoxShape.circle,
+              boxShadow: item.$2 >= .9
+                  ? [
+                      BoxShadow(
+                        color: color.withOpacity(.16),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
+            ),
+          ),
+          const SizedBox(width: 3),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final bg = const Color(0xFFF3F5F8); // матовый светлый фон
+    const bg = Colors.white;
 
     return Scaffold(
       backgroundColor: bg,
@@ -140,13 +203,18 @@ class _CommunityScreenState extends State<CommunityScreen> {
         elevation: 0,
         backgroundColor: bg,
         surfaceTintColor: Colors.transparent,
-        centerTitle: true,
-        title: const Text(
-          'Сообщество',
-          style: TextStyle(
-            fontWeight: FontWeight.w800,
-            fontSize: 18,
-          ),
+        centerTitle: false,
+        titleSpacing: 16,
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _brandDots(),
+            const SizedBox(width: 9),
+            Text(
+              'Сообщество',
+              style: _title(16),
+            ),
+          ],
         ),
         actions: [
           PopupMenuButton<String>(
@@ -168,14 +236,16 @@ class _CommunityScreenState extends State<CommunityScreen> {
             sliver: SliverToBoxAdapter(
               child: Row(
                 children: [
-                  Text(
-                    'ВЫБЕРИТЕ ВИД СПОРТА',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: Theme.of(context).colorScheme.onBackground.withOpacity(0.4),
-                      letterSpacing: 1.2,
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _brandDots(color: const Color(0xFF067A46)),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Виды спорта',
+                        style: _title(12.4),
+                      ),
+                    ],
                   ),
                   const Spacer(),
                   TextButton.icon(
@@ -208,10 +278,19 @@ class _CommunityScreenState extends State<CommunityScreen> {
                         )
                       : null,
                   filled: true,
-                  fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  fillColor: const Color(0xFFF7F9F8),
+                  hintStyle: _text(11.2, color: const Color(0xFF98A2B3)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(9),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(9),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(9),
                     borderSide: BorderSide.none,
                   ),
                 ),
@@ -235,15 +314,24 @@ class _CommunityScreenState extends State<CommunityScreen> {
                     final selected = _selectedCats.contains(key);
 
                     return FilterChip(
-                      label: Text(label),
+                      label: Text(
+                        label,
+                        style: _text(
+                          10.2,
+                          weight: selected ? FontWeight.w600 : FontWeight.w500,
+                          color: selected
+                              ? const Color(0xFF067A46)
+                              : const Color(0xFF5F6670),
+                        ),
+                      ),
                       selected: selected,
                       onSelected: (_) => _toggleCategory(key),
                       showCheckmark: false,
-                      selectedColor: Theme.of(context).colorScheme.primary.withOpacity(0.12),
-                      side: BorderSide(
-                        color: selected
-                            ? Theme.of(context).colorScheme.primary
-                            : Colors.grey.shade300,
+                      selectedColor: const Color(0xFFF3FAF6),
+                      backgroundColor: const Color(0xFFF7F9F8),
+                      side: BorderSide.none,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(9),
                       ),
                     );
                   },
@@ -292,11 +380,11 @@ class _CommunityScreenState extends State<CommunityScreen> {
 
   Widget _buildSportCard(BuildContext context, Map<String, dynamic> sport) {
     return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
+      color: const Color(0xFFF7F9F8),
+      borderRadius: BorderRadius.circular(10),
       elevation: 0,
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(10),
         onTap: () {
           Navigator.push(
             context,
@@ -306,7 +394,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
           );
         },
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(13),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -314,7 +402,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: (sport['color'] as Color).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(9),
                 ),
                 child: Icon(
                   sport['icon'] as IconData,
@@ -326,11 +414,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
               Text(
                 sport['name'] as String,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1E293B),
-                ),
+                style: _title(12.4),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -344,11 +428,10 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 ),
                 child: Text(
                   kCategoryLabels[sport['cat']] ?? 'Другое',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade700,
-                    letterSpacing: 0.2,
+                  style: _text(
+                    9.6,
+                    weight: FontWeight.w500,
+                    color: const Color(0xFF667085),
                   ),
                 ),
               ),

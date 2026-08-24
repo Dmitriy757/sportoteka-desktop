@@ -16,6 +16,7 @@ import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/chat_screen/chat_room_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/chat_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/create_group_chat_screen.dart';
+import 'package:sportoteka/presentation/chat_screen/cmr_notifications_panel.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_club_ai_assistant_panel.dart';
 
 enum _CmrChatMode { privateChats, groups, users }
@@ -66,6 +67,8 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
   _CmrChatMode _mode = _CmrChatMode.privateChats;
 
   // ИИ клуба открываем первым: для клуба это рабочий поиск по отчетам/игрокам/сессиям.
+  bool _notificationsSelected = false;
+  int _notificationsUnread = 0;
   bool _aiSelected = false;
   bool _openingAiRoute = false;
 
@@ -255,6 +258,7 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
   }
 
   void _autoSelectFirstChat() {
+    if (_notificationsSelected) return;
     if (_aiSelected) return;
     if (_selectedChatId != null) return;
     final chats = _visibleChatsRaw();
@@ -527,6 +531,16 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
     });
   }
 
+  void _selectNotifications() {
+    setState(() {
+      _notificationsSelected = true;
+      _aiSelected = false;
+      _selectedChat = null;
+      _selectedChatId = null;
+      _selectedChatName = 'Уведомления';
+    });
+  }
+
   void _selectAiClub() {
     // На телефоне ИИ открываем отдельным маршрутом: нижний dock Club Workspace
     // исчезает, а поле ввода остаётся в самом низу как в обычном мессенджере.
@@ -536,6 +550,7 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
     }
     // На планшете/ПК оставляем ИИ справа внутри рабочей области чатов.
     setState(() {
+      _notificationsSelected = false;
       _aiSelected = true;
       _selectedChat = null;
       _selectedChatId = null;
@@ -598,6 +613,7 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
     final id = _asInt(chat['id'] ?? chat['chat_id']);
     if (id <= 0) return;
     final title = _chatTitle(chat);
+    _notificationsSelected = false;
     _aiSelected = false;
     if (_phoneMessengerLayout) {
       unawaited(_openChatFullscreen(chatId: id, title: title, chat: chat));
@@ -644,6 +660,7 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
           if (!mounted) return;
           if (_phoneMessengerLayout) {
             setState(() {
+            _notificationsSelected = false;
             _aiSelected = false;
             _mode = _CmrChatMode.privateChats;
           });
@@ -660,6 +677,7 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
             return;
           }
           setState(() {
+            _notificationsSelected = false;
             _aiSelected = false;
             _mode = _CmrChatMode.privateChats;
             _selectedChatId = chatId;
@@ -840,6 +858,12 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
   }
 
   Widget _buildCompact(List<Map<String, dynamic>> items) {
+    if (_notificationsSelected) {
+      return _buildRight(
+        showBack: true,
+        key: const ValueKey('notifications-phone'),
+      );
+    }
     if (_aiSelected) {
       // Если раздел «Чаты» открылся сразу с выбранным ИИ, на телефоне не
       // встраиваем его под нижний dock, а открываем полноценным экраном.
@@ -883,6 +907,13 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
             mobile: mobile,
           ),
           SizedBox(height: mobile ? 9 : 10),
+          _NotificationsPinnedRow(
+            selected: _notificationsSelected,
+            unread: _notificationsUnread,
+            mobile: mobile,
+            onTap: _selectNotifications,
+          ),
+          SizedBox(height: mobile ? 6 : 7),
           _AiPinnedChatRow(
             selected: _aiSelected,
             mobile: mobile,
@@ -994,6 +1025,23 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
   }
 
   Widget _buildRight({bool showBack = false, Key? key}) {
+    if (_notificationsSelected) {
+      return CmrNotificationsPanel(
+        key: const ValueKey('cmr-notifications'),
+        userId: widget.userId,
+        onUnreadChanged: (value) {
+          if (!mounted) return;
+          setState(() => _notificationsUnread = value);
+        },
+        onNavigate: widget.onAiNavigate,
+        onBack: showBack
+            ? () => setState(() {
+                  _notificationsSelected = false;
+                  _selectedChatName = '';
+                })
+            : null,
+      );
+    }
     if (_aiSelected) {
       return CmrClubAiAssistantPanel(
         key: const ValueKey('cmr-club-ai-chat'),
@@ -1069,6 +1117,130 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
 
 }
 
+
+
+class _NotificationsPinnedRow extends StatelessWidget {
+  final bool selected;
+  final int unread;
+  final bool mobile;
+  final VoidCallback onTap;
+
+  const _NotificationsPinnedRow({
+    required this.selected,
+    required this.unread,
+    required this.mobile,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 170),
+          padding: EdgeInsets.symmetric(
+            horizontal: mobile ? 9 : 10,
+            vertical: mobile ? 8 : 9,
+          ),
+          decoration: BoxDecoration(
+            color: selected ? const Color(0xFFE2F7EA) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 170),
+                width: 3,
+                height: mobile ? 42 : 44,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? _CmrChatColors.green
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                width: mobile ? 38 : 40,
+                height: mobile ? 38 : 40,
+                decoration: BoxDecoration(
+                  color: _CmrChatColors.greenSoft,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.notifications_rounded,
+                  color: _CmrChatColors.greenDark,
+                  size: 19,
+                ),
+              ),
+              SizedBox(width: mobile ? 9 : 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Уведомления',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _CmrChatText.title(
+                              mobile ? 13.2 : 13.8,
+                            ),
+                          ),
+                        ),
+                        if (unread > 0)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _CmrChatColors.graphite,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              unread > 99 ? '99+' : unread.toString(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9.8,
+                                fontWeight: FontWeight.w600,
+                                height: 1,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Дневник, тренировки, тесты и важные события',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _CmrChatText.muted(
+                        mobile ? 10.8 : 11.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.arrow_forward_rounded,
+                color: _CmrChatColors.greenDark,
+                size: 16,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 
 class _AiPinnedChatRow extends StatelessWidget {

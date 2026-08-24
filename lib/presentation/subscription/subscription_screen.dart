@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import 'package:sportoteka/core/constants/app_colors.dart';
+
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/core/subscription/subscription_activation_service.dart';
 
@@ -23,74 +24,73 @@ class SubscriptionScreen extends StatefulWidget {
 }
 
 class _SubscriptionScreenState extends State<SubscriptionScreen> {
-  static const String subscriptionInfoUrl =
-      'https://sportoteka.by/api/get_my_subscription.php';
-  // Если у тебя подписки обслуживаются на другом домене — просто замени URL.
-
-  bool _yearly = false;
-
   bool _loadingSubscription = true;
   _SubscriptionInfo? _subscription;
 
-  List<_PlanModel> get _plans => [
+  // planCode оставлены прежними, чтобы не ломать существующий backend
+  // SubscriptionActivationService.
+  List<_PlanModel> get _plans => const <_PlanModel>[
         _PlanModel(
           id: 'coach_pro',
-          title: 'Coach Pro',
-          subtitle: 'Для тренеров и команд',
-          monthlyPrice: '19 BYN',
-          yearlyPrice: '190 BYN',
-          yearlyBadge: '2 мес. в подарок',
-          accent: const Color(0xFF2563EB),
-          light: const Color(0xFFEFF6FF),
-          features: const [
-            'Графический редактор команды',
-            'Планы-конспекты',
-            'Видеоанализ',
-            'Heatmap',
-            'Профессиональные модули команды',
+          title: 'Базовая',
+          subtitle: 'Минимальный набор для клуба, школы или академии',
+          price: '150 000 ₽',
+          period: 'в год',
+          priceNote: '≈ 5 400 BYN · ориентировочно по текущему курсу',
+          accent: _SubscriptionUi.green,
+          light: _SubscriptionUi.greenSoft,
+          features: <String>[
+            'Клубный кабинет и управление командами',
+            'До 20 команд',
+            'До 20 игроков в команде',
+            'До 20 родителей',
+            'Календарь мероприятий',
+            'Журнал посещаемости',
+            'Дневник игрока',
+            'Планы-конспекты и тестирование',
+            'Чаты и уведомления',
           ],
         ),
         _PlanModel(
           id: 'club_pro',
-          title: 'Club Pro',
-          subtitle: 'Для клубов и академий',
-          monthlyPrice: '49 BYN',
-          yearlyPrice: '490 BYN',
-          yearlyBadge: '2 мес. в подарок',
-          accent: AppColors.primaryGreen,
-          light: const Color(0xFFEFFAF3),
+          title: 'Аналитика + AI',
+          subtitle: 'Для глубокой работы с тренировками и матчами',
+          price: '200 000 ₽',
+          period: 'в год',
+          priceNote: '≈ 7 190 BYN · ориентировочно по текущему курсу',
+          accent: _SubscriptionUi.greenDark,
+          light: Color(0xFFEEF8F3),
           isPopular: true,
-          features: const [
-            'Панель клуба',
-            'Графический редактор клуба',
-            'Планы и конспекты',
-            'Видеоанализ клуба',
-            'Heatmap',
-            'Расширенная аналитика',
-            'Управление командами клуба',
+          features: <String>[
+            'Всё из тарифа «Базовая»',
+            'Расширенная аналитика команды и игроков',
+            'AI-анализ тренировок и матчей',
+            'Видеоанализ',
+            'Heatmap и маршруты',
+            'Расширенные отчёты',
+            'AI-рекомендации и профессиональные инструменты',
           ],
         ),
         _PlanModel(
           id: 'full_pro',
-          title: 'Full Pro',
-          subtitle: 'Максимальный доступ',
-          monthlyPrice: '99 BYN',
-          yearlyPrice: '990 BYN',
-          yearlyBadge: '2 мес. в подарок',
-          accent: const Color(0xFF7C3AED),
-          light: const Color(0xFFF5F3FF),
-          features: const [
-            'Все функции Coach Pro',
-            'Все функции Club Pro',
-            'Видеоуроки',
-            'AI-модули',
-            'Все PRO-инструменты',
-            'Приоритетный доступ к новым функциям',
+          title: 'Оборудование',
+          subtitle: 'Трекинг команды и полный аппаратный комплект',
+          price: 'По запросу',
+          period: '',
+          priceNote: 'Комплект на 12–24 трекера',
+          accent: _SubscriptionUi.amber,
+          light: _SubscriptionUi.amberSoft,
+          requestOnly: true,
+          features: <String>[
+            'Всё из тарифа «Аналитика + AI»',
+            'Комплект на 12–24 GPS-трекера',
+            'Подключение оборудования к Sportoteka',
+            'Настройка команды и рабочих сценариев',
+            'Сопровождение при внедрении',
+            'Индивидуальная комплектация под клуб',
           ],
         ),
       ];
-
-  String get _periodLabel => _yearly ? 'в год' : 'в месяц';
 
   @override
   void initState() {
@@ -98,62 +98,161 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     _loadCurrentSubscription();
   }
 
-  Future<void> _loadCurrentSubscription() async {
-  setState(() => _loadingSubscription = true);
-
-  try {
-    final userId = await PrefUtils.getUserId();
-    debugPrint('SUB userId = $userId');
-
-    if (userId == null || userId <= 0) {
-      setState(() {
-        _subscription = null;
-        _loadingSubscription = false;
-      });
-      return;
-    }
-
-    final response = await http.post(
-      Uri.parse('https://sportotekaapp.ru/api/get_my_subscription.php'),
-      body: {'user_id': userId.toString()},
+  TextStyle _t(
+    double size, {
+    FontWeight weight = FontWeight.w400,
+    Color color = _SubscriptionUi.text,
+    double height = 1.25,
+  }) {
+    return AppTypography.custom(
+      size: size,
+      weight: weight,
+      color: color,
+      height: height,
+      letterSpacing: 0,
     );
+  }
 
-    debugPrint('SUB statusCode = ${response.statusCode}');
-    debugPrint('SUB raw body = ${utf8.decode(response.bodyBytes)}');
+  Widget _dot(
+    Color color, {
+    double size = 5,
+    bool glow = false,
+  }) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        boxShadow: glow
+            ? <BoxShadow>[
+                BoxShadow(
+                  color: color.withOpacity(.18),
+                  blurRadius: size * 2,
+                ),
+              ]
+            : null,
+      ),
+    );
+  }
 
-    if (response.statusCode != 200) {
-      setState(() => _loadingSubscription = false);
-      return;
-    }
+  Widget _brandDots({
+    Color color = _SubscriptionUi.green,
+    bool compact = false,
+  }) {
+    final values = compact
+        ? const <List<double>>[
+            <double>[3.0, .34],
+            <double>[3.8, .48],
+            <double>[4.6, .68],
+            <double>[5.4, 1],
+          ]
+        : const <List<double>>[
+            <double>[3.5, .34],
+            <double>[4.5, .48],
+            <double>[5.5, .68],
+            <double>[6.5, 1],
+          ];
 
-    final data = jsonDecode(utf8.decode(response.bodyBytes));
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: <Widget>[
+        for (int i = 0; i < values.length; i++) ...<Widget>[
+          Container(
+            width: values[i][0],
+            height: values[i][0],
+            decoration: BoxDecoration(
+              color: color.withOpacity(values[i][1]),
+              shape: BoxShape.circle,
+              boxShadow: values[i][1] >= .95
+                  ? <BoxShadow>[
+                      BoxShadow(
+                        color: color.withOpacity(.14),
+                        blurRadius: 8,
+                      ),
+                    ]
+                  : null,
+            ),
+          ),
+          if (i != values.length - 1)
+            const SizedBox(width: 3),
+        ],
+      ],
+    );
+  }
 
-    debugPrint('SUB parsed = $data');
-
-    if (data is Map<String, dynamic> && data['success'] == true) {
-      final sub = data['subscription'];
-      if (sub is Map<String, dynamic>) {
-        _subscription = _SubscriptionInfo.fromJson(sub);
-      } else {
-        _subscription = null;
-      }
-    } else {
-      _subscription = null;
-    }
-  } catch (e) {
-    debugPrint('LOAD SUBSCRIPTION ERROR: $e');
-  } finally {
+  Future<void> _loadCurrentSubscription() async {
     if (mounted) {
-      setState(() => _loadingSubscription = false);
+      setState(() => _loadingSubscription = true);
+    }
+
+    try {
+      final userId = await PrefUtils.getUserId();
+
+      if (userId == null || userId <= 0) {
+        if (!mounted) return;
+        setState(() {
+          _subscription = null;
+          _loadingSubscription = false;
+        });
+        return;
+      }
+
+      final response = await http.post(
+        Uri.parse(
+          'https://sportotekaapp.ru/api/get_my_subscription.php',
+        ),
+        body: <String, String>{
+          'user_id': userId.toString(),
+        },
+      );
+
+      if (!mounted) return;
+
+      if (response.statusCode != 200) {
+        setState(() => _loadingSubscription = false);
+        return;
+      }
+
+      final data = jsonDecode(
+        utf8.decode(response.bodyBytes),
+      );
+
+      if (data is Map<String, dynamic> &&
+          data['success'] == true) {
+        final sub = data['subscription'];
+
+        setState(() {
+          _subscription = sub is Map<String, dynamic>
+              ? _SubscriptionInfo.fromJson(sub)
+              : null;
+        });
+      } else {
+        setState(() => _subscription = null);
+      }
+    } catch (e) {
+      debugPrint('LOAD SUBSCRIPTION ERROR: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _loadingSubscription = false);
+      }
     }
   }
-}
 
   Future<void> _selectPlan(_PlanModel plan) async {
-    debugPrint('SELECT PLAN tapped: ${plan.id}');
+    if (plan.requestOnly) {
+      Get.snackbar(
+        'Оборудование Sportoteka',
+        'Комплект на 12–24 трекера рассчитывается индивидуально. '
+            'Подключение оформляется по запросу.',
+        snackPosition: SnackPosition.BOTTOM,
+        margin: const EdgeInsets.all(12),
+      );
+      return;
+    }
 
     final userId = await PrefUtils.getUserId();
-    debugPrint('USER ID = $userId');
 
     if (userId == null || userId <= 0) {
       Get.snackbar(
@@ -165,26 +264,27 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       return;
     }
 
-    String role = 'user';
-    if (plan.id == 'coach_pro') {
-      role = 'coach';
-    } else if (plan.id == 'club_pro') {
-      role = 'club';
-    } else if (plan.id == 'full_pro') {
-      role = 'club';
-    }
+    // Все новые коммерческие тарифы относятся к клубному workspace.
+    const role = 'club';
 
     Get.dialog(
-      const Center(child: CircularProgressIndicator()),
+      const Center(
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: _SubscriptionUi.green,
+        ),
+      ),
       barrierDismissible: false,
     );
 
-    final result = await SubscriptionActivationService.activatePlan(
-  userId: userId,
-  role: role,
-  planCode: plan.id,
-  isYearly: _yearly,
-);
+    final result =
+        await SubscriptionActivationService.activatePlan(
+      userId: userId,
+      role: role,
+      planCode: plan.id,
+      isYearly: true,
+    );
+
     if (Get.isDialogOpen == true) {
       Get.back();
     }
@@ -192,7 +292,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     if (result['success'] == true) {
       Get.snackbar(
         'Подписка активирована',
-        'Тариф ${plan.title} подключён',
+        'Тариф «${plan.title}» подключён',
         snackPosition: SnackPosition.BOTTOM,
         margin: const EdgeInsets.all(12),
       );
@@ -203,7 +303,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
     Get.snackbar(
       'Ошибка',
-      (result['message'] ?? 'Не удалось активировать тариф').toString(),
+      (result['message'] ??
+              'Не удалось активировать тариф')
+          .toString(),
       snackPosition: SnackPosition.BOTTOM,
       margin: const EdgeInsets.all(12),
     );
@@ -211,538 +313,401 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
   bool _isCurrentPlan(_PlanModel plan) {
     if (_subscription == null) return false;
-    return _subscription!.planCode == plan.id && _subscription!.isActive;
+
+    return _subscription!.planCode == plan.id &&
+        _subscription!.isActive;
   }
 
   @override
   Widget build(BuildContext context) {
-    final hint = widget.titleHint?.trim();
     final width = MediaQuery.of(context).size.width;
-    final isTablet = width > 700;
+    final wide = width >= 1080;
+    final medium = width >= 720;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FB),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
-        title: const Text(
-          'Sportoteka PRO',
-          style: TextStyle(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        actions: [
-          IconButton(
-            onPressed: _loadCurrentSubscription,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: _loadCurrentSubscription,
-        child: ListView(
-          padding: EdgeInsets.fromLTRB(
-            isTablet ? 24 : 16,
-            8,
-            isTablet ? 24 : 16,
-            24,
-          ),
-          children: [
-            _HeroSubscriptionCard(
-              titleHint: hint,
-              source: widget.source,
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Column(
+          children: <Widget>[
+            _header(
+              mobile: MediaQuery.of(context).size.width < 900,
             ),
-            const SizedBox(height: 16),
-
-            if (_loadingSubscription)
-              const _SubscriptionLoadingCard()
-            else
-              _SubscriptionStatusCard(
-                subscription: _subscription,
+            const Divider(
+              height: 1,
+              thickness: .6,
+              color: _SubscriptionUi.line,
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                color: _SubscriptionUi.green,
                 onRefresh: _loadCurrentSubscription,
-              ),
-
-            const SizedBox(height: 16),
-            _BillingToggle(
-              yearly: _yearly,
-              onChanged: (v) => setState(() => _yearly = v),
-            ),
-            const SizedBox(height: 16),
-
-            if (isTablet)
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: _plans
-                    .map(
-                      (plan) => Expanded(
-                        child: Padding(
-                          padding: EdgeInsets.only(
-                            right: plan == _plans.last ? 0 : 12,
-                          ),
-                          child: _PlanCard(
-                            plan: plan,
-                            yearly: _yearly,
-                            isCurrent: _isCurrentPlan(plan),
-                            onTap: () => _selectPlan(plan),
-                          ),
+                child: ListView(
+                  padding: EdgeInsets.fromLTRB(
+                    wide ? 20 : medium ? 16 : 12,
+                    12,
+                    wide ? 20 : medium ? 16 : 12,
+                    28,
+                  ),
+                  children: <Widget>[
+                    _hero(),
+                    const SizedBox(height: 9),
+                    if (_loadingSubscription)
+                      _loadingStatus()
+                    else
+                      _subscriptionStatus(),
+                    const SizedBox(height: 12),
+                    _plansHeader(),
+                    const SizedBox(height: 9),
+                    if (wide)
+                      Row(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: <Widget>[
+                          for (int i = 0;
+                              i < _plans.length;
+                              i++) ...<Widget>[
+                            Expanded(
+                              child: _planCard(_plans[i]),
+                            ),
+                            if (i != _plans.length - 1)
+                              const SizedBox(width: 10),
+                          ],
+                        ],
+                      )
+                    else
+                      ..._plans.map(
+                        (plan) => Padding(
+                          padding:
+                              const EdgeInsets.only(bottom: 8),
+                          child: _planCard(plan),
                         ),
                       ),
-                    )
-                    .toList(),
-              )
-            else
-              ..._plans.map(
-                (plan) => Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: _PlanCard(
-                    plan: plan,
-                    yearly: _yearly,
-                    isCurrent: _isCurrentPlan(plan),
-                    onTap: () => _selectPlan(plan),
-                  ),
+                    const SizedBox(height: 4),
+                    _priceNotice(),
+                  ],
                 ),
               ),
-
-            const SizedBox(height: 8),
-            _BenefitsGrid(yearly: _yearly, periodLabel: _periodLabel),
-            const SizedBox(height: 16),
-            _BottomInfoCard(yearly: _yearly),
+            ),
           ],
         ),
       ),
     );
   }
-}
 
-class _SubscriptionStatusCard extends StatelessWidget {
-  final _SubscriptionInfo? subscription;
-  final VoidCallback onRefresh;
-
-  const _SubscriptionStatusCard({
-    required this.subscription,
-    required this.onRefresh,
-  });
-
-  String _formatDate(DateTime? dt) {
-    if (dt == null) return '—';
-    return DateFormat('dd.MM.yyyy').format(dt);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (subscription == null) {
-      return Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(22),
-          boxShadow: [AppColors.cardShadow],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF3F4F6),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(
-                Icons.subscriptions_outlined,
-                color: Color(0xFF6B7280),
+  Widget _header({
+    required bool mobile,
+  }) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 62),
+      padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
+      child: Row(
+        children: <Widget>[
+          if (!mobile) ...<Widget>[
+            Material(
+              color: _SubscriptionUi.soft,
+              borderRadius: BorderRadius.circular(9),
+              child: InkWell(
+                onTap: () => Navigator.maybePop(context),
+                borderRadius: BorderRadius.circular(9),
+                child: const SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    size: 15,
+                    color: _SubscriptionUi.text,
+                  ),
+                ),
               ),
             ),
-            const SizedBox(width: 14),
-            const Expanded(
+            const SizedBox(width: 10),
+          ],
+          _brandDots(),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'Подписка SPORTOTEKA',
+                  style: _t(
+                    14.5,
+                    weight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Тарифы для клубов, школ и академий',
+                  style: _t(
+                    9.5,
+                    color: _SubscriptionUi.muted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Material(
+            color: _SubscriptionUi.soft,
+            borderRadius: BorderRadius.circular(8),
+            child: InkWell(
+              onTap: _loadCurrentSubscription,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 9,
+                  vertical: 7,
+                ),
+                child: Row(
+                  children: <Widget>[
+                    _dot(
+                      _SubscriptionUi.green,
+                      size: 4.5,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Обновить',
+                      style: _t(
+                        9.1,
+                        weight: FontWeight.w600,
+                        color: _SubscriptionUi.greenDark,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _hero() {
+    final hint = widget.titleHint?.trim();
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 13, 14, 13),
+      decoration: BoxDecoration(
+        color: _SubscriptionUi.greenSoft,
+        borderRadius: BorderRadius.circular(11),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 620;
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              _brandDots(
+                color: _SubscriptionUi.greenDark,
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Один контур для управления клубом',
+                      style: _t(
+                        compact ? 14 : 16.2,
+                        weight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      hint?.isNotEmpty == true
+                          ? 'Модуль «$hint» доступен в соответствующем тарифе. '
+                              'Выберите уровень, который подходит вашей организации.'
+                          : 'Начните с базового управления клубом, '
+                              'добавьте аналитику и AI или подключите '
+                              'полный комплект оборудования.',
+                      style: _t(
+                        9.8,
+                        color: _SubscriptionUi.muted,
+                        height: 1.38,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: const <Widget>[
+                        _HeroTag(
+                          label: 'Управление',
+                          color: _SubscriptionUi.green,
+                        ),
+                        _HeroTag(
+                          label: 'Аналитика + AI',
+                          color: _SubscriptionUi.greenDark,
+                        ),
+                        _HeroTag(
+                          label: '12–24 трекера',
+                          color: _SubscriptionUi.amber,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _loadingStatus() {
+    return Container(
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(
+        color: _SubscriptionUi.soft,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: <Widget>[
+          const SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: _SubscriptionUi.green,
+            ),
+          ),
+          const SizedBox(width: 9),
+          Text(
+            'Проверяем текущую подписку…',
+            style: _t(
+              9.8,
+              color: _SubscriptionUi.muted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _subscriptionStatus() {
+    final subscription = _subscription;
+
+    if (subscription == null) {
+      return Container(
+        padding: const EdgeInsets.all(11),
+        decoration: BoxDecoration(
+          color: _SubscriptionUi.soft,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: <Widget>[
+            _dot(
+              _SubscriptionUi.muted2,
+              size: 6,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                children: <Widget>[
                   Text(
                     'Подписка не активирована',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.textPrimary,
+                    style: _t(
+                      10.8,
+                      weight: FontWeight.w600,
                     ),
                   ),
-                  SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
-                    'Выберите тариф ниже, чтобы открыть PRO-возможности Sportoteka.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      height: 1.3,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textSecondary,
+                    'Выберите подходящий тариф ниже.',
+                    style: _t(
+                      9.3,
+                      color: _SubscriptionUi.muted,
                     ),
                   ),
                 ],
               ),
-            ),
-            IconButton(
-              onPressed: onRefresh,
-              icon: const Icon(Icons.refresh_rounded),
             ),
           ],
         ),
       );
     }
 
-    final activeColor = subscription!.isActive
-        ? AppColors.primaryGreen
-        : const Color(0xFFEF4444);
-
-    final activeBg = subscription!.isActive
-        ? const Color(0xFFEFFAF3)
-        : const Color(0xFFFEF2F2);
+    final statusColor = subscription.isActive
+        ? _SubscriptionUi.green
+        : _SubscriptionUi.red;
 
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [AppColors.cardShadow],
-        border: Border.all(color: activeBg),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: activeBg,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(
-                  subscription!.isActive
-                      ? Icons.verified_rounded
-                      : Icons.warning_amber_rounded,
-                  color: activeColor,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      subscription!.isActive
-                          ? 'Подписка активна'
-                          : 'Подписка истекла',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subscription!.planTitle,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: activeColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                onPressed: onRefresh,
-                icon: const Icon(Icons.refresh_rounded),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              _InfoChip(
-                icon: Icons.calendar_today_outlined,
-                label: 'Начало: ${_formatDate(subscription!.startedAt)}',
-              ),
-              _InfoChip(
-                icon: Icons.event_available_outlined,
-                label: 'До: ${_formatDate(subscription!.expiresAt)}',
-              ),
-              _InfoChip(
-                icon: Icons.timelapse_rounded,
-                label: subscription!.isActive
-                    ? 'Осталось ${subscription!.daysLeft} дн.'
-                    : 'Срок завершён',
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SubscriptionLoadingCard extends StatelessWidget {
-  const _SubscriptionLoadingCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [AppColors.cardShadow],
-      ),
-      child: const Row(
-        children: [
-          SizedBox(
-            width: 22,
-            height: 22,
-            child: CircularProgressIndicator(strokeWidth: 2.5),
-          ),
-          SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              'Загружаем информацию о подписке...',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-
-  const _InfoChip({
-    required this.icon,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        color: subscription.isActive
+            ? _SubscriptionUi.greenSoft
+            : _SubscriptionUi.redSoft,
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: AppColors.textSecondary),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HeroSubscriptionCard extends StatelessWidget {
-  final String? titleHint;
-  final String? source;
-
-  const _HeroSubscriptionCard({
-    required this.titleHint,
-    required this.source,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: const LinearGradient(
-          colors: [
-            Color(0xFF0F172A),
-            Color(0xFF1E3A8A),
-            Color(0xFF00A750),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.12),
-            blurRadius: 24,
-            offset: const Offset(0, 14),
-          ),
-        ],
-      ),
-      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.14),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: const Text(
-              'Профессиональный доступ',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-                fontSize: 12,
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-          const Text(
-            'Открой все PRO-инструменты Sportoteka',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-              height: 1.15,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            titleHint?.isNotEmpty == true
-                ? 'Для доступа к модулю «$titleHint» выберите подходящий тариф и активируйте подписку.'
-                : 'Выберите подходящий тариф для команды, клуба или полного профессионального доступа.',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.92),
-              fontSize: 14,
-              height: 1.35,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: const [
-              _HeroChip(label: 'Видеоанализ'),
-              _HeroChip(label: 'Heatmap'),
-              _HeroChip(label: 'Планы'),
-              _HeroChip(label: 'AI-модули'),
-            ],
-          ),
-          if (source != null && source!.trim().isNotEmpty) ...[
-            const SizedBox(height: 14),
-            Text(
-              'Источник: $source',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.75),
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _HeroChip extends StatelessWidget {
-  final String label;
-
-  const _HeroChip({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.14),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withOpacity(0.18)),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class _BillingToggle extends StatelessWidget {
-  final bool yearly;
-  final ValueChanged<bool> onChanged;
-
-  const _BillingToggle({
-    required this.yearly,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [AppColors.cardShadow],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _PeriodButton(
-              active: !yearly,
-              title: 'Помесячно',
-              subtitle: 'гибкая оплата',
-              onTap: () => onChanged(false),
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: _dot(
+              statusColor,
+              size: 6,
+              glow: subscription.isActive,
             ),
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                _PeriodButton(
-                  active: yearly,
-                  title: 'На год',
-                  subtitle: 'выгоднее',
-                  onTap: () => onChanged(true),
-                ),
-                Positioned(
-                  top: -10,
-                  right: 10,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryGreen,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: const Text(
-                      '−17%',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 10,
-                      ),
-                    ),
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  subscription.isActive
+                      ? 'Подписка активна'
+                      : 'Подписка завершена',
+                  style: _t(
+                    10.6,
+                    weight: FontWeight.w600,
                   ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subscription.planTitle,
+                  style: _t(
+                    9.8,
+                    weight: FontWeight.w600,
+                    color: statusColor,
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: <Widget>[
+                    _statusPill(
+                      'Начало',
+                      _formatDate(
+                        subscription.startedAt,
+                      ),
+                      _SubscriptionUi.greenDark,
+                    ),
+                    _statusPill(
+                      'До',
+                      _formatDate(
+                        subscription.expiresAt,
+                      ),
+                      _SubscriptionUi.amber,
+                    ),
+                    _statusPill(
+                      subscription.isActive
+                          ? 'Осталось'
+                          : 'Статус',
+                      subscription.isActive
+                          ? '${subscription.daysLeft} дн.'
+                          : 'Завершена',
+                      statusColor,
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -751,528 +716,466 @@ class _BillingToggle extends StatelessWidget {
       ),
     );
   }
-}
 
-class _PeriodButton extends StatelessWidget {
-  final bool active;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
+  Widget _statusPill(
+    String label,
+    String value,
+    Color color,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 5,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(.72),
+        borderRadius: BorderRadius.circular(7),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          _dot(
+            color,
+            size: 4,
+          ),
+          const SizedBox(width: 5),
+          Text(
+            '$label: $value',
+            style: _t(
+              8.8,
+              weight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-  const _PeriodButton({
-    required this.active,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
+  String _formatDate(DateTime? dt) {
+    if (dt == null) return '—';
+    return DateFormat('dd.MM.yyyy').format(dt);
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: active ? AppColors.primaryGreen : const Color(0xFFF6F8FB),
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+  Widget _plansHeader() {
+    return Row(
+      children: <Widget>[
+        _brandDots(
+          color: _SubscriptionUi.greenDark,
+          compact: true,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
           child: Column(
-            children: [
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
+            children: <Widget>[
               Text(
-                title,
-                style: TextStyle(
-                  color: active ? Colors.white : AppColors.textPrimary,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 14,
+                'Выберите уровень',
+                style: _t(
+                  12,
+                  weight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
-                subtitle,
-                style: TextStyle(
-                  color: active
-                      ? Colors.white.withOpacity(0.9)
-                      : AppColors.textSecondary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 11,
+                'Все тарифы рассчитаны на организацию, а не на одного пользователя.',
+                style: _t(
+                  9.2,
+                  color: _SubscriptionUi.muted,
                 ),
               ),
             ],
           ),
         ),
-      ),
+      ],
     );
   }
-}
 
-class _PlanCard extends StatelessWidget {
-  final _PlanModel plan;
-  final bool yearly;
-  final bool isCurrent;
-  final VoidCallback onTap;
-
-  const _PlanCard({
-    required this.plan,
-    required this.yearly,
-    required this.isCurrent,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final price = yearly ? plan.yearlyPrice : plan.monthlyPrice;
+  Widget _planCard(_PlanModel plan) {
+    final current = _isCurrentPlan(plan);
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: isCurrent
-              ? AppColors.primaryGreen
-              : (plan.isPopular ? plan.accent : const Color(0xFFE5E7EB)),
-          width: (isCurrent || plan.isPopular) ? 2 : 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: isCurrent
-                ? AppColors.primaryGreen.withOpacity(0.14)
-                : plan.isPopular
-                    ? plan.accent.withOpacity(0.14)
-                    : Colors.black.withOpacity(0.05),
-            blurRadius: isCurrent || plan.isPopular ? 22 : 18,
-            offset: const Offset(0, 10),
-          ),
-        ],
+        color: _SubscriptionUi.soft,
+        borderRadius: BorderRadius.circular(11),
       ),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (isCurrent)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryGreen,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: const Text(
-                      'Текущий тариф',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 11,
-                      ),
-                    ),
-                  )
-                else if (plan.isPopular)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: plan.accent,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: const Text(
-                      'Популярный план',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
-                Row(
-                  children: [
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: plan.light,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Icon(
-                        _iconForPlan(plan.id),
-                        color: plan.accent,
-                        size: 28,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            plan.title,
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            plan.subtitle,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      price,
-                      style: TextStyle(
-                        fontSize: 28,
-                        height: 1,
-                        fontWeight: FontWeight.w900,
-                        color: plan.accent,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 3),
-                      child: Text(
-                        yearly ? 'в год' : 'в месяц',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                if (yearly) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: plan.light,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      plan.yearlyBadge,
-                      style: TextStyle(
-                        color: plan.accent,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 16),
-                ...plan.features.map(
-                  (f) => Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.check_circle_rounded,
-                          size: 18,
-                          color: plan.accent,
-                        ),
-                        const SizedBox(width: 8),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
+            children: <Widget>[
+              _brandDots(
+                color: plan.accent,
+                compact: true,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Row(
+                      children: <Widget>[
                         Expanded(
                           child: Text(
-                            f,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              height: 1.25,
-                              color: AppColors.textPrimary,
-                              fontWeight: FontWeight.w600,
+                            plan.title,
+                            style: _t(
+                              13.2,
+                              weight: FontWeight.w600,
                             ),
                           ),
                         ),
+                        if (current)
+                          _badge(
+                            'Текущий',
+                            _SubscriptionUi.green,
+                            _SubscriptionUi.greenSoft,
+                          )
+                        else if (plan.isPopular)
+                          _badge(
+                            'Рекомендуем',
+                            _SubscriptionUi.greenDark,
+                            const Color(0xFFE8F5EE),
+                          ),
                       ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      plan.subtitle,
+                      style: _t(
+                        9.4,
+                        color: _SubscriptionUi.muted,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 13),
+          Row(
+            crossAxisAlignment:
+                CrossAxisAlignment.end,
+            children: <Widget>[
+              Flexible(
+                child: Text(
+                  plan.price,
+                  style: _t(
+                    21,
+                    weight: FontWeight.w600,
+                    color: plan.accent,
+                    height: 1,
+                  ),
+                ),
+              ),
+              if (plan.period.isNotEmpty) ...<Widget>[
+                const SizedBox(width: 6),
+                Padding(
+                  padding:
+                      const EdgeInsets.only(bottom: 2),
+                  child: Text(
+                    plan.period,
+                    style: _t(
+                      9.4,
+                      color: _SubscriptionUi.muted,
                     ),
                   ),
                 ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: isCurrent ? null : onTap,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          isCurrent ? const Color(0xFFE5E7EB) : plan.accent,
-                      foregroundColor:
-                          isCurrent ? const Color(0xFF6B7280) : Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    child: Text(
-                      isCurrent
-                          ? 'Тариф уже активен'
-                          : (plan.isPopular
-                              ? 'Выбрать популярный план'
-                              : 'Выбрать тариф'),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                      ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 5),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 5,
+            ),
+            decoration: BoxDecoration(
+              color: plan.light,
+              borderRadius: BorderRadius.circular(7),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                _dot(
+                  plan.accent,
+                  size: 4.5,
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    plan.priceNote,
+                    style: _t(
+                      8.9,
+                      weight: FontWeight.w500,
+                      color: plan.accent,
                     ),
                   ),
                 ),
               ],
             ),
           ),
-          if (plan.isPopular && !isCurrent)
-            Positioned(
-              top: -8,
-              right: 16,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF111827),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: const Text(
-                  'TOP',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 10,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  IconData _iconForPlan(String id) {
-    switch (id) {
-      case 'coach_pro':
-        return Icons.sports;
-      case 'club_pro':
-        return Icons.shield_outlined;
-      case 'full_pro':
-        return Icons.workspace_premium_outlined;
-      default:
-        return Icons.star_outline;
-    }
-  }
-}
-
-class _BenefitsGrid extends StatelessWidget {
-  final bool yearly;
-  final String periodLabel;
-
-  const _BenefitsGrid({
-    required this.yearly,
-    required this.periodLabel,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final items = [
-      _BenefitItem(
-        icon: Icons.lock_open_rounded,
-        title: 'Доступ к PRO',
-        subtitle: 'Открытие профессиональных инструментов',
-      ),
-      _BenefitItem(
-        icon: Icons.calendar_today_outlined,
-        title: yearly ? 'Оплата на год' : 'Ежемесячная оплата',
-        subtitle: yearly ? 'Более выгодный формат' : 'Гибкий формат подключения',
-      ),
-      _BenefitItem(
-        icon: Icons.bolt_rounded,
-        title: 'Мгновенная активация',
-        subtitle: 'После подтверждения оплаты',
-      ),
-      _BenefitItem(
-        icon: Icons.support_agent_outlined,
-        title: 'Поддержка',
-        subtitle: 'Помощь по настройке доступа',
-      ),
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Что входит',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w900,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 10),
-        GridView.builder(
-          itemCount: items.length,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 1.35,
-          ),
-          itemBuilder: (context, index) {
-            final item = items[index];
-            return Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: [AppColors.cardShadow],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(item.icon, color: AppColors.primaryGreen, size: 24),
-                  const SizedBox(height: 10),
-                  Text(
-                    item.title,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.textPrimary,
+          const SizedBox(height: 13),
+          ...plan.features.map(
+            (feature) => Padding(
+              padding:
+                  const EdgeInsets.only(bottom: 7),
+              child: Row(
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                children: <Widget>[
+                  Padding(
+                    padding:
+                        const EdgeInsets.only(top: 5),
+                    child: _dot(
+                      plan.accent,
+                      size: 4.5,
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    item.subtitle,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      height: 1.25,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textSecondary,
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Text(
+                      feature,
+                      style: _t(
+                        9.5,
+                        color: _SubscriptionUi.text,
+                        height: 1.32,
+                      ),
                     ),
                   ),
                 ],
               ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-}
-
-class _BottomInfoCard extends StatelessWidget {
-  final bool yearly;
-
-  const _BottomInfoCard({required this.yearly});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [AppColors.cardShadow],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Оплата и подключение',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-              color: AppColors.textPrimary,
             ),
           ),
-          const SizedBox(height: 10),
-          Text(
-            yearly
-                ? 'Вы выбрали годовой формат. Он выгоднее и позволяет не продлевать подписку каждый месяц.'
-                : 'Вы выбрали помесячный формат. Он подойдёт для гибкого старта и тестирования возможностей.',
-            style: const TextStyle(
-              fontSize: 14,
-              height: 1.35,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 12),
-          const Row(
-            children: [
-              Icon(
-                Icons.info_outline,
-                size: 18,
-                color: AppColors.textTertiary,
-              ),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Здесь далее можно подключить оплату, промокоды, пробный период или заявку менеджеру.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    height: 1.3,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textTertiary,
+          const SizedBox(height: 7),
+          SizedBox(
+            width: double.infinity,
+            child: Material(
+              color: current
+                  ? const Color(0xFFE7EAE8)
+                  : plan.requestOnly
+                      ? plan.light
+                      : plan.accent,
+              borderRadius:
+                  BorderRadius.circular(9),
+              child: InkWell(
+                onTap: current
+                    ? null
+                    : () => _selectPlan(plan),
+                borderRadius:
+                    BorderRadius.circular(9),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(
+                    horizontal: 11,
+                    vertical: 10,
+                  ),
+                  child: Row(
+                    mainAxisAlignment:
+                        MainAxisAlignment.center,
+                    children: <Widget>[
+                      _dot(
+                        current
+                            ? _SubscriptionUi.muted2
+                            : plan.requestOnly
+                                ? plan.accent
+                                : Colors.white,
+                        size: 4.5,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        current
+                            ? 'Тариф активен'
+                            : plan.requestOnly
+                                ? 'Запросить предложение'
+                                : 'Выбрать тариф',
+                        style: _t(
+                          9.7,
+                          weight: FontWeight.w600,
+                          color: current
+                              ? _SubscriptionUi.muted
+                              : plan.requestOnly
+                                  ? plan.accent
+                                  : Colors.white,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ],
+            ),
           ),
         ],
       ),
     );
   }
+
+  Widget _badge(
+    String label,
+    Color color,
+    Color background,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 7,
+        vertical: 4,
+      ),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(7),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          _dot(
+            color,
+            size: 4,
+          ),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: _t(
+              8.3,
+              weight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _priceNotice() {
+    return Container(
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(
+        color: _SubscriptionUi.soft,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: <Widget>[
+          _dot(
+            _SubscriptionUi.amber,
+            size: 5,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Эквиваленты в BYN указаны ориентировочно по текущему курсу '
+              'на 24.08.2026 и могут меняться. '
+              'Стоимость оборудования зависит от количества трекеров, '
+              'комплектации и условий внедрения.',
+              style: _t(
+                9.2,
+                color: _SubscriptionUi.muted,
+                height: 1.38,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroTag extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _HeroTag({
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 5,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(.76),
+        borderRadius: BorderRadius.circular(7),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Container(
+            width: 4.5,
+            height: 4.5,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: AppTypography.custom(
+              size: 8.8,
+              weight: FontWeight.w600,
+              color: _SubscriptionUi.text,
+              height: 1.1,
+              letterSpacing: 0,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SubscriptionUi {
+  static const Color green = Color(0xFF00A750);
+  static const Color greenDark = Color(0xFF067A46);
+  static const Color greenSoft = Color(0xFFF3FAF6);
+
+  static const Color amber = Color(0xFFF59E0B);
+  static const Color amberSoft = Color(0xFFFFF7E8);
+
+  static const Color red = Color(0xFFD92D20);
+  static const Color redSoft = Color(0xFFFFF1F1);
+
+  static const Color text = Color(0xFF0B0F14);
+  static const Color muted = Color(0xFF667085);
+  static const Color muted2 = Color(0xFF98A2B3);
+
+  static const Color soft = Color(0xFFF7F9F8);
+  static const Color line = Color(0xFFEEF1EF);
 }
 
 class _PlanModel {
   final String id;
   final String title;
   final String subtitle;
-  final String monthlyPrice;
-  final String yearlyPrice;
-  final String yearlyBadge;
+  final String price;
+  final String period;
+  final String priceNote;
   final Color accent;
   final Color light;
   final bool isPopular;
+  final bool requestOnly;
   final List<String> features;
 
   const _PlanModel({
     required this.id,
     required this.title,
     required this.subtitle,
-    required this.monthlyPrice,
-    required this.yearlyPrice,
-    required this.yearlyBadge,
+    required this.price,
+    required this.period,
+    required this.priceNote,
     required this.accent,
     required this.light,
     this.isPopular = false,
+    this.requestOnly = false,
     required this.features,
-  });
-}
-
-class _BenefitItem {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  _BenefitItem({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
   });
 }
 
@@ -1293,9 +1196,12 @@ class _SubscriptionInfo {
     required this.daysLeft,
   });
 
-  bool get isActive => status.toLowerCase() == 'active';
+  bool get isActive =>
+      status.toLowerCase() == 'active';
 
-  factory _SubscriptionInfo.fromJson(Map<String, dynamic> json) {
+  factory _SubscriptionInfo.fromJson(
+    Map<String, dynamic> json,
+  ) {
     DateTime? parseDate(dynamic value) {
       if (value == null) return null;
       final s = value.toString().trim();
@@ -1308,11 +1214,33 @@ class _SubscriptionInfo {
       return int.tryParse(value.toString()) ?? 0;
     }
 
+    final planCode =
+        (json['plan_code'] ?? '').toString();
+
+    String displayTitle;
+    switch (planCode) {
+      case 'coach_pro':
+        displayTitle = 'Базовая';
+        break;
+      case 'club_pro':
+        displayTitle = 'Аналитика + AI';
+        break;
+      case 'full_pro':
+        displayTitle = 'Оборудование';
+        break;
+      default:
+        displayTitle =
+            (json['plan_title'] ??
+                    json['plan_code'] ??
+                    'Подписка')
+                .toString();
+    }
+
     return _SubscriptionInfo(
-      planCode: (json['plan_code'] ?? '').toString(),
-      planTitle: (json['plan_title'] ?? json['plan_code'] ?? 'Подписка')
-          .toString(),
-      status: (json['status'] ?? 'inactive').toString(),
+      planCode: planCode,
+      planTitle: displayTitle,
+      status:
+          (json['status'] ?? 'inactive').toString(),
       startedAt: parseDate(json['started_at']),
       expiresAt: parseDate(json['expires_at']),
       daysLeft: parseInt(json['days_left']),

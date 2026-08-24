@@ -45,6 +45,7 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
 
   final _title = TextEditingController();
   bool _saving = false;
+  bool _showBlockLibrary = false;
 
   late List<PostBlock> _blocks;
 
@@ -182,19 +183,27 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
   InputDecoration _fieldDecoration(String hint) {
     return InputDecoration(
       hintText: hint,
+      hintStyle: _editorText(
+        10.6,
+        color: const Color(0xFF98A2B3),
+      ),
       filled: true,
-      fillColor: const Color(0xFFF8F9FA),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+      fillColor: const Color(0xFFF7F9F8),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 11,
+      ),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(9),
+        borderSide: BorderSide.none,
+      ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+        borderRadius: BorderRadius.circular(9),
+        borderSide: BorderSide.none,
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(
-          color: const Color(0xFF00A750).withOpacity(0.7),
-          width: 1.6,
-        ),
+        borderRadius: BorderRadius.circular(9),
+        borderSide: BorderSide.none,
       ),
     );
   }
@@ -207,65 +216,80 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
     return showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (_) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 14,
-            right: 14,
-            top: 12,
-            bottom: 14 + MediaQuery.of(context).viewInsets.bottom,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 44,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE5E7EB),
-                  borderRadius: BorderRadius.circular(3),
+        return SafeArea(
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+            padding: EdgeInsets.fromLTRB(
+              14,
+              12,
+              14,
+              14 + MediaQuery.of(context).viewInsets.bottom,
+            ),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(
+                top: Radius.circular(14),
+                bottom: Radius.circular(14),
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    _brandDots(),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: _editorText(
+                          13.2,
+                          weight: FontWeight.w600,
+                          color: const Color(0xFF0B0F14),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Закрыть',
+                      onPressed: () => Navigator.pop(context, false),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15.5,
+                const SizedBox(height: 10),
+                content,
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    style: FilledButton.styleFrom(
+                      elevation: 0,
+                      backgroundColor: const Color(0xFF00A750),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 11,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(9),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              content,
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00A750),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  child: Text(
-                    buttonText,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
+                    child: Text(
+                      buttonText,
+                      style: _editorText(
+                        10.8,
+                        weight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
@@ -695,80 +719,158 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
   }
 
   Future<void> _showAddBlockMenu() async {
-    await showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+    if (!mounted) return;
+    setState(() => _showBlockLibrary = !_showBlockLibrary);
+  }
+
+  Widget _blockLibrary() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3FAF6),
+        borderRadius: BorderRadius.circular(9),
       ),
-      builder: (_) {
-        return SafeArea(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final twoColumns = constraints.maxWidth >= 390;
+          final width = twoColumns
+              ? (constraints.maxWidth - 6) / 2
+              : constraints.maxWidth;
+
+          final items = <Widget>[
+            _blockTool(
+              width: width,
+              icon: Icons.text_fields_rounded,
+              title: 'Текст',
+              subtitle: 'Текстовый блок',
+              accent: const Color(0xFF00A750),
+              onTap: () {
+                setState(() => _showBlockLibrary = false);
+                _addTextBlock();
+              },
+            ),
+            _blockTool(
+              width: width,
+              icon: Icons.photo_outlined,
+              title: 'Фото',
+              subtitle: 'Изображение',
+              accent: const Color(0xFFF59E0B),
+              onTap: () {
+                setState(() => _showBlockLibrary = false);
+                _addImageBlock();
+              },
+            ),
+            _blockTool(
+              width: width,
+              icon: Icons.link_rounded,
+              title: 'Ссылка',
+              subtitle: 'Сайт или страница',
+              accent: const Color(0xFF067A46),
+              onTap: () {
+                setState(() => _showBlockLibrary = false);
+                _addLinkBlock();
+              },
+            ),
+            _blockTool(
+              width: width,
+              icon: Icons.play_circle_outline_rounded,
+              title: 'Видео',
+              subtitle: 'Ссылка или файл',
+              accent: const Color(0xFFF59E0B),
+              onTap: () {
+                setState(() => _showBlockLibrary = false);
+                _addVideoBlock();
+              },
+            ),
+          ];
+
+          return Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: items,
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _blockTool({
+    required double width,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color accent,
+    required VoidCallback onTap,
+  }) {
+    return SizedBox(
+      width: width,
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 9,
+              vertical: 9,
+            ),
+            child: Row(
               children: [
                 Container(
-                  width: 46,
-                  height: 5,
+                  width: 30,
+                  height: 30,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE5E7EB),
-                    borderRadius: BorderRadius.circular(99),
+                    color: _softForAccent(accent),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    icon,
+                    size: 16,
+                    color: accent,
                   ),
                 ),
-                const SizedBox(height: 16),
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    "Добавить блок",
-                    style: TextStyle(
-                      fontSize: 15.5,
-                      fontWeight: FontWeight.w600,
-                    ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          _statusDot(
+                            color: accent,
+                            size: 4.5,
+                            glow: false,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              title,
+                              style: _editorText(
+                                10.4,
+                                weight: FontWeight.w600,
+                                color: const Color(0xFF0B0F14),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _editorText(9.2),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 12),
-                _addMenuTile(
-                  icon: Icons.text_fields,
-                  title: "Текст",
-                  subtitle: "Обычный текстовый блок",
-                  onTap: () {
-                    Navigator.pop(context);
-                    _addTextBlock();
-                  },
-                ),
-                _addMenuTile(
-                  icon: Icons.photo_library_outlined,
-                  title: "Фото",
-                  subtitle: "Загрузить изображение",
-                  onTap: () {
-                    Navigator.pop(context);
-                    _addImageBlock();
-                  },
-                ),
-                _addMenuTile(
-                  icon: Icons.link,
-                  title: "Ссылка",
-                  subtitle: "Переход на сайт или страницу",
-                  onTap: () {
-                    Navigator.pop(context);
-                    _addLinkBlock();
-                  },
-                ),
-                _addMenuTile(
-                  icon: Icons.play_circle_outline,
-                  title: "Видео",
-                  subtitle: "По ссылке или загрузить с телефона",
-                  onTap: () {
-                    Navigator.pop(context);
-                    _addVideoBlock();
-                  },
                 ),
               ],
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
@@ -780,13 +882,13 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(9),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8F9FA),
-          borderRadius: BorderRadius.circular(16),
+          color: const Color(0xFFF7F9F8),
+          borderRadius: BorderRadius.circular(9),
                   ),
         child: Row(
           children: [
@@ -806,18 +908,16 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
+                    style: _editorText(
+                      10.8,
+                      weight: FontWeight.w600,
+                      color: const Color(0xFF0B0F14),
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: const TextStyle(
-                      color: Color(0xFF666666),
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: _editorText(9.6),
                   ),
                 ],
               ),
@@ -1184,6 +1284,99 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
     Navigator.of(context).pop(saved);
   }
 
+  Widget _brandDots({Color color = const Color(0xFF00A750)}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        for (final item in const <(double, double)>[
+          (3.5, .34),
+          (4.5, .48),
+          (5.5, .68),
+          (6.5, 1.0),
+        ]) ...[
+          Container(
+            width: item.$1,
+            height: item.$1,
+            decoration: BoxDecoration(
+              color: color.withOpacity(item.$2),
+              shape: BoxShape.circle,
+              boxShadow: item.$2 >= .9
+                  ? [
+                      BoxShadow(
+                        color: color.withOpacity(.16),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
+            ),
+          ),
+          const SizedBox(width: 3),
+        ],
+      ],
+    );
+  }
+
+  Widget _statusDot({
+    required Color color,
+    double size = 5.5,
+    bool glow = true,
+  }) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        boxShadow: glow
+            ? [
+                BoxShadow(
+                  color: color.withOpacity(.18),
+                  blurRadius: size * 1.9,
+                  spreadRadius: .25,
+                ),
+                BoxShadow(
+                  color: color.withOpacity(.08),
+                  blurRadius: size * 3.0,
+                  spreadRadius: .5,
+                ),
+              ]
+            : null,
+      ),
+    );
+  }
+
+  Color _blockAccent(PostBlock block) {
+    if (block is ImageBlock) return const Color(0xFFF59E0B);
+    if (block is VideoBlock) return const Color(0xFFF59E0B);
+    if (block is LinkBlock) return const Color(0xFF067A46);
+    if (block is TextBlock) return const Color(0xFF00A750);
+    return const Color(0xFF8A9099);
+  }
+
+  String _blockKind(PostBlock block) {
+    if (block is ImageBlock) return 'Фото';
+    if (block is VideoBlock) return 'Видео';
+    if (block is LinkBlock) return 'Ссылка';
+    if (block is TextBlock) return 'Текст';
+    return 'Блок';
+  }
+
+  Color _softForAccent(Color color) {
+    if (color == const Color(0xFFF59E0B)) {
+      return const Color(0xFFFFF7E8);
+    }
+    if (color == const Color(0xFFD92D20)) {
+      return const Color(0xFFFFF1F1);
+    }
+    if (color == const Color(0xFF067A46) ||
+        color == const Color(0xFF00A750)) {
+      return const Color(0xFFF3FAF6);
+    }
+    return const Color(0xFFF7F9F8);
+  }
+
   TextStyle _editorText(
     double size, {
     FontWeight weight = FontWeight.w400,
@@ -1200,9 +1393,26 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
   @override
   Widget build(BuildContext context) {
     final editorBody = ListView(
-        padding: EdgeInsets.fromLTRB(widget.embedded ? 12 : 16, 12, widget.embedded ? 12 : 16, 24),
-        children: _buildEditorChildren(),
-      );
+      padding: EdgeInsets.fromLTRB(
+        widget.embedded ? 12 : 16,
+        10,
+        widget.embedded ? 12 : 16,
+        24,
+      ),
+      children: _buildEditorChildren(),
+    );
+
+    final baseTheme = Theme.of(context);
+    final themed = Theme(
+      data: baseTheme.copyWith(
+        textTheme: baseTheme.textTheme.apply(
+          fontFamily: AppTypography.fontFamily,
+          bodyColor: const Color(0xFF0B0F14),
+          displayColor: const Color(0xFF0B0F14),
+        ),
+      ),
+      child: editorBody,
+    );
 
     if (widget.embedded) {
       return Container(
@@ -1210,401 +1420,667 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
         child: Column(
           children: [
             Container(
-              height: 58,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(bottom: BorderSide(color: Color(0xFFE9ECEA), width: .7)),
-              ),
+              constraints: const BoxConstraints(minHeight: 56),
+              padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
+              color: Colors.white,
               child: Row(
                 children: [
-                  IconButton(
-                    tooltip: 'Назад к ленте',
-                    onPressed: _saving ? null : () => _finishEditor(saved: false),
-                    icon: const Icon(Icons.arrow_back_rounded, size: 19),
+                  Material(
+                    color: const Color(0xFFF7F9F8),
+                    borderRadius: BorderRadius.circular(9),
+                    child: InkWell(
+                      onTap: _saving
+                          ? null
+                          : () => _finishEditor(saved: false),
+                      borderRadius: BorderRadius.circular(9),
+                      child: const SizedBox(
+                        width: 36,
+                        height: 36,
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 17,
+                          color: Color(0xFF5F6670),
+                        ),
+                      ),
+                    ),
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 9),
+                  _brandDots(),
+                  const SizedBox(width: 9),
                   Expanded(
-                    child: Text(
-                      widget.isEdit ? 'Редактирование публикации' : 'Новая публикация',
-                      style: _editorText(15.5, weight: FontWeight.w600, color: const Color(0xFF0B0F14)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.isEdit
+                              ? 'Редактирование публикации'
+                              : 'Новая публикация',
+                          style: _editorText(
+                            13.6,
+                            weight: FontWeight.w600,
+                            color: const Color(0xFF0B0F14),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          widget.sportName,
+                          style: _editorText(9.6),
+                        ),
+                      ],
                     ),
                   ),
                   FilledButton.icon(
                     onPressed: _saving ? null : _save,
                     style: FilledButton.styleFrom(
                       elevation: 0,
-                      backgroundColor: const Color(0xFF111827),
+                      backgroundColor: const Color(0xFF00A750),
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 11,
+                        vertical: 10,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(9),
+                      ),
                     ),
                     icon: _saving
-                        ? const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.check_rounded, size: 17),
-                    label: Text(widget.isEdit ? 'Сохранить' : 'Опубликовать', style: _editorText(11.5, weight: FontWeight.w600, color: Colors.white)),
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.check_rounded, size: 16),
+                    label: Text(
+                      widget.isEdit ? 'Сохранить' : 'Опубликовать',
+                      style: _editorText(
+                        10.3,
+                        weight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
-            Expanded(child: editorBody),
+            Expanded(child: themed),
           ],
         ),
       );
     }
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        title: Text(
-          widget.isEdit ? "Редактирование поста" : "Новый пост",
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF1A1A1A),
-            fontSize: 14,
-          ),
+    return Theme(
+      data: baseTheme.copyWith(
+        textTheme: baseTheme.textTheme.apply(
+          fontFamily: AppTypography.fontFamily,
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 10),
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF00A750), Color(0xFF008C40)],
+      ),
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          titleSpacing: 14,
+          title: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _brandDots(),
+              const SizedBox(width: 8),
+              Text(
+                widget.isEdit ? 'Редактирование поста' : 'Новый пост',
+                style: _editorText(
+                  14,
+                  weight: FontWeight.w600,
+                  color: const Color(0xFF0B0F14),
                 ),
-                borderRadius: BorderRadius.circular(14),
               ),
-              child: TextButton.icon(
+            ],
+          ),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 10),
+              child: FilledButton.icon(
                 onPressed: _saving ? null : _save,
+                style: FilledButton.styleFrom(
+                  elevation: 0,
+                  backgroundColor: const Color(0xFF00A750),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                ),
                 icon: _saving
                     ? const SizedBox(
-                        width: 16,
-                        height: 16,
+                        width: 14,
+                        height: 14,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           color: Colors.white,
                         ),
                       )
-                    : const Icon(Icons.check, color: Colors.white),
+                    : const Icon(Icons.check_rounded, size: 16),
                 label: Text(
-                  widget.isEdit ? "Сохранить" : "Опубликовать",
-                  style: const TextStyle(
+                  widget.isEdit ? 'Сохранить' : 'Опубликовать',
+                  style: _editorText(
+                    10.4,
+                    weight: FontWeight.w600,
                     color: Colors.white,
-                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
+        body: themed,
       ),
-      body: editorBody,
     );
   }
 
   List<Widget> _buildEditorChildren() {
     return <Widget>[
-          _card(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "Заголовок",
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _title,
-                  decoration: InputDecoration(
-                    hintText: "Введите заголовок…",
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(
-                        color: const Color(0xFF00A750).withOpacity(0.7),
-                        width: 1.6,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+      _editorSection(
+        title: 'Заголовок',
+        subtitle: 'Коротко сформулируйте тему публикации',
+        dotColor: _title.text.trim().isNotEmpty
+            ? const Color(0xFF00A750)
+            : const Color(0xFF8A9099),
+        statusText: _title.text.trim().isNotEmpty
+            ? 'Готово'
+            : 'Не заполнено',
+        child: TextField(
+          controller: _title,
+          onChanged: (_) => setState(() {}),
+          style: _editorText(
+            11.2,
+            weight: FontWeight.w500,
+            color: const Color(0xFF0B0F14),
           ),
-          const SizedBox(height: 12),
-          _card(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "Обложка (по желанию)",
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _saving ? null : _pickCover,
-                        icon: const Icon(Icons.photo, color: Color(0xFF00A750)),
-                        label: const Text(
-                          "Выбрать обложку",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF00A750),
-                          ),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Color(0xFFE5E7EB)),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          backgroundColor: Colors.white,
-                        ),
-                      ),
-                    ),
-                    if (_newCoverFile != null) ...[
-                      const SizedBox(width: 10),
-                      IconButton(
-                        onPressed: () => setState(() => _newCoverFile = null),
-                        icon: const Icon(Icons.close),
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 10),
-                if (_newCoverFile != null)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: Image.file(
-                      _newCoverFile!,
-                      height: 220,
-                      width: double.infinity,
-                      fit: BoxFit.contain,
-                    ),
-                  )
-                else if (_coverUrl.trim().isNotEmpty)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: Image.network(
-                      _coverUrl,
-                      height: 220,
-                      width: double.infinity,
-                      fit: BoxFit.contain,
-                    ),
-                  )
-                else
-                  const Text(
-                    "Нет обложки",
-                    style: TextStyle(
-                      color: Color(0xFF666666),
-                      fontWeight: FontWeight.w600,
-                    ),
+          decoration: _fieldDecoration('Введите заголовок…'),
+        ),
+      ),
+      const SizedBox(height: 8),
+      _editorSection(
+        title: 'Обложка',
+        subtitle: 'Необязательно · фото для превью публикации',
+        dotColor: _newCoverFile != null || _coverUrl.trim().isNotEmpty
+            ? const Color(0xFFF59E0B)
+            : const Color(0xFF8A9099),
+        statusText: _newCoverFile != null || _coverUrl.trim().isNotEmpty
+            ? 'Добавлена'
+            : 'Не выбрана',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Material(
+              color: const Color(0xFFF7F9F8),
+              borderRadius: BorderRadius.circular(9),
+              child: InkWell(
+                onTap: _saving ? null : _pickCover,
+                borderRadius: BorderRadius.circular(9),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 11,
+                    vertical: 10,
                   ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          _card(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Text(
-                      "Контент (блоки)",
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    const Spacer(),
-                    ElevatedButton.icon(
-                      onPressed: _saving ? null : _showAddBlockMenu,
-                      icon: const Icon(Icons.add, color: Colors.white),
-                      label: const Text(
-                        "Добавить блок",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00A750),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                if (_blocks.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    child: Center(
-                      child: Text(
-                        "Добавьте текст, фото, ссылку или видео",
-                        style: TextStyle(
-                          color: Color(0xFF666666),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  )
-                else
-                  Column(
-                    children: List.generate(_blocks.length, (i) {
-                      final b = _blocks[i];
-
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                                                    borderRadius: BorderRadius.circular(16),
+                          color: const Color(0xFFF3FAF6),
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: const Icon(
+                          Icons.photo_outlined,
+                          size: 17,
+                          color: Color(0xFF067A46),
+                        ),
+                      ),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Text(
+                          _newCoverFile != null ||
+                                  _coverUrl.trim().isNotEmpty
+                              ? 'Заменить обложку'
+                              : 'Выбрать обложку',
+                          style: _editorText(
+                            10.5,
+                            weight: FontWeight.w600,
+                            color: const Color(0xFF0B0F14),
+                          ),
+                        ),
+                      ),
+                      if (_newCoverFile != null)
+                        IconButton(
+                          tooltip: 'Убрать',
+                          onPressed: () =>
+                              setState(() => _newCoverFile = null),
+                          icon: const Icon(
+                            Icons.close_rounded,
+                            size: 16,
+                          ),
+                        )
+                      else
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          size: 17,
+                          color: Color(0xFF98A2B3),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (_newCoverFile != null) ...[
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(9),
+                child: Image.file(
+                  _newCoverFile!,
+                  height: 190,
+                  width: double.infinity,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ] else if (_coverUrl.trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(9),
+                child: Image.network(
+                  _coverUrl,
+                  height: 190,
+                  width: double.infinity,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      const SizedBox(height: 8),
+      _editorSection(
+        title: 'Содержание',
+        subtitle: 'Текст, фото, ссылки и видео в нужном порядке',
+        dotColor: _blocks.isNotEmpty
+            ? const Color(0xFF00A750)
+            : const Color(0xFF8A9099),
+        statusText: _blocks.isEmpty
+            ? 'Пусто'
+            : '${_blocks.length} ${_blocks.length == 1 ? 'блок' : 'блока'}',
+        trailing: Material(
+          color: _showBlockLibrary
+              ? const Color(0xFFF3FAF6)
+              : const Color(0xFFF7F9F8),
+          borderRadius: BorderRadius.circular(8),
+          child: InkWell(
+            onTap: _saving ? null : _showAddBlockMenu,
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 9,
+                vertical: 7,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _showBlockLibrary
+                        ? Icons.close_rounded
+                        : Icons.add_rounded,
+                    size: 15,
+                    color: const Color(0xFF067A46),
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    _showBlockLibrary ? 'Закрыть' : 'Добавить блок',
+                    style: _editorText(
+                      9.8,
+                      weight: FontWeight.w600,
+                      color: const Color(0xFF067A46),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (_showBlockLibrary) ...[
+              _blockLibrary(),
+              const SizedBox(height: 8),
+            ],
+            if (_blocks.isEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 18,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF7F9F8),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Row(
+                  children: [
+                    _statusDot(
+                      color: const Color(0xFF8A9099),
+                      size: 5,
+                      glow: false,
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        'Добавьте первый блок публикации',
+                        style: _editorText(10.4),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Column(
+                children: List.generate(_blocks.length, (i) {
+                  final b = _blocks[i];
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 7),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF7F9F8),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
                           children: [
-                            Row(
-                              children: [
-                                Text(
-                                  "Блок ${i + 1}",
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const Spacer(),
-                                IconButton(
-                                  onPressed: i == 0 ? null : () => _moveUp(i),
-                                  icon: const Icon(Icons.arrow_upward, size: 18),
-                                ),
-                                IconButton(
-                                  onPressed: i == _blocks.length - 1
-                                      ? null
-                                      : () => _moveDown(i),
-                                  icon: const Icon(Icons.arrow_downward, size: 18),
-                                ),
-                                IconButton(
-                                  onPressed: () => _deleteBlock(i),
-                                  icon: const Icon(
-                                    Icons.delete_outline,
-                                    color: Colors.redAccent,
-                                  ),
-                                ),
-                              ],
+                            _statusDot(
+                              color: _blockAccent(b),
+                              size: 5.5,
                             ),
-                            const SizedBox(height: 6),
-                            if (b is TextBlock) _buildTextBlockPreview(b, i),
-                            if (b is ImageBlock)
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(14),
-                                child: AspectRatio(
-                                  aspectRatio: 16 / 10,
-                                  child: Image.network(
-                                    b.url,
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (_, __, ___) => Container(
-                                      color: Colors.grey.shade200,
-                                      child: const Center(
-                                        child: Icon(Icons.broken_image),
-                                      ),
+                            const SizedBox(width: 7),
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  Text(
+                                    _blockKind(b),
+                                    style: _editorText(
+                                      9.8,
+                                      weight: FontWeight.w600,
+                                      color: _blockAccent(b),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Блок ${i + 1}',
+                                    style: _editorText(
+                                      9.4,
+                                      weight: FontWeight.w500,
+                                      color: const Color(0xFF8A9099),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            _blockAction(
+                              Icons.arrow_upward_rounded,
+                              i == 0 ? null : () => _moveUp(i),
+                              'Выше',
+                            ),
+                            _blockAction(
+                              Icons.arrow_downward_rounded,
+                              i == _blocks.length - 1
+                                  ? null
+                                  : () => _moveDown(i),
+                              'Ниже',
+                            ),
+                            _blockAction(
+                              Icons.delete_outline_rounded,
+                              () => _deleteBlock(i),
+                              'Удалить',
+                              danger: true,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 7),
+                        if (b is TextBlock)
+                          _buildTextBlockPreview(b, i),
+                        if (b is ImageBlock)
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(9),
+                            child: AspectRatio(
+                              aspectRatio: 16 / 10,
+                              child: Image.network(
+                                b.url,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, __, ___) =>
+                                    Container(
+                                  color: const Color(0xFFEFF2F0),
+                                  child: const Center(
+                                    child: Icon(
+                                      Icons.broken_image_outlined,
+                                      color: Color(0xFF98A2B3),
                                     ),
                                   ),
                                 ),
                               ),
-                            if (b is LinkBlock)
-                              InkWell(
-                                onTap: () => _editLinkBlock(i, b),
-                                borderRadius: BorderRadius.circular(14),
-                                child: Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.all(14),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF8F9FA),
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(
-                                      color: const Color(0xFFE5E7EB),
-                                    ),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                            ),
+                          ),
+                        if (b is LinkBlock)
+                          InkWell(
+                            onTap: () => _editLinkBlock(i, b),
+                            borderRadius: BorderRadius.circular(9),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  Row(
                                     children: [
-                                      Row(
-                                        children: const [
-                                          Icon(Icons.link, color: Color(0xFF00A750)),
-                                          SizedBox(width: 8),
-                                          Text(
-                                            "Ссылка",
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ],
+                                      const Icon(
+                                        Icons.link_rounded,
+                                        color: Color(0xFF067A46),
+                                        size: 16,
                                       ),
-                                      const SizedBox(height: 10),
-                                      if (b.title.trim().isNotEmpty)
-                                        Text(
-                                          b.title,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 15,
-                                          ),
-                                        ),
-                                      if (b.title.trim().isNotEmpty)
-                                        const SizedBox(height: 6),
-                                      GestureDetector(
-                                        onTap: () => _openUrl(b.url),
-                                        child: Text(
-                                          b.url,
-                                          style: const TextStyle(
-                                            color: Colors.blue,
-                                            decoration: TextDecoration.underline,
-                                            fontWeight: FontWeight.w600,
-                                          ),
+                                      const SizedBox(width: 7),
+                                      Text(
+                                        'Ссылка',
+                                        style: _editorText(
+                                          10.2,
+                                          weight: FontWeight.w600,
+                                          color:
+                                              const Color(0xFF0B0F14),
                                         ),
                                       ),
                                     ],
                                   ),
-                                ),
+                                  if (b.title.trim().isNotEmpty) ...[
+                                    const SizedBox(height: 7),
+                                    Text(
+                                      b.title,
+                                      style: _editorText(
+                                        10.8,
+                                        weight: FontWeight.w600,
+                                        color:
+                                            const Color(0xFF0B0F14),
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 5),
+                                  GestureDetector(
+                                    onTap: () => _openUrl(b.url),
+                                    child: Text(
+                                      b.url,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: _editorText(
+                                        9.6,
+                                        weight: FontWeight.w500,
+                                        color:
+                                            const Color(0xFF067A46),
+                                      ).copyWith(
+                                        decoration:
+                                            TextDecoration.underline,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            if (b is VideoBlock) _buildVideoPreview(b, i),
-                          ],
+                            ),
+                          ),
+                        if (b is VideoBlock)
+                          _buildVideoPreview(b, i),
+                      ],
+                    ),
+                  );
+                }),
+              ),
+          ],
+        ),
+      ),
+    ];
+  }
+
+  Widget _editorSection({
+    required String title,
+    required String subtitle,
+    required Widget child,
+    required Color dotColor,
+    String? statusText,
+    Widget? trailing,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 5),
+                child: _statusDot(
+                  color: dotColor,
+                  size: 6,
+                  glow: dotColor != const Color(0xFF8A9099),
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: _editorText(
+                              11.5,
+                              weight: FontWeight.w600,
+                              color: const Color(0xFF0B0F14),
+                            ),
+                          ),
                         ),
-                      );
-                    }),
-                  ),
+                        if (statusText != null && statusText!.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _softForAccent(dotColor),
+                              borderRadius: BorderRadius.circular(7),
+                            ),
+                            child: Text(
+                              statusText!,
+                              style: _editorText(
+                                8.9,
+                                weight: FontWeight.w600,
+                                color: dotColor,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: _editorText(9.6),
+                    ),
+                  ],
+                ),
+              ),
+              if (trailing != null) ...[
+                const SizedBox(width: 8),
+                trailing,
               ],
+            ],
+          ),
+          const SizedBox(height: 10),
+          child,
+        ],
+      ),
+    );
+  }
+
+
+  Widget _blockAction(
+    IconData icon,
+    VoidCallback? onTap,
+    String tooltip, {
+    bool danger = false,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(7),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(7),
+          child: SizedBox(
+            width: 29,
+            height: 29,
+            child: Icon(
+              icon,
+              size: 15,
+              color: onTap == null
+                  ? const Color(0xFFD0D5DD)
+                  : danger
+                      ? const Color(0xFFD92D20)
+                      : const Color(0xFF667085),
             ),
           ),
-        ];
+        ),
+      ),
+    );
   }
 
   Widget _card({required Widget child}) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 14,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        color: const Color(0xFFF7F9F8),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: child,
     );

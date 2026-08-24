@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/routes/app_routes.dart';
 import 'package:sportoteka/presentation/team_roster_screen/team_roster_screen.dart';
@@ -18,6 +19,9 @@ import 'package:sportoteka/presentation/player_game_zone/player_quizzes_screen.d
 import 'package:sportoteka/presentation/player_game_zone/player_match_games_screen.dart';
 import 'package:sportoteka/presentation/player_game_zone/player_highlights_screen.dart';
 import 'package:sportoteka/presentation/tracker/player/player_my_trainings_screen.dart';
+import 'package:sportoteka/presentation/player_screen/player_self_assessment_screen.dart';
+import 'package:sportoteka/presentation/chat_screen/chat_screen.dart';
+import 'package:sportoteka/presentation/workspace_hub/workspace_hub_screen.dart';
 
 enum PlayerWorkspaceSection {
   home,
@@ -360,22 +364,30 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
 
   ThemeData _workspaceTheme(BuildContext context) {
     final base = Theme.of(context);
+    final firm = AppTypography.custom(
+      size: 12,
+      weight: FontWeight.w400,
+      color: _P.text,
+    );
+
     return base.copyWith(
       scaffoldBackgroundColor: _P.bg,
       visualDensity: VisualDensity.compact,
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      materialTapTargetSize:
+          MaterialTapTargetSize.shrinkWrap,
       colorScheme: base.colorScheme.copyWith(
         primary: _P.primaryGreen,
-        secondary: _P.blue,
-        surface: _P.card,
+        secondary: _P.primaryGreen,
+        surface: Colors.white,
       ),
       textTheme: base.textTheme.apply(
-        fontFamily: _P.fontFamily,
+        fontFamily: firm.fontFamily,
         bodyColor: _P.text,
         displayColor: _P.text,
       ),
-      primaryTextTheme: base.primaryTextTheme.apply(
-        fontFamily: _P.fontFamily,
+      primaryTextTheme:
+          base.primaryTextTheme.apply(
+        fontFamily: firm.fontFamily,
         bodyColor: _P.text,
         displayColor: _P.text,
       ),
@@ -396,56 +408,343 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
 
   Widget _buildProfessionalWorkspace() {
     return Scaffold(
-      backgroundColor: _P.bg,
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final sidePadding = constraints.maxWidth >= 1100 ? 12.0 : 8.0;
-            final contentPadding = EdgeInsets.fromLTRB(
-              sidePadding,
-              8,
-              sidePadding,
-              88,
-            );
+            final navWidth =
+                constraints.maxWidth >= 1150
+                    ? 220.0
+                    : 198.0;
 
-            return Stack(
-              children: [
-                Positioned.fill(
-                  child: _PlayerWorkspaceWallpaper(
-                    teamName: teamName,
-                    teamLogo: teamLogoUrl,
-                  ),
+            return Row(
+              crossAxisAlignment:
+                  CrossAxisAlignment.stretch,
+              children: <Widget>[
+                SizedBox(
+                  width: navWidth,
+                  child:
+                      _buildTabletSidebar(),
                 ),
-                Positioned.fill(
-                  child: Padding(
-                    padding: contentPadding,
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 180),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeOutCubic,
-                      child: _buildContent(key: ValueKey(selectedSection.name)),
+                Container(
+                  width: 1,
+                  color: _P.divider,
+                ),
+                Expanded(
+                  child: ColoredBox(
+                    color: Colors.white,
+                    child: Column(
+                      children: <Widget>[
+                        _buildWorkspaceHeader(
+                          tablet: true,
+                        ),
+                        Expanded(
+                          child:
+                              _buildTabletWorkspaceContent(),
+                        ),
+                      ],
                     ),
-                  ),
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 14,
-                  child: _PlayerWorkspaceTaskbar(
-                    teamName: teamName,
-                    teamLogo: teamLogoUrl,
-                    selectedSection: selectedSection,
-                    items: _dockItems,
-                    onStart: _openFullModulesMenu,
-                    onSearch: _openCommandMenu,
-                    onSelect: _selectSection,
-                    onHome: () => _selectSection(PlayerWorkspaceSection.home),
-                    onRefresh: _refreshAll,
                   ),
                 ),
               ],
             );
           },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabletSidebar() {
+    return ColoredBox(
+      color: Colors.white,
+      child: Column(
+        children: <Widget>[
+          Padding(
+            padding:
+                const EdgeInsets.fromLTRB(
+              10,
+              10,
+              10,
+              8,
+            ),
+            child: Row(
+              children: <Widget>[
+                _TeamLogoAvatar(
+                  logoUrl: teamLogoUrl,
+                  size: 38,
+                  radius: 10,
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        teamName,
+                        maxLines: 1,
+                        overflow:
+                            TextOverflow.ellipsis,
+                        style:
+                            _P.title(11.3),
+                      ),
+                      const SizedBox(
+                        height: 2,
+                      ),
+                      Text(
+                        teamCategory.isEmpty
+                            ? 'Кабинет игрока'
+                            : teamCategory,
+                        maxLines: 1,
+                        overflow:
+                            TextOverflow.ellipsis,
+                        style:
+                            _P.subtle(8.5),
+                      ),
+                    ],
+                  ),
+                ),
+                const _PDots(
+                  compact: true,
+                ),
+              ],
+            ),
+          ),
+          Container(
+            height: 1,
+            color: _P.divider,
+          ),
+          Expanded(
+            child: ListView(
+              padding:
+                  const EdgeInsets.fromLTRB(
+                8,
+                8,
+                8,
+                8,
+              ),
+              children: <Widget>[
+                for (final group
+                    in _navGroups) ...<
+                    Widget>[
+                  _PlayerGroupTitle(
+                    title: group.title,
+                  ),
+                  for (final item
+                      in group.items)
+                    _PlayerSidebarTile(
+                      item: item,
+                      active:
+                          selectedSection ==
+                              item.section,
+                      onTap: () =>
+                          _selectSection(
+                        item.section,
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                ],
+              ],
+            ),
+          ),
+          Container(
+            height: 1,
+            color: _P.divider,
+          ),
+          Padding(
+            padding:
+                const EdgeInsets.fromLTRB(
+              9,
+              8,
+              9,
+              10,
+            ),
+            child: _PlayerWorkspaceBackTile(
+              onTap: _goToWorkspaceHub,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWorkspaceHeader({
+    required bool tablet,
+  }) {
+    final item =
+        _itemFor(selectedSection);
+
+    return Container(
+      height: tablet ? 58 : 62,
+      padding:
+          const EdgeInsets.symmetric(
+        horizontal: 12,
+      ),
+      decoration:
+          const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(
+            color: _P.divider,
+            width: .65,
+          ),
+        ),
+      ),
+      child: Row(
+        children: <Widget>[
+          const _PDots(),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisAlignment:
+                  MainAxisAlignment.center,
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  item.title,
+                  maxLines: 1,
+                  overflow:
+                      TextOverflow.ellipsis,
+                  style:
+                      _P.title(
+                    tablet ? 13.5 : 14.2,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  teamName,
+                  maxLines: 1,
+                  overflow:
+                      TextOverflow.ellipsis,
+                  style:
+                      _P.subtle(9),
+                ),
+              ],
+            ),
+          ),
+          _PDotAction(
+            label: 'Обновить',
+            onTap: _refreshAll,
+          ),
+          const SizedBox(width: 6),
+          _PDotAction(
+            label: 'Workspace',
+            emphasized: true,
+            onTap: _goToWorkspaceHub,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabletWorkspaceContent() {
+    switch (selectedSection) {
+      case PlayerWorkspaceSection.home:
+        return _PlayerWorkspaceScroll(
+          onRefresh: _refreshAll,
+          children: <Widget>[
+            _buildHeroPanel(),
+            const SizedBox(height: 10),
+            _buildGameZoneSummaryCard(),
+          ],
+        );
+
+      case PlayerWorkspaceSection.roster:
+        return TeamRosterScreen(
+          teamId: widget.teamId,
+          teamName: teamName,
+          embedded: true,
+        );
+
+      case PlayerWorkspaceSection.calendar:
+        return PlayerTeamCalendarScreen(
+          teamId: widget.teamId,
+          teamName: teamName,
+          embedded: true,
+        );
+
+      case PlayerWorkspaceSection.trainings:
+        return PlayerMyTrainingsScreen(
+          teamId: widget.teamId,
+          teamName: teamName,
+          userId: widget.userId,
+          playerId: widget.userId,
+        );
+
+      case PlayerWorkspaceSection.selfAssessment:
+        return PlayerSelfAssessmentScreen(
+          teamId: widget.teamId,
+          userId: widget.userId,
+          playerId: widget.userId,
+          embedded: true,
+        );
+
+      case PlayerWorkspaceSection.chat:
+        return ChatScreen(
+          userId: widget.userId,
+        );
+
+      case PlayerWorkspaceSection.matches:
+      case PlayerWorkspaceSection.rating:
+      case PlayerWorkspaceSection.challenges:
+      case PlayerWorkspaceSection.battles:
+      case PlayerWorkspaceSection.quizzes:
+      case PlayerWorkspaceSection.miniGames:
+      case PlayerWorkspaceSection.highlights:
+        return _buildTabletLauncher(
+          selectedSection,
+        );
+    }
+  }
+
+  Widget _buildTabletLauncher(
+    PlayerWorkspaceSection section,
+  ) {
+    final item = _itemFor(section);
+
+    return ColoredBox(
+      color: Colors.white,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(22),
+          child: ConstrainedBox(
+            constraints:
+                const BoxConstraints(
+              maxWidth: 560,
+            ),
+            child: Column(
+              mainAxisSize:
+                  MainAxisSize.min,
+              children: <Widget>[
+                const _PDots(),
+                const SizedBox(height: 12),
+                Text(
+                  item.title,
+                  textAlign: TextAlign.center,
+                  style: _P.title(15),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  item.subtitle,
+                  textAlign: TextAlign.center,
+                  style: _P.subtle(10.2),
+                ),
+                const SizedBox(height: 14),
+                _PDotAction(
+                  label:
+                      _primaryButtonText(
+                    section,
+                  ),
+                  emphasized: true,
+                  onTap: () =>
+                      _openRealModule(
+                    section,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -525,59 +824,72 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
   }
 
   Widget _buildTopBar() {
-    final item = _itemFor(selectedSection);
+    final item =
+        _itemFor(selectedSection);
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
-      decoration: _cardDecoration(radius: 16),
-      child: Row(
-        children: [
-          _BackCircleButton(onTap: _handleBack),
-          const SizedBox(width: 10),
-          _TeamLogoAvatar(
-            logoUrl: teamLogoUrl,
-            size: 38,
-            radius: 12,
+      constraints:
+          const BoxConstraints(
+        minHeight: 58,
+      ),
+      padding:
+          const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 8,
+      ),
+      decoration:
+          const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(
+            color: _P.divider,
+            width: .65,
           ),
-          const SizedBox(width: 10),
+        ),
+      ),
+      child: Row(
+        children: <Widget>[
+          const _PDots(),
+          const SizedBox(width: 9),
           Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              mainAxisAlignment:
+                  MainAxisAlignment.center,
+              children: <Widget>[
                 Text(
                   item.title,
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _P.title(15.5),
+                  overflow:
+                      TextOverflow.ellipsis,
+                  style: _P.title(13),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '$teamName${teamCategory.isNotEmpty ? ' • $teamCategory' : ''}',
+                  teamName,
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _P.subtle(11),
+                  overflow:
+                      TextOverflow.ellipsis,
+                  style: _P.subtle(8.8),
                 ),
               ],
             ),
           ),
-          _TopActionButton(
-            icon: Icons.search_rounded,
-            tooltip: 'Поиск',
-            onTap: _openCommandMenu,
-          ),
-          const SizedBox(width: 6),
-          _TopActionButton(
-            icon: Icons.view_agenda_rounded,
-            tooltip: 'Все модули',
-            onTap: _openFullModulesMenu,
-          ),
-          const SizedBox(width: 6),
-          _TopActionButton(
-            icon: Icons.refresh_rounded,
-            tooltip: 'Обновить',
-            onTap: _refreshAll,
+          _PDotAction(
+            label: 'Меню',
+            onTap:
+                _openFullModulesMenu,
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _goToWorkspaceHub() async {
+    if (!mounted) return;
+    Get.offAll<void>(
+      () => const WorkspaceHubScreen(),
     );
   }
 
@@ -648,7 +960,9 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.person_rounded, size: 14, color: _P.primaryGreen),
+                    const _PDots(
+                      compact: true,
+                    ),
                     const SizedBox(width: 6),
                     Text(
                       profileLoading
@@ -755,7 +1069,10 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: _P.primaryGreen, size: compact ? 14 : 15),
+          const _PDot(
+            color: _P.primaryGreen,
+            size: 5,
+          ),
           const SizedBox(height: 5),
           Text(
             value,
@@ -842,7 +1159,11 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: _P.primaryGreen.withOpacity(.18), width: .7),
                 ),
-                child: const Icon(Icons.sports_esports_rounded, color: _P.primaryGreen, size: 19),
+                child: const Center(
+                  child: _PDots(
+                    compact: true,
+                  ),
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -923,7 +1244,10 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
       ),
       child: Row(
         children: [
-          Icon(icon, color: _P.primaryGreen, size: 19),
+          const _PDot(
+            color: _P.primaryGreen,
+            size: 5.5,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -1001,7 +1325,12 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
                   color: accent.withOpacity(.10),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(item.icon, color: accent, size: compact ? 20 : 22),
+                child: Center(
+                  child: _PDots(
+                    color: accent,
+                    compact: true,
+                  ),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1041,10 +1370,9 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
           Row(
             children: [
               Expanded(
-                child: ElevatedButton.icon(
+                child: ElevatedButton(
                   onPressed: () => _openRealModule(section),
-                  icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                  label: Text(_primaryButtonText(section)),
+                  child: Text(_primaryButtonText(section)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _P.text,
                     foregroundColor: Colors.white,
@@ -1220,68 +1548,46 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
   }
 
   Widget _buildMobileBottomNav() {
-    final bottom = MediaQuery.of(context).padding.bottom;
-    final width = MediaQuery.of(context).size.width;
-    final horizontal = width < 380 ? 14.0 : 22.0;
-    final activeIndex = _mobileBottomMenuIndex();
-    final bottomInset = bottom > 0 ? math.max(12.0, math.min(16.0, bottom * .45)) : 10.0;
+    final width =
+        MediaQuery.of(context).size.width;
+    final horizontal =
+        width < 380 ? 14.0 : 22.0;
+    final activeIndex =
+        _mobileBottomMenuIndex();
 
     Widget dockIcon({
       required int index,
       required IconData icon,
       required VoidCallback onTap,
-      int badge = 0,
     }) {
-      final active = activeIndex == index;
+      final active =
+          activeIndex == index;
+
       return Expanded(
         child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
+          behavior:
+              HitTestBehavior.opaque,
           onTap: onTap,
           child: Center(
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 170),
+              duration:
+                  const Duration(milliseconds: 170),
               curve: Curves.easeOutCubic,
               width: active ? 44 : 34,
               height: 36,
               decoration: BoxDecoration(
-                color: active ? _P.greenSoft : Colors.transparent,
-                borderRadius: BorderRadius.circular(999),
+                color: active
+                    ? const Color(0xB8EAF8F0)
+                    : Colors.transparent,
+                borderRadius:
+                    BorderRadius.circular(999),
               ),
-              child: Stack(
-                clipBehavior: Clip.none,
-                alignment: Alignment.center,
-                children: [
-                  Icon(
-                    icon,
-                    size: active ? 22 : 21,
-                    color: active ? _P.primaryGreen : _P.muted,
-                  ),
-                  if (badge > 0)
-                    Positioned(
-                      top: 1,
-                      right: active ? 6 : 0,
-                      child: Container(
-                        constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFF0050),
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: Colors.white, width: 1.6),
-                        ),
-                        child: Center(
-                          child: Text(
-                            badge > 99 ? '99+' : '$badge',
-                            style: const TextStyle(
-                              fontSize: 8.5,
-                              height: 1,
-                              fontWeight: FontWeight.w900,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
+              child: Icon(
+                icon,
+                size: active ? 22 : 21,
+                color: active
+                    ? const Color(0xFF111827)
+                    : const Color(0xFF344054),
               ),
             ),
           ),
@@ -1289,33 +1595,105 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
       );
     }
 
-    return Material(
-      type: MaterialType.transparency,
-      color: Colors.transparent,
-      child: SafeArea(
-        top: false,
-        bottom: false,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, bottomInset),
-          child: Container(
-            height: 56,
-            padding: const EdgeInsets.symmetric(horizontal: 7),
-            decoration: BoxDecoration(
-              color: _P.panel,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: _P.divider.withOpacity(.78), width: .85),
-              boxShadow: _P.cardShadow,
-            ),
-            child: Row(
-              children: [
-                dockIcon(index: 0, icon: Icons.home_rounded, onTap: () => _selectSection(PlayerWorkspaceSection.home)),
-                dockIcon(index: 1, icon: Icons.groups_2_outlined, onTap: () => _selectSection(PlayerWorkspaceSection.roster)),
-                dockIcon(index: 2, icon: Icons.sports_soccer_outlined, onTap: () => _selectSection(PlayerWorkspaceSection.matches)),
-                dockIcon(index: 3, icon: Icons.calendar_month_outlined, onTap: () => _selectSection(PlayerWorkspaceSection.calendar)),
-                dockIcon(index: 4, icon: Icons.near_me_outlined, badge: 1, onTap: () => _selectSection(PlayerWorkspaceSection.chat)),
-                dockIcon(index: 5, icon: Icons.more_horiz_rounded, onTap: _openMobileMoreMenu),
-              ],
-            ),
+    final bottom =
+        MediaQuery.of(context)
+            .padding
+            .bottom;
+
+    final bottomInset =
+        bottom > 0
+            ? math.max(
+                12.0,
+                math.min(
+                  16.0,
+                  bottom * .45,
+                ),
+              )
+            : 10.0;
+
+    return SafeArea(
+      top: false,
+      bottom: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          horizontal,
+          0,
+          horizontal,
+          bottomInset,
+        ),
+        child: Container(
+          height: 56,
+          padding: const EdgeInsets.symmetric(
+            horizontal: 7,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius:
+                BorderRadius.circular(30),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color:
+                    Colors.black.withOpacity(.08),
+                blurRadius: 28,
+                spreadRadius: -12,
+                offset:
+                    const Offset(0, 13),
+              ),
+            ],
+          ),
+          child: Row(
+            children: <Widget>[
+              dockIcon(
+                index: 0,
+                icon: Icons.home_rounded,
+                onTap: () =>
+                    _activateSection(
+                  PlayerWorkspaceSection.home,
+                ),
+              ),
+              dockIcon(
+                index: 1,
+                icon:
+                    Icons.groups_2_outlined,
+                onTap: () =>
+                    _activateSection(
+                  PlayerWorkspaceSection.roster,
+                ),
+              ),
+              dockIcon(
+                index: 2,
+                icon:
+                    Icons.sports_soccer_outlined,
+                onTap: () =>
+                    _activateSection(
+                  PlayerWorkspaceSection.matches,
+                ),
+              ),
+              dockIcon(
+                index: 3,
+                icon:
+                    Icons.calendar_month_outlined,
+                onTap: () =>
+                    _activateSection(
+                  PlayerWorkspaceSection.calendar,
+                ),
+              ),
+              dockIcon(
+                index: 4,
+                icon: Icons.forum_outlined,
+                onTap: () =>
+                    _activateSection(
+                  PlayerWorkspaceSection.chat,
+                ),
+              ),
+              dockIcon(
+                index: 5,
+                icon:
+                    Icons.more_horiz_rounded,
+                onTap:
+                    _openMobileMoreMenu,
+              ),
+            ],
           ),
         ),
       ),
@@ -1336,6 +1714,28 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
     setState(() => selectedSection = section);
   }
 
+  Future<void> _activateSection(
+    PlayerWorkspaceSection section,
+  ) async {
+    if (!mounted) return;
+
+    final width =
+        MediaQuery.sizeOf(context).width;
+
+    if (width >= 760) {
+      _selectSection(section);
+      return;
+    }
+
+    if (section ==
+        PlayerWorkspaceSection.home) {
+      _selectSection(section);
+      return;
+    }
+
+    await _openRealModule(section);
+  }
+
   _PlayerNavItem _itemFor(PlayerWorkspaceSection section) {
     for (final item in _allItems) {
       if (item.section == section) return item;
@@ -1350,14 +1750,30 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         return _PlayerMoreBottomSheet(
-          title: 'Меню игрока',
+          title: 'Меню',
           teamName: teamName,
           teamLogo: teamLogoUrl,
           currentSection: selectedSection,
           groups: _navGroups,
+          onWorkspace: () {
+            Navigator.of(
+              sheetContext,
+            ).pop();
+            Future<void>.delayed(
+              const Duration(
+                milliseconds: 80,
+              ),
+              _goToWorkspaceHub,
+            );
+          },
           onSelect: (section) {
-            Navigator.of(sheetContext).pop();
-            _selectSection(section);
+            Navigator.of(
+              sheetContext,
+            ).pop();
+            Future<void>.delayed(
+              const Duration(milliseconds: 80),
+              () => _activateSection(section),
+            );
           },
         );
       },
@@ -1378,7 +1794,10 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
           currentSection: selectedSection,
           onSelect: (section) {
             Navigator.of(sheetContext).pop();
-            _selectSection(section);
+            Future<void>.delayed(
+              const Duration(milliseconds: 80),
+              () => _activateSection(section),
+            );
           },
         );
       },
@@ -1493,7 +1912,11 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
         );
         return;
       case PlayerWorkspaceSection.chat:
-        Get.snackbar('Чат', 'Командный чат подключим следующим этапом');
+        Get.to(
+          () => ChatScreen(
+            userId: widget.userId,
+          ),
+        );
         return;
     }
   }
@@ -1535,144 +1958,175 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
     }
   }
 
-  BoxDecoration _cardDecoration({double radius = 16}) {
-    final r = math.min(radius, 18.0);
+  BoxDecoration _cardDecoration({
+    double radius = 12,
+  }) {
+    final r =
+        math.min(radius, 14.0);
     return BoxDecoration(
-      color: _P.panel,
-      borderRadius: BorderRadius.circular(r),
-      border: Border.all(color: _P.divider.withOpacity(.78), width: .85),
-      boxShadow: _P.cardShadow,
+      color: Colors.white,
+      borderRadius:
+          BorderRadius.circular(r),
     );
   }
 
   BoxDecoration _gradientDecoration() {
     return BoxDecoration(
-      color: _P.panel,
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: _P.divider.withOpacity(.78), width: .85),
-      boxShadow: _P.cardShadow,
+      color: Colors.white,
+      borderRadius:
+          BorderRadius.circular(12),
     );
   }
 }
 class _P {
-  static const String fontFamily = 'Segoe UI';
-  static const List<String> fontFallback = <String>[
-    'SF Pro Display',
-    'SF Pro Text',
-    'Inter',
-    'Roboto',
-    'Arial',
-  ];
-
-  static const Color bg = Color(0xFFF3F5F7);
+  static const Color bg = Colors.white;
   static const Color panel = Colors.white;
   static const Color card = Colors.white;
-  static const Color soft = Color(0xFFFAFCFD);
-  static const Color soft2 = Color(0xFFF3F5F7);
-  static const Color text = Color(0xFF0B0F14);
-  static const Color muted = Color(0xFF374151);
-  static const Color subtleColor = Color(0xFF6B7280);
-  static const Color lightMuted = Color(0xFF6B7280);
-  static const Color divider = Color(0xFFE8EDF2);
-  static const Color border = Color(0xFFE8EDF2);
-  static const Color borderSoft = Color(0xFFE8EDF2);
-  static const Color primaryGreen = Color(0xFF00A750);
-  static const Color greenSoft = Color(0xFFF1FBF6);
-  static const Color greenDark = Color(0xFF067A46);
-  static const Color blue = Color(0xFF2563EB);
-  static const Color blueSoft = Color(0xFFF4F7FF);
-  static const Color purple = Color(0xFF7C3AED);
-  static const Color purpleSoft = Color(0xFFF5F0FF);
-  static const Color orange = Color(0xFFEA580C);
-  static const Color orangeSoft = Color(0xFFFFF7ED);
-  static const Color teal = Color(0xFF06B6D4);
-  static const Color tealSoft = Color(0xFFEFFBFF);
-  static const Color red = Color(0xFFDC2626);
-  static const Color redSoft = Color(0xFFFEF2F2);
+  static const Color soft =
+      Color(0xFFF7F9F8);
+  static const Color soft2 =
+      Color(0xFFF2F5F3);
 
-  static List<BoxShadow> get cardShadow => [
+  static const Color text =
+      Color(0xFF0B0F14);
+  static const Color muted =
+      Color(0xFF667085);
+  static const Color muted2 =
+      Color(0xFF98A2B3);
+  static const Color subtleColor =
+      Color(0xFF667085);
+  static const Color lightMuted =
+      Color(0xFF98A2B3);
+
+  static const Color divider =
+      Color(0xFFEDF0EE);
+  static const Color border =
+      Color(0xFFEDF0EE);
+  static const Color borderSoft =
+      Color(0xFFEDF0EE);
+
+  static const Color primaryGreen =
+      Color(0xFF00A750);
+  static const Color greenSoft =
+      Color(0xFFF3FAF6);
+  static const Color greenDark =
+      Color(0xFF067A46);
+
+  static const Color blue =
+      Color(0xFF067A46);
+  static const Color blueSoft =
+      Color(0xFFF3FAF6);
+  static const Color purple =
+      Color(0xFF067A46);
+  static const Color purpleSoft =
+      Color(0xFFF3FAF6);
+  static const Color orange =
+      Color(0xFFF59E0B);
+  static const Color orangeSoft =
+      Color(0xFFFFF7ED);
+  static const Color teal =
+      Color(0xFF00A750);
+  static const Color tealSoft =
+      Color(0xFFF3FAF6);
+  static const Color red =
+      Color(0xFFD92D20);
+  static const Color redSoft =
+      Color(0xFFFFF1F1);
+
+  static List<BoxShadow> get cardShadow =>
+      <BoxShadow>[
         BoxShadow(
-          color: Colors.black.withOpacity(.015),
-          blurRadius: 16,
-          spreadRadius: -11,
-          offset: const Offset(0, 9),
+          color:
+              Colors.black.withOpacity(
+            .025,
+          ),
+          blurRadius: 18,
+          spreadRadius: -12,
+          offset:
+              const Offset(0, 8),
         ),
       ];
 
-  static TextStyle title(double size) => TextStyle(
+  static TextStyle title(
+    double size,
+  ) =>
+      AppTypography.custom(
+        size: size,
+        weight: FontWeight.w600,
         color: text,
-        fontFamily: fontFamily,
-        fontFamilyFallback: fontFallback,
-        fontSize: size,
-        fontWeight: FontWeight.w600,
-        letterSpacing: -0.18,
-        height: 1.08,
+        height: 1.1,
       );
 
-  static TextStyle section() => const TextStyle(
+  static TextStyle section() =>
+      AppTypography.custom(
+        size: 11.2,
+        weight: FontWeight.w600,
         color: text,
-        fontFamily: fontFamily,
-        fontFamilyFallback: fontFallback,
-        fontSize: 11.2,
-        fontWeight: FontWeight.w600,
-        letterSpacing: -0.08,
         height: 1.12,
       );
 
-  static TextStyle value(double size) => TextStyle(
+  static TextStyle value(
+    double size,
+  ) =>
+      AppTypography.custom(
+        size: size,
+        weight: FontWeight.w600,
         color: text,
-        fontFamily: fontFamily,
-        fontFamilyFallback: fontFallback,
-        fontSize: size,
-        fontWeight: FontWeight.w600,
-        letterSpacing: -0.12,
-        fontFeatures: const [FontFeature.tabularFigures()],
         height: 1.08,
+      ).copyWith(
+        fontFeatures:
+            const <FontFeature>[
+          FontFeature
+              .tabularFigures(),
+        ],
       );
 
-  static TextStyle mutedText(double size) => TextStyle(
-        color: subtleColor,
-        fontFamily: fontFamily,
-        fontFamilyFallback: fontFallback,
-        fontSize: size,
-        fontWeight: FontWeight.w500,
-        letterSpacing: -0.02,
-        height: 1.28,
+  static TextStyle mutedText(
+    double size,
+  ) =>
+      AppTypography.custom(
+        size: size,
+        weight: FontWeight.w400,
+        color: muted,
+        height: 1.25,
       );
 
-  static TextStyle subtle(double size) => TextStyle(
-        color: subtleColor,
-        fontFamily: fontFamily,
-        fontFamilyFallback: fontFallback,
-        fontSize: size,
-        fontWeight: FontWeight.w500,
-        letterSpacing: -0.02,
-        height: 1.24,
+  static TextStyle subtle(
+    double size,
+  ) =>
+      AppTypography.custom(
+        size: size,
+        weight: FontWeight.w400,
+        color: muted,
+        height: 1.22,
       );
 
-  static TextStyle caption() => const TextStyle(
-        color: subtleColor,
-        fontFamily: fontFamily,
-        fontFamilyFallback: fontFallback,
-        fontSize: 9.2,
-        fontWeight: FontWeight.w500,
-        letterSpacing: 0.02,
-        height: 1.08,
+  static TextStyle caption() =>
+      AppTypography.custom(
+        size: 8.6,
+        weight: FontWeight.w600,
+        color: muted2,
+        height: 1.1,
       );
 
-  static TextStyle action() => const TextStyle(
+  static TextStyle action() =>
+      AppTypography.custom(
+        size: 9.6,
+        weight: FontWeight.w600,
         color: text,
-        fontFamily: fontFamily,
-        fontFamilyFallback: fontFallback,
-        fontSize: 10.4,
-        fontWeight: FontWeight.w600,
-        letterSpacing: -0.02,
-        height: 1.08,
+        height: 1.1,
       );
 
-  static Color accentForSection(PlayerWorkspaceSection section) {
+  static Color accentForSection(
+    PlayerWorkspaceSection section,
+  ) {
     switch (section) {
       case PlayerWorkspaceSection.home:
+      case PlayerWorkspaceSection.roster:
+      case PlayerWorkspaceSection.calendar:
+      case PlayerWorkspaceSection.matches:
+      case PlayerWorkspaceSection.trainings:
+      case PlayerWorkspaceSection.selfAssessment:
       case PlayerWorkspaceSection.rating:
       case PlayerWorkspaceSection.challenges:
       case PlayerWorkspaceSection.battles:
@@ -1680,28 +2134,415 @@ class _P {
       case PlayerWorkspaceSection.miniGames:
       case PlayerWorkspaceSection.highlights:
         return primaryGreen;
-      case PlayerWorkspaceSection.roster:
-        return blue;
-      case PlayerWorkspaceSection.calendar:
-        return teal;
-      case PlayerWorkspaceSection.matches:
-        return orange;
-      case PlayerWorkspaceSection.trainings:
-      case PlayerWorkspaceSection.selfAssessment:
-        return purple;
       case PlayerWorkspaceSection.chat:
-        return muted;
+        return greenDark;
     }
   }
 
-  static Color softFor(Color color) {
-    if (color == blue) return blueSoft;
-    if (color == purple) return purpleSoft;
-    if (color == orange) return orangeSoft;
-    if (color == teal) return tealSoft;
-    if (color == red) return redSoft;
-    if (color == primaryGreen) return greenSoft;
-    return soft;
+  static Color softFor(
+    Color color,
+  ) {
+    if (color == red) {
+      return redSoft;
+    }
+    if (color == orange) {
+      return orangeSoft;
+    }
+    return greenSoft;
+  }
+}
+
+class _PDot extends StatelessWidget {
+  final Color color;
+  final double size;
+  final double opacity;
+
+  const _PDot({
+    required this.color,
+    required this.size,
+    this.opacity = 1,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: opacity,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+        ),
+      ),
+    );
+  }
+}
+
+class _PDots extends StatelessWidget {
+  final Color color;
+  final bool compact;
+
+  const _PDots({
+    this.color = _P.primaryGreen,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scale =
+        compact ? .76 : 1.0;
+
+    return Row(
+      mainAxisSize:
+          MainAxisSize.min,
+      children: <Widget>[
+        _PDot(
+          color: color,
+          size: 3.4 * scale,
+          opacity: .32,
+        ),
+        SizedBox(width: 3 * scale),
+        _PDot(
+          color: color,
+          size: 4.4 * scale,
+          opacity: .55,
+        ),
+        SizedBox(width: 3 * scale),
+        _PDot(
+          color: color,
+          size: 5.4 * scale,
+          opacity: .78,
+        ),
+        SizedBox(width: 3 * scale),
+        _PDot(
+          color: color,
+          size: 6.4 * scale,
+        ),
+      ],
+    );
+  }
+}
+
+class _PDotAction extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  final bool emphasized;
+
+  const _PDotAction({
+    required this.label,
+    required this.onTap,
+    this.emphasized = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: emphasized
+          ? _P.greenSoft
+          : _P.soft,
+      borderRadius:
+          BorderRadius.circular(9),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius:
+            BorderRadius.circular(9),
+        child: Container(
+          height: 34,
+          padding:
+              const EdgeInsets.symmetric(
+            horizontal: 9,
+          ),
+          child: Row(
+            mainAxisSize:
+                MainAxisSize.min,
+            children: <Widget>[
+              _PDot(
+                color: emphasized
+                    ? _P.primaryGreen
+                    : _P.muted2,
+                size:
+                    emphasized ? 5 : 4.4,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style:
+                    AppTypography.custom(
+                  size: 9,
+                  weight:
+                      FontWeight.w600,
+                  color: emphasized
+                      ? _P.greenDark
+                      : _P.text,
+                  height: 1.1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlayerGroupTitle
+    extends StatelessWidget {
+  final String title;
+
+  const _PlayerGroupTitle({
+    required this.title,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding:
+          const EdgeInsets.fromLTRB(
+        8,
+        5,
+        8,
+        5,
+      ),
+      child: Text(
+        title.toUpperCase(),
+        maxLines: 1,
+        overflow:
+            TextOverflow.ellipsis,
+        style:
+            AppTypography.custom(
+          size: 8.4,
+          weight: FontWeight.w700,
+          color: _P.muted2,
+          height: 1.1,
+          letterSpacing: .45,
+        ),
+      ),
+    );
+  }
+}
+
+class _PlayerSidebarTile
+    extends StatelessWidget {
+  final _PlayerNavItem item;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _PlayerSidebarTile({
+    required this.item,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = active
+        ? _P.greenDark
+        : const Color(0xFF344054);
+
+    return Material(
+      color: active
+          ? _P.greenSoft
+          : Colors.transparent,
+      borderRadius:
+          BorderRadius.circular(9),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius:
+            BorderRadius.circular(9),
+        child: Container(
+          constraints:
+              const BoxConstraints(
+            minHeight: 42,
+          ),
+          padding:
+              const EdgeInsets.symmetric(
+            horizontal: 8,
+            vertical: 5,
+          ),
+          child: Row(
+            children: <Widget>[
+              SizedBox(
+                width: 28,
+                height: 28,
+                child: Center(
+                  child: Icon(
+                    item.icon,
+                    size: 17,
+                    color: accent,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  mainAxisAlignment:
+                      MainAxisAlignment.center,
+                  children: <Widget>[
+                    Text(
+                      item.title,
+                      maxLines: 1,
+                      overflow:
+                          TextOverflow.ellipsis,
+                      style:
+                          AppTypography.custom(
+                        size: 9.8,
+                        weight:
+                            FontWeight.w600,
+                        color: active
+                            ? _P.greenDark
+                            : _P.text,
+                        height: 1.1,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      item.subtitle,
+                      maxLines: 1,
+                      overflow:
+                          TextOverflow.ellipsis,
+                      style:
+                          AppTypography.custom(
+                        size: 8.2,
+                        weight:
+                            FontWeight.w400,
+                        color: _P.muted,
+                        height: 1.15,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+class _PlayerWorkspaceBackTile
+    extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _PlayerWorkspaceBackTile({
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _P.greenSoft,
+      borderRadius:
+          BorderRadius.circular(9),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius:
+            BorderRadius.circular(9),
+        child: Container(
+          constraints:
+              const BoxConstraints(
+            minHeight: 48,
+          ),
+          padding:
+              const EdgeInsets.symmetric(
+            horizontal: 9,
+            vertical: 7,
+          ),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 30,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color:
+                      const Color(0xFFEAF8F0),
+                  borderRadius:
+                      BorderRadius.circular(9),
+                ),
+                child: const Icon(
+                  Icons.account_tree_outlined,
+                  size: 17,
+                  color: _P.greenDark,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'К выбору Workspace',
+                      style:
+                          AppTypography.custom(
+                        size: 9.6,
+                        weight:
+                            FontWeight.w600,
+                        color: _P.greenDark,
+                        height: 1.1,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'личный или рабочий кабинет',
+                      maxLines: 1,
+                      overflow:
+                          TextOverflow.ellipsis,
+                      style:
+                          AppTypography.custom(
+                        size: 8.2,
+                        weight:
+                            FontWeight.w400,
+                        color: _P.muted,
+                        height: 1.1,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+class _PlayerWorkspaceScroll
+    extends StatelessWidget {
+  final Future<void> Function()
+      onRefresh;
+  final List<Widget> children;
+
+  const _PlayerWorkspaceScroll({
+    required this.onRefresh,
+    required this.children,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      color: _P.primaryGreen,
+      onRefresh: onRefresh,
+      child: ListView(
+        physics:
+            const AlwaysScrollableScrollPhysics(),
+        padding:
+            const EdgeInsets.fromLTRB(
+          12,
+          12,
+          12,
+          22,
+        ),
+        children: children,
+      ),
+    );
   }
 }
 
@@ -1795,10 +2636,8 @@ class _TeamLogoAvatar extends StatelessWidget {
   Widget _fallback() {
     return Container(
       color: _P.primaryGreen.withOpacity(.10),
-      child: const Icon(
-        Icons.sports_soccer_rounded,
-        color: _P.primaryGreen,
-        size: 30,
+      child: const Center(
+        child: _PDots(),
       ),
     );
   }
@@ -1891,7 +2730,10 @@ class _SmallActionChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 15, color: _P.primaryGreen),
+            const _PDot(
+              color: _P.primaryGreen,
+              size: 5,
+            ),
             const SizedBox(width: 6),
             Text(
               label,
@@ -2405,13 +3247,17 @@ class _TaskbarTeamPill extends StatelessWidget {
   }
 }
 
-class _PlayerMoreBottomSheet extends StatelessWidget {
+class _PlayerMoreBottomSheet
+    extends StatelessWidget {
   final String title;
   final String teamName;
   final String? teamLogo;
-  final PlayerWorkspaceSection currentSection;
+  final PlayerWorkspaceSection
+      currentSection;
   final List<_PlayerNavGroup> groups;
-  final ValueChanged<PlayerWorkspaceSection> onSelect;
+  final VoidCallback onWorkspace;
+  final ValueChanged<
+      PlayerWorkspaceSection> onSelect;
 
   const _PlayerMoreBottomSheet({
     required this.title,
@@ -2419,88 +3265,155 @@ class _PlayerMoreBottomSheet extends StatelessWidget {
     required this.teamLogo,
     required this.currentSection,
     required this.groups,
+    required this.onWorkspace,
     required this.onSelect,
   });
 
   @override
   Widget build(BuildContext context) {
-    final h = MediaQuery.of(context).size.height;
-    final bottom = MediaQuery.of(context).padding.bottom;
-    final totalItems = groups.fold<int>(0, (sum, group) => sum + group.items.length);
+    final bottom =
+        MediaQuery.of(context)
+            .padding
+            .bottom;
+    final height =
+        MediaQuery.of(context)
+            .size
+            .height;
 
     return Container(
-      constraints: BoxConstraints(maxHeight: h * .88),
-      margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-      padding: EdgeInsets.fromLTRB(14, 10, 14, 14 + bottom),
+      constraints: BoxConstraints(
+        maxHeight: height * .88,
+      ),
+      margin:
+          const EdgeInsets.fromLTRB(
+        10,
+        0,
+        10,
+        10,
+      ),
+      padding: EdgeInsets.fromLTRB(
+        14,
+        10,
+        14,
+        14 + bottom,
+      ),
       decoration: BoxDecoration(
-        color: _P.panel,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _P.divider.withOpacity(.78), width: .85),
-        boxShadow: _P.cardShadow,
+        color: Colors.white,
+        borderRadius:
+            BorderRadius.circular(28),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black
+                .withOpacity(.16),
+            blurRadius: 28,
+            offset:
+                const Offset(0, 14),
+          ),
+        ],
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+        mainAxisSize:
+            MainAxisSize.min,
+        children: <Widget>[
           Container(
             width: 42,
             height: 5,
-            decoration: BoxDecoration(
-              color: _P.divider,
-              borderRadius: BorderRadius.circular(999),
+            decoration:
+                BoxDecoration(
+              color: const Color(
+                0xFFD0D5DD,
+              ),
+              borderRadius:
+                  BorderRadius.circular(
+                999,
+              ),
             ),
           ),
           const SizedBox(height: 12),
-          _MobileMoreHeaderCard(
-            teamName: teamName,
-            teamLogo: teamLogo,
-          ),
-          const SizedBox(height: 10),
           Row(
-            children: [
+            children: <Widget>[
+              _TeamLogoAvatar(
+                logoUrl: teamLogo,
+                size: 40,
+                radius: 10,
+              ),
+              const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  title,
-                  style: _P.title(15.5),
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment
+                          .start,
+                  children: <Widget>[
+                    Text(
+                      teamName,
+                      maxLines: 1,
+                      overflow:
+                          TextOverflow
+                              .ellipsis,
+                      style:
+                          _P.title(12.6),
+                    ),
+                    const SizedBox(
+                      height: 2,
+                    ),
+                    Text(
+                      'Вы вошли как игрок',
+                      style:
+                          _P.subtle(9.8),
+                    ),
+                  ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: _P.panel,
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: _P.divider.withOpacity(0.0)),
-                ),
-                child: Text(
-                  '$totalItems',
-                  style: const TextStyle(
-                    color: _P.text,
-                    fontSize: 10.8,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+              const _PDots(
+                compact: true,
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
+          Align(
+            alignment:
+                Alignment.centerLeft,
+            child: Text(
+              title,
+              style: _P.title(13.2),
+            ),
+          ),
+          const SizedBox(height: 7),
           Flexible(
             child: ListView(
               shrinkWrap: true,
-              physics: const BouncingScrollPhysics(),
-              children: [
-                for (final group in groups) ...[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(2, 10, 2, 6),
-                    child: Text(
-                      group.title.toUpperCase(),
-                      style: _P.caption().copyWith(letterSpacing: .22, fontWeight: FontWeight.w600),
-                    ),
+              padding: EdgeInsets.zero,
+              physics:
+                  const BouncingScrollPhysics(),
+              children: <Widget>[
+                const _PlayerGroupTitle(
+                  title: 'Навигация',
+                ),
+                _PlayerWorkspaceMenuTile(
+                  onTap: onWorkspace,
+                ),
+                const SizedBox(height: 8),
+                for (final group
+                    in groups) ...<
+                    Widget>[
+                  _PlayerGroupTitle(
+                    title: group.title,
                   ),
-                  for (final item in group.items)
-                    _MobileMoreTile(
+                  for (final item
+                      in group.items)
+                    _PlayerMobileMenuTile(
                       item: item,
-                      active: item.section == currentSection,
-                      onTap: () => onSelect(item.section),
+                      active:
+                          item.section ==
+                              currentSection,
+                      onTap: () =>
+                          onSelect(
+                        item.section,
+                      ),
                     ),
+                  const SizedBox(
+                    height: 8,
+                  ),
                 ],
               ],
             ),
@@ -2511,51 +3424,228 @@ class _PlayerMoreBottomSheet extends StatelessWidget {
   }
 }
 
-class _MobileMoreHeaderCard extends StatelessWidget {
-  final String teamName;
-  final String? teamLogo;
+class _PlayerMobileMenuTile
+    extends StatelessWidget {
+  final _PlayerNavItem item;
+  final bool active;
+  final VoidCallback onTap;
 
-  const _MobileMoreHeaderCard({
-    required this.teamName,
-    required this.teamLogo,
+  const _PlayerMobileMenuTile({
+    required this.item,
+    required this.active,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: _P.soft,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _P.divider.withOpacity(.78), width: .7),
-      ),
-      child: Row(
-        children: [
-          _TeamLogoAvatar(logoUrl: teamLogo, size: 44, radius: 15),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Кабинет игрока', style: _P.subtle(10.8)),
-                const SizedBox(height: 2),
-                Text(
-                  teamName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _P.title(13.8),
-                ),
-              ],
-            ),
+    final accent = active
+        ? _P.greenDark
+        : const Color(0xFF344054);
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius:
+          BorderRadius.circular(15),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius:
+            BorderRadius.circular(15),
+        child: AnimatedContainer(
+          duration:
+              const Duration(milliseconds: 170),
+          constraints:
+              const BoxConstraints(
+            minHeight: 50,
           ),
-          const Icon(Icons.keyboard_arrow_down_rounded, color: _P.lightMuted),
-        ],
+          padding:
+              const EdgeInsets.symmetric(
+            horizontal: 9,
+            vertical: 6,
+          ),
+          decoration: BoxDecoration(
+            color: active
+                ? _P.greenSoft
+                : Colors.transparent,
+            borderRadius:
+                BorderRadius.circular(15),
+          ),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 32,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: active
+                      ? const Color(0xFFEAF8F0)
+                      : _P.soft,
+                  borderRadius:
+                      BorderRadius.circular(11),
+                ),
+                child: Icon(
+                  item.icon,
+                  size: 18,
+                  color: accent,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  mainAxisSize:
+                      MainAxisSize.min,
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      item.title,
+                      maxLines: 1,
+                      overflow:
+                          TextOverflow.ellipsis,
+                      style:
+                          AppTypography.custom(
+                        size: 11.4,
+                        weight:
+                            FontWeight.w600,
+                        color: active
+                            ? _P.greenDark
+                            : _P.text,
+                        height: 1.15,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      item.subtitle,
+                      maxLines: 1,
+                      overflow:
+                          TextOverflow.ellipsis,
+                      style:
+                          AppTypography.custom(
+                        size: 9.7,
+                        weight:
+                            FontWeight.w400,
+                        color: _P.muted,
+                        height: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: Color(0xFF98A2B3),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 }
 
-class _MobileMoreTile extends StatelessWidget {
+
+class _PlayerWorkspaceMenuTile
+    extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _PlayerWorkspaceMenuTile({
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _P.greenSoft,
+      borderRadius:
+          BorderRadius.circular(15),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius:
+            BorderRadius.circular(15),
+        child: Container(
+          constraints:
+              const BoxConstraints(
+            minHeight: 50,
+          ),
+          padding:
+              const EdgeInsets.symmetric(
+            horizontal: 9,
+            vertical: 6,
+          ),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 32,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color:
+                      const Color(0xFFEAF8F0),
+                  borderRadius:
+                      BorderRadius.circular(11),
+                ),
+                child: const Icon(
+                  Icons.account_tree_outlined,
+                  size: 18,
+                  color: _P.greenDark,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  mainAxisAlignment:
+                      MainAxisAlignment.center,
+                  children: <Widget>[
+                    Text(
+                      'К выбору Workspace',
+                      style:
+                          AppTypography.custom(
+                        size: 11.4,
+                        weight:
+                            FontWeight.w600,
+                        color: _P.greenDark,
+                        height: 1.15,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'выбрать личный или рабочий кабинет',
+                      maxLines: 1,
+                      overflow:
+                          TextOverflow.ellipsis,
+                      style:
+                          AppTypography.custom(
+                        size: 9.7,
+                        weight:
+                            FontWeight.w400,
+                        color: _P.muted,
+                        height: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: Color(0xFF98A2B3),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+
+
+class _MobileMoreTile
+    extends StatelessWidget {
   final _PlayerNavItem item;
   final bool active;
   final VoidCallback onTap;
@@ -2568,76 +3658,104 @@ class _MobileMoreTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = active ? _P.primaryGreen : _P.accentForSection(item.section);
-    final bgColor = active ? accent.withOpacity(.08) : Colors.transparent;
-    final iconBgColor = active ? accent.withOpacity(.12) : _P.soft;
-    final iconColor = active ? accent : _P.muted;
-    final titleColor = active ? accent : _P.text;
+    final accent = active
+        ? _P.greenDark
+        : const Color(0xFF344054);
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOut,
-      width: double.infinity,
-      constraints: const BoxConstraints(minHeight: 50),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(15),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-            child: Row(
-              children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: iconBgColor,
-                    borderRadius: BorderRadius.circular(13),
-                    border: Border.all(color: active ? accent.withOpacity(.18) : _P.borderSoft),
-                  ),
-                  child: Icon(item.icon, color: iconColor, size: 20),
+    return Material(
+      color: active
+          ? _P.greenSoft
+          : Colors.transparent,
+      borderRadius:
+          BorderRadius.circular(15),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius:
+            BorderRadius.circular(15),
+        child: Container(
+          constraints:
+              const BoxConstraints(
+            minHeight: 50,
+          ),
+          padding:
+              const EdgeInsets.symmetric(
+            horizontal: 9,
+            vertical: 6,
+          ),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 32,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: active
+                      ? const Color(0xFFEAF8F0)
+                      : _P.soft,
+                  borderRadius:
+                      BorderRadius.circular(11),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        item.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: _P.title(13.2).copyWith(color: titleColor),
+                child: Icon(
+                  item.icon,
+                  size: 18,
+                  color: accent,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment:
+                      MainAxisAlignment.center,
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      item.title,
+                      maxLines: 1,
+                      overflow:
+                          TextOverflow.ellipsis,
+                      style:
+                          AppTypography.custom(
+                        size: 11.4,
+                        weight:
+                            FontWeight.w600,
+                        color: active
+                            ? _P.greenDark
+                            : _P.text,
+                        height: 1.15,
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        item.subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: _P.mutedText(10.8),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      item.subtitle,
+                      maxLines: 1,
+                      overflow:
+                          TextOverflow.ellipsis,
+                      style:
+                          AppTypography.custom(
+                        size: 9.7,
+                        weight:
+                            FontWeight.w400,
+                        color: _P.muted,
+                        height: 1.2,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                Icon(
-                  active ? Icons.check_circle_rounded : Icons.chevron_right_rounded,
-                  color: active ? accent : _P.lightMuted,
-                  size: 20,
-                ),
-              ],
-            ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: Color(0xFF98A2B3),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 }
+
 
 class _PlayerCommandSheet extends StatefulWidget {
   final String teamName;

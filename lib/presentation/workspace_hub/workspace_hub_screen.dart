@@ -9,6 +9,7 @@ import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/club_workspace/club_workspace_screen.dart';
 import 'package:sportoteka/presentation/my_profile_screen/my_profile_screen.dart';
 import 'package:sportoteka/presentation/player_screen/player_dashboard_screen.dart';
+import 'package:sportoteka/routes/app_routes.dart';
 
 /// Стартовый экран после авторизации.
 ///
@@ -54,6 +55,8 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
   String? _clubName;
   String? _teamName;
   String? _teamLogoUrl;
+  String? _clubLogoUrl;
+  String? _userAvatarUrl;
   int? _teamId;
   Map<String, dynamic>? _player;
 
@@ -151,11 +154,75 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
       _role = '${user['role'] ?? _role}'.trim();
       _player = player;
 
+      final club = root['club'] is Map
+          ? Map<String, dynamic>.from(root['club'] as Map)
+          : null;
+
+      final userAvatar = _normalizeMediaUrl(
+        user['avatar_url'] ??
+            user['avatarUrl'] ??
+            user['avatar'] ??
+            user['photo_url'] ??
+            user['photoUrl'] ??
+            user['photo'] ??
+            user['image_url'] ??
+            user['imageUrl'] ??
+            user['image'] ??
+            user['profile_photo'] ??
+            user['profilePhoto'] ??
+            user['avatar_path'] ??
+            user['avatarPath'] ??
+            root['avatar_url'] ??
+            root['avatar'] ??
+            root['photo_url'] ??
+            root['photo'] ??
+            player?['avatar_url'] ??
+            player?['avatarUrl'] ??
+            player?['avatar'] ??
+            player?['photo_url'] ??
+            player?['photoUrl'] ??
+            player?['photo'] ??
+            player?['profile_photo'] ??
+            player?['profilePhoto'] ??
+            player?['avatar_path'] ??
+            player?['avatarPath'],
+      );
+
+      if (userAvatar != null && userAvatar.isNotEmpty) {
+        _userAvatarUrl = userAvatar;
+      }
+
+      final directClubLogo = _normalizeMediaUrl(
+        user['club_logo_url'] ??
+            user['clubLogoUrl'] ??
+            user['club_logo'] ??
+            user['clubLogo'] ??
+            root['club_logo_url'] ??
+            root['clubLogoUrl'] ??
+            root['club_logo'] ??
+            root['clubLogo'] ??
+            club?['logo_url'] ??
+            club?['logoUrl'] ??
+            club?['logo'] ??
+            club?['image_url'] ??
+            club?['imageUrl'] ??
+            club?['image'] ??
+            club?['logo_path'] ??
+            club?['logoPath'],
+      );
+
+      if (directClubLogo != null && directClubLogo.isNotEmpty) {
+        _clubLogoUrl = directClubLogo;
+      }
+
       final directClubName = _cleanString(
         user['club_name'] ??
             user['clubName'] ??
             user['organization_name'] ??
-            user['organizationName'],
+            user['organizationName'] ??
+            club?['name'] ??
+            club?['club_name'] ??
+            club?['title'],
       );
 
       if (directClubName.isNotEmpty) {
@@ -181,6 +248,17 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
         if (loadedClubName.isNotEmpty) _clubName = loadedClubName;
         if (loadedTeamLogo != null && loadedTeamLogo.isNotEmpty) {
           _teamLogoUrl = loadedTeamLogo;
+        }
+
+        final loadedClubLogo = _normalizeMediaUrl(
+          team['club_logo_url'] ??
+              team['clubLogoUrl'] ??
+              team['club_logo'] ??
+              team['clubLogo'],
+        );
+
+        if (loadedClubLogo != null && loadedClubLogo.isNotEmpty) {
+          _clubLogoUrl = loadedClubLogo;
         }
       }
     } catch (e) {
@@ -244,6 +322,29 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
 
         if (name.isNotEmpty) _teamName = name;
         if (club.isNotEmpty) _clubName = club;
+
+        final logo = _normalizeMediaUrl(
+          item['logo_url'] ??
+              item['logoUrl'] ??
+              item['logo'] ??
+              item['team_logo'] ??
+              item['teamLogo'],
+        );
+
+        if (logo != null && logo.isNotEmpty) {
+          _teamLogoUrl = logo;
+        }
+
+        final clubLogo = _normalizeMediaUrl(
+          item['club_logo_url'] ??
+              item['clubLogoUrl'] ??
+              item['club_logo'] ??
+              item['clubLogo'],
+        );
+
+        if (clubLogo != null && clubLogo.isNotEmpty) {
+          _clubLogoUrl = clubLogo;
+        }
 
         return;
       }
@@ -435,12 +536,49 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
     );
   }
 
+  Future<void> _logoutFromProfile() async {
+    await _clearLocalProfileSession();
+    if (!mounted) return;
+    Get.offAllNamed(AppRoutes.loginScreen);
+  }
+
+  Future<void> _clearLocalProfileSession() async {
+    try {
+      await PrefUtils.setIsSignIn(false);
+    } catch (_) {}
+
+    try {
+      await PrefUtils.setUserId(0);
+    } catch (_) {}
+
+    try {
+      await PrefUtils.setUserFirstName('');
+    } catch (_) {}
+
+    try {
+      await PrefUtils.setUserLastName('');
+    } catch (_) {}
+
+    try {
+      await PrefUtils.setUserEmail('');
+    } catch (_) {}
+
+    try {
+      await PrefUtils.setRole('');
+    } catch (_) {}
+
+    try {
+      await PrefUtils.setUserPhoto('');
+    } catch (_) {}
+  }
+
   _HubCardData? get _workspaceCard {
     if (_isPlayer) {
       return _HubCardData(
         title: 'Центр игрока',
-        subtitle: 'Профиль, публикации, Reels, подписчики и сообщения',
-        icon: Icons.person_search_outlined,
+        subtitle: 'Лента, поиск людей, видеоуроки, чаты и площадки',
+        imageUrl: _userAvatarUrl,
+        circularImage: true,
         onTap: _openWorkspace,
       );
     }
@@ -458,11 +596,11 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
       ].join(' · ');
 
       return _HubCardData(
-        title: 'Кабинет тренера',
+        title: 'Мой кабинет тренера',
         subtitle: context.isNotEmpty
-            ? '$context · состав, тренировки, матчи и аналитика'
-            : 'Состав, тренировки, матчи и аналитика',
-        icon: Icons.sports_soccer_outlined,
+            ? '$context · личное рабочее пространство тренера'
+            : 'Расписание, планы, тестирование, чаты и отчёты',
+        imageUrl: _teamLogoUrl ?? _clubLogoUrl,
         onTap: _openWorkspace,
       );
     }
@@ -475,7 +613,7 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
         subtitle: club.isNotEmpty
             ? '$club · команды, тренеры, состав и аналитика'
             : 'Команды, тренеры, состав, календарь и аналитика',
-        icon: Icons.apartment_outlined,
+        imageUrl: _clubLogoUrl,
         onTap: _openWorkspace,
       );
     }
@@ -486,8 +624,9 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
   _HubCardData get _profileCard {
     return _HubCardData(
       title: 'Мой профиль',
-      subtitle: 'Публикации, медиа, сообщения и настройки',
-      icon: Icons.person_outline_rounded,
+      subtitle: 'Лента, поиск людей, видеоуроки, чаты и площадки',
+      imageUrl: _userAvatarUrl,
+      circularImage: true,
       onTap: _openProfile,
     );
   }
@@ -505,7 +644,7 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
       subtitle: context.isNotEmpty
           ? '$context · состав, календарь, матчи и командная жизнь'
           : 'Состав, календарь, матчи и командная жизнь',
-      icon: Icons.groups_2_outlined,
+      imageUrl: _teamLogoUrl ?? _clubLogoUrl,
       onTap: _openPlayerTeam,
     );
   }
@@ -516,7 +655,7 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
 
   String get _choiceSubtitle {
     if (_isCoach && _coachHasAssignedTeam) {
-      return 'Выберите кабинет тренера или личный профиль.';
+      return 'Выберите «Мой кабинет тренера» или личный профиль.';
     }
 
     if (_isCoach) {
@@ -552,7 +691,7 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
     }
 
     if (_isPlayer) {
-      return 'Центр игрока открывает ваш социальный профиль, '
+      return 'Центр игрока открывает личную социальную зону, '
           'а «Моя команда» — только привязанную команду.';
     }
 
@@ -606,10 +745,10 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
     final desktop = size.width >= 980;
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: mobile ? _panel : _bg,
       body: SafeArea(
         child: mobile
-            ? _buildMobile(size)
+            ? _buildMobile()
             : _buildWide(
                 size,
                 desktop: desktop,
@@ -806,118 +945,109 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
     );
   }
 
-  Widget _buildMobile(Size size) {
+  Widget _buildMobile() {
     final workspace = _workspaceCard;
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(
-        12,
-        14,
-        12,
-        22,
-      ),
-      children: [
-        Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: 520,
-            ),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: _panel,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: _divider,
-                  width: .8,
+    return ColoredBox(
+      color: _panel,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: 560,
+          ),
+          child: CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(
+                  20,
+                  16,
+                  20,
+                  0,
                 ),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        16,
-                        14,
-                        16,
-                        14,
-                      ),
-                      child: _buildBrand(
+                sliver: SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildBrand(
                         compact: true,
                       ),
-                    ),
-                    Container(
-                      height: 1,
-                      color: _divider,
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        16,
-                        22,
-                        16,
-                        26,
+                      const SizedBox(height: 34),
+                      _buildAccountMini(),
+                      const SizedBox(height: 32),
+                      Text(
+                        'Куда вы хотите войти?',
+                        style: _title(25),
                       ),
-                      child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.stretch,
-                        children: [
-                          _buildAccountMini(),
-                          const SizedBox(height: 24),
-                          Text(
-                            'Куда вы хотите войти?',
-                            style: _title(24),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            _choiceSubtitle,
-                            style: _body(12.5),
-                          ),
-                          const SizedBox(height: 24),
-                          if (workspace != null) ...[
-                            _WorkspaceChoiceCard(
-                              data: workspace,
-                              compact: true,
-                            ),
-                            const SizedBox(height: 12),
-                          ],
-                          _WorkspaceChoiceCard(
-                            data: _secondaryCard,
-                            compact: true,
-                          ),
-                          if (_isCoach &&
-                              !_coachHasAssignedTeam) ...[
-                            const SizedBox(height: 14),
-                            const _TrainerNoTeamNotice(),
-                          ],
-                          const SizedBox(height: 18),
-                          Text(
-                            _accessHint,
-                            style: AppTypography.custom(
-                              size: 10.4,
-                              weight: FontWeight.w400,
-                              color: _subtle,
-                              height: 1.4,
-                              letterSpacing: 0,
-                            ),
-                          ),
-                        ],
+                      const SizedBox(height: 8),
+                      Text(
+                        _choiceSubtitle,
+                        style: _body(12.5),
                       ),
-                    ),
-                    Container(
-                      height: 1,
-                      color: _divider,
-                    ),
-                    _buildFooter(
-                      mobile: true,
-                    ),
-                  ],
+                      const SizedBox(height: 24),
+                      if (workspace != null) ...[
+                        _WorkspaceChoiceCard(
+                          data: workspace,
+                          compact: true,
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                      _WorkspaceChoiceCard(
+                        data: _secondaryCard,
+                        compact: true,
+                      ),
+                      if (_isCoach &&
+                          !_coachHasAssignedTeam) ...[
+                        const SizedBox(height: 12),
+                        const _TrainerNoTeamNotice(
+                          compact: true,
+                        ),
+                      ],
+                      const SizedBox(height: 22),
+                      Text(
+                        _accessHint,
+                        style: AppTypography.custom(
+                          size: 10.4,
+                          weight: FontWeight.w400,
+                          color: _subtle,
+                          height: 1.4,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                    ],
+                  ),
                 ),
               ),
-            ),
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      20,
+                      0,
+                      20,
+                      4,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildMobileLogoutButton(),
+                        const SizedBox(height: 12),
+                        _buildFooter(
+                          mobile: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 
@@ -948,23 +1078,10 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
   Widget _buildAccountMini() {
     return Row(
       children: [
-        Container(
-          width: 46,
-          height: 46,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: _greenSoft,
-            borderRadius: BorderRadius.circular(11),
-            border: Border.all(
-              color: _greenBorder,
-              width: .8,
-            ),
-          ),
-          child: const Icon(
-            Icons.person_outline_rounded,
-            color: _greenDark,
-            size: 21,
-          ),
+        _HubIdentityImage(
+          imageUrl: _userAvatarUrl,
+          size: 46,
+          circular: true,
         ),
         const SizedBox(width: 11),
         Expanded(
@@ -1003,14 +1120,52 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
     );
   }
 
+  Widget _buildMobileLogoutButton() {
+    return Material(
+      color: _soft,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: _logoutFromProfile,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 12,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.logout_rounded,
+                size: 17,
+                color: _secondary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Выйти из профиля',
+                style: AppTypography.custom(
+                  size: 11.5,
+                  weight: FontWeight.w600,
+                  color: _secondary,
+                  height: 1.2,
+                  letterSpacing: 0,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildFooter({
     required bool mobile,
   }) {
     return Padding(
       padding: mobile
-          ? const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 16,
+          ? const EdgeInsets.only(
+              top: 2,
+              bottom: 0,
             )
           : EdgeInsets.zero,
       child: Text(
@@ -1054,13 +1209,15 @@ class _HubCardData {
   const _HubCardData({
     required this.title,
     required this.subtitle,
-    required this.icon,
     required this.onTap,
+    this.imageUrl,
+    this.circularImage = false,
   });
 
   final String title;
   final String subtitle;
-  final IconData icon;
+  final String? imageUrl;
+  final bool circularImage;
   final VoidCallback onTap;
 }
 
@@ -1077,21 +1234,25 @@ class _WorkspaceChoiceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(compact ? 14 : 12),
       child: InkWell(
         onTap: data.onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(compact ? 14 : 12),
         child: Container(
           constraints: BoxConstraints(
-            minHeight: compact ? 102 : 112,
+            minHeight: compact ? 96 : 112,
           ),
           decoration: BoxDecoration(
-            color: _WorkspaceHubScreenState._panel,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: _WorkspaceHubScreenState._divider,
-              width: .8,
-            ),
+            color: compact
+                ? _WorkspaceHubScreenState._soft
+                : _WorkspaceHubScreenState._panel,
+            borderRadius: BorderRadius.circular(compact ? 14 : 12),
+            border: compact
+                ? null
+                : Border.all(
+                    color: _WorkspaceHubScreenState._divider,
+                    width: .8,
+                  ),
           ),
           padding: EdgeInsets.fromLTRB(
             compact ? 13 : 16,
@@ -1101,36 +1262,21 @@ class _WorkspaceChoiceCard extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Container(
-                width: 3,
-                height: compact ? 58 : 64,
-                decoration: BoxDecoration(
-                  color: _WorkspaceHubScreenState._green,
-                  borderRadius: BorderRadius.circular(99),
-                ),
-              ),
-              SizedBox(
-                width: compact ? 12 : 15,
-              ),
-              Container(
-                width: compact ? 50 : 56,
-                height: compact ? 50 : 56,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: _WorkspaceHubScreenState._greenSoft,
-                  borderRadius: BorderRadius.circular(11),
-                  border: Border.all(
-                    color:
-                        _WorkspaceHubScreenState._greenBorder,
-                    width: .8,
+              if (!compact) ...[
+                Container(
+                  width: 3,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: _WorkspaceHubScreenState._green,
+                    borderRadius: BorderRadius.circular(99),
                   ),
                 ),
-                child: Icon(
-                  data.icon,
-                  color:
-                      _WorkspaceHubScreenState._greenDark,
-                  size: compact ? 23 : 26,
-                ),
+                const SizedBox(width: 15),
+              ],
+              _HubIdentityImage(
+                imageUrl: data.imageUrl,
+                size: compact ? 50 : 56,
+                circular: data.circularImage,
               ),
               SizedBox(
                 width: compact ? 12 : 15,
@@ -1172,10 +1318,10 @@ class _WorkspaceChoiceCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              const Icon(
-                Icons.chevron_right_rounded,
-                size: 22,
-                color: _WorkspaceHubScreenState._greenDark,
+              const _SportotekaDots(
+                color:
+                    _WorkspaceHubScreenState._greenDark,
+                compact: true,
               ),
             ],
           ),
@@ -1185,8 +1331,60 @@ class _WorkspaceChoiceCard extends StatelessWidget {
   }
 }
 
+class _HubIdentityImage extends StatelessWidget {
+  const _HubIdentityImage({
+    required this.imageUrl,
+    required this.size,
+    this.circular = false,
+  });
+
+  final String? imageUrl;
+  final double size;
+  final bool circular;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = (imageUrl ?? '').trim();
+    final radius = circular ? size / 2 : 11.0;
+
+    Widget fallback() {
+      return Container(
+        width: size,
+        height: size,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: _WorkspaceHubScreenState._greenSoft,
+          borderRadius: BorderRadius.circular(radius),
+        ),
+        child: const _SportotekaDots(
+          color: _WorkspaceHubScreenState._greenDark,
+        ),
+      );
+    }
+
+    if (url.isEmpty) {
+      return fallback();
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: Image.network(
+        url,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => fallback(),
+      ),
+    );
+  }
+}
+
 class _TrainerNoTeamNotice extends StatelessWidget {
-  const _TrainerNoTeamNotice();
+  const _TrainerNoTeamNotice({
+    this.compact = false,
+  });
+
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -1197,19 +1395,24 @@ class _TrainerNoTeamNotice extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: _WorkspaceHubScreenState._soft,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: _WorkspaceHubScreenState._divider,
-          width: .7,
-        ),
+        borderRadius: BorderRadius.circular(compact ? 12 : 10),
+        border: compact
+            ? null
+            : Border.all(
+                color: _WorkspaceHubScreenState._divider,
+                width: .7,
+              ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
-            Icons.info_outline_rounded,
-            size: 17,
-            color: _WorkspaceHubScreenState._subtle,
+          const Padding(
+            padding: EdgeInsets.only(top: 3),
+            child: _SportotekaDots(
+              color:
+                  _WorkspaceHubScreenState._subtle,
+              compact: true,
+            ),
           ),
           const SizedBox(width: 9),
           Expanded(
@@ -1241,24 +1444,94 @@ class _SportotekaMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: size,
       height: size,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: _WorkspaceHubScreenState._greenSoft,
-        borderRadius: BorderRadius.circular(
-          size * .23,
-        ),
-        border: Border.all(
-          color: _WorkspaceHubScreenState._greenBorder,
-          width: .8,
+      child: const Center(
+        child: _SportotekaDots(
+          color:
+              _WorkspaceHubScreenState._green,
+          brand: true,
         ),
       ),
-      child: Icon(
-        Icons.sports_soccer_outlined,
-        color: _WorkspaceHubScreenState._greenDark,
-        size: size * .52,
+    );
+  }
+}
+
+class _SportotekaDots extends StatelessWidget {
+  const _SportotekaDots({
+    required this.color,
+    this.compact = false,
+    this.brand = false,
+  });
+
+  final Color color;
+  final bool compact;
+  final bool brand;
+
+  @override
+  Widget build(BuildContext context) {
+    final scale = brand
+        ? 1.18
+        : compact
+            ? .72
+            : 1.0;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment:
+          CrossAxisAlignment.center,
+      children: <Widget>[
+        _SportotekaDot(
+          size: 3.4 * scale,
+          color: color,
+          opacity: .32,
+        ),
+        SizedBox(width: 3.2 * scale),
+        _SportotekaDot(
+          size: 4.4 * scale,
+          color: color,
+          opacity: .55,
+        ),
+        SizedBox(width: 3.2 * scale),
+        _SportotekaDot(
+          size: 5.4 * scale,
+          color: color,
+          opacity: .78,
+        ),
+        SizedBox(width: 3.2 * scale),
+        _SportotekaDot(
+          size: 6.4 * scale,
+          color: color,
+          opacity: 1,
+        ),
+      ],
+    );
+  }
+}
+
+class _SportotekaDot extends StatelessWidget {
+  const _SportotekaDot({
+    required this.size,
+    required this.color,
+    required this.opacity,
+  });
+
+  final double size;
+  final Color color;
+  final double opacity;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: opacity,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+        ),
       ),
     );
   }

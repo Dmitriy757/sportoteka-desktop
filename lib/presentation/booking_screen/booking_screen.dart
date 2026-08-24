@@ -4,6 +4,7 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 
 import 'package:sportoteka/presentation/booking_screen/add_venue_screen.dart';
 import 'package:sportoteka/presentation/booking_screen/my_bookings_screen.dart';
@@ -49,8 +50,8 @@ class _BookingScreenState extends State<BookingScreen> {
   bool _canLoadMore = true;
   bool _loadingMore = false;
 
-  VenueCatalogView _view = VenueCatalogView.list;
-  bool _grid = false;
+  VenueCatalogView _view = VenueCatalogView.grid;
+  bool _grid = true;
 
   @override
   void initState() {
@@ -70,6 +71,7 @@ class _BookingScreenState extends State<BookingScreen> {
   // ------------------- DATA -------------------
 
   void _onSearchChanged() {
+    if (mounted) setState(() {});
     _searchDebounce?.cancel();
     _searchDebounce = Timer(const Duration(milliseconds: 450), () {
       _loadFirst();
@@ -210,161 +212,451 @@ class _BookingScreenState extends State<BookingScreen> {
     );
   }
 
-  // ------------------- UI -------------------
+  // ------------------- CMR / TRACKER UI -------------------
+
+  TextStyle _t(
+    double size, {
+    FontWeight weight = FontWeight.w400,
+    Color color = _BookingUi.text,
+    double height = 1.2,
+  }) {
+    return AppTypography.custom(
+      size: size,
+      weight: weight,
+      color: color,
+      height: height,
+      letterSpacing: 0,
+    );
+  }
+
+  Widget _brandDots({Color color = _BookingUi.green}) {
+    const sizes = <double>[3.5, 4.5, 5.5, 6.5];
+    const opacities = <double>[.34, .48, .68, 1];
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        for (var i = 0; i < sizes.length; i++) ...[
+          Container(
+            width: sizes[i],
+            height: sizes[i],
+            decoration: BoxDecoration(
+              color: color.withOpacity(opacities[i]),
+              shape: BoxShape.circle,
+              boxShadow: i == sizes.length - 1
+                  ? [
+                      BoxShadow(
+                        color: color.withOpacity(.14),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
+            ),
+          ),
+          if (i != sizes.length - 1) const SizedBox(width: 3),
+        ],
+      ],
+    );
+  }
+
+  Widget _dot(
+    Color color, {
+    double size = 5,
+    bool glow = false,
+  }) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        boxShadow: glow
+            ? [
+                BoxShadow(
+                  color: color.withOpacity(.18),
+                  blurRadius: size * 2,
+                ),
+              ]
+            : null,
+      ),
+    );
+  }
+
+  bool get _hasFilters =>
+      _sport != 'Все' ||
+      _city.isNotEmpty ||
+      _searchCtrl.text.trim().isNotEmpty;
+
+  List<String> get _cityItems => _cities.isEmpty
+      ? const ['Минск', 'Брест', 'Гомель', 'Витебск', 'Гродно', 'Могилёв']
+      : _cities;
+
+  void _resetFilters() {
+    setState(() {
+      _sport = 'Все';
+      _city = '';
+      _searchCtrl.clear();
+    });
+    _loadFirst();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final bg = const Color(0xFFF3F5F8);
+    final base = Theme.of(context);
 
-    return Scaffold(
-      backgroundColor: bg,
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: bg,
-        surfaceTintColor: Colors.transparent,
-        titleSpacing: 16,
-        title: const Text('Площадки', style: TextStyle(fontWeight: FontWeight.w800)),
-        actions: [
-          IconButton(
-            tooltip: _grid ? 'Режим списка' : 'Режим сетки',
-            onPressed: () => setState(() {
-              _grid = !_grid;
-              _view = _grid ? VenueCatalogView.grid : VenueCatalogView.list;
-            }),
-            icon: Icon(_grid ? Icons.view_list_rounded : Icons.grid_view_rounded),
-          ),
-          IconButton(
-            tooltip: 'Мои брони',
-            onPressed: _openMyBookings,
-            icon: const Icon(Icons.book_online_rounded),
-          ),
-          IconButton(
-            tooltip: 'Добавить площадку',
-            onPressed: _openAddVenue,
-            icon: const Icon(Icons.add_location_alt_rounded),
-          ),
-          IconButton(
-            tooltip: 'Обновить',
-            onPressed: _loadFirst,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: _loadFirst,
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(child: _searchAndChips(bg)),
-            SliverToBoxAdapter(child: const SizedBox(height: 8)),
-
-            if (_loading) ...[
-              SliverToBoxAdapter(child: _skeletonList()),
-            ] else if (_err) ...[
-              SliverFillRemaining(hasScrollBody: false, child: _error()),
-            ] else if (_items.isEmpty) ...[
-              SliverFillRemaining(hasScrollBody: false, child: _empty()),
-            ] else if (_view == VenueCatalogView.grid) ...[
-              _gridSliver(),
-              SliverToBoxAdapter(child: _loadMoreFooter()),
-              const SliverToBoxAdapter(child: SizedBox(height: 16)),
-            ] else ...[
-              _listSliver(),
-              SliverToBoxAdapter(child: _loadMoreFooter()),
-              const SliverToBoxAdapter(child: SizedBox(height: 16)),
-            ],
-          ],
+    return Theme(
+      data: base.copyWith(
+        scaffoldBackgroundColor: Colors.white,
+        textTheme: base.textTheme.apply(
+          fontFamily: AppTypography.fontFamily,
+          bodyColor: _BookingUi.text,
+          displayColor: _BookingUi.text,
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF1E74C4),
-        onPressed: _openAddVenue,
-        child: const Icon(Icons.add, color: Colors.white),
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final desktop = constraints.maxWidth >= 980;
+              final compact = constraints.maxWidth < 720;
+
+              return Column(
+                children: [
+                  _topBar(compact: compact, desktop: desktop),
+                  const Divider(
+                    height: 1,
+                    thickness: .6,
+                    color: _BookingUi.line,
+                  ),
+                  Expanded(
+                    child: desktop
+                        ? Row(
+                            children: [
+                              SizedBox(
+                                width: 258,
+                                child: _desktopFilters(),
+                              ),
+                              const VerticalDivider(
+                                width: 1,
+                                thickness: .6,
+                                color: _BookingUi.line,
+                              ),
+                              Expanded(child: _catalog()),
+                            ],
+                          )
+                        : Column(
+                            children: [
+                              _mobileFilters(compact: compact),
+                              const Divider(
+                                height: 1,
+                                thickness: .6,
+                                color: _BookingUi.line,
+                              ),
+                              Expanded(child: _catalog()),
+                            ],
+                          ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
       ),
     );
   }
 
-  // --- Top search + chips ---
-  Widget _searchAndChips(Color bg) {
+  Widget _topBar({required bool compact, required bool desktop}) {
     return Container(
-      decoration: BoxDecoration(color: bg),
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
-      child: Column(
+      constraints: const BoxConstraints(minHeight: 66),
+      color: Colors.white,
+      padding: EdgeInsets.fromLTRB(
+        compact ? 12 : 16,
+        9,
+        compact ? 10 : 14,
+        9,
+      ),
+      child: Row(
         children: [
-          _MatteSurface(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            child: Row(
+          _brandDots(),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.search_rounded, size: 22, color: Color(0xFF64748B)),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: _searchCtrl,
-                    decoration: const InputDecoration(
-                      hintText: 'Поиск по названию / адресу',
-                      border: InputBorder.none,
-                      isDense: true,
-                    ),
-                    textInputAction: TextInputAction.search,
-                    onSubmitted: (_) => _loadFirst(),
+                Text(
+                  'Площадки',
+                  style: _t(
+                    compact ? 15.5 : 17,
+                    weight: FontWeight.w600,
                   ),
                 ),
-                if (_searchCtrl.text.isNotEmpty)
-                  IconButton(
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    icon: const Icon(Icons.close_rounded, size: 20),
-                    onPressed: () {
-                      _searchCtrl.clear();
-                      _loadFirst();
-                    },
+                if (!compact) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Каталог спортивных объектов и бронирование',
+                    style: _t(9.8, color: _BookingUi.muted),
                   ),
+                ],
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          if (!compact) ...[
+            _headerAction(
+              icon: Icons.book_online_outlined,
+              label: 'Мои брони',
+              onTap: _openMyBookings,
+            ),
+            const SizedBox(width: 6),
+            _headerAction(
+              icon: Icons.add_location_alt_outlined,
+              label: desktop ? 'Добавить площадку' : 'Добавить',
+              onTap: _openAddVenue,
+              primary: true,
+            ),
+            const SizedBox(width: 6),
+          ] else ...[
+            _iconAction(
+              icon: Icons.book_online_outlined,
+              tooltip: 'Мои брони',
+              onTap: _openMyBookings,
+            ),
+            const SizedBox(width: 5),
+            _iconAction(
+              icon: Icons.add_rounded,
+              tooltip: 'Добавить площадку',
+              onTap: _openAddVenue,
+              primary: true,
+            ),
+            const SizedBox(width: 5),
+          ],
+          _iconAction(
+            icon: Icons.refresh_rounded,
+            tooltip: 'Обновить',
+            onTap: _loadFirst,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _headerAction({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool primary = false,
+  }) {
+    return Material(
+      color: primary ? _BookingUi.green : _BookingUi.soft,
+      borderRadius: BorderRadius.circular(9),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: primary ? Colors.white : _BookingUi.greenDark,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: _t(
+                  9.8,
+                  weight: FontWeight.w600,
+                  color: primary ? Colors.white : _BookingUi.greenDark,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _iconAction({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+    bool primary = false,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: primary ? _BookingUi.green : _BookingUi.soft,
+        borderRadius: BorderRadius.circular(9),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(9),
+          child: SizedBox(
+            width: 36,
+            height: 36,
+            child: Icon(
+              icon,
+              size: 17,
+              color: primary ? Colors.white : _BookingUi.text,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _desktopFilters() {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 18),
+      child: ListView(
+        children: [
+          Row(
+            children: [
+              _brandDots(color: _BookingUi.greenDark),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Поиск и фильтры',
+                  style: _t(11.4, weight: FontWeight.w600),
+                ),
+              ),
+              if (_hasFilters)
+                InkWell(
+                  onTap: _resetFilters,
+                  borderRadius: BorderRadius.circular(7),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    child: Text(
+                      'Сбросить',
+                      style: _t(
+                        8.9,
+                        weight: FontWeight.w600,
+                        color: _BookingUi.red,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _searchField(),
+          const SizedBox(height: 14),
+          _sectionLabel('Вид спорта', _BookingUi.green),
+          const SizedBox(height: 7),
+          ..._sports.map(
+            (sport) => Padding(
+              padding: const EdgeInsets.only(bottom: 5),
+              child: _sportRow(sport),
+            ),
+          ),
+          const SizedBox(height: 10),
+          _sectionLabel('Город', _BookingUi.amber),
+          const SizedBox(height: 7),
+          _popupFilter(
+            label: _city.isEmpty ? 'Все города' : _city,
+            items: _cityItems,
+            current: _city,
+            dotColor: _BookingUi.amber,
+            allowEmpty: true,
+            fullWidth: true,
+            onSelected: (value) {
+              setState(() => _city = value);
+              _loadFirst();
+            },
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: _BookingUi.soft,
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _brandDots(),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Выберите площадку — расписание и бронирование откроются в карточке объекта.',
+                    style: _t(9.3, color: _BookingUi.muted, height: 1.35),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _mobileFilters({required bool compact}) {
+    return Container(
+      color: Colors.white,
+      padding: EdgeInsets.fromLTRB(compact ? 10 : 14, 9, compact ? 10 : 14, 9),
+      child: Column(
+        children: [
+          _searchField(),
+          const SizedBox(height: 7),
           SizedBox(
-            height: 42,
+            height: 38,
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: [
-                _FilterChipMatte(
+                _popupFilter(
                   label: _sport == 'Все' ? 'Вид спорта' : _sport,
-                  icon: Icons.sports_soccer_rounded,
-                  onTap: () => _pickFilter('Вид спорта', _sport, _sports, (v) {
-                    setState(() => _sport = v);
+                  items: _sports,
+                  current: _sport,
+                  dotColor: _BookingUi.green,
+                  onSelected: (value) {
+                    setState(() => _sport = value);
                     _loadFirst();
-                  }),
-                  selected: _sport != 'Все',
+                  },
                 ),
-                _FilterChipMatte(
+                const SizedBox(width: 6),
+                _popupFilter(
                   label: _city.isEmpty ? 'Город' : _city,
-                  icon: Icons.location_city_rounded,
-                  onTap: () => _pickFilter('Город', _city, _cities.isEmpty ? ['Минск', 'Брест', 'Гомель', 'Витебск', 'Гродно', 'Могилёв'] : _cities, (v) {
-                    setState(() => _city = v);
+                  items: _cityItems,
+                  current: _city,
+                  dotColor: _BookingUi.amber,
+                  allowEmpty: true,
+                  onSelected: (value) {
+                    setState(() => _city = value);
                     _loadFirst();
-                  }),
-                  selected: _city.isNotEmpty,
+                  },
                 ),
-                if (_sport != 'Все' || _city.isNotEmpty || _searchCtrl.text.isNotEmpty)
-                  _FilterChipMatte(
-                    label: 'Сбросить',
-                    icon: Icons.filter_alt_off_rounded,
-                    onTap: () {
-                      setState(() {
-                        _sport = 'Все';
-                        _city = '';
-                        _searchCtrl.clear();
-                      });
-                      _loadFirst();
-                    },
-                    selected: true,
+                if (_hasFilters) ...[
+                  const SizedBox(width: 6),
+                  Material(
+                    color: _BookingUi.redSoft,
+                    borderRadius: BorderRadius.circular(8),
+                    child: InkWell(
+                      onTap: _resetFilters,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+                        child: Row(
+                          children: [
+                            _dot(_BookingUi.red, size: 4.5),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Сбросить',
+                              style: _t(
+                                9.4,
+                                weight: FontWeight.w600,
+                                color: _BookingUi.red,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
-              ].expand((w) sync* {
-                yield w;
-                yield const SizedBox(width: 8);
-              }).toList()
-                ..removeLast(),
+                ],
+              ],
             ),
           ),
         ],
@@ -372,330 +664,762 @@ class _BookingScreenState extends State<BookingScreen> {
     );
   }
 
-  Future<void> _pickFilter(
-    String title,
-    String current,
-    List<String> items,
-    void Function(String) onPick,
-  ) async {
-    final value = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+  Widget _searchField() {
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: _BookingUi.soft,
+        borderRadius: BorderRadius.circular(9),
       ),
-      builder: (_) {
-        return SafeArea(
+      child: Row(
+        children: [
+          const Icon(Icons.search_rounded, size: 17, color: _BookingUi.muted2),
+          const SizedBox(width: 7),
+          Expanded(
+            child: TextField(
+              controller: _searchCtrl,
+              textInputAction: TextInputAction.search,
+              style: _t(10.4),
+              decoration: InputDecoration(
+                hintText: 'Название или адрес',
+                hintStyle: _t(10.2, color: _BookingUi.muted2),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+              onSubmitted: (_) => _loadFirst(),
+            ),
+          ),
+          if (_searchCtrl.text.isNotEmpty)
+            InkWell(
+              onTap: () {
+                _searchCtrl.clear();
+                _loadFirst();
+              },
+              borderRadius: BorderRadius.circular(7),
+              child: const SizedBox(
+                width: 26,
+                height: 26,
+                child: Icon(Icons.close_rounded, size: 15, color: _BookingUi.muted),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionLabel(String text, Color color) {
+    return Row(
+      children: [
+        _dot(color, size: 5, glow: true),
+        const SizedBox(width: 7),
+        Text(text, style: _t(9.8, weight: FontWeight.w600)),
+      ],
+    );
+  }
+
+  Widget _sportRow(String sport) {
+    final selected = _sport == sport;
+    return Material(
+      color: selected ? _BookingUi.greenSoft : Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: () {
+          setState(() => _sport = sport);
+          _loadFirst();
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: SizedBox(
+          height: 34,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+            padding: const EdgeInsets.symmetric(horizontal: 9),
+            child: Row(
               children: [
-                Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 12),
-                SizedBox(
-                  height: MediaQuery.of(context).size.height * 0.5,
-                  child: ListView.separated(
-                    itemCount: items.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (_, i) {
-                      final v = items[i];
-                      final selected = v == current;
-                      return ListTile(
-                        title: Text(v),
-                        trailing: selected ? const Icon(Icons.check_rounded) : null,
-                        onTap: () => Navigator.pop(context, v),
-                      );
-                    },
+                _dot(
+                  selected ? _BookingUi.green : _BookingUi.muted2,
+                  size: selected ? 5.5 : 4,
+                  glow: selected,
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    sport,
+                    style: _t(
+                      9.7,
+                      weight: selected ? FontWeight.w600 : FontWeight.w500,
+                      color: selected ? _BookingUi.greenDark : _BookingUi.text,
+                    ),
                   ),
                 ),
+                if (selected)
+                  const Icon(Icons.check_rounded, size: 14, color: _BookingUi.greenDark),
               ],
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
-
-    if (value != null) onPick(value);
   }
 
-  // --- Slivers ---
-  Widget _listSliver() {
-    return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-      sliver: SliverList.separated(
-        itemCount: _items.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
-        itemBuilder: (_, i) => _venueTile(_items[i]),
+  Widget _popupFilter({
+    required String label,
+    required List<String> items,
+    required String current,
+    required Color dotColor,
+    required ValueChanged<String> onSelected,
+    bool allowEmpty = false,
+    bool fullWidth = false,
+  }) {
+    final selected = allowEmpty ? current.isNotEmpty : current != 'Все';
+
+    return PopupMenuButton<String>(
+      tooltip: '',
+      color: Colors.white,
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      onSelected: onSelected,
+      itemBuilder: (context) {
+        final result = <PopupMenuEntry<String>>[];
+
+        if (allowEmpty) {
+          result.add(
+            PopupMenuItem<String>(
+              value: '',
+              child: Row(
+                children: [
+                  _dot(current.isEmpty ? _BookingUi.green : _BookingUi.muted2, size: 4.5),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Все города',
+                    style: _t(
+                      10.2,
+                      weight: current.isEmpty ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        for (final item in items) {
+          result.add(
+            PopupMenuItem<String>(
+              value: item,
+              child: Row(
+                children: [
+                  _dot(item == current ? dotColor : _BookingUi.muted2, size: 4.5),
+                  const SizedBox(width: 8),
+                  Text(
+                    item,
+                    style: _t(
+                      10.2,
+                      weight: item == current ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        return result;
+      },
+      child: Container(
+        width: fullWidth ? double.infinity : null,
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 9),
+        decoration: BoxDecoration(
+          color: selected ? _BookingUi.greenSoft : _BookingUi.soft,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: fullWidth ? MainAxisSize.max : MainAxisSize.min,
+          children: [
+            _dot(selected ? dotColor : _BookingUi.muted2, size: selected ? 5 : 4, glow: selected),
+            const SizedBox(width: 7),
+            if (fullWidth)
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _t(
+                    9.7,
+                    weight: selected ? FontWeight.w600 : FontWeight.w500,
+                    color: selected ? _BookingUi.greenDark : _BookingUi.text,
+                  ),
+                ),
+              )
+            else
+              Text(
+                label,
+                style: _t(
+                  9.7,
+                  weight: selected ? FontWeight.w600 : FontWeight.w500,
+                  color: selected ? _BookingUi.greenDark : _BookingUi.text,
+                ),
+              ),
+            const SizedBox(width: 6),
+            const Icon(Icons.expand_more_rounded, size: 15, color: _BookingUi.muted),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _catalog() {
+    return RefreshIndicator(
+      color: _BookingUi.green,
+      onRefresh: _loadFirst,
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (sn) {
+          if (sn.metrics.pixels >= sn.metrics.maxScrollExtent - 320) {
+            _loadMore();
+          }
+          return false;
+        },
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+          SliverToBoxAdapter(child: _catalogHeader()),
+          if (_loading)
+            SliverToBoxAdapter(child: _skeletonList())
+          else if (_err)
+            SliverFillRemaining(hasScrollBody: false, child: _error())
+          else if (_items.isEmpty)
+            SliverFillRemaining(hasScrollBody: false, child: _empty())
+          else if (_view == VenueCatalogView.grid)
+            _gridSliver()
+          else
+            _listSliver(),
+          if (!_loading && !_err && _items.isNotEmpty)
+            SliverToBoxAdapter(child: _loadMoreFooter()),
+            const SliverToBoxAdapter(child: SizedBox(height: 20)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _catalogHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 560;
+          return Row(
+            children: [
+              _dot(_BookingUi.green, size: 6, glow: true),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _loading ? 'Загрузка площадок' : '${_items.length} ${_venueWord(_items.length)}',
+                      style: _t(11.8, weight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _filterSummary(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _t(9.4, color: _BookingUi.muted),
+                    ),
+                  ],
+                ),
+              ),
+              if (!compact) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _BookingUi.soft,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      _dot(_BookingUi.amber, size: 4.5),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Нажмите на площадку для бронирования',
+                        style: _t(9.1, color: _BookingUi.muted),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+              _viewToggle(),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  String _filterSummary() {
+    final parts = <String>[];
+    if (_sport != 'Все') parts.add(_sport);
+    if (_city.isNotEmpty) parts.add(_city);
+    if (_searchCtrl.text.trim().isNotEmpty) parts.add('«${_searchCtrl.text.trim()}»');
+    return parts.isEmpty ? 'Все доступные спортивные объекты' : parts.join(' · ');
+  }
+
+  String _venueWord(int count) {
+    final mod100 = count % 100;
+    final mod10 = count % 10;
+    if (mod100 >= 11 && mod100 <= 14) return 'площадок';
+    if (mod10 == 1) return 'площадка';
+    if (mod10 >= 2 && mod10 <= 4) return 'площадки';
+    return 'площадок';
+  }
+
+  Widget _viewToggle() {
+    return Container(
+      height: 34,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: _BookingUi.soft,
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _viewButton(
+            Icons.grid_view_rounded,
+            selected: _view == VenueCatalogView.grid,
+            onTap: () => setState(() {
+              _grid = true;
+              _view = VenueCatalogView.grid;
+            }),
+          ),
+          _viewButton(
+            Icons.view_list_rounded,
+            selected: _view == VenueCatalogView.list,
+            onTap: () => setState(() {
+              _grid = false;
+              _view = VenueCatalogView.list;
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _viewButton(IconData icon, {required bool selected, required VoidCallback onTap}) {
+    return Material(
+      color: selected ? Colors.white : Colors.transparent,
+      borderRadius: BorderRadius.circular(7),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(7),
+        child: SizedBox(
+          width: 29,
+          height: 28,
+          child: Icon(
+            icon,
+            size: 15,
+            color: selected ? _BookingUi.greenDark : _BookingUi.muted2,
+          ),
+        ),
       ),
     );
   }
 
   Widget _gridSliver() {
     return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 14),
       sliver: SliverGrid.builder(
         itemCount: _items.length,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 0.86,
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 360,
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: 1.12,
         ),
-        itemBuilder: (_, i) => _venueCardGrid(_items[i]),
+        itemBuilder: (_, i) => _venueGridCard(_items[i]),
       ),
     );
   }
 
-  // --- Tiles ---
-  Widget _venueTile(Map<String, dynamic> v) {
+  Widget _listSliver() {
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      sliver: SliverList.separated(
+        itemCount: _items.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 7),
+        itemBuilder: (_, i) => _venueListTile(_items[i]),
+      ),
+    );
+  }
+
+  Widget _venueGridCard(Map<String, dynamic> v) {
     final title = (v['title'] ?? v['name'] ?? 'Площадка').toString();
     final address = (v['address'] ?? v['location'] ?? '').toString();
     final sport = (v['sport'] ?? v['category'] ?? '').toString();
+    final city = (v['city'] ?? '').toString();
     final image = _normalizeImage(v);
 
-    return _MatteSurface(
-      onTap: () => _openVenue(v),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _VenueImage(image: image, fallbackIcon: Icons.location_on_rounded),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 6),
-                  if (address.isNotEmpty)
+    return Material(
+      color: _BookingUi.soft,
+      borderRadius: BorderRadius.circular(10),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _openVenue(v),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 11,
+              child: _VenueImage(
+                image: image,
+                fallbackIcon: Icons.location_on_outlined,
+                radius: 0,
+              ),
+            ),
+            Expanded(
+              flex: 10,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Row(
                       children: [
-                        Icon(Icons.place_rounded, size: 14, color: Colors.grey[600]),
+                        _dot(_BookingUi.green, size: 5, glow: true),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            address,
-                            style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                            sport.isEmpty ? 'Спортивная площадка' : sport,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
+                            style: _t(
+                              8.9,
+                              weight: FontWeight.w600,
+                              color: _BookingUi.greenDark,
+                            ),
                           ),
+                        ),
+                        if (city.isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          _dot(_BookingUi.amber, size: 4),
+                          const SizedBox(width: 5),
+                          Flexible(
+                            child: Text(
+                              city,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _t(8.7, color: _BookingUi.muted),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: _t(11.6, weight: FontWeight.w600),
+                    ),
+                    if (address.isNotEmpty) ...[
+                      const SizedBox(height: 5),
+                      Text(
+                        address,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _t(9.2, color: _BookingUi.muted),
+                      ),
+                    ],
+                    const Spacer(),
+                    Row(
+                      children: [
+                        _brandDots(color: _BookingUi.greenDark),
+                        const Spacer(),
+                        Text(
+                          'Забронировать',
+                          style: _t(
+                            9.3,
+                            weight: FontWeight.w600,
+                            color: _BookingUi.greenDark,
+                          ),
+                        ),
+                        const SizedBox(width: 3),
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          size: 15,
+                          color: _BookingUi.greenDark,
                         ),
                       ],
                     ),
-                  if (sport.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Row(
-                        children: [
-                          Icon(Icons.sports_rounded, size: 14, color: Colors.grey[600]),
-                          const SizedBox(width: 6),
-                          Text(sport, style: const TextStyle(color: Color(0xFF64748B), fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                  const SizedBox(height: 10),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: FilledButton.tonal(
-                      onPressed: () => _openVenue(v),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFFEFF6FF),
-                        foregroundColor: const Color(0xFF1D4ED8),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
-                      ),
-                      child: const Text('Забронировать'),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8)),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _venueCardGrid(Map<String, dynamic> v) {
+  Widget _venueListTile(Map<String, dynamic> v) {
     final title = (v['title'] ?? v['name'] ?? 'Площадка').toString();
     final address = (v['address'] ?? v['location'] ?? '').toString();
+    final sport = (v['sport'] ?? v['category'] ?? '').toString();
+    final city = (v['city'] ?? '').toString();
     final image = _normalizeImage(v);
 
-    return _MatteSurface(
-      padding: const EdgeInsets.all(12),
-      onTap: () => _openVenue(v),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _VenueImage(
-            image: image,
-            fallbackIcon: Icons.location_on_rounded,
-            height: 110,
-            borderRadius: 10,
-          ),
-          const SizedBox(height: 10),
-          Text(
-            title,
-            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 6),
-          if (address.isNotEmpty)
-            Row(
-              children: [
-                Icon(Icons.place_rounded, size: 12, color: Colors.grey[600]),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    address,
-                    style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+    return Material(
+      color: _BookingUi.soft,
+      borderRadius: BorderRadius.circular(10),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _openVenue(v),
+        child: Padding(
+          padding: const EdgeInsets.all(9),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 96,
+                height: 82,
+                child: _VenueImage(
+                  image: image,
+                  fallbackIcon: Icons.location_on_outlined,
+                  radius: 9,
                 ),
-              ],
-            ),
-          const Spacer(),
-          Row(
-            children: const [
-              Text(
-                "Открыть",
-                style: TextStyle(color: Color(0xFF0EA5E9), fontWeight: FontWeight.bold, fontSize: 12),
               ),
-              SizedBox(width: 4),
-              Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Color(0xFF0EA5E9)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        _dot(_BookingUi.green, size: 5),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            sport.isEmpty ? 'Спортивная площадка' : sport,
+                            style: _t(
+                              8.9,
+                              weight: FontWeight.w600,
+                              color: _BookingUi.greenDark,
+                            ),
+                          ),
+                        ),
+                        if (city.isNotEmpty) ...[
+                          _dot(_BookingUi.amber, size: 4),
+                          const SizedBox(width: 5),
+                          Text(city, style: _t(8.8, color: _BookingUi.muted)),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _t(11.5, weight: FontWeight.w600),
+                    ),
+                    if (address.isNotEmpty) ...[
+                      const SizedBox(height: 5),
+                      Text(
+                        address,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _t(9.2, color: _BookingUi.muted),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+                decoration: BoxDecoration(
+                  color: _BookingUi.greenSoft,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _dot(_BookingUi.green, size: 4.5),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Забронировать',
+                      style: _t(
+                        9.2,
+                        weight: FontWeight.w600,
+                        color: _BookingUi.greenDark,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
 
   String _normalizeImage(Map<String, dynamic> v) {
-    final raw = (v['image_path'] ?? v['image'] ?? v['imageUrl'] ?? v['photo'] ?? v['logo'] ?? '').toString().trim();
+    final raw = (v['image_path'] ?? v['image'] ?? v['imageUrl'] ?? v['photo'] ?? v['logo'] ?? '')
+        .toString()
+        .trim();
     if (raw.isEmpty) return '';
-    if (raw.startsWith('http')) return raw;
-    // если сервер возвращает относительный путь
-    return 'https://sportotekaapp.ru/$raw';
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+    final clean = raw.startsWith('/') ? raw.substring(1) : raw;
+    return 'https://sportotekaapp.ru/$clean';
   }
 
-  // --- Footer автоподгрузки ---
   Widget _loadMoreFooter() {
-    return NotificationListener<ScrollNotification>(
-      onNotification: (sn) {
-        if (sn.metrics.pixels >= sn.metrics.maxScrollExtent - 240) {
-          _loadMore();
-        }
-        return false;
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Center(
-          child: _loadingMore
-              ? const SizedBox(height: 28, width: 28, child: CircularProgressIndicator(strokeWidth: 2.8))
-              : _canLoadMore
-                  ? const Text('Прокрутите вниз, чтобы загрузить ещё', style: TextStyle(color: Color(0xFF94A3B8)))
-                  : const Text('Больше результатов нет', style: TextStyle(color: Color(0xFF94A3B8))),
-        ),
-      ),
-    );
-  }
-
-  // --- Skeleton / Empty / Error ---
-  Widget _skeletonList() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: Column(
-        children: List.generate(
-          6,
-          (i) => Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _MatteSurface(
-              child: Row(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      child: Center(
+        child: _loadingMore
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: _BookingUi.green,
+                ),
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  const _VenueImageSkeleton(),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        _SkeletonLine(widthFactor: 1.0),
-                        SizedBox(height: 8),
-                        _SkeletonLine(widthFactor: 0.7),
-                        SizedBox(height: 6),
-                        _SkeletonLine(widthFactor: 0.45),
-                      ],
+                  _dot(
+                    _canLoadMore
+                        ? _BookingUi.green
+                        : _BookingUi.muted2,
+                    size: 4.5,
+                  ),
+                  const SizedBox(width: 7),
+                  Text(
+                    _canLoadMore
+                        ? 'Прокрутите ниже — загрузим ещё'
+                        : 'Все площадки загружены',
+                    style: _t(
+                      9.2,
+                      color: _BookingUi.muted,
                     ),
                   ),
                 ],
               ),
+      ),
+    );
+  }
+
+  Widget _skeletonList() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 4),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final columns = constraints.maxWidth >= 980
+              ? 3
+              : constraints.maxWidth >= 620
+                  ? 2
+                  : 1;
+          final width = columns == 1
+              ? constraints.maxWidth
+              : (constraints.maxWidth - (columns - 1) * 10) / columns;
+          return Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: List.generate(
+              6,
+              (_) => SizedBox(width: width, child: const _VenueSkeleton()),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
 
   Widget _empty() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.search_off_rounded, size: 56, color: Color(0xFF94A3B8)),
-            const SizedBox(height: 12),
-            const Text('Площадок не найдено', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-            const SizedBox(height: 6),
-            const Text('Попробуйте изменить фильтры или запрос', style: TextStyle(color: Color(0xFF64748B))),
-            const SizedBox(height: 16),
-            FilledButton.tonal(
-              onPressed: () {
-                setState(() {
-                  _sport = 'Все';
-                  _city = '';
-                  _searchCtrl.clear();
-                });
-                _loadFirst();
-              },
-              child: const Text('Сбросить фильтры'),
-            ),
-          ],
-        ),
-      ),
+    return _stateBlock(
+      color: _BookingUi.amber,
+      icon: Icons.search_off_rounded,
+      title: 'Площадки не найдены',
+      text: 'Измените запрос или сбросьте выбранные фильтры.',
+      actionLabel: 'Сбросить фильтры',
+      onAction: _resetFilters,
     );
   }
 
   Widget _error() {
+    return _stateBlock(
+      color: _BookingUi.red,
+      icon: Icons.error_outline_rounded,
+      title: 'Не удалось загрузить площадки',
+      text: _errMsg ?? 'Проверьте соединение и попробуйте ещё раз.',
+      actionLabel: 'Повторить',
+      onAction: _loadFirst,
+    );
+  }
+
+  Widget _stateBlock({
+    required Color color,
+    required IconData icon,
+    required String title,
+    required String text,
+    required String actionLabel,
+    required VoidCallback onAction,
+  }) {
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 440),
+        margin: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _BookingUi.soft,
+          borderRadius: BorderRadius.circular(11),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline, size: 56, color: Colors.redAccent),
-            const SizedBox(height: 12),
-            const Text('Ошибка загрузки', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-            const SizedBox(height: 6),
-            Text(
-              _errMsg ?? 'Попробуйте ещё раз',
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Color(0xFF64748B)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _dot(color, size: 7, glow: true),
+                const SizedBox(width: 8),
+                Icon(icon, size: 20, color: color),
+              ],
             ),
-            const SizedBox(height: 16),
-            FilledButton(onPressed: _loadFirst, child: const Text('Повторить')),
+            const SizedBox(height: 10),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: _t(12.4, weight: FontWeight.w600),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              text,
+              textAlign: TextAlign.center,
+              style: _t(9.8, color: _BookingUi.muted, height: 1.35),
+            ),
+            const SizedBox(height: 11),
+            Material(
+              color: color == _BookingUi.red ? _BookingUi.redSoft : _BookingUi.greenSoft,
+              borderRadius: BorderRadius.circular(8),
+              child: InkWell(
+                onTap: onAction,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+                  child: Text(
+                    actionLabel,
+                    style: _t(
+                      9.6,
+                      weight: FontWeight.w600,
+                      color: color == _BookingUi.red ? _BookingUi.red : _BookingUi.greenDark,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -703,137 +1427,101 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 }
 
-// ===================== MATTE UI COMPONENTS =====================
-
-class _MatteSurface extends StatelessWidget {
-  final Widget child;
-  final EdgeInsetsGeometry padding;
-  final VoidCallback? onTap;
-
-  const _MatteSurface({
-    required this.child,
-    this.padding = const EdgeInsets.all(12),
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final content = Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: const [
-          BoxShadow(color: Color(0x11000000), blurRadius: 16, offset: Offset(0, 6)),
-        ],
-      ),
-      child: child,
-    );
-
-    if (onTap != null) {
-      return Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: onTap,
-          child: content,
-        ),
-      );
-    }
-    return content;
-  }
+class _BookingUi {
+  static const green = Color(0xFF00A750);
+  static const greenDark = Color(0xFF067A46);
+  static const greenSoft = Color(0xFFF3FAF6);
+  static const amber = Color(0xFFF59E0B);
+  static const red = Color(0xFFD92D20);
+  static const redSoft = Color(0xFFFFF1F1);
+  static const text = Color(0xFF0B0F14);
+  static const muted = Color(0xFF667085);
+  static const muted2 = Color(0xFF98A2B3);
+  static const soft = Color(0xFFF7F9F8);
+  static const line = Color(0xFFEEF1EF);
 }
 
 class _VenueImage extends StatelessWidget {
   final String image;
   final IconData fallbackIcon;
-  final double? height;
-  final double borderRadius;
+  final double radius;
 
   const _VenueImage({
     required this.image,
     required this.fallbackIcon,
-    this.height,
-    this.borderRadius = 12,
+    this.radius = 10,
   });
 
   @override
   Widget build(BuildContext context) {
-    final size = height ?? 56;
+    final fallback = Container(
+      color: const Color(0xFFF0F4F1),
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              color: _BookingUi.green,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(height: 7),
+          Icon(fallbackIcon, size: 22, color: _BookingUi.greenDark),
+        ],
+      ),
+    );
+
+    if (image.isEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: fallback,
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: Image.network(
+        image,
+        width: double.infinity,
+        height: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => fallback,
+      ),
+    );
+  }
+}
+
+class _VenueSkeleton extends StatelessWidget {
+  const _VenueSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      width: size,
-      height: size,
+      height: 238,
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(borderRadius),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        color: _BookingUi.soft,
+        borderRadius: BorderRadius.circular(10),
       ),
       clipBehavior: Clip.antiAlias,
-      child: image.isNotEmpty
-          ? Image.network(
-              image,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Icon(fallbackIcon, color: const Color(0xFF0EA5E9)),
-            )
-          : Icon(fallbackIcon, color: const Color(0xFF0EA5E9)),
-    );
-  }
-}
-
-class _VenueImageSkeleton extends StatelessWidget {
-  const _VenueImageSkeleton();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 56,
-      height: 56,
-      decoration: BoxDecoration(
-        color: const Color(0xFFE5E7EB),
-        borderRadius: BorderRadius.circular(12),
-      ),
-    );
-  }
-}
-
-class _FilterChipMatte extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _FilterChipMatte({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-    this.selected = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = selected ? const Color(0xFFEFF6FF) : Colors.white;
-    final border = selected ? const Color(0xFF93C5FD) : const Color(0xFFE5E7EB);
-    final text = selected ? const Color(0xFF1D4ED8) : const Color(0xFF334155);
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(24),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: border),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 18, color: text),
-            const SizedBox(width: 6),
-            Text(label, style: TextStyle(color: text, fontWeight: FontWeight.w600)),
-          ],
-        ),
+      child: Column(
+        children: [
+          Expanded(child: Container(color: const Color(0xFFEDF1EF))),
+          const Padding(
+            padding: EdgeInsets.all(10),
+            child: Column(
+              children: [
+                _SkeletonLine(widthFactor: .38),
+                SizedBox(height: 8),
+                _SkeletonLine(widthFactor: .84),
+                SizedBox(height: 7),
+                _SkeletonLine(widthFactor: .58),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -845,13 +1533,16 @@ class _SkeletonLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FractionallySizedBox(
-      widthFactor: widthFactor,
-      child: Container(
-        height: 12,
-        decoration: BoxDecoration(
-          color: const Color(0xFFE5E7EB),
-          borderRadius: BorderRadius.circular(8),
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: FractionallySizedBox(
+        widthFactor: widthFactor,
+        child: Container(
+          height: 10,
+          decoration: BoxDecoration(
+            color: const Color(0xFFE2E7E4),
+            borderRadius: BorderRadius.circular(6),
+          ),
         ),
       ),
     );

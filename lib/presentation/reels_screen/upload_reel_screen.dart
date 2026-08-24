@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 
 import 'package:sportoteka/core/constants/app_colors.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 
 class UploadReelScreen extends StatefulWidget {
@@ -407,55 +408,279 @@ class _UploadReelScreenState extends State<UploadReelScreen>
     }
   }
 
+  TextStyle _t(
+    double size, {
+    FontWeight weight = FontWeight.w400,
+    Color color = const Color(0xFF0B0F14),
+    double height = 1.25,
+  }) {
+    return AppTypography.custom(
+      size: size,
+      weight: weight,
+      color: color,
+      height: height,
+      letterSpacing: 0,
+    );
+  }
+
+  Widget _dot(
+    Color color, {
+    double size = 5,
+    bool glow = false,
+  }) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        boxShadow: glow
+            ? [
+                BoxShadow(
+                  color: color.withOpacity(.18),
+                  blurRadius: size * 2,
+                ),
+              ]
+            : null,
+      ),
+    );
+  }
+
+  Widget _brandDots({
+    Color color = const Color(0xFF00A750),
+  }) {
+    const values = <List<double>>[
+      <double>[3.5, .34],
+      <double>[4.5, .48],
+      <double>[5.5, .68],
+      <double>[6.5, 1],
+    ];
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        for (int i = 0; i < values.length; i++) ...[
+          Container(
+            width: values[i][0],
+            height: values[i][0],
+            decoration: BoxDecoration(
+              color: color.withOpacity(values[i][1]),
+              shape: BoxShape.circle,
+            ),
+          ),
+          if (i != values.length - 1)
+            const SizedBox(width: 3),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final canUpload = !_isUploading &&
         _videoFile != null &&
         _descriptionController.text.trim().isNotEmpty;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
-        title: const Text(
-          "Загрузка Reels",
-          style: TextStyle(
-            fontWeight: FontWeight.w900,
-            color: AppColors.textPrimary,
+    final base = Theme.of(context);
+
+    return Theme(
+      data: base.copyWith(
+        textTheme: base.textTheme.apply(
+          fontFamily: AppTypography.fontFamily,
+          bodyColor: const Color(0xFF0B0F14),
+          displayColor: const Color(0xFF0B0F14),
+        ),
+      ),
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: SafeArea(
+          child: Column(
+            children: [
+              _header(canUpload),
+              const Divider(
+                height: 1,
+                thickness: .6,
+                color: Color(0xFFEEF1EF),
+              ),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
+                  children: [
+                    _section(
+                      title: 'Видео',
+                      subtitle: _videoFile == null
+                          ? 'Выберите ролик из галереи'
+                          : 'Видео готово к публикации',
+                      color: _videoFile == null
+                          ? const Color(0xFF98A2B3)
+                          : const Color(0xFFF59E0B),
+                      child: _buildVideoCard(),
+                    ),
+                    const SizedBox(height: 8),
+                    _section(
+                      title: 'Описание',
+                      subtitle: 'Коротко опишите момент или тренировку',
+                      color: _descriptionController.text.trim().isEmpty
+                          ? const Color(0xFF98A2B3)
+                          : const Color(0xFF00A750),
+                      child: _buildDescriptionCard(),
+                    ),
+                    if (_isUploading) ...[
+                      const SizedBox(height: 8),
+                      _buildUploadingCard(),
+                    ],
+                    const SizedBox(height: 10),
+                    _buildActions(canUpload),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
-        actions: [
+      ),
+    );
+  }
+
+  Widget _header(bool canUpload) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 62),
+      padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
+      child: Row(
+        children: [
+          Material(
+            color: const Color(0xFFF7F9F8),
+            borderRadius: BorderRadius.circular(9),
+            child: InkWell(
+              onTap: _isUploading ? null : () => Navigator.pop(context),
+              borderRadius: BorderRadius.circular(9),
+              child: const SizedBox(
+                width: 36,
+                height: 36,
+                child: Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  size: 15,
+                  color: Color(0xFF0B0F14),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          _brandDots(),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Новый Reels',
+                  style: _t(
+                    14.2,
+                    weight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Подготовьте видео и описание',
+                  style: _t(
+                    9.5,
+                    color: const Color(0xFF667085),
+                  ),
+                ),
+              ],
+            ),
+          ),
           if (_videoFile != null)
-            IconButton(
-              tooltip: _showGrid ? "Скрыть сетку" : "Показать сетку",
-              onPressed: _toggleGrid,
-              icon: Icon(
-                Icons.grid_on_rounded,
-                color: _showGrid ? AppColors.primaryGreen : AppColors.textSecondary,
+            Material(
+              color: _showGrid
+                  ? const Color(0xFFF3FAF6)
+                  : const Color(0xFFF7F9F8),
+              borderRadius: BorderRadius.circular(8),
+              child: InkWell(
+                onTap: _toggleGrid,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 7,
+                  ),
+                  child: Row(
+                    children: [
+                      _dot(
+                        _showGrid
+                            ? const Color(0xFF00A750)
+                            : const Color(0xFF98A2B3),
+                        size: 4.5,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Сетка',
+                        style: _t(
+                          9.1,
+                          weight: FontWeight.w600,
+                          color: _showGrid
+                              ? const Color(0xFF067A46)
+                              : const Color(0xFF667085),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+    );
+  }
+
+  Widget _section({
+    required String title,
+    required String subtitle,
+    required Color color,
+    required Widget child,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F9F8),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionTitle(
-            title: "Видео",
-            right: _videoFile == null ? "не выбрано" : "готово",
+          Row(
+            children: [
+              _dot(
+                color,
+                size: 6,
+                glow: color != const Color(0xFF98A2B3),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: _t(
+                        11.4,
+                        weight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: _t(
+                        9.3,
+                        color: const Color(0xFF667085),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          _buildVideoCard(),
-          const SizedBox(height: 16),
-          const _SectionTitle(title: "Описание", right: ""),
-          const SizedBox(height: 8),
-          _buildDescriptionCard(),
-          const SizedBox(height: 16),
-          if (_isUploading) _buildUploadingCard(),
-          if (_isUploading) const SizedBox(height: 12),
-          _buildActions(canUpload),
+          const SizedBox(height: 10),
+          child,
         ],
       ),
     );
@@ -467,52 +692,50 @@ class _UploadReelScreenState extends State<UploadReelScreen>
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [AppColors.cardShadow],
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(9),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!hasVideo)
             InkWell(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(9),
               onTap: _isUploading ? null : _pickVideo,
               child: Container(
                 height: 210,
                 decoration: BoxDecoration(
                   color: AppColors.primaryGreen.withOpacity(0.10),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: AppColors.primaryGreen.withOpacity(0.18),
-                  ),
+                  borderRadius: BorderRadius.circular(9),
                 ),
                 child: Center(
-                  child: Column(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
-                    children: const [
-                      Icon(
-                        Icons.video_call_outlined,
-                        size: 44,
-                        color: AppColors.primaryGreen,
+                    children: [
+                      _brandDots(
+                        color: const Color(0xFFF59E0B),
                       ),
-                      SizedBox(height: 10),
-                      Text(
-                        "Выбрать видео",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      SizedBox(height: 6),
-                      Text(
-                        "MP4 / MOV — из галереи",
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textSecondary,
-                        ),
+                      const SizedBox(width: 9),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Выбрать видео',
+                            style: _t(
+                              11.2,
+                              weight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'MP4 / MOV · из галереи',
+                            style: _t(
+                              9.4,
+                              color: const Color(0xFF667085),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -528,33 +751,21 @@ class _UploadReelScreenState extends State<UploadReelScreen>
           Row(
             children: [
               Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _isUploading ? null : _pickVideo,
-                  icon: const Icon(Icons.change_circle_outlined),
-                  label: const Text("Заменить"),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.textSecondary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
+                child: _softAction(
+                  label: 'Заменить',
+                  color: const Color(0xFF067A46),
+                  onTap: _isUploading ? null : _pickVideo,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 6),
               Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: (_isUploading || _videoFile == null) ? null : _removeVideo,
-                  icon: const Icon(Icons.delete_outline),
-                  label: const Text("Убрать"),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.error,
-                    side: BorderSide(color: AppColors.error.withOpacity(0.25)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
+                child: _softAction(
+                  label: 'Убрать',
+                  color: const Color(0xFFD92D20),
+                  onTap: (_isUploading || _videoFile == null)
+                      ? null
+                      : _removeVideo,
+                  danger: true,
                 ),
               ),
             ],
@@ -564,12 +775,58 @@ class _UploadReelScreenState extends State<UploadReelScreen>
     );
   }
 
+  Widget _softAction({
+    required String label,
+    required Color color,
+    required VoidCallback? onTap,
+    bool danger = false,
+  }) {
+    return Material(
+      color: danger
+          ? const Color(0xFFFFF1F1)
+          : const Color(0xFFF3FAF6),
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 9,
+            vertical: 8,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _dot(
+                onTap == null
+                    ? const Color(0xFF98A2B3)
+                    : color,
+                size: 4.5,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: _t(
+                  9.4,
+                  weight: FontWeight.w600,
+                  color: onTap == null
+                      ? const Color(0xFF98A2B3)
+                      : color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildVideoPreview() {
     final c = _videoController;
 
     if (_previewReelsMode) {
       return ClipRRect(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(9),
         child: AspectRatio(
           aspectRatio: 9 / 16,
           child: LayoutBuilder(
@@ -679,7 +936,7 @@ class _UploadReelScreenState extends State<UploadReelScreen>
                                 "FILL 9:16  •  x${_cropScale.toStringAsFixed(2)}",
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontWeight: FontWeight.w900,
+                                  fontWeight: FontWeight.w600,
                                   fontSize: 11,
                                 ),
                               ),
@@ -709,7 +966,7 @@ class _UploadReelScreenState extends State<UploadReelScreen>
         : 16 / 9;
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(9),
       child: AspectRatio(
         aspectRatio: ar,
         child: _previewStackFit(c),
@@ -793,7 +1050,7 @@ class _UploadReelScreenState extends State<UploadReelScreen>
               "FIT  •  rotate=$_manualRotateDeg°",
               style: const TextStyle(
                 color: Colors.white,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w600,
                 fontSize: 11,
                 letterSpacing: 0.2,
               ),
@@ -808,28 +1065,27 @@ class _UploadReelScreenState extends State<UploadReelScreen>
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [AppColors.cardShadow],
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(9),
       ),
       child: TextField(
         controller: _descriptionController,
         enabled: !_isUploading,
         maxLines: 4,
-        style: const TextStyle(
-          color: AppColors.textPrimary,
-          fontWeight: FontWeight.w700,
+        style: _t(
+          10.2,
+          color: const Color(0xFF0B0F14),
         ),
         decoration: InputDecoration(
           hintText: "Например: Лучший момент тренировки / гол / техника…",
-          hintStyle: const TextStyle(
-            color: AppColors.textTertiary,
-            fontWeight: FontWeight.w700,
+          hintStyle: _t(
+            9.7,
+            color: const Color(0xFF98A2B3),
           ),
           filled: true,
-          fillColor: AppColors.background,
+          fillColor: const Color(0xFFF7F9F8),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(9),
             borderSide: BorderSide.none,
           ),
           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -844,19 +1100,28 @@ class _UploadReelScreenState extends State<UploadReelScreen>
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [AppColors.cardShadow],
+        color: const Color(0xFFF7F9F8),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "Загрузка…",
-            style: TextStyle(
-              fontWeight: FontWeight.w900,
-              color: AppColors.textPrimary,
-            ),
+          Row(
+            children: [
+              _dot(
+                const Color(0xFF00A750),
+                size: 5,
+                glow: true,
+              ),
+              const SizedBox(width: 7),
+              Text(
+                'Загрузка…',
+                style: _t(
+                  10.5,
+                  weight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
           ClipRRect(
@@ -873,7 +1138,7 @@ class _UploadReelScreenState extends State<UploadReelScreen>
             "$percent%",
             style: const TextStyle(
               fontSize: 12,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               color: AppColors.textSecondary,
             ),
           ),
@@ -884,88 +1149,50 @@ class _UploadReelScreenState extends State<UploadReelScreen>
 
   Widget _buildActions(bool canUpload) {
     return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        Expanded(
-          child: OutlinedButton(
-            onPressed: _isUploading ? null : () => Navigator.pop(context),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.textSecondary,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-            ),
-            child: const Text("Отмена"),
-          ),
+        _softAction(
+          label: 'Отмена',
+          color: const Color(0xFF667085),
+          onTap: _isUploading ? null : () => Navigator.pop(context),
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: ElevatedButton.icon(
-            onPressed: canUpload ? _uploadReel : null,
-            icon: _isUploading
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: AppColors.white,
-                    ),
-                  )
-                : const Icon(Icons.cloud_upload_outlined),
-            label: const Text("Загрузить"),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryGreen,
-              foregroundColor: AppColors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              textStyle: const TextStyle(fontWeight: FontWeight.w900),
+        const SizedBox(width: 6),
+        FilledButton(
+          onPressed: canUpload ? _uploadReel : null,
+          style: FilledButton.styleFrom(
+            elevation: 0,
+            backgroundColor: const Color(0xFF00A750),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 15,
+              vertical: 10,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(9),
             ),
           ),
+          child: _isUploading
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : Text(
+                  'Опубликовать',
+                  style: _t(
+                    9.8,
+                    weight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
         ),
       ],
     );
   }
-}
 
-class _SectionTitle extends StatelessWidget {
-  final String title;
-  final String right;
-
-  const _SectionTitle({
-    required this.title,
-    required this.right,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            title.toUpperCase(),
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.1,
-              color: AppColors.textTertiary,
-            ),
-          ),
-        ),
-        if (right.isNotEmpty)
-          Text(
-            right,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textSecondary,
-            ),
-          ),
-      ],
-    );
-  }
 }
 
 class _InstagramFillVideo extends StatelessWidget {

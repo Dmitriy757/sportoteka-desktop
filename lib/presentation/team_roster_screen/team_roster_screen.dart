@@ -12,6 +12,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:sportoteka/routes/app_routes.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/core/constants/app_colors.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 
 // ✅ ЧАТ
 import 'package:sportoteka/presentation/chat_screen/chat_room_screen.dart';
@@ -24,11 +25,13 @@ import 'package:pdf/pdf.dart';
 class TeamRosterScreen extends StatefulWidget {
   final int teamId;
   final String teamName;
+  final bool embedded;
 
   const TeamRosterScreen({
     super.key,
     required this.teamId,
     required this.teamName,
+    this.embedded = false,
   });
 
   @override
@@ -38,20 +41,42 @@ class TeamRosterScreen extends StatefulWidget {
 enum _RosterTab { players, staff, parents, managers }
 
 class _RosterPalette {
-  static const Color bg = Color(0xFFF7F8FA);
+  static const Color bg = Colors.white;
   static const Color card = Colors.white;
-  static const Color text = Color(0xFF0F172A);
-  static const Color muted = Color(0xFF64748B);
-  static const Color line = Color(0xFFE5E7EB);
-  static const Color green = Color(0xFF00A750);
-  static const Color greenDark = Color(0xFF008C40);
-  static const Color blue = Color(0xFF2563EB);
-  static const Color blueSoft = Color(0xFFEFF6FF);
-  static const Color cyan = Color(0xFF0891B2);
-  static const Color orange = Color(0xFFEA580C);
-  static const Color purple = Color(0xFF7C3AED);
-  static const Color rose = Color(0xFFE11D48);
+  static const Color soft =
+      Color(0xFFF7F9F8);
+  static const Color soft2 =
+      Color(0xFFF2F5F3);
+  static const Color text =
+      Color(0xFF0B0F14);
+  static const Color muted =
+      Color(0xFF667085);
+  static const Color muted2 =
+      Color(0xFF98A2B3);
+  static const Color line =
+      Color(0xFFEDF0EE);
+  static const Color green =
+      Color(0xFF00A750);
+  static const Color greenDark =
+      Color(0xFF067A46);
+  static const Color greenSoft =
+      Color(0xFFF3FAF6);
+
+  // aliases kept for old helper widgets
+  static const Color blue =
+      greenDark;
+  static const Color blueSoft =
+      greenSoft;
+  static const Color cyan =
+      green;
+  static const Color orange =
+      Color(0xFFF59E0B);
+  static const Color purple =
+      greenDark;
+  static const Color rose =
+      Color(0xFFD92D20);
 }
+
 
 class _TeamRosterScreenState extends State<TeamRosterScreen>
     with SingleTickerProviderStateMixin {
@@ -639,176 +664,386 @@ class _TeamRosterScreenState extends State<TeamRosterScreen>
     }
   }
 
+  Widget _compactTab({
+    required int index,
+    required String title,
+    required int count,
+    required IconData icon,
+  }) {
+    final active =
+        _tab.index == index;
+
+    return Expanded(
+      child: Material(
+        color: active
+            ? _RosterPalette.greenSoft
+            : _RosterPalette.soft,
+        borderRadius:
+            BorderRadius.circular(9),
+        child: InkWell(
+          onTap: () =>
+              _tab.animateTo(index),
+          borderRadius:
+              BorderRadius.circular(9),
+          child: Container(
+            height: 38,
+            padding:
+                const EdgeInsets.symmetric(
+              horizontal: 8,
+            ),
+            child: Row(
+              mainAxisAlignment:
+                  MainAxisAlignment.center,
+              children: <Widget>[
+                Icon(
+                  icon,
+                  size: 16,
+                  color: active
+                      ? _RosterPalette
+                          .greenDark
+                      : _RosterPalette
+                          .muted,
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    '$title $count',
+                    maxLines: 1,
+                    overflow:
+                        TextOverflow.ellipsis,
+                    style:
+                        AppTypography.custom(
+                      size: 9.2,
+                      weight:
+                          FontWeight.w600,
+                      color: active
+                          ? _RosterPalette
+                              .greenDark
+                          : _RosterPalette
+                              .muted,
+                      height: 1.1,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactRoster() {
+    return Column(
+      children: <Widget>[
+        Container(
+          height: 58,
+          padding:
+              const EdgeInsets.symmetric(
+            horizontal: 12,
+          ),
+          decoration:
+              const BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              bottom: BorderSide(
+                color:
+                    _RosterPalette.line,
+                width: .6,
+              ),
+            ),
+          ),
+          child: Row(
+            children: <Widget>[
+              _TeamLogoAvatar(
+                teamName:
+                    widget.teamName,
+                logoUrl: teamLogoUrl,
+                size: 34,
+                compact: true,
+              ),
+              const SizedBox(width: 9),
+              const _RosterDots(),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment:
+                      MainAxisAlignment
+                          .center,
+                  crossAxisAlignment:
+                      CrossAxisAlignment
+                          .start,
+                  children: <Widget>[
+                    Text(
+                      'Состав',
+                      style:
+                          AppTypography.custom(
+                        size: 13,
+                        weight:
+                            FontWeight.w600,
+                        color:
+                            _RosterPalette.text,
+                        height: 1.1,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      widget.teamName,
+                      maxLines: 1,
+                      overflow:
+                          TextOverflow
+                              .ellipsis,
+                      style:
+                          AppTypography.custom(
+                        size: 8.7,
+                        weight:
+                            FontWeight.w400,
+                        color:
+                            _RosterPalette.muted,
+                        height: 1.15,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (canEditRoster)
+                _RosterTextAction(
+                  label: 'Печать',
+                  onTap:
+                      _printPlayersTable,
+                ),
+              const SizedBox(width: 5),
+              _RosterTextAction(
+                label: 'Обновить',
+                onTap: () async {
+                  await Future.wait(
+                    <Future<void>>[
+                      _loadTeamProfileSilent(),
+                      _loadAll(),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding:
+              const EdgeInsets.fromLTRB(
+            10,
+            8,
+            10,
+            7,
+          ),
+          child: Row(
+            children: <Widget>[
+              _compactTab(
+                index: 0,
+                title: 'Игроки',
+                count: players.length,
+                icon:
+                    Icons.people_alt_outlined,
+              ),
+              const SizedBox(width: 5),
+              _compactTab(
+                index: 1,
+                title: 'Штаб',
+                count: staff.length,
+                icon:
+                    Icons.sports_outlined,
+              ),
+              const SizedBox(width: 5),
+              _compactTab(
+                index: 2,
+                title: 'Родители',
+                count: parents.length,
+                icon: Icons
+                    .family_restroom_outlined,
+              ),
+              const SizedBox(width: 5),
+              _compactTab(
+                index: 3,
+                title: 'Руководство',
+                count: managers.length,
+                icon:
+                    Icons.apartment_outlined,
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tab,
+            children: <Widget>[
+              _PlayersTabModern(
+                key:
+                    const PageStorageKey(
+                  'roster_players_tab',
+                ),
+                teamId: widget.teamId,
+                players: players,
+                canEdit: canEditRoster,
+                canOpenPlayerProfile:
+                    role != 'player',
+                onAddPlayer:
+                    canEditRoster
+                        ? () =>
+                            Get.toNamed(
+                              AppRoutes
+                                  .addPlayerScreen,
+                              arguments:
+                                  <String,
+                                      dynamic>{
+                                'teamId':
+                                    widget
+                                        .teamId,
+                              },
+                            )
+                        : null,
+                onPlayerTap: (p) {
+                  final mp =
+                      Map<String,
+                          dynamic>.from(
+                    p,
+                  );
+                  mp['team_id'] =
+                      widget.teamId;
+                  mp['teamId'] =
+                      widget.teamId;
+                  mp['club_id'] =
+                      clubId;
+                  mp['team_name'] =
+                      widget.teamName;
+                  Get.toNamed(
+                    AppRoutes
+                        .playerProfileScreen,
+                    arguments: mp,
+                  );
+                },
+                onPlayerDelete:
+                    _deletePlayer,
+              ),
+              _StaffTabModern(
+                key:
+                    const PageStorageKey(
+                  'roster_staff_tab',
+                ),
+                items: staff,
+                emptyText:
+                    'Тренеры команды не назначены.',
+                onTapTrainer: (t) {
+                  final tid =
+                      _pickTrainerId(t);
+                  final name = _fio(t);
+                  if (tid <= 0) {
+                    return;
+                  }
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          TrainerProfileViewScreen(
+                        trainerId: tid,
+                        trainerName:
+                            name.isEmpty
+                                ? 'Тренер #$tid'
+                                : name,
+                        trainerPhotoRaw:
+                            (t['photo_url'] ??
+                                    t['photo'])
+                                ?.toString(),
+                        trainerEmailRaw:
+                            t['email']
+                                ?.toString(),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              _PeopleTabModern(
+                key:
+                    const PageStorageKey(
+                  'roster_parents_tab',
+                ),
+                items: parents,
+                emptyText:
+                    'Родители не найдены.',
+                icon: Icons
+                    .family_restroom_outlined,
+                accent:
+                    _RosterPalette.green,
+              ),
+              _PeopleTabModern(
+                key:
+                    const PageStorageKey(
+                  'roster_managers_tab',
+                ),
+                items: managers,
+                emptyText:
+                    clubId <= 0
+                        ? 'Не найден club_id.'
+                        : 'Руководство не найдено.',
+                icon: Icons
+                    .apartment_outlined,
+                accent:
+                    _RosterPalette.greenDark,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isTablet = screenWidth >= 700;
+    final firm =
+        AppTypography.custom(
+      size: 11,
+      weight: FontWeight.w400,
+      color: _RosterPalette.text,
+    );
 
-    return Scaffold(
-      backgroundColor: _RosterPalette.bg,
-      body: SafeArea(
-        bottom: false,
-        child: RefreshIndicator(
-          color: _RosterPalette.green,
-          onRefresh: () async {
-            await Future.wait([_loadTeamProfileSilent(), _loadAll()]);
-          },
+    final theme =
+        Theme.of(context).copyWith(
+      scaffoldBackgroundColor:
+          Colors.white,
+      colorScheme:
+          Theme.of(context)
+              .colorScheme
+              .copyWith(
+        primary:
+            _RosterPalette.green,
+      ),
+      textTheme:
+          Theme.of(context)
+              .textTheme
+              .apply(
+        fontFamily:
+            firm.fontFamily,
+        bodyColor:
+            _RosterPalette.text,
+        displayColor:
+            _RosterPalette.text,
+      ),
+    );
+
+    return Theme(
+      data: theme,
+      child: Scaffold(
+        backgroundColor:
+            Colors.white,
+        body: SafeArea(
+          bottom: false,
           child: loading
               ? const _RosterLoadingView()
               : error != null
-                  ? _ErrorBlock(text: error!, onRetry: _loadAll)
-                  : NestedScrollView(
-                      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                      headerSliverBuilder: (context, innerBoxIsScrolled) => [
-                        SliverAppBar(
-                          pinned: true,
-                          floating: false,
-                          automaticallyImplyLeading: false,
-                          backgroundColor: _RosterPalette.bg,
-                          surfaceTintColor: Colors.transparent,
-                          elevation: 0,
-                          expandedHeight: isTablet ? 178 : 248,
-                          toolbarHeight: isTablet ? 54 : 60,
-                          leadingWidth: 60,
-                          leading: Padding(
-                            padding: const EdgeInsets.only(left: 12, top: 8, bottom: 8),
-                            child: _SimpleBackButton(onTap: () => Navigator.pop(context)),
-                          ),
-                          titleSpacing: 0,
-                          title: _CollapsedTeamTitle(
-                            teamName: widget.teamName,
-                            logoUrl: teamLogoUrl,
-                            subtitle: _tabTitle(_currentTab),
-                          ),
-                          actions: [
-                            _TopActionButton(icon: Icons.print_rounded, onTap: _printPlayersTable),
-                            const SizedBox(width: 8),
-                            _TopActionButton(
-                              icon: Icons.refresh_rounded,
-                              onTap: () async {
-                                await Future.wait([_loadTeamProfileSilent(), _loadAll()]);
-                              },
-                            ),
-                            const SizedBox(width: 12),
-                          ],
-                          flexibleSpace: FlexibleSpaceBar(
-                            collapseMode: CollapseMode.parallax,
-                            background: Padding(
-                              padding: EdgeInsets.fromLTRB(
-                              isTablet ? 18 : 16,
-                              isTablet ? 60 : 66,
-                              isTablet ? 18 : 16,
-                              isTablet ? 8 : 10,
-                            ),
-                              child: _RosterHero(
-                                teamName: widget.teamName,
-                                logoUrl: teamLogoUrl,
-                                role: _roleLabel(role),
-                                activeSection: _tabTitle(_currentTab),
-                                totalPlayers: players.length,
-                                totalStaff: staff.length,
-                                totalParents: parents.length,
-                                totalManagers: managers.length,
-                                canEdit: canEditRoster,
-                                onAddPlayer: canEditRoster
-                                    ? () => Get.toNamed(
-                                          AppRoutes.addPlayerScreen,
-                                          arguments: {'teamId': widget.teamId},
-                                        )
-                                    : null,
-                              ),
-                            ),
-                          ),
-                        ),
-                        SliverPersistentHeader(
-                          pinned: true,
-                          delegate: _RosterTabsHeaderDelegate(
-                            controller: _tab,
-                            currentTitle: _tabTitle(_currentTab),
-                            currentSubtitle: _sectionSubtitle(_currentTab),
-                            currentCount: _currentCount,
-                            playersCount: players.length,
-                            staffCount: staff.length,
-                            parentsCount: parents.length,
-                            managersCount: managers.length,
-                            onTabTap: (i) => _tab.animateTo(i),
-                            dense: isTablet,
-                          ),
-                        ),
-                      ],
-                      body: TabBarView(
-                        controller: _tab,
-                        children: [
-                          _PlayersTabModern(
-                            key: const PageStorageKey('roster_players_tab'),
-                            teamId: widget.teamId,
-                            players: players,
-                            canEdit: canEditRoster,
-                            canOpenPlayerProfile: role != 'player',
-                            onAddPlayer: canEditRoster
-                                ? () => Get.toNamed(
-                                      AppRoutes.addPlayerScreen,
-                                      arguments: {'teamId': widget.teamId},
-                                    )
-                                : null,
-                            onPlayerTap: (p) {
-                              final mp = Map<String, dynamic>.from(p);
-                              mp['team_id'] = widget.teamId;
-                              mp['teamId'] = widget.teamId;
-                              mp['club_id'] = clubId;
-                              mp['team_name'] = widget.teamName;
-                              Get.toNamed(AppRoutes.playerProfileScreen, arguments: mp);
-                            },
-                            onPlayerDelete: _deletePlayer,
-                          ),
-                          _StaffTabModern(
-                            key: const PageStorageKey('roster_staff_tab'),
-                            items: staff,
-                            emptyText: 'Тренеры команды не назначены.',
-                            onTapTrainer: (t) {
-                              final tid = _pickTrainerId(t);
-                              final name = _fio(t);
-                              if (tid <= 0) {
-                                Get.snackbar(
-                                  'Тренер',
-                                  'Не найден trainer_id в ответе API. Ключи: ${t.keys.toList()}',
-                                  snackPosition: SnackPosition.BOTTOM,
-                                  margin: const EdgeInsets.all(12),
-                                );
-                                return;
-                              }
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => TrainerProfileViewScreen(
-                                    trainerId: tid,
-                                    trainerName: name.isEmpty ? 'Тренер #$tid' : name,
-                                    trainerPhotoRaw: (t['photo_url'] ?? t['photo'])?.toString(),
-                                    trainerEmailRaw: t['email']?.toString(),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                          _PeopleTabModern(
-                            key: const PageStorageKey('roster_parents_tab'),
-                            items: parents,
-                            emptyText: 'Родители не найдены.',
-                            icon: Icons.family_restroom_rounded,
-                            accent: _RosterPalette.orange,
-                          ),
-                          _PeopleTabModern(
-                            key: const PageStorageKey('roster_managers_tab'),
-                            items: managers,
-                            emptyText: clubId <= 0
-                                ? 'Не найден club_id через get_user.php.'
-                                : 'Руководство не найдено.',
-                            icon: Icons.apartment_rounded,
-                            accent: _RosterPalette.purple,
-                          ),
-                        ],
-                      ),
-                    ),
+                  ? _ErrorBlock(
+                      text: error!,
+                      onRetry:
+                          _loadAll,
+                    )
+                  : _buildCompactRoster(),
         ),
       ),
     );
@@ -862,6 +1097,131 @@ class _TeamRosterScreenState extends State<TeamRosterScreen>
       case _RosterTab.managers:
         return 'Ответственные лица и руководство клуба';
     }
+  }
+}
+
+
+class _RosterDot extends StatelessWidget {
+  final Color color;
+  final double size;
+  final double opacity;
+
+  const _RosterDot({
+    required this.color,
+    required this.size,
+    this.opacity = 1,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: opacity,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+        ),
+      ),
+    );
+  }
+}
+
+class _RosterDots extends StatelessWidget {
+  final Color color;
+
+  const _RosterDots({
+    this.color =
+        _RosterPalette.green,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize:
+          MainAxisSize.min,
+      children: <Widget>[
+        _RosterDot(
+          color: color,
+          size: 3.4,
+          opacity: .32,
+        ),
+        const SizedBox(width: 3),
+        _RosterDot(
+          color: color,
+          size: 4.4,
+          opacity: .55,
+        ),
+        const SizedBox(width: 3),
+        _RosterDot(
+          color: color,
+          size: 5.4,
+          opacity: .78,
+        ),
+        const SizedBox(width: 3),
+        _RosterDot(
+          color: color,
+          size: 6.4,
+        ),
+      ],
+    );
+  }
+}
+
+class _RosterTextAction
+    extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _RosterTextAction({
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color:
+          _RosterPalette.greenSoft,
+      borderRadius:
+          BorderRadius.circular(9),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius:
+            BorderRadius.circular(9),
+        child: Container(
+          height: 32,
+          padding:
+              const EdgeInsets.symmetric(
+            horizontal: 8,
+          ),
+          child: Row(
+            children: <Widget>[
+              const _RosterDot(
+                color:
+                    _RosterPalette.green,
+                size: 5,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style:
+                    AppTypography.custom(
+                  size: 8.6,
+                  weight:
+                      FontWeight.w600,
+                  color:
+                      _RosterPalette
+                          .greenDark,
+                  height: 1.1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -1850,7 +2210,7 @@ class _AddPlayerWideButton extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(10),
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.all(14),
@@ -2292,12 +2652,8 @@ class _ModernCard extends StatelessWidget {
     final box = Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: _RosterPalette.line),
-        boxShadow: const [
-          BoxShadow(color: Color(0x0F000000), blurRadius: 18, offset: Offset(0, 8)),
-        ],
+        color: _RosterPalette.soft,
+        borderRadius: BorderRadius.circular(10),
       ),
       child: child,
     );
@@ -2391,9 +2747,8 @@ class _MiniInfoPill extends StatelessWidget {
       constraints: const BoxConstraints(maxWidth: 180),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: _RosterPalette.line),
+        color: _RosterPalette.soft2,
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -2819,95 +3174,73 @@ class _TrainerHeroCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: const LinearGradient(
-          colors: [_RosterPalette.blue, _RosterPalette.cyan, _RosterPalette.green],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        boxShadow: const [
-          BoxShadow(color: Color(0x332563EB), blurRadius: 26, offset: Offset(0, 14)),
-        ],
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              _TrainerCircleNetworkImage(
-                imageUrl: photo,
-                size: 96,
-                borderColor: Colors.white.withOpacity(0.35),
-                borderWidth: 3,
-                glow: Colors.white.withOpacity(0.12),
-                fallback: Container(
-                  color: Colors.white.withOpacity(0.20),
-                  child: const Icon(Icons.person_outline_rounded, color: Colors.white, size: 48),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const _HeroPill(icon: Icons.badge_rounded, text: 'Визитка тренера'),
-                    const SizedBox(height: 12),
-                    Text(
-                      name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 23,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                        height: 1.05,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 7),
-                    Text(
-                      email.isNotEmpty ? email : 'ID: $trainerId',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: Colors.white.withOpacity(0.82), fontWeight: FontWeight.w700),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+      padding:
+          const EdgeInsets.all(14),
+      color: Colors.white,
+      child: Row(
+        children: <Widget>[
+          _TrainerCircleNetworkImage(
+            imageUrl: photo,
+            size: 58,
+            borderColor:
+                _RosterPalette.line,
+            borderWidth: 1,
+            fallback: Container(
+              color:
+                  _RosterPalette.soft,
+              alignment:
+                  Alignment.center,
+              child:
+                  const _RosterDots(),
+            ),
           ),
-          const SizedBox(height: 16),
-          if (position.isNotEmpty)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.16),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: Colors.white.withOpacity(0.22)),
-              ),
-              child: Text(
-                position,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
-              ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow:
+                      TextOverflow.ellipsis,
+                  style:
+                      AppTypography.custom(
+                    size: 13,
+                    weight:
+                        FontWeight.w600,
+                    color:
+                        _RosterPalette.text,
+                    height: 1.1,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  position.isNotEmpty
+                      ? position
+                      : (email.isNotEmpty
+                          ? email
+                          : 'ID $trainerId'),
+                  maxLines: 1,
+                  overflow:
+                      TextOverflow.ellipsis,
+                  style:
+                      AppTypography.custom(
+                    size: 9.1,
+                    weight:
+                        FontWeight.w400,
+                    color:
+                        _RosterPalette.muted,
+                    height: 1.2,
+                  ),
+                ),
+              ],
             ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: onChatTap,
-              icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
-              label: const Text('Написать', style: TextStyle(fontWeight: FontWeight.w900)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: _RosterPalette.text,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-              ),
-            ),
+          ),
+          _RosterTextAction(
+            label: 'Написать',
+            onTap: onChatTap,
           ),
         ],
       ),
