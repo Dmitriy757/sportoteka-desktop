@@ -6,6 +6,7 @@ import 'dart:io';
 import 'dart:ui' show FontFeature;
 
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
@@ -14,6 +15,7 @@ import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:mime/mime.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:video_player/video_player.dart';
 
 import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/presentation/my_profile_screen/my_profile_screen.dart';
@@ -48,46 +50,52 @@ class _WinChatColors {
   static const Color line = Color(0xFFEDF0EE);
 }
 
-Color _messageAccent(int index) =>
-    _WinChatColors.greenDark;
+Color _messageAccent(int index) => _WinChatColors.greenDark;
 
-Color _messageAccentSoft(int index) =>
-    _WinChatColors.soft;
+Color _messageAccentSoft(int index) => _WinChatColors.soft;
 
 class _WinChatText {
   static TextStyle title(
     double size, {
     Color color = _WinChatColors.text,
     FontWeight weight = FontWeight.w600,
-  }) =>
-      AppTypography.custom(
-        size: size,
-        weight: weight,
-        color: color,
-        height: 1.12,
-      );
+  }) {
+    final TextStyle base;
+    if (size >= 15) {
+      base = AppTypography.screenTitle(color: color);
+    } else if (size >= 13.5) {
+      base = AppTypography.sectionTitle(color: color);
+    } else if (size >= 11.5) {
+      base = AppTypography.itemTitle(color: color);
+    } else {
+      base = AppTypography.captionMedium(color: color);
+    }
+    return base.copyWith(fontWeight: weight);
+  }
 
   static TextStyle body(
     double size, {
     Color color = _WinChatColors.text,
     FontWeight weight = FontWeight.w400,
-  }) =>
-      AppTypography.custom(
-        size: size,
-        weight: weight,
-        color: color,
-        height: 1.25,
-      );
+  }) {
+    final TextStyle base;
+    if (size >= 12.2) {
+      base = AppTypography.body(color: color);
+    } else if (size >= 11) {
+      base = AppTypography.secondary(color: color);
+    } else if (size >= 10) {
+      base = AppTypography.caption(color: color);
+    } else {
+      base = AppTypography.commentMeta(color: color);
+    }
+    return base.copyWith(fontWeight: weight);
+  }
 
   static TextStyle caption({
     Color color = _WinChatColors.muted,
   }) =>
-      AppTypography.custom(
-        size: 9.6,
-        weight: FontWeight.w500,
-        color: color,
-        height: 1.15,
-      );
+      AppTypography.commentMeta(color: color)
+          .copyWith(fontWeight: FontWeight.w500);
 }
 
 class _RoomDot extends StatelessWidget {
@@ -159,8 +167,6 @@ class _RoomDots extends StatelessWidget {
     );
   }
 }
-
-
 
 class _WinChatDecor {
   static BoxDecoration workspaceBg() => const BoxDecoration(
@@ -432,14 +438,39 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
             low.contains('=image'));
   }
 
+  bool _isVideoType(String type, [String url = '']) {
+    final t = type.toLowerCase().trim();
+    final u = url.toLowerCase();
+    return t == 'video' ||
+        u.endsWith('.mp4') ||
+        u.endsWith('.mov') ||
+        u.endsWith('.m4v') ||
+        u.endsWith('.webm');
+  }
+
+  bool _isImageType(String type, [String url = '']) {
+    final t = type.toLowerCase().trim();
+    final u = url.toLowerCase();
+    return ['image', 'photo', 'picture'].contains(t) ||
+        u.endsWith('.jpg') ||
+        u.endsWith('.jpeg') ||
+        u.endsWith('.png') ||
+        u.endsWith('.gif') ||
+        u.endsWith('.webp');
+  }
+
   String _excerptFromMsg(Map<String, dynamic> m) {
     final type = (m['type'] ?? '').toString().toLowerCase();
-    if (['image', 'photo', 'picture'].contains(type) ||
-        (m['file_url'] != null && m['file_url'].toString().isNotEmpty)) {
-      return '[Фото]';
-    }
+    final fileUrl = (m['file_url'] ?? '').toString();
+
+    if (_isVideoType(type, fileUrl)) return '[Видео]';
+    if (_isImageType(type, fileUrl)) return '[Фото]';
+
     final t = (m['content'] ?? '').toString();
-    if (t.isEmpty) return '[Сообщение]';
+    if (t.isEmpty) {
+      if (fileUrl.isNotEmpty) return '[Файл]';
+      return '[Сообщение]';
+    }
     return t.length > 80 ? '${t.substring(0, 80)}…' : t;
   }
 
@@ -487,21 +518,19 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
   String _memberPhoto(
     Map<String, dynamic> member,
   ) {
-    final raw = (
-      member['photo'] ??
-      member['photo_url'] ??
-      member['avatar'] ??
-      member['avatar_url'] ??
-      ''
-    ).toString().trim();
+    final raw = (member['photo'] ??
+            member['photo_url'] ??
+            member['avatar'] ??
+            member['avatar_url'] ??
+            '')
+        .toString()
+        .trim();
 
-    if (raw.isEmpty ||
-        raw.toLowerCase() == 'null') {
+    if (raw.isEmpty || raw.toLowerCase() == 'null') {
       return '';
     }
 
-    if (raw.startsWith('http://') ||
-        raw.startsWith('https://')) {
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
       return raw;
     }
 
@@ -748,7 +777,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
     return tempId;
   }
 
-  int _addOptimisticImage(String localPath) {
+  int _addOptimisticMedia(
+    String localPath, {
+    required String type,
+  }) {
     final tempId = -DateTime.now().millisecondsSinceEpoch;
     final nowIso = DateTime.now().toUtc().toIso8601String();
 
@@ -774,7 +806,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
       'avatar_url': null,
       'content': '',
       'created_at': nowIso,
-      'type': 'image',
+      'type': type,
       'file_url': null,
       'local_path': localPath,
       'is_deleted': 0,
@@ -790,6 +822,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
     });
     if (_isNearBottom()) _scrollToBottom();
     return tempId;
+  }
+
+  int _addOptimisticImage(String localPath) {
+    return _addOptimisticMedia(localPath, type: 'image');
+  }
+
+  int _addOptimisticVideo(String localPath) {
+    return _addOptimisticMedia(localPath, type: 'video');
   }
 
   void _replaceTempWithServer(int tempId,
@@ -893,6 +933,62 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
     }
   }
 
+  Future<void> _openAttachmentMenu() async {
+    if (!mounted) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Container(
+                    width: 34,
+                    height: 3,
+                    margin: const EdgeInsets.only(bottom: 10),
+                    decoration: BoxDecoration(
+                      color: _WinChatColors.line,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
+                  _AttachmentAction(
+                    icon: Icons.image_outlined,
+                    title: 'Фото',
+                    subtitle: 'Выбрать изображение',
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _pickImage();
+                    },
+                  ),
+                  const SizedBox(height: 5),
+                  _AttachmentAction(
+                    icon: Icons.play_circle_outline_rounded,
+                    title: 'Видео',
+                    subtitle: 'MP4, MOV, M4V или WebM',
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _pickVideo();
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _pickImage() async {
     try {
       final picker = ImagePicker();
@@ -908,41 +1004,106 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
     }
   }
 
+  Future<void> _pickVideo() async {
+    try {
+      File? file;
+
+      if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+        final result = await FilePicker.pickFiles(
+          type: FileType.video,
+          allowMultiple: false,
+        );
+        final path = result?.files.single.path;
+        if (path != null && path.isNotEmpty) {
+          file = File(path);
+        }
+      } else {
+        final picker = ImagePicker();
+        final picked = await picker.pickVideo(
+          source: ImageSource.gallery,
+        );
+        if (picked != null) {
+          file = File(picked.path);
+        }
+      }
+
+      if (file == null) return;
+      await _sendVideo(file);
+    } catch (e) {
+      _showError('Не удалось выбрать видео: $e');
+    }
+  }
+
   Future<void> _sendImage(File file) async {
-    final tempId = _addOptimisticImage(file.path);
+    await _sendMedia(file, type: 'image');
+  }
+
+  Future<void> _sendVideo(File file) async {
+    await _sendMedia(file, type: 'video');
+  }
+
+  MediaType _mediaTypeForFile(File file, String type) {
+    final guessed = lookupMimeType(file.path);
+
+    if (guessed != null && guessed.contains('/')) {
+      final parts = guessed.split('/');
+      return MediaType(parts.first, parts.last);
+    }
+
+    final low = file.path.toLowerCase();
+
+    if (type == 'video') {
+      if (low.endsWith('.mov')) return MediaType('video', 'quicktime');
+      if (low.endsWith('.webm')) return MediaType('video', 'webm');
+      if (low.endsWith('.m4v')) return MediaType('video', 'mp4');
+      return MediaType('video', 'mp4');
+    }
+
+    return MediaType('image', 'jpeg');
+  }
+
+  Future<void> _sendMedia(
+    File file, {
+    required String type,
+  }) async {
+    final tempId = type == 'video'
+        ? _addOptimisticVideo(file.path)
+        : _addOptimisticImage(file.path);
 
     try {
       final uri =
           Uri.parse('https://sportotekaapp.ru/api/send_file_message.php');
 
-      final mime = lookupMimeType(file.path) ?? 'image/jpeg';
-      final parts = mime.split('/');
-      final contentType = MediaType(parts.first, parts.last);
+      final contentType = _mediaTypeForFile(file, type);
 
       final req = http.MultipartRequest('POST', uri)
         ..fields['chat_id'] = widget.chatId.toString()
         ..fields['sender_id'] = widget.userId.toString()
         ..fields['user_id'] = widget.userId.toString()
-        ..fields['type'] = 'image';
+        ..fields['type'] = type;
 
       if (replyingToId != null) {
         req.fields['reply_to_id'] = replyingToId.toString();
       }
 
-      req.files.add(await http.MultipartFile.fromPath(
-        'file',
-        file.path,
-        filename: file.path.split('/').last,
-        contentType: contentType,
-      ));
+      req.files.add(
+        await http.MultipartFile.fromPath(
+          'file',
+          file.path,
+          filename: file.path.split(Platform.pathSeparator).last,
+          contentType: contentType,
+        ),
+      );
 
       final streamed = await req.send();
       final res = await http.Response.fromStream(streamed);
 
-      setState(() {
-        replyingToId = null;
-        replyingToMessage = null;
-      });
+      if (mounted) {
+        setState(() {
+          replyingToId = null;
+          replyingToMessage = null;
+        });
+      }
 
       if (res.statusCode != 200) {
         _removeTemp(tempId);
@@ -957,12 +1118,17 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
             status == 'ok' ||
             status == 'success' ||
             status == '200';
+
         final newId = int.tryParse('${data['message_id'] ?? ''}');
         final absUrl = (data['url'] ?? data['file_url'])?.toString();
 
         if (ok) {
           if (newId != null) {
-            _replaceTempWithServer(tempId, newId: newId, fileUrl: absUrl);
+            _replaceTempWithServer(
+              tempId,
+              newId: newId,
+              fileUrl: absUrl,
+            );
           }
           _loadMessages();
           _markThisChatRead();
@@ -976,7 +1142,11 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
       }
     } catch (e) {
       _removeTemp(tempId);
-      _showError('Ошибка отправки изображения: $e');
+      _showError(
+        type == 'video'
+            ? 'Ошибка отправки видео: $e'
+            : 'Ошибка отправки изображения: $e',
+      );
     }
   }
 
@@ -1156,7 +1326,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
             .toString()
             .toLowerCase();
 
-        final textMatch = (type != 'image' && content.contains(q));
+        final textMatch =
+            (type != 'image' && type != 'video' && content.contains(q));
         final nameMatch = name.contains(q);
 
         if (textMatch || nameMatch) hits.add(id);
@@ -1246,12 +1417,12 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Ответ на $author',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 12.35)),
+                      style:
+                          AppTypography.bodyMedium(color: _WinChatColors.text)),
                   const SizedBox(height: 2),
                   Text(preview,
-                      style: const TextStyle(
-                          color: _WinChatColors.muted, fontSize: 11.1)),
+                      style:
+                          AppTypography.secondary(color: _WinChatColors.muted)),
                 ],
               ),
             ),
@@ -1294,7 +1465,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
               preview.isEmpty
                   ? 'Редактирование сообщения'
                   : 'Редактирование: $preview',
-              style: const TextStyle(fontSize: 12.35),
+              style: AppTypography.body(color: _WinChatColors.text),
             ),
           ),
           IconButton(
@@ -1436,14 +1607,17 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
     final replyContent =
         (reply?['content'] ?? msg['reply_content'] ?? '').toString();
 
-    final hasImage = ((reply?['file_url'] ?? msg['reply_file_url']) ?? '')
-            .toString()
-            .isNotEmpty ||
-        ['image', 'photo', 'picture'].contains(replyType);
+    final replyFile =
+        ((reply?['file_url'] ?? msg['reply_file_url']) ?? '').toString();
 
-    final text = hasImage
-        ? '[Фото]'
-        : (replyContent.isEmpty ? '[Сообщение]' : replyContent);
+    final hasVideo = _isVideoType(replyType, replyFile);
+    final hasImage = _isImageType(replyType, replyFile);
+
+    final text = hasVideo
+        ? '[Видео]'
+        : hasImage
+            ? '[Фото]'
+            : (replyContent.isEmpty ? '[Сообщение]' : replyContent);
     final preview = text.length > 80 ? '${text.substring(0, 80)}…' : text;
 
     return InkWell(
@@ -1467,14 +1641,12 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
             if ((replyAuthor ?? '').toString().isNotEmpty)
               Text(
                 (replyAuthor ?? '').toString(),
-                style: const TextStyle(
-                    fontWeight: FontWeight.w600, fontSize: 11.1),
+                style: AppTypography.commentAuthor(color: _WinChatColors.text),
               ),
             const SizedBox(height: 2),
             Text(
               preview,
-              style:
-                  const TextStyle(color: _WinChatColors.muted, fontSize: 11.1),
+              style: AppTypography.secondary(color: _WinChatColors.muted),
             ),
           ],
         ),
@@ -1620,11 +1792,15 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                               if ((msg['reply_to_id'] ?? msg['reply']) != null)
                                 _replyBubblePreview(msg),
                               if (isDeleted)
-                                const Text(
+                                Text(
                                   'Сообщение удалено',
-                                  style: TextStyle(
-                                      color: Colors.grey,
-                                      fontStyle: FontStyle.italic),
+                                  style: _WinChatText.body(
+                                    11.3,
+                                    color: _WinChatColors.muted,
+                                    weight: FontWeight.w400,
+                                  ).copyWith(
+                                    fontStyle: FontStyle.italic,
+                                  ),
                                 )
                               else
                                 ...() {
@@ -1640,6 +1816,47 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                                   );
                                   final text =
                                       (msg['content'] ?? '').toString();
+
+                                  final localPath =
+                                      (msg['local_path'] ?? '').toString();
+
+                                  if (_isVideoType(type, fileUrl) &&
+                                      localPath.isNotEmpty) {
+                                    return [
+                                      _ChatVideoPreview(
+                                        file: File(localPath),
+                                        onOpen: () {
+                                          Navigator.of(context).push(
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  _FullVideoScreen.file(
+                                                file: File(localPath),
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ];
+                                  }
+
+                                  if (_isVideoType(type, fileUrl) &&
+                                      fileUrl.isNotEmpty) {
+                                    return [
+                                      _ChatVideoPreview(
+                                        url: fileUrl,
+                                        onOpen: () {
+                                          Navigator.of(context).push(
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  _FullVideoScreen.network(
+                                                url: fileUrl,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ];
+                                  }
 
                                   if ((['image', 'file', 'photo', 'picture']
                                           .contains(type)) &&
@@ -1744,8 +1961,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                                       )
                                     ];
                                   } else {
-                                    final style =
-                                        _WinChatText.body(
+                                    final style = _WinChatText.body(
                                       11.3,
                                       color: _WinChatColors.text,
                                       weight: FontWeight.w500,
@@ -1767,18 +1983,18 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                                 children: [
                                   Text(
                                     DateFormat.Hm().format(messageDate),
-                                    style: TextStyle(
-                                      fontSize: 10.2,
+                                    style: AppTypography.commentMeta(
                                       color: Colors.grey.shade600,
                                     ),
                                   ),
                                   if (isEdited)
-                                    const Padding(
-                                      padding: EdgeInsets.only(left: 6),
+                                    Padding(
+                                      padding: const EdgeInsets.only(left: 6),
                                       child: Text(
                                         '· изменено',
-                                        style: TextStyle(
-                                            fontSize: 10, color: Colors.grey),
+                                        style: AppTypography.commentMeta(
+                                          color: Colors.grey,
+                                        ),
                                       ),
                                     ),
                                   if (isMine)
@@ -1934,8 +2150,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                               ? Image.network(
                                   peerPhoto,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) =>
-                                      const Center(
+                                  errorBuilder: (_, __, ___) => const Center(
                                     child: _RoomDots(compact: true),
                                   ),
                                 )
@@ -2204,7 +2419,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                 children: <Widget>[
                   _RoomInputAction(
                     icon: Icons.attach_file_rounded,
-                    onTap: _pickImage,
+                    onTap: _openAttachmentMenu,
                   ),
                   const SizedBox(width: 5),
                   Expanded(
@@ -2283,6 +2498,78 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
   void _stopRecording() {
     setState(() => isRecording = false);
     // TODO: Отправка на сервер (multipart как _sendImage)
+  }
+}
+
+
+class _AttachmentAction extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _AttachmentAction({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _WinChatColors.soft,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: _WinChatColors.greenSoft,
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(
+                  icon,
+                  color: _WinChatColors.greenDark,
+                  size: 19,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      title,
+                      style: _WinChatText.title(11.8),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: _WinChatText.body(
+                        9.8,
+                        color: _WinChatColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: _WinChatColors.muted,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -2388,6 +2675,360 @@ class _RoomSendAction extends StatelessWidget {
   }
 }
 
+
+class _ChatVideoPreview extends StatefulWidget {
+  final String? url;
+  final File? file;
+  final VoidCallback onOpen;
+
+  const _ChatVideoPreview({
+    this.url,
+    this.file,
+    required this.onOpen,
+  }) : assert(url != null || file != null);
+
+  @override
+  State<_ChatVideoPreview> createState() => _ChatVideoPreviewState();
+}
+
+class _ChatVideoPreviewState extends State<_ChatVideoPreview> {
+  VideoPlayerController? _controller;
+  Future<void>? _initializing;
+
+  @override
+  void initState() {
+    super.initState();
+
+    final controller = widget.file != null
+        ? VideoPlayerController.file(widget.file!)
+        : VideoPlayerController.networkUrl(Uri.parse(widget.url!));
+
+    _controller = controller;
+    _initializing = controller.initialize().then((_) async {
+      await controller.setLooping(false);
+      await controller.pause();
+      if (mounted) setState(() {});
+    }).catchError((Object _) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  String _durationLabel(Duration value) {
+    final minutes = value.inMinutes;
+    final seconds = value.inSeconds.remainder(60);
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = _controller;
+
+    return GestureDetector(
+      onTap: widget.onOpen,
+      child: Container(
+        width: 230,
+        height: 150,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: _WinChatColors.graphite,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            if (controller != null)
+              FutureBuilder<void>(
+                future: _initializing,
+                builder: (_, snapshot) {
+                  if (snapshot.connectionState != ConnectionState.done ||
+                      !controller.value.isInitialized) {
+                    return const Center(
+                      child: SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      ),
+                    );
+                  }
+
+                  final aspect = controller.value.aspectRatio > 0
+                      ? controller.value.aspectRatio
+                      : 16 / 9;
+
+                  return Center(
+                    child: AspectRatio(
+                      aspectRatio: aspect,
+                      child: VideoPlayer(controller),
+                    ),
+                  );
+                },
+              ),
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: <Color>[
+                      Colors.black.withOpacity(.03),
+                      Colors.black.withOpacity(.24),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Center(
+              child: Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(.92),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.play_arrow_rounded,
+                  size: 27,
+                  color: _WinChatColors.graphite,
+                ),
+              ),
+            ),
+            Positioned(
+              left: 8,
+              bottom: 7,
+              child: Row(
+                children: <Widget>[
+                  const Icon(
+                    Icons.videocam_outlined,
+                    size: 14,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Видео',
+                    style: AppTypography.commentMeta(
+                      color: Colors.white,
+                    ).copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+            if (controller != null && controller.value.isInitialized)
+              Positioned(
+                right: 8,
+                bottom: 7,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(.55),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    _durationLabel(controller.value.duration),
+                    style: AppTypography.commentMeta(
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FullVideoScreen extends StatefulWidget {
+  final String? url;
+  final File? file;
+
+  const _FullVideoScreen.network({
+    super.key,
+    required String this.url,
+  }) : file = null;
+
+  const _FullVideoScreen.file({
+    super.key,
+    required File this.file,
+  }) : url = null;
+
+  @override
+  State<_FullVideoScreen> createState() => _FullVideoScreenState();
+}
+
+class _FullVideoScreenState extends State<_FullVideoScreen> {
+  late final VideoPlayerController _controller;
+  late final Future<void> _initializing;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = widget.file != null
+        ? VideoPlayerController.file(widget.file!)
+        : VideoPlayerController.networkUrl(Uri.parse(widget.url!));
+
+    _initializing = _controller.initialize().then((_) async {
+      await _controller.setLooping(false);
+      await _controller.play();
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  String _time(Duration value) {
+    final hours = value.inHours;
+    final minutes = value.inMinutes.remainder(60);
+    final seconds = value.inSeconds.remainder(60);
+
+    if (hours > 0) {
+      return '$hours:${minutes.toString().padLeft(2, '0')}:'
+          '${seconds.toString().padLeft(2, '0')}';
+    }
+
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF090B0E),
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: const Color(0xFF090B0E),
+        foregroundColor: Colors.white,
+        title: Text(
+          'Видео',
+          style: AppTypography.sectionTitle(color: Colors.white),
+        ),
+      ),
+      body: FutureBuilder<void>(
+        future: _initializing,
+        builder: (_, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(
+              child: CircularProgressIndicator(color: Colors.white),
+            );
+          }
+
+          if (!_controller.value.isInitialized) {
+            return Center(
+              child: Text(
+                'Не удалось открыть видео',
+                style: AppTypography.body(color: Colors.white),
+              ),
+            );
+          }
+
+          return SafeArea(
+            top: false,
+            child: Column(
+              children: <Widget>[
+                Expanded(
+                  child: Center(
+                    child: AspectRatio(
+                      aspectRatio: _controller.value.aspectRatio > 0
+                          ? _controller.value.aspectRatio
+                          : 16 / 9,
+                      child: VideoPlayer(_controller),
+                    ),
+                  ),
+                ),
+                AnimatedBuilder(
+                  animation: _controller,
+                  builder: (_, __) {
+                    final value = _controller.value;
+                    final duration = value.duration;
+                    final position = value.position;
+                    final maxMs =
+                        duration.inMilliseconds <= 0 ? 1 : duration.inMilliseconds;
+                    final posMs =
+                        position.inMilliseconds.clamp(0, maxMs).toDouble();
+
+                    return Container(
+                      padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
+                      color: const Color(0xFF090B0E),
+                      child: Column(
+                        children: <Widget>[
+                          Slider(
+                            value: posMs,
+                            max: maxMs.toDouble(),
+                            onChanged: (v) {
+                              _controller.seekTo(
+                                Duration(milliseconds: v.round()),
+                              );
+                            },
+                          ),
+                          Row(
+                            children: <Widget>[
+                              Material(
+                                color: Colors.white.withOpacity(.10),
+                                borderRadius: BorderRadius.circular(10),
+                                child: InkWell(
+                                  onTap: () async {
+                                    if (value.isPlaying) {
+                                      await _controller.pause();
+                                    } else {
+                                      await _controller.play();
+                                    }
+                                    if (mounted) setState(() {});
+                                  },
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: SizedBox(
+                                    width: 42,
+                                    height: 42,
+                                    child: Icon(
+                                      value.isPlaying
+                                          ? Icons.pause_rounded
+                                          : Icons.play_arrow_rounded,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                '${_time(position)} / ${_time(duration)}',
+                                style: AppTypography.secondary(
+                                  color: Colors.white70,
+                                ),
+                              ),
+                              const Spacer(),
+                              const _RoomDots(
+                                color: _WinChatColors.green,
+                                compact: true,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
 
 // ====================== Fullscreen Image ======================
 

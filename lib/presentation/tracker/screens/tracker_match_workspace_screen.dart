@@ -185,9 +185,17 @@ class TrackerMatchWorkspaceScreen extends StatefulWidget {
 
 class _TrackerMatchWorkspaceScreenState
     extends State<TrackerMatchWorkspaceScreen> {
+  // Один saved-team connect на команду во всём Flutter-процессе. Раньше два
+  // открытых workspace одновременно входили сюда и оба запускали BLE recovery.
+  static final Map<String, Future<void>> _savedTeamConnectInFlight =
+      <String, Future<void>>{};
+  static final Map<String, String> _sharedTeamBleLeaseTokens =
+      <String, String>{};
+
   late final ActionTrackerBleService _ble;
   late final TeamActionTrackerBlePool _teamBlePool;
   late final String _teamBlePoolSharedKey;
+  late final String _teamBleLeaseToken;
   late final TeamTrackerLiveCoordinator _teamLiveCoordinator;
   late final HeartRateBleService _heart;
   late final TrackerProApi _api;
@@ -360,6 +368,10 @@ class _TrackerMatchWorkspaceScreenState
     _liveApi = TrackerLiveApi();
     _ble = ActionTrackerBleService();
     _teamBlePoolSharedKey = '${widget.clubId}:${widget.teamId}';
+    _teamBleLeaseToken = _sharedTeamBleLeaseTokens.putIfAbsent(
+      _teamBlePoolSharedKey,
+      () => 'tablet_${widget.teamId}_${widget.userId}_${DateTime.now().toUtc().microsecondsSinceEpoch}_${math.Random.secure().nextInt(1 << 31)}',
+    );
     _teamBlePool =
         TeamActionTrackerBlePool.acquireShared(_teamBlePoolSharedKey);
     _teamLiveCoordinator = TeamTrackerLiveCoordinator(
@@ -367,6 +379,7 @@ class _TrackerMatchWorkspaceScreenState
       teamId: widget.teamId,
       fieldId: null,
       pool: _teamBlePool,
+      bleLeaseToken: _teamBleLeaseToken,
       api: _liveApi,
       onRecoveryChanged: _handleTeamRecoveryChanged,
     );
@@ -1952,7 +1965,7 @@ class _TrackerMatchWorkspaceScreenState
               label,
               style: TextStyle(
                 color: active ? Colors.white : _TD.graphite,
-                fontSize: 10.5,
+                fontSize: AppTypography.captionSize,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -2065,7 +2078,7 @@ class _TrackerMatchWorkspaceScreenState
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: _TD.text,
-                        fontSize: 10.5,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -2380,6 +2393,7 @@ class _TrackerMatchWorkspaceScreenState
     setState(() => _connecting = true);
     try {
       await TrackerPermissions.ensureBlePermissions();
+      if (!await _claimSingleBleLease(device)) return;
       await _teamBlePool.connect(device);
       _connected = device;
       if (mounted) setState(() {});
@@ -2579,6 +2593,7 @@ class _TrackerMatchWorkspaceScreenState
       'TEAM LIVE PREFLIGHT: игроков=${bindings.length} · BLE=${_teamBlePool.connectedCount}',
       source: 'workspace_team_live_preflight',
       extra: <String, dynamic>{
+        'ble_lease_owner': _teamBleLeaseToken,
         'bindings': bindings
             .map((binding) => <String, dynamic>{
                   'player_id': binding.playerId,
@@ -2737,7 +2752,7 @@ class _TrackerMatchWorkspaceScreenState
                                   'Восстановление GPS после Stop',
                                   style: TextStyle(
                                     color: _TD.text,
-                                    fontSize: 15.4,
+                                    fontSize: AppTypography.screenTitleSize,
                                     fontWeight: FontWeight.w800,
                                   ),
                                 ),
@@ -2746,7 +2761,7 @@ class _TrackerMatchWorkspaceScreenState
                                   'Дополняет существующую сессию — дубль тренировки не создаётся',
                                   style: TextStyle(
                                     color: _TD.muted,
-                                    fontSize: 9.5,
+                                    fontSize: AppTypography.menuGroupSize,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -2803,7 +2818,7 @@ class _TrackerMatchWorkspaceScreenState
                                               overflow: TextOverflow.ellipsis,
                                               style: const TextStyle(
                                                 color: _TD.text,
-                                                fontSize: 12.4,
+                                                fontSize: AppTypography.bodySize,
                                                 fontWeight: FontWeight.w800,
                                               ),
                                             ),
@@ -2814,7 +2829,7 @@ class _TrackerMatchWorkspaceScreenState
                                               color: connected
                                                   ? _TD.green
                                                   : _TD.orange,
-                                              fontSize: 9.2,
+                                              fontSize: AppTypography.menuGroupSize,
                                               fontWeight: FontWeight.w800,
                                             ),
                                           ),
@@ -2825,7 +2840,7 @@ class _TrackerMatchWorkspaceScreenState
                                         '${row['device_name'] ?? ''} · job #${row['job_id'] ?? 0} · session #${row['final_session_id'] ?? 0}',
                                         style: const TextStyle(
                                           color: _TD.muted,
-                                          fontSize: 9.4,
+                                          fontSize: AppTypography.menuGroupSize,
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
@@ -2836,7 +2851,7 @@ class _TrackerMatchWorkspaceScreenState
                                             : 'ATP file пока не определён',
                                         style: const TextStyle(
                                           color: _TD.text,
-                                          fontSize: 10.2,
+                                          fontSize: AppTypography.captionSize,
                                           fontWeight: FontWeight.w700,
                                         ),
                                       ),
@@ -2848,7 +2863,7 @@ class _TrackerMatchWorkspaceScreenState
                                           overflow: TextOverflow.ellipsis,
                                           style: const TextStyle(
                                             color: _TD.muted,
-                                            fontSize: 9.2,
+                                            fontSize: AppTypography.menuGroupSize,
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),
@@ -2871,7 +2886,7 @@ class _TrackerMatchWorkspaceScreenState
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 color: _TD.muted,
-                                fontSize: 9.2,
+                                fontSize: AppTypography.menuGroupSize,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -3024,12 +3039,130 @@ class _TrackerMatchWorkspaceScreenState
     }
   }
 
+  Future<Set<String>> _claimSavedBleLeases(
+    Iterable<MapEntry<String, TrackerDeviceModel>> entries, {
+    required bool silent,
+  }) async {
+    final rows = entries.toList(growable: false);
+    if (rows.isEmpty) return <String>{};
+    try {
+      final result = await _liveApi.claimBleTrackerLeases(
+        teamId: widget.teamId,
+        leaseToken: _teamBleLeaseToken,
+        devices: rows
+            .map((entry) => <String, dynamic>{
+                  'client_key': entry.key,
+                  'device_uuid': entry.value.deviceUuid,
+                  'device_name': entry.value.deviceName,
+                })
+            .toList(growable: false),
+      );
+      final busy = <String>{};
+      for (final item in (result['busy'] as List? ?? const <dynamic>[])) {
+        if (item is! Map) continue;
+        final key = '${item['client_key'] ?? ''}'.trim();
+        if (key.isNotEmpty) busy.add(key);
+      }
+      if (busy.isNotEmpty) {
+        unawaited(_logRemote(
+          'BLE LEASE BUSY: ${busy.length} датчиков уже используются другим планшетом',
+          level: 'warning',
+          source: 'workspace_ble_lease_busy',
+          extra: <String, dynamic>{
+            'lease_owner': _teamBleLeaseToken,
+            'busy_keys': busy.toList(growable: false),
+          },
+        ));
+        if (!silent) {
+          _toast(
+            'BLE занят',
+            '${busy.length} датч. уже используются другой активной сессией и не будут переподключены.',
+          );
+        }
+      }
+      return busy;
+    } catch (e) {
+      // Серверный lease усиливает online режим, но не ломает существующий
+      // offline Live: без сети физические GPS по-прежнему могут работать.
+      unawaited(_logRemote(
+        'BLE lease недоступен, продолжаю offline-совместимо: $e',
+        level: 'warning',
+        source: 'workspace_ble_lease_unavailable',
+      ));
+      return <String>{};
+    }
+  }
+
+  Future<bool> _claimSingleBleLease(
+    ActionTrackerDevice device, {
+    bool silent = false,
+  }) async {
+    final key = _teamBindingKey(device.id, device.name);
+    try {
+      final result = await _liveApi.claimBleTrackerLeases(
+        teamId: widget.teamId,
+        leaseToken: _teamBleLeaseToken,
+        devices: <Map<String, dynamic>>[
+          <String, dynamic>{
+            'client_key': key,
+            'device_uuid': device.id,
+            'device_name': device.name,
+          },
+        ],
+      );
+      final busy = (result['busy'] as List? ?? const <dynamic>[])
+          .whereType<Map>()
+          .any((item) => '${item['client_key'] ?? ''}'.trim() == key);
+      if (busy && !silent) {
+        _toast('GPS занят', '${device.name} используется другой активной сессией.');
+      }
+      return !busy;
+    } catch (e) {
+      unawaited(_logRemote(
+        'BLE lease check для ${device.name} недоступен: $e',
+        level: 'warning',
+        source: 'workspace_ble_lease_unavailable',
+      ));
+      return true;
+    }
+  }
+
   Future<void> _connectSavedTeam({
     bool silent = false,
     bool prepareForLive = false,
   }) async {
+    final key = _teamBlePoolSharedKey;
+    final active = _savedTeamConnectInFlight[key];
+    if (active != null) {
+      await active;
+      _restoreSavedAssignmentsForConnectedDevices();
+      if (mounted) setState(() {});
+      return;
+    }
+
+    final future = _connectSavedTeamOwned(
+      silent: silent,
+      prepareForLive: prepareForLive,
+    );
+    _savedTeamConnectInFlight[key] = future;
+    try {
+      await future;
+    } finally {
+      if (identical(_savedTeamConnectInFlight[key], future)) {
+        _savedTeamConnectInFlight.remove(key);
+      }
+    }
+  }
+
+  Future<void> _connectSavedTeamOwned({
+    bool silent = false,
+    bool prepareForLive = false,
+  }) async {
     if (_savedTeamConnecting) return;
-    if (_liveRunning || _teamLiveCoordinator.running) {
+    if (_liveRunning ||
+        _teamLiveCoordinator.running ||
+        _teamBlePool.livePolling ||
+        ActionTrackerBleService.teamLiveGuardActive) {
       if (!silent) {
         _toast('Сохранённая команда',
             'Состав датчиков меняется между тренировками. Текущий Live уже идёт.');
@@ -3061,11 +3194,35 @@ class _TrackerMatchWorkspaceScreenState
     try {
       await TrackerPermissions.ensureBlePermissions();
 
+      // До любого connect/recover спрашиваем сервер, не занят ли физический BLE
+      // другим планшетом. При отсутствии сети сохраняем прежний offline режим.
+      final allSaved = <MapEntry<String, TrackerDeviceModel>>[
+        ...gpsSavedByKey.entries,
+        ...heartSavedByKey.entries,
+      ];
+      final busyLeaseKeys = await _claimSavedBleLeases(
+        allSaved,
+        silent: silent,
+      );
+      final gpsAvailableByKey = <String, TrackerDeviceModel>{
+        for (final entry in gpsSavedByKey.entries)
+          if (!busyLeaseKeys.contains(entry.key)) entry.key: entry.value,
+      };
+      final heartAvailableByKey = <String, TrackerDeviceModel>{
+        for (final entry in heartSavedByKey.entries)
+          if (!busyLeaseKeys.contains(entry.key)) entry.key: entry.value,
+      };
+      for (final entry in allSaved) {
+        if (busyLeaseKeys.contains(entry.key)) {
+          missing.add('${entry.value.deviceName}: используется другой активной сессией');
+        }
+      }
+
       if (prepareForLive && _teamLiveCoordinator.offlineRecoveryBusy) {
         await _teamBlePool.pauseOfflineRecoveryForLive();
       }
 
-      var gpsMissing = gpsSavedByKey.values
+      var gpsMissing = gpsAvailableByKey.values
           .where((saved) => !_isTeamTrackerConnected(saved))
           .toList(growable: false);
 
@@ -3093,7 +3250,7 @@ class _TrackerMatchWorkspaceScreenState
         }
       }
 
-      gpsMissing = gpsSavedByKey.values
+      gpsMissing = gpsAvailableByKey.values
           .where((saved) => !_isTeamTrackerConnected(saved))
           .toList(growable: false);
       if (gpsMissing.isNotEmpty) {
@@ -3103,7 +3260,7 @@ class _TrackerMatchWorkspaceScreenState
           universalMode: true,
         );
       }
-      for (final saved in gpsSavedByKey.values) {
+      for (final saved in gpsAvailableByKey.values) {
         ActionTrackerDevice? actual = _connectedTeamTrackerForSaved(saved);
         if (actual == null) {
           for (final candidate in _ble.discoveredDevices) {
@@ -3144,14 +3301,14 @@ class _TrackerMatchWorkspaceScreenState
             _teamLiveCoordinator.tryRecoverPendingForBinding(binding));
       }
 
-      final heartMissing = heartSavedByKey.values.where((saved) {
+      final heartMissing = heartAvailableByKey.values.where((saved) {
         return !_heart.connectedInfos.any((device) =>
             _heartIdOrNameMatches(device.id, device.name, saved));
       }).toList(growable: false);
       if (heartMissing.isNotEmpty) {
         await _heart.scan(showAllBleCandidates: true);
       }
-      for (final saved in heartSavedByKey.values) {
+      for (final saved in heartAvailableByKey.values) {
         HeartRateBleDevice? actual;
         for (final candidate in <HeartRateBleDevice>[
           ..._heart.connectedInfos,
@@ -3597,7 +3754,7 @@ class _TrackerMatchWorkspaceScreenState
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                     color: _TD.text,
-                                    fontSize: 11.2,
+                                    fontSize: AppTypography.secondarySize,
                                     fontWeight: FontWeight.w700)),
                             const SizedBox(height: 4),
                             Wrap(spacing: 5, runSpacing: 5, children: [
@@ -3702,7 +3859,7 @@ class _TrackerMatchWorkspaceScreenState
                                 : emptyText),
                         style: const TextStyle(
                             color: _TD.muted,
-                            fontSize: 10.2,
+                            fontSize: AppTypography.captionSize,
                             fontWeight: FontWeight.w500),
                       ),
                     ),
@@ -3771,7 +3928,7 @@ class _TrackerMatchWorkspaceScreenState
                                             overflow: TextOverflow.ellipsis,
                                             style: const TextStyle(
                                                 color: _TD.text,
-                                                fontSize: 11.2,
+                                                fontSize: AppTypography.secondarySize,
                                                 fontWeight: FontWeight.w700)),
                                         const SizedBox(height: 2),
                                         Text(
@@ -3780,7 +3937,7 @@ class _TrackerMatchWorkspaceScreenState
                                             overflow: TextOverflow.ellipsis,
                                             style: const TextStyle(
                                                 color: _TD.muted,
-                                                fontSize: 11.2,
+                                                fontSize: AppTypography.secondarySize,
                                                 fontWeight: FontWeight.w700)),
                                       ])),
                                   Text(
@@ -3791,7 +3948,7 @@ class _TrackerMatchWorkspaceScreenState
                                           color: assignedToSelected
                                               ? _TD.green
                                               : _TD.muted,
-                                          fontSize: 11.2,
+                                          fontSize: AppTypography.secondarySize,
                                           fontWeight: FontWeight.w700)),
                                 ]),
                               ),
@@ -3876,7 +4033,7 @@ class _TrackerMatchWorkspaceScreenState
                                             overflow: TextOverflow.ellipsis,
                                             style: const TextStyle(
                                                 color: _TD.text,
-                                                fontSize: 11.2,
+                                                fontSize: AppTypography.secondarySize,
                                                 fontWeight: FontWeight.w700)),
                                         const SizedBox(height: 2),
                                         Text(
@@ -3885,7 +4042,7 @@ class _TrackerMatchWorkspaceScreenState
                                             overflow: TextOverflow.ellipsis,
                                             style: const TextStyle(
                                                 color: _TD.muted,
-                                                fontSize: 11.2,
+                                                fontSize: AppTypography.secondarySize,
                                                 fontWeight: FontWeight.w700)),
                                       ])),
                                   Column(
@@ -3900,7 +4057,7 @@ class _TrackerMatchWorkspaceScreenState
                                                 color: assignedToSelected
                                                     ? _TD.green
                                                     : _TD.muted,
-                                                fontSize: 11.2,
+                                                fontSize: AppTypography.secondarySize,
                                                 fontWeight: FontWeight.w700)),
                                         const SizedBox(height: 2),
                                         Text(
@@ -3909,7 +4066,7 @@ class _TrackerMatchWorkspaceScreenState
                                                 color: connected
                                                     ? _TD.green
                                                     : _TD.dim,
-                                                fontSize: 11.2,
+                                                fontSize: AppTypography.secondarySize,
                                                 fontWeight: FontWeight.w700)),
                                       ]),
                                 ]),
@@ -3946,7 +4103,7 @@ class _TrackerMatchWorkspaceScreenState
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                     color: _TD.text,
-                                    fontSize: 15,
+                                    fontSize: AppTypography.sectionTitleSize,
                                     fontWeight: FontWeight.w700)),
                             const SizedBox(height: 4),
                             Text(_equipmentStatusForPlayer(selected),
@@ -3954,7 +4111,7 @@ class _TrackerMatchWorkspaceScreenState
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                     color: _TD.muted,
-                                    fontSize: 11,
+                                    fontSize: AppTypography.secondarySize,
                                     fontWeight: FontWeight.w700)),
                           ])),
                     ]),
@@ -4163,13 +4320,13 @@ class _TrackerMatchWorkspaceScreenState
                             Text('Оборудование команды',
                                 style: TextStyle(
                                     color: _TD.text,
-                                    fontSize: 15.4,
+                                    fontSize: AppTypography.screenTitleSize,
                                     fontWeight: FontWeight.w700)),
                             SizedBox(height: 2),
                             Text('назначение GPS-трекеров и Polar H10 игрокам',
                                 style: TextStyle(
                                     color: _TD.muted,
-                                    fontSize: 11,
+                                    fontSize: AppTypography.secondarySize,
                                     fontWeight: FontWeight.w700)),
                           ])),
                       _NoHoverTap(
@@ -5669,35 +5826,35 @@ class _TrackerMatchWorkspaceScreenState
           ),
           titleMedium: baseTheme.textTheme.titleMedium?.copyWith(
             fontFamily: 'Inter',
-            fontSize: 15,
+            fontSize: AppTypography.sectionTitleSize,
             fontWeight: FontWeight.w600,
             height: 1.20,
             letterSpacing: 0,
           ),
           bodyLarge: baseTheme.textTheme.bodyLarge?.copyWith(
             fontFamily: 'Inter',
-            fontSize: 13.5,
+            fontSize: AppTypography.itemTitleSize,
             fontWeight: FontWeight.w400,
             height: 1.30,
             letterSpacing: 0,
           ),
           bodyMedium: baseTheme.textTheme.bodyMedium?.copyWith(
             fontFamily: 'Inter',
-            fontSize: 12.5,
+            fontSize: AppTypography.bodySize,
             fontWeight: FontWeight.w400,
             height: 1.28,
             letterSpacing: 0,
           ),
           bodySmall: baseTheme.textTheme.bodySmall?.copyWith(
             fontFamily: 'Inter',
-            fontSize: 11.2,
+            fontSize: AppTypography.secondarySize,
             fontWeight: FontWeight.w500,
             height: 1.22,
             letterSpacing: 0,
           ),
           labelLarge: baseTheme.textTheme.labelLarge?.copyWith(
             fontFamily: 'Inter',
-            fontSize: 12.2,
+            fontSize: AppTypography.bodySize,
             fontWeight: FontWeight.w600,
             letterSpacing: 0,
           ),
@@ -5837,7 +5994,7 @@ class _TrackerMatchWorkspaceScreenState
                   style: const TextStyle(
                     fontFamily: 'Inter',
                     color: _TD.text,
-                    fontSize: 14.5,
+                    fontSize: AppTypography.sectionTitleSize,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -5851,7 +6008,7 @@ class _TrackerMatchWorkspaceScreenState
                   style: const TextStyle(
                     fontFamily: 'Inter',
                     color: _TD.muted,
-                    fontSize: 11.2,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -6103,7 +6260,7 @@ class _TrackerMatchWorkspaceScreenState
 
         final window = DefaultTextStyle(
           style: AppTypography.custom(
-            size: 12,
+            size: AppTypography.bodySize,
             weight: FontWeight.w400,
             color: _TD.text,
             height: 1.22,
@@ -6432,7 +6589,7 @@ class _TrackerMatchWorkspaceScreenState
                   style: const TextStyle(
                     fontFamily: 'Inter',
                     color: _TD.muted,
-                    fontSize: 10.5,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w400,
                     height: 1.2,
                   ),
@@ -7215,7 +7372,7 @@ class _TrackerMatchWorkspaceScreenState
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: _TD.text,
-                      fontSize: 9.8,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -7249,7 +7406,7 @@ class _TrackerMatchWorkspaceScreenState
                       '$connected/$totalPlayers',
                       style: const TextStyle(
                         color: _TD.text,
-                        fontSize: 16,
+                        fontSize: AppTypography.screenTitleSize,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -7305,7 +7462,7 @@ class _TrackerMatchWorkspaceScreenState
                             'Сегодня',
                             style: TextStyle(
                               color: _TD.text,
-                              fontSize: 12.5,
+                              fontSize: AppTypography.bodySize,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
@@ -7314,7 +7471,7 @@ class _TrackerMatchWorkspaceScreenState
                             'Следующая командная сессия',
                             style: TextStyle(
                               color: _TD.dim,
-                              fontSize: 8.8,
+                              fontSize: AppTypography.badgeSize,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -7354,7 +7511,7 @@ class _TrackerMatchWorkspaceScreenState
                   'Командная тренировка',
                   style: TextStyle(
                     color: _TD.text,
-                    fontSize: 13.4,
+                    fontSize: AppTypography.itemTitleSize,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -7367,7 +7524,7 @@ class _TrackerMatchWorkspaceScreenState
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: _TD.muted,
-                    fontSize: 9.4,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -7390,7 +7547,7 @@ class _TrackerMatchWorkspaceScreenState
                     label: Text(
                       _liveRunning ? 'Перейти в LIVE' : 'Перейти в LIVE',
                       style: const TextStyle(
-                        fontSize: 9.6,
+                        fontSize: AppTypography.menuGroupSize,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -7422,7 +7579,7 @@ class _TrackerMatchWorkspaceScreenState
                         'Игроки активны',
                         style: TextStyle(
                           color: _TD.text,
-                          fontSize: 12.3,
+                          fontSize: AppTypography.bodySize,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
@@ -7453,7 +7610,7 @@ class _TrackerMatchWorkspaceScreenState
                               'GPS в готовности',
                               style: TextStyle(
                                 color: _TD.muted,
-                                fontSize: 8.7,
+                                fontSize: AppTypography.badgeSize,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -7490,7 +7647,7 @@ class _TrackerMatchWorkspaceScreenState
                               '$percent%',
                               style: const TextStyle(
                                 color: _TD.text,
-                                fontSize: 13.5,
+                                fontSize: AppTypography.itemTitleSize,
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
@@ -7529,7 +7686,7 @@ class _TrackerMatchWorkspaceScreenState
                         'Индекс нагрузки',
                         style: TextStyle(
                           color: _TD.text,
-                          fontSize: 11.4,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -7538,7 +7695,7 @@ class _TrackerMatchWorkspaceScreenState
                       loadLabel,
                       style: TextStyle(
                         color: loadAverage >= 700 ? _TD.orange : _TD.green,
-                        fontSize: 9.2,
+                        fontSize: AppTypography.menuGroupSize,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -7562,7 +7719,7 @@ class _TrackerMatchWorkspaceScreenState
                             'Данные нагрузки появятся после сессии',
                             style: TextStyle(
                               color: _TD.dim,
-                              fontSize: 9,
+                              fontSize: AppTypography.badgeSize,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -7646,7 +7803,7 @@ class _TrackerMatchWorkspaceScreenState
                               'Последние сессии',
                               style: TextStyle(
                                 color: _TD.text,
-                                fontSize: 11.2,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
@@ -7658,7 +7815,7 @@ class _TrackerMatchWorkspaceScreenState
                               'Все',
                               style: TextStyle(
                                 color: _TD.green,
-                                fontSize: 8.8,
+                                fontSize: AppTypography.badgeSize,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
@@ -7731,7 +7888,7 @@ class _TrackerMatchWorkspaceScreenState
                                                         TextOverflow.ellipsis,
                                                     style: const TextStyle(
                                                       color: _TD.text,
-                                                      fontSize: 9.2,
+                                                      fontSize: AppTypography.menuGroupSize,
                                                       fontWeight:
                                                           FontWeight.w800,
                                                     ),
@@ -7855,7 +8012,7 @@ class _TrackerMatchWorkspaceScreenState
                             'Быстрая панель действий',
                             style: TextStyle(
                               color: _TD.text,
-                              fontSize: 11.4,
+                              fontSize: AppTypography.secondarySize,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
@@ -7922,7 +8079,7 @@ class _TrackerMatchWorkspaceScreenState
                                     textAlign: TextAlign.center,
                                     style: const TextStyle(
                                       color: _TD.text,
-                                      fontSize: 8.5,
+                                      fontSize: AppTypography.badgeSize,
                                       fontWeight: FontWeight.w800,
                                       height: 1.12,
                                     ),
@@ -8457,7 +8614,7 @@ class _TrackerMatchWorkspaceScreenState
                       title,
                       style: TextStyle(
                         color: _TD.text,
-                        fontSize: 16.8,
+                        fontSize: AppTypography.screenTitleSize,
                         fontWeight: FontWeight.w900,
                         letterSpacing: -.35,
                       ),
@@ -8467,7 +8624,7 @@ class _TrackerMatchWorkspaceScreenState
                       subtitle,
                       style: TextStyle(
                         color: _TD.muted,
-                        fontSize: 11.0,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w700,
                         height: 1.25,
                       ),
@@ -8486,7 +8643,7 @@ class _TrackerMatchWorkspaceScreenState
                         primary ? '10–12 игроков' : '1 игрок',
                         style: TextStyle(
                           color: primary ? _TD.greenDark : _TD.graphite,
-                          fontSize: 9.6,
+                          fontSize: AppTypography.menuGroupSize,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
@@ -8531,7 +8688,7 @@ class _TrackerMatchWorkspaceScreenState
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: _TD.text,
-                  fontSize: 15.0,
+                  fontSize: AppTypography.sectionTitleSize,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -8600,7 +8757,7 @@ class _TrackerMatchWorkspaceScreenState
                     _playerInitials(player.name),
                     style: const TextStyle(
                       color: _TD.graphite,
-                      fontSize: 15,
+                      fontSize: AppTypography.sectionTitleSize,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -8611,7 +8768,7 @@ class _TrackerMatchWorkspaceScreenState
                   _playerInitials(player.name),
                   style: const TextStyle(
                     color: _TD.graphite,
-                    fontSize: 15,
+                    fontSize: AppTypography.sectionTitleSize,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -8639,7 +8796,7 @@ class _TrackerMatchWorkspaceScreenState
               label,
               style: TextStyle(
                 color: active ? _TD.graphite : _TD.muted,
-                fontSize: 8.5,
+                fontSize: AppTypography.badgeSize,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -8697,7 +8854,7 @@ class _TrackerMatchWorkspaceScreenState
                                   '${player.number}',
                                   style: const TextStyle(
                                     color: Colors.white,
-                                    fontSize: 8.5,
+                                    fontSize: AppTypography.badgeSize,
                                     fontWeight: FontWeight.w800,
                                   ),
                                 ),
@@ -8716,7 +8873,7 @@ class _TrackerMatchWorkspaceScreenState
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 color: _TD.text,
-                                fontSize: 11.6,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w800,
                                 height: 1.12,
                               ),
@@ -8728,7 +8885,7 @@ class _TrackerMatchWorkspaceScreenState
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 color: _TD.muted,
-                                fontSize: 9.2,
+                                fontSize: AppTypography.menuGroupSize,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -8784,7 +8941,7 @@ class _TrackerMatchWorkspaceScreenState
                         'Игроки команды',
                         style: TextStyle(
                           color: _TD.text,
-                          fontSize: 13.5,
+                          fontSize: AppTypography.itemTitleSize,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -8793,7 +8950,7 @@ class _TrackerMatchWorkspaceScreenState
                         'Выбор для Live и контроль датчиков',
                         style: TextStyle(
                           color: _TD.muted,
-                          fontSize: 9.7,
+                          fontSize: AppTypography.captionSize,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -8812,7 +8969,7 @@ class _TrackerMatchWorkspaceScreenState
                     '$ready/$total готовы',
                     style: const TextStyle(
                       color: _TD.graphite,
-                      fontSize: 9.4,
+                      fontSize: AppTypography.menuGroupSize,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -8827,7 +8984,7 @@ class _TrackerMatchWorkspaceScreenState
                       'Игроки команды не загружены',
                       style: TextStyle(
                         color: _TD.muted,
-                        fontSize: 11.5,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -8894,7 +9051,7 @@ class _TrackerMatchWorkspaceScreenState
               value,
               style: const TextStyle(
                 color: _TD.text,
-                fontSize: 11.2,
+                fontSize: AppTypography.secondarySize,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -8903,7 +9060,7 @@ class _TrackerMatchWorkspaceScreenState
               label,
               style: const TextStyle(
                 color: _TD.muted,
-                fontSize: 9.5,
+                fontSize: AppTypography.menuGroupSize,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -9047,7 +9204,7 @@ class _TrackerMatchWorkspaceScreenState
                                       _playerInitials(player.name),
                                       style: const TextStyle(
                                         color: _TD.greenDark,
-                                        fontSize: 13,
+                                        fontSize: AppTypography.itemTitleSize,
                                         fontWeight: FontWeight.w900,
                                       ),
                                     ),
@@ -9058,7 +9215,7 @@ class _TrackerMatchWorkspaceScreenState
                                     _playerInitials(player.name),
                                     style: const TextStyle(
                                       color: _TD.greenDark,
-                                      fontSize: 13,
+                                      fontSize: AppTypography.itemTitleSize,
                                       fontWeight: FontWeight.w900,
                                     ),
                                   ),
@@ -9243,7 +9400,7 @@ class _TrackerMatchWorkspaceScreenState
                       'Все игроки',
                       style: TextStyle(
                         color: _TD.greenDark,
-                        fontSize: 9.5,
+                        fontSize: AppTypography.menuGroupSize,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -9261,7 +9418,7 @@ class _TrackerMatchWorkspaceScreenState
                       'Основной состав',
                       style: TextStyle(
                         color: _TD.graphite,
-                        fontSize: 9.5,
+                        fontSize: AppTypography.menuGroupSize,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -9386,7 +9543,7 @@ class _TrackerMatchWorkspaceScreenState
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                         color: _TD.text,
-                                        fontSize: 14.6,
+                                        fontSize: AppTypography.sectionTitleSize,
                                         fontWeight: FontWeight.w700,
                                         height: 1)),
                                 Text(
@@ -9397,7 +9554,7 @@ class _TrackerMatchWorkspaceScreenState
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                         color: _TD.muted,
-                                        fontSize: 11.8,
+                                        fontSize: AppTypography.bodySize,
                                         fontWeight: FontWeight.w600,
                                         height: 1.1)),
                               ])),
@@ -9442,7 +9599,7 @@ class _TrackerMatchWorkspaceScreenState
                                   Text('Дата и сессии',
                                       style: TextStyle(
                                           color: _TD.green,
-                                          fontSize: 11.5,
+                                          fontSize: AppTypography.secondarySize,
                                           fontWeight: FontWeight.w700))
                                 ]),
                           ),
@@ -9461,7 +9618,7 @@ class _TrackerMatchWorkspaceScreenState
                                     Text('Игроки',
                                         style: TextStyle(
                                             color: _TD.graphite,
-                                            fontSize: 11.5,
+                                            fontSize: AppTypography.secondarySize,
                                             fontWeight: FontWeight.w700))
                                   ])),
                           const SizedBox(width: 8),
@@ -9479,7 +9636,7 @@ class _TrackerMatchWorkspaceScreenState
                                     Text('Командные',
                                         style: TextStyle(
                                             color: _TD.graphite,
-                                            fontSize: 11.5,
+                                            fontSize: AppTypography.secondarySize,
                                             fontWeight: FontWeight.w700))
                                   ])),
                         ]),
@@ -9561,7 +9718,7 @@ class _TrackerMatchWorkspaceScreenState
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: _TD.text,
-                              fontSize: 14.5,
+                              fontSize: AppTypography.sectionTitleSize,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
@@ -9930,7 +10087,7 @@ class _TrackerMatchWorkspaceScreenState
                         child: Text('Сервер / другие устройства',
                             style: TextStyle(
                                 color: _TD.greenDark,
-                                fontSize: 10.2,
+                                fontSize: AppTypography.captionSize,
                                 fontWeight: FontWeight.w500)),
                       ),
                     ...remote.map((log) {
@@ -9946,7 +10103,7 @@ class _TrackerMatchWorkspaceScreenState
                           style: const TextStyle(
                               color: _TD.muted,
                               fontFamily: 'monospace',
-                              fontSize: 11.0,
+                              fontSize: AppTypography.secondarySize,
                               fontWeight: FontWeight.w600),
                         ),
                       );
@@ -9958,7 +10115,7 @@ class _TrackerMatchWorkspaceScreenState
                         child: Text('Локально',
                             style: TextStyle(
                                 color: _TD.greenDark,
-                                fontSize: 11.0,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w700)),
                       ),
                       ...local.map((line) => Padding(
@@ -9970,7 +10127,7 @@ class _TrackerMatchWorkspaceScreenState
                               style: const TextStyle(
                                   color: _TD.muted,
                                   fontFamily: 'monospace',
-                                  fontSize: 11.0,
+                                  fontSize: AppTypography.secondarySize,
                                   fontWeight: FontWeight.w600),
                             ),
                           )),
@@ -10018,6 +10175,7 @@ class _TrackerMatchWorkspaceScreenState
     setState(() => _connecting = true);
     try {
       await TrackerPermissions.ensureBlePermissions();
+      if (!await _claimSingleBleLease(device)) return;
       // Командный режим обязан использовать отдельный BLE-сервис для каждого UUID.
       // Одиночный _ble.connect(device) отключал предыдущий GPS при подключении следующего.
       await _teamBlePool.connect(device);
@@ -10158,7 +10316,7 @@ class _TrackerMatchWorkspaceScreenState
       return Row(mainAxisSize: MainAxisSize.min, children: [
         Text(battery == null ? '—' : '$battery%',
             style: const TextStyle(
-                color: _TD.text, fontSize: 11, fontWeight: FontWeight.w700)),
+                color: _TD.text, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700)),
         const SizedBox(width: 6),
         Container(
           width: 20,
@@ -10241,7 +10399,7 @@ class _TrackerMatchWorkspaceScreenState
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: fg,
-                        fontSize: 11.4,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -10252,7 +10410,7 @@ class _TrackerMatchWorkspaceScreenState
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: sub,
-                        fontSize: 9.8,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -10304,7 +10462,7 @@ class _TrackerMatchWorkspaceScreenState
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: _TD.text,
-                    fontSize: 10.8,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -10431,7 +10589,7 @@ class _TrackerMatchWorkspaceScreenState
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: active ? _TD.text : _TD.muted,
-                  fontSize: 11.4,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: active ? FontWeight.w700 : FontWeight.w500,
                 ),
               ),
@@ -10483,7 +10641,7 @@ class _TrackerMatchWorkspaceScreenState
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               color: _TD.text,
-                              fontSize: 12.5,
+                              fontSize: AppTypography.bodySize,
                               fontWeight: FontWeight.w700)),
                       const SizedBox(height: 3),
                       Text(
@@ -10492,7 +10650,7 @@ class _TrackerMatchWorkspaceScreenState
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                               color: active ? _TD.green : _TD.muted,
-                              fontSize: 11.0,
+                              fontSize: AppTypography.secondarySize,
                               fontWeight: FontWeight.w700)),
                     ]),
               ),
@@ -10503,7 +10661,7 @@ class _TrackerMatchWorkspaceScreenState
                 selected ? 'Назначить' : 'Выберите игрока',
                 style: TextStyle(
                   color: selected ? _TD.greenDark : _TD.muted,
-                  fontSize: 11.0,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -10552,7 +10710,7 @@ class _TrackerMatchWorkspaceScreenState
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               color: _TD.text,
-                              fontSize: 12.5,
+                              fontSize: AppTypography.bodySize,
                               fontWeight: FontWeight.w700)),
                       const SizedBox(height: 3),
                       Text(
@@ -10561,7 +10719,7 @@ class _TrackerMatchWorkspaceScreenState
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                               color: active ? _TD.green : _TD.muted,
-                              fontSize: 11.0,
+                              fontSize: AppTypography.secondarySize,
                               fontWeight: FontWeight.w700)),
                     ]),
               ),
@@ -10572,7 +10730,7 @@ class _TrackerMatchWorkspaceScreenState
                 selected ? 'Назначить' : 'Выберите игрока',
                 style: TextStyle(
                   color: selected ? _TD.greenDark : _TD.muted,
-                  fontSize: 11.0,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -10592,7 +10750,7 @@ class _TrackerMatchWorkspaceScreenState
                 child: Text('Доступные устройства рядом',
                     style: TextStyle(
                         color: _TD.text,
-                        fontSize: 13,
+                        fontSize: AppTypography.itemTitleSize,
                         fontWeight: FontWeight.w700))),
             _DarkActionButton(
                 icon: Icons.refresh_rounded,
@@ -10649,7 +10807,7 @@ class _TrackerMatchWorkspaceScreenState
                 child: Text('Доступные Polar H10 рядом',
                     style: TextStyle(
                         color: _TD.text,
-                        fontSize: 13,
+                        fontSize: AppTypography.itemTitleSize,
                         fontWeight: FontWeight.w700))),
             _DarkActionButton(
                 icon: Icons.refresh_rounded,
@@ -10725,7 +10883,7 @@ class _TrackerMatchWorkspaceScreenState
                   'Выберите игрока слева — здесь сразу будут видны его GPS и кардио-датчик.',
                   style: TextStyle(
                     color: _TD.graphite,
-                    fontSize: 10.2,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -10802,7 +10960,7 @@ class _TrackerMatchWorkspaceScreenState
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 color: _TD.text,
-                                fontSize: 10.4,
+                                fontSize: AppTypography.captionSize,
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
@@ -10935,7 +11093,7 @@ class _TrackerMatchWorkspaceScreenState
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: _TD.text,
-                      fontSize: 10.8,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -11045,7 +11203,7 @@ class _TrackerMatchWorkspaceScreenState
                               label,
                               style: TextStyle(
                                 color: active ? _TD.greenDark : _TD.muted,
-                                fontSize: 8.8,
+                                fontSize: AppTypography.badgeSize,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -11099,7 +11257,7 @@ class _TrackerMatchWorkspaceScreenState
                                             overflow: TextOverflow.ellipsis,
                                             style: const TextStyle(
                                               color: _TD.text,
-                                              fontSize: 11.5,
+                                              fontSize: AppTypography.secondarySize,
                                               height: 1.10,
                                               fontWeight: FontWeight.w900,
                                             ),
@@ -11111,7 +11269,7 @@ class _TrackerMatchWorkspaceScreenState
                                             '#${p.number}',
                                             style: const TextStyle(
                                               color: _TD.dim,
-                                              fontSize: 8.6,
+                                              fontSize: AppTypography.badgeSize,
                                               fontWeight: FontWeight.w800,
                                             ),
                                           ),
@@ -11127,7 +11285,7 @@ class _TrackerMatchWorkspaceScreenState
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                         color: _TD.muted,
-                                        fontSize: 9.2,
+                                        fontSize: AppTypography.menuGroupSize,
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
@@ -11194,7 +11352,7 @@ class _TrackerMatchWorkspaceScreenState
                               child: Text('Управление датчиками',
                                   style: TextStyle(
                                       color: _TD.text,
-                                      fontSize: 15.4,
+                                      fontSize: AppTypography.screenTitleSize,
                                       fontWeight: FontWeight.w700))),
                           _SheetCloseButton(
                               onTap: () => Navigator.of(sheetContext).pop()),
@@ -11282,7 +11440,7 @@ class _TrackerMatchWorkspaceScreenState
                                 child: Text('Выберите игрока',
                                     style: TextStyle(
                                         color: _TD.text,
-                                        fontSize: 15,
+                                        fontSize: AppTypography.sectionTitleSize,
                                         fontWeight: FontWeight.w700))),
                             _SheetCloseButton(
                                 onTap: () => Navigator.of(sheetContext).pop()),
@@ -11403,7 +11561,7 @@ class _TrackerMatchWorkspaceScreenState
                                         : 'Подключить Polar H10',
                                     style: const TextStyle(
                                         color: _TD.text,
-                                        fontSize: 15,
+                                        fontSize: AppTypography.sectionTitleSize,
                                         fontWeight: FontWeight.w700)),
                                 Text(
                                     _selectedPlayer == null
@@ -11413,7 +11571,7 @@ class _TrackerMatchWorkspaceScreenState
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                         color: _TD.muted,
-                                        fontSize: 11.2,
+                                        fontSize: AppTypography.secondarySize,
                                         fontWeight: FontWeight.w700)),
                               ]),
                         ),
@@ -11497,7 +11655,7 @@ class _TrackerMatchWorkspaceScreenState
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                                 color: fg,
-                                fontSize: 11.4,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w600)),
                         const SizedBox(height: 1),
                         Text(caption,
@@ -11505,7 +11663,7 @@ class _TrackerMatchWorkspaceScreenState
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                                 color: sub,
-                                fontSize: 11.0,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w700)),
                       ]),
                 ),
@@ -11539,7 +11697,7 @@ class _TrackerMatchWorkspaceScreenState
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _TD.graphite,
-                      fontSize: 11.0,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700)),
             ]),
           ),
@@ -11637,7 +11795,7 @@ class _TrackerMatchWorkspaceScreenState
                           key: ValueKey<String>('number'),
                           style: TextStyle(
                             color: color,
-                            fontSize: 10.5,
+                            fontSize: AppTypography.captionSize,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -11651,7 +11809,7 @@ class _TrackerMatchWorkspaceScreenState
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: done || current ? _TD.text : _TD.muted,
-                    fontSize: 10.8,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -11673,7 +11831,7 @@ class _TrackerMatchWorkspaceScreenState
                   const Text('Подключение комплекта',
                       style: TextStyle(
                           color: _TD.text,
-                          fontSize: 15.2,
+                          fontSize: AppTypography.screenTitleSize,
                           fontWeight: FontWeight.w700)),
                   const SizedBox(height: 2),
                   Text(
@@ -11682,7 +11840,7 @@ class _TrackerMatchWorkspaceScreenState
                         : 'Выберите игрока и назначьте его датчики',
                     style: TextStyle(
                         color: complete ? _TD.greenDark : _TD.muted,
-                        fontSize: 11.2,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w600),
                   ),
                 ],
@@ -11698,7 +11856,7 @@ class _TrackerMatchWorkspaceScreenState
                 child: const Text('ГОТОВО',
                     style: TextStyle(
                         color: _TD.greenDark,
-                        fontSize: 9.8,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w700)),
               ),
           ]),
@@ -11781,7 +11939,7 @@ class _TrackerMatchWorkspaceScreenState
                       : Text('$number',
                           style: TextStyle(
                               color: color,
-                              fontSize: 10.5,
+                              fontSize: AppTypography.captionSize,
                               fontWeight: FontWeight.w700)),
                 ),
                 const SizedBox(width: 8),
@@ -11969,7 +12127,7 @@ class _TrackerMatchWorkspaceScreenState
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _TD.text,
-                            fontSize: 15.5,
+                            fontSize: AppTypography.screenTitleSize,
                             fontWeight: FontWeight.w700)),
                     const SizedBox(height: 3),
                     Text(
@@ -11982,7 +12140,7 @@ class _TrackerMatchWorkspaceScreenState
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _TD.muted,
-                            fontSize: 11.2,
+                            fontSize: AppTypography.secondarySize,
                             fontWeight: FontWeight.w700)),
                   ])),
               const SizedBox(width: 8),
@@ -11995,7 +12153,7 @@ class _TrackerMatchWorkspaceScreenState
                 child: Text(p == null ? 'Выбрать' : 'Сменить',
                     style: const TextStyle(
                         color: _TD.text,
-                        fontSize: 11.2,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w700)),
               ),
             ]),
@@ -12025,7 +12183,7 @@ class _TrackerMatchWorkspaceScreenState
           child: Text(connected ? 'Подключен' : 'Назначен',
               style: TextStyle(
                   color: connected ? _TD.green : _TD.muted,
-                  fontSize: 10.4,
+                  fontSize: AppTypography.captionSize,
                   fontWeight: FontWeight.w700)),
         );
       }
@@ -12037,7 +12195,7 @@ class _TrackerMatchWorkspaceScreenState
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: _TD.text,
-                  fontSize: 12.5,
+                  fontSize: AppTypography.bodySize,
                   fontWeight: FontWeight.w700)),
           const SizedBox(height: 3),
           Text(deviceId,
@@ -12045,7 +12203,7 @@ class _TrackerMatchWorkspaceScreenState
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: _TD.muted,
-                  fontSize: 11.0,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w700)),
           const SizedBox(height: 3),
           Row(children: [
@@ -12055,7 +12213,7 @@ class _TrackerMatchWorkspaceScreenState
             Text(connected ? 'Подключен' : 'Ожидает подключения',
                 style: TextStyle(
                     color: connected ? _TD.green : _TD.muted,
-                    fontSize: 11.0,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w700)),
           ]),
         ]);
@@ -12105,7 +12263,7 @@ class _TrackerMatchWorkspaceScreenState
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _TD.text,
-                          fontSize: 12.5,
+                          fontSize: AppTypography.bodySize,
                           fontWeight: FontWeight.w700))),
               const SizedBox(width: 8),
               statusPill(),
@@ -12240,7 +12398,7 @@ class _TrackerMatchWorkspaceScreenState
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                                 color: _TD.text,
-                                fontSize: 17,
+                                fontSize: AppTypography.screenTitleSize,
                                 fontWeight: FontWeight.w700)),
                         const SizedBox(height: 3),
                         Text(_equipmentStatusForPlayer(p),
@@ -12248,7 +12406,7 @@ class _TrackerMatchWorkspaceScreenState
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                                 color: _TD.text,
-                                fontSize: 11,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w700)),
                       ])),
                   Container(
@@ -12261,7 +12419,7 @@ class _TrackerMatchWorkspaceScreenState
                       child: const Text('Активен',
                           style: TextStyle(
                               color: _TD.green,
-                              fontSize: 11.2,
+                              fontSize: AppTypography.secondarySize,
                               fontWeight: FontWeight.w700))),
                 ]),
               ),
@@ -12269,7 +12427,7 @@ class _TrackerMatchWorkspaceScreenState
               const Text('Назначенные устройства',
                   style: TextStyle(
                       color: _TD.text,
-                      fontSize: 13,
+                      fontSize: AppTypography.itemTitleSize,
                       fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
               if (gpsDevice == null)
@@ -12367,7 +12525,7 @@ class _TrackerMatchWorkspaceScreenState
                       const Text('Информация об игроке',
                           style: TextStyle(
                               color: _TD.text,
-                              fontSize: 12.5,
+                              fontSize: AppTypography.bodySize,
                               fontWeight: FontWeight.w700)),
                       const SizedBox(height: 10),
                       _InfoRow(label: 'Позиция', value: p.position ?? '—'),
@@ -12428,7 +12586,7 @@ class _TrackerMatchWorkspaceScreenState
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                     color: _TD.text,
-                                    fontSize: 15,
+                                    fontSize: AppTypography.sectionTitleSize,
                                     fontWeight: FontWeight.w700))),
                         _SheetCloseButton(
                             onTap: () => Navigator.of(sheetContext).pop()),
@@ -12505,7 +12663,7 @@ class _TrackerMatchWorkspaceScreenState
                       Text(title,
                           style: const TextStyle(
                               color: _TD.text,
-                              fontSize: 12,
+                              fontSize: AppTypography.bodySize,
                               fontWeight: FontWeight.w700)),
                       const SizedBox(width: 6),
                       Icon(Icons.circle,
@@ -12517,7 +12675,7 @@ class _TrackerMatchWorkspaceScreenState
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _TD.muted,
-                            fontSize: 11.2,
+                            fontSize: AppTypography.secondarySize,
                             fontWeight: FontWeight.w700)),
                   ])),
               const Icon(Icons.chevron_right_rounded, color: _TD.muted),
@@ -12568,7 +12726,7 @@ class _TrackerMatchWorkspaceScreenState
             Text(text,
                 style: const TextStyle(
                     color: _TD.text,
-                    fontSize: 11.2,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w700))
           ]);
       return Container(
@@ -12626,7 +12784,7 @@ class _TrackerMatchWorkspaceScreenState
                     label,
                     style: TextStyle(
                       color: active ? _TD.text : _TD.graphite,
-                      fontSize: 11.4,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -12722,7 +12880,7 @@ class _TrackerMatchWorkspaceScreenState
                           connecting ? 'подключение' : 'найдено',
                           style: const TextStyle(
                             color: _TD.muted,
-                            fontSize: 9.8,
+                            fontSize: AppTypography.captionSize,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -12803,7 +12961,7 @@ class _TrackerMatchWorkspaceScreenState
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: _TD.text,
-                          fontSize: 13.2,
+                          fontSize: AppTypography.itemTitleSize,
                           fontWeight: FontWeight.w900,
                           letterSpacing: -.2,
                         ),
@@ -12817,7 +12975,7 @@ class _TrackerMatchWorkspaceScreenState
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: _TD.muted,
-                          fontSize: 10.7,
+                          fontSize: AppTypography.captionSize,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -12835,7 +12993,7 @@ class _TrackerMatchWorkspaceScreenState
                     player == null ? 'ВЫБРАТЬ' : 'ИЗМЕНИТЬ',
                     style: const TextStyle(
                       color: _TD.greenDark,
-                      fontSize: 9.2,
+                      fontSize: AppTypography.menuGroupSize,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -12902,7 +13060,7 @@ class _TrackerMatchWorkspaceScreenState
                                 'ПОДКЛЮЧЕНИЕ',
                                 style: TextStyle(
                                   color: _TD.text,
-                                  fontSize: 15.5,
+                                  fontSize: AppTypography.screenTitleSize,
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: -.25,
                                 ),
@@ -12912,7 +13070,7 @@ class _TrackerMatchWorkspaceScreenState
                                 'Игрок → GPS → Polar H10 → Live',
                                 style: TextStyle(
                                   color: _TD.muted,
-                                  fontSize: 10.7,
+                                  fontSize: AppTypography.captionSize,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -12937,7 +13095,7 @@ class _TrackerMatchWorkspaceScreenState
                                   'ГОТОВО',
                                   style: TextStyle(
                                     color: _TD.greenDark,
-                                    fontSize: 9.5,
+                                    fontSize: AppTypography.menuGroupSize,
                                     fontWeight: FontWeight.w900,
                                   ),
                                 ),
@@ -13000,7 +13158,7 @@ class _TrackerMatchWorkspaceScreenState
                                     : '${polar ? 'Polar H10' : 'GPS-трекеры'} рядом',
                             style: const TextStyle(
                               color: _TD.text,
-                              fontSize: 12.8,
+                              fontSize: AppTypography.itemTitleSize,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
@@ -13032,7 +13190,7 @@ class _TrackerMatchWorkspaceScreenState
                             textAlign: TextAlign.center,
                             style: const TextStyle(
                               color: _TD.muted,
-                              fontSize: 10.3,
+                              fontSize: AppTypography.captionSize,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -13067,7 +13225,7 @@ class _TrackerMatchWorkspaceScreenState
                               label: Text(
                                 count == 0 ? 'НАЙТИ УСТРОЙСТВА' : 'ПОВТОРИТЬ ПОИСК',
                                 style: const TextStyle(
-                                  fontSize: 11.5,
+                                  fontSize: AppTypography.secondarySize,
                                   fontWeight: FontWeight.w900,
                                 ),
                               ),
@@ -13085,7 +13243,7 @@ class _TrackerMatchWorkspaceScreenState
                               'ДОСТУПНЫЕ УСТРОЙСТВА',
                               style: TextStyle(
                                 color: _TD.muted,
-                                fontSize: 10.2,
+                                fontSize: AppTypography.captionSize,
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: .35,
                               ),
@@ -13095,7 +13253,7 @@ class _TrackerMatchWorkspaceScreenState
                             '$count',
                             style: const TextStyle(
                               color: _TD.green,
-                              fontSize: 10.8,
+                              fontSize: AppTypography.secondarySize,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
@@ -13137,7 +13295,7 @@ class _TrackerMatchWorkspaceScreenState
                         label: const Text(
                           'ОТКРЫТЬ LIVE',
                           style: TextStyle(
-                            fontSize: 12.2,
+                            fontSize: AppTypography.bodySize,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
@@ -13216,7 +13374,7 @@ class _TrackerMatchWorkspaceScreenState
                 active ? 'Online' : 'Offline',
                 style: TextStyle(
                   color: active ? _TD.greenDark : _TD.dim,
-                  fontSize: 8.8,
+                  fontSize: AppTypography.badgeSize,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -13274,7 +13432,7 @@ class _TrackerMatchWorkspaceScreenState
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: player == null ? _TD.dim : _TD.text,
-                  fontSize: 9.3,
+                  fontSize: AppTypography.menuGroupSize,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -13286,7 +13444,7 @@ class _TrackerMatchWorkspaceScreenState
       Widget tableHeader() {
         const style = TextStyle(
           color: _TD.muted,
-          fontSize: 8.6,
+          fontSize: AppTypography.badgeSize,
           fontWeight: FontWeight.w800,
         );
         return Container(
@@ -13348,7 +13506,7 @@ class _TrackerMatchWorkspaceScreenState
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: _TD.text,
-                          fontSize: 9.4,
+                          fontSize: AppTypography.menuGroupSize,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -13386,7 +13544,7 @@ class _TrackerMatchWorkspaceScreenState
                   battery == null ? '—' : '$battery%',
                   style: const TextStyle(
                     color: _TD.text,
-                    fontSize: 8.9,
+                    fontSize: AppTypography.badgeSize,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -13441,7 +13599,7 @@ class _TrackerMatchWorkspaceScreenState
                         isHeart ? 'Polar H10' : 'Tracker',
                         style: const TextStyle(
                           color: _TD.graphite,
-                          fontSize: 8.9,
+                          fontSize: AppTypography.badgeSize,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -13455,7 +13613,7 @@ class _TrackerMatchWorkspaceScreenState
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: _TD.muted,
-                          fontSize: 8.8,
+                          fontSize: AppTypography.badgeSize,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -13468,7 +13626,7 @@ class _TrackerMatchWorkspaceScreenState
                         d.isNearby ? 'только что' : 'нет сигнала',
                         style: TextStyle(
                           color: d.isNearby ? _TD.green : _TD.dim,
-                          fontSize: 8.7,
+                          fontSize: AppTypography.badgeSize,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -13507,7 +13665,7 @@ class _TrackerMatchWorkspaceScreenState
                   label,
                   style: const TextStyle(
                     color: _TD.graphite,
-                    fontSize: 10.1,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -13538,7 +13696,7 @@ class _TrackerMatchWorkspaceScreenState
               label,
               style: TextStyle(
                 color: active ? _TD.greenDark : _TD.muted,
-                fontSize: 10.0,
+                fontSize: AppTypography.captionSize,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -13595,7 +13753,7 @@ class _TrackerMatchWorkspaceScreenState
                               color: _deviceWorkspaceTab == tab.$1
                                   ? _TD.greenDark
                                   : _TD.muted,
-                              fontSize: 10.0,
+                              fontSize: AppTypography.captionSize,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -13617,7 +13775,7 @@ class _TrackerMatchWorkspaceScreenState
                       '${filteredDevices.length} устройств',
                       style: const TextStyle(
                         color: _TD.muted,
-                        fontSize: 9.8,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -13764,7 +13922,7 @@ class _TrackerMatchWorkspaceScreenState
                     'GPS ${_teamBlePool.connectedCount} · Polar ${_heart.connectedCount}',
                     style: const TextStyle(
                       color: _TD.muted,
-                      fontSize: 9.5,
+                      fontSize: AppTypography.menuGroupSize,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -13816,7 +13974,7 @@ class _TrackerMatchWorkspaceScreenState
                           child: Text('Архив привязок',
                               style: TextStyle(
                                   color: _TD.text,
-                                  fontSize: 15.4,
+                                  fontSize: AppTypography.screenTitleSize,
                                   fontWeight: FontWeight.w700))),
                       _SheetCloseButton(
                           onTap: () => Navigator.of(sheetContext).pop()),
@@ -14011,7 +14169,7 @@ class _TrackerMatchWorkspaceScreenState
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _TD.text,
-                        fontSize: 11.5,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w700)),
                 const SizedBox(height: 2),
                 Text(subtitle,
@@ -14019,7 +14177,7 @@ class _TrackerMatchWorkspaceScreenState
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _TD.muted,
-                        fontSize: 11.0,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w600)),
               ]),
         ),
@@ -14097,7 +14255,7 @@ class _TrackerMatchWorkspaceScreenState
                             Text('+ точка $_calibrationFlashLabel',
                                 style: const TextStyle(
                                     color: _TD.text,
-                                    fontSize: 14,
+                                    fontSize: AppTypography.sectionTitleSize,
                                     fontWeight: FontWeight.w700)),
                           ]),
                         ),
@@ -14131,7 +14289,7 @@ class _TrackerMatchWorkspaceScreenState
                   Text('Координаты сохранены',
                       style: TextStyle(
                           color: _TD.text,
-                          fontSize: 11.2,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w700)),
                 ]),
               ),
@@ -14166,7 +14324,7 @@ class _TrackerMatchWorkspaceScreenState
                       child: Text('Запрашиваю свежую GPS-точку у трекера...',
                           style: TextStyle(
                               color: _TD.text,
-                              fontSize: 11.2,
+                              fontSize: AppTypography.secondarySize,
                               fontWeight: FontWeight.w700))),
                 ]),
               ),
@@ -14287,7 +14445,7 @@ class _TrackerMatchWorkspaceScreenState
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: _TD.text,
-                        fontSize: 13.5,
+                        fontSize: AppTypography.itemTitleSize,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -14298,7 +14456,7 @@ class _TrackerMatchWorkspaceScreenState
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: _TD.muted,
-                        fontSize: 10.7,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -14321,7 +14479,7 @@ class _TrackerMatchWorkspaceScreenState
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: _TD.dim,
-                              fontSize: 9.4,
+                              fontSize: AppTypography.menuGroupSize,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -14365,7 +14523,7 @@ class _TrackerMatchWorkspaceScreenState
                         'Поля',
                         style: TextStyle(
                           color: _TD.text,
-                          fontSize: 16.5,
+                          fontSize: AppTypography.screenTitleSize,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -14376,7 +14534,7 @@ class _TrackerMatchWorkspaceScreenState
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: _TD.muted,
-                          fontSize: 10.8,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -14422,7 +14580,7 @@ class _TrackerMatchWorkspaceScreenState
                       color: _selectedField?.hasCalibration == true
                           ? _TD.greenDark
                           : _TD.muted,
-                      fontSize: 10.3,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -14432,7 +14590,7 @@ class _TrackerMatchWorkspaceScreenState
                     '${_selectedField!.lengthM.toStringAsFixed(0)}×${_selectedField!.widthM.toStringAsFixed(0)} м',
                     style: const TextStyle(
                       color: _TD.graphiteSoft,
-                      fontSize: 10.2,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -14488,7 +14646,7 @@ class _TrackerMatchWorkspaceScreenState
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: _TD.text,
-                        fontSize: 12.6,
+                        fontSize: AppTypography.bodySize,
                         fontWeight: FontWeight.w700,
                         height: 1.1,
                       ),
@@ -14500,7 +14658,7 @@ class _TrackerMatchWorkspaceScreenState
                       color: visibleCorners.length >= 4
                           ? _TD.greenDark
                           : _TD.graphiteSoft,
-                      fontSize: 10.6,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -14678,7 +14836,7 @@ class _TrackerMatchWorkspaceScreenState
                     : Text('$number',
                         style: TextStyle(
                             color: color,
-                            fontSize: 10.2,
+                            fontSize: AppTypography.captionSize,
                             fontWeight: FontWeight.w700)),
               ),
               const SizedBox(width: 7),
@@ -14900,7 +15058,7 @@ class _TrackerMatchWorkspaceScreenState
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                       color: _TD.text,
-                                      fontSize: 13.6,
+                                      fontSize: AppTypography.itemTitleSize,
                                       fontWeight: FontWeight.w700,
                                       height: 1.0)),
                               if ((subtitle ?? '').trim().isNotEmpty) ...[
@@ -14910,7 +15068,7 @@ class _TrackerMatchWorkspaceScreenState
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                         color: _TD.muted,
-                                        fontSize: 11.2,
+                                        fontSize: AppTypography.secondarySize,
                                         fontWeight: FontWeight.w600,
                                         height: 1.1)),
                               ],
@@ -14966,7 +15124,7 @@ class _TrackerMatchWorkspaceScreenState
                                   color: disabled
                                       ? _TD.dim
                                       : (primary ? Colors.white : _TD.graphite),
-                                  fontSize: 11.2,
+                                  fontSize: AppTypography.secondarySize,
                                   fontWeight: FontWeight.w700))),
                     ]),
               ),
@@ -15028,7 +15186,7 @@ class _TrackerMatchWorkspaceScreenState
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                                 color: _TD.text,
-                                fontSize: 13.5,
+                                fontSize: AppTypography.itemTitleSize,
                                 fontWeight: FontWeight.w700,
                                 height: 1.0)),
                         const SizedBox(height: 4),
@@ -15037,7 +15195,7 @@ class _TrackerMatchWorkspaceScreenState
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                                 color: _TD.muted,
-                                fontSize: 11.2,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w700,
                                 height: 1.05)),
                       ])),
@@ -15047,7 +15205,7 @@ class _TrackerMatchWorkspaceScreenState
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                           color: selected ? _TD.green : _TD.graphite,
-                          fontSize: 11.2,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w700)),
                   const SizedBox(width: 4),
                   const Icon(Icons.chevron_right_rounded,
@@ -15170,7 +15328,7 @@ class _TrackerMatchWorkspaceScreenState
                               'Нажмите «Новое», затем отметьте углы на карте или пройдите их GPS-трекером.',
                               style: TextStyle(
                                   color: _TD.muted,
-                                  fontSize: 12,
+                                  fontSize: AppTypography.bodySize,
                                   fontWeight: FontWeight.w700)),
                         ),
                       ..._fields.map((f) => fieldTile(f)),
@@ -15321,7 +15479,7 @@ class _TrackerMatchWorkspaceScreenState
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _TD.muted,
-                            fontSize: 10,
+                            fontSize: AppTypography.captionSize,
                             fontWeight: FontWeight.w600)),
                     const SizedBox(height: 2),
                     Text(value,
@@ -15329,7 +15487,7 @@ class _TrackerMatchWorkspaceScreenState
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _TD.text,
-                            fontSize: 14,
+                            fontSize: AppTypography.sectionTitleSize,
                             fontWeight: FontWeight.w800)),
                   ],
                 ),
@@ -15373,7 +15531,7 @@ class _TrackerMatchWorkspaceScreenState
                 textAlign: TextAlign.center,
                 style: TextStyle(
                     color: _TD.muted,
-                    fontSize: 12.5,
+                    fontSize: AppTypography.bodySize,
                     fontWeight: FontWeight.w500,
                     height: 1.4),
               ),
@@ -15409,7 +15567,7 @@ class _TrackerMatchWorkspaceScreenState
                       const Text('Видео + телеметрия',
                           style: TextStyle(
                               color: _TD.text,
-                              fontSize: 15,
+                              fontSize: AppTypography.sectionTitleSize,
                               fontWeight: FontWeight.w800)),
                       const SizedBox(height: 2),
                       Text(
@@ -15418,7 +15576,7 @@ class _TrackerMatchWorkspaceScreenState
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _TD.muted,
-                            fontSize: 10.5,
+                            fontSize: AppTypography.captionSize,
                             fontWeight: FontWeight.w600),
                       ),
                     ],
@@ -15437,7 +15595,7 @@ class _TrackerMatchWorkspaceScreenState
                     child: const Row(mainAxisSize: MainAxisSize.min, children: [
                       Icon(Icons.arrow_back_rounded, size: 15, color: _TD.graphiteSoft),
                       SizedBox(width: 5),
-                      Text('К карте', style: TextStyle(color: _TD.graphite, fontSize: 10.2, fontWeight: FontWeight.w700)),
+                      Text('К карте', style: TextStyle(color: _TD.graphite, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w700)),
                     ]),
                   ),
                 ),
@@ -15470,7 +15628,7 @@ class _TrackerMatchWorkspaceScreenState
                       Text('ИИ-инженер',
                           style: TextStyle(
                               color: _TD.green,
-                              fontSize: 10.5,
+                              fontSize: AppTypography.captionSize,
                               fontWeight: FontWeight.w700)),
                     ]),
                   ),
@@ -15525,7 +15683,7 @@ class _TrackerMatchWorkspaceScreenState
                               const Text('Источник видео ещё не передан Tracker',
                                   style: TextStyle(
                                       color: _TD.text,
-                                      fontSize: 13,
+                                      fontSize: AppTypography.itemTitleSize,
                                       fontWeight: FontWeight.w700)),
                               const SizedBox(height: 4),
                               const Text(
@@ -15533,7 +15691,7 @@ class _TrackerMatchWorkspaceScreenState
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                     color: _TD.muted,
-                                    fontSize: 10.5,
+                                    fontSize: AppTypography.captionSize,
                                     fontWeight: FontWeight.w500),
                               ),
                             ]),
@@ -15551,7 +15709,7 @@ class _TrackerMatchWorkspaceScreenState
                             child: Text('SYNC · ${clock(elapsedMs)}',
                                 style: const TextStyle(
                                     color: _TD.green,
-                                    fontSize: 10,
+                                    fontSize: AppTypography.captionSize,
                                     fontWeight: FontWeight.w800)),
                           ),
                         ),
@@ -15576,7 +15734,7 @@ class _TrackerMatchWorkspaceScreenState
                         Text(clock(elapsedMs),
                             style: const TextStyle(
                                 color: _TD.text,
-                                fontSize: 11,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w800)),
                         const SizedBox(width: 8),
                         Expanded(
@@ -15612,7 +15770,7 @@ class _TrackerMatchWorkspaceScreenState
                         Text(clock(durationMs),
                             style: const TextStyle(
                                 color: _TD.muted,
-                                fontSize: 10.5,
+                                fontSize: AppTypography.captionSize,
                                 fontWeight: FontWeight.w700)),
                       ]),
                     ),
@@ -15634,13 +15792,13 @@ class _TrackerMatchWorkspaceScreenState
                       const Text('Автособытия',
                           style: TextStyle(
                               color: _TD.text,
-                              fontSize: 12,
+                              fontSize: AppTypography.bodySize,
                               fontWeight: FontWeight.w800)),
                       const Spacer(),
                       Text('${moments.length}',
                           style: const TextStyle(
                               color: _TD.muted,
-                              fontSize: 10,
+                              fontSize: AppTypography.captionSize,
                               fontWeight: FontWeight.w700)),
                     ]),
                     if (alerts.isNotEmpty) ...[
@@ -15658,7 +15816,7 @@ class _TrackerMatchWorkspaceScreenState
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               color: _TD.text,
-                              fontSize: 9.5,
+                              fontSize: AppTypography.menuGroupSize,
                               fontWeight: FontWeight.w600),
                         ),
                       ),
@@ -15671,7 +15829,7 @@ class _TrackerMatchWorkspaceScreenState
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                       color: _TD.muted,
-                                      fontSize: 10.5,
+                                      fontSize: AppTypography.captionSize,
                                       fontWeight: FontWeight.w600)),
                             )
                           : ListView.separated(
@@ -15711,7 +15869,7 @@ class _TrackerMatchWorkspaceScreenState
                                         child: Text(clock(mElapsed),
                                             style: const TextStyle(
                                                 color: _TD.green,
-                                                fontSize: 8.5,
+                                                fontSize: AppTypography.badgeSize,
                                                 fontWeight: FontWeight.w800)),
                                       ),
                                       const SizedBox(width: 8),
@@ -15724,7 +15882,7 @@ class _TrackerMatchWorkspaceScreenState
                                                 overflow: TextOverflow.ellipsis,
                                                 style: const TextStyle(
                                                     color: _TD.text,
-                                                    fontSize: 10,
+                                                    fontSize: AppTypography.captionSize,
                                                     fontWeight: FontWeight.w800)),
                                             const SizedBox(height: 2),
                                             Text('${moment['detail'] ?? ''}',
@@ -15732,7 +15890,7 @@ class _TrackerMatchWorkspaceScreenState
                                                 overflow: TextOverflow.ellipsis,
                                                 style: const TextStyle(
                                                     color: _TD.muted,
-                                                    fontSize: 8.8,
+                                                    fontSize: AppTypography.badgeSize,
                                                     fontWeight: FontWeight.w600)),
                                           ],
                                         ),
@@ -15921,7 +16079,7 @@ class _TrackerMatchWorkspaceScreenState
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: danger ? _TD.red : _TD.text,
-                                fontSize: 10.8,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
@@ -15932,7 +16090,7 @@ class _TrackerMatchWorkspaceScreenState
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 color: _TD.muted,
-                                fontSize: 9.2,
+                                fontSize: AppTypography.menuGroupSize,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -16006,7 +16164,7 @@ class _TrackerMatchWorkspaceScreenState
                                         _playerInitials(player.name),
                                         style: const TextStyle(
                                           color: _TD.greenDark,
-                                          fontSize: 11,
+                                          fontSize: AppTypography.secondarySize,
                                           fontWeight: FontWeight.w900,
                                         ),
                                       ),
@@ -16017,7 +16175,7 @@ class _TrackerMatchWorkspaceScreenState
                                       _playerInitials(player.name),
                                       style: const TextStyle(
                                         color: _TD.greenDark,
-                                        fontSize: 11,
+                                        fontSize: AppTypography.secondarySize,
                                         fontWeight: FontWeight.w900,
                                       ),
                                     ),
@@ -16034,7 +16192,7 @@ class _TrackerMatchWorkspaceScreenState
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 color: _TD.text,
-                                fontSize: 11.4,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
@@ -16045,7 +16203,7 @@ class _TrackerMatchWorkspaceScreenState
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 color: _TD.muted,
-                                fontSize: 9.1,
+                                fontSize: AppTypography.badgeSize,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -16156,7 +16314,7 @@ class _TrackerMatchWorkspaceScreenState
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 color: _TD.text,
-                                fontSize: 8.6,
+                                fontSize: AppTypography.badgeSize,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
@@ -16335,7 +16493,7 @@ class _TrackerMatchWorkspaceScreenState
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                       color: _TD.text,
-                                      fontSize: 11,
+                                      fontSize: AppTypography.secondarySize,
                                       fontWeight: FontWeight.w700,
                                       fontFamily: 'monospace'),
                                 ),
@@ -16348,7 +16506,7 @@ class _TrackerMatchWorkspaceScreenState
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                   color: _TD.greenDark,
-                                  fontSize: 11,
+                                  fontSize: AppTypography.secondarySize,
                                   fontWeight: FontWeight.w700),
                             ),
                             const SizedBox(height: 5),
@@ -16356,7 +16514,7 @@ class _TrackerMatchWorkspaceScreenState
                               message.isEmpty ? '—' : message,
                               style: const TextStyle(
                                   color: _TD.muted,
-                                  fontSize: 11.5,
+                                  fontSize: AppTypography.secondarySize,
                                   height: 1.25,
                                   fontFamily: 'monospace',
                                   fontWeight: FontWeight.w600),
@@ -16368,7 +16526,7 @@ class _TrackerMatchWorkspaceScreenState
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                       color: _TD.dim,
-                                      fontSize: 11.2,
+                                      fontSize: AppTypography.secondarySize,
                                       fontFamily: 'monospace')),
                             ],
                             if (playerId.isNotEmpty || liveId.isNotEmpty) ...[
@@ -16376,7 +16534,7 @@ class _TrackerMatchWorkspaceScreenState
                               Text('player=$playerId  live=$liveId',
                                   style: const TextStyle(
                                       color: _TD.dim,
-                                      fontSize: 11.2,
+                                      fontSize: AppTypography.secondarySize,
                                       fontFamily: 'monospace')),
                             ],
                           ]),
@@ -16407,7 +16565,7 @@ class _TrackerMatchWorkspaceScreenState
               'Локально GPS не подключены. Этот блок не зависит от интернета.',
               style: TextStyle(
                   color: _TD.muted,
-                  fontSize: 10.8,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w600),
             ),
           ),
@@ -16425,14 +16583,14 @@ class _TrackerMatchWorkspaceScreenState
           child: Text(
             'Локально подключены: ${devices.length} · интернет не требуется',
             style: const TextStyle(
-                color: _TD.text, fontSize: 11.2, fontWeight: FontWeight.w700),
+                color: _TD.text, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700),
           ),
         ),
         if (_teamLiveCoordinator.running)
           const Text('LIVE локально',
               style: TextStyle(
                   color: _TD.green,
-                  fontSize: 10.5,
+                  fontSize: AppTypography.captionSize,
                   fontWeight: FontWeight.w800)),
       ]),
       const SizedBox(height: 6),
@@ -16487,7 +16645,7 @@ class _TrackerMatchWorkspaceScreenState
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                                 color: _TD.text,
-                                fontSize: 10.8,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w700)),
                       ),
                     ]),
@@ -16497,7 +16655,7 @@ class _TrackerMatchWorkspaceScreenState
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             color: serverOffline ? _TD.orange : _TD.green,
-                            fontSize: 10.4,
+                            fontSize: AppTypography.captionSize,
                             fontWeight: FontWeight.w800)),
                     const SizedBox(height: 2),
                     Text(detail,
@@ -16505,7 +16663,7 @@ class _TrackerMatchWorkspaceScreenState
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _TD.muted,
-                            fontSize: 10.0,
+                            fontSize: AppTypography.captionSize,
                             fontWeight: FontWeight.w600)),
                     const SizedBox(height: 2),
                     Text(
@@ -16516,7 +16674,7 @@ class _TrackerMatchWorkspaceScreenState
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _TD.dim,
-                          fontSize: 9.5,
+                          fontSize: AppTypography.menuGroupSize,
                           fontWeight: FontWeight.w600),
                     ),
                   ]),
@@ -16593,7 +16751,7 @@ class _TrackerMatchWorkspaceScreenState
                             style: const TextStyle(
                                 color: _TD.muted,
                                 fontFamily: 'monospace',
-                                fontSize: 10.4,
+                                fontSize: AppTypography.captionSize,
                                 fontWeight: FontWeight.w600),
                           ),
                         ),
@@ -16756,7 +16914,7 @@ class _MobileSessionsReportPaneState extends State<_MobileSessionsReportPane> {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                               color: _TD.text,
-                              fontSize: 14.2,
+                              fontSize: AppTypography.sectionTitleSize,
                               fontWeight: FontWeight.w700,
                               height: 1))),
                   _NoHoverTap(
@@ -16840,7 +16998,7 @@ class _MobileSessionsReportPaneState extends State<_MobileSessionsReportPane> {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _TD.text,
-                            fontSize: 13.6,
+                            fontSize: AppTypography.itemTitleSize,
                             fontWeight: FontWeight.w700),
                       ),
                     ),
@@ -16858,7 +17016,7 @@ class _MobileSessionsReportPaneState extends State<_MobileSessionsReportPane> {
                         child: const Text('Выбор',
                             style: TextStyle(
                                 color: _TD.green,
-                                fontSize: 11.2,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w700,
                                 height: 1)),
                       ),
@@ -17072,7 +17230,7 @@ class _MobileReportActionChip extends StatelessWidget {
                       color: primary && enabled
                           ? Colors.white
                           : (enabled ? _TD.graphite : _TD.dim),
-                      fontSize: 11.2,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -17129,7 +17287,7 @@ class _MobileTrainingSelectorCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _TD.text,
-                    fontSize: 13.2,
+                    fontSize: AppTypography.itemTitleSize,
                     fontWeight: FontWeight.w700,
                     height: 1),
               ),
@@ -17137,7 +17295,7 @@ class _MobileTrainingSelectorCard extends StatelessWidget {
             Text('$sessionsCount сесс.',
                 style: const TextStyle(
                     color: _TD.muted,
-                    fontSize: 11.0,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w600,
                     height: 1)),
           ]),
@@ -17169,7 +17327,7 @@ class _MobileTrainingSelectorCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               color: _TD.text,
-                              fontSize: 13.4,
+                              fontSize: AppTypography.itemTitleSize,
                               fontWeight: FontWeight.w700,
                               height: 1.05)),
                       const SizedBox(height: 3),
@@ -17179,7 +17337,7 @@ class _MobileTrainingSelectorCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _TD.muted,
-                            fontSize: 11.2,
+                            fontSize: AppTypography.secondarySize,
                             fontWeight: FontWeight.w600,
                             height: 1.05),
                       ),
@@ -17202,7 +17360,7 @@ class _MobileTrainingSelectorCard extends StatelessWidget {
                 'Выберите дату и сессию: календарь откроется отдельным окном, а отчёт останется чистым и широким.',
                 style: TextStyle(
                     color: _TD.muted,
-                    fontSize: 11.3,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w600,
                     height: 1.22),
               ),
@@ -17262,7 +17420,7 @@ class _MobileTinyMetric extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _TD.graphite,
-                    fontSize: 11.2,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w700,
                     height: 1))),
       ]),
@@ -17312,7 +17470,7 @@ class _MobileFlatButton extends StatelessWidget {
                           color: primary && enabled
                               ? Colors.white
                               : (enabled ? _TD.graphite : _TD.dim),
-                          fontSize: 11.2,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w700,
                           height: 1))),
             ]),
@@ -17362,7 +17520,7 @@ class _MobileSelectedSessionCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _TD.text,
-                      fontSize: 15,
+                      fontSize: AppTypography.sectionTitleSize,
                       fontWeight: FontWeight.w700)),
               const SizedBox(height: 2),
               Text(
@@ -17371,7 +17529,7 @@ class _MobileSelectedSessionCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _TD.muted,
-                    fontSize: 11.2,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w700),
               ),
             ]),
@@ -17393,7 +17551,7 @@ class _MobileSelectedSessionCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style:
-                      TextStyle(fontSize: 11.3, fontWeight: FontWeight.w700)),
+                      TextStyle(fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700)),
             ),
           ),
           const SizedBox(width: 8),
@@ -17411,7 +17569,7 @@ class _MobileSelectedSessionCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style:
-                      TextStyle(fontSize: 11.3, fontWeight: FontWeight.w700)),
+                      TextStyle(fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700)),
             ),
           ),
         ]),
@@ -17437,7 +17595,7 @@ class _MobileReportsEmptySelector extends StatelessWidget {
                 'Сессия не выбрана. После Live или сохранения GPS здесь появится список сессий.',
                 style: TextStyle(
                     color: _TD.muted,
-                    fontSize: 11.5,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w700))),
       ]),
     );
@@ -17470,12 +17628,12 @@ class _MobileReportsSectionTitle extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-                color: _TD.text, fontSize: 14, fontWeight: FontWeight.w700)),
+                color: _TD.text, fontSize: AppTypography.sectionTitleSize, fontWeight: FontWeight.w700)),
         Text(subtitle,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-                color: _TD.muted, fontSize: 11.0, fontWeight: FontWeight.w700)),
+                color: _TD.muted, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700)),
       ])),
     ]);
   }
@@ -17525,7 +17683,7 @@ class _MobileSessionChipCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _TD.text,
-                            fontSize: 11.4,
+                            fontSize: AppTypography.secondarySize,
                             fontWeight: FontWeight.w700))),
               ]),
               const SizedBox(height: 5),
@@ -17534,7 +17692,7 @@ class _MobileSessionChipCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _TD.muted,
-                      fontSize: 11.2,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700)),
               const Spacer(),
               Row(children: [
@@ -17545,7 +17703,7 @@ class _MobileSessionChipCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _TD.dim,
-                            fontSize: 11.0,
+                            fontSize: AppTypography.secondarySize,
                             fontWeight: FontWeight.w700))),
                 _NoHoverTap(
                   onTap: onOpen,
@@ -17618,7 +17776,7 @@ class _MobileSessionListCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _TD.text,
-                            fontSize: 12.2,
+                            fontSize: AppTypography.bodySize,
                             fontWeight: FontWeight.w700)),
                     const SizedBox(height: 2),
                     Text(
@@ -17627,7 +17785,7 @@ class _MobileSessionListCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _TD.muted,
-                          fontSize: 11.2,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w700),
                     ),
                   ]),
@@ -17700,7 +17858,7 @@ class _MobileReportHeroPanel extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                         color: _TD.text,
-                        fontSize: 16.2,
+                        fontSize: AppTypography.screenTitleSize,
                         fontWeight: FontWeight.w700,
                         height: 1.06)),
                 const SizedBox(height: 5),
@@ -17709,7 +17867,7 @@ class _MobileReportHeroPanel extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _TD.muted,
-                        fontSize: 11.2,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w600,
                         height: 1.15)),
               ])),
@@ -17798,20 +17956,20 @@ class _MobileReportSelectedSessionCard extends StatelessWidget {
               child: Text('Выбранная сессия',
                   style: TextStyle(
                       color: _TD.text,
-                      fontSize: 14.6,
+                      fontSize: AppTypography.sectionTitleSize,
                       fontWeight: FontWeight.w700))),
         ]),
         const SizedBox(height: 8),
         Text('Сессия #${session.id}',
             style: const TextStyle(
-                color: _TD.text, fontSize: 13.8, fontWeight: FontWeight.w700)),
+                color: _TD.text, fontSize: AppTypography.sectionTitleSize, fontWeight: FontWeight.w700)),
         const SizedBox(height: 5),
         Text(
           '${_reportShortDate(session.createdAt)} · ${_reportShortTime(session.createdAt)} · ${_reportDurationLabel(session.durationSec)}',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
-              color: _TD.muted, fontSize: 11.3, fontWeight: FontWeight.w700),
+              color: _TD.muted, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 8),
         Container(
@@ -17887,7 +18045,7 @@ class _MobileReportPlayersExportCard extends StatelessWidget {
               child: Text('Игроки для выгрузки',
                   style: TextStyle(
                       color: _TD.text,
-                      fontSize: 14.6,
+                      fontSize: AppTypography.sectionTitleSize,
                       fontWeight: FontWeight.w700))),
           const SizedBox(width: 8),
           _MobileReportOutlineButton(label: 'Изменить', onTap: onTap),
@@ -17899,7 +18057,7 @@ class _MobileReportPlayersExportCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                   color: _TD.muted,
-                  fontSize: 11.1,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w700))
         else
           Row(
@@ -17918,7 +18076,7 @@ class _MobileReportPlayersExportCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _TD.text,
-                            fontSize: 11.0,
+                            fontSize: AppTypography.secondarySize,
                             fontWeight: FontWeight.w700,
                             height: 1.05)),
                   ]),
@@ -17968,7 +18126,7 @@ class _MobileReportIncludeBlocksCard extends StatelessWidget {
               child: Text('Что включить в отчёт',
                   style: TextStyle(
                       color: _TD.text,
-                      fontSize: 14.6,
+                      fontSize: AppTypography.sectionTitleSize,
                       fontWeight: FontWeight.w700))),
         ]),
         const SizedBox(height: 8),
@@ -17990,7 +18148,7 @@ class _MobileReportIncludeBlocksCard extends StatelessWidget {
                     Text(item,
                         style: const TextStyle(
                             color: _TD.graphite,
-                            fontSize: 11.4,
+                            fontSize: AppTypography.secondarySize,
                             fontWeight: FontWeight.w700)),
                     const SizedBox(width: 7),
                     const Icon(Icons.check_circle_rounded,
@@ -18037,7 +18195,7 @@ class _MobileReportPdfParamsCard extends StatelessWidget {
               child: Text('Параметры PDF',
                   style: TextStyle(
                       color: _TD.text,
-                      fontSize: 14.6,
+                      fontSize: AppTypography.sectionTitleSize,
                       fontWeight: FontWeight.w700))),
         ]),
         const SizedBox(height: 8),
@@ -18057,7 +18215,7 @@ class _MobileReportPdfParamsCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               color: _TD.graphite,
-                              fontSize: 11.8,
+                              fontSize: AppTypography.bodySize,
                               fontWeight: FontWeight.w700))),
                   const SizedBox(width: 8),
                   const _MobileReportToggle(active: true),
@@ -18108,7 +18266,7 @@ class _MobileReportPreviewOverviewCard extends StatelessWidget {
               child: Text('Предпросмотр отчёта',
                   style: TextStyle(
                       color: _TD.text,
-                      fontSize: 14.6,
+                      fontSize: AppTypography.sectionTitleSize,
                       fontWeight: FontWeight.w700))),
         ]),
         const SizedBox(height: 8),
@@ -18120,13 +18278,13 @@ class _MobileReportPreviewOverviewCard extends StatelessWidget {
               const Text('Сводка команды',
                   style: TextStyle(
                       color: _TD.text,
-                      fontSize: 13,
+                      fontSize: AppTypography.itemTitleSize,
                       fontWeight: FontWeight.w700)),
               const SizedBox(height: 2),
               const Text('Ключевые показатели',
                   style: TextStyle(
                       color: _TD.muted,
-                      fontSize: 11.0,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
               _MiniPreviewMetric(
@@ -18161,13 +18319,13 @@ class _MobileReportPreviewOverviewCard extends StatelessWidget {
                   Text('Карта перемещений',
                       style: TextStyle(
                           color: _TD.text,
-                          fontSize: 13,
+                          fontSize: AppTypography.itemTitleSize,
                           fontWeight: FontWeight.w700)),
                   SizedBox(height: 2),
                   Text('6 точек',
                       style: TextStyle(
                           color: _TD.muted,
-                          fontSize: 11.0,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w700)),
                   SizedBox(height: 10),
                   SizedBox(height: 150, child: _ReportMiniPitchPreview()),
@@ -18186,13 +18344,13 @@ class _MobileReportPreviewOverviewCard extends StatelessWidget {
                   Text('Пульс команды',
                       style: TextStyle(
                           color: _TD.text,
-                          fontSize: 13,
+                          fontSize: AppTypography.itemTitleSize,
                           fontWeight: FontWeight.w700)),
                   SizedBox(height: 2),
                   Text('111 уд/мин · Ср. пульс',
                       style: TextStyle(
                           color: _TD.muted,
-                          fontSize: 11.0,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w700)),
                   SizedBox(height: 12),
                   SizedBox(height: 150, child: _ReportMiniHrChart()),
@@ -18226,14 +18384,14 @@ class _MobileReportSprintFooterCard extends StatelessWidget {
               const Text('Спринты',
                   style: TextStyle(
                       color: _TD.text,
-                      fontSize: 14.6,
+                      fontSize: AppTypography.sectionTitleSize,
                       fontWeight: FontWeight.w700)),
               const SizedBox(height: 3),
               Text(
                   'Макс. скорость ${session.maxSpeedKmh.toStringAsFixed(1)} км/ч',
                   style: const TextStyle(
                       color: _TD.muted,
-                      fontSize: 11.2,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700)),
             ]),
           ),
@@ -18284,7 +18442,7 @@ class _MobileReportPrimaryButton extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 11.6,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w700))),
           ]),
         ),
@@ -18323,7 +18481,7 @@ class _MobileReportSoftButton extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _TD.graphite,
-                        fontSize: 12.3,
+                        fontSize: AppTypography.bodySize,
                         fontWeight: FontWeight.w700))),
           ]),
         ),
@@ -18351,7 +18509,7 @@ class _MobileReportOutlineButton extends StatelessWidget {
             border: Border.all(color: _TD.greenBorder, width: .9)),
         child: Text(label,
             style: const TextStyle(
-                color: _TD.green, fontSize: 12.6, fontWeight: FontWeight.w700)),
+                color: _TD.green, fontSize: AppTypography.bodySize, fontWeight: FontWeight.w700)),
       ),
     );
   }
@@ -18375,7 +18533,7 @@ class _MobileReportStatusChip extends StatelessWidget {
         Text(label,
             style: const TextStyle(
                 color: _TD.graphite,
-                fontSize: 11.7,
+                fontSize: AppTypography.secondarySize,
                 fontWeight: FontWeight.w700)),
       ]),
     );
@@ -18401,7 +18559,7 @@ class _MobileReportMetricTile extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
                 color: _TD.text,
-                fontSize: 11.0,
+                fontSize: AppTypography.secondarySize,
                 fontWeight: FontWeight.w700,
                 height: 1.05)),
         const SizedBox(height: 2),
@@ -18410,7 +18568,7 @@ class _MobileReportMetricTile extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
                 color: _TD.muted,
-                fontSize: 10.4,
+                fontSize: AppTypography.captionSize,
                 fontWeight: FontWeight.w700,
                 height: 1.04)),
       ]),
@@ -18462,12 +18620,12 @@ class _MiniPreviewMetric extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-                color: _TD.text, fontSize: 11.5, fontWeight: FontWeight.w700)),
+                color: _TD.text, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700)),
         Text(label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-                color: _TD.muted, fontSize: 11.2, fontWeight: FontWeight.w700)),
+                color: _TD.muted, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700)),
       ])),
     ]);
   }
@@ -18500,7 +18658,7 @@ class _ReportMiniHeatLegend extends StatelessWidget {
       const Text('Низкая',
           style: TextStyle(
               color: _TD.graphite,
-              fontSize: 11.0,
+              fontSize: AppTypography.secondarySize,
               fontWeight: FontWeight.w700)),
       const SizedBox(width: 6),
       Expanded(
@@ -18520,7 +18678,7 @@ class _ReportMiniHeatLegend extends StatelessWidget {
       const Text('Высокая',
           style: TextStyle(
               color: _TD.graphite,
-              fontSize: 11.0,
+              fontSize: AppTypography.secondarySize,
               fontWeight: FontWeight.w700)),
     ]);
   }
@@ -18550,14 +18708,14 @@ class _SprintSummaryMini extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-                color: _TD.text, fontSize: 15, fontWeight: FontWeight.w700)),
+                color: _TD.text, fontSize: AppTypography.sectionTitleSize, fontWeight: FontWeight.w700)),
         const SizedBox(height: 2),
         Text(label,
             maxLines: 2,
             textAlign: TextAlign.center,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-                color: _TD.muted, fontSize: 11.0, fontWeight: FontWeight.w700)),
+                color: _TD.muted, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700)),
       ]),
     );
   }
@@ -19109,7 +19267,7 @@ class _SessionsListPaneState extends State<_SessionsListPane> {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _TD.text,
-                        fontSize: 13.4,
+                        fontSize: AppTypography.itemTitleSize,
                         fontWeight: FontWeight.w700,
                         letterSpacing: -.25)),
                 const SizedBox(height: 2),
@@ -19119,7 +19277,7 @@ class _SessionsListPaneState extends State<_SessionsListPane> {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _TD.muted,
-                        fontSize: 11.2,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w600)),
               ])),
         ]);
@@ -19229,7 +19387,7 @@ class _SessionsListPaneState extends State<_SessionsListPane> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _TD.graphite,
-                      fontSize: 10.4,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w700,
                       height: 1))),
           Container(
@@ -19246,7 +19404,7 @@ class _SessionsListPaneState extends State<_SessionsListPane> {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _TD.text,
-                    fontSize: 11.2,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w700,
                     height: 1)),
           ),
@@ -19274,7 +19432,7 @@ class _SessionsListPaneState extends State<_SessionsListPane> {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                     color: sourceColor,
-                    fontSize: 9.6,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w700,
                     height: 1)),
           ),
@@ -19306,7 +19464,7 @@ class _SessionsListPaneState extends State<_SessionsListPane> {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _TD.graphite,
-                        fontSize: 9.6,
+                        fontSize: AppTypography.menuGroupSize,
                         fontWeight: FontWeight.w700,
                         height: 1))),
           ]),
@@ -19366,7 +19524,7 @@ class _SessionsListPaneState extends State<_SessionsListPane> {
                     maxLines: 1,
                     style: TextStyle(
                         color: dayColor,
-                        fontSize: 11.0,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w700,
                         height: 1)),
               ),
@@ -19388,7 +19546,7 @@ class _SessionsListPaneState extends State<_SessionsListPane> {
                         maxLines: 1,
                         style: const TextStyle(
                             color: _TD.green,
-                            fontSize: 9.6,
+                            fontSize: AppTypography.menuGroupSize,
                             fontWeight: FontWeight.w700,
                             height: 1)),
                   ),
@@ -19453,7 +19611,7 @@ class _SessionsListPaneState extends State<_SessionsListPane> {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                   color: primary ? Colors.white : _TD.graphite,
-                  fontSize: 10.4,
+                  fontSize: AppTypography.captionSize,
                   fontWeight: FontWeight.w700,
                   height: 1)),
         ]),
@@ -19511,7 +19669,7 @@ class _SessionsListPaneState extends State<_SessionsListPane> {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _TD.text,
-                        fontSize: 11.8,
+                        fontSize: AppTypography.bodySize,
                         fontWeight: FontWeight.w700,
                         letterSpacing: -.08,
                         height: 1))),
@@ -19549,7 +19707,7 @@ class _SessionsListPaneState extends State<_SessionsListPane> {
                           child: Text(d,
                               style: const TextStyle(
                                   color: _TD.muted,
-                                  fontSize: 11.2,
+                                  fontSize: AppTypography.secondarySize,
                                   fontWeight: FontWeight.w700,
                                   height: 1)))))
                   .toList()),
@@ -19602,14 +19760,14 @@ class _SessionsListPaneState extends State<_SessionsListPane> {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                  color: _TD.dim, fontSize: 10.4, fontWeight: FontWeight.w700)),
+                  color: _TD.dim, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w700)),
           const SizedBox(height: 1),
           Text(value,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: _TD.text,
-                  fontSize: 11.2,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w700)),
         ])),
       ]),
@@ -19642,7 +19800,7 @@ class _SessionsListPaneState extends State<_SessionsListPane> {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _TD.text,
-                        fontSize: 11.2,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w700,
                         letterSpacing: -.12,
                         height: 1))),
@@ -19651,7 +19809,7 @@ class _SessionsListPaneState extends State<_SessionsListPane> {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _TD.muted,
-                    fontSize: 10.4,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w600,
                     height: 1)),
           ]),
@@ -19752,7 +19910,7 @@ class _SessionsListPaneState extends State<_SessionsListPane> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _TD.text,
-                      fontSize: 12.0,
+                      fontSize: AppTypography.bodySize,
                       fontWeight: FontWeight.w600,
                       height: 1))),
           const SizedBox(width: 4),
@@ -19767,7 +19925,7 @@ class _SessionsListPaneState extends State<_SessionsListPane> {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _TD.text,
-                          fontSize: 12.0,
+                          fontSize: AppTypography.bodySize,
                           fontWeight: FontWeight.w700,
                           height: 1)),
                   const SizedBox(height: 7),
@@ -19804,7 +19962,7 @@ class _SessionsListPaneState extends State<_SessionsListPane> {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                     color: sourceColor,
-                    fontSize: 11.2,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w600,
                     height: 1)),
           ),
@@ -19829,7 +19987,7 @@ class _SessionsListPaneState extends State<_SessionsListPane> {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
                 color: _TD.graphite,
-                fontSize: 11.2,
+                fontSize: AppTypography.secondarySize,
                 fontWeight: FontWeight.w500,
                 height: 1)),
       ]),
@@ -19847,7 +20005,7 @@ class _SessionsListPaneState extends State<_SessionsListPane> {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: _TD.graphite,
-                  fontSize: 11.2,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w600,
                   height: 1))),
     ]));
@@ -19894,7 +20052,7 @@ class _SessionsListPaneState extends State<_SessionsListPane> {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _TD.text,
-                          fontSize: 13.4,
+                          fontSize: AppTypography.itemTitleSize,
                           fontWeight: FontWeight.w700)),
                   Text(
                       '${filtered.length} сессий · $selectedDayPlayers игроков · ${(totalDistance / 1000).toStringAsFixed(2)} км · $sprintCount спр.',
@@ -19902,7 +20060,7 @@ class _SessionsListPaneState extends State<_SessionsListPane> {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _TD.muted,
-                          fontSize: 11.0,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w600)),
                 ])),
             const SizedBox(width: 8),
@@ -20583,7 +20741,7 @@ class _SelectedTrainingReportPaneState
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               color: _TD.text,
-                              fontSize: 13.2,
+                              fontSize: AppTypography.itemTitleSize,
                               fontWeight: FontWeight.w700))),
                   _NoHoverTap(
                       onTap: () => Navigator.of(sheetContext).pop(),
@@ -20633,7 +20791,7 @@ class _SelectedTrainingReportPaneState
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _TD.text,
-                        fontSize: 13.4,
+                        fontSize: AppTypography.itemTitleSize,
                         fontWeight: FontWeight.w700),
                   ),
                 ),
@@ -20666,14 +20824,14 @@ class _SelectedTrainingReportPaneState
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                  color: _TD.dim, fontSize: 10.4, fontWeight: FontWeight.w700)),
+                  color: _TD.dim, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w700)),
           const SizedBox(height: 1),
           Text(value,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: _TD.text,
-                  fontSize: 11.8,
+                  fontSize: AppTypography.bodySize,
                   fontWeight: FontWeight.w700)),
         ])),
       ]),
@@ -20698,7 +20856,7 @@ class _SelectedTrainingReportPaneState
                 child: Text(title,
                     style: const TextStyle(
                         color: _TD.text,
-                        fontSize: 12.6,
+                        fontSize: AppTypography.bodySize,
                         fontWeight: FontWeight.w700))),
             Flexible(
                 child: Text(subtitle,
@@ -20707,7 +20865,7 @@ class _SelectedTrainingReportPaneState
                     textAlign: TextAlign.right,
                     style: const TextStyle(
                         color: _TD.dim,
-                        fontSize: 11.0,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w700))),
           ]),
         ),
@@ -20776,7 +20934,7 @@ class _SelectedTrainingReportPaneState
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _TD.text,
-                        fontSize: 11.2,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w700)),
                 const SizedBox(height: 2),
                 Text(subtitle,
@@ -20784,7 +20942,7 @@ class _SelectedTrainingReportPaneState
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _TD.muted,
-                        fontSize: 10.4,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w700)),
               ])),
           const SizedBox(width: 6),
@@ -20801,7 +20959,7 @@ class _SelectedTrainingReportPaneState
             child: Text(statusLabel ?? (hasData ? 'данные' : 'нет'),
                 style: TextStyle(
                     color: hasData ? _TD.green : _TD.dim,
-                    fontSize: 10.4,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w700)),
           ),
           const SizedBox(width: 6),
@@ -20851,7 +21009,7 @@ class _SelectedTrainingReportPaneState
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _TD.muted,
-                    fontSize: 11.0,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w700))),
       ]),
       const SizedBox(height: 6),
@@ -20917,7 +21075,7 @@ class _SelectedTrainingReportPaneState
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-                color: _TD.muted, fontSize: 11.0, fontWeight: FontWeight.w700),
+                color: _TD.muted, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700),
           ),
         ),
       ]),
@@ -20933,7 +21091,7 @@ class _SelectedTrainingReportPaneState
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
                 color: _TD.orange,
-                fontSize: 10.4,
+                fontSize: AppTypography.captionSize,
                 fontWeight: FontWeight.w600)),
       ],
       const SizedBox(height: 7),
@@ -20975,7 +21133,7 @@ class _SelectedTrainingReportPaneState
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               color: _TD.dim,
-                              fontSize: 10.4,
+                              fontSize: AppTypography.captionSize,
                               fontWeight: FontWeight.w700))),
                 ]),
               );
@@ -21033,7 +21191,7 @@ class _SelectedTrainingReportPaneState
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _TD.text,
-                        fontSize: 11.2,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w700)),
                 const SizedBox(height: 2),
                 Text(subtitle,
@@ -21041,7 +21199,7 @@ class _SelectedTrainingReportPaneState
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _TD.muted,
-                        fontSize: 10.4,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w700,
                         height: 1.10)),
               ])),
@@ -21073,7 +21231,7 @@ class _SelectedTrainingReportPaneState
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _TD.text,
-                        fontSize: 11.8,
+                        fontSize: AppTypography.bodySize,
                         fontWeight: FontWeight.w600,
                         letterSpacing: -.08,
                         height: 1))),
@@ -21086,7 +21244,7 @@ class _SelectedTrainingReportPaneState
                       textAlign: TextAlign.right,
                       style: const TextStyle(
                           color: _TD.muted,
-                          fontSize: 10.4,
+                          fontSize: AppTypography.captionSize,
                           fontWeight: FontWeight.w500,
                           height: 1))),
           ]),
@@ -21122,7 +21280,7 @@ class _SelectedTrainingReportPaneState
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
               color: color,
-              fontSize: 11.2,
+              fontSize: AppTypography.secondarySize,
               fontWeight: FontWeight.w600,
               height: 1)),
     );
@@ -21173,7 +21331,7 @@ class _SelectedTrainingReportPaneState
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: _TD.orange,
-                  fontSize: 11.2,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w600,
                   height: 1)),
         ),
@@ -21220,7 +21378,7 @@ class _SelectedTrainingReportPaneState
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                                 color: _TD.text,
-                                fontSize: 11.0,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w600,
                                 height: 1.0)),
                         const SizedBox(height: 2),
@@ -21232,7 +21390,7 @@ class _SelectedTrainingReportPaneState
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                                 color: _TD.muted,
-                                fontSize: 11.2,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w500,
                                 height: 1.0)),
                       ])),
@@ -21273,7 +21431,7 @@ class _SelectedTrainingReportPaneState
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _TD.muted,
-                      fontSize: 11.2,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w600,
                       height: 1))),
         ]),
@@ -21307,7 +21465,7 @@ class _SelectedTrainingReportPaneState
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _TD.text,
-                      fontSize: 11.0,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w600,
                       height: 1))),
           Icon(value ? Icons.check_circle_rounded : Icons.circle_outlined,
@@ -21336,7 +21494,7 @@ class _SelectedTrainingReportPaneState
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: _TD.muted,
-                  fontSize: 11.0,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w600,
                   height: 1)),
         ),
@@ -21444,7 +21602,7 @@ class _SelectedTrainingReportPaneState
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _TD.text,
-                      fontSize: 11.0,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700,
                       height: 1))),
           _NoHoverTap(
@@ -21472,7 +21630,7 @@ class _SelectedTrainingReportPaneState
                 child: Text('всё',
                     style: TextStyle(
                         color: _TD.green,
-                        fontSize: 11.0,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w700,
                         height: 1))),
           ),
@@ -21501,7 +21659,7 @@ class _SelectedTrainingReportPaneState
                 child: Text('минимум',
                     style: TextStyle(
                         color: _TD.dim,
-                        fontSize: 11.0,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w700,
                         height: 1))),
           ),
@@ -21536,11 +21694,11 @@ class _SelectedTrainingReportPaneState
                         indicatorColor: _TD.green,
                         indicatorWeight: 2,
                         labelStyle: TextStyle(
-                            fontSize: 11.2,
+                            fontSize: AppTypography.secondarySize,
                             fontWeight: FontWeight.w700,
                             height: 1),
                         unselectedLabelStyle: TextStyle(
-                            fontSize: 11.2,
+                            fontSize: AppTypography.secondarySize,
                             fontWeight: FontWeight.w600,
                             height: 1),
                         tabs: [
@@ -21576,7 +21734,7 @@ class _SelectedTrainingReportPaneState
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
                 color: _TD.green,
-                fontSize: 11.0,
+                fontSize: AppTypography.secondarySize,
                 fontWeight: FontWeight.w600,
                 height: 1)),
       ),
@@ -21606,7 +21764,7 @@ class _SelectedTrainingReportPaneState
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _TD.text,
-                      fontSize: 11.0,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w600,
                       height: 1.0))),
           AnimatedContainer(
@@ -21647,7 +21805,7 @@ class _SelectedTrainingReportPaneState
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _TD.text,
-                      fontSize: 11.2,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700,
                       height: 1))),
         ]),
@@ -21705,7 +21863,7 @@ class _SelectedTrainingReportPaneState
                 Text('PDF / печать',
                     style: TextStyle(
                         color: Colors.white,
-                        fontSize: 11.0,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w700,
                         height: 1)),
               ]),
@@ -21725,7 +21883,7 @@ class _SelectedTrainingReportPaneState
                 Text('Excel / CSV',
                     style: TextStyle(
                         color: Colors.white,
-                        fontSize: 11.0,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w700,
                         height: 1)),
               ]),
@@ -21799,7 +21957,7 @@ class _SelectedTrainingReportPaneState
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                     color: _TD.text,
-                                    fontSize: 14.4,
+                                    fontSize: AppTypography.sectionTitleSize,
                                     fontWeight: FontWeight.w700))),
                         _NoHoverTap(
                             onTap: () => Navigator.of(context).maybePop(),
@@ -21880,7 +22038,7 @@ class _SelectedTrainingReportPaneState
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _TD.text,
-                    fontSize: 10.4,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w700,
                     height: 1.0)),
             const SizedBox(height: 1),
@@ -21889,7 +22047,7 @@ class _SelectedTrainingReportPaneState
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _TD.muted,
-                    fontSize: 9.6,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w600,
                     height: 1.0)),
           ]),
@@ -21916,7 +22074,7 @@ class _SelectedTrainingReportPaneState
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: _TD.text,
-                  fontSize: 11.0,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w600,
                   height: 1)),
         ),
@@ -21941,7 +22099,7 @@ class _SelectedTrainingReportPaneState
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
                 color: _TD.text,
-                fontSize: 12.2,
+                fontSize: AppTypography.bodySize,
                 fontWeight: FontWeight.w700,
                 height: 1)),
         const SizedBox(height: 10),
@@ -21971,7 +22129,7 @@ class _SelectedTrainingReportPaneState
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         const Text('Предпросмотр отчёта',
             style: TextStyle(
-                color: _TD.text, fontSize: 14.6, fontWeight: FontWeight.w700)),
+                color: _TD.text, fontSize: AppTypography.sectionTitleSize, fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
         if (_summary)
           _mobilePreviewPanel(
@@ -22109,7 +22267,7 @@ class _SelectedTrainingReportPaneState
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _TD.muted,
-                          fontSize: 9.2,
+                          fontSize: AppTypography.menuGroupSize,
                           fontWeight: FontWeight.w700,
                           letterSpacing: .3)),
                   const SizedBox(height: 3),
@@ -22118,7 +22276,7 @@ class _SelectedTrainingReportPaneState
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _TD.text,
-                          fontSize: 14,
+                          fontSize: AppTypography.sectionTitleSize,
                           fontWeight: FontWeight.w700)),
                 ])),
           ]),
@@ -22139,14 +22297,14 @@ class _SelectedTrainingReportPaneState
                     Text(title,
                         style: const TextStyle(
                             color: _TD.text,
-                            fontSize: 13.8,
+                            fontSize: AppTypography.sectionTitleSize,
                             fontWeight: FontWeight.w700)),
                     if ((subtitle ?? '').isNotEmpty) ...[
                       const SizedBox(height: 2),
                       Text(subtitle!,
                           style: const TextStyle(
                               color: _TD.muted,
-                              fontSize: 10.8,
+                              fontSize: AppTypography.secondarySize,
                               fontWeight: FontWeight.w600))
                     ],
                   ]),
@@ -22187,22 +22345,22 @@ class _SelectedTrainingReportPaneState
                 Text('Низкая',
                     style: TextStyle(
                         color: _TD.muted,
-                        fontSize: 10,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w600)),
                 Text('Умеренная',
                     style: TextStyle(
                         color: _TD.muted,
-                        fontSize: 10,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w600)),
                 Text('Высокая',
                     style: TextStyle(
                         color: _TD.muted,
-                        fontSize: 10,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w600)),
                 Text('Очень высокая',
                     style: TextStyle(
                         color: _TD.muted,
-                        fontSize: 10,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w600)),
               ]),
         ]);
@@ -22233,13 +22391,13 @@ class _SelectedTrainingReportPaneState
                       Text(lead?.name ?? widget.teamName,
                           style: const TextStyle(
                               color: _TD.text,
-                              fontSize: 15.5,
+                              fontSize: AppTypography.screenTitleSize,
                               fontWeight: FontWeight.w700)),
                       const SizedBox(height: 3),
                       Text('Сессия #${s.id} · GPS + Polar',
                           style: const TextStyle(
                               color: _TD.muted,
-                              fontSize: 11,
+                              fontSize: AppTypography.secondarySize,
                               fontWeight: FontWeight.w600)),
                     ])),
               ]),
@@ -22340,14 +22498,14 @@ class _SelectedTrainingReportPaneState
                         Text(lead?.name ?? widget.teamName,
                             style: const TextStyle(
                                 color: _TD.text,
-                                fontSize: 16.5,
+                                fontSize: AppTypography.screenTitleSize,
                                 fontWeight: FontWeight.w700)),
                         const SizedBox(height: 3),
                         Text(
                             '${widget.teamName} · сессия #${s.id} · GPS + Polar',
                             style: const TextStyle(
                                 color: _TD.muted,
-                                fontSize: 11.5,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w600)),
                       ])),
                   Container(
@@ -22360,7 +22518,7 @@ class _SelectedTrainingReportPaneState
                       child: const Text('Завершено',
                           style: TextStyle(
                               color: _TD.green,
-                              fontSize: 10.5,
+                              fontSize: AppTypography.captionSize,
                               fontWeight: FontWeight.w700))),
                 ]),
                 const SizedBox(height: 12),
@@ -22491,7 +22649,7 @@ class _SelectedTrainingReportPaneState
             child: Text(index,
                 style: const TextStyle(
                     color: _TD.text,
-                    fontSize: 9.6,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w700,
                     height: 1))),
         Expanded(
@@ -22500,13 +22658,13 @@ class _SelectedTrainingReportPaneState
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _TD.graphite,
-                    fontSize: 9.6,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w600,
                     height: 1))),
         Text(value,
             style: const TextStyle(
                 color: _TD.text,
-                fontSize: 9.6,
+                fontSize: AppTypography.menuGroupSize,
                 fontWeight: FontWeight.w700,
                 height: 1)),
       ]),
@@ -22544,7 +22702,7 @@ class _SelectedTrainingReportPaneState
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _TD.text,
-                        fontSize: 15.2,
+                        fontSize: AppTypography.screenTitleSize,
                         fontWeight: FontWeight.w700,
                         letterSpacing: -.25)),
                 const SizedBox(height: 3),
@@ -22553,7 +22711,7 @@ class _SelectedTrainingReportPaneState
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _TD.muted,
-                        fontSize: 11.8,
+                        fontSize: AppTypography.bodySize,
                         fontWeight: FontWeight.w600)),
               ])),
           const SizedBox(width: 8),
@@ -22720,7 +22878,7 @@ class _SelectedTrainingReportPaneState
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                         color: _TD.text,
-                                        fontSize: 14.2,
+                                        fontSize: AppTypography.sectionTitleSize,
                                         fontWeight: FontWeight.w700,
                                         height: 1)),
                                 if ((subtitle ?? '').trim().isNotEmpty) ...[
@@ -22730,7 +22888,7 @@ class _SelectedTrainingReportPaneState
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                           color: _TD.muted,
-                                          fontSize: 11.2,
+                                          fontSize: AppTypography.secondarySize,
                                           fontWeight: FontWeight.w700,
                                           height: 1)),
                                 ],
@@ -22768,7 +22926,7 @@ class _SelectedTrainingReportPaneState
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                                 color: _TD.graphite,
-                                fontSize: 11.0,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w700))),
                     const Icon(Icons.expand_more_rounded,
                         color: _TD.graphiteSoft, size: 17),
@@ -22793,7 +22951,7 @@ class _SelectedTrainingReportPaneState
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _TD.greenDark,
-                          fontSize: 11.2,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w700)),
                 );
               }
@@ -22840,7 +22998,7 @@ class _SelectedTrainingReportPaneState
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                   color: _TD.text,
-                                  fontSize: 12.2,
+                                  fontSize: AppTypography.bodySize,
                                   fontWeight: FontWeight.w700,
                                   height: 1)),
                           const SizedBox(height: 3),
@@ -22849,7 +23007,7 @@ class _SelectedTrainingReportPaneState
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                   color: _TD.muted,
-                                  fontSize: 11.0,
+                                  fontSize: AppTypography.secondarySize,
                                   fontWeight: FontWeight.w700,
                                   height: 1)),
                         ]),
@@ -22873,7 +23031,7 @@ class _SelectedTrainingReportPaneState
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                                 color: _TD.text,
-                                fontSize: 11.0,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w700,
                                 height: 1))),
                     const SizedBox(width: 8),
@@ -22885,7 +23043,7 @@ class _SelectedTrainingReportPaneState
                             textAlign: TextAlign.right,
                             style: const TextStyle(
                                 color: _TD.graphite,
-                                fontSize: 11.0,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w700,
                                 height: 1))),
                     const SizedBox(width: 8),
@@ -22897,7 +23055,7 @@ class _SelectedTrainingReportPaneState
                             textAlign: TextAlign.right,
                             style: const TextStyle(
                                 color: _TD.graphite,
-                                fontSize: 11.0,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w700,
                                 height: 1))),
                     if (v3 != null) ...[
@@ -22910,7 +23068,7 @@ class _SelectedTrainingReportPaneState
                               textAlign: TextAlign.right,
                               style: const TextStyle(
                                   color: _TD.graphite,
-                                  fontSize: 11.0,
+                                  fontSize: AppTypography.secondarySize,
                                   fontWeight: FontWeight.w700,
                                   height: 1))),
                     ],
@@ -22925,7 +23083,7 @@ class _SelectedTrainingReportPaneState
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _TD.muted,
-                            fontSize: 11.0,
+                            fontSize: AppTypography.secondarySize,
                             fontWeight: FontWeight.w700,
                             height: 1.2)),
                   );
@@ -23192,7 +23350,7 @@ class _SelectedTrainingReportPaneState
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                           color: _TD.text,
-                                          fontSize: 16.5,
+                                          fontSize: AppTypography.screenTitleSize,
                                           fontWeight: FontWeight.w700,
                                           height: 1)),
                                   const SizedBox(height: 6),
@@ -23201,7 +23359,7 @@ class _SelectedTrainingReportPaneState
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                           color: _TD.muted,
-                                          fontSize: 11.2,
+                                          fontSize: AppTypography.secondarySize,
                                           fontWeight: FontWeight.w700)),
                                   const SizedBox(height: 3),
                                   Text(
@@ -23210,7 +23368,7 @@ class _SelectedTrainingReportPaneState
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                           color: _TD.green,
-                                          fontSize: 11.2,
+                                          fontSize: AppTypography.secondarySize,
                                           fontWeight: FontWeight.w700)),
                                 ])),
                             if (widget.onPickSession == null)
@@ -23245,7 +23403,7 @@ class _SelectedTrainingReportPaneState
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
                                           color: _TD.greenDark,
-                                          fontSize: 11.2,
+                                          fontSize: AppTypography.secondarySize,
                                           fontWeight: FontWeight.w700,
                                           height: 1)),
                                 ),
@@ -23342,7 +23500,7 @@ class _SelectedTrainingReportPaneState
                                         textAlign: TextAlign.center,
                                         style: const TextStyle(
                                             color: _TD.graphite,
-                                            fontSize: 11.0,
+                                            fontSize: AppTypography.secondarySize,
                                             fontWeight: FontWeight.w700,
                                             height: 1.05)),
                                   ]),
@@ -23354,7 +23512,7 @@ class _SelectedTrainingReportPaneState
                             'По умолчанию выгружаются игроки с данными выбранной сессии.',
                             style: TextStyle(
                                 color: _TD.muted,
-                                fontSize: 11.2,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w700)),
                   ),
                   mobileCard(
@@ -23414,7 +23572,7 @@ class _SelectedTrainingReportPaneState
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                               color: _TD.text,
-                              fontSize: 15.0,
+                              fontSize: AppTypography.sectionTitleSize,
                               fontWeight: FontWeight.w700,
                               height: 1)),
                     ),
@@ -23454,7 +23612,7 @@ class _SelectedTrainingReportPaneState
                                                   color: _mobileCompareTab == 0
                                                       ? _TD.greenDark
                                                       : _TD.graphite,
-                                                  fontSize: 11.2,
+                                                  fontSize: AppTypography.secondarySize,
                                                   fontWeight:
                                                       FontWeight.w700))))),
                               const SizedBox(width: 8),
@@ -23481,7 +23639,7 @@ class _SelectedTrainingReportPaneState
                                                   color: _mobileCompareTab == 1
                                                       ? _TD.greenDark
                                                       : _TD.graphite,
-                                                  fontSize: 11.2,
+                                                  fontSize: AppTypography.secondarySize,
                                                   fontWeight:
                                                       FontWeight.w700))))),
                             ]),
@@ -23615,7 +23773,7 @@ class _SelectedTrainingReportPaneState
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                           color: _TD.text,
-                                          fontSize: 12.8,
+                                          fontSize: AppTypography.itemTitleSize,
                                           fontWeight: FontWeight.w700,
                                           height: 1)),
                                   if ((subtitle ?? '').trim().isNotEmpty) ...[
@@ -23625,7 +23783,7 @@ class _SelectedTrainingReportPaneState
                                         overflow: TextOverflow.ellipsis,
                                         style: const TextStyle(
                                             color: _TD.muted,
-                                            fontSize: 11.0,
+                                            fontSize: AppTypography.secondarySize,
                                             fontWeight: FontWeight.w600,
                                             height: 1)),
                                   ],
@@ -23672,7 +23830,7 @@ class _SelectedTrainingReportPaneState
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                   color: _TD.text,
-                                  fontSize: 13.5,
+                                  fontSize: AppTypography.itemTitleSize,
                                   fontWeight: FontWeight.w700,
                                   height: 1)),
                           const SizedBox(height: 6),
@@ -23681,7 +23839,7 @@ class _SelectedTrainingReportPaneState
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                   color: _TD.muted,
-                                  fontSize: 10.4,
+                                  fontSize: AppTypography.captionSize,
                                   fontWeight: FontWeight.w600,
                                   height: 1)),
                         ])),
@@ -23708,7 +23866,7 @@ class _SelectedTrainingReportPaneState
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                                 color: _TD.text,
-                                fontSize: 14.0,
+                                fontSize: AppTypography.sectionTitleSize,
                                 fontWeight: FontWeight.w700,
                                 height: 1)),
                         const SizedBox(height: 8),
@@ -23782,7 +23940,7 @@ class _SelectedTrainingReportPaneState
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                         color: _TD.muted,
-                                        fontSize: 12.6,
+                                        fontSize: AppTypography.bodySize,
                                         fontWeight: FontWeight.w600,
                                         height: 1)),
                                 const SizedBox(height: 5),
@@ -23792,7 +23950,7 @@ class _SelectedTrainingReportPaneState
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                         color: _TD.green,
-                                        fontSize: 12.0,
+                                        fontSize: AppTypography.bodySize,
                                         fontWeight: FontWeight.w700,
                                         height: 1)),
                               ])),
@@ -23868,7 +24026,7 @@ class _SelectedTrainingReportPaneState
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                           color: _TD.text,
-                          fontSize: 17.0,
+                          fontSize: AppTypography.screenTitleSize,
                           fontWeight: FontWeight.w700,
                           height: 1)),
                   const SizedBox(height: 8),
@@ -23902,7 +24060,7 @@ class _SelectedTrainingReportPaneState
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                         color: _TD.text,
-                                        fontSize: 11.5,
+                                        fontSize: AppTypography.secondarySize,
                                         fontWeight: FontWeight.w700,
                                         height: 1)),
                                 const SizedBox(height: 8),
@@ -24420,7 +24578,7 @@ class _TrackerCalendarSessionBadge extends StatelessWidget {
                   count > 9 ? '9+' : '$count',
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 9.6,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w700,
                     height: 1,
                     shadows: [Shadow(color: Color(0x66000000), blurRadius: 4)],
@@ -24580,66 +24738,49 @@ class _TD {
 }
 
 class _TText {
-  // V182: шкала из Player Profile / PpText.
-  static double _titleSize(double requested) {
-    if (requested >= 17) return 18;
-    if (requested >= 15) return 16;
-    return 14;
+  static TextStyle title(double size, {Color color = _TD.text}) {
+    final base = size >= 17
+        ? AppTypography.screenTitle(color: color)
+        : size >= 15
+            ? AppTypography.sectionTitle(color: color)
+            : AppTypography.subsectionTitle(color: color);
+    return base.copyWith(fontWeight: FontWeight.w600);
   }
-
-  static double _bodySize(double requested) {
-    if (requested < 9.4) return 9.5;
-    if (requested < 10.6) return 10.2;
-    if (requested < 11.7) return 11;
-    if (requested < 12.7) return 12;
-    return 13;
-  }
-
-  static double _valueSize(double requested) {
-    if (requested >= 16.5) return 17;
-    if (requested >= 14.5) return 15;
-    return 14;
-  }
-
-  static TextStyle title(double size, {Color color = _TD.text}) =>
-      AppTypography.custom(
-        size: _titleSize(size),
-        weight: FontWeight.w600,
-        color: color,
-        height: 1.18,
-        letterSpacing: 0,
-      );
 
   static TextStyle body(
     double size, {
     Color color = _TD.muted,
     FontWeight weight = FontWeight.w400,
-  }) =>
-      AppTypography.custom(
-        size: _bodySize(size),
-        weight: weight,
-        color: color,
-        height: 1.30,
-        letterSpacing: 0,
-      );
+  }) {
+    final base = size < 9.4
+        ? AppTypography.commentMeta(color: color)
+        : size < 10.6
+            ? AppTypography.caption(color: color)
+            : size < 11.7
+                ? AppTypography.secondary(color: color)
+                : AppTypography.body(color: color);
+    return base.copyWith(fontWeight: weight);
+  }
 
-  static TextStyle value(double size, {Color color = _TD.text}) =>
-      AppTypography.custom(
-        size: _valueSize(size),
-        weight: FontWeight.w600,
-        color: color,
-        height: 1.12,
-        letterSpacing: 0,
-      );
+  static TextStyle value(double size, {Color color = _TD.text}) {
+    final metricSize = size >= 16.5
+        ? 17.0
+        : size >= 14.5
+            ? 15.0
+            : 14.0;
+    return AppTypography.metricStrong(color: color).copyWith(
+      fontSize: metricSize,
+      fontWeight: FontWeight.w600,
+      height: 1.12,
+    );
+  }
 
-  static TextStyle caption({double size = 10.2, Color color = _TD.dim}) =>
-      AppTypography.custom(
-        size: size < 10 ? 9.5 : 10.2,
-        weight: FontWeight.w500,
-        color: color,
-        height: 1.18,
-        letterSpacing: 0,
-      );
+  static TextStyle caption({double size = 10.2, Color color = _TD.dim}) {
+    final base = size < 10
+        ? AppTypography.commentMeta(color: color)
+        : AppTypography.caption(color: color);
+    return base.copyWith(fontWeight: FontWeight.w500);
+  }
 }
 
 extension _SectionExt on TrackerWorkspaceSection {
@@ -25061,7 +25202,7 @@ class _CmrTextActionButton extends StatelessWidget {
             label,
             style: TextStyle(
               color: primary ? Colors.white : _TD.text,
-              fontSize: 10.8,
+              fontSize: AppTypography.secondarySize,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -25159,7 +25300,7 @@ class _CmrTrackerContextPanel extends StatelessWidget {
                             style: const TextStyle(
                               fontFamily: 'Inter',
                               color: _TD.muted,
-                              fontSize: 11.2,
+                              fontSize: AppTypography.secondarySize,
                               fontWeight: FontWeight.w400,
                               height: 1.30,
                             ),
@@ -25217,7 +25358,7 @@ class _CmrContextGroup extends StatelessWidget {
                 style: const TextStyle(
                   fontFamily: 'Inter',
                   color: _TD.text,
-                  fontSize: 12.2,
+                  fontSize: AppTypography.bodySize,
                   fontWeight: FontWeight.w600,
                   height: 1.2,
                 ),
@@ -25254,7 +25395,7 @@ class _CmrContextGroup extends StatelessWidget {
                               style: const TextStyle(
                                 fontFamily: 'Inter',
                                 color: _TD.dim,
-                                fontSize: 9.6,
+                                fontSize: AppTypography.menuGroupSize,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -25266,7 +25407,7 @@ class _CmrContextGroup extends StatelessWidget {
                               style: const TextStyle(
                                 fontFamily: 'Inter',
                                 color: _TD.text,
-                                fontSize: 14.2,
+                                fontSize: AppTypography.sectionTitleSize,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -25304,7 +25445,7 @@ class _CmrContextGroup extends StatelessWidget {
                             style: const TextStyle(
                               fontFamily: 'Inter',
                               color: _TD.muted,
-                              fontSize: 10.2,
+                              fontSize: AppTypography.captionSize,
                               fontWeight: FontWeight.w500,
                               height: 1.25,
                             ),
@@ -25321,7 +25462,7 @@ class _CmrContextGroup extends StatelessWidget {
                             style: TextStyle(
                               fontFamily: 'Inter',
                               color: data.rows[i].color ?? _TD.text,
-                              fontSize: 10.4,
+                              fontSize: AppTypography.captionSize,
                               fontWeight: FontWeight.w600,
                               height: 1.25,
                             ),
@@ -25373,7 +25514,7 @@ class _CmrContextAction extends StatelessWidget {
               style: TextStyle(
                 fontFamily: 'Inter',
                 color: primary ? Colors.white : _TD.text,
-                fontSize: 10.8,
+                fontSize: AppTypography.secondarySize,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -25465,7 +25606,7 @@ class _TrackerProgramCollapsedBar extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                         color: _TD.text,
-                        fontSize: 11.2,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 2),
@@ -25475,7 +25616,7 @@ class _TrackerProgramCollapsedBar extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _TD.muted,
-                        fontSize: 10.4,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w600),
                   ),
                 ],
@@ -25601,7 +25742,7 @@ class _TrackerMobileHeader extends StatelessWidget {
                           'ТРЕКЕР',
                           style: TextStyle(
                             color: _TD.text,
-                            fontSize: 14.2,
+                            fontSize: AppTypography.sectionTitleSize,
                             fontWeight: FontWeight.w800,
                             height: 1,
                             letterSpacing: -.2,
@@ -25620,7 +25761,7 @@ class _TrackerMobileHeader extends StatelessWidget {
                             statusText,
                             style: TextStyle(
                               color: statusColor,
-                              fontSize: 9.2,
+                              fontSize: AppTypography.menuGroupSize,
                               fontWeight: FontWeight.w800,
                               height: 1,
                               letterSpacing: .3,
@@ -25636,7 +25777,7 @@ class _TrackerMobileHeader extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: _TD.muted,
-                        fontSize: 10.8,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w600,
                         height: 1,
                       ),
@@ -25710,7 +25851,7 @@ class _TrackerMobileHeader extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: active ? _TD.green : _TD.graphite,
-                    fontSize: 9.6,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: active ? FontWeight.w700 : FontWeight.w600,
                     height: 1,
                     letterSpacing: -.02,
@@ -25784,7 +25925,7 @@ class _TrackerMobileHeader extends StatelessWidget {
                 borderRadius: BorderRadius.circular(999)),
             child: Text(label,
                 style: TextStyle(
-                    fontSize: 10.4, fontWeight: FontWeight.w700, color: color)),
+                    fontSize: AppTypography.captionSize, fontWeight: FontWeight.w700, color: color)),
           );
         }
 
@@ -25794,7 +25935,7 @@ class _TrackerMobileHeader extends StatelessWidget {
             child: Text(
               title.toUpperCase(),
               style: const TextStyle(
-                  fontSize: 10.4,
+                  fontSize: AppTypography.captionSize,
                   fontWeight: FontWeight.w700,
                   color: Color(0xFF98A2B3),
                   letterSpacing: .45),
@@ -25867,7 +26008,7 @@ class _TrackerMobileHeader extends StatelessWidget {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                        fontSize: 12,
+                                        fontSize: AppTypography.bodySize,
                                         fontWeight: FontWeight.w700,
                                         color: titleColor),
                                   ),
@@ -25882,7 +26023,7 @@ class _TrackerMobileHeader extends StatelessWidget {
                                             BorderRadius.circular(999)),
                                     child: const Text('PRO',
                                         style: TextStyle(
-                                            fontSize: 9.6,
+                                            fontSize: AppTypography.menuGroupSize,
                                             fontWeight: FontWeight.w700,
                                             color: Color(0xFFEA580C))),
                                   ),
@@ -25894,7 +26035,7 @@ class _TrackerMobileHeader extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                  fontSize: 11.2,
+                                  fontSize: AppTypography.secondarySize,
                                   fontWeight: FontWeight.w500,
                                   color: subtitleColor),
                             ),
@@ -25974,7 +26115,7 @@ class _TrackerMobileHeader extends StatelessWidget {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
-                                      fontSize: 13,
+                                      fontSize: AppTypography.itemTitleSize,
                                       fontWeight: FontWeight.w700,
                                       color: Color(0xFF111512))),
                               const SizedBox(height: 2),
@@ -25982,7 +26123,7 @@ class _TrackerMobileHeader extends StatelessWidget {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
-                                      fontSize: 11.2,
+                                      fontSize: AppTypography.secondarySize,
                                       fontWeight: FontWeight.w700,
                                       color: Color(0xFF6B746E))),
                             ],
@@ -25999,7 +26140,7 @@ class _TrackerMobileHeader extends StatelessWidget {
                           child: Text('Меню трекера',
                               style: TextStyle(
                                   color: Color(0xFF111512),
-                                  fontSize: 17,
+                                  fontSize: AppTypography.screenTitleSize,
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: -.22))),
                       Container(
@@ -26012,7 +26153,7 @@ class _TrackerMobileHeader extends StatelessWidget {
                         child: Text('${sections.length}',
                             style: const TextStyle(
                                 color: _TD.green,
-                                fontSize: 13.5,
+                                fontSize: AppTypography.itemTitleSize,
                                 fontWeight: FontWeight.w700)),
                       ),
                     ],
@@ -26183,7 +26324,7 @@ class _TrackerMobileTabs extends StatelessWidget {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: active ? _TD.green : _TD.graphite,
-                        fontSize: 11.0,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: active ? FontWeight.w700 : FontWeight.w600,
                         height: 1,
                         letterSpacing: -.02,
@@ -26323,7 +26464,7 @@ class _TrackerTabletBottomNav extends StatelessWidget {
                               color: section == current
                                   ? _TD.greenDark
                                   : _TD.muted,
-                              fontSize: 9.2,
+                              fontSize: AppTypography.menuGroupSize,
                               fontWeight: section == current
                                   ? FontWeight.w800
                                   : FontWeight.w600,
@@ -26458,7 +26599,7 @@ class _TrackerMobileTopNav extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: active ? _TD.text : _TD.muted,
-                      fontSize: 8.7,
+                      fontSize: AppTypography.badgeSize,
                       fontWeight: active ? FontWeight.w800 : FontWeight.w600,
                       height: 1,
                     ),
@@ -26538,7 +26679,7 @@ class _TrackerMobileTopNav extends StatelessWidget {
                             title,
                             style: TextStyle(
                               color: active ? _TD.greenDark : _TD.text,
-                              fontSize: 12.5,
+                              fontSize: AppTypography.bodySize,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -26549,7 +26690,7 @@ class _TrackerMobileTopNav extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: _TD.muted,
-                              fontSize: 10.4,
+                              fontSize: AppTypography.captionSize,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -26598,7 +26739,7 @@ class _TrackerMobileTopNav extends StatelessWidget {
                         'Ещё в трекере',
                         style: TextStyle(
                           color: _TD.text,
-                          fontSize: 14.5,
+                          fontSize: AppTypography.sectionTitleSize,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -26745,7 +26886,7 @@ class _TrackerMobileBottomNav extends StatelessWidget {
                     'LIVE',
                     style: TextStyle(
                       color: active ? Colors.white : _TD.green,
-                      fontSize: 8.7,
+                      fontSize: AppTypography.badgeSize,
                       fontWeight: FontWeight.w800,
                       height: 1,
                     ),
@@ -26794,7 +26935,7 @@ class _TrackerMobileBottomNav extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: active ? _TD.green : _TD.muted,
-                  fontSize: 9.1,
+                  fontSize: AppTypography.badgeSize,
                   fontWeight: active ? FontWeight.w800 : FontWeight.w600,
                   height: 1,
                 ),
@@ -26864,7 +27005,7 @@ class _TrackerMobileBottomNav extends StatelessWidget {
                             Text(title,
                                 style: TextStyle(
                                   color: active ? _TD.green : _TD.text,
-                                  fontSize: 13.1,
+                                  fontSize: AppTypography.itemTitleSize,
                                   fontWeight: FontWeight.w800,
                                 )),
                             const SizedBox(height: 2),
@@ -26873,7 +27014,7 @@ class _TrackerMobileBottomNav extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   color: _TD.muted,
-                                  fontSize: 10.7,
+                                  fontSize: AppTypography.captionSize,
                                   fontWeight: FontWeight.w600,
                                 )),
                           ],
@@ -26916,7 +27057,7 @@ class _TrackerMobileBottomNav extends StatelessWidget {
                     const Text('Меню трекера',
                         style: TextStyle(
                           color: _TD.text,
-                          fontSize: 17,
+                          fontSize: AppTypography.screenTitleSize,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -.3,
                         )),
@@ -27048,7 +27189,7 @@ class _TrackerRadarPulseState extends State<_TrackerRadarPulse>
             widget.label,
             style: const TextStyle(
               color: _TD.text,
-              fontSize: 12.3,
+              fontSize: AppTypography.bodySize,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -27058,7 +27199,7 @@ class _TrackerRadarPulseState extends State<_TrackerRadarPulse>
             textAlign: TextAlign.center,
             style: TextStyle(
               color: _TD.muted,
-              fontSize: 10.5,
+              fontSize: AppTypography.captionSize,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -27231,7 +27372,7 @@ class _TrackerProgramSidePanel extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: _TD.greenDark,
-                    fontSize: 12.6,
+                    fontSize: AppTypography.bodySize,
                     fontWeight: FontWeight.w900,
                     letterSpacing: -.28,
                   ),
@@ -27283,7 +27424,7 @@ class _TrackerProgramSidePanel extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: _TD.text,
-                    fontSize: 10.2,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -27294,7 +27435,7 @@ class _TrackerProgramSidePanel extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: _TD.dim,
-                    fontSize: 9.2,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -27358,7 +27499,7 @@ class _TrackerSideNavItem extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: active ? _TD.text : _TD.graphite,
-                    fontSize: 10.8,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: active ? FontWeight.w800 : FontWeight.w600,
                     letterSpacing: -.08,
                   ),
@@ -27472,7 +27613,7 @@ class _TrackerSmallGhostButton extends StatelessWidget {
                     label!,
                     style: const TextStyle(
                       color: _TD.text,
-                      fontSize: 11.2,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -27534,7 +27675,7 @@ class _TrackerSideFooterAction extends StatelessWidget {
               Text(label,
                   style: const TextStyle(
                       color: _TD.graphite,
-                      fontSize: 11.2,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700)),
             ],
           ),
@@ -27689,7 +27830,7 @@ class _TrackerProgramTabsBar extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: _TD.muted,
-                    fontSize: 11.2,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -27850,7 +27991,7 @@ class _TrackerProgramTab extends StatelessWidget {
                     section.title,
                     style: TextStyle(
                       color: fg,
-                      fontSize: 12,
+                      fontSize: AppTypography.bodySize,
                       fontWeight: FontWeight.w500,
                       letterSpacing: -.15,
                     ),
@@ -27893,7 +28034,7 @@ class _TrackerStatusDot extends StatelessWidget {
             label,
             style: TextStyle(
               color: color,
-              fontSize: 10.4,
+              fontSize: AppTypography.captionSize,
               fontWeight: FontWeight.w500,
               letterSpacing: .2,
             ),
@@ -28035,7 +28176,7 @@ class _RailButton extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: active ? _TD.text : _TD.muted,
-                  fontSize: 9.6,
+                  fontSize: AppTypography.menuGroupSize,
                   fontWeight: active ? FontWeight.w700 : FontWeight.w500,
                 ),
               ),
@@ -28084,7 +28225,7 @@ class _TopBar extends StatelessWidget {
                   style: const TextStyle(
                     color: _TD.text,
                     fontWeight: FontWeight.w700,
-                    fontSize: 13.6,
+                    fontSize: AppTypography.itemTitleSize,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -28094,7 +28235,7 @@ class _TopBar extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: _TD.muted,
-                    fontSize: 11.0,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -28141,7 +28282,7 @@ class _TopPill extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       style: const TextStyle(
         color: _TD.muted,
-        fontSize: 10.4,
+        fontSize: AppTypography.captionSize,
         fontWeight: FontWeight.w500,
       ),
     );
@@ -28279,7 +28420,7 @@ class _WorkspaceFlatHeader extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: _TD.text,
-                          fontSize: 14.2,
+                          fontSize: AppTypography.sectionTitleSize,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -.22,
                         ),
@@ -28295,7 +28436,7 @@ class _WorkspaceFlatHeader extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: _TD.muted,
-                      fontSize: 10.2,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -28331,7 +28472,7 @@ class _WorkspaceFlatHeader extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: _TD.text,
-                        fontSize: 15.4,
+                        fontSize: AppTypography.screenTitleSize,
                         fontWeight: FontWeight.w800,
                         letterSpacing: -.22,
                       ),
@@ -28344,7 +28485,7 @@ class _WorkspaceFlatHeader extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: _TD.muted,
-                          fontSize: 10.2,
+                          fontSize: AppTypography.captionSize,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -28513,7 +28654,7 @@ class _DarkActionButton extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: primary ? Colors.white : _TD.text,
-                    fontSize: 11.4,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -28606,7 +28747,7 @@ class _EquipmentMiniBadge extends StatelessWidget {
       label,
       style: TextStyle(
         color: active ? _TD.greenDark : _TD.muted,
-        fontSize: 10.4,
+        fontSize: AppTypography.captionSize,
         fontWeight: FontWeight.w700,
       ),
     );
@@ -28637,7 +28778,7 @@ class _EquipmentAssignmentBox extends StatelessWidget {
             title,
             style: const TextStyle(
               color: _TD.text,
-              fontSize: 12.2,
+              fontSize: AppTypography.bodySize,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -28648,7 +28789,7 @@ class _EquipmentAssignmentBox extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: _TD.muted,
-              fontSize: 11.0,
+              fontSize: AppTypography.secondarySize,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -28832,7 +28973,7 @@ class _HeartRateDeviceDarkTile extends StatelessWidget {
                         style: const TextStyle(
                             color: _TD.text,
                             fontWeight: FontWeight.w700,
-                            fontSize: 11.2)),
+                            fontSize: AppTypography.secondarySize)),
                     const SizedBox(height: 2),
                     Text(
                         '${device.id} · RSSI ${device.rssi} · $sampleText${device.serviceHit ? ' · Heart Rate 180D' : (device.rawProbe ? ' · BLE-кандидат' : '')}',
@@ -28840,7 +28981,7 @@ class _HeartRateDeviceDarkTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _TD.muted,
-                            fontSize: 10.4,
+                            fontSize: AppTypography.captionSize,
                             fontWeight: FontWeight.w600)),
                   ])),
               const SizedBox(width: 8),
@@ -28848,7 +28989,7 @@ class _HeartRateDeviceDarkTile extends StatelessWidget {
                   style: TextStyle(
                       color: stateColor,
                       fontWeight: FontWeight.w700,
-                      fontSize: 10.4)),
+                      fontSize: AppTypography.captionSize)),
             ]),
             const SizedBox(height: 8),
             Row(children: [
@@ -28868,14 +29009,14 @@ class _HeartRateDeviceDarkTile extends StatelessWidget {
                       hint: const Text('Назначить игроку',
                           style: TextStyle(
                               color: _TD.muted,
-                              fontSize: 11.0,
+                              fontSize: AppTypography.secondarySize,
                               fontWeight: FontWeight.w700)),
                       items: <DropdownMenuItem<int?>>[
                         const DropdownMenuItem<int?>(
                             value: null,
                             child: Text('Игрок не выбран',
                                 style: TextStyle(
-                                    fontSize: 11.0,
+                                    fontSize: AppTypography.secondarySize,
                                     fontWeight: FontWeight.w700))),
                         ...players.map((p) => DropdownMenuItem<int?>(
                             value: p.id,
@@ -28883,7 +29024,7 @@ class _HeartRateDeviceDarkTile extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                    fontSize: 11.0,
+                                    fontSize: AppTypography.secondarySize,
                                     fontWeight: FontWeight.w700)))),
                       ],
                       onChanged: onPlayerChanged,
@@ -28909,7 +29050,7 @@ class _HeartRateDeviceDarkTile extends StatelessWidget {
                       size: 15),
                   label: Text(active ? 'выбрать' : 'подключить',
                       style: const TextStyle(
-                          fontSize: 11.2, fontWeight: FontWeight.w700)),
+                          fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700)),
                 ),
               ),
             ]),
@@ -28972,7 +29113,7 @@ class _SavedDeviceDarkTile extends StatelessWidget {
                           style: const TextStyle(
                               color: _TD.text,
                               fontWeight: FontWeight.w700,
-                              fontSize: 11)),
+                              fontSize: AppTypography.secondarySize)),
                     ),
                     if (aliasCount > 1) ...[
                       const SizedBox(width: 6),
@@ -28980,7 +29121,7 @@ class _SavedDeviceDarkTile extends StatelessWidget {
                           style: const TextStyle(
                               color: _TD.muted,
                               fontWeight: FontWeight.w600,
-                              fontSize: 11.0)),
+                              fontSize: AppTypography.secondarySize)),
                     ],
                   ]),
                   const SizedBox(height: 3),
@@ -28990,7 +29131,7 @@ class _SavedDeviceDarkTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _TD.muted,
-                        fontSize: 11.0,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 4),
@@ -29010,7 +29151,7 @@ class _SavedDeviceDarkTile extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                               color: statusColor,
-                              fontSize: 11.0,
+                              fontSize: AppTypography.secondarySize,
                               fontWeight: FontWeight.w700)),
                     ),
                   ]),
@@ -29040,7 +29181,7 @@ class _SavedDeviceDarkTile extends StatelessWidget {
                 borderSide: BorderSide.none),
           ),
           style: const TextStyle(
-              color: _TD.text, fontWeight: FontWeight.w600, fontSize: 11.2),
+              color: _TD.text, fontWeight: FontWeight.w600, fontSize: AppTypography.secondarySize),
           items: [
             const DropdownMenuItem<int?>(
               value: null,
@@ -29083,7 +29224,7 @@ class _SavedDeviceDarkTile extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: _TD.muted,
-                  fontSize: 10.4,
+                  fontSize: AppTypography.captionSize,
                   fontWeight: FontWeight.w600),
             ),
           ),
@@ -29100,7 +29241,7 @@ class _SavedDeviceDarkTile extends StatelessWidget {
                     style: TextStyle(
                         color: _TD.red,
                         fontWeight: FontWeight.w700,
-                        fontSize: 10.4)),
+                        fontSize: AppTypography.captionSize)),
               ]),
             ),
           ),
@@ -29126,7 +29267,7 @@ class _InfoRow extends StatelessWidget {
               child: Text(label,
                   style: const TextStyle(
                       color: _TD.muted,
-                      fontSize: 11.2,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700))),
           const SizedBox(width: 10),
           Flexible(
@@ -29136,7 +29277,7 @@ class _InfoRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _TD.text,
-                      fontSize: 11.2,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700))),
         ],
       ),
@@ -29306,7 +29447,7 @@ class _DashboardKpiStrip extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: _TD.text,
-                    fontSize: 15.2,
+                    fontSize: AppTypography.screenTitleSize,
                     fontWeight: FontWeight.w700,
                     letterSpacing: -.35,
                   ),
@@ -29318,7 +29459,7 @@ class _DashboardKpiStrip extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: _TD.muted,
-                    fontSize: 11.0,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -29329,7 +29470,7 @@ class _DashboardKpiStrip extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: _TD.dim,
-                    fontSize: 11.2,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -29380,7 +29521,7 @@ class _ReadinessRow extends StatelessWidget {
                   style: const TextStyle(
                     color: _TD.text,
                     fontWeight: FontWeight.w700,
-                    fontSize: 11.2,
+                    fontSize: AppTypography.secondarySize,
                   ),
                 ),
                 Text(
@@ -29390,7 +29531,7 @@ class _ReadinessRow extends StatelessWidget {
                   style: const TextStyle(
                     color: _TD.muted,
                     fontWeight: FontWeight.w500,
-                    fontSize: 11.0,
+                    fontSize: AppTypography.secondarySize,
                   ),
                 ),
               ],
@@ -29436,7 +29577,7 @@ class _ScenarioButton extends StatelessWidget {
                   child: Text(step,
                       style: const TextStyle(
                           color: _TD.green,
-                          fontSize: 10.4,
+                          fontSize: AppTypography.captionSize,
                           fontWeight: FontWeight.w600))),
               const SizedBox(width: 10),
               Icon(icon, color: _TD.graphite, size: 17),
@@ -29451,14 +29592,14 @@ class _ScenarioButton extends StatelessWidget {
                           style: const TextStyle(
                               color: _TD.text,
                               fontWeight: FontWeight.w700,
-                              fontSize: 11.0)),
+                              fontSize: AppTypography.secondarySize)),
                       Text(text,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               color: _TD.muted,
                               fontWeight: FontWeight.w600,
-                              fontSize: 10.4)),
+                              fontSize: AppTypography.captionSize)),
                     ]),
               ),
               const Icon(Icons.chevron_right_rounded, color: _TD.dim),
@@ -29560,7 +29701,7 @@ class _MiniDebugPill extends StatelessWidget {
         Text(label,
             style: TextStyle(
                 color: active ? _TD.greenDark : _TD.orange,
-                fontSize: 11.0,
+                fontSize: AppTypography.secondarySize,
                 fontWeight: FontWeight.w700)),
       ]),
     );
@@ -29583,7 +29724,7 @@ class _DarkHint extends StatelessWidget {
             style: const TextStyle(
                 color: _TD.graphiteSoft,
                 fontWeight: FontWeight.w600,
-                fontSize: 11.0,
+                fontSize: AppTypography.secondarySize,
                 height: 1.22)));
   }
 }
@@ -29816,7 +29957,7 @@ class _RemoteConnectedTrackersStrip extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                  color: _TD.text, fontWeight: FontWeight.w700, fontSize: 12),
+                  color: _TD.text, fontWeight: FontWeight.w700, fontSize: AppTypography.bodySize),
             ),
           ),
           _NoHoverTap(
@@ -29828,7 +29969,7 @@ class _RemoteConnectedTrackersStrip extends StatelessWidget {
                   style: TextStyle(
                       color: _TD.green,
                       fontWeight: FontWeight.w700,
-                      fontSize: 11.2)),
+                      fontSize: AppTypography.secondarySize)),
             ),
           ),
         ]),
@@ -29867,7 +30008,7 @@ class _RemoteConnectedTrackersStrip extends StatelessWidget {
                           style: const TextStyle(
                               color: _TD.text,
                               fontWeight: FontWeight.w700,
-                              fontSize: 11.5)),
+                              fontSize: AppTypography.secondarySize)),
                       const SizedBox(height: 2),
                       Text(details.join(' · '),
                           maxLines: 2,
@@ -29875,7 +30016,7 @@ class _RemoteConnectedTrackersStrip extends StatelessWidget {
                           style: const TextStyle(
                               color: _TD.muted,
                               fontWeight: FontWeight.w600,
-                              fontSize: 11.0)),
+                              fontSize: AppTypography.secondarySize)),
                     ]),
               ),
               const SizedBox(width: 4),
@@ -29883,7 +30024,7 @@ class _RemoteConnectedTrackersStrip extends StatelessWidget {
                   style: TextStyle(
                       color: item.liveRunning ? _TD.green : _TD.orange,
                       fontWeight: FontWeight.w700,
-                      fontSize: 11.2)),
+                      fontSize: AppTypography.secondarySize)),
             ]),
           );
         }),
@@ -29931,7 +30072,7 @@ class _CalibrationStatusBanner extends StatelessWidget {
               style: TextStyle(
                 color: done ? _TD.green : _TD.text,
                 fontWeight: FontWeight.w500,
-                fontSize: 12,
+                fontSize: AppTypography.bodySize,
               ),
             ),
           ),

@@ -30,11 +30,21 @@ class TeamCalendarScreen extends StatelessWidget {
     return Theme(
       data: base.copyWith(
         scaffoldBackgroundColor: const Color(0xFFF7F8F7),
-        textTheme: base.textTheme.apply(
-          fontFamily: AppTypography.fontFamily,
-          bodyColor: const Color(0xFF0B0F14),
-          displayColor: const Color(0xFF0B0F14),
-        ),
+        textTheme: base.textTheme
+            .apply(
+              fontFamily: AppTypography.fontFamily,
+              bodyColor: const Color(0xFF0B0F14),
+              displayColor: const Color(0xFF0B0F14),
+            )
+            .copyWith(
+              titleLarge: AppTypography.screenTitle(),
+              titleMedium: AppTypography.sectionTitle(),
+              titleSmall: AppTypography.subsectionTitle(),
+              bodyLarge: AppTypography.body(),
+              bodyMedium: AppTypography.body(),
+              bodySmall: AppTypography.caption(),
+              labelLarge: AppTypography.action(),
+            ),
         primaryTextTheme: base.primaryTextTheme.apply(
           fontFamily: AppTypography.fontFamily,
           bodyColor: const Color(0xFF0B0F14),

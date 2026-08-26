@@ -18,6 +18,8 @@ import 'package:video_player/video_player.dart';
 
 import 'package:sportoteka/core/constants/app_colors.dart';
 import 'package:sportoteka/core/theme/app_typography.dart';
+import 'package:sportoteka/presentation/workspace_os/sportoteka_workspace_icons.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_entity_records.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/team_video_analysis/match_video_player_screen.dart';
 import 'package:sportoteka/presentation/team_video_analysis/video_match_review_screen.dart';
@@ -27,6 +29,11 @@ import 'package:sportoteka/presentation/advanced_video_analysis/models/player_de
 import 'package:sportoteka/presentation/match_live/match_live_screen.dart';
 
 class TeamMatchDetailScreen extends StatefulWidget {
+  static const int overviewTabIndex = 0;
+  static const int videoTabIndex = 4;
+  static const int aiTabIndex = 5;
+  static const int documentsTabIndex = 6;
+
   final int? matchId;
   final int? teamId;
   final int? clubId;
@@ -39,6 +46,26 @@ class TeamMatchDetailScreen extends StatefulWidget {
   /// и без кнопки назад, которая закрывала бы весь workspace.
   final bool embedded;
 
+  /// Индекс вкладки, которую нужно открыть сразу. 0 = Обзор.
+  /// Используется Workspace OS, чтобы открыть матч сразу на «Видео».
+  final int initialTabIndex;
+
+  /// Только рабочая область видео без внутреннего левого меню матча.
+  /// Используется Video Center внутри Workspace OS.
+  final bool videoOnly;
+
+  /// Только редактор выбранного матча. Используется правой рабочей панелью CMR.
+  final bool editorOnly;
+
+  /// Только документы и заметки матча. Используется правой рабочей панелью CMR.
+  final bool documentsOnly;
+
+  /// Закрыть встроенную правую рабочую панель.
+  final VoidCallback? onClose;
+
+  /// Вызывается после сохранения встроенного редактора.
+  final Future<void> Function()? onSaved;
+
   const TeamMatchDetailScreen({
     super.key,
     this.matchId,
@@ -48,6 +75,12 @@ class TeamMatchDetailScreen extends StatefulWidget {
     this.clubName,
     this.initialMatch,
     this.embedded = false,
+    this.initialTabIndex = 0,
+    this.videoOnly = false,
+    this.editorOnly = false,
+    this.documentsOnly = false,
+    this.onClose,
+    this.onSaved,
   });
 
   @override
@@ -66,6 +99,7 @@ void showTeamMatchDetailCmrWindow(
   String? teamName,
   String? clubName,
   Map<String, dynamic>? initialMatch,
+  int initialTabIndex = TeamMatchDetailScreen.overviewTabIndex,
   VoidCallback? onClosed,
 }) {
   OverlayState? overlay;
@@ -315,6 +349,7 @@ void showTeamMatchDetailCmrWindow(
                     clubName: clubName,
                     initialMatch: initialMatch,
                     embedded: true,
+                    initialTabIndex: initialTabIndex,
                   ),
                 ),
               ],
@@ -338,35 +373,43 @@ class _TeamMatchUiText {
     'Arial',
   ];
 
-  static TextStyle title(double size, {Color color = const Color(0xFF0B0F14)}) => TextStyle(
+  static TextStyle title(double size, {Color color = const Color(0xFF0B0F14)}) => AppTypography.custom(
+        size: size,
         color: color,
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: size,
-        fontWeight: FontWeight.w600,
+        weight: FontWeight.w600,
         letterSpacing: -0.22,
         height: 1.08,
       );
 
-  static TextStyle body(double size, {Color color = const Color(0xFF374151), FontWeight weight = FontWeight.w600}) => TextStyle(
+  static TextStyle body(double size, {Color color = const Color(0xFF374151), FontWeight weight = FontWeight.w600}) => AppTypography.custom(
+        size: size,
         color: color,
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: size,
-        fontWeight: weight,
+        weight: weight,
         letterSpacing: -0.05,
         height: 1.22,
       );
 
-  static TextStyle action({Color color = const Color(0xFF0B0F14), double size = 11.4}) => TextStyle(
+  static TextStyle action({Color color = const Color(0xFF0B0F14), double size = 12.2}) => AppTypography.action(
         color: color,
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: size,
-        fontWeight: FontWeight.w600,
-        letterSpacing: -0.06,
-        height: 1.08,
-      );
+      ).copyWith(fontSize: size);
+
+  static TextStyle screenTitle({Color color = const Color(0xFF0B0F14)}) =>
+      AppTypography.screenTitle(color: color);
+
+  static TextStyle sectionTitle({Color color = const Color(0xFF0B0F14)}) =>
+      AppTypography.sectionTitle(color: color);
+
+  static TextStyle secondary({Color color = const Color(0xFF667085)}) =>
+      AppTypography.secondaryMedium(color: color);
+
+  static TextStyle formLabel({Color color = const Color(0xFF374151)}) =>
+      AppTypography.formLabel(color: color);
+
+  static TextStyle formText({Color color = const Color(0xFF0B0F14)}) =>
+      AppTypography.formText(color: color);
+
+  static TextStyle formHint({Color color = const Color(0xFF667085)}) =>
+      AppTypography.formHint(color: color);
 }
 
 class _TeamMatchCmrWindowButton extends StatelessWidget {
@@ -429,6 +472,8 @@ class _AiPlayerMotion {
   });
 }
 
+enum _MatchRightPanelMode { none, editor, uploadFull, uploadHighlight, documents }
+
 class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
     with SingleTickerProviderStateMixin {
   static const String apiBase = "https://sportotekaapp.ru/api";
@@ -448,10 +493,13 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
   bool uploadingVideo = false;
   bool _isMatchInfoEditing = false;
   OverlayEntry? _uploadProgressOverlay;
+  _MatchRightPanelMode _rightPanelMode = _MatchRightPanelMode.none;
+  bool _embeddedMainNoteOpen = false;
 
   int matchId = 0;
   int teamId = 0;
   int _coachId = 0;
+  int _workspaceClubId = 0;
   String teamName = "Моя команда";
   
   
@@ -564,7 +612,13 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    var requestedInitialTab = widget.initialTabIndex;
+    final initialArgs = Get.arguments;
+    if (initialArgs is Map) {
+      requestedInitialTab = int.tryParse('${initialArgs['initial_tab_index'] ?? initialArgs['tab_index'] ?? requestedInitialTab}') ?? requestedInitialTab;
+    }
+    final initialTab = requestedInitialTab.clamp(0, 6).toInt();
+    _tabController = TabController(length: 7, initialIndex: initialTab, vsync: this);
     _tabController.addListener(() {
       if (mounted) setState(() {});
     });
@@ -575,7 +629,11 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
 
   Future<void> _init() async {
     _coachId = await PrefUtils.getUserId() ?? 0;
+    _workspaceClubId = widget.clubId ?? (await PrefUtils.getUserClubId() ?? 0);
     await load();
+    if (_workspaceClubId <= 0) {
+      _workspaceClubId = _i(match?["club_id"] ?? match?["clubId"]);
+    }
     await _loadTtdReport();
   }
 
@@ -1454,6 +1512,20 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
     );
   }
 
+  void _openMatchDocumentsWorkspace() {
+    final width = MediaQuery.maybeOf(context)?.size.width ?? 1000;
+    if (width >= 560 || widget.embedded) {
+      setState(() {
+        _embeddedMainNoteOpen = false;
+        _rightPanelMode = _MatchRightPanelMode.documents;
+      });
+      return;
+    }
+    if (_tabController.length > TeamMatchDetailScreen.documentsTabIndex) {
+      _tabController.animateTo(TeamMatchDetailScreen.documentsTabIndex);
+    }
+  }
+
   Future<void> _showCurrentMatchActions() async {
     if (!mounted) return;
 
@@ -1484,9 +1556,9 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                     Icons.drive_file_rename_outline_rounded,
                     color: Color(0xFF111827),
                   ),
-                  title: const Text(
+                  title: Text(
                     'Переименовать матч',
-                    style: TextStyle(fontWeight: FontWeight.w600),
+                    style: AppTypography.menuTitle(color: const Color(0xFF111827)),
                   ),
                   subtitle: Text(
                     _currentMatchActionTitle,
@@ -1500,14 +1572,26 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                 ),
                 ListTile(
                   leading: const Icon(Icons.edit_note_rounded, color: Color(0xFF28A86B)),
-                  title: const Text(
+                  title: Text(
                     'Редактировать данные матча',
-                    style: TextStyle(fontWeight: FontWeight.w600),
+                    style: AppTypography.menuTitle(color: const Color(0xFF111827)),
                   ),
-                  subtitle: const Text('Турнир, дата, стадион, статистика'),
+                  subtitle: Text('Турнир, дата, стадион, статистика', style: AppTypography.caption(color: const Color(0xFF758079))),
                   onTap: () {
                     Navigator.of(sheetContext).pop();
                     _openMatchInfoEditorSheet();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.folder_copy_outlined, color: Color(0xFF28A86B)),
+                  title: Text(
+                    'Документы и заметки',
+                    style: AppTypography.menuTitle(color: const Color(0xFF111827)),
+                  ),
+                  subtitle: Text('Материалы матча и общая рабочая заметка', style: AppTypography.caption(color: const Color(0xFF758079))),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _openMatchDocumentsWorkspace();
                   },
                 ),
                 const Divider(height: 14),
@@ -1788,10 +1872,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                     Expanded(
                       child: Text(
                         title,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 18,
-                        ),
+                        style: _TeamMatchUiText.screenTitle(),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1810,11 +1891,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                         ),
                         child: Text(
                           eventType,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: primary,
-                          ),
+                          style: AppTypography.badge(color: primary),
                         ),
                       ),
                   ],
@@ -2266,6 +2343,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
           Tab(height: 42, text: "Нарезка"),
           Tab(height: 42, text: "Видео"),
           Tab(height: 42, text: "ИИ"),
+          Tab(height: 42, text: "Документы и заметки"),
         ],
       ),
     );
@@ -2309,11 +2387,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                             title,
                             maxLines: isPhone ? 2 : 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: isPhone ? 16 : 17,
+                            style: _TeamMatchUiText.sectionTitle(
                               color: textPrimary,
-                              height: 1.14,
                             ),
                           ),
                         if (hasSubtitle) ...[
@@ -2322,11 +2397,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                             subtitle!.trim(),
                             maxLines: isPhone ? 2 : 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: isPhone ? 12 : 12.5,
+                            style: _TeamMatchUiText.secondary(
                               color: textSecondary,
-                              height: 1.28,
                             ),
                           ),
                         ],
@@ -2363,11 +2435,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
         children: [
           Text(
             label,
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
-              color: textSecondary,
-            ),
+            style: _TeamMatchUiText.formLabel(color: textSecondary),
           ),
           const SizedBox(height: 6),
           Container(
@@ -2379,14 +2447,11 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
               controller: controller,
               maxLines: maxLines,
               keyboardType: keyboardType,
-              style: TextStyle(
-                color: textPrimary,
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-              ),
+              style: _TeamMatchUiText.formText(color: textPrimary)
+                  .copyWith(fontWeight: FontWeight.w500),
               decoration: InputDecoration(
                 hintText: hint,
-                hintStyle: TextStyle(color: textSecondary.withOpacity(.55), fontWeight: FontWeight.w600),
+                hintStyle: _TeamMatchUiText.formHint(color: textSecondary.withOpacity(.55)),
                 contentPadding: EdgeInsets.symmetric(
                   horizontal: 14,
                   vertical: maxLines > 1 ? 14 : 12,
@@ -3060,6 +3125,12 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
   Future<void> _openMatchInfoEditorSheet() async {
     if (!mounted) return;
 
+    final width = MediaQuery.maybeOf(context)?.size.width ?? 1000;
+    if (width >= 560 || widget.embedded || widget.videoOnly) {
+      setState(() => _rightPanelMode = _MatchRightPanelMode.editor);
+      return;
+    }
+
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -3116,7 +3187,7 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                               ),
                             ),
                             const SizedBox(width: 12),
-                            const Expanded(
+                            Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -3124,10 +3195,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                                     'Редактировать матч',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w600,
-                                      color: Color(0xFF101828),
+                                    style: _TeamMatchUiText.screenTitle(
+                                      color: const Color(0xFF101828),
                                     ),
                                   ),
                                   SizedBox(height: 3),
@@ -3631,10 +3700,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                               title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
+                              style: _TeamMatchUiText.sectionTitle(
                                 color: textPrimary,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
                               ),
                             ),
                             const SizedBox(height: 3),
@@ -3724,10 +3791,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                               playerName,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
+                              style: _TeamMatchUiText.sectionTitle(
                                 color: textPrimary,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
                               ),
                             ),
                             const SizedBox(height: 3),
@@ -5194,6 +5259,16 @@ String _translatePosition(String key) {
     _selectedUploadThumbName = null;
     _selectedUploadThumbSize = null;
 
+    final width = MediaQuery.maybeOf(context)?.size.width ?? 1000;
+    if (width >= 560 || widget.embedded || widget.videoOnly) {
+      setState(() {
+        _rightPanelMode = type == 'highlight'
+            ? _MatchRightPanelMode.uploadHighlight
+            : _MatchRightPanelMode.uploadFull;
+      });
+      return;
+    }
+
     final overlay = _rootOverlayState() ?? Overlay.of(context, rootOverlay: true);
     final closed = Completer<void>();
     late OverlayEntry entry;
@@ -5353,10 +5428,7 @@ String _translatePosition(String key) {
                                             title,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              fontSize: 18,
-                                              height: 1.12,
-                                              fontWeight: FontWeight.w600,
+                                            style: _TeamMatchUiText.screenTitle(
                                               color: textPrimary,
                                             ),
                                           ),
@@ -5583,6 +5655,410 @@ String _translatePosition(String key) {
 
     overlay.insert(entry);
     await closed.future;
+  }
+
+
+  Widget _buildEmbeddedVideoOnlySurface() {
+    final content = ColoredBox(color: Colors.white, child: _buildVideosTab());
+    if (widget.onClose == null) return content;
+    return _profileModeSurface(
+      title: 'Видео матча',
+      subtitle: 'Записи, загрузка и анализ внутри рабочего окна',
+      icon: Icons.video_library_outlined,
+      child: content,
+    );
+  }
+
+  Widget _buildEmbeddedDocumentsOnlySurface() {
+    return _profileModeSurface(
+      title: 'Документы и заметки',
+      subtitle: 'Общие материалы матча · синхронизируются с Workspace OS',
+      icon: Icons.folder_copy_outlined,
+      child: _embeddedMainNoteOpen
+          ? _buildInlineMatchMainNote(onClose: () => setState(() => _embeddedMainNoteOpen = false))
+          : _buildDocumentsNotesTab(),
+    );
+  }
+
+  Widget _buildEmbeddedEditorOnlySurface() {
+    return _profileModeSurface(
+      title: 'Редактирование матча',
+      subtitle: 'Данные, статистика и комментарий тренера',
+      icon: Icons.edit_calendar_outlined,
+      footer: _profileRightEditorFooter(),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 24),
+        child: _buildMatchInfoEditorFields(isPhone: false),
+      ),
+    );
+  }
+
+  Widget _profileModeSurface({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Widget child,
+    Widget? footer,
+  }) {
+    return ColoredBox(
+      color: Colors.white,
+      child: Column(
+        children: [
+          _profileRightHeader(
+            title: title,
+            subtitle: subtitle,
+            icon: icon,
+            onClose: widget.onClose,
+          ),
+          Expanded(child: child),
+          if (footer != null) footer,
+        ],
+      ),
+    );
+  }
+
+  Widget _profileRightHeader({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    VoidCallback? onClose,
+  }) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 13, 10, 12),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFE9ECEA))),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF3FAF6),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(icon, size: 18, color: const Color(0xFF0B8F55)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.sectionTitle(color: const Color(0xFF101814)),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const _MatchProfileBrandDots(),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.caption(color: const Color(0xFF758079)),
+                ),
+              ],
+            ),
+          ),
+          if (onClose != null)
+            IconButton(
+              tooltip: 'Закрыть',
+              onPressed: onClose,
+              icon: const Icon(Icons.close_rounded, size: 19, color: Color(0xFF667085)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _profileRightEditorFooter() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Color(0xFFE9ECEA))),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: saving ? null : widget.onClose,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF667085),
+                side: BorderSide.none,
+                backgroundColor: const Color(0xFFF7F9F8),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              child: Text('Отмена', style: AppTypography.action(color: const Color(0xFF667085))),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 2,
+            child: FilledButton.icon(
+              onPressed: saving
+                  ? null
+                  : () async {
+                      await _saveAll();
+                      await widget.onSaved?.call();
+                    },
+              icon: saving
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.check_rounded, size: 18),
+              label: Text(saving ? 'Сохраняем...' : 'Сохранить', style: AppTypography.action(color: Colors.white)),
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0B8F55), padding: const EdgeInsets.symmetric(vertical: 12)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMatchProfileRightPanel() {
+    final mode = _rightPanelMode;
+    final isUpload = mode == _MatchRightPanelMode.uploadFull || mode == _MatchRightPanelMode.uploadHighlight;
+    final isHighlight = mode == _MatchRightPanelMode.uploadHighlight;
+    final title = mode == _MatchRightPanelMode.editor
+        ? 'Редактирование матча'
+        : mode == _MatchRightPanelMode.documents
+            ? 'Документы и заметки'
+            : isHighlight
+                ? 'Добавить видеонарезку'
+                : 'Добавить видео матча';
+    final subtitle = mode == _MatchRightPanelMode.editor
+        ? 'Данные, статистика и комментарий тренера'
+        : mode == _MatchRightPanelMode.documents
+            ? 'Материалы матча · общий архив Sportoteka'
+            : isHighlight
+                ? 'Короткий фрагмент для разбора эпизода'
+                : 'Полная запись матча для просмотра и AI-анализа';
+    final icon = mode == _MatchRightPanelMode.editor
+        ? Icons.edit_calendar_outlined
+        : mode == _MatchRightPanelMode.documents
+            ? Icons.folder_copy_outlined
+            : Icons.video_file_outlined;
+
+    Widget child;
+    Widget? footer;
+    if (mode == _MatchRightPanelMode.editor) {
+      child = SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 24),
+        child: _buildMatchInfoEditorFields(isPhone: false),
+      );
+      footer = _rightPanelEditFooter();
+    } else if (mode == _MatchRightPanelMode.documents) {
+      child = _embeddedMainNoteOpen
+          ? _buildInlineMatchMainNote(onClose: () => setState(() => _embeddedMainNoteOpen = false))
+          : _buildDocumentsNotesTab();
+    } else if (isUpload) {
+      child = _buildVideoUploadRightPanel(isHighlight: isHighlight);
+      footer = _rightPanelUploadFooter(type: isHighlight ? 'highlight' : 'full');
+    } else {
+      child = const SizedBox.shrink();
+    }
+
+    return Material(
+      color: Colors.white,
+      elevation: 8,
+      shadowColor: Colors.black.withOpacity(.08),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(left: BorderSide(color: Color(0xFFE6EAE7))),
+        ),
+        child: Column(
+          children: [
+            _profileRightHeader(
+              title: title,
+              subtitle: subtitle,
+              icon: icon,
+              onClose: () => setState(() => _rightPanelMode = _MatchRightPanelMode.none),
+            ),
+            Expanded(child: child),
+            if (footer != null) footer,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _rightPanelEditFooter() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Color(0xFFE9ECEA))),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: saving ? null : () => setState(() => _rightPanelMode = _MatchRightPanelMode.none),
+              style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFF667085), side: BorderSide.none, backgroundColor: const Color(0xFFF7F9F8)),
+              child: Text('Отмена', style: AppTypography.action(color: const Color(0xFF667085))),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 2,
+            child: FilledButton.icon(
+              onPressed: saving
+                  ? null
+                  : () async {
+                      await _saveAll();
+                      if (mounted) setState(() => _rightPanelMode = _MatchRightPanelMode.none);
+                    },
+              icon: saving
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.check_rounded, size: 18),
+              label: Text(saving ? 'Сохраняем...' : 'Сохранить', style: AppTypography.action(color: Colors.white)),
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0B8F55)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickRightVideoFile() async {
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['mp4', 'mov', 'm4v', 'avi'],
+        allowMultiple: false,
+        withData: false,
+      );
+      if (result == null || result.files.isEmpty) return;
+      final picked = result.files.first;
+      if (picked.path == null || picked.path!.isEmpty) return;
+      final file = File(picked.path!);
+      if (!await file.exists()) return;
+      if (!mounted) return;
+      setState(() {
+        _selectedUploadVideoPath = picked.path!;
+        _selectedUploadVideoName = picked.name;
+        _selectedUploadVideoSize = picked.size > 0 ? picked.size : null;
+      });
+    } catch (e) {
+      Get.snackbar('Видео', 'Не удалось выбрать видео: $e');
+    }
+  }
+
+  Future<void> _pickRightVideoThumb() async {
+    try {
+      final x = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85, maxWidth: 1400);
+      if (x == null) return;
+      final file = File(x.path);
+      final size = await file.length();
+      if (!mounted) return;
+      setState(() {
+        _selectedUploadThumbPath = x.path;
+        _selectedUploadThumbName = x.name;
+        _selectedUploadThumbSize = size;
+      });
+    } catch (e) {
+      Get.snackbar('Видео', 'Не удалось выбрать превью: $e');
+    }
+  }
+
+  Widget _buildVideoUploadRightPanel({required bool isHighlight}) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
+      children: [
+        _uploadPickerCard(
+          title: 'Видео файл',
+          subtitle: _selectedUploadVideoPath == null ? 'MP4, MOV, M4V или AVI' : 'Файл выбран и готов к загрузке',
+          buttonText: _selectedUploadVideoPath == null ? 'Выбрать видео' : 'Заменить видео',
+          icon: Icons.video_file_outlined,
+          selected: _selectedUploadVideoPath != null,
+          fileName: _selectedUploadVideoName,
+          fileSize: _selectedUploadVideoSize,
+          onTap: uploadingVideo ? null : _pickRightVideoFile,
+        ),
+        const SizedBox(height: 10),
+        _uploadPickerCard(
+          title: 'Превью',
+          subtitle: _selectedUploadThumbPath == null ? 'Необязательно · изображение для карточки' : 'Превью выбрано',
+          buttonText: _selectedUploadThumbPath == null ? 'Выбрать превью' : 'Заменить превью',
+          icon: Icons.image_outlined,
+          selected: _selectedUploadThumbPath != null,
+          fileName: _selectedUploadThumbName,
+          fileSize: _selectedUploadThumbSize,
+          onTap: uploadingVideo ? null : _pickRightVideoThumb,
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: const Color(0xFFF7FAF8), borderRadius: BorderRadius.circular(12)),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _MatchProfileBrandDots(),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  isHighlight
+                      ? 'Нарезка будет привязана к этому матчу и сразу появится в разделе видео.'
+                      : 'Большие записи загружаются по частям. После загрузки видео сразу появится в матче и в Video Center OS.',
+                  style: AppTypography.secondary(color: const Color(0xFF667085)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _rightPanelUploadFooter({required String type}) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Color(0xFFE9ECEA)))),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: uploadingVideo ? null : () => setState(() => _rightPanelMode = _MatchRightPanelMode.none),
+              style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFF667085), side: BorderSide.none, backgroundColor: const Color(0xFFF7F9F8)),
+              child: Text('Отмена', style: AppTypography.action(color: const Color(0xFF667085))),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 2,
+            child: FilledButton.icon(
+              onPressed: uploadingVideo || _selectedUploadVideoPath == null
+                  ? null
+                  : () async {
+                      final video = File(_selectedUploadVideoPath!);
+                      if (!await video.exists()) {
+                        Get.snackbar('Видео', 'Выбранный файл не найден');
+                        return;
+                      }
+                      final thumb = _selectedUploadThumbPath?.isNotEmpty == true ? File(_selectedUploadThumbPath!) : null;
+                      await _uploadVideoWithChunks(type: type, video: video, thumbnail: thumb);
+                      if (mounted) setState(() => _rightPanelMode = _MatchRightPanelMode.none);
+                    },
+              icon: uploadingVideo
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.cloud_upload_outlined, size: 18),
+              label: Text(uploadingVideo ? 'Загрузка...' : 'Загрузить', style: AppTypography.action(color: Colors.white)),
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0B8F55)),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _uploadPickerCard({
@@ -6183,14 +6659,11 @@ String _translatePosition(String key) {
                             child: const Icon(Icons.delete_outline_rounded, color: Color(0xFFD92D20)),
                           ),
                           const SizedBox(width: 12),
-                          const Expanded(
+                          Expanded(
                             child: Text(
                               'Удалить видео?',
-                              style: TextStyle(
-                                fontSize: 18,
-                                height: 1.1,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF101828),
+                              style: _TeamMatchUiText.screenTitle(
+                                color: const Color(0xFF101828),
                               ),
                             ),
                           ),
@@ -6329,10 +6802,7 @@ String _translatePosition(String key) {
                             Text(
                               "Загружаем видео",
                               textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 18,
-                                height: 1.12,
-                                fontWeight: FontWeight.w600,
+                              style: _TeamMatchUiText.screenTitle(
                                 color: textPrimary,
                               ),
                             ),
@@ -7263,6 +7733,95 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     );
   }
 
+
+  Widget _buildInlineMatchMainNote({required VoidCallback onClose}) {
+    final resolvedClubId = _workspaceClubId > 0
+        ? _workspaceClubId
+        : (widget.clubId ?? _i(match?["club_id"] ?? match?["clubId"]));
+    final resolvedMatchId = matchId > 0 ? matchId : _i(match?["match_id"] ?? match?["id"]);
+    return WorkspaceEntityRecordDocument(
+      ownerTitle: _currentMatchActionTitle,
+      sectionTitle: 'Документы и заметки',
+      title: 'Заметка матча',
+      iconKind: SportotekaWorkspaceIconKind.document,
+      record: Map<String, dynamic>.from(match ?? const <String, dynamic>{}),
+      properties: <WorkspaceEntityProperty>[
+        WorkspaceEntityProperty('Матч', _currentMatchActionTitle),
+        if (_s(match?['match_date'] ?? match?['info_date']).isNotEmpty)
+          WorkspaceEntityProperty('Дата', _s(match?['match_date'] ?? match?['info_date'])),
+      ],
+      noteKey: 'match:$resolvedMatchId',
+      entityType: 'match',
+      entityId: '$resolvedMatchId',
+      clubId: resolvedClubId,
+      serverParentKey: 'entity:match:$resolvedMatchId',
+      onClose: onClose,
+    );
+  }
+
+  Widget _buildDocumentsNotesTab() {
+    final resolvedClubId = _workspaceClubId > 0
+        ? _workspaceClubId
+        : (widget.clubId ?? _i(match?["club_id"] ?? match?["clubId"]));
+    final resolvedMatchId = matchId > 0 ? matchId : _i(match?["match_id"] ?? match?["id"]);
+
+    if (resolvedMatchId <= 0) {
+      return Center(
+        child: Text(
+          'Не удалось определить матч для документов и заметок',
+          style: AppTypography.secondary(color: textSecondary),
+        ),
+      );
+    }
+
+    return WorkspaceEntityRecordBrowser(
+      ownerTitle: _currentMatchActionTitle,
+      sectionTitle: 'Документы и заметки',
+      iconKind: SportotekaWorkspaceIconKind.documents,
+      loadRecords: () async => <Map<String, dynamic>>[
+        <String, dynamic>{
+          'id': 'match-note:$resolvedMatchId',
+          'title': 'Заметка матча',
+          'description': 'Общая редактируемая заметка · синхронизируется с Workspace OS',
+          'updated_at': _s(match?['updated_at'] ?? match?['match_date'] ?? match?['info_date']),
+          '_workspace_match_main_note': true,
+        },
+      ],
+      titleFor: (row) => _s(row['title']).isEmpty ? 'Материал матча' : _s(row['title']),
+      subtitleFor: (row) => _s(row['description'] ?? row['notes'] ?? row['comment']),
+      dateFor: (row) => _s(row['updated_at'] ?? row['created_at'] ?? row['date']),
+      propertiesFor: (row) => <WorkspaceEntityProperty>[
+        const WorkspaceEntityProperty('Матч', 'Общий рабочий документ'),
+        if (_s(row['created_at']).isNotEmpty) WorkspaceEntityProperty('Создано', _s(row['created_at'])),
+        if (_s(row['updated_at']).isNotEmpty) WorkspaceEntityProperty('Изменено', _s(row['updated_at'])),
+      ],
+      openRecord: (context, row) async {
+        if (row['_workspace_match_main_note'] != true) return;
+        if (widget.documentsOnly || _rightPanelMode == _MatchRightPanelMode.documents) {
+          if (mounted) setState(() => _embeddedMainNoteOpen = true);
+          return;
+        }
+        await Navigator.of(context).push<void>(
+          MaterialPageRoute<void>(
+            builder: (_) => Scaffold(
+              backgroundColor: Colors.white,
+              body: SafeArea(child: _buildInlineMatchMainNote(onClose: () => Navigator.of(context).maybePop())),
+            ),
+          ),
+        );
+      },
+      emptyText: 'У матча пока нет документов и заметок. Добавьте заметку или перетащите сюда файл.',
+      localStorageKey: 'sportoteka_match_materials_${resolvedClubId}_$resolvedMatchId',
+      contextLabel: 'Матч',
+      clubId: resolvedClubId,
+      serverParentKey: 'entity:match:$resolvedMatchId:materials',
+      attachmentEntityType: 'match',
+      attachmentEntityId: resolvedMatchId,
+      attachmentSectionKey: 'documents_notes',
+      showBackButton: false,
+    );
+  }
+
   Widget _buildVideosTab() {
     final videos = ((match?["videos"] as List?) ?? [])
         .map((e) => Map<String, dynamic>.from(e))
@@ -7359,6 +7918,11 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           subtitle: "разбор видео",
           icon: Icons.psychology_alt_rounded,
         ),
+        _MatchDetailNavItem(
+          title: "Документы и заметки",
+          subtitle: "файлы и записи",
+          icon: Icons.folder_copy_outlined,
+        ),
       ];
 
   int _safeMatchTabIndex(int index) {
@@ -7398,6 +7962,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
         return _buildVideosTab();
       case 5:
         return _buildAiVideoAnalysisTab();
+      case 6:
+        return _buildDocumentsNotesTab();
       default:
         return _buildOverviewTab();
     }
@@ -7428,6 +7994,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
         _buildHighlightsTab(),
         _buildVideosTab(),
         _buildAiVideoAnalysisTab(),
+        _buildDocumentsNotesTab(),
       ],
     );
   }
@@ -7605,11 +8172,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                               _liveAiStatus,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: _mcSub,
-                                fontSize: 10.8,
-                                fontWeight: FontWeight.w600,
-                              ),
+                              style: AppTypography.captionMedium(color: _mcSub),
                             ),
                           ),
                         ],
@@ -7747,13 +8310,13 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                 Text(
                   title,
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: _mcText, fontSize: 18, fontWeight: FontWeight.w600),
+                  style: AppTypography.sectionTitle(color: _mcText),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   subtitle,
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: _mcSub, fontSize: 12.5, height: 1.4),
+                  style: AppTypography.secondary(color: _mcSub),
                 ),
                 if (action != null) ...[
                   const SizedBox(height: 18),
@@ -9232,14 +9795,14 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
         children: [
           Text(
             'Тренерский вывод',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: textPrimary),
+            style: AppTypography.sectionTitle(color: textPrimary),
           ),
           const SizedBox(height: 8),
           Text(
             _aiCoachText(),
             maxLines: 5,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 12.5, height: 1.35, fontWeight: FontWeight.w600, color: textSecondary),
+            style: AppTypography.secondaryMedium(color: textSecondary),
           ),
           const SizedBox(height: 14),
           _proAiPoint('Эффективность: ${_efficiency.toStringAsFixed(1)}%'),
@@ -9314,10 +9877,10 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             controller: _coachCommentCtrl,
             minLines: 4,
             maxLines: 5,
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textPrimary),
+            style: AppTypography.commentText(color: textPrimary),
             decoration: InputDecoration(
               hintText: 'Добавьте заметку о матче...',
-              hintStyle: TextStyle(color: textSecondary.withOpacity(.75), fontWeight: FontWeight.w600),
+              hintStyle: AppTypography.formHint(color: textSecondary.withOpacity(.75)),
               filled: true,
               fillColor: softSurface,
               border: OutlineInputBorder(borderSide: BorderSide.none, borderRadius: BorderRadius.circular(18)),
@@ -10301,6 +10864,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
               (3, Icons.video_library_outlined, 'Нарезка'),
               (4, Icons.play_circle_outline_rounded, 'Видео'),
               (5, Icons.psychology_alt_rounded, 'ИИ'),
+              (6, Icons.folder_copy_outlined, 'Док.'),
             ];
 
             return Row(
@@ -13577,11 +14141,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                           children: [
                             Text(
                               'События матча',
-                              style: TextStyle(
-                                color: _mcText,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                              ),
+                              style: AppTypography.sectionTitle(color: _mcText),
                             ),
                             const SizedBox(height: 4),
                             Text(
@@ -13754,20 +14314,12 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                               children: [
                                 Text(
                                   'Заметка к видео',
-                                  style: TextStyle(
-                                    color: _mcText,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                                  style: AppTypography.sectionTitle(color: _mcText),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
                                   'Текущий момент: ${_formatMatchPlayerTime(position)}',
-                                  style: TextStyle(
-                                    color: _mcSub,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                                  style: AppTypography.commentMeta(color: _mcSub),
                                 ),
                               ],
                             ),
@@ -13784,8 +14336,10 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                         minLines: 3,
                         maxLines: 5,
                         autofocus: true,
+                        style: AppTypography.commentText(color: _mcText),
                         decoration: InputDecoration(
                           hintText: 'Например: плохо закрыли правый фланг после потери...',
+                          hintStyle: AppTypography.formHint(color: _mcSub),
                           filled: true,
                           fillColor: Colors.white,
                           border: OutlineInputBorder(
@@ -13823,11 +14377,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                         children: [
                           Text(
                             'Быстрые заметки',
-                            style: TextStyle(
-                              color: _mcText,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
+                            style: AppTypography.subsectionTitle(color: _mcText),
                           ),
                           const Spacer(),
                           if (_localVideoNotes.isNotEmpty)
@@ -13853,11 +14403,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                 ),
                                 child: Text(
                                   'Пока нет быстрых заметок в этой сессии',
-                                  style: TextStyle(
-                                    color: _mcSub,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                                  style: AppTypography.emptyText(color: _mcSub),
                                 ),
                               )
                             : ListView.separated(
@@ -13882,22 +14428,13 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                           children: [
                                             Text(
                                               note['timeLabel'] as String,
-                                              style: TextStyle(
-                                                color: _mcBlue,
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                              ),
+                                              style: AppTypography.commentMeta(color: _mcBlue),
                                             ),
                                             const SizedBox(width: 12),
                                             Expanded(
                                               child: Text(
                                                 note['text'] as String,
-                                                style: TextStyle(
-                                                  color: _mcText,
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w600,
-                                                  height: 1.25,
-                                                ),
+                                                style: AppTypography.commentText(color: _mcText),
                                               ),
                                             ),
                                           ],
@@ -14815,15 +15352,21 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                   ),
                 ),
               )
-            : useWorkspace
-                ? _buildMatchAnalysisWorkspace(
-                    title: title,
-                    opponent: opponent,
-                    date: date,
-                    competition: competition,
-                    score: score,
-                  )
-                : Column(
+            : widget.editorOnly
+                ? _buildEmbeddedEditorOnlySurface()
+                : widget.documentsOnly
+                    ? _buildEmbeddedDocumentsOnlySurface()
+                    : widget.videoOnly
+                        ? _buildEmbeddedVideoOnlySurface()
+                        : useWorkspace
+                    ? _buildMatchAnalysisWorkspace(
+                        title: title,
+                        opponent: opponent,
+                        date: date,
+                        competition: competition,
+                        score: score,
+                      )
+                    : Column(
                     children: [
                       _buildCmrTopBar(
                         compact: compact,
@@ -14858,7 +15401,19 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
               displayColor: textPrimary,
             ),
           ),
-          child: body,
+          child: Stack(
+            children: [
+              Positioned.fill(child: body),
+              if (_rightPanelMode != _MatchRightPanelMode.none && !isPhone)
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  bottom: 0,
+                  width: min(520.0, max(390.0, width * .46)),
+                  child: _buildMatchProfileRightPanel(),
+                ),
+            ],
+          ),
         );
 
         if (widget.embedded) {
@@ -14885,6 +15440,32 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           ),
         );
       },
+    );
+  }
+}
+
+
+class _MatchProfileBrandDots extends StatelessWidget {
+  const _MatchProfileBrandDots();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(
+        3,
+        (index) => Padding(
+          padding: EdgeInsets.only(left: index == 0 ? 0 : 4),
+          child: Container(
+            width: 5.5,
+            height: 5.5,
+            decoration: BoxDecoration(
+              color: index == 1 ? const Color(0xFF0B8F55) : const Color(0xFFB8D9C6),
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

@@ -3,6 +3,7 @@ import 'dart:html' as html;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 
 class PlansEmbeddedFileViewer extends StatefulWidget {
   final String url;
@@ -92,9 +93,9 @@ class _PlansEmbeddedFileViewerState extends State<PlansEmbeddedFileViewer> {
                     _usingGoogle
                         ? 'Google Docs Viewer'
                         : 'Microsoft Office Viewer',
-                    style: const TextStyle(
+                    style: const TextStyle(fontFamily: AppTypography.fontFamily, 
                       color: Color(0xFF101828),
-                      fontSize: 11.5,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700,
                     ),
                   ),

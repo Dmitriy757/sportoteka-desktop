@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'team_calendar_models.dart';
 
 class CalendarWeekView extends StatefulWidget {
@@ -136,19 +137,14 @@ class _CalendarWeekViewState extends State<CalendarWeekView> {
                                 children: [
                                   Text(
                                     dayNames[i],
-                                    style: const TextStyle(
-                                      fontSize: 10.2,
-                                      fontWeight: FontWeight.w600,
-                                      color: Color(0xFF6B7280),
+                                    style: AppTypography.captionMedium(
+                                      color: const Color(0xFF6B7280),
                                     ),
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
                                     "${d.day}",
-                                    style: const TextStyle(
-                                      fontSize: 13.2,
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                                    style: AppTypography.itemTitle(),
                                   ),
                                   const SizedBox(height: 6),
                                   _DotsMini(events: list),
@@ -200,14 +196,14 @@ class _CalendarWeekViewState extends State<CalendarWeekView> {
                     children: [
                       Text(
                         "${dayNames[d.weekday - 1]} • ${d.day}.${d.month.toString().padLeft(2, '0')}",
-                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.2, letterSpacing: -0.12),
+                        style: AppTypography.menuTitle(),
                       ),
                       const Spacer(),
                       TextButton(
                         onPressed: () => widget.onDayLongPress(d),
                         style: TextButton.styleFrom(
                           foregroundColor: const Color(0xFF067A46),
-                          textStyle: const TextStyle(fontSize: 10.8, fontWeight: FontWeight.w600),
+                          textStyle: AppTypography.action(color: const Color(0xFF067A46)),
                           visualDensity: VisualDensity.compact,
                         ),
                         child: const Text("Добавить"),
@@ -405,15 +401,15 @@ class _WeekEventTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(e.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.4, letterSpacing: -0.12)),
+                  Text(e.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.itemTitle()),
                   const SizedBox(height: 2),
                   Text(
                     "${eventTypeLabel(e.type)} • $when",
-                    style: const TextStyle(fontSize: 10.8, fontWeight: FontWeight.w600, color: Color(0xFF6B7280)),
+                    style: AppTypography.captionMedium(color: const Color(0xFF6B7280)),
                   ),
                   if (e.location.trim().isNotEmpty) ...[
                     const SizedBox(height: 2),
-                    Text("📍 ${e.location}", maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10.8, fontWeight: FontWeight.w600)),
+                    Text("📍 ${e.location}", maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.captionMedium(color: const Color(0xFF374151))),
                   ],
                   if (e.notes.trim().isNotEmpty) ...[
                     const SizedBox(height: 2),
@@ -421,7 +417,7 @@ class _WeekEventTile extends StatelessWidget {
                       e.notes,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 10.8, fontWeight: FontWeight.w500, color: Color(0xFF374151)),
+                      style: AppTypography.secondary(color: const Color(0xFF374151)),
                     ),
                   ],
                 ],

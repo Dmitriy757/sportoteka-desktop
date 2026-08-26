@@ -1394,10 +1394,10 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
                     Expanded(
                       child: TextField(
                         controller: searchC,
-                        style: _AttText.value(11.6),
+                        style: AppTypography.formText(color: _C.text),
                         decoration: InputDecoration(
                           hintText: 'Поиск игрока',
-                          hintStyle: _AttText.muted(10.8),
+                          hintStyle: AppTypography.formHint(color: _C.muted2),
                           border: InputBorder.none,
                           enabledBorder: InputBorder.none,
                           focusedBorder: InputBorder.none,
@@ -1843,63 +1843,45 @@ class _C {
 }
 
 class _AttText {
-  static TextStyle title(double size) => AppTypography.custom(
-        size: size,
-        weight: FontWeight.w600,
-        color: _C.text,
-        height: 1.18,
-        letterSpacing: 0,
-      );
+  static TextStyle title(double requested) {
+    if (requested >= 15) {
+      return AppTypography.screenTitle(color: _C.text);
+    }
+    if (requested >= 14) {
+      return AppTypography.sectionTitle(color: _C.text);
+    }
+    return AppTypography.subsectionTitle(color: _C.text);
+  }
 
-  static TextStyle section() => AppTypography.custom(
-        size: 11.8,
-        weight: FontWeight.w600,
-        color: _C.text,
-        height: 1.2,
-        letterSpacing: 0,
-      );
+  static TextStyle section() =>
+      AppTypography.subsectionTitle(color: _C.text);
 
-  static TextStyle value(double size) => AppTypography.custom(
-        size: size,
-        weight: FontWeight.w600,
-        color: _C.text,
-        height: 1.18,
-        letterSpacing: 0,
-      );
+  static TextStyle value(double requested) {
+    if (requested >= 11.5) {
+      return AppTypography.bodyMedium(color: _C.text);
+    }
+    if (requested >= 10.5) {
+      return AppTypography.secondaryMedium(color: _C.text);
+    }
+    return AppTypography.captionMedium(color: _C.text);
+  }
 
-  static TextStyle body(double size) => AppTypography.custom(
-        size: size,
-        weight: FontWeight.w400,
-        color: _C.text,
-        height: 1.3,
-        letterSpacing: 0,
-      );
+  static TextStyle body(double requested) =>
+      AppTypography.body(color: _C.text);
 
-  static TextStyle muted(double size) => AppTypography.custom(
-        size: size,
-        weight: FontWeight.w400,
-        color: _C.muted2,
-        height: 1.3,
-        letterSpacing: 0,
-      );
+  static TextStyle muted(double requested) {
+    if (requested >= 11) {
+      return AppTypography.secondary(color: _C.muted2);
+    }
+    return AppTypography.caption(color: _C.muted2);
+  }
 
-  static TextStyle caption() => AppTypography.custom(
-        size: 10.1,
-        weight: FontWeight.w500,
-        color: _C.subtle,
-        height: 1.18,
-        letterSpacing: 0,
-      );
+  static TextStyle caption() =>
+      AppTypography.captionMedium(color: _C.subtle);
 
-  static TextStyle action() => AppTypography.custom(
-        size: 10.9,
-        weight: FontWeight.w600,
-        color: _C.text,
-        height: 1.1,
-        letterSpacing: 0,
-      );
+  static TextStyle action() =>
+      AppTypography.action(color: _C.text);
 }
-
 class _CmrGlowDot extends StatelessWidget {
   final Color color;
   final double size;
@@ -2147,7 +2129,12 @@ class _TeamLogoMark extends StatelessWidget {
       alignment: Alignment.center,
       child: Text(
         letter,
-        style: _AttText.title(size * .34),
+        style: AppTypography.custom(
+          size: size * .34,
+          weight: FontWeight.w600,
+          color: _C.text,
+          height: 1,
+        ),
       ),
     );
   }
@@ -2233,8 +2220,11 @@ class _StatusCircle extends StatelessWidget {
             )
           : Text(
               symbol,
-              style: _AttText.value(size * .38).copyWith(
+              style: AppTypography.custom(
+                size: size * .38,
+                weight: FontWeight.w600,
                 color: color,
+                height: 1,
               ),
             ),
     );

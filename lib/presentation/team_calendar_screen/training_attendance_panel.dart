@@ -256,7 +256,7 @@ class _TrainingAttendancePanelState extends State<TrainingAttendancePanel> {
               children: [
                 _StatusCircle(item: item, active: true, size: 25),
                 const SizedBox(width: 5),
-                Text(item.label, style: _style(10.2, weight: FontWeight.w600, color: _muted)),
+                Text(item.label, style: AppTypography.captionMedium(color: _muted)),
               ],
             ),
           );
@@ -341,13 +341,13 @@ class _TrainingAttendancePanelState extends State<TrainingAttendancePanel> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: _style(13.8, weight: FontWeight.w600)),
+                    Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.itemTitle(color: _text)),
                     const SizedBox(height: 5),
                     Text(
                       position.isEmpty ? 'Без амплуа' : position,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _style(11.2, color: _muted),
+                      style: AppTypography.secondary(color: _muted),
                     ),
                   ],
                 ),

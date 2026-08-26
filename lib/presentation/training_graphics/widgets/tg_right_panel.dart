@@ -152,9 +152,10 @@ class _Section extends StatelessWidget {
                 child: Text(
                   title,
                   style: const TextStyle(
+                    fontFamily: AppTypography.fontFamily,
                     color: _txt,
                     fontWeight: FontWeight.w600,
-                    fontSize: 11,
+                    fontSize: AppTypography.captionSize,
                   ),
                 ),
               ),
@@ -162,9 +163,10 @@ class _Section extends StatelessWidget {
                 Text(
                   trailing!,
                   style: const TextStyle(
+                    fontFamily: AppTypography.fontFamily,
                     color: _txtDim,
                     fontWeight: FontWeight.w600,
-                    fontSize: 10,
+                    fontSize: AppTypography.captionSize,
                   ),
                 ),
             ],
@@ -209,9 +211,10 @@ class _ToggleBtn extends StatelessWidget {
         child: Text(
           text,
           style: TextStyle(
+            fontFamily: AppTypography.fontFamily,
             color: active ? _green : _txt,
             fontWeight: FontWeight.w600,
-            fontSize: 10.2,
+            fontSize: AppTypography.captionSize,
           ),
         ),
       ),
@@ -245,18 +248,20 @@ class _ObjectEditModeBanner extends StatelessWidget {
           const Text(
             'Работа с элементом',
             style: TextStyle(
+              fontFamily: AppTypography.fontFamily,
               color: Color(0xFF111713),
               fontWeight: FontWeight.w600,
-              fontSize: 11,
+              fontSize: AppTypography.captionSize,
             ),
           ),
           const SizedBox(height: 7),
           const Text(
             'Объект — перемещение, размер и поворот. Точки — изменение формы линии.',
             style: TextStyle(
+              fontFamily: AppTypography.fontFamily,
               color: Color(0xFF6F7A73),
               fontWeight: FontWeight.w600,
-              fontSize: 9.8,
+              fontSize: AppTypography.captionSize,
               height: 1.3,
             ),
           ),
@@ -357,7 +362,7 @@ class _SliderRow extends StatelessWidget {
           width: 70,
           child: Text(
             title,
-            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 11),
+            style: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w500, fontSize: AppTypography.captionSize),
           ),
         ),
         Expanded(
@@ -382,7 +387,7 @@ class _SliderRow extends StatelessWidget {
           child: Text(
             asPercent ? '${(value * 100).round()}%' : value.toStringAsFixed(0),
             textAlign: TextAlign.right,
-            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 11),
+            style: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w500, fontSize: AppTypography.captionSize),
           ),
         ),
       ],
@@ -417,9 +422,10 @@ class _PillType extends StatelessWidget {
         child: Text(
           text,
           style: TextStyle(
+            fontFamily: AppTypography.fontFamily,
             color: active ? green : const Color(0xFF111827),
             fontWeight: FontWeight.w600,
-            fontSize: 10.2,
+            fontSize: AppTypography.captionSize,
           ),
         ),
       ),
@@ -702,9 +708,10 @@ class _BasePanel extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
+                fontFamily: AppTypography.fontFamily,
                 color: _text,
                 fontWeight: FontWeight.w600,
-                fontSize: 12.2,
+                fontSize: AppTypography.secondarySize,
               ),
             ),
           ),
@@ -750,8 +757,9 @@ class _PanelCloseButton extends StatelessWidget {
                   Text(
                   'Закрыть',
                   style: TextStyle(
+                    fontFamily: AppTypography.fontFamily,
                     color: Color(0xFFE11D48),
-                    fontSize: 10.5,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -994,14 +1002,14 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
                 t.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: _txt, fontSize: 11.2, fontWeight: FontWeight.w600),
+                style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _txt, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 3),
               Text(
                 t.subtitle,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: _txtDim, fontSize: 9.6, height: 1.2, fontWeight: FontWeight.w600),
+                style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _txtDim, fontSize: AppTypography.captionSize, height: 1.2, fontWeight: FontWeight.w600),
               ),
             ],
           ),
@@ -1056,7 +1064,7 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
                       Expanded(
                         child: Text(
                           'Открыть 3D Pro с этим составом',
-                          style: TextStyle(color: Colors.white, fontSize: 11.2, fontWeight: FontWeight.w600),
+                          style: TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.white, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w600),
                         ),
                       ),
                       Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 17),
@@ -1086,7 +1094,7 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
           Expanded(
             child: Text(
               'Загружаю игроков команды...',
-              style: TextStyle(color: _txtDim, fontSize: 10.8, fontWeight: FontWeight.w600),
+              style: TextStyle(fontFamily: AppTypography.fontFamily, color: _txtDim, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -1106,7 +1114,7 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
         widget.teamPlayersError?.trim().isNotEmpty == true
             ? 'Игроки не загрузились: ${widget.teamPlayersError}'
             : 'Игроки команды пока не загружены. Открой редактор из команды или проверь team_id.',
-        style: const TextStyle(color: _txtDim, fontSize: 10.8, height: 1.25, fontWeight: FontWeight.w600),
+        style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _txtDim, fontSize: AppTypography.captionSize, height: 1.25, fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -1150,7 +1158,7 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
                       ? Center(
                           child: Text(
                             number > 0 ? '$number' : _initials(name),
-                            style: const TextStyle(color: _green, fontSize: 12, fontWeight: FontWeight.w600),
+                            style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _green, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w600),
                           ),
                         )
                       : Image.network(
@@ -1159,7 +1167,7 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
                           errorBuilder: (_, __, ___) => Center(
                             child: Text(
                               number > 0 ? '$number' : _initials(name),
-                              style: const TextStyle(color: _green, fontSize: 12, fontWeight: FontWeight.w600),
+                              style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _green, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w600),
                             ),
                           ),
                         ),
@@ -1174,9 +1182,10 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
+                          fontFamily: AppTypography.fontFamily,
                           color: active ? _green : _txt,
                           fontWeight: FontWeight.w600,
-                          fontSize: 11.5,
+                          fontSize: AppTypography.secondarySize,
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -1185,9 +1194,10 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
+                          fontFamily: AppTypography.fontFamily,
                           color: _txtDim,
                           fontWeight: FontWeight.w600,
-                          fontSize: 10,
+                          fontSize: AppTypography.captionSize,
                         ),
                       ),
                     ],
@@ -1330,8 +1340,9 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
+                        fontFamily: AppTypography.fontFamily,
                         color: _txt,
-                        fontSize: 10.8,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -1341,8 +1352,9 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
+                        fontFamily: AppTypography.fontFamily,
                         color: _txtDim,
-                        fontSize: 9.5,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -1378,8 +1390,9 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
                 dropdownColor: Colors.white,
                 borderRadius: BorderRadius.circular(14),
                 style: const TextStyle(
+                  fontFamily: AppTypography.fontFamily,
                   color: _txt,
-                  fontSize: 11.2,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w600,
                 ),
                 items: List.generate(categories.length, (index) {
@@ -1412,8 +1425,9 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
             child: Text(
               '$count',
               style: const TextStyle(
+                fontFamily: AppTypography.fontFamily,
                 color: _green,
-                fontSize: 10.5,
+                fontSize: AppTypography.captionSize,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -1473,9 +1487,10 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
+                          fontFamily: AppTypography.fontFamily,
                           color: active ? _green : _txt,
                           fontWeight: FontWeight.w600,
-                          fontSize: 11.5,
+                          fontSize: AppTypography.secondarySize,
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -1484,9 +1499,10 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
+                          fontFamily: AppTypography.fontFamily,
                           color: _txtDim,
                           fontWeight: FontWeight.w600,
-                          fontSize: 10,
+                          fontSize: AppTypography.captionSize,
                         ),
                       ),
                     ],
@@ -1551,7 +1567,7 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
           Text(
             'В этой категории пока нет объектов',
             textAlign: TextAlign.center,
-            style: TextStyle(color: _txtDim, fontSize: 11.2, fontWeight: FontWeight.w600),
+            style: TextStyle(fontFamily: AppTypography.fontFamily, color: _txtDim, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -1572,7 +1588,7 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
           Expanded(
             child: Text(
               'Выберите элемент из списка вниз, затем нажмите на поле. Для ТВ-графики сначала выберите пресет.',
-              style: TextStyle(color: _txtDim, fontSize: 10, fontWeight: FontWeight.w600),
+              style: TextStyle(fontFamily: AppTypography.fontFamily, color: _txtDim, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -1659,8 +1675,9 @@ class _EditorPanelContent extends StatelessWidget {
                 child: Text(
                   'Режим «Объект»: перетаскивайте элемент, углы меняют размер, круглая верхняя ручка поворачивает. Двумя пальцами по объекту — масштаб и поворот; вне объекта — камера.',
                   style: TextStyle(
+                    fontFamily: AppTypography.fontFamily,
                     color: Color(0xFF4F5C54),
-                    fontSize: 10,
+                    fontSize: AppTypography.captionSize,
                     height: 1.35,
                     fontWeight: FontWeight.w600,
                   ),
@@ -1765,8 +1782,9 @@ class _EditorPanelContent extends StatelessWidget {
             dropdownColor: Colors.white,
             borderRadius: BorderRadius.circular(14),
             style: const TextStyle(
+              fontFamily: AppTypography.fontFamily,
               color: Color(0xFF111827),
-              fontSize: 11.2,
+              fontSize: AppTypography.secondarySize,
               fontWeight: FontWeight.w600,
             ),
             items: elements.reversed.map((element) {
@@ -1858,10 +1876,11 @@ class _EditorPanelContent extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
+                fontFamily: AppTypography.fontFamily,
                 color: isDestructive
                     ? const Color(0xFFEF4444)
                     : const Color(0xFF111827),
-                fontSize: 10.5,
+                fontSize: AppTypography.captionSize,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -1954,7 +1973,8 @@ class _ThreeDPanelContent extends StatelessWidget {
           child: Text(
             'Камера',
             style: TextStyle(
-              fontSize: 11.2,
+              fontFamily: AppTypography.fontFamily,
+              fontSize: AppTypography.secondarySize,
               fontWeight: FontWeight.w600,
               color: _txt,
             ),
@@ -2062,8 +2082,9 @@ class _ThreeDPanelContent extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
+                    fontFamily: AppTypography.fontFamily,
                     color: _txt,
-                    fontSize: 10.5,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -2098,7 +2119,8 @@ class _ThreeDPanelContent extends StatelessWidget {
               Text(
                 label,
                 style: const TextStyle(
-                  fontSize: 10.5,
+                  fontFamily: AppTypography.fontFamily,
+                  fontSize: AppTypography.captionSize,
                   fontWeight: FontWeight.w600,
                   color: _txt,
                 ),
@@ -2130,7 +2152,8 @@ class _ThreeDPanelContent extends StatelessWidget {
                           ? '${(value.abs() * 50).round()}°'
                           : '${(value * 30).round()}°',
                       style: TextStyle(
-                        fontSize: 9.6,
+                        fontFamily: AppTypography.fontFamily,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w600,
                         color: _green,
                       ),
@@ -2168,8 +2191,9 @@ class _ThreeDPanelContent extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
+                fontFamily: AppTypography.fontFamily,
                 color: _green,
-                fontSize: 11.2,
+                fontSize: AppTypography.secondarySize,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -2593,8 +2617,9 @@ class _StampEditor extends StatelessWidget {
             child: const Text(
               'SVG сохраняет оригинальные цвета',
               style: TextStyle(
+                fontFamily: AppTypography.fontFamily,
                 color: Color(0xFF6B7280),
-                fontSize: 10.5,
+                fontSize: AppTypography.captionSize,
                 fontWeight: FontWeight.w600,
               ),
               textAlign: TextAlign.center,
@@ -2781,8 +2806,9 @@ class _TextEditor extends StatelessWidget {
             decoration: InputDecoration(
               hintText: 'Введите текст',
               hintStyle: TextStyle(
+                fontFamily: AppTypography.fontFamily,
                 color: _txtDim.withOpacity(0.5),
-                fontSize: 11.2,
+                fontSize: AppTypography.secondarySize,
               ),
               filled: true,
               fillColor: Colors.white,
@@ -2794,8 +2820,9 @@ class _TextEditor extends StatelessWidget {
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             ),
             style: const TextStyle(
+              fontFamily: AppTypography.fontFamily,
               color: _txt,
-              fontSize: 12.5,
+              fontSize: AppTypography.bodySize,
               fontWeight: FontWeight.w500,
             ),
             maxLines: 3,
@@ -2959,8 +2986,9 @@ class _ZigzagEditor extends StatelessWidget {
                   child: Text(
                     "Перетаскивайте цветные точки на поле для изменения формы зигзага",
                     style: TextStyle(
+                      fontFamily: AppTypography.fontFamily,
                       color: _txt,
-                      fontSize: 10,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -3090,8 +3118,9 @@ class _WavyEditor extends StatelessWidget {
                   child: Text(
                     "Перетаскивайте цветные точки на поле для изменения формы волны",
                     style: TextStyle(
+                      fontFamily: AppTypography.fontFamily,
                       color: _txt,
-                      fontSize: 10,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -3303,8 +3332,9 @@ class _SpringEditor extends StatelessWidget {
                   child: Text(
                     "Перетаскивайте цветные точки на поле для изменения формы пружинки",
                     style: TextStyle(
+                      fontFamily: AppTypography.fontFamily,
                       color: _txt,
-                      fontSize: 10,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -3434,8 +3464,9 @@ class _SpiralEditor extends StatelessWidget {
                   child: Text(
                     "Перетаскивайте цветные точки на поле для изменения формы спирали",
                     style: TextStyle(
+                      fontFamily: AppTypography.fontFamily,
                       color: _txt,
-                      fontSize: 10,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -3713,8 +3744,9 @@ class _CurveEditor extends StatelessWidget {
                   child: Text(
                     "Перетаскивайте точки на поле для изменения формы кривой",
                     style: TextStyle(
+                      fontFamily: AppTypography.fontFamily,
                       color: txt,
-                      fontSize: 11.2,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -3916,11 +3948,12 @@ class _PropColorEditor extends StatelessWidget {
                 child: Text(
                   'Выбранный цвет',
                   style: TextStyle(
+                    fontFamily: AppTypography.fontFamily,
                     color: playerColors.jersey.computeLuminance() > 0.5
                         ? Colors.black
                         : Colors.white,
                     fontWeight: FontWeight.w600,
-                    fontSize: 11,
+                    fontSize: AppTypography.captionSize,
                   ),
                 ),
               ),
@@ -4082,7 +4115,7 @@ class _TemplatesPanelContent extends StatelessWidget {
           title: 'Как пользоваться',
           child: const Text(
             'Выберите шаблон, затем поставьте элемент на поле. После выбора элемента откройте «Свойства» или «Слои» для точной настройки.',
-            style: TextStyle(color: _muted, fontSize: 10.8, height: 1.35, fontWeight: FontWeight.w500),
+            style: TextStyle(fontFamily: AppTypography.fontFamily, color: _muted, fontSize: AppTypography.captionSize, height: 1.35, fontWeight: FontWeight.w500),
           ),
         ),
       ],
@@ -4126,9 +4159,9 @@ class _TemplatesPanelContent extends StatelessWidget {
                 child: Icon(t.icon, size: 17, color: _green),
               ),
               const SizedBox(height: 8),
-              Text(t.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _txt, fontSize: 11.2, fontWeight: FontWeight.w600)),
+              Text(t.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _txt, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w600)),
               const SizedBox(height: 3),
-              Text(t.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontSize: 9.6, height: 1.2, fontWeight: FontWeight.w600)),
+              Text(t.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _muted, fontSize: AppTypography.captionSize, height: 1.2, fontWeight: FontWeight.w600)),
             ],
           ),
         ),
@@ -4171,9 +4204,9 @@ class _TemplatesPanelContent extends StatelessWidget {
                 child: Icon(t.icon, size: 17, color: _green),
               ),
               const SizedBox(height: 8),
-              Text(t.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _txt, fontSize: 11.2, fontWeight: FontWeight.w600)),
+              Text(t.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _txt, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w600)),
               const SizedBox(height: 3),
-              Text(t.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontSize: 9.6, height: 1.2, fontWeight: FontWeight.w600)),
+              Text(t.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _muted, fontSize: AppTypography.captionSize, height: 1.2, fontWeight: FontWeight.w600)),
             ],
           ),
         ),
@@ -4201,9 +4234,9 @@ class _TemplatesPanelContent extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: const TextStyle(color: _txt, fontSize: 11.2, fontWeight: FontWeight.w600)),
+                    Text(title, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _txt, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 2),
-                    Text(subtitle, style: const TextStyle(color: _muted, fontSize: 10, height: 1.2, fontWeight: FontWeight.w500)),
+                    Text(subtitle, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _muted, fontSize: AppTypography.captionSize, height: 1.2, fontWeight: FontWeight.w500)),
                   ],
                 ),
               ),
@@ -4272,7 +4305,7 @@ class _LayersPanelContent extends StatelessWidget {
     if (elements.isEmpty) {
       return _Section(
         title: 'Слои схемы',
-        child: const Text('Пока нет объектов. Добавьте игроков, стрелки, зоны или подписи.', style: TextStyle(color: _muted, fontSize: 12)),
+        child: const Text('Пока нет объектов. Добавьте игроков, стрелки, зоны или подписи.', style: TextStyle(fontFamily: AppTypography.fontFamily, color: _muted, fontSize: AppTypography.secondarySize)),
       );
     }
 
@@ -4339,9 +4372,9 @@ class _LayersPanelContent extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(_elementTitle(e), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _txt, fontSize: 11.2, fontWeight: FontWeight.w600)),
+                      Text(_elementTitle(e), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _txt, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 2),
-                      Text(e.layer == 'default' ? 'основной слой' : e.layer, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontSize: 10.2, fontWeight: FontWeight.w600)),
+                      Text(e.layer == 'default' ? 'основной слой' : e.layer, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _muted, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ),
@@ -4412,13 +4445,13 @@ class _LayersPanelContent extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(color: _txt, fontSize: 10.8, fontWeight: FontWeight.w600)),
+                Text(title, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _txt, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 2),
-                Text(layer, style: const TextStyle(color: _muted, fontSize: 9.8, fontWeight: FontWeight.w600)),
+                Text(layer, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _muted, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w600)),
               ],
             ),
           ),
-          Text('$count', style: const TextStyle(color: _green, fontSize: 10.8, fontWeight: FontWeight.w600)),
+          Text('$count', style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _green, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w600)),
           const SizedBox(width: 6),
           _miniIcon(allHidden ? Icons.visibility_off : Icons.visibility, () => state.setLayerGroupHidden(layer, !allHidden)),
           _miniIcon(allLocked ? Icons.lock : Icons.lock_open, () => state.setLayerGroupLocked(layer, !allLocked)),
@@ -4486,7 +4519,7 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
           trailing: 'без тайминга',
           child: const Text(
             'Тайминг убран из основного редактора. Здесь настраивается сцена: поле, камера, глубина, 3D-объекты и формат для Unity/GLB.',
-            style: TextStyle(color: _muted, fontSize: 10.8, height: 1.35, fontWeight: FontWeight.w600),
+            style: TextStyle(fontFamily: AppTypography.fontFamily, color: _muted, fontSize: AppTypography.captionSize, height: 1.35, fontWeight: FontWeight.w600),
           ),
         ),
         const SizedBox(height: 12),
@@ -4538,14 +4571,14 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
         else
           _Section(
             title: 'Выбранный объект',
-            child: const Text('Выберите элемент на поле или в списке ниже, чтобы назначить ему 3D-слой и свойства.', style: TextStyle(color: _muted, fontSize: 10.8, height: 1.35, fontWeight: FontWeight.w600)),
+            child: const Text('Выберите элемент на поле или в списке ниже, чтобы назначить ему 3D-слой и свойства.', style: TextStyle(fontFamily: AppTypography.fontFamily, color: _muted, fontSize: AppTypography.captionSize, height: 1.35, fontWeight: FontWeight.w600)),
           ),
         const SizedBox(height: 12),
         _Section(
           title: 'Объекты на схеме',
           trailing: '${elements.length}',
           child: elements.isEmpty
-              ? const Text('Пока нет объектов. Добавьте игрока, стрелку, зону или подпись.', style: TextStyle(color: _muted, fontSize: 10.8, fontWeight: FontWeight.w600))
+              ? const Text('Пока нет объектов. Добавьте игрока, стрелку, зону или подпись.', style: TextStyle(fontFamily: AppTypography.fontFamily, color: _muted, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w600))
               : Column(children: elements.map((e) => _sceneObjectTile(e)).toList()),
         ),
       ],
@@ -4597,9 +4630,9 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: const TextStyle(color: _txt, fontSize: 11.2, fontWeight: FontWeight.w600)),
+                      Text(title, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _txt, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 2),
-                      Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontSize: 10, height: 1.2, fontWeight: FontWeight.w600)),
+                      Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _muted, fontSize: AppTypography.captionSize, height: 1.2, fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ),
@@ -4620,8 +4653,8 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
         children: [
           Icon(_elementIcon(e), size: 18, color: _green),
           const SizedBox(width: 8),
-          Expanded(child: Text(_elementTitle(e), style: const TextStyle(color: _txt, fontSize: 11.2, fontWeight: FontWeight.w600))),
-          Text(e.layer == '3d' ? '3D' : '2D', style: TextStyle(color: e.layer == '3d' ? _green : _muted, fontSize: 10.5, fontWeight: FontWeight.w600)),
+          Expanded(child: Text(_elementTitle(e), style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _txt, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w600))),
+          Text(e.layer == '3d' ? '3D' : '2D', style: TextStyle(fontFamily: AppTypography.fontFamily, color: e.layer == '3d' ? _green : _muted, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -4652,9 +4685,9 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(_elementTitle(e), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _txt, fontSize: 11.2, fontWeight: FontWeight.w600)),
+                      Text(_elementTitle(e), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _txt, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 2),
-                      Text(is3d ? '3D слой / экспортируемый объект' : '2D слой / схема', style: const TextStyle(color: _muted, fontSize: 10.2, fontWeight: FontWeight.w600)),
+                      Text(is3d ? '3D слой / экспортируемый объект' : '2D слой / схема', style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _muted, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ),
@@ -4668,7 +4701,7 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: is3d ? _green.withOpacity(.45) : _border),
                     ),
-                    child: Text(is3d ? '3D' : '+3D', style: TextStyle(color: is3d ? _green : _muted, fontSize: 10, fontWeight: FontWeight.w600)),
+                    child: Text(is3d ? '3D' : '+3D', style: TextStyle(fontFamily: AppTypography.fontFamily, color: is3d ? _green : _muted, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w600)),
                   ),
                 ),
               ],
@@ -4686,7 +4719,7 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
       label: Text(text),
       style: TextButton.styleFrom(
         foregroundColor: _green,
-        textStyle: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600),
+        textStyle: const TextStyle(fontFamily: AppTypography.fontFamily, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w600),
         padding: const EdgeInsets.symmetric(vertical: 10),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: _green.withOpacity(.28))),
       ),
@@ -4794,9 +4827,9 @@ class _ExportPanelContent extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(title, style: const TextStyle(color: _txt, fontSize: 11.2, fontWeight: FontWeight.w600)),
+                    Text(title, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _txt, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 2),
-                    Text(subtitle, style: const TextStyle(color: _muted, fontSize: 10, height: 1.2, fontWeight: FontWeight.w600)),
+                    Text(subtitle, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _muted, fontSize: AppTypography.captionSize, height: 1.2, fontWeight: FontWeight.w600)),
                   ]),
                 ),
                 const Icon(Icons.chevron_right, color: _muted, size: 18),
@@ -4813,9 +4846,9 @@ class _ExportPanelContent extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: _border)),
       child: Column(children: [
-        Text(value, style: const TextStyle(color: _txt, fontSize: 12, fontWeight: FontWeight.w600)),
+        Text(value, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _txt, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w600)),
         const SizedBox(height: 2),
-        Text(title, style: const TextStyle(color: _muted, fontSize: 9.5, fontWeight: FontWeight.w600)),
+        Text(title, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _muted, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w600)),
       ]),
     );
   }
@@ -4836,8 +4869,8 @@ class _QualityRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 7),
       child: Row(
         children: [
-          Expanded(child: Text(title, style: const TextStyle(color: Color(0xFF6B7280), fontSize: 10.5, fontWeight: FontWeight.w600))),
-          Text(value, style: const TextStyle(color: Color(0xFF111827), fontSize: 10.5, fontWeight: FontWeight.w600)),
+          Expanded(child: Text(title, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: Color(0xFF6B7280), fontSize: AppTypography.captionSize, fontWeight: FontWeight.w600))),
+          Text(value, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: Color(0xFF111827), fontSize: AppTypography.captionSize, fontWeight: FontWeight.w600)),
         ],
       ),
     );

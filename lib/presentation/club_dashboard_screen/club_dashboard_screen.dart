@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/core/subscription/premium_bottom_sheet.dart';
 import 'package:sportoteka/core/subscription/subscription_access.dart';
 import 'package:sportoteka/core/subscription/subscription_service.dart';
@@ -938,7 +939,7 @@ class _ClubDashboardScreenState extends State<ClubDashboardScreen>
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
+                    style: AppTypography.itemTitle(color: ClubDashboardPalette.text),
                   ),
                   const SizedBox(height: 8),
                   Wrap(
@@ -1125,14 +1126,11 @@ class _ClubDashboardScreenState extends State<ClubDashboardScreen>
                         borderRadius: BorderRadius.circular(3),
                       ),
                     ),
-                    const Align(
+                    Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
                         'Поиск тренера по email (role=coach)',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                        ),
+                        style: AppTypography.screenTitle(color: ClubDashboardPalette.text),
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -1360,14 +1358,11 @@ class _ClubDashboardScreenState extends State<ClubDashboardScreen>
                         borderRadius: BorderRadius.circular(3),
                       ),
                     ),
-                    const Align(
+                    Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
                         'Создать команду',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                        ),
+                        style: AppTypography.screenTitle(color: ClubDashboardPalette.text),
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -1425,14 +1420,9 @@ class _ClubDashboardScreenState extends State<ClubDashboardScreen>
                                 crossAxisAlignment:
                                     CrossAxisAlignment.start,
                                 children: [
-                                  const Text(
+                                  Text(
                                     'Тренер',
-                                    style: TextStyle(
-                                      color:
-                                          ClubDashboardPalette.textMuted,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 12,
-                                    ),
+                                    style: AppTypography.formLabel(color: ClubDashboardPalette.textMuted),
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
@@ -1751,10 +1741,7 @@ class _ClubDashboardScreenState extends State<ClubDashboardScreen>
                     children: [
                       Text(
                         title,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 16,
-                        ),
+                        style: AppTypography.sectionTitle(color: ClubDashboardPalette.text),
                       ),
                       const SizedBox(height: 10),
                       Wrap(
@@ -1799,16 +1786,13 @@ class _ClubDashboardScreenState extends State<ClubDashboardScreen>
                       ),
                     ),
                     const SizedBox(height: 14),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
                           'Настройка карточки команды',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                          ),
+                          style: AppTypography.screenTitle(color: ClubDashboardPalette.text),
                         ),
                       ),
                     ),
@@ -2088,12 +2072,7 @@ class _ClubDashboardScreenState extends State<ClubDashboardScreen>
                                       : clubDescriptionController.text.trim(),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: Colors.white.withOpacity(0.82),
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w500,
-                                    height: 1.25,
-                                  ),
+                                  style: AppTypography.secondary(color: Colors.white.withOpacity(0.82)),
                                 ),
                                 const SizedBox(height: 8),
                                 GestureDetector(
@@ -2115,13 +2094,9 @@ class _ClubDashboardScreenState extends State<ClubDashboardScreen>
                                         color: Colors.white.withOpacity(0.10),
                                       ),
                                     ),
-                                    child: const Text(
+                                    child: Text(
                                       'Удерживайте для редактирования',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 10.5,
-                                        fontWeight: FontWeight.w800,
-                                      ),
+                                      style: AppTypography.captionMedium(color: Colors.white),
                                     ),
                                   ),
                                 ),
@@ -2266,12 +2241,7 @@ class _ClubDashboardScreenState extends State<ClubDashboardScreen>
               children: [
                 Text(
                   title,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.82),
-                    fontWeight: FontWeight.w700,
-                    fontSize: 11,
-                    height: 1.0,
-                  ),
+                  style: AppTypography.captionMedium(color: Colors.white.withOpacity(0.82)),
                 ),
                 const SizedBox(height: 5),
                 Text(
@@ -2327,12 +2297,8 @@ class _ClubDashboardScreenState extends State<ClubDashboardScreen>
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: filled
-                      ? ClubDashboardPalette.primaryGreen
-                      : Colors.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 12.5,
+                style: AppTypography.actionStrong(
+                  color: filled ? ClubDashboardPalette.primaryGreen : Colors.white,
                 ),
               ),
             ),
@@ -2397,22 +2363,14 @@ class _ClubDashboardScreenState extends State<ClubDashboardScreen>
                   children: [
                     Text(
                       'Выбранная команда',
-                      style: TextStyle(
-                        color: ClubDashboardPalette.textMuted,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                      ),
+                      style: AppTypography.formLabel(color: ClubDashboardPalette.textMuted),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       selectedTeamName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 17,
-                        color: ClubDashboardPalette.text,
-                      ),
+                      style: AppTypography.screenTitle(color: ClubDashboardPalette.text),
                     ),
                   ],
                 ),
@@ -2770,23 +2728,14 @@ class _ClubDashboardScreenState extends State<ClubDashboardScreen>
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: ClubDashboardPalette.textMuted,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: AppTypography.captionMedium(color: ClubDashboardPalette.textMuted),
                 ),
                 const SizedBox(height: 5),
                 Text(
                   value,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: ClubDashboardPalette.text,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w900,
-                    height: 1.1,
-                  ),
+                  style: AppTypography.itemTitle(color: ClubDashboardPalette.text),
                 ),
               ],
             ),
@@ -2877,24 +2826,14 @@ class _ClubDashboardScreenState extends State<ClubDashboardScreen>
                       item['title'] as String,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 14,
-                        color: textColor,
-                        height: 1.1,
-                      ),
+                      style: AppTypography.itemTitle(color: textColor),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       item['subtitle'] as String,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        color: textColor.withOpacity(0.75),
-                        height: 1.2,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: AppTypography.secondaryMedium(color: textColor.withOpacity(0.75)),
                     ),
                   ],
                 ),
@@ -2912,13 +2851,9 @@ class _ClubDashboardScreenState extends State<ClubDashboardScreen>
                 color: Colors.black87,
                 borderRadius: BorderRadius.circular(999),
               ),
-              child: const Text(
+              child: Text(
                 'PRO',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                ),
+                style: AppTypography.badge(color: Colors.white),
               ),
             ),
           ),
@@ -3057,23 +2992,14 @@ class _ClubDashboardScreenState extends State<ClubDashboardScreen>
                       item['title'] as String,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: ClubDashboardPalette.text,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 13.5,
-                      ),
+                      style: AppTypography.itemTitle(color: ClubDashboardPalette.text),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       item['subtitle'] as String,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: ClubDashboardPalette.textMuted,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 11,
-                        height: 1.2,
-                      ),
+                      style: AppTypography.secondaryMedium(color: ClubDashboardPalette.textMuted),
                     ),
                   ],
                 ),
@@ -3152,12 +3078,7 @@ class _ClubDashboardScreenState extends State<ClubDashboardScreen>
               title,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 14,
-                color: ClubDashboardPalette.text,
-                height: 1.15,
-              ),
+              style: AppTypography.itemTitle(color: ClubDashboardPalette.text),
             ),
             const SizedBox(height: 8),
             if (date.isNotEmpty)
@@ -3296,24 +3217,14 @@ class _ClubDashboardScreenState extends State<ClubDashboardScreen>
                     fullName,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: ClubDashboardPalette.text,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 13.5,
-                      height: 1.15,
-                    ),
+                    style: AppTypography.itemTitle(color: ClubDashboardPalette.text),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     email.isEmpty ? 'Email не указан' : email,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: ClubDashboardPalette.textMuted,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 11,
-                      height: 1.2,
-                    ),
+                    style: AppTypography.secondaryMedium(color: ClubDashboardPalette.textMuted),
                   ),
                 ],
               ),
@@ -3338,11 +3249,7 @@ class _ClubDashboardScreenState extends State<ClubDashboardScreen>
             text,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: ClubDashboardPalette.textMuted,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-            ),
+            style: AppTypography.secondaryMedium(color: ClubDashboardPalette.textMuted),
           ),
         ),
       ],
@@ -3357,13 +3264,9 @@ class _ClubDashboardScreenState extends State<ClubDashboardScreen>
         elevation: 0,
         backgroundColor: ClubDashboardPalette.white,
         surfaceTintColor: Colors.transparent,
-        title: const Text(
+        title: Text(
           'Панель клуба',
-          style: TextStyle(
-            fontWeight: FontWeight.w900,
-            color: ClubDashboardPalette.text,
-            fontSize: 16,
-          ),
+          style: AppTypography.screenTitle(color: ClubDashboardPalette.text),
         ),
         iconTheme: const IconThemeData(color: Colors.black87),
        actions: [
@@ -3544,11 +3447,7 @@ class _ClubModuleScreenState extends State<ClubModuleScreen>
         surfaceTintColor: Colors.transparent,
         title: Text(
           _title(),
-          style: const TextStyle(
-            fontWeight: FontWeight.w900,
-            color: ClubDashboardPalette.text,
-            fontSize: 16,
-          ),
+          style: AppTypography.screenTitle(color: ClubDashboardPalette.text),
         ),
         iconTheme: const IconThemeData(color: Colors.black87),
         actions: [
@@ -3642,18 +3541,12 @@ class _ClubModuleBody extends StatelessWidget {
               children: [
                 Text(
                   _titleForType(type),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 15,
-                  ),
+                  style: AppTypography.sectionTitle(color: ClubDashboardPalette.text),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Команд: ${teams.length} • Тренеров: ${trainers.length} • Событий: ${events.length}',
-                  style: const TextStyle(
-                    color: ClubDashboardPalette.textMuted,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: AppTypography.secondaryMedium(color: ClubDashboardPalette.textMuted),
                 ),
               ],
             ),
@@ -3751,10 +3644,7 @@ class _ClubModuleBody extends StatelessWidget {
             children: [
               Text(
                 clubName.isEmpty ? 'Клуб' : clubName,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 16,
-                ),
+                style: AppTypography.sectionTitle(color: ClubDashboardPalette.text),
               ),
               const SizedBox(height: 6),
               if (desc.isNotEmpty)
@@ -3782,7 +3672,7 @@ class _ClubModuleBody extends StatelessWidget {
                     Expanded(
                       child: Text(
                         address,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
+                        style: AppTypography.bodyMedium(color: ClubDashboardPalette.text),
                       ),
                     ),
                   ],
@@ -3796,15 +3686,15 @@ class _ClubModuleBody extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Состав клуба (команды)',
-                style: TextStyle(fontWeight: FontWeight.w900),
+                style: AppTypography.sectionTitle(color: ClubDashboardPalette.text),
               ),
               const SizedBox(height: 10),
               if (teams.isEmpty)
-                const Text(
+                Text(
                   'Команд нет.',
-                  style: TextStyle(color: ClubDashboardPalette.textMuted),
+                  style: AppTypography.secondary(color: ClubDashboardPalette.textMuted),
                 )
               else
                 ...teams.take(20).map((e) {
@@ -3853,15 +3743,15 @@ class _ClubModuleBody extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Тренеры',
-            style: TextStyle(fontWeight: FontWeight.w900),
+            style: AppTypography.sectionTitle(color: ClubDashboardPalette.text),
           ),
           const SizedBox(height: 10),
           if (trainers.isEmpty)
-            const Text(
+            Text(
               'Тренеры не найдены.',
-              style: TextStyle(color: ClubDashboardPalette.textMuted),
+              style: AppTypography.secondary(color: ClubDashboardPalette.textMuted),
             )
           else
             ...trainers.map((e) {
@@ -3881,7 +3771,7 @@ class _ClubModuleBody extends StatelessWidget {
                 ),
                 title: Text(
                   name.isEmpty ? 'Тренер' : name,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
+                  style: AppTypography.itemTitle(color: ClubDashboardPalette.text),
                 ),
                 subtitle: email.isEmpty ? null : Text(email),
               );
@@ -3896,15 +3786,15 @@ class _ClubModuleBody extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'События всех команд',
-            style: TextStyle(fontWeight: FontWeight.w900),
+            style: AppTypography.sectionTitle(color: ClubDashboardPalette.text),
           ),
           const SizedBox(height: 10),
           if (events.isEmpty)
-            const Text(
+            Text(
               'Событий нет.',
-              style: TextStyle(color: ClubDashboardPalette.textMuted),
+              style: AppTypography.secondary(color: ClubDashboardPalette.textMuted),
             )
           else
             ...events.take(30).map((e) {
@@ -3965,14 +3855,11 @@ class _ClubModuleBody extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+          Text(title, style: AppTypography.sectionTitle(color: ClubDashboardPalette.text)),
           const SizedBox(height: 10),
           Text(
             text,
-            style: const TextStyle(
-              color: ClubDashboardPalette.text,
-              height: 1.25,
-            ),
+            style: AppTypography.body(color: ClubDashboardPalette.text),
           ),
         ],
       ),
@@ -4018,7 +3905,7 @@ class _ErrorView extends StatelessWidget {
             Text(
               text,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontWeight: FontWeight.w700),
+              style: AppTypography.bodyMedium(color: ClubDashboardPalette.text),
             ),
             const SizedBox(height: 12),
             ElevatedButton(
@@ -4079,11 +3966,7 @@ class _SectionTitle extends StatelessWidget {
         Expanded(
           child: Text(
             title,
-            style: const TextStyle(
-              fontWeight: FontWeight.w900,
-              fontSize: 16,
-              color: ClubDashboardPalette.text,
-            ),
+            style: AppTypography.sectionTitle(color: ClubDashboardPalette.text),
           ),
         ),
         if (right != null)
@@ -4211,11 +4094,7 @@ class _TeamTile extends StatelessWidget {
                   children: [
                     Text(
                       name.isEmpty ? 'Команда #$id' : name,
-                      style: TextStyle(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w800,
-                        color: textColor,
-                      ),
+                      style: AppTypography.itemTitle(color: textColor),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -4223,10 +4102,7 @@ class _TeamTile extends StatelessWidget {
                         if (cat.isNotEmpty) cat,
                         if (city.isNotEmpty) city,
                       ].join(' • '),
-                      style: TextStyle(
-                        color: subTextColor,
-                        fontSize: 12,
-                      ),
+                      style: AppTypography.secondary(color: subTextColor),
                     ),
                   ],
                 ),

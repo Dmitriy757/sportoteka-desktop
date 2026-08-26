@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 
 import '../models/action_tracker_protocol.dart';
 import '../models/tracker_pro_models.dart';
@@ -657,20 +658,20 @@ class _TrackerReadinessPanelState extends State<TrackerReadinessPanel> {
                     Text('Состав по приоритету',
                         style: TextStyle(
                             color: _ReadinessColors.text,
-                            fontSize: 12.2,
+                            fontSize: AppTypography.bodySize,
                             fontWeight: FontWeight.w900)),
                     SizedBox(height: 2),
                     Text('сначала игроки, которым нужно внимание',
                         style: TextStyle(
                             color: _ReadinessColors.muted,
-                            fontSize: 9.4,
+                            fontSize: AppTypography.menuGroupSize,
                             fontWeight: FontWeight.w500)),
                   ]),
             ),
             Text('${visible.length} из ${rows.length}',
                 style: const TextStyle(
                     color: _ReadinessColors.muted,
-                    fontSize: 9.4,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w700)),
           ]),
           const SizedBox(height: 9),
@@ -726,7 +727,7 @@ class _TrackerReadinessPanelState extends State<TrackerReadinessPanel> {
         Text(widget.personalMode ? 'Игрок' : 'Состав',
             style: const TextStyle(
                 color: _ReadinessColors.muted,
-                fontSize: 10.5,
+                fontSize: AppTypography.captionSize,
                 fontWeight: FontWeight.w700)),
         const SizedBox(width: 9),
         Expanded(
@@ -771,7 +772,7 @@ class _TrackerReadinessPanelState extends State<TrackerReadinessPanel> {
                               color: _showTeamOverview
                                   ? _ReadinessColors.greenDark
                                   : _ReadinessColors.text,
-                              fontSize: 10.5,
+                              fontSize: AppTypography.captionSize,
                               fontWeight: _showTeamOverview
                                   ? FontWeight.w800
                                   : FontWeight.w600)),
@@ -807,7 +808,7 @@ class _TrackerReadinessPanelState extends State<TrackerReadinessPanel> {
                         color: selected
                             ? _ReadinessColors.greenDark
                             : _ReadinessColors.text,
-                        fontSize: 10.5,
+                        fontSize: AppTypography.captionSize,
                         fontWeight:
                             selected ? FontWeight.w800 : FontWeight.w600,
                       ),
@@ -866,7 +867,7 @@ class _TrackerReadinessPanelState extends State<TrackerReadinessPanel> {
             const Text('из 100',
                 style: TextStyle(
                     color: _ReadinessColors.muted,
-                    fontSize: 8.5,
+                    fontSize: AppTypography.badgeSize,
                     fontWeight: FontWeight.w600)),
           ]),
         );
@@ -878,7 +879,7 @@ class _TrackerReadinessPanelState extends State<TrackerReadinessPanel> {
                   readiness.label,
                   style: const TextStyle(
                     color: _ReadinessColors.text,
-                    fontSize: 17,
+                    fontSize: AppTypography.screenTitleSize,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -892,7 +893,7 @@ class _TrackerReadinessPanelState extends State<TrackerReadinessPanel> {
               '${player.name} · расчёт на ${_displayDate(_referenceDate)}',
               style: const TextStyle(
                   color: _ReadinessColors.muted,
-                  fontSize: 10.6,
+                  fontSize: AppTypography.captionSize,
                   fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 9),
@@ -929,7 +930,7 @@ class _TrackerReadinessPanelState extends State<TrackerReadinessPanel> {
                     child: Text(message,
                         style: const TextStyle(
                             color: _ReadinessColors.text,
-                            fontSize: 10.4,
+                            fontSize: AppTypography.captionSize,
                             height: 1.25,
                             fontWeight: FontWeight.w600)),
                   ),
@@ -1017,7 +1018,7 @@ class _TrackerReadinessPanelState extends State<TrackerReadinessPanel> {
           'Тенденция нагрузки — тренерский сигнал, а не медицинский прогноз травмы.',
           style: TextStyle(
               color: _ReadinessColors.muted,
-              fontSize: 9.3,
+              fontSize: AppTypography.menuGroupSize,
               height: 1.25,
               fontWeight: FontWeight.w500),
         ),
@@ -1043,7 +1044,7 @@ class _TrackerReadinessPanelState extends State<TrackerReadinessPanel> {
                 'Окно ищется скользящим расчётом по реальным GPS-сегментам; разрывы более 15 секунд не склеиваются.',
                 style: TextStyle(
                     color: _ReadinessColors.muted,
-                    fontSize: 9.3,
+                    fontSize: AppTypography.menuGroupSize,
                     height: 1.25,
                     fontWeight: FontWeight.w500),
               ),
@@ -1113,7 +1114,7 @@ class _TrackerReadinessPanelState extends State<TrackerReadinessPanel> {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _ReadinessColors.text,
-                          fontSize: 9.8,
+                          fontSize: AppTypography.captionSize,
                           height: 1.3,
                           fontWeight: FontWeight.w600)),
                 ),
@@ -1200,7 +1201,7 @@ class _TrackerReadinessPanelState extends State<TrackerReadinessPanel> {
         ),
         style: const TextStyle(
             color: _ReadinessColors.text,
-            fontSize: 10.3,
+            fontSize: AppTypography.captionSize,
             fontWeight: FontWeight.w600),
       ),
       const SizedBox(height: 8),
@@ -1257,7 +1258,7 @@ class _TrackerReadinessPanelState extends State<TrackerReadinessPanel> {
                       .join('\n'),
                   style: const TextStyle(
                       color: _ReadinessColors.muted,
-                      fontSize: 9.2,
+                      fontSize: AppTypography.menuGroupSize,
                       height: 1.35,
                       fontWeight: FontWeight.w500),
                 ),
@@ -1320,7 +1321,7 @@ class _TrackerReadinessPanelState extends State<TrackerReadinessPanel> {
                 'После сохранения пороги сразу применяются к карте, графику скорости и пиковым отрезкам в текущей аналитике.',
                 style: TextStyle(
                     color: _ReadinessColors.muted,
-                    fontSize: 9.3,
+                    fontSize: AppTypography.menuGroupSize,
                     height: 1.25,
                     fontWeight: FontWeight.w500),
               ),
@@ -1472,7 +1473,7 @@ class _TeamReadinessHeader extends StatelessWidget {
             Text(label,
                 style: const TextStyle(
                     color: _ReadinessColors.muted,
-                    fontSize: 8.8,
+                    fontSize: AppTypography.badgeSize,
                     fontWeight: FontWeight.w600)),
             const SizedBox(height: 2),
             Row(mainAxisSize: MainAxisSize.min, children: [
@@ -1485,7 +1486,7 @@ class _TeamReadinessHeader extends StatelessWidget {
               Text(value,
                   style: const TextStyle(
                       color: _ReadinessColors.text,
-                      fontSize: 13.5,
+                      fontSize: AppTypography.itemTitleSize,
                       fontWeight: FontWeight.w900)),
             ]),
           ]),
@@ -1515,7 +1516,7 @@ class _TeamReadinessHeader extends StatelessWidget {
               const Text('Командный центр готовности',
                   style: TextStyle(
                       color: _ReadinessColors.text,
-                      fontSize: 16,
+                      fontSize: AppTypography.screenTitleSize,
                       fontWeight: FontWeight.w900)),
               const SizedBox(height: 2),
               Text('$teamName · ${_displayDate(referenceDate)}',
@@ -1523,7 +1524,7 @@ class _TeamReadinessHeader extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _ReadinessColors.muted,
-                      fontSize: 10.2,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w600)),
             ]),
           ),
@@ -1534,7 +1535,7 @@ class _TeamReadinessHeader extends StatelessWidget {
             child: Text('$average/100',
                 style: TextStyle(
                     color: averageColor,
-                    fontSize: 14,
+                    fontSize: AppTypography.sectionTitleSize,
                     fontWeight: FontWeight.w900)),
           ),
         ]),
@@ -1580,7 +1581,7 @@ class _TeamReadinessPlayerRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                     color: color ?? _ReadinessColors.text,
-                    fontSize: 9.4,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w800)),
           ]),
         );
@@ -1612,7 +1613,7 @@ class _TeamReadinessPlayerRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _ReadinessColors.text,
-                      fontSize: 11.2,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w900)),
               const SizedBox(height: 2),
               Text(
@@ -1625,7 +1626,7 @@ class _TeamReadinessPlayerRow extends StatelessWidget {
                     color: data.checkin.hasEntry
                         ? scoreColor
                         : _ReadinessColors.muted,
-                    fontSize: 8.8,
+                    fontSize: AppTypography.badgeSize,
                     fontWeight: FontWeight.w600),
               ),
             ]),
@@ -1641,7 +1642,7 @@ class _TeamReadinessPlayerRow extends StatelessWidget {
             child: Text('$score',
                 style: TextStyle(
                     color: scoreColor,
-                    fontSize: 13.5,
+                    fontSize: AppTypography.itemTitleSize,
                     fontWeight: FontWeight.w900)),
           ),
         ]);
@@ -2184,14 +2185,14 @@ class _ReadinessCard extends StatelessWidget {
                 Text(title,
                     style: const TextStyle(
                         color: _ReadinessColors.text,
-                        fontSize: 11.7,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w800)),
                 Text(subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _ReadinessColors.muted,
-                        fontSize: 9.3,
+                        fontSize: AppTypography.menuGroupSize,
                         fontWeight: FontWeight.w500)),
               ]),
             ),
@@ -2225,14 +2226,14 @@ class _ReadinessBigMetric extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: _ReadinessColors.muted,
-                  fontSize: 8.8,
+                  fontSize: AppTypography.badgeSize,
                   fontWeight: FontWeight.w600)),
           const SizedBox(height: 2),
           Text(value,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                  color: color, fontSize: 14.2, fontWeight: FontWeight.w900)),
+                  color: color, fontSize: AppTypography.sectionTitleSize, fontWeight: FontWeight.w900)),
           Text(note,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -2254,13 +2255,13 @@ class _ReadinessInfoLine extends StatelessWidget {
             child: Text(label,
                 style: const TextStyle(
                     color: _ReadinessColors.muted,
-                    fontSize: 9.3,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w600))),
         const SizedBox(width: 5),
         Text(value,
             style: const TextStyle(
                 color: _ReadinessColors.text,
-                fontSize: 9.6,
+                fontSize: AppTypography.menuGroupSize,
                 fontWeight: FontWeight.w800)),
       ]);
 }
@@ -2277,7 +2278,7 @@ class _ReadinessMetricPill extends StatelessWidget {
         child: Text('$label · $value',
             style: const TextStyle(
                 color: _ReadinessColors.text,
-                fontSize: 9.2,
+                fontSize: AppTypography.menuGroupSize,
                 fontWeight: FontWeight.w700)),
       );
 }
@@ -2355,7 +2356,7 @@ class _ReadinessStatusPill extends StatelessWidget {
             color: Colors.white, borderRadius: BorderRadius.circular(9)),
         child: Text(text,
             style: TextStyle(
-                color: color, fontSize: 8.7, fontWeight: FontWeight.w700)),
+                color: color, fontSize: AppTypography.badgeSize, fontWeight: FontWeight.w700)),
       );
 }
 
@@ -2377,7 +2378,7 @@ class _ReadinessNotice extends StatelessWidget {
                 color: warning
                     ? const Color(0xFF8A5600)
                     : _ReadinessColors.muted,
-                fontSize: 9.4,
+                fontSize: AppTypography.menuGroupSize,
                 height: 1.28,
                 fontWeight: FontWeight.w600)),
       );
@@ -2393,7 +2394,7 @@ class _ReadinessSmallEmpty extends StatelessWidget {
             textAlign: TextAlign.center,
             style: const TextStyle(
                 color: _ReadinessColors.muted,
-                fontSize: 9.8,
+                fontSize: AppTypography.captionSize,
                 height: 1.35,
                 fontWeight: FontWeight.w600)),
       );
@@ -2415,14 +2416,14 @@ class _ReadinessEmpty extends StatelessWidget {
             Text(title,
                 style: const TextStyle(
                     color: _ReadinessColors.text,
-                    fontSize: 15,
+                    fontSize: AppTypography.sectionTitleSize,
                     fontWeight: FontWeight.w900)),
             const SizedBox(height: 5),
             Text(message,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                     color: _ReadinessColors.muted,
-                    fontSize: 10.5,
+                    fontSize: AppTypography.captionSize,
                     height: 1.35,
                     fontWeight: FontWeight.w600)),
           ]),
@@ -2499,7 +2500,7 @@ class _PeakWindowRow extends StatelessWidget {
             child: Text('${metric.minutes} мин',
                 style: const TextStyle(
                     color: _ReadinessColors.greenDark,
-                    fontSize: 9,
+                    fontSize: AppTypography.badgeSize,
                     fontWeight: FontWeight.w900)),
           ),
           const SizedBox(width: 8),
@@ -2511,7 +2512,7 @@ class _PeakWindowRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _ReadinessColors.text,
-                      fontSize: 9.5,
+                      fontSize: AppTypography.menuGroupSize,
                       fontWeight: FontWeight.w800)),
               const SizedBox(height: 2),
               Text(
@@ -2551,13 +2552,13 @@ class _MatchComparisonRow extends StatelessWidget {
               child: Text(item.label,
                   style: const TextStyle(
                       color: _ReadinessColors.text,
-                      fontSize: 9.4,
+                      fontSize: AppTypography.menuGroupSize,
                       fontWeight: FontWeight.w700))),
           Text(
               '${item.current.toStringAsFixed(item.unit == 'шт.' ? 0 : 1)} / ${item.baseline.toStringAsFixed(item.unit == 'шт.' ? 0 : 1)} ${item.unit}',
               style: const TextStyle(
                   color: _ReadinessColors.muted,
-                  fontSize: 8.6,
+                  fontSize: AppTypography.badgeSize,
                   fontWeight: FontWeight.w600)),
           const SizedBox(width: 7),
           SizedBox(
@@ -2565,7 +2566,7 @@ class _MatchComparisonRow extends StatelessWidget {
             child: Text(percent == null ? '—' : '${percent.round()}%',
                 textAlign: TextAlign.right,
                 style: TextStyle(
-                    color: color, fontSize: 9.3, fontWeight: FontWeight.w900)),
+                    color: color, fontSize: AppTypography.menuGroupSize, fontWeight: FontWeight.w900)),
           ),
         ]),
         const SizedBox(height: 5),
@@ -2609,14 +2610,14 @@ class _ReadinessSlider extends StatelessWidget {
               child: Text(label,
                   style: const TextStyle(
                       color: _ReadinessColors.text,
-                      fontSize: 9.6,
+                      fontSize: AppTypography.menuGroupSize,
                       fontWeight: FontWeight.w700))),
           Text(valueLabel,
               style: TextStyle(
                   color: danger
                       ? _ReadinessColors.red
                       : _ReadinessColors.greenDark,
-                  fontSize: 9.3,
+                  fontSize: AppTypography.menuGroupSize,
                   fontWeight: FontWeight.w900)),
         ]),
         SizedBox(
@@ -2665,7 +2666,7 @@ class _ScaleEditor extends StatelessWidget {
               child: Text(label,
                   style: const TextStyle(
                       color: _ReadinessColors.text,
-                      fontSize: 9.6,
+                      fontSize: AppTypography.menuGroupSize,
                       fontWeight: FontWeight.w700))),
           for (var i = 1; i <= 5; i++) ...[
             _ReadinessTap(
@@ -2689,7 +2690,7 @@ class _ScaleEditor extends StatelessWidget {
                         color: i == value
                             ? _ReadinessColors.text
                             : _ReadinessColors.muted,
-                        fontSize: 9.2,
+                        fontSize: AppTypography.menuGroupSize,
                         fontWeight:
                             i == value ? FontWeight.w900 : FontWeight.w600)),
               ),
@@ -2721,7 +2722,7 @@ class _ModeChip extends StatelessWidget {
                   color: selected
                       ? _ReadinessColors.greenDark
                       : _ReadinessColors.muted,
-                  fontSize: 9.1,
+                  fontSize: AppTypography.badgeSize,
                   fontWeight: selected ? FontWeight.w800 : FontWeight.w600)),
         ),
       );
@@ -2745,7 +2746,7 @@ class _ReadinessTextButton extends StatelessWidget {
             child: Text(label,
                 style: const TextStyle(
                     color: _ReadinessColors.greenDark,
-                    fontSize: 9,
+                    fontSize: AppTypography.badgeSize,
                     fontWeight: FontWeight.w800)),
           ),
         ),
@@ -2771,7 +2772,7 @@ class _ReadinessPrimaryButton extends StatelessWidget {
             child: Text(label,
                 style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 9.6,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w800)),
           ),
         ),

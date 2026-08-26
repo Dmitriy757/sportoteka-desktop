@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/core/theme/app_typography.dart';
+import 'package:sportoteka/presentation/my_profile_screen/my_profile_screen.dart';
 import 'package:sportoteka/presentation/community_screen/app_video_player_screen.dart';
 import 'package:sportoteka/presentation/community_screen/create_post_editor_screen.dart';
 import 'package:sportoteka/presentation/community_screen/in_app_web_video_screen.dart';
@@ -77,6 +78,11 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
 
   int _currentUserId = 0;
 
+  // Avatar cache for comment authors. get_comments_tree.php may not always
+  // return the user photo, so missing avatars are hydrated via get_user.php.
+  final Map<int, String> _commentAvatarByUserId = <int, String>{};
+  final Set<int> _commentAvatarLoading = <int>{};
+
   final TextEditingController _commentController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _commentFocus = FocusNode();
@@ -133,6 +139,17 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t)));
   }
 
+  void _openUserProfile(int userId) {
+    if (userId <= 0 || !mounted) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MyProfileScreen(userId: userId),
+      ),
+    );
+  }
+
   int _asInt(dynamic v) =>
       v is int ? v : int.tryParse((v ?? "").toString()) ?? 0;
 
@@ -167,6 +184,118 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
   String _safeInitial(Map<String, dynamic> c) {
     final name = _safeName(c);
     return name.isNotEmpty ? name.characters.first.toUpperCase() : 'П';
+  }
+
+  String _normalizeAvatarUrl(dynamic raw) {
+    if (raw == null) return '';
+    var s = raw.toString().trim();
+    if (s.isEmpty || s.toLowerCase() == 'null') return '';
+
+    if (s.startsWith('http://') || s.startsWith('https://')) return s;
+    if (s.startsWith('//')) return 'https:$s';
+    if (s.startsWith('sportotekaapp.ru/')) return 'https://$s';
+    if (s.startsWith('www.sportotekaapp.ru/')) return 'https://$s';
+    if (s.startsWith('/')) return 'https://sportotekaapp.ru$s';
+    if (s.startsWith('uploads/')) return 'https://sportotekaapp.ru/$s';
+    if (s.startsWith('api/uploads/')) return 'https://sportotekaapp.ru/$s';
+
+    // User photos in Sportoteka are normally stored in /uploads.
+    return 'https://sportotekaapp.ru/uploads/$s';
+  }
+
+  String _safeAvatar(Map<String, dynamic> c) {
+    const keys = <String>[
+      'photo_url',
+      'photo_urls',
+      'photo',
+      'avatar_url',
+      'avatar',
+      'profile_photo_url',
+      'profile_photo',
+      'user_photo_url',
+      'user_photo',
+    ];
+
+    for (final key in keys) {
+      final u = _normalizeAvatarUrl(c[key]);
+      if (u.isNotEmpty) return u;
+    }
+
+    for (final nestedKey in const ['user', 'author', 'profile']) {
+      final nested = c[nestedKey];
+      if (nested is Map) {
+        final m = Map<String, dynamic>.from(nested);
+        for (final key in keys) {
+          final u = _normalizeAvatarUrl(m[key]);
+          if (u.isNotEmpty) return u;
+        }
+      }
+    }
+
+    final uid = _asInt(c['user_id'] ?? c['author_id']);
+    return uid > 0 ? (_commentAvatarByUserId[uid] ?? '') : '';
+  }
+
+  Future<void> _hydrateCommentAvatars() async {
+    final ids = _flatComments
+        .map((c) => _asInt(c['user_id'] ?? c['author_id']))
+        .where((id) => id > 0)
+        .toSet();
+
+    for (final id in ids) {
+      if ((_commentAvatarByUserId[id] ?? '').isNotEmpty) continue;
+      if (_commentAvatarLoading.contains(id)) continue;
+
+      Map<String, dynamic>? row;
+      for (final c in _flatComments) {
+        if (_asInt(c['user_id'] ?? c['author_id']) == id) {
+          row = c;
+          break;
+        }
+      }
+      if (row != null) {
+        final directAvatar = _safeAvatar(row);
+        if (directAvatar.isNotEmpty) {
+          _commentAvatarByUserId[id] = directAvatar;
+          continue;
+        }
+      }
+
+      _commentAvatarLoading.add(id);
+      try {
+        final r = await http.get(
+          Uri.parse('$_apiBase/get_user.php?user_id=$id'),
+        );
+        if (r.statusCode != 200) continue;
+
+        final decoded = json.decode(utf8.decode(r.bodyBytes));
+        Map<String, dynamic> root = <String, dynamic>{};
+        if (decoded is Map) root = Map<String, dynamic>.from(decoded);
+
+        Map<String, dynamic> user = root;
+        if (root['user'] is Map) {
+          user = Map<String, dynamic>.from(root['user'] as Map);
+        }
+
+        final avatar = _normalizeAvatarUrl(
+          user['photo_url'] ??
+              user['photo_urls'] ??
+              user['photo'] ??
+              user['avatar_url'] ??
+              user['avatar'] ??
+              user['profile_photo'],
+        );
+
+        if (avatar.isNotEmpty) {
+          _commentAvatarByUserId[id] = avatar;
+          if (mounted) setState(() {});
+        }
+      } catch (_) {
+        // Keep the initial fallback when a profile photo cannot be loaded.
+      } finally {
+        _commentAvatarLoading.remove(id);
+      }
+    }
   }
 
   String _formatDateTime(dynamic v) {
@@ -489,7 +618,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-            child: const Text("Удалить", style: TextStyle(color: Colors.white)),
+            child: Text("Удалить", style: AppTypography.actionStrong(color: Colors.white)),
           ),
         ],
       ),
@@ -564,6 +693,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
       _tree = _buildTree(_flatComments, sort: _sort);
 
       if (mounted) setState(() {});
+      _hydrateCommentAvatars();
     } catch (e) {
       _snack("Ошибка загрузки: $e");
     } finally {
@@ -777,17 +907,40 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
       }
 
       final streamed = await req.send();
-      final body = await streamed.stream.bytesToString();
+      final response = await http.Response.fromStream(streamed);
+      final body = utf8.decode(response.bodyBytes, allowMalformed: true).trim();
 
-      if (streamed.statusCode != 200) {
-        _snack("Ошибка отправки: HTTP ${streamed.statusCode}");
+      debugPrint(
+        'ADD COMMENT -> HTTP ${response.statusCode} | '
+        'post_id=${widget.newsId} user_id=$_currentUserId '
+        'parent_id=${_replyToCommentId ?? 0} | body=$body',
+      );
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final serverText = body.isEmpty
+            ? 'Сервер вернул пустой ответ'
+            : body.length > 700
+                ? '${body.substring(0, 700)}…'
+                : body;
+        _snack(
+          'Ошибка отправки: HTTP ${response.statusCode}\n$serverText',
+        );
         return;
       }
 
-      final j = json.decode(body);
+      dynamic j;
+      try {
+        j = json.decode(body);
+      } catch (_) {
+        _snack(
+          'Сервер вернул не JSON: ${body.isEmpty ? "пустой ответ" : body}',
+        );
+        return;
+      }
+
       if (j is! Map || j["success"] != true || j["comment"] is! Map) {
         _snack(
-          "Ошибка отправки: ${(j is Map ? (j["message"] ?? "Ошибка") : "Ошибка")}",
+          "Ошибка отправки: ${(j is Map ? (j["message"] ?? j["error"] ?? "Ошибка") : "Ошибка")}",
         );
         return;
       }
@@ -799,6 +952,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
       _tree = _buildTree(_flatComments, sort: _sort);
 
       if (mounted) setState(() {});
+      _hydrateCommentAvatars();
       _clearComposer();
       FocusScope.of(context).unfocus();
     } catch (e) {
@@ -824,7 +978,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-            child: const Text("Удалить", style: TextStyle(color: Colors.white)),
+            child: Text("Удалить", style: AppTypography.actionStrong(color: Colors.white)),
           ),
         ],
       ),
@@ -958,10 +1112,9 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                       ),
           child: Text(
             label,
-            style: TextStyle(
+            style: AppTypography.chip(
               color: selected ? Colors.white : NewsPalette.textMuted,
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
+              active: selected,
             ),
           ),
         ),
@@ -992,12 +1145,11 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
   Widget _postBlocksView() {
     final blocks = _postBlocks();
     if (blocks.isEmpty) {
-      return const Text(
+      return Text(
         "Нет текста",
-        style: TextStyle(
+        style: AppTypography.emptyText(
           color: NewsPalette.textMuted,
-          fontWeight: FontWeight.w600,
-        ),
+        ).copyWith(fontWeight: FontWeight.w600),
       );
     }
 
@@ -1010,13 +1162,9 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
         children.add(
           Text(
             b.text,
-            style: AppTypography.custom(
-              size: 13.2,
-              weight: FontWeight.w400,
+            style: AppTypography.body(
               color: NewsPalette.text,
-              height: 1.42,
-              letterSpacing: 0,
-            ),
+            ).copyWith(height: 1.42),
           ),
         );
         children.add(const SizedBox(height: 12));
@@ -1097,9 +1245,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                       children: [
                         Text(
                           b.title.trim().isEmpty ? "Ссылка" : b.title,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14.5,
+                          style: AppTypography.sectionTitle(
                             color: NewsPalette.text,
                           ),
                         ),
@@ -1108,12 +1254,9 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                           b.url,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: AppTypography.secondaryMedium(
                             color: Colors.blue,
-                            decoration: TextDecoration.underline,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
+                          ).copyWith(decoration: TextDecoration.underline),
                         ),
                       ],
                     ),
@@ -1156,23 +1299,17 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
   }
 
   TextStyle _cmrTitle(double size, {Color color = NewsPalette.text}) {
-    return AppTypography.custom(
-      size: size,
-      weight: FontWeight.w600,
-      color: color,
-      height: 1.18,
-      letterSpacing: 0,
-    );
+    if (size >= 15.5) return AppTypography.screenTitle(color: color);
+    if (size >= 14) return AppTypography.sectionTitle(color: color);
+    if (size >= 13) return AppTypography.subsectionTitle(color: color);
+    return AppTypography.itemTitle(color: color);
   }
 
   TextStyle _cmrText(double size, {FontWeight weight = FontWeight.w400, Color color = NewsPalette.textMuted}) {
-    return AppTypography.custom(
-      size: size,
-      weight: weight,
-      color: color,
-      height: 1.30,
-      letterSpacing: 0,
-    );
+    final base = size >= 11.5
+        ? AppTypography.secondary(color: color)
+        : AppTypography.caption(color: color);
+    return base.copyWith(fontWeight: weight);
   }
 
   Widget _buildCmrHeader() {
@@ -1415,13 +1552,12 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                     )
                   else if (_tree.isEmpty)
                     _whiteCard(
-                      child: const Center(
+                      child: Center(
                         child: Text(
                           'Пока нет комментариев. Будьте первым!',
-                          style: TextStyle(
+                          style: AppTypography.emptyText(
                             color: NewsPalette.textMuted,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          ).copyWith(fontWeight: FontWeight.w600),
                         ),
                       ),
                     )
@@ -1446,8 +1582,10 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                       onDelete: _deleteComment,
                       onVote: _vote,
                       onOpenImage: _openImageFullScreen,
+                      onOpenProfile: _openUserProfile,
                       safeName: _safeName,
                       safeInitial: _safeInitial,
+                      safeAvatar: _safeAvatar,
                       formatDate: _formatDateTime,
                       quoteFor: (m) => _buildQuote(m),
                     ),
@@ -1492,9 +1630,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                                 _editingCommentId != null
                                     ? "Редактирование"
                                     : "Ответ: ${_replyToUserLabel ?? ""}",
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                ),
+                                style: AppTypography.commentAuthor(),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -1504,11 +1640,9 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                                   _replyQuote ?? '',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
+                                  style: AppTypography.commentMeta(
                                     color: NewsPalette.textMuted,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                                  ).copyWith(fontWeight: FontWeight.w600),
                                 ),
                             ],
                           ),
@@ -1566,10 +1700,10 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                             ),
                           ),
                         const SizedBox(width: 10),
-                        const Expanded(
+                        Expanded(
                           child: Text(
                             "Вложение добавлено",
-                            style: TextStyle(fontWeight: FontWeight.w600),
+                            style: AppTypography.secondaryMedium(),
                           ),
                         ),
                         IconButton(
@@ -1606,11 +1740,16 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                         focusNode: _commentFocus,
                         controller: _commentController,
                         maxLines: null,
+                        style: AppTypography.formText(
+                          color: NewsPalette.text,
+                        ),
                         decoration: InputDecoration(
                           hintText: _editingCommentId != null
                               ? "Редактировать..."
                               : "Написать комментарий...",
-                          hintStyle: const TextStyle(color: Colors.grey),
+                          hintStyle: AppTypography.formHint(
+                            color: Colors.grey,
+                          ),
                           filled: true,
                           fillColor: NewsPalette.background,
                           border: OutlineInputBorder(
@@ -1775,8 +1914,10 @@ class _ThreadList extends StatelessWidget {
   final void Function(_CNode node) onDelete;
   final void Function(int commentId, int value) onVote;
   final void Function(String url, String heroTag) onOpenImage;
+  final void Function(int userId) onOpenProfile;
   final String Function(Map<String, dynamic>) safeName;
   final String Function(Map<String, dynamic>) safeInitial;
+  final String Function(Map<String, dynamic>) safeAvatar;
   final String Function(dynamic) formatDate;
   final String Function(Map<String, dynamic>) quoteFor;
 
@@ -1792,8 +1933,10 @@ class _ThreadList extends StatelessWidget {
     required this.onDelete,
     required this.onVote,
     required this.onOpenImage,
+    required this.onOpenProfile,
     required this.safeName,
     required this.safeInitial,
+    required this.safeAvatar,
     required this.formatDate,
     required this.quoteFor,
   });
@@ -1816,8 +1959,10 @@ class _ThreadList extends StatelessWidget {
               onDelete: onDelete,
               onVote: onVote,
               onOpenImage: onOpenImage,
+              onOpenProfile: onOpenProfile,
               safeName: safeName,
               safeInitial: safeInitial,
+              safeAvatar: safeAvatar,
               formatDate: formatDate,
               quoteFor: quoteFor,
             ),
@@ -1840,8 +1985,10 @@ class _ThreadNode extends StatelessWidget {
   final void Function(_CNode node) onDelete;
   final void Function(int commentId, int value) onVote;
   final void Function(String url, String heroTag) onOpenImage;
+  final void Function(int userId) onOpenProfile;
   final String Function(Map<String, dynamic>) safeName;
   final String Function(Map<String, dynamic>) safeInitial;
+  final String Function(Map<String, dynamic>) safeAvatar;
   final String Function(dynamic) formatDate;
   final String Function(Map<String, dynamic>) quoteFor;
 
@@ -1858,8 +2005,10 @@ class _ThreadNode extends StatelessWidget {
     required this.onDelete,
     required this.onVote,
     required this.onOpenImage,
+    required this.onOpenProfile,
     required this.safeName,
     required this.safeInitial,
+    required this.safeAvatar,
     required this.formatDate,
     required this.quoteFor,
   });
@@ -1870,8 +2019,10 @@ class _ThreadNode extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = node.data;
+    final authorUserId = _asInt(c["user_id"] ?? c["author_id"]);
 
     final name = safeName(c);
+    final avatarUrl = safeAvatar(c);
     final date = formatDate(c["created_at"]);
     final edited = (c["edited_at"] ?? "").toString().trim().isNotEmpty;
 
@@ -1879,7 +2030,7 @@ class _ThreadNode extends StatelessWidget {
     final imgUrl = (c["image_url"] ?? "").toString().trim();
     final text = (c["comment"] ?? "").toString().trim();
 
-    final isMine = _asInt(c["user_id"]) == currentUserId;
+    final isMine = _asInt(c["user_id"] ?? c["author_id"]) == currentUserId;
     final hasChildren = node.children.isNotEmpty;
     final isCollapsed = collapsed.contains(node.id);
 
@@ -1933,35 +2084,63 @@ class _ThreadNode extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      CircleAvatar(
-                        radius: 16,
-                        backgroundColor: NewsPalette.lightGreen,
-                        child: Text(
-                          safeInitial(c),
-                          style: const TextStyle(
-                            color: NewsPalette.primaryGreen,
-                            fontWeight: FontWeight.w600,
+                      MouseRegion(
+                        cursor: authorUserId > 0
+                            ? SystemMouseCursors.click
+                            : MouseCursor.defer,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: authorUserId > 0
+                              ? () => onOpenProfile(authorUserId)
+                              : null,
+                          child: CircleAvatar(
+                            radius: 16,
+                            backgroundColor: NewsPalette.lightGreen,
+                            foregroundImage: avatarUrl.isNotEmpty
+                                ? NetworkImage(avatarUrl)
+                                : null,
+                            onForegroundImageError: avatarUrl.isNotEmpty
+                                ? (_, __) {}
+                                : null,
+                            child: Text(
+                              safeInitial(c),
+                              style: AppTypography.captionMedium(
+                                color: NewsPalette.primaryGreen,
+                              ),
+                            ),
                           ),
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: Text(
-                          name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: NewsPalette.text,
+                        child: MouseRegion(
+                          cursor: authorUserId > 0
+                              ? SystemMouseCursors.click
+                              : MouseCursor.defer,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: authorUserId > 0
+                                ? () => onOpenProfile(authorUserId)
+                                : null,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 3),
+                              child: Text(
+                                name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.commentAuthor(
+                                  color: NewsPalette.text,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ),
                       if (date.isNotEmpty)
                         Text(
                           date,
-                          style: const TextStyle(
+                          style: AppTypography.commentMeta(
                             color: NewsPalette.textMuted,
-                            fontSize: 11,
                           ),
                         ),
                     ],
@@ -1993,21 +2172,16 @@ class _ThreadNode extends StatelessWidget {
                               children: [
                                 Text(
                                   safeName(parent),
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 12,
-                                  ),
+                                  style: AppTypography.commentAuthor(),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 const SizedBox(height: 3),
                                 Text(
                                   quoteFor(parent),
-                                  style: const TextStyle(
+                                  style: AppTypography.commentMeta(
                                     color: NewsPalette.textMuted,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                                  ).copyWith(fontWeight: FontWeight.w600),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -2070,15 +2244,13 @@ class _ThreadNode extends StatelessWidget {
                   if (text.isNotEmpty)
                     Text(
                       text,
-                      style: TextStyle(
-                        fontSize: 14.5,
-                        height: 1.35,
+                      style: AppTypography.commentText(
                         color: text == "Комментарий удалён"
                             ? Colors.grey.shade600
                             : NewsPalette.text,
-                        fontWeight: text == "Комментарий удалён"
-                            ? FontWeight.w600
-                            : FontWeight.w600,
+                      ).copyWith(
+                        height: 1.35,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   const SizedBox(height: 10),
@@ -2116,8 +2288,10 @@ class _ThreadNode extends StatelessWidget {
                               onDelete: onDelete,
                               onVote: onVote,
                               onOpenImage: onOpenImage,
+                              onOpenProfile: onOpenProfile,
                               safeName: safeName,
                               safeInitial: safeInitial,
+                              safeAvatar: safeAvatar,
                               formatDate: formatDate,
                               quoteFor: quoteFor,
                             ),
@@ -2191,7 +2365,9 @@ class _CommentActionsRow extends StatelessWidget {
             ),
             Text(
               score.toString(),
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              style: AppTypography.captionMedium(
+                color: NewsPalette.text,
+              ),
             ),
             InkWell(
               onTap: onDownvote,
@@ -2206,7 +2382,10 @@ class _CommentActionsRow extends StatelessWidget {
       return TextButton.icon(
         onPressed: onReply,
         icon: const Icon(Icons.reply, size: 18),
-        label: Text(compact ? "Ответ" : "Ответить"),
+        label: Text(
+          compact ? "Ответ" : "Ответить",
+          style: AppTypography.action(color: NewsPalette.primaryGreen),
+        ),
         style: TextButton.styleFrom(
           foregroundColor: NewsPalette.primaryGreen,
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -2248,13 +2427,12 @@ class _CommentActionsRow extends StatelessWidget {
               replyBtn(),
               if (hasChildren) collapseBtn(),
               if (edited)
-                const Padding(
-                  padding: EdgeInsets.only(left: 2),
+                Padding(
+                  padding: const EdgeInsets.only(left: 2),
                   child: Text(
                     "изменено",
-                    style: TextStyle(
+                    style: AppTypography.commentMeta(
                       color: NewsPalette.textMuted,
-                      fontSize: 11,
                     ),
                   ),
                 ),
@@ -2541,9 +2719,7 @@ class _InlineVideoBlockCard extends StatelessWidget {
                   if (title.trim().isNotEmpty) ...[
                     Text(
                       title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
+                      style: AppTypography.itemTitle(
                         color: NewsPalette.text,
                       ),
                     ),
@@ -2555,10 +2731,8 @@ class _InlineVideoBlockCard extends StatelessWidget {
                         : isExternal
                             ? "Видео по внешней ссылке"
                             : "Видеоисточник",
-                    style: const TextStyle(
+                    style: AppTypography.secondaryMedium(
                       color: NewsPalette.textMuted,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -2575,10 +2749,8 @@ class _InlineVideoBlockCard extends StatelessWidget {
                         ),
                         child: Text(
                           isDirect ? "Смотреть" : "Открыть",
-                          style: const TextStyle(
+                          style: AppTypography.actionStrong(
                             color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
                           ),
                         ),
                       ),
@@ -2586,9 +2758,11 @@ class _InlineVideoBlockCard extends StatelessWidget {
                       TextButton.icon(
                         onPressed: onOpenExternal,
                         icon: const Icon(Icons.open_in_new, size: 16),
-                        label: const Text(
+                        label: Text(
                           "Открыть ссылку",
-                          style: TextStyle(fontWeight: FontWeight.w600),
+                          style: AppTypography.action(
+                            color: NewsPalette.primaryGreen,
+                          ),
                         ),
                         style: TextButton.styleFrom(
                           foregroundColor: NewsPalette.primaryGreen,
@@ -2708,9 +2882,9 @@ class _GifPickerSheetState extends State<_GifPickerSheet> {
               ),
               Row(
                 children: [
-                  const Text(
+                  Text(
                     "GIF",
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
+                    style: AppTypography.screenTitle(),
                   ),
                   const Spacer(),
                   IconButton(
@@ -2724,8 +2898,10 @@ class _GifPickerSheetState extends State<_GifPickerSheet> {
                 controller: _q,
                 textInputAction: TextInputAction.search,
                 onSubmitted: (v) => _search(v.trim()),
+                style: AppTypography.formText(),
                 decoration: InputDecoration(
                   hintText: "Поиск GIF…",
+                  hintStyle: AppTypography.formHint(),
                   filled: true,
                   fillColor: NewsPalette.background,
                   prefixIcon: const Icon(Icons.search),
@@ -2759,7 +2935,9 @@ class _GifPickerSheetState extends State<_GifPickerSheet> {
                   child: Center(
                     child: Text(
                       "Ошибка: $error",
-                      style: const TextStyle(color: NewsPalette.textMuted),
+                      style: AppTypography.emptyText(
+                        color: NewsPalette.textMuted,
+                      ),
                     ),
                   ),
                 )

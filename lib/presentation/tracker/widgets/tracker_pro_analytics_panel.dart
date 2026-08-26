@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 
 import '../models/tracker_pro_models.dart';
 
@@ -179,7 +180,7 @@ class _DarkPage extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: _AD.text,
-                          fontSize: 17,
+                          fontSize: AppTypography.screenTitleSize,
                           fontWeight: FontWeight.w900,
                           letterSpacing: -.25,
                         ),
@@ -191,7 +192,7 @@ class _DarkPage extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: _AD.muted,
-                            fontSize: 11,
+                            fontSize: AppTypography.secondarySize,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
@@ -250,7 +251,7 @@ class _DarkCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: _AD.text,
-                        fontSize: 12.6,
+                        fontSize: AppTypography.bodySize,
                         fontWeight: FontWeight.w900,
                         letterSpacing: -.08,
                       ),
@@ -265,7 +266,7 @@ class _DarkCard extends StatelessWidget {
                         textAlign: TextAlign.right,
                         style: const TextStyle(
                           color: _AD.muted,
-                          fontSize: 9.8,
+                          fontSize: AppTypography.captionSize,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -305,7 +306,7 @@ class _DarkActionButton extends StatelessWidget {
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             Icon(icon, color: _AD.text, size: 17),
             const SizedBox(width: 6),
-            Text(label, style: const TextStyle(color: _AD.text, fontSize: 11, fontWeight: FontWeight.w900)),
+            Text(label, style: const TextStyle(color: _AD.text, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w900)),
           ]),
         ),
       ),
@@ -334,9 +335,9 @@ class _GaugeCard extends StatelessWidget {
         SizedBox(width: 48, height: 48, child: CustomPaint(painter: _GaugePainter(progress: progress, color: color), child: Center(child: Icon(icon, color: color, size: 18)))),
         const SizedBox(width: 9),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AD.muted, fontSize: 9.5, fontWeight: FontWeight.w900)),
-          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AD.text, fontSize: 17, fontWeight: FontWeight.w900)),
-          Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AD.dim, fontSize: 8.7, fontWeight: FontWeight.w800)),
+          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AD.muted, fontSize: AppTypography.menuGroupSize, fontWeight: FontWeight.w900)),
+          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AD.text, fontSize: AppTypography.screenTitleSize, fontWeight: FontWeight.w900)),
+          Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AD.dim, fontSize: AppTypography.badgeSize, fontWeight: FontWeight.w800)),
         ])),
       ]),
     );
@@ -427,7 +428,7 @@ class _PerformanceMatrix extends StatelessWidget {
               p.playerName,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: _AD.text, fontSize: 11, fontWeight: FontWeight.w900),
+              style: const TextStyle(color: _AD.text, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w900),
             ),
           ),
         ],
@@ -470,7 +471,7 @@ class _PerformanceMatrix extends StatelessWidget {
       height: 38,
       alignment: Alignment.center,
       decoration: BoxDecoration(color: color.withOpacity(.16 + r * .18), border: Border.all(color: _AD.border.withOpacity(.65), width: .5)),
-      child: Text(text, style: const TextStyle(color: _AD.text, fontSize: 11, fontWeight: FontWeight.w900)),
+      child: Text(text, style: const TextStyle(color: _AD.text, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w900)),
     );
   }
 }
@@ -504,7 +505,7 @@ class _MiniMetric extends StatelessWidget {
     decoration: BoxDecoration(color: _AD.card2, borderRadius: BorderRadius.circular(9), border: Border.all(color: _AD.border)),
     padding: const EdgeInsets.all(8),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-      Text(label, style: const TextStyle(color: _AD.muted, fontSize: 10, fontWeight: FontWeight.w900)),
+      Text(label, style: const TextStyle(color: _AD.muted, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w900)),
       Text(value, style: const TextStyle(color: _AD.text, fontSize: 18, fontWeight: FontWeight.w900)),
     ]),
   );
@@ -524,7 +525,7 @@ class _AlertRow extends StatelessWidget {
       const SizedBox(width: 8),
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AD.text, fontWeight: FontWeight.w900)),
-        Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AD.muted, fontSize: 10, fontWeight: FontWeight.w800)),
+        Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AD.muted, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w800)),
       ])),
     ]),
   );

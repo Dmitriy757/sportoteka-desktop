@@ -46,21 +46,13 @@ class _PlansBrowseModalState extends State<PlansBrowseModal> {
     final pad = MediaQuery.of(context).viewInsets.bottom;
     final baseTheme = Theme.of(context);
     final textTheme = baseTheme.textTheme.apply(
-      fontFamily: AppTypography.custom(
-        size: 13,
-        weight: FontWeight.w400,
-        color: const Color(0xFF111827),
-      ).fontFamily,
+      fontFamily: AppTypography.fontFamily,
     );
 
     return Theme(
       data: baseTheme.copyWith(textTheme: textTheme),
       child: DefaultTextStyle.merge(
-        style: AppTypography.custom(
-          size: 12.5,
-          weight: FontWeight.w400,
-          color: const Color(0xFF111827),
-        ),
+        style: AppTypography.body(color: const Color(0xFF111827)),
         child: Container(
       padding: EdgeInsets.fromLTRB(14, 14, 14, 14 + pad),
       decoration: const BoxDecoration(
@@ -87,7 +79,7 @@ class _PlansBrowseModalState extends State<PlansBrowseModal> {
                 Expanded(
                   child: Text(
                     widget.title,
-                    style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 16),
+                    style: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w500, fontSize: AppTypography.screenTitleSize),
                   ),
                 ),
                 TextButton(
@@ -224,9 +216,9 @@ class _InfoCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
+                Text(title, style: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w500)),
                 const SizedBox(height: 6),
-                Text(subtitle, style: const TextStyle(color: Color(0xFF6B7280), fontWeight: FontWeight.w500)),
+                Text(subtitle, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: Color(0xFF6B7280), fontWeight: FontWeight.w500)),
               ],
             ),
           ),

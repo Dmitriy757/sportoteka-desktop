@@ -23,6 +23,7 @@ import 'package:sportoteka/presentation/training_graphics/widgets/tg_right_panel
 import 'package:sportoteka/presentation/training_graphics/tg_models.dart';
 import 'package:sportoteka/presentation/sportoteka_3d_pro/sportoteka_3d_pro_launcher.dart';
 import 'tg_export_saver.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 
 /// ================== ЦВЕТОВАЯ ПАЛИТРА ==================
 class TgScreenPalette {
@@ -243,9 +244,10 @@ class TgScreenErrorBanner extends StatelessWidget {
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
+                fontFamily: AppTypography.fontFamily,
                 color: TgScreenPalette.textSecondary,
                 fontWeight: FontWeight.w500,
-                fontSize: 13,
+                fontSize: AppTypography.bodySize,
               ),
             ),
           ),
@@ -258,9 +260,10 @@ class TgScreenErrorBanner extends StatelessWidget {
               child: const Text(
                 "Повторить",
                 style: TextStyle(
+                  fontFamily: AppTypography.fontFamily,
                   color: Colors.white,
                   fontWeight: FontWeight.w700,
-                  fontSize: 8.4,
+                  fontSize: AppTypography.badgeSize,
                 ),
               ),
             ),
@@ -315,9 +318,10 @@ class TgScreenLoadingOverlay extends StatelessWidget {
               Text(
                 message,
                 style: const TextStyle(
+                  fontFamily: AppTypography.fontFamily,
                   color: TgScreenPalette.textSecondary,
                   fontWeight: FontWeight.w600,
-                  fontSize: 14,
+                  fontSize: AppTypography.sectionTitleSize,
                 ),
               ),
             ],
@@ -644,6 +648,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
             title: const Text(
               "Найден черновик",
               style: TextStyle(
+                fontFamily: AppTypography.fontFamily,
                 color: TgScreenPalette.textPrimary,
                 fontWeight: FontWeight.w900,
               ),
@@ -651,6 +656,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
             content: const Text(
               "Восстановить последнюю несохранённую версию схемы?",
               style: TextStyle(
+                fontFamily: AppTypography.fontFamily,
                 color: TgScreenPalette.textSecondary,
                 fontWeight: FontWeight.w600,
               ),
@@ -705,6 +711,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
         title: const Text(
           "Схема не сохранена",
           style: TextStyle(
+            fontFamily: AppTypography.fontFamily,
             color: TgScreenPalette.textPrimary,
             fontWeight: FontWeight.w900,
           ),
@@ -712,6 +719,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
         content: const Text(
           "Сохранить изменения перед выходом?",
           style: TextStyle(
+            fontFamily: AppTypography.fontFamily,
             color: TgScreenPalette.textSecondary,
             fontWeight: FontWeight.w600,
           ),
@@ -1565,9 +1573,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('TacticalPad функции', style: TextStyle(color: TgScreenPalette.textPrimary, fontSize: 16, fontWeight: FontWeight.w900)),
+                          Text('TacticalPad функции', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontSize: AppTypography.screenTitleSize, fontWeight: FontWeight.w900)),
                           SizedBox(height: 2),
-                          Text('Пресеты добавляются на поле и попадают в слои', style: TextStyle(color: TgScreenPalette.textMuted, fontSize: 8.4, fontWeight: FontWeight.w600)),
+                          Text('Пресеты добавляются на поле и попадают в слои', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontSize: AppTypography.badgeSize, fontWeight: FontWeight.w600)),
                         ],
                       ),
                     ),
@@ -1604,7 +1612,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                 const SizedBox(height: 12),
                 const Text(
                   'Каждый пресет создаёт собственную tactical-группу. Откройте «Слои» для выбора/скрытия/блокировки группы или «Свойства» для редактирования объекта.',
-                  style: TextStyle(color: TgScreenPalette.textMuted, fontSize: 11.5, height: 1.35, fontWeight: FontWeight.w600),
+                  style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontSize: AppTypography.secondarySize, height: 1.35, fontWeight: FontWeight.w600),
                 ),
               ],
             ),
@@ -1645,9 +1653,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
               children: [
                 Icon(icon, color: TgScreenPalette.primaryGreen, size: 22),
                 const SizedBox(height: 8),
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: TgScreenPalette.textPrimary, fontSize: 13, fontWeight: FontWeight.w900)),
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontSize: AppTypography.bodySize, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 2),
-                Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: TgScreenPalette.textMuted, fontSize: 8.4, fontWeight: FontWeight.w700)),
+                Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontSize: AppTypography.badgeSize, fontWeight: FontWeight.w700)),
               ],
             ),
           ),
@@ -1906,9 +1914,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Экспорт FIFA / TV графики', style: TextStyle(color: TgScreenPalette.textPrimary, fontSize: 15, fontWeight: FontWeight.w900)),
+                          Text('Экспорт FIFA / TV графики', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontSize: AppTypography.sectionTitleSize, fontWeight: FontWeight.w900)),
                           SizedBox(height: 2),
-                          Text('PNG собирается из текущего кадра. Для Unity/3D нужен экспорт сцены в JSON/GLB pipeline.', style: TextStyle(color: TgScreenPalette.textMuted, fontSize: 11.5, height: 1.25, fontWeight: FontWeight.w500)),
+                          Text('PNG собирается из текущего кадра. Для Unity/3D нужен экспорт сцены в JSON/GLB pipeline.', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontSize: AppTypography.secondarySize, height: 1.25, fontWeight: FontWeight.w500)),
                         ],
                       ),
                     ),
@@ -2241,18 +2249,20 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                                 Text(
                                   'Шаблоны тренировок',
                                   style: TextStyle(
+                                    fontFamily: AppTypography.fontFamily,
                                     color: TgScreenPalette.textPrimary,
                                     fontWeight: FontWeight.w900,
-                                    fontSize: 15,
+                                    fontSize: AppTypography.sectionTitleSize,
                                   ),
                                 ),
                                 SizedBox(height: 1),
                                 Text(
                                   'Быстро открыть рондо, прессинг, билдап или сохранить свою схему.',
                                   style: TextStyle(
+                                    fontFamily: AppTypography.fontFamily,
                                     color: TgScreenPalette.textMuted,
                                     fontWeight: FontWeight.w600,
-                                    fontSize: 9.5,
+                                    fontSize: AppTypography.captionSize,
                                   ),
                                 ),
                               ],
@@ -2280,7 +2290,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                       child: TextField(
                         controller: searchCtrl,
                         onChanged: (v) => setSheetState(() => query = v),
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                        style: const TextStyle(fontFamily: AppTypography.fontFamily, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700),
                         decoration: InputDecoration(
                           isDense: true,
                           prefixIcon: const Icon(Icons.search_rounded, size: 18),
@@ -2308,9 +2318,10 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                             selected: active,
                             label: Text(cat),
                             labelStyle: TextStyle(
+                              fontFamily: AppTypography.fontFamily,
                               color: active ? Colors.white : TgScreenPalette.textSecondary,
                               fontWeight: FontWeight.w800,
-                              fontSize: 10,
+                              fontSize: AppTypography.captionSize,
                             ),
                             selectedColor: TgScreenPalette.primaryGreen,
                             backgroundColor: TgScreenPalette.surfaceLight,
@@ -2328,7 +2339,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                                 padding: EdgeInsets.all(28),
                                 child: Text(
                                   'Шаблоны не найдены',
-                                  style: TextStyle(color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700),
+                                  style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700),
                                 ),
                               ),
                             )
@@ -2774,8 +2785,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       filled: true,
       fillColor: TgScreenPalette.surfaceLight,
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-      labelStyle: const TextStyle(color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: 11),
-      hintStyle: const TextStyle(color: TgScreenPalette.textLight, fontWeight: FontWeight.w600, fontSize: 11),
+      labelStyle: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: AppTypography.captionSize),
+      hintStyle: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textLight, fontWeight: FontWeight.w600, fontSize: AppTypography.captionSize),
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: TgScreenPalette.borderLight)),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: TgScreenPalette.primaryGreen, width: 1.2)),
     );
@@ -3131,7 +3142,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                   Expanded(child: TextField(controller: completionCtrl, keyboardType: TextInputType.number, decoration: _workflowInputDecoration('Выполнение %'))),
                 ]),
                 const SizedBox(height: 12),
-                const Text('Выполненные упражнения', style: TextStyle(color: TgScreenPalette.textSecondary, fontWeight: FontWeight.w900, fontSize: 12)),
+                const Text('Выполненные упражнения', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textSecondary, fontWeight: FontWeight.w900, fontSize: AppTypography.secondarySize)),
                 const SizedBox(height: 6),
                 DecoratedBox(
                   decoration: BoxDecoration(color: TgScreenPalette.surfaceLight, borderRadius: BorderRadius.circular(14), border: Border.all(color: TgScreenPalette.borderLight)),
@@ -3150,8 +3161,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                               done.remove(ex.id);
                             }
                           }),
-                          title: Text(ex.title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
-                          subtitle: Text('${ex.block} • ${ex.durationMin} мин', style: const TextStyle(fontSize: 10.5, color: TgScreenPalette.textMuted)),
+                          title: Text(ex.title, style: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w800, fontSize: AppTypography.secondarySize)),
+                          subtitle: Text('${ex.block} • ${ex.durationMin} мин', style: const TextStyle(fontFamily: AppTypography.fontFamily, fontSize: AppTypography.captionSize, color: TgScreenPalette.textMuted)),
                         ),
                     ],
                   ),
@@ -3437,8 +3448,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                   value: attachScheme,
                   activeColor: TgScreenPalette.primaryGreen,
                   onChanged: (v) => setPanelState(() => attachScheme = v),
-                  title: const Text('Сохранить текущую схему и прикрепить к плану', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5)),
-                  subtitle: Text(graphicId == null ? 'Сначала будет создана схема в этой же папке' : 'Будет обновлена схема #$graphicId', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 10.5, color: TgScreenPalette.textMuted)),
+                  title: const Text('Сохранить текущую схему и прикрепить к плану', style: TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w800, fontSize: AppTypography.bodySize)),
+                  subtitle: Text(graphicId == null ? 'Сначала будет создана схема в этой же папке' : 'Будет обновлена схема #$graphicId', style: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w600, fontSize: AppTypography.captionSize, color: TgScreenPalette.textMuted)),
                 ),
                 const SizedBox(height: 10),
                 Row(
@@ -3490,7 +3501,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
         builder: (panelContext) => Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('В плане пока нет упражнений. Добавить текущую схему и продолжить сохранение?', style: TextStyle(color: TgScreenPalette.textSecondary, fontWeight: FontWeight.w700, height: 1.35)),
+            const Text('В плане пока нет упражнений. Добавить текущую схему и продолжить сохранение?', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textSecondary, fontWeight: FontWeight.w700, height: 1.35)),
             const SizedBox(height: 12),
             Row(children: [
               Expanded(child: OutlinedButton(onPressed: () => Navigator.of(panelContext).pop(false), child: const Text('Отмена'))),
@@ -3637,9 +3648,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('План тренировки', style: TextStyle(color: TgScreenPalette.textPrimary, fontWeight: FontWeight.w900, fontSize: 15)),
+                                const Text('План тренировки', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontWeight: FontWeight.w900, fontSize: AppTypography.sectionTitleSize)),
                                 const SizedBox(height: 1),
-                                Text('${_trainingPlanExercises.length} упражн. • $_trainingPlanTotalMinutes мин • ${widget.resolvedTeamName}', style: const TextStyle(color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: 10)),
+                                Text('${_trainingPlanExercises.length} упражн. • $_trainingPlanTotalMinutes мин • ${widget.resolvedTeamName}', style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: AppTypography.captionSize)),
                               ],
                             ),
                           ),
@@ -3691,8 +3702,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                             children: [
                               Icon(Icons.folder_open_rounded, size: 15, color: TgScreenPalette.primaryGreen),
                               const SizedBox(width: 6),
-                              Expanded(child: Text('CMR папка: $folderTitle', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: TgScreenPalette.textMuted, fontWeight: FontWeight.w800, fontSize: 10.5))),
-                              if (_cmrSavedPlanId != null) Text('план #$_cmrSavedPlanId', style: const TextStyle(color: TgScreenPalette.primaryGreen, fontWeight: FontWeight.w900, fontSize: 10.5)),
+                              Expanded(child: Text('CMR папка: $folderTitle', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w800, fontSize: AppTypography.captionSize))),
+                              if (_cmrSavedPlanId != null) Text('план #$_cmrSavedPlanId', style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.primaryGreen, fontWeight: FontWeight.w900, fontSize: AppTypography.captionSize)),
                             ],
                           ),
                         ],
@@ -3707,9 +3718,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                                 children: [
                                   const Icon(Icons.event_note_outlined, color: TgScreenPalette.textLight, size: 34),
                                   const SizedBox(height: 10),
-                                  const Text('План пока пустой', style: TextStyle(color: TgScreenPalette.textPrimary, fontWeight: FontWeight.w900, fontSize: 14)),
+                                  const Text('План пока пустой', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontWeight: FontWeight.w900, fontSize: AppTypography.sectionTitleSize)),
                                   const SizedBox(height: 4),
-                                  const Text('Добавьте текущую схему или любой шаблон в тренировку.', textAlign: TextAlign.center, style: TextStyle(color: TgScreenPalette.textMuted, fontWeight: FontWeight.w600, fontSize: 11)),
+                                  const Text('Добавьте текущую схему или любой шаблон в тренировку.', textAlign: TextAlign.center, style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w600, fontSize: AppTypography.captionSize)),
                                   const SizedBox(height: 12),
                                   FilledButton.icon(
                                     onPressed: () async {
@@ -3729,7 +3740,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                                   if ((grouped[block] ?? const <_TrainingPlanExercise>[]).isNotEmpty) ...[
                                     Padding(
                                       padding: const EdgeInsets.only(top: 6, bottom: 6),
-                                      child: Text(block, style: const TextStyle(color: TgScreenPalette.textSecondary, fontWeight: FontWeight.w900, fontSize: 11)),
+                                      child: Text(block, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textSecondary, fontWeight: FontWeight.w900, fontSize: AppTypography.captionSize)),
                                     ),
                                     for (final exercise in grouped[block]!)
                                       Padding(
@@ -3885,9 +3896,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: TgScreenPalette.textPrimary, fontWeight: FontWeight.w900, fontSize: 12.6)),
+                              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontWeight: FontWeight.w900, fontSize: AppTypography.bodySize)),
                               const SizedBox(height: 2),
-                              Text(hint.isEmpty ? 'CMR Plans' : hint, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: 10.2)),
+                              Text(hint.isEmpty ? 'CMR Plans' : hint, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: AppTypography.captionSize)),
                             ],
                           ),
                         ),
@@ -4202,18 +4213,20 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                               Text(
                                 goalkeeper ? 'Выберите вратаря' : 'Выберите игрока',
                                 style: const TextStyle(
+                                  fontFamily: AppTypography.fontFamily,
                                   color: TgScreenPalette.textPrimary,
                                   fontWeight: FontWeight.w900,
-                                  fontSize: 18,
+                                  fontSize: AppTypography.screenTitleSize,
                                 ),
                               ),
                               const SizedBox(height: 4),
                               const Text(
                                 'После выбора нажмите на поле — появится круг с аватаркой.',
                                 style: TextStyle(
+                                  fontFamily: AppTypography.fontFamily,
                                   color: TgScreenPalette.textMuted,
                                   fontWeight: FontWeight.w600,
-                                  fontSize: 8.4,
+                                  fontSize: AppTypography.badgeSize,
                                 ),
                               ),
                             ],
@@ -4307,9 +4320,10 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
+                                        fontFamily: AppTypography.fontFamily,
                                         color: TgScreenPalette.textPrimary,
                                         fontWeight: FontWeight.w800,
-                                        fontSize: 14,
+                                        fontSize: AppTypography.sectionTitleSize,
                                       ),
                                     ),
                                   ),
@@ -4325,9 +4339,10 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                                     child: Text(
                                       number,
                                       style: const TextStyle(
+                                        fontFamily: AppTypography.fontFamily,
                                         color: Colors.white,
                                         fontWeight: FontWeight.w900,
-                                        fontSize: 8.4,
+                                        fontSize: AppTypography.badgeSize,
                                       ),
                                     ),
                                   ),
@@ -4496,8 +4511,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
               const Text(
                 "Ошибка загрузки",
                 style: TextStyle(
+                  fontFamily: AppTypography.fontFamily,
                   color: TgScreenPalette.textPrimary,
-                  fontSize: 18,
+                  fontSize: AppTypography.screenTitleSize,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -4506,8 +4522,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                 _listError!,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
+                  fontFamily: AppTypography.fontFamily,
                   color: TgScreenPalette.textMuted,
-                  fontSize: 14,
+                  fontSize: AppTypography.sectionTitleSize,
                 ),
               ),
               const SizedBox(height: 20),
@@ -4517,6 +4534,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                 child: const Text(
                   "Повторить",
                   style: TextStyle(
+                    fontFamily: AppTypography.fontFamily,
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
                   ),
@@ -4549,8 +4567,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
             const Text(
               "В этой папке пока нет схем",
               style: TextStyle(
+                fontFamily: AppTypography.fontFamily,
                 color: TgScreenPalette.textMuted,
-                fontSize: 16,
+                fontSize: AppTypography.screenTitleSize,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -4618,16 +4637,18 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
+                          fontFamily: AppTypography.fontFamily,
                           color: TgScreenPalette.textPrimary,
                           fontWeight: FontWeight.w800,
-                          fontSize: 15,
+                          fontSize: AppTypography.sectionTitleSize,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         "ID: $id",
                         style: const TextStyle(
-                          fontSize: 8.4,
+                          fontFamily: AppTypography.fontFamily,
+                          fontSize: AppTypography.badgeSize,
                           color: TgScreenPalette.textMuted,
                           fontWeight: FontWeight.w600,
                         ),
@@ -5118,7 +5139,7 @@ class _ToolbarItem extends StatelessWidget {
                   style: TextStyle(
                     color: color,
                     fontFamily: TgScreenPalette.fontFamily,
-                    fontSize: 7.5,
+                    fontSize: AppTypography.badgeSize,
                     fontWeight: active ? FontWeight.w700 : FontWeight.w600,
                   ),
                 ),
@@ -5174,8 +5195,9 @@ class _ReferenceStylePanel extends StatelessWidget {
                       child: Text(
                         'Выбран: $title',
                         style: const TextStyle(
+                          fontFamily: AppTypography.fontFamily,
                           color: TgScreenPalette.textPrimary,
-                          fontSize: 10.2,
+                          fontSize: AppTypography.captionSize,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
@@ -5201,7 +5223,7 @@ class _ReferenceStylePanel extends StatelessWidget {
                 const SizedBox(height: 6),
                 const Text(
                   'Толщина линии',
-                  style: TextStyle(color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: 10.2),
+                  style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: AppTypography.captionSize),
                 ),
                 Row(
                   children: [
@@ -5221,14 +5243,14 @@ class _ReferenceStylePanel extends StatelessWidget {
                         ),
                       ),
                     ),
-                    Text('${currentWidth.round()} px', style: const TextStyle(color: TgScreenPalette.textMuted, fontWeight: FontWeight.w800, fontSize: 10.2)),
+                    Text('${currentWidth.round()} px', style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w800, fontSize: AppTypography.captionSize)),
                   ],
                 ),
                 if (selected is TgStamp) ...[
                   const SizedBox(height: 6),
                   const Text(
                     'Размер объекта',
-                    style: TextStyle(color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: 10.2),
+                    style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: AppTypography.captionSize),
                   ),
                   Row(
                     children: [
@@ -5248,13 +5270,13 @@ class _ReferenceStylePanel extends StatelessWidget {
                           ),
                         ),
                       ),
-                      Text('${selected.size.round()}', style: const TextStyle(color: TgScreenPalette.textMuted, fontWeight: FontWeight.w800, fontSize: 10.2)),
+                      Text('${selected.size.round()}', style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w800, fontSize: AppTypography.captionSize)),
                     ],
                   ),
                   const SizedBox(height: 8),
                   const Text(
                     'Поворот',
-                    style: TextStyle(color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: 10.2),
+                    style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: AppTypography.captionSize),
                   ),
                   Row(
                     children: [
@@ -5273,14 +5295,14 @@ class _ReferenceStylePanel extends StatelessWidget {
                           ),
                         ),
                       ),
-                      Text('${(selected.rotation * 180 / math.pi).round()}°', style: const TextStyle(color: TgScreenPalette.textMuted, fontWeight: FontWeight.w800, fontSize: 10.2)),
+                      Text('${(selected.rotation * 180 / math.pi).round()}°', style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w800, fontSize: AppTypography.captionSize)),
                     ],
                   ),
                 ],
                 const SizedBox(height: 6),
                 const Text(
                   'Стиль линии',
-                  style: TextStyle(color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: 10.2),
+                  style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: AppTypography.captionSize),
                 ),
                 const SizedBox(height: 8),
                 Container(
@@ -5433,7 +5455,7 @@ class _ReferenceStylePanel extends StatelessWidget {
               color: active ? Colors.white : TgScreenPalette.textSecondary,
               fontFamily: TgScreenPalette.fontFamily,
               fontWeight: FontWeight.w800,
-              fontSize: 14,
+              fontSize: AppTypography.sectionTitleSize,
             ),
           ),
         ),
@@ -5524,7 +5546,7 @@ class _ReferenceStylePanel extends StatelessWidget {
                     text,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 9.4),
+                    style: TextStyle(fontFamily: AppTypography.fontFamily, color: color, fontWeight: FontWeight.w900, fontSize: AppTypography.captionSize),
                   ),
                 ),
               ],
@@ -5561,7 +5583,7 @@ class _ReferenceMiniMap extends StatelessWidget {
           children: [
             Row(
               children: const [
-                Expanded(child: Text('RADAR', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: .8))),
+                Expanded(child: Text('RADAR', style: TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.white, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w800, letterSpacing: .8))),
                 Icon(Icons.visibility_outlined, size: 16, color: Colors.white70),
                 SizedBox(width: 10),
                 Icon(Icons.lock_outline_rounded, size: 16, color: Colors.white70),
@@ -5654,7 +5676,7 @@ class _AvatarFallback extends StatelessWidget {
       color: color.withOpacity(.92),
       child: Text(
         initials(),
-        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15),
+        style: const TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.white, fontWeight: FontWeight.w900, fontSize: AppTypography.sectionTitleSize),
       ),
     );
   }
@@ -5685,9 +5707,10 @@ class _TeamSideChip extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
+              fontFamily: AppTypography.fontFamily,
               color: active ? color : TgScreenPalette.textMuted,
               fontWeight: FontWeight.w900,
-              fontSize: 8.4,
+              fontSize: AppTypography.badgeSize,
             ),
           ),
         ),
@@ -6052,9 +6075,9 @@ class _WorkflowPanelShell extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: TgScreenPalette.textPrimary, fontWeight: FontWeight.w900, fontSize: 14.5, height: 1.1)),
+                        Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontWeight: FontWeight.w900, fontSize: AppTypography.sectionTitleSize, height: 1.1)),
                         const SizedBox(height: 2),
-                        Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: TgScreenPalette.textMuted, fontWeight: FontWeight.w600, fontSize: 10.5, height: 1.18)),
+                        Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w600, fontSize: AppTypography.captionSize, height: 1.18)),
                       ],
                     ),
                   ),
@@ -6105,9 +6128,9 @@ class _WorkflowInfoBox extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(color: TgScreenPalette.textPrimary, fontWeight: FontWeight.w900, fontSize: 12)),
+                Text(title, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontWeight: FontWeight.w900, fontSize: AppTypography.secondarySize)),
                 const SizedBox(height: 3),
-                Text(text, style: const TextStyle(color: TgScreenPalette.textSecondary, fontWeight: FontWeight.w600, fontSize: 10.8, height: 1.25)),
+                Text(text, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textSecondary, fontWeight: FontWeight.w600, fontSize: AppTypography.captionSize, height: 1.25)),
                 if (action != null) ...[
                   const SizedBox(height: 9),
                   Align(alignment: Alignment.centerLeft, child: action!),
@@ -6145,9 +6168,9 @@ class _WorkflowInfoCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(color: TgScreenPalette.textPrimary, fontWeight: FontWeight.w900, fontSize: 12)),
+                Text(title, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontWeight: FontWeight.w900, fontSize: AppTypography.secondarySize)),
                 const SizedBox(height: 3),
-                Text(text, style: const TextStyle(color: TgScreenPalette.textSecondary, fontWeight: FontWeight.w600, fontSize: 10.8, height: 1.25)),
+                Text(text, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textSecondary, fontWeight: FontWeight.w600, fontSize: AppTypography.captionSize, height: 1.25)),
               ],
             ),
           ),
@@ -6216,7 +6239,7 @@ class _WorkflowChip extends StatelessWidget {
         children: [
           Icon(icon, size: 13, color: color),
           const SizedBox(width: 4),
-          Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 9.5)),
+          Text(label, style: TextStyle(fontFamily: AppTypography.fontFamily, color: color, fontWeight: FontWeight.w800, fontSize: AppTypography.captionSize)),
         ],
       ),
     );
@@ -6272,7 +6295,7 @@ class _TrainingPlanExerciseCard extends StatelessWidget {
                 ),
                 child: Text(
                   '${index + 1}',
-                  style: const TextStyle(color: TgScreenPalette.primaryGreen, fontWeight: FontWeight.w900, fontSize: 12),
+                  style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.primaryGreen, fontWeight: FontWeight.w900, fontSize: AppTypography.secondarySize),
                 ),
               ),
               const SizedBox(width: 10),
@@ -6284,21 +6307,21 @@ class _TrainingPlanExerciseCard extends StatelessWidget {
                       exercise.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: TgScreenPalette.textPrimary, fontWeight: FontWeight.w900, fontSize: 12.5),
+                      style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontWeight: FontWeight.w900, fontSize: AppTypography.bodySize),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       '${exercise.durationMin} мин • ${exercise.playersCount} игроков • ${exercise.equipment}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: 9.5),
+                      style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: AppTypography.captionSize),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       exercise.goal,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: TgScreenPalette.textSecondary, fontWeight: FontWeight.w600, fontSize: 9.5, height: 1.18),
+                      style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textSecondary, fontWeight: FontWeight.w600, fontSize: AppTypography.captionSize, height: 1.18),
                     ),
                   ],
                 ),
@@ -6374,9 +6397,10 @@ class _TemplateCard extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
+                              fontFamily: AppTypography.fontFamily,
                               color: TgScreenPalette.textPrimary,
                               fontWeight: FontWeight.w900,
-                              fontSize: 12.5,
+                              fontSize: AppTypography.bodySize,
                             ),
                           ),
                         ),
@@ -6389,9 +6413,10 @@ class _TemplateCard extends StatelessWidget {
                           child: Text(
                             template.builtin ? 'база' : 'мой',
                             style: TextStyle(
+                              fontFamily: AppTypography.fontFamily,
                               color: accent,
                               fontWeight: FontWeight.w900,
-                              fontSize: 8.5,
+                              fontSize: AppTypography.badgeSize,
                             ),
                           ),
                         ),
@@ -6403,9 +6428,10 @@ class _TemplateCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
+                        fontFamily: AppTypography.fontFamily,
                         color: TgScreenPalette.textMuted,
                         fontWeight: FontWeight.w600,
-                        fontSize: 9.5,
+                        fontSize: AppTypography.captionSize,
                         height: 1.2,
                       ),
                     ),
@@ -6574,7 +6600,7 @@ class _TopTitleBar extends StatelessWidget {
                       color: TgScreenPalette.textPrimary,
                       fontFamily: TgScreenPalette.fontFamily,
                       fontWeight: FontWeight.w700,
-                      fontSize: 13.2,
+                      fontSize: AppTypography.bodySize,
                       letterSpacing: -.45,
                     ),
                   ),
@@ -6587,7 +6613,7 @@ class _TopTitleBar extends StatelessWidget {
                       color: TgScreenPalette.textMuted,
                       fontFamily: TgScreenPalette.fontFamily,
                       fontWeight: FontWeight.w600,
-                      fontSize: 8.4,
+                      fontSize: AppTypography.badgeSize,
                     ),
                   ),
                 ],
@@ -6709,7 +6735,7 @@ class _BoardModeSwitch extends StatelessWidget {
               color: active ? TgScreenPalette.primaryGreen : TgScreenPalette.textPrimary,
               fontFamily: TgScreenPalette.fontFamily,
               fontWeight: FontWeight.w800,
-              fontSize: 8.4,
+              fontSize: AppTypography.badgeSize,
             ),
           ),
         ),
@@ -6976,7 +7002,7 @@ class _HeaderActionButton extends StatelessWidget {
                     color: foreground,
                     fontFamily: TgScreenPalette.fontFamily,
                     fontWeight: FontWeight.w700,
-                    fontSize: 8.6,
+                    fontSize: AppTypography.badgeSize,
                   ),
                 ),
               ],
@@ -7061,9 +7087,10 @@ class _CloseEditorButton extends StatelessWidget {
                 Text(
                   'Закрыть',
                   style: TextStyle(
+                    fontFamily: AppTypography.fontFamily,
                     color: Color(0xFFE11D48),
                     fontWeight: FontWeight.w800,
-                    fontSize: 8.4,
+                    fontSize: AppTypography.badgeSize,
                   ),
                 ),
               ],
@@ -7109,7 +7136,7 @@ class _SaveButton extends StatelessWidget {
                         color: Colors.white,
                         fontFamily: TgScreenPalette.fontFamily,
                         fontWeight: FontWeight.w700,
-                        fontSize: 8.6,
+                        fontSize: AppTypography.badgeSize,
                       ),
                     ),
                   ],
@@ -7141,9 +7168,10 @@ class _AttachButton extends StatelessWidget {
           child: Text(
             'Прикрепить ($count)',
             style: TextStyle(
+              fontFamily: AppTypography.fontFamily,
               color: active ? Colors.white : TgScreenPalette.textMuted,
               fontWeight: FontWeight.w700,
-              fontSize: 8.4,
+              fontSize: AppTypography.badgeSize,
             ),
           ),
         ),
@@ -7266,8 +7294,9 @@ class _ExportOptionTile extends StatelessWidget {
                 Text(
                   title,
                   style: const TextStyle(
+                    fontFamily: AppTypography.fontFamily,
                     color: TgScreenPalette.textPrimary,
-                    fontSize: 10.2,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -7275,8 +7304,9 @@ class _ExportOptionTile extends StatelessWidget {
                 Text(
                   subtitle,
                   style: const TextStyle(
+                    fontFamily: AppTypography.fontFamily,
                     color: TgScreenPalette.textMuted,
-                    fontSize: 8.4,
+                    fontSize: AppTypography.badgeSize,
                     height: 1.25,
                     fontWeight: FontWeight.w500,
                   ),
@@ -7751,7 +7781,7 @@ class _TgPlaybackWindow extends StatelessWidget {
                           'Анимация',
                           style: TextStyle(
                             fontFamily: TgScreenPalette.fontFamily,
-                            fontSize: 13.2,
+                            fontSize: AppTypography.bodySize,
                             fontWeight: FontWeight.w800,
                             color: TgScreenPalette.textPrimary,
                           ),
@@ -7761,7 +7791,7 @@ class _TgPlaybackWindow extends StatelessWidget {
                           'Шаги, маршруты и воспроизведение',
                           style: TextStyle(
                             fontFamily: TgScreenPalette.fontFamily,
-                            fontSize: 9.4,
+                            fontSize: AppTypography.captionSize,
                             fontWeight: FontWeight.w500,
                             color: TgScreenPalette.textMuted,
                           ),
@@ -7821,7 +7851,7 @@ class _TgPlaybackWindow extends StatelessWidget {
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                         fontFamily: TgScreenPalette.fontFamily,
-                                        fontSize: 10.4,
+                                        fontSize: AppTypography.captionSize,
                                         fontWeight: FontWeight.w700,
                                         color: TgScreenPalette.textPrimary,
                                       ),
@@ -7831,7 +7861,7 @@ class _TgPlaybackWindow extends StatelessWidget {
                                     stepLabels.isEmpty ? '0 / 0' : '${safeStep + 1} / ${stepLabels.length}',
                                     style: const TextStyle(
                                       fontFamily: TgScreenPalette.fontFamily,
-                                      fontSize: 9.2,
+                                      fontSize: AppTypography.captionSize,
                                       fontWeight: FontWeight.w700,
                                       color: TgScreenPalette.textMuted,
                                     ),
@@ -7928,7 +7958,7 @@ class _TgPlaybackWindow extends StatelessWidget {
                                       '${index + 1}',
                                       style: TextStyle(
                                         fontFamily: TgScreenPalette.fontFamily,
-                                        fontSize: 8.8,
+                                        fontSize: AppTypography.badgeSize,
                                         fontWeight: FontWeight.w800,
                                         color: active ? Colors.white : TgScreenPalette.textMuted,
                                       ),
@@ -7942,7 +7972,7 @@ class _TgPlaybackWindow extends StatelessWidget {
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
                                         fontFamily: TgScreenPalette.fontFamily,
-                                        fontSize: 10.4,
+                                        fontSize: AppTypography.captionSize,
                                         fontWeight: active ? FontWeight.w700 : FontWeight.w600,
                                         color: active ? TgScreenPalette.primaryGreenDark : TgScreenPalette.textPrimary,
                                       ),
@@ -7976,7 +8006,7 @@ class _TgPlaybackWindow extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 fontFamily: TgScreenPalette.fontFamily,
-                                fontSize: 11.2,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w700,
                                 color: TgScreenPalette.textPrimary,
                               ),
@@ -8057,7 +8087,7 @@ class _TgPlaybackWindow extends StatelessWidget {
                                           overflow: TextOverflow.ellipsis,
                                           style: const TextStyle(
                                             fontFamily: TgScreenPalette.fontFamily,
-                                            fontSize: 10.2,
+                                            fontSize: AppTypography.captionSize,
                                             fontWeight: FontWeight.w700,
                                             color: TgScreenPalette.textPrimary,
                                           ),
@@ -8069,7 +8099,7 @@ class _TgPlaybackWindow extends StatelessWidget {
                                           overflow: TextOverflow.ellipsis,
                                           style: const TextStyle(
                                             fontFamily: TgScreenPalette.fontFamily,
-                                            fontSize: 8.8,
+                                            fontSize: AppTypography.badgeSize,
                                             fontWeight: FontWeight.w500,
                                             color: TgScreenPalette.textMuted,
                                           ),
@@ -8112,7 +8142,7 @@ class _PlaybackWindowSectionLabel extends StatelessWidget {
       text,
       style: const TextStyle(
         fontFamily: TgScreenPalette.fontFamily,
-        fontSize: 8.7,
+        fontSize: AppTypography.badgeSize,
         fontWeight: FontWeight.w700,
         letterSpacing: .42,
         color: TgScreenPalette.textMuted,
@@ -8159,7 +8189,7 @@ class _PlaybackWindowAction extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontFamily: TgScreenPalette.fontFamily,
-                    fontSize: 9.7,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w700,
                     color: fg,
                   ),
@@ -8195,7 +8225,7 @@ class _PlaybackWindowEmpty extends StatelessWidget {
               text,
               style: const TextStyle(
                 fontFamily: TgScreenPalette.fontFamily,
-                fontSize: 9.2,
+                fontSize: AppTypography.captionSize,
                 height: 1.3,
                 fontWeight: FontWeight.w500,
                 color: TgScreenPalette.textMuted,
@@ -8317,7 +8347,7 @@ class _TgPlaybackTimelineBar extends StatelessWidget {
                       selectedSubjectLabel,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontFamily: TgScreenPalette.fontFamily, fontSize: 10.5, fontWeight: FontWeight.w800, color: TgScreenPalette.textPrimary),
+                      style: const TextStyle(fontFamily: TgScreenPalette.fontFamily, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w800, color: TgScreenPalette.textPrimary),
                     ),
                   ),
                   const SizedBox(width: 4),
@@ -8357,7 +8387,7 @@ class _TgPlaybackTimelineBar extends StatelessWidget {
                         '${index + 1}. ${stepLabels[index]}',
                         style: TextStyle(
                           fontFamily: TgScreenPalette.fontFamily,
-                          fontSize: 9.4,
+                          fontSize: AppTypography.captionSize,
                           fontWeight: FontWeight.w800,
                           color: active ? TgScreenPalette.primaryGreenDark : TgScreenPalette.textSecondary,
                         ),
@@ -8411,7 +8441,7 @@ class _TgPlaybackTimelineBar extends StatelessWidget {
                 'Анимация',
                 style: TextStyle(
                   fontFamily: TgScreenPalette.fontFamily,
-                  fontSize: 11.2,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w800,
                   color: TgScreenPalette.textPrimary,
                 ),
@@ -8454,14 +8484,14 @@ class _TgPlaybackTimelineBar extends StatelessWidget {
                     children: [
                       const Text(
                         'Объект для анимации',
-                        style: TextStyle(fontFamily: TgScreenPalette.fontFamily, fontSize: 8.4, fontWeight: FontWeight.w700, color: TgScreenPalette.textSecondary),
+                        style: TextStyle(fontFamily: TgScreenPalette.fontFamily, fontSize: AppTypography.badgeSize, fontWeight: FontWeight.w700, color: TgScreenPalette.textSecondary),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         selectedSubjectLabel,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontFamily: TgScreenPalette.fontFamily, fontSize: 14, fontWeight: FontWeight.w800, color: TgScreenPalette.textPrimary),
+                        style: const TextStyle(fontFamily: TgScreenPalette.fontFamily, fontSize: AppTypography.sectionTitleSize, fontWeight: FontWeight.w800, color: TgScreenPalette.textPrimary),
                       ),
                     ],
                   ),
@@ -8519,7 +8549,8 @@ class _TgPlaybackTimelineBar extends StatelessWidget {
                           child: Text(
                             '${index + 1}',
                             style: TextStyle(
-                              fontSize: 8.4,
+                              fontFamily: AppTypography.fontFamily,
+                              fontSize: AppTypography.badgeSize,
                               fontWeight: FontWeight.w800,
                               color: active ? Colors.white : TgScreenPalette.textSecondary,
                             ),
@@ -8530,7 +8561,7 @@ class _TgPlaybackTimelineBar extends StatelessWidget {
                           stepLabels[index],
                           style: TextStyle(
                             fontFamily: TgScreenPalette.fontFamily,
-                            fontSize: 8.4,
+                            fontSize: AppTypography.badgeSize,
                             fontWeight: FontWeight.w700,
                             color: active ? TgScreenPalette.primaryGreenDark : TgScreenPalette.textSecondary,
                           ),
@@ -8629,7 +8660,7 @@ class _TgStepBindingsStrip extends StatelessWidget {
                         '${item.subjectTitle} · ${item.routeTitle}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 9.2, fontWeight: FontWeight.w800, color: TgScreenPalette.textPrimary),
+                        style: const TextStyle(fontFamily: AppTypography.fontFamily, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w800, color: TgScreenPalette.textPrimary),
                       ),
                     ),
                     InkWell(
@@ -8667,7 +8698,7 @@ class _TgStepBindingsStrip extends StatelessWidget {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 8.4, fontWeight: FontWeight.w700, color: TgScreenPalette.textMuted),
+                    style: const TextStyle(fontFamily: AppTypography.fontFamily, fontSize: AppTypography.badgeSize, fontWeight: FontWeight.w700, color: TgScreenPalette.textMuted),
                   ),
                 ),
               ],
@@ -8711,13 +8742,13 @@ class _TgStepBindingsStrip extends StatelessWidget {
                                 item.subjectTitle,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 10.2, fontWeight: FontWeight.w900, color: TgScreenPalette.textPrimary),
+                                style: const TextStyle(fontFamily: AppTypography.fontFamily, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w900, color: TgScreenPalette.textPrimary),
                               ),
                               Text(
                                 item.routeTitle,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 8.4, fontWeight: FontWeight.w700, color: TgScreenPalette.textMuted),
+                                style: const TextStyle(fontFamily: AppTypography.fontFamily, fontSize: AppTypography.badgeSize, fontWeight: FontWeight.w700, color: TgScreenPalette.textMuted),
                               ),
                             ],
                           ),
@@ -8770,7 +8801,7 @@ class _TimelineWideAction extends StatelessWidget {
               label,
               style: TextStyle(
                 fontFamily: TgScreenPalette.fontFamily,
-                fontSize: 10.8,
+                fontSize: AppTypography.captionSize,
                 fontWeight: FontWeight.w700,
                 color: danger ? const Color(0xFFE11D48) : TgScreenPalette.textPrimary,
               ),
@@ -8878,7 +8909,7 @@ class _TgPlaybackPainter extends CustomPainter {
     final tp = TextPainter(
       text: TextSpan(
         text: binding.number.isNotEmpty ? binding.number : binding.initials,
-        style: const TextStyle(color: Colors.white, fontSize: 8.4, fontWeight: FontWeight.w800),
+        style: const TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.white, fontSize: AppTypography.badgeSize, fontWeight: FontWeight.w800),
       ),
       textDirection: TextDirection.ltr,
     )..layout();

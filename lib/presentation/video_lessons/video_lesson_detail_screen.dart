@@ -365,12 +365,7 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
         Expanded(
           child: Text(
             title,
-            style: const TextStyle(
-              fontSize: 17,
-              height: 1.12,
-              fontWeight: FontWeight.w600,
-              color: VideoLessonDetailPalette.text,
-            ),
+            style: CmrVideoText.title(17),
           ),
         ),
         if (counter != null)
@@ -382,10 +377,9 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
             ),
             child: Text(
               counter,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+              style: CmrVideoText.chip(
                 color: VideoLessonDetailPalette.primaryGreen,
+                active: true,
               ),
             ),
           ),
@@ -412,12 +406,7 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
           const SizedBox(width: 6),
           Text(
             text,
-            style: TextStyle(
-              fontSize: 12.5,
-              height: 1.1,
-              fontWeight: FontWeight.w500,
-              color: color,
-            ),
+            style: CmrVideoText.chip(color: color),
           ),
         ],
       ),
@@ -437,12 +426,7 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
                 : 'Видеоурок',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              color: VideoLessonDetailPalette.text,
-              fontSize: 16,
-              height: 1.1,
-            ),
+            style: CmrVideoText.title(16),
           ),
         ),
       ],
@@ -676,11 +660,10 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
               const SizedBox(width: 10),
               Text(
                 compact ? position : '$position / $duration',
-                style: TextStyle(
+                style: CmrVideoText.body(
+                  compact ? 11.0 : 12.0,
                   color: Colors.white,
-                  fontSize: compact ? 11.5 : 12.5,
-                  height: 1.0,
-                  fontWeight: FontWeight.w500,
+                  weight: FontWeight.w500,
                 ),
               ),
             ],
@@ -723,13 +706,7 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
             currentLesson.title.trim().isEmpty
                 ? 'Без названия'
                 : currentLesson.title,
-            style: const TextStyle(
-              fontSize: 24,
-              height: 1.12,
-              fontWeight: FontWeight.w600,
-              letterSpacing: -0.3,
-              color: VideoLessonDetailPalette.text,
-            ),
+            style: CmrVideoText.title(17),
           ),
           const SizedBox(height: 12),
           Wrap(
@@ -776,20 +753,12 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
                       authorFullName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        height: 1.1,
-                        fontWeight: FontWeight.w600,
-                        color: VideoLessonDetailPalette.text,
-                      ),
+                      style: CmrVideoText.title(15),
                     ),
                     const SizedBox(height: 3),
-                    const Text(
+                    Text(
                       'Автор видеоурока',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        height: 1.1,
-                        fontWeight: FontWeight.w400,
+                      style: CmrVideoText.secondary(
                         color: VideoLessonDetailPalette.textMuted,
                       ),
                     ),
@@ -815,7 +784,7 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
                               .withOpacity(0.18),
                         ),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
@@ -826,11 +795,8 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
                           SizedBox(width: 6),
                           Text(
                             'Изменить',
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              height: 1.1,
-                              fontWeight: FontWeight.w600,
-                              color: VideoLessonDetailPalette.primaryGreen,
+                            style: CmrVideoText.action(
+                              VideoLessonDetailPalette.primaryGreen,
                             ),
                           ),
                         ],
@@ -861,10 +827,8 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
             description.isEmpty
                 ? 'Описание пока не добавлено. Здесь можно указать цель урока, ключевые моменты, технику выполнения и рекомендации тренера.'
                 : description,
-            style: TextStyle(
-              fontSize: 14.5,
-              height: 1.48,
-              fontWeight: FontWeight.w400,
+            style: CmrVideoText.body(
+              13,
               color: description.isEmpty
                   ? VideoLessonDetailPalette.textMuted
                   : VideoLessonDetailPalette.text,
@@ -888,20 +852,15 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
           const SizedBox(height: 12),
           TextField(
             controller: commentController,
-            style: const TextStyle(
-              fontSize: 14,
-              height: 1.25,
+            style: CmrVideoText.formText(
               color: VideoLessonDetailPalette.text,
-              fontWeight: FontWeight.w400,
             ),
             minLines: 2,
             maxLines: 4,
             decoration: InputDecoration(
               hintText: 'Написать комментарий...',
-              hintStyle: const TextStyle(
+              hintStyle: CmrVideoText.formHint(
                 color: VideoLessonDetailPalette.textLight,
-                fontWeight: FontWeight.w400,
-                fontSize: 14,
               ),
               filled: true,
               fillColor: VideoLessonDetailPalette.surface,
@@ -961,11 +920,7 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
                     : const Icon(Icons.send_rounded, size: 19),
                 label: Text(
                   isCommentLoading ? 'Отправка...' : 'Отправить',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    height: 1.1,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: CmrVideoText.action(Colors.white),
                 ),
               ),
             ),
@@ -1014,7 +969,7 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: Colors.transparent, width: 0),
       ),
-      child: const Column(
+      child: Column(
         children: [
           Icon(
             Icons.chat_bubble_outline_rounded,
@@ -1024,9 +979,7 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
           SizedBox(height: 10),
           Text(
             'Комментариев пока нет',
-            style: TextStyle(
-              fontSize: 14.5,
-              fontWeight: FontWeight.w600,
+            style: CmrVideoText.emptyTitle(
               color: VideoLessonDetailPalette.text,
             ),
           ),
@@ -1034,10 +987,7 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
           Text(
             'Оставьте первый комментарий к видеоуроку.',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13,
-              height: 1.35,
-              fontWeight: FontWeight.w400,
+            style: CmrVideoText.emptyText(
               color: VideoLessonDetailPalette.textMuted,
             ),
           ),
@@ -1089,10 +1039,7 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
                             : authorFullName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          height: 1.1,
-                          fontWeight: FontWeight.w600,
+                        style: CmrVideoText.commentAuthor(
                           color: VideoLessonDetailPalette.text,
                         ),
                       ),
@@ -1100,10 +1047,7 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
                     const SizedBox(width: 8),
                     Text(
                       _formatCommentTime(comment.createdAt),
-                      style: const TextStyle(
-                        fontSize: 11.5,
-                        height: 1.1,
-                        fontWeight: FontWeight.w400,
+                      style: CmrVideoText.commentMeta(
                         color: VideoLessonDetailPalette.textLight,
                       ),
                     ),
@@ -1112,10 +1056,7 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
                 const SizedBox(height: 7),
                 Text(
                   comment.comment,
-                  style: const TextStyle(
-                    fontSize: 13.8,
-                    height: 1.42,
-                    fontWeight: FontWeight.w400,
+                  style: CmrVideoText.commentText(
                     color: VideoLessonDetailPalette.text,
                   ),
                 ),
@@ -1206,7 +1147,7 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: _card(
-          child: const Column(
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
@@ -1217,9 +1158,7 @@ class _VideoLessonDetailScreenState extends State<VideoLessonDetailScreen>
               SizedBox(height: 12),
               Text(
                 'Урок не найден',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 16,
+                style: CmrVideoText.emptyTitle(
                   color: VideoLessonDetailPalette.text,
                 ),
               ),

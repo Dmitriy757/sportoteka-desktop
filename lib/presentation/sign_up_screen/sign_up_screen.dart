@@ -226,13 +226,16 @@ class SignUpScreen extends StatelessWidget {
           SizedBox(height: desktop ? 88 : 62),
           Text(
             'Создайте аккаунт\nSportoteka',
-            style: _hubTitle(desktop ? 28 : 25),
+            style: AppTypography.screenTitle(
+              color: _text,
+              scale: desktop ? 1.18 : 1.08,
+            ),
           ),
           const SizedBox(height: 12),
           Text(
             'Выберите свою роль. После регистрации Sportoteka '
             'покажет только доступные вашему аккаунту рабочие пространства.',
-            style: _hubBody(desktop ? 13.4 : 13),
+            style: AppTypography.body(color: _secondary),
           ),
           SizedBox(height: desktop ? 42 : 32),
           _buildRoleInfo(
@@ -284,12 +287,12 @@ class SignUpScreen extends StatelessWidget {
                 children: [
                   Text(
                     'Регистрация',
-                    style: _hubTitle(mobile ? 24 : 27),
+                    style: AppTypography.screenTitle(color: _text),
                   ),
                   const SizedBox(height: 7),
                   Text(
                     'Заполните данные учётной записи',
-                    style: _hubBody(mobile ? 12.6 : 13),
+                    style: AppTypography.secondary(color: _secondary),
                   ),
                   const SizedBox(height: 22),
 
@@ -421,13 +424,7 @@ class SignUpScreen extends StatelessWidget {
                       ),
                       child: Text(
                         'Зарегистрироваться',
-                        style: AppTypography.custom(
-                          size: 13.2,
-                          weight: FontWeight.w700,
-                          color: Colors.white,
-                          height: 1,
-                          letterSpacing: 0,
-                        ),
+                        style: AppTypography.actionStrong(color: Colors.white),
                       ),
                     ),
                   ),
@@ -443,8 +440,8 @@ class SignUpScreen extends StatelessWidget {
   }
 
   Widget _buildRegistrationMobileInfo() {
-    return const Padding(
-      padding: EdgeInsets.fromLTRB(16, 16, 16, 16),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -458,12 +455,7 @@ class SignUpScreen extends StatelessWidget {
             child: Text(
               'Роль определяет доступные кабинеты. '
               'Родитель связывается с конкретным ребёнком только через Parent Key.',
-              style: TextStyle(
-                color: _secondary,
-                fontSize: 10.8,
-                height: 1.4,
-                fontWeight: FontWeight.w500,
-              ),
+              style: AppTypography.captionMedium(color: _secondary),
             ),
           ),
         ],
@@ -496,13 +488,10 @@ class SignUpScreen extends StatelessWidget {
         const SizedBox(width: 10),
         Text(
           'SPORTOTEKA',
-          style: AppTypography.custom(
-            size: compact ? 15.2 : 16.4,
-            weight: FontWeight.w700,
+          style: AppTypography.screenTitle(
             color: _text,
-            height: 1,
-            letterSpacing: .15,
-          ),
+            scale: compact ? .92 : 1,
+          ).copyWith(height: 1, letterSpacing: .15),
         ),
       ],
     );
@@ -538,24 +527,12 @@ class SignUpScreen extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: AppTypography.custom(
-                  size: 12.2,
-                  weight: FontWeight.w600,
-                  color: _text,
-                  height: 1.2,
-                  letterSpacing: 0,
-                ),
+                style: AppTypography.menuTitle(color: _text),
               ),
               const SizedBox(height: 3),
               Text(
                 text,
-                style: AppTypography.custom(
-                  size: 10.8,
-                  weight: FontWeight.w400,
-                  color: _secondary,
-                  height: 1.35,
-                  letterSpacing: 0,
-                ),
+                style: AppTypography.caption(color: _secondary),
               ),
             ],
           ),
@@ -567,44 +544,12 @@ class SignUpScreen extends StatelessWidget {
   Widget _hubFieldLabel(String text) {
     return Text(
       text,
-      style: AppTypography.custom(
-        size: 12,
-        weight: FontWeight.w600,
-        color: _text,
-        height: 1.18,
-        letterSpacing: 0,
-      ),
-    );
-  }
-
-  TextStyle _hubTitle(double size) {
-    return AppTypography.custom(
-      size: size,
-      weight: FontWeight.w600,
-      color: _text,
-      height: 1.18,
-      letterSpacing: 0,
-    );
-  }
-
-  TextStyle _hubBody(double size) {
-    return AppTypography.custom(
-      size: size,
-      weight: FontWeight.w400,
-      color: _secondary,
-      height: 1.32,
-      letterSpacing: 0,
+      style: AppTypography.formLabel(color: _text),
     );
   }
 
   TextStyle _hubCaption() {
-    return AppTypography.custom(
-      size: 10.8,
-      weight: FontWeight.w500,
-      color: _subtle,
-      height: 1.18,
-      letterSpacing: 0,
-    );
+    return AppTypography.captionMedium(color: _subtle);
   }
 
   Widget _buildRegistrationFooter({required bool mobile}) {
@@ -615,13 +560,7 @@ class SignUpScreen extends StatelessWidget {
       child: Text(
         '© Sportoteka · Все права защищены',
         textAlign: mobile ? TextAlign.center : TextAlign.left,
-        style: AppTypography.custom(
-          size: 10.3,
-          weight: FontWeight.w400,
-          color: _subtle,
-          height: 1.4,
-          letterSpacing: 0,
-        ),
+        style: AppTypography.commentMeta(color: _subtle),
       ),
     );
   }
@@ -672,24 +611,12 @@ class SignUpScreen extends StatelessWidget {
                   children: [
                     Text(
                       'Клуб / ДЮСШ / СДЮШОР',
-                      style: AppTypography.custom(
-                        size: 12.3,
-                        weight: FontWeight.w600,
-                        color: _text,
-                        height: 1.2,
-                        letterSpacing: 0,
-                      ),
+                      style: AppTypography.menuTitle(color: _text),
                     ),
                     const SizedBox(height: 3),
                     Text(
                       'Отдельная регистрация клуба по заявке',
-                      style: AppTypography.custom(
-                        size: 10.6,
-                        weight: FontWeight.w400,
-                        color: _secondary,
-                        height: 1.35,
-                        letterSpacing: 0,
-                      ),
+                      style: AppTypography.menuSubtitle(color: _secondary),
                     ),
                   ],
                 ),
@@ -793,19 +720,16 @@ class SignUpScreen extends StatelessWidget {
                 const SizedBox(height: 18),
                 Text(
                   'КЛУБ\nДЮСШ\nСДЮШОР',
-                  style: AppTypography.custom(
-                    size: 22.5,
-                    weight: FontWeight.w600,
+                  style: AppTypography.screenTitle(
                     color: _text,
-                    height: 1.08,
-                    letterSpacing: 0,
-                  ),
+                    scale: 1.08,
+                  ).copyWith(height: 1.08),
                 ),
                 const SizedBox(height: 14),
                 Text(
                   'Создайте заявку организации. '
                   'После проверки аккаунт получит доступ к клубному кабинету Sportoteka.',
-                  style: _hubBody(12.3),
+                  style: AppTypography.body(color: _secondary),
                 ),
                 const SizedBox(height: 28),
                 _buildClubApplicationInfoRow(
@@ -826,13 +750,7 @@ class SignUpScreen extends StatelessWidget {
                 Text(
                   'Заявка создаёт аккаунт организации '
                   'со статусом «ожидает подтверждения».',
-                  style: AppTypography.custom(
-                    size: 9.9,
-                    weight: FontWeight.w400,
-                    color: _subtle,
-                    height: 1.4,
-                    letterSpacing: 0,
-                  ),
+                  style: AppTypography.commentMeta(color: _subtle),
                 ),
               ],
             ),
@@ -920,13 +838,7 @@ class SignUpScreen extends StatelessWidget {
         Expanded(
           child: Text(
             text,
-            style: AppTypography.custom(
-              size: 10.8,
-              weight: FontWeight.w600,
-              color: _text,
-              height: 1.25,
-              letterSpacing: 0,
-            ),
+            style: AppTypography.captionMedium(color: _text),
           ),
         ),
       ],
@@ -962,12 +874,12 @@ class SignUpScreen extends StatelessWidget {
                       children: [
                         Text(
                           'Заявка: КЛУБ / ДЮСШ / СДЮШОР',
-                          style: _hubTitle(21.5),
+                          style: AppTypography.screenTitle(color: _text),
                         ),
                         const SizedBox(height: 6),
                         Text(
                           'Заполните данные организации',
-                          style: _hubBody(12.2),
+                          style: AppTypography.secondary(color: _secondary),
                         ),
                       ],
                     ),
@@ -986,12 +898,12 @@ class SignUpScreen extends StatelessWidget {
             else ...[
               Text(
                 'Заявка: КЛУБ / ДЮСШ / СДЮШОР',
-                style: _hubTitle(20.8),
+                style: AppTypography.screenTitle(color: _text),
               ),
               const SizedBox(height: 6),
               Text(
                 'Заполните данные организации',
-                style: _hubBody(12.2),
+                style: AppTypography.secondary(color: _secondary),
               ),
             ],
 
@@ -1202,13 +1114,7 @@ class SignUpScreen extends StatelessWidget {
                 ),
                 child: Text(
                   'Отправить заявку',
-                  style: AppTypography.custom(
-                    size: 13,
-                    weight: FontWeight.w700,
-                    color: Colors.white,
-                    height: 1,
-                    letterSpacing: 0,
-                  ),
+                  style: AppTypography.actionStrong(color: Colors.white),
                 ),
               ),
             ),
@@ -1222,13 +1128,7 @@ class SignUpScreen extends StatelessWidget {
               textAlign: mobile
                   ? TextAlign.center
                   : TextAlign.left,
-              style: AppTypography.custom(
-                size: 9.8,
-                weight: FontWeight.w400,
-                color: _subtle,
-                height: 1.4,
-                letterSpacing: 0,
-              ),
+              style: AppTypography.commentMeta(color: _subtle),
             ),
           ],
         ),
@@ -1251,22 +1151,10 @@ class SignUpScreen extends StatelessWidget {
       keyboardType: textInputType,
       obscureText: obscureText,
       maxLines: obscureText ? 1 : maxLines,
-      style: AppTypography.custom(
-        size: 13,
-        weight: FontWeight.w500,
-        color: _text,
-        height: 1.25,
-        letterSpacing: 0,
-      ),
+      style: AppTypography.formText(color: _text),
       decoration: InputDecoration(
         hintText: hintText,
-        hintStyle: AppTypography.custom(
-          size: 12.8,
-          weight: FontWeight.w400,
-          color: _subtle,
-          height: 1.25,
-          letterSpacing: 0,
-        ),
+        hintStyle: AppTypography.formHint(color: _subtle),
         filled: true,
         fillColor: _greenSoft2,
         contentPadding: EdgeInsets.symmetric(
@@ -1397,26 +1285,14 @@ class SignUpScreen extends StatelessWidget {
           color: _greenDark,
           size: 20,
         ),
-        style: AppTypography.custom(
-          size: 13,
-          weight: FontWeight.w500,
-          color: _text,
-          height: 1.25,
-          letterSpacing: 0,
-        ),
+        style: AppTypography.formText(color: _text),
         items: roleMapping.keys
             .map(
               (role) => DropdownMenuItem<String>(
                 value: role,
                 child: Text(
                   role,
-                  style: AppTypography.custom(
-                    size: 13,
-                    weight: FontWeight.w500,
-                    color: _text,
-                    height: 1.25,
-                    letterSpacing: 0,
-                  ),
+                  style: AppTypography.formText(color: _text),
                 ),
               ),
             )
@@ -1497,25 +1373,13 @@ class SignUpScreen extends StatelessWidget {
                 children: [
                   Text(
                     'Доступ родителя к ребёнку',
-                    style: AppTypography.custom(
-                      size: 11.8,
-                      weight: FontWeight.w600,
-                      color: _text,
-                      height: 1.20,
-                      letterSpacing: 0,
-                    ),
+                    style: AppTypography.secondaryMedium(color: _text),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'После регистрации откройте «Мои дети» и введите '
                     'Parent Key, который клуб выдаёт именно для вашего ребёнка.',
-                    style: AppTypography.custom(
-                      size: 10.5,
-                      weight: FontWeight.w400,
-                      color: _secondary,
-                      height: 1.32,
-                      letterSpacing: 0,
-                    ),
+                    style: AppTypography.caption(color: _secondary),
                   ),
                 ],
               ),
@@ -1535,13 +1399,7 @@ class SignUpScreen extends StatelessWidget {
       children: [
         Text(
           'Уже есть аккаунт?',
-          style: AppTypography.custom(
-            size: 12.2,
-            weight: FontWeight.w400,
-            color: _secondary,
-            height: 1.2,
-            letterSpacing: 0,
-          ),
+          style: AppTypography.secondary(color: _secondary),
         ),
         const SizedBox(width: 5),
         TextButton(
@@ -1551,13 +1409,7 @@ class SignUpScreen extends StatelessWidget {
           ),
           child: Text(
             'Войти',
-            style: AppTypography.custom(
-              size: 12.2,
-              weight: FontWeight.w600,
-              color: _greenDark,
-              height: 1.2,
-              letterSpacing: 0,
-            ),
+            style: AppTypography.action(color: _greenDark),
           ),
         ),
       ],
@@ -1580,13 +1432,9 @@ class _AuthLinkText extends StatelessWidget {
       onTap: onTap,
       child: Text(
         text,
-        style: AppTypography.custom(
-          size: 11.5,
-          weight: FontWeight.w600,
+        style: AppTypography.captionMedium(
           color: SignUpScreen._greenDark,
-          height: 1.42,
-          letterSpacing: 0,
-        ),
+        ).copyWith(height: 1.42),
       ),
     );
   }

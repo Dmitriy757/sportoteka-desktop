@@ -17,6 +17,7 @@ import 'package:sportoteka/presentation/chat_screen/chat_room_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/chat_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/create_group_chat_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/cmr_notifications_panel.dart';
+import 'package:sportoteka/presentation/chat_screen/call_history_panel.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_club_ai_assistant_panel.dart';
 
 enum _CmrChatMode { privateChats, groups, users }
@@ -68,6 +69,7 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
 
   // ИИ клуба открываем первым: для клуба это рабочий поиск по отчетам/игрокам/сессиям.
   bool _notificationsSelected = false;
+  bool _callsSelected = false;
   int _notificationsUnread = 0;
   bool _aiSelected = false;
   bool _openingAiRoute = false;
@@ -258,7 +260,7 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
   }
 
   void _autoSelectFirstChat() {
-    if (_notificationsSelected) return;
+    if (_notificationsSelected || _callsSelected) return;
     if (_aiSelected) return;
     if (_selectedChatId != null) return;
     final chats = _visibleChatsRaw();
@@ -534,10 +536,22 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
   void _selectNotifications() {
     setState(() {
       _notificationsSelected = true;
+      _callsSelected = false;
       _aiSelected = false;
       _selectedChat = null;
       _selectedChatId = null;
       _selectedChatName = 'Уведомления';
+    });
+  }
+
+  void _selectCalls() {
+    setState(() {
+      _callsSelected = true;
+      _notificationsSelected = false;
+      _aiSelected = false;
+      _selectedChat = null;
+      _selectedChatId = null;
+      _selectedChatName = 'Звонки';
     });
   }
 
@@ -551,6 +565,7 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
     // На планшете/ПК оставляем ИИ справа внутри рабочей области чатов.
     setState(() {
       _notificationsSelected = false;
+      _callsSelected = false;
       _aiSelected = true;
       _selectedChat = null;
       _selectedChatId = null;
@@ -614,6 +629,7 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
     if (id <= 0) return;
     final title = _chatTitle(chat);
     _notificationsSelected = false;
+    _callsSelected = false;
     _aiSelected = false;
     if (_phoneMessengerLayout) {
       unawaited(_openChatFullscreen(chatId: id, title: title, chat: chat));
@@ -864,6 +880,12 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
         key: const ValueKey('notifications-phone'),
       );
     }
+    if (_callsSelected) {
+      return _buildRight(
+        showBack: true,
+        key: const ValueKey('calls-phone'),
+      );
+    }
     if (_aiSelected) {
       // Если раздел «Чаты» открылся сразу с выбранным ИИ, на телефоне не
       // встраиваем его под нижний dock, а открываем полноценным экраном.
@@ -912,6 +934,12 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
             unread: _notificationsUnread,
             mobile: mobile,
             onTap: _selectNotifications,
+          ),
+          SizedBox(height: mobile ? 6 : 7),
+          _CallsPinnedRow(
+            selected: _callsSelected,
+            mobile: mobile,
+            onTap: _selectCalls,
           ),
           SizedBox(height: mobile ? 6 : 7),
           _AiPinnedChatRow(
@@ -1040,6 +1068,31 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
                   _selectedChatName = '';
                 })
             : null,
+      );
+    }
+    if (_callsSelected) {
+      return Container(
+        key: const ValueKey('cmr-call-history'),
+        color: Colors.white,
+        child: Column(
+          children: [
+            if (showBack)
+              _EmbeddedChatHeader(
+                title: 'Звонки',
+                subtitle: 'История входящих и исходящих',
+                avatarUrl: '',
+                initials: 'З',
+                isGroup: false,
+                onBack: () => setState(() {
+                  _callsSelected = false;
+                  _selectedChatName = '';
+                }),
+              ),
+            Expanded(
+              child: CallHistoryPanel(userId: widget.userId),
+            ),
+          ],
+        ),
       );
     }
     if (_aiSelected) {
@@ -1224,6 +1277,98 @@ class _NotificationsPinnedRow extends StatelessWidget {
                       style: _CmrChatText.muted(
                         mobile ? 10.8 : 11.2,
                       ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.arrow_forward_rounded,
+                color: _CmrChatColors.greenDark,
+                size: 16,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+class _CallsPinnedRow extends StatelessWidget {
+  final bool selected;
+  final bool mobile;
+  final VoidCallback onTap;
+
+  const _CallsPinnedRow({
+    required this.selected,
+    required this.mobile,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 170),
+          padding: EdgeInsets.symmetric(
+            horizontal: mobile ? 9 : 10,
+            vertical: mobile ? 8 : 9,
+          ),
+          decoration: BoxDecoration(
+            color: selected ? const Color(0xFFE2F7EA) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 170),
+                width: 3,
+                height: mobile ? 42 : 44,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? _CmrChatColors.green
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                width: mobile ? 38 : 40,
+                height: mobile ? 38 : 40,
+                decoration: BoxDecoration(
+                  color: _CmrChatColors.greenSoft,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.call_outlined,
+                  color: _CmrChatColors.greenDark,
+                  size: 19,
+                ),
+              ),
+              SizedBox(width: mobile ? 9 : 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Звонки',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _CmrChatText.title(mobile ? 13.2 : 13.8),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Входящие, исходящие и пропущенные',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _CmrChatText.muted(mobile ? 10.8 : 11.2),
                     ),
                   ],
                 ),

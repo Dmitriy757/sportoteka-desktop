@@ -138,28 +138,31 @@ class TrainerCabinetPanel extends StatelessWidget {
   }
 
   TextStyle _title(
-    double size, {
+    double legacySize, {
     Color color = _text,
-  }) =>
-      AppTypography.custom(
-        size: size,
-        weight: FontWeight.w600,
-        color: color,
-        height: 1.18,
-      );
+  }) {
+    if (legacySize >= 16) {
+      return AppTypography.screenTitle(color: color);
+    }
+    if (legacySize >= 14) {
+      return AppTypography.sectionTitle(color: color);
+    }
+    if (legacySize >= 11.5) {
+      return AppTypography.itemTitle(color: color);
+    }
+    return AppTypography.menuTitle(color: color);
+  }
 
   TextStyle _body(
-    double size, {
+    double legacySize, {
     Color color = _muted,
-    FontWeight weight =
-        FontWeight.w400,
-  }) =>
-      AppTypography.custom(
-        size: size,
-        weight: weight,
-        color: color,
-        height: 1.3,
-      );
+    FontWeight weight = FontWeight.w400,
+  }) {
+    final base = legacySize >= 9.2
+        ? AppTypography.secondary(color: color)
+        : AppTypography.caption(color: color);
+    return base.copyWith(fontWeight: weight);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -241,10 +244,9 @@ class TrainerCabinetPanel extends StatelessWidget {
                     children: <Widget>[
                       Text(
                         'Мой кабинет тренера',
-                        style:
-                            _title(phone
-                                ? 15
-                                : 16.5),
+                        style: AppTypography.screenTitle(
+                          color: _text,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -515,14 +517,8 @@ class _MetricStrip extends StatelessWidget {
                 children: <Widget>[
                   Text(
                     items[i].value,
-                    style:
-                        AppTypography.custom(
-                      size: 11.7,
-                      weight:
-                          FontWeight.w600,
-                      color:
-                          TrainerCabinetPanel
-                              ._text,
+                    style: AppTypography.itemTitle(
+                      color: TrainerCabinetPanel._text,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -531,15 +527,9 @@ class _MetricStrip extends StatelessWidget {
                     maxLines: 1,
                     overflow:
                         TextOverflow.ellipsis,
-                    style:
-                        AppTypography.custom(
-                      size: 7.9,
-                      weight:
-                          FontWeight.w500,
-                      color:
-                          TrainerCabinetPanel
-                              ._muted2,
-                    ),
+                    style: AppTypography.commentMeta(
+                      color: TrainerCabinetPanel._muted2,
+                    ).copyWith(fontWeight: FontWeight.w500),
                   ),
                 ],
               ),

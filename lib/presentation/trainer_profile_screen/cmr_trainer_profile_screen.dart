@@ -2087,11 +2087,8 @@ class _CmrTrainerProfileScreenState
                             maxLines: 1,
                             overflow:
                                 TextOverflow.ellipsis,
-                            style:
-                                _TpText.title(
-                              compact
-                                  ? 14
-                                  : 15,
+                            style: AppTypography.screenTitle(
+                              color: _TpColors.text,
                             ),
                           ),
                         ),
@@ -2113,16 +2110,9 @@ class _CmrTrainerProfileScreenState
                         maxLines: 1,
                         overflow:
                             TextOverflow.ellipsis,
-                        style:
-                            _TpText.body(
-                          compact
-                              ? 9.5
-                              : 10.2,
-                          color:
-                              _TpColors.muted,
-                          weight:
-                              FontWeight.w500,
-                        ),
+                        style: AppTypography.secondary(
+                          color: _TpColors.muted,
+                        ).copyWith(fontWeight: FontWeight.w500),
                       ),
                     ],
                   ],
@@ -2380,6 +2370,7 @@ class _CmrTrainerProfileScreenState
   ) {
     final active = _section == section;
     final color = _sectionColor(section);
+    final mobile = MediaQuery.sizeOf(context).width < 640;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 3),
@@ -2412,8 +2403,7 @@ class _CmrTrainerProfileScreenState
                       maxLines: 1,
                       overflow:
                           TextOverflow.ellipsis,
-                      style: _TpText.body(
-                        10.2,
+                      style: AppTypography.menuTitle(
                         color: active
                             ? _TpColors.greenDark
                             : _TpColors.text,
@@ -2518,15 +2508,11 @@ class _CmrTrainerProfileScreenState
                           const SizedBox(width: 5),
                           Text(
                             _sectionTitle(item),
-                            style: _TpText.body(
-                              9.6,
+                            style: AppTypography.tab(
                               color: active
-                                  ? _TpColors
-                                      .greenDark
+                                  ? _TpColors.greenDark
                                   : _TpColors.text,
-                              weight: active
-                                  ? FontWeight.w600
-                                  : FontWeight.w500,
+                              active: active,
                             ),
                           ),
                         ],
@@ -2858,7 +2844,9 @@ class _CmrTrainerProfileScreenState
                     maxLines: 1,
                     overflow:
                         TextOverflow.ellipsis,
-                    style: _TpText.title(11.8),
+                    style: AppTypography.subsectionTitle(
+            color: _TpColors.text,
+          ),
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -3343,7 +3331,7 @@ class _CmrTrainerProfileScreenState
                     Text(
                       _teamName(team),
                       style: _TpText.body(
-                        9.5,
+                        MediaQuery.sizeOf(context).width < 640 ? 10.5 : 9.5,
                         weight: active
                             ? FontWeight.w600
                             : FontWeight.w500,
@@ -5385,32 +5373,61 @@ static const Color blue = Color(0xFF2563EB);
 
 class _TpText {
   static TextStyle title(
-    double size, {
+    double legacySize, {
     Color color = _TpColors.text,
     FontWeight weight = FontWeight.w600,
   }) {
-    return AppTypography.custom(
-      size: size,
-      weight: weight,
-      color: color,
-      height: 1.18,
+    final TextStyle base;
+    if (legacySize >= 16) {
+      base = AppTypography.screenTitle(color: color);
+    } else if (legacySize >= 14) {
+      base = AppTypography.sectionTitle(color: color);
+    } else if (legacySize >= 13) {
+      base = AppTypography.subsectionTitle(color: color);
+    } else if (legacySize >= 12) {
+      base = AppTypography.itemTitle(color: color);
+    } else if (legacySize >= 11) {
+      base = AppTypography.menuTitle(color: color);
+    } else {
+      base = AppTypography.captionMedium(color: color);
+    }
+
+    return base.copyWith(
+      fontWeight: weight,
       letterSpacing: 0,
-      features: const <FontFeature>[
+      fontFeatures: const <FontFeature>[
         FontFeature.tabularFigures(),
       ],
     );
   }
 
   static TextStyle body(
-    double size, {
+    double legacySize, {
     Color color = _TpColors.text,
     FontWeight weight = FontWeight.w400,
     double height = 1.25,
   }) {
-    return AppTypography.custom(
-      size: size,
-      weight: weight,
-      color: color,
+    final bool medium = weight.index >= FontWeight.w600.index;
+    final TextStyle base;
+
+    if (legacySize >= 10.8) {
+      base = medium
+          ? AppTypography.bodyMedium(color: color)
+          : AppTypography.body(color: color);
+    } else if (legacySize >= 9.7) {
+      base = medium
+          ? AppTypography.secondaryMedium(color: color)
+          : AppTypography.secondary(color: color);
+    } else if (legacySize >= 8.8) {
+      base = medium
+          ? AppTypography.captionMedium(color: color)
+          : AppTypography.caption(color: color);
+    } else {
+      base = AppTypography.commentMeta(color: color);
+    }
+
+    return base.copyWith(
+      fontWeight: weight,
       height: height,
       letterSpacing: 0,
     );
@@ -5609,8 +5626,9 @@ class _TpHeaderAction extends StatelessWidget {
           child: compact
               ? Text(
                   label,
-                  style:
-                      _TpText.title(14),
+                  style: AppTypography.actionStrong(
+                    color: _TpColors.text,
+                  ),
                 )
               : Row(
                   mainAxisSize:
@@ -5628,19 +5646,10 @@ class _TpHeaderAction extends StatelessWidget {
                     ),
                     Text(
                       label,
-                      style:
-                          _TpText.body(
-                        10.2,
-                        color:
-                            emphasized ||
-                                    active
-                                ? _TpColors
-                                    .greenDark
-                                : _TpColors
-                                    .text,
-                        weight:
-                            FontWeight
-                                .w600,
+                      style: AppTypography.action(
+                        color: emphasized || active
+                            ? _TpColors.greenDark
+                            : _TpColors.text,
                       ),
                     ),
                   ],
@@ -5699,12 +5708,8 @@ class _TpAction extends StatelessWidget {
                   maxLines: 1,
                   overflow:
                       TextOverflow.ellipsis,
-                  style: _TpText.body(
-                    9.5,
-                    color: filled
-                        ? Colors.white
-                        : color,
-                    weight: FontWeight.w600,
+                  style: AppTypography.action(
+                    color: filled ? Colors.white : color,
                   ),
                 ),
               ),
@@ -5736,7 +5741,9 @@ class _TpSectionTitle extends StatelessWidget {
         const SizedBox(width: 7),
         Text(
           title,
-          style: _TpText.title(11.8),
+          style: AppTypography.subsectionTitle(
+            color: _TpColors.text,
+          ),
         ),
       ],
     );
@@ -7652,7 +7659,9 @@ class _TpTestingList extends StatelessWidget {
                 children: <Widget>[
                   Text(
                     teamName,
-                    style: _TpText.title(11.8),
+                    style: AppTypography.subsectionTitle(
+            color: _TpColors.text,
+          ),
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -9744,7 +9753,9 @@ class _TpEmpty extends StatelessWidget {
             Text(
               title,
               textAlign: TextAlign.center,
-              style: _TpText.title(11.8),
+              style: AppTypography.subsectionTitle(
+            color: _TpColors.text,
+          ),
             ),
             const SizedBox(height: 5),
             Text(

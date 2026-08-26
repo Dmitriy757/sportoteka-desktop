@@ -43,97 +43,61 @@ class _CmrTestColors {
 
 class _CmrTestText {
   static TextStyle title(double size) {
-    return AppTypography.custom(
-      size: size,
-      weight: FontWeight.w600,
-      color: _CmrTestColors.text,
-      height: 1.18,
-      letterSpacing: 0,
-    );
+    if (size >= 18) {
+      return AppTypography.screenTitle(color: _CmrTestColors.text);
+    }
+    if (size >= 15) {
+      return AppTypography.sectionTitle(color: _CmrTestColors.text);
+    }
+    return AppTypography.subsectionTitle(color: _CmrTestColors.text);
   }
 
   static TextStyle section() {
-    return AppTypography.custom(
-      size: 12.2,
-      weight: FontWeight.w600,
-      color: _CmrTestColors.text,
-      height: 1.20,
-      letterSpacing: 0,
-    );
+    return AppTypography.subsectionTitle(color: _CmrTestColors.text);
   }
 
   static TextStyle value(double size) {
-    return AppTypography.custom(
-      size: size,
-      weight: FontWeight.w600,
-      color: _CmrTestColors.text,
-      height: 1.18,
-      letterSpacing: 0,
-    );
+    if (size >= 17) {
+      return AppTypography.metricStrong(color: _CmrTestColors.text);
+    }
+    if (size >= 14) {
+      return AppTypography.itemTitle(color: _CmrTestColors.text);
+    }
+    if (size >= 12) {
+      return AppTypography.bodyMedium(color: _CmrTestColors.text);
+    }
+    return AppTypography.captionMedium(color: _CmrTestColors.text);
   }
 
   static TextStyle muted(double size) {
-    return AppTypography.custom(
-      size: size,
-      weight: FontWeight.w400,
-      color: _CmrTestColors.muted,
-      height: 1.32,
-      letterSpacing: 0,
-    );
+    if (size >= 11.5) {
+      return AppTypography.secondary(color: _CmrTestColors.muted);
+    }
+    return AppTypography.caption(color: _CmrTestColors.muted2);
   }
 
   static TextStyle caption() {
-    return AppTypography.custom(
-      size: 10.5,
-      weight: FontWeight.w500,
-      color: _CmrTestColors.muted2,
-      height: 1.14,
-    );
+    return AppTypography.captionMedium(color: _CmrTestColors.muted2);
   }
 
   static TextStyle pill() {
-    return AppTypography.custom(
-      size: 11,
-      weight: FontWeight.w600,
-      color: _CmrTestColors.text,
-      height: 1,
-    );
+    return AppTypography.chip(color: _CmrTestColors.text, active: true);
   }
 
   static TextStyle tab() {
-    return AppTypography.custom(
-      size: 11.5,
-      weight: FontWeight.w500,
-      color: _CmrTestColors.text,
-      height: 1,
-    );
+    return AppTypography.tab(color: _CmrTestColors.text);
   }
 
   static TextStyle tabSelected() {
-    return AppTypography.custom(
-      size: 11.5,
-      weight: FontWeight.w600,
-      color: _CmrTestColors.text,
-      height: 1,
-    );
+    return AppTypography.tab(color: _CmrTestColors.text, active: true);
   }
 
   static TextStyle action() {
-    return AppTypography.custom(
-      size: 11.5,
-      weight: FontWeight.w600,
-      color: _CmrTestColors.text,
-      height: 1,
-    );
+    return AppTypography.action(color: _CmrTestColors.text);
   }
 
   static TextStyle danger() {
-    return AppTypography.custom(
-      size: 11.5,
-      weight: FontWeight.w600,
-      color: _CmrTestColors.red,
-      height: 1,
-    );
+    return AppTypography.action(color: _CmrTestColors.red);
   }
 }
 
@@ -1124,7 +1088,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
           const SizedBox(width: 6),
           Text(
             compact ? stage : 'Этап $stage',
-            style: _CmrTestText.action().copyWith(fontSize: compact ? 12 : 13),
+            style: AppTypography.action(color: _CmrTestColors.text),
           ),
         ],
       ),
@@ -1847,7 +1811,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                               onPressed: () => localSetState(() => visibleMonth = DateTime(visibleMonth.year, visibleMonth.month - 1)),
                               icon: const Icon(Icons.chevron_left_rounded),
                             ),
-                            Expanded(child: Center(child: Text(_monthTitle(visibleMonth), style: _CmrTestText.section().copyWith(fontSize: 16)))),
+                            Expanded(child: Center(child: Text(_monthTitle(visibleMonth), style: AppTypography.sectionTitle(color: _CmrTestColors.text)))),
                             IconButton(
                               onPressed: () => localSetState(() => visibleMonth = DateTime(visibleMonth.year, visibleMonth.month + 1)),
                               icon: const Icon(Icons.chevron_right_rounded),
@@ -1993,7 +1957,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
             style: TextButton.styleFrom(
               foregroundColor: _CmrTestColors.graphite,
               visualDensity: VisualDensity.compact,
-              textStyle: AppTypography.custom(size: 11.5, weight: FontWeight.w600, color: _CmrTestColors.graphite),
+              textStyle: AppTypography.action(color: _CmrTestColors.graphite),
             ),
             child: const Text('Показать всех'),
           ),
@@ -2244,7 +2208,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                     ),
                     child: Text(
                       'Найден',
-                      style: AppTypography.custom(size: 10.5, weight: FontWeight.w600, color: Colors.white),
+                      style: AppTypography.chip(color: Colors.white, active: true),
                     ),
                   ),
                   const SizedBox(width: 6),
@@ -2309,7 +2273,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                     style: _CmrTestText.value(11),
                   ),
                 ),
-                Text(_unitForTest(test), style: _CmrTestText.caption().copyWith(fontSize: 9)),
+                Text(_unitForTest(test), style: AppTypography.caption(color: _CmrTestColors.muted2, scale: .88)),
               ],
             ),
             const SizedBox(height: 4),
@@ -2338,8 +2302,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
               hasRating ? r.label : 'ввод результата',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: _CmrTestText.caption().copyWith(
-                fontSize: 10,
+              style: AppTypography.captionMedium(
                 color: hasRating ? _darken(r.color) : _CmrTestColors.muted,
               ),
             ),
@@ -2383,7 +2346,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                           _playerPosition(p),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: _CmrTestText.caption().copyWith(fontSize: 10),
+                          style: AppTypography.caption(color: _CmrTestColors.muted2),
                         ),
                       ),
                       if (focused) ...[
@@ -2396,7 +2359,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                           ),
                           child: Text(
                             'Найден',
-                            style: AppTypography.custom(size: 9, weight: FontWeight.w600, color: Colors.white),
+                            style: AppTypography.badge(color: Colors.white),
                           ),
                         ),
                       ],
@@ -2441,7 +2404,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
             hintText: '—',
             border: InputBorder.none,
             helperText: r.label.isEmpty ? null : r.label,
-            helperStyle: AppTypography.custom(size: 9, weight: FontWeight.w600, color: _darken(r.color)),
+            helperStyle: AppTypography.captionMedium(color: _darken(r.color), scale: .88),
           ),
         ),
       );
@@ -2459,7 +2422,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
           style: hasRating
-              ? AppTypography.custom(size: 11, weight: FontWeight.w600, color: _darken(r.color))
+              ? AppTypography.chip(color: _darken(r.color), active: true)
               : _CmrTestText.caption(),
         ),
       ),
@@ -2482,7 +2445,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
-          style: AppTypography.custom(size: 11, weight: FontWeight.w600, color: _darken(r.color)),
+          style: AppTypography.chip(color: _darken(r.color), active: true),
         ),
       ),
     );
@@ -2761,7 +2724,7 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Графическая схема', style: _CmrTestText.section().copyWith(fontSize: 15)),
+                          Text('Графическая схема', style: AppTypography.sectionTitle(color: _CmrTestColors.text)),
                           const SizedBox(height: 8),
                           Expanded(
                             child: Container(
@@ -3048,11 +3011,9 @@ class _TestingNavItem extends StatelessWidget {
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTypography.custom(
-                          size: 11.0,
-                          weight: active ? FontWeight.w600 : FontWeight.w500,
+                        style: AppTypography.menuTitle(
                           color: active ? _CmrTestColors.greenDark : _CmrTestColors.text,
-                          height: 1.30,
+                          weight: active ? FontWeight.w600 : FontWeight.w500,
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -3060,13 +3021,10 @@ class _TestingNavItem extends StatelessWidget {
                         subtitle,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTypography.custom(
-                          size: 10.1,
-                          weight: FontWeight.w400,
+                        style: AppTypography.menuSubtitle(
                           color: active
                               ? _CmrTestColors.greenDark.withOpacity(.68)
                               : _CmrTestColors.muted2,
-                          height: 1.30,
                         ),
                       ),
                     ],
@@ -3420,10 +3378,9 @@ class _PositionChip extends StatelessWidget {
           ),
           child: Text(
             '$label · $count',
-            style: _CmrTestText.caption().copyWith(
+            style: AppTypography.chip(
               color: _CmrTestColors.text,
-              fontWeight: FontWeight.w600,
-              fontSize: 11,
+              active: true,
             ),
           ),
         ),

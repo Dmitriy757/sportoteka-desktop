@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 
 class AiAttendanceSummaryCard extends StatelessWidget {
   final int present;
@@ -32,10 +33,12 @@ class AiAttendanceSummaryCard extends StatelessWidget {
             children: [
               const Icon(Icons.fact_check_rounded, color: Color(0xFF078548)),
               const SizedBox(width: 8),
-              const Expanded(
+              Expanded(
                 child: Text(
                   'Посещение мероприятия',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                  style: AppTypography.sectionTitle().copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
               TextButton(
@@ -78,7 +81,7 @@ class _Chip extends StatelessWidget {
       ),
       child: Text(
         '$label · $value',
-        style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 11),
+        style: AppTypography.chip(color: color, active: true).copyWith(fontWeight: FontWeight.w700),
       ),
     );
   }

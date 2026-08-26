@@ -203,6 +203,19 @@ class ActionTrackerBleService {
       (defaultTargetPlatform == TargetPlatform.iOS ||
           defaultTargetPlatform == TargetPlatform.macOS);
 
+  static Future<BluetoothAdapterState> _readAdapterState() async {
+    try {
+      return await FlutterBluePlus.adapterState.first.timeout(
+        const Duration(seconds: 2),
+        onTimeout: () => BluetoothAdapterState.unknown,
+      );
+    } on MissingPluginException {
+      throw StateError(
+        'FlutterBluePlus native channel не зарегистрирован в текущем Flutter engine. Нужен полный перезапуск приложения, не hot-reload.',
+      );
+    }
+  }
+
   /// Единая проверка BLE runtime для GPS + Polar + Team pool.
   ///
   /// На Apple намеренно НЕ вызываем FlutterBluePlus.isSupported: в некоторых
@@ -215,17 +228,20 @@ class ActionTrackerBleService {
 
     final future = () async {
       if (!_appleRuntime && !_runtimeCapabilityChecked) {
-        final supported = await FlutterBluePlus.isSupported;
-        _runtimeSupported = supported;
-        _runtimeCapabilityChecked = true;
+        try {
+          final supported = await FlutterBluePlus.isSupported;
+          _runtimeSupported = supported;
+          _runtimeCapabilityChecked = true;
+        } on MissingPluginException {
+          throw StateError(
+            'FlutterBluePlus native channel не зарегистрирован в текущем Flutter engine. Нужен полный перезапуск приложения, не hot-reload.',
+          );
+        }
       }
       if (!_runtimeSupported) {
         throw Exception('Bluetooth не поддерживается на этом устройстве');
       }
-      return FlutterBluePlus.adapterState.first.timeout(
-        const Duration(seconds: 2),
-        onTimeout: () => BluetoothAdapterState.unknown,
-      );
+      return _readAdapterState();
     }();
     _runtimeInitInFlight = future;
     try {
@@ -333,10 +349,7 @@ class ActionTrackerBleService {
     // эффект: датчик появился, затем сразу пропал из списка.
     _emitDevices();
 
-    final adapterState = await FlutterBluePlus.adapterState.first.timeout(
-      const Duration(seconds: 2),
-      onTimeout: () => BluetoothAdapterState.unknown,
-    );
+    final adapterState = await _readAdapterState();
     _log(
         'BLE DIAG: adapter=$adapterState · knownIds=${knownDeviceIds.length} · knownNames=${knownDeviceNames.length} · mode=${universalMode ? 'universal-compatible' : 'auto'}');
     if (adapterState != BluetoothAdapterState.on) {
@@ -1120,6 +1133,11 @@ class ActionTrackerBleService {
   }) async {
     var info = connectedInfo ?? lastKnownInfo;
     var device = _device;
+    // Team Live rescue scan разрешён только на Apple. На Android потерянный
+    // канал восстанавливаем прямым reconnect по известному MAC/UUID: общий
+    // startScan во время Live провоцировал GATT 133 и ронял соседние каналы.
+    final teamLiveRescueAllowed =
+        allowTeamLiveRescueScan && _appleRuntime;
 
     if (info == null) {
       _log('BLE reconnect skipped: нет connectedInfo/lastKnownInfo');
@@ -1135,7 +1153,7 @@ class ActionTrackerBleService {
       final scanRecently = lastScan != null &&
           now.difference(lastScan) < _appleBackgroundResolutionScanCooldown;
       final scanAllowed = allowScanFallback &&
-          (!teamLiveGuardActive || allowTeamLiveRescueScan);
+          (!teamLiveGuardActive || teamLiveRescueAllowed);
       final resolved = cached ??
           ((!scanAllowed || scanRecently)
               ? null
@@ -1197,7 +1215,7 @@ class ActionTrackerBleService {
     }
 
     final scanAllowed = allowScanFallback &&
-        (!teamLiveGuardActive || allowTeamLiveRescueScan);
+        (!teamLiveGuardActive || teamLiveRescueAllowed);
     if (found == null && !scanAllowed) {
       _log(
           'BLE reconnect direct wait: scan во время Team Live запрещён; повторю точный UUID позже.');

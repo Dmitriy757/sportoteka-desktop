@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
@@ -268,7 +269,7 @@ class _ClubPlansBaseScreenState extends State<ClubPlansBaseScreen> {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     "Создать папку",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                    style: TextStyle(fontFamily: AppTypography.fontFamily, fontSize: AppTypography.screenTitleSize, fontWeight: FontWeight.w900),
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -291,7 +292,7 @@ class _ClubPlansBaseScreenState extends State<ClubPlansBaseScreen> {
                       await _createFolder(name);
                     },
                     icon: const Icon(Icons.create_new_folder_outlined, color: Colors.white),
-                    label: const Text("Создать", style: TextStyle(color: Colors.white)),
+                    label: const Text("Создать", style: TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.white)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: ClubDashboardPalette.primaryGreen,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -395,7 +396,7 @@ class _ClubPlansBaseScreenState extends State<ClubPlansBaseScreen> {
                     Expanded(
                       child: Text(
                         result.files.single.name,
-                        style: const TextStyle(fontWeight: FontWeight.w900),
+                        style: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w900),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -430,7 +431,7 @@ class _ClubPlansBaseScreenState extends State<ClubPlansBaseScreen> {
                       await _uploadFile(path: path, title: title, keywords: keywordsC.text.trim());
                     },
                     icon: const Icon(Icons.cloud_upload_outlined, color: Colors.white),
-                    label: const Text("Загрузить", style: TextStyle(color: Colors.white)),
+                    label: const Text("Загрузить", style: TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.white)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: ClubDashboardPalette.primaryGreen,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -536,7 +537,7 @@ class _ClubPlansBaseScreenState extends State<ClubPlansBaseScreen> {
         surfaceTintColor: Colors.transparent,
         title: const Text(
           "Планы / Конспекты",
-          style: TextStyle(fontWeight: FontWeight.w900, color: ClubDashboardPalette.text, fontSize: 16),
+          style: TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w900, color: ClubDashboardPalette.text, fontSize: AppTypography.screenTitleSize),
         ),
         iconTheme: const IconThemeData(color: Colors.black87),
         actions: [
@@ -715,12 +716,12 @@ class _HeaderCard extends StatelessWidget {
                   clubName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
+                  style: const TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.white, fontWeight: FontWeight.w900, fontSize: AppTypography.screenTitleSize),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   "База планов-конспектов • схемы • микроциклы",
-                  style: TextStyle(color: Colors.white.withOpacity(0.9), fontWeight: FontWeight.w700, fontSize: 12),
+                  style: TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.white.withOpacity(0.9), fontWeight: FontWeight.w700, fontSize: AppTypography.secondarySize),
                 ),
               ],
             ),
@@ -783,7 +784,7 @@ class _SearchBar extends StatelessWidget {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               elevation: 0,
             ),
-            child: const Text("Найти", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+            child: const Text("Найти", style: TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.white, fontWeight: FontWeight.w800)),
           ),
         ],
       ),
@@ -816,7 +817,7 @@ class _Breadcrumbs extends StatelessWidget {
             ),
             child: Text(
               c.title,
-              style: TextStyle(
+              style: TextStyle(fontFamily: AppTypography.fontFamily, 
                 fontWeight: FontWeight.w900,
                 color: isLast ? ClubDashboardPalette.primaryGreen : ClubDashboardPalette.text,
               ),
@@ -838,9 +839,9 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15))),
+        Expanded(child: Text(title, style: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w900, fontSize: AppTypography.sectionTitleSize))),
         if (right != null)
-          Text(right!, style: const TextStyle(color: ClubDashboardPalette.textMuted, fontWeight: FontWeight.w700)),
+          Text(right!, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: ClubDashboardPalette.textMuted, fontWeight: FontWeight.w700)),
       ],
     );
   }
@@ -873,8 +874,8 @@ class _FolderTile extends StatelessWidget {
           ),
           child: const Icon(Icons.folder_outlined, color: ClubDashboardPalette.primaryGreen),
         ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
-        subtitle: Text(subtitle, style: const TextStyle(color: ClubDashboardPalette.textMuted, fontWeight: FontWeight.w700)),
+        title: Text(title, style: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w900)),
+        subtitle: Text(subtitle, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: ClubDashboardPalette.textMuted, fontWeight: FontWeight.w700)),
         trailing: const Icon(Icons.chevron_right),
       ),
     );
@@ -923,9 +924,9 @@ class _FileTile extends StatelessWidget {
           ),
           child: Icon(icon, color: fg),
         ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+        title: Text(title, style: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w900)),
         subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: ClubDashboardPalette.textMuted, fontWeight: FontWeight.w700)),
+            style: const TextStyle(fontFamily: AppTypography.fontFamily, color: ClubDashboardPalette.textMuted, fontWeight: FontWeight.w700)),
         trailing: const Icon(Icons.open_in_new_rounded),
       ),
     );
@@ -961,12 +962,12 @@ class _PlansFab extends StatelessWidget {
                   const SizedBox(height: 12),
                   ListTile(
                     leading: const Icon(Icons.create_new_folder_outlined),
-                    title: const Text("Создать папку", style: TextStyle(fontWeight: FontWeight.w900)),
+                    title: const Text("Создать папку", style: TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w900)),
                     onTap: () { Navigator.pop(context); onCreateFolder(); },
                   ),
                   ListTile(
                     leading: const Icon(Icons.cloud_upload_outlined),
-                    title: const Text("Загрузить файл (jpg/docx/xlsx)", style: TextStyle(fontWeight: FontWeight.w900)),
+                    title: const Text("Загрузить файл (jpg/docx/xlsx)", style: TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w900)),
                     onTap: () { Navigator.pop(context); onUpload(); },
                   ),
                 ],
@@ -994,12 +995,12 @@ class _ErrorView extends StatelessWidget {
           children: [
             Icon(Icons.wifi_off_rounded, size: 44, color: ClubDashboardPalette.primaryGreen),
             const SizedBox(height: 10),
-            Text(text, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text(text, textAlign: TextAlign.center, style: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w700)),
             const SizedBox(height: 12),
             ElevatedButton(
               onPressed: onRetry,
               style: ElevatedButton.styleFrom(backgroundColor: ClubDashboardPalette.primaryGreen),
-              child: const Text("Повторить", style: TextStyle(color: Colors.white)),
+              child: const Text("Повторить", style: TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.white)),
             ),
           ],
         ),
@@ -1021,7 +1022,7 @@ class _EmptyHint extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: ClubDashboardPalette.border),
       ),
-      child: Text(text, style: const TextStyle(color: ClubDashboardPalette.textMuted, fontWeight: FontWeight.w700)),
+      child: Text(text, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: ClubDashboardPalette.textMuted, fontWeight: FontWeight.w700)),
     );
   }
 }

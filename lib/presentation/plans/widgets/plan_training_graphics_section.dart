@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:http/http.dart' as http;
 import 'package:sportoteka/presentation/club_workspace/widgets/ai_tactical_document_preview.dart';
 
@@ -74,7 +75,7 @@ class _PlanTrainingGraphicsSectionState
       children: [
         const Text(
           'Тактические схемы',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          style: TextStyle(fontFamily: AppTypography.fontFamily, fontSize: AppTypography.screenTitleSize, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 12),
         for (final item in _items) ...[

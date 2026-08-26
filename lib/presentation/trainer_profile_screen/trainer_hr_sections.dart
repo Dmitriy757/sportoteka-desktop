@@ -804,31 +804,48 @@ class _HrColors {
 
 class _HrText {
   static TextStyle title(
-    double size, {
+    double legacySize, {
     Color color = _HrColors.text,
     FontWeight weight = FontWeight.w600,
-  }) =>
-      AppTypography.custom(
-        size: size,
-        weight: weight,
-        color: color,
-        height: 1.18,
-        letterSpacing: 0,
-      );
+  }) {
+    final TextStyle base;
+    if (legacySize >= 13.8) {
+      base = AppTypography.sectionTitle(color: color);
+    } else if (legacySize >= 12.5) {
+      base = AppTypography.itemTitle(color: color);
+    } else if (legacySize >= 10.8) {
+      base = AppTypography.menuTitle(color: color);
+    } else {
+      base = AppTypography.captionMedium(color: color);
+    }
+    return base.copyWith(fontWeight: weight, letterSpacing: 0);
+  }
 
   static TextStyle body(
-    double size, {
+    double legacySize, {
     Color color = _HrColors.text,
     FontWeight weight = FontWeight.w400,
     double height = 1.28,
-  }) =>
-      AppTypography.custom(
-        size: size,
-        weight: weight,
-        color: color,
-        height: height,
-        letterSpacing: 0,
-      );
+  }) {
+    final bool medium = weight.index >= FontWeight.w600.index;
+    final TextStyle base;
+    if (legacySize >= 10) {
+      base = medium
+          ? AppTypography.secondaryMedium(color: color)
+          : AppTypography.secondary(color: color);
+    } else if (legacySize >= 8.7) {
+      base = medium
+          ? AppTypography.captionMedium(color: color)
+          : AppTypography.caption(color: color);
+    } else {
+      base = AppTypography.commentMeta(color: color);
+    }
+    return base.copyWith(
+      fontWeight: weight,
+      height: height,
+      letterSpacing: 0,
+    );
+  }
 }
 
 class _HrDot extends StatelessWidget {
@@ -947,12 +964,8 @@ class _HrAction extends StatelessWidget {
                     maxLines: 1,
                     overflow:
                         TextOverflow.ellipsis,
-                    style: _HrText.body(
-                      9.2,
-                      color: filled
-                          ? Colors.white
-                          : color,
-                      weight: FontWeight.w600,
+                    style: AppTypography.action(
+                      color: filled ? Colors.white : color,
                     ),
                   ),
                 ),
@@ -1531,7 +1544,7 @@ class _HrAttendanceDayPane
                       maxLines: 1,
                       overflow:
                           TextOverflow.ellipsis,
-                      style: _HrText.title(12.8),
+                      style: AppTypography.documentTitle(color: _HrColors.text),
                     ),
                   ),
                 ],
@@ -2993,12 +3006,8 @@ class _HrRecordEditorState
                   const SizedBox(height: 12),
                   Text(
                     'Комментарий',
-                    style: _HrText.body(
-                      8.8,
-                      color:
-                          _HrColors.muted2,
-                      weight:
-                          FontWeight.w600,
+                    style: AppTypography.formLabel(
+                      color: _HrColors.muted2,
                     ),
                   ),
                   const SizedBox(height: 5),
@@ -3006,10 +3015,8 @@ class _HrRecordEditorState
                     _noteC.text.trim().isEmpty
                         ? 'Комментарий не указан.'
                         : _noteC.text.trim(),
-                    style: _HrText.body(
-                      10,
-                      color:
-                          _HrColors.muted,
+                    style: AppTypography.commentText(
+                      color: _HrColors.muted,
                     ),
                   ),
                   if (fileUrl.isNotEmpty) ...<
@@ -3293,7 +3300,7 @@ class _HrEditorHeader extends StatelessWidget {
                     maxLines: 1,
                     overflow:
                         TextOverflow.ellipsis,
-                    style: _HrText.title(12.8),
+                    style: AppTypography.documentTitle(color: _HrColors.text),
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -3301,8 +3308,7 @@ class _HrEditorHeader extends StatelessWidget {
                     maxLines: 1,
                     overflow:
                         TextOverflow.ellipsis,
-                    style: _HrText.body(
-                      8.8,
+                    style: AppTypography.documentMeta(
                       color: _HrColors.muted,
                     ),
                   ),
@@ -3412,21 +3418,18 @@ class _HrField extends StatelessWidget {
         children: <Widget>[
           Text(
             label,
-            style: _HrText.body(
-              8.8,
+            style: AppTypography.formLabel(
               color: _HrColors.muted,
-              weight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 5),
           TextField(
             controller: controller,
             maxLines: maxLines,
-            style: _HrText.body(10),
+            style: AppTypography.formText(),
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle: _HrText.body(
-                9.5,
+              hintStyle: AppTypography.formHint(
                 color: _HrColors.muted2,
               ),
               filled: true,
@@ -3495,10 +3498,8 @@ class _HrReadRow extends StatelessWidget {
             width: 105,
             child: Text(
               label,
-              style: _HrText.body(
-                8.7,
-                color:
-                    _HrColors.muted2,
+              style: AppTypography.documentMeta(
+                color: _HrColors.muted2,
               ),
             ),
           ),
@@ -3512,9 +3513,8 @@ class _HrReadRow extends StatelessWidget {
               maxLines: 2,
               overflow:
                   TextOverflow.ellipsis,
-              style: _HrText.body(
-                9.7,
-                weight: FontWeight.w600,
+              style: AppTypography.secondaryMedium(
+                color: _HrColors.text,
               ),
             ),
           ),
@@ -3556,14 +3556,15 @@ class _HrEmpty extends StatelessWidget {
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: _HrText.title(11),
+                style: AppTypography.emptyTitle(
+                  color: _HrColors.text,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
                 text,
                 textAlign: TextAlign.center,
-                style: _HrText.body(
-                  9.2,
+                style: AppTypography.emptyText(
                   color: _HrColors.muted,
                 ),
               ),

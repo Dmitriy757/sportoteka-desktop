@@ -1,5 +1,6 @@
 // lib/presentation/club_calendar_screen/club_calendar_screen.dart
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:get/get.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 
@@ -381,17 +382,20 @@ class _ClubCalendarScreenState extends State<ClubCalendarScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text("Удалить событие?"),
-        content: Text("Событие «${e.title}» будет удалено без возможности восстановления."),
+        title: Text("Удалить событие?", style: AppTypography.sectionTitle()),
+        content: Text(
+          "Событие «${e.title}» будет удалено без возможности восстановления.",
+          style: AppTypography.body(),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text("Отмена"),
+            child: Text("Отмена", style: AppTypography.action()),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text("Удалить"),
+            child: Text("Удалить", style: AppTypography.action(color: Colors.white)),
           ),
         ],
       ),
@@ -426,12 +430,12 @@ class _ClubCalendarScreenState extends State<ClubCalendarScreen> {
             widget.clubName,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            style: AppTypography.screenTitle(),
           ),
           const SizedBox(height: 2),
-          const Text(
+          Text(
             "Календарь клуба",
-            style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+            style: AppTypography.secondary(),
           ),
         ],
       ),
@@ -473,7 +477,7 @@ class _ClubCalendarScreenState extends State<ClubCalendarScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("📊 Сводка", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+          Text("📊 Сводка", style: AppTypography.sectionTitle()),
           const SizedBox(height: 12),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -504,7 +508,7 @@ class _ClubCalendarScreenState extends State<ClubCalendarScreen> {
           ),
           const SizedBox(height: 14),
           if (stats['byType'] is Map) ...[
-            const Text("По типам:", style: TextStyle(fontWeight: FontWeight.w700)),
+            Text("По типам:", style: AppTypography.subsectionTitle()),
             const SizedBox(height: 8),
             Wrap(
               spacing: 10,
@@ -546,7 +550,7 @@ class _ClubCalendarScreenState extends State<ClubCalendarScreen> {
             child: Text(
               mode == CalendarMode.month ? _monthTitle(cursor) : "Неделя • ${_weekTitle(cursor)}",
               textAlign: TextAlign.center,
-              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+              style: AppTypography.sectionTitle(),
             ),
           ),
           IconButton(
@@ -629,9 +633,7 @@ class _ClubCalendarScreenState extends State<ClubCalendarScreen> {
         child: Center(
           child: Text(
             text,
-            style: TextStyle(
-              fontWeight: FontWeight.w900,
-              fontSize: 13,
+            style: AppTypography.actionStrong(
               color: active ? primary : const Color(0xFF111827),
             ),
           ),
@@ -657,9 +659,9 @@ class _ClubCalendarScreenState extends State<ClubCalendarScreen> {
             backgroundColor: const Color(0xFFF3F5F8),
             selectedColor: primary.withOpacity(0.16),
             checkmarkColor: primary,
-            labelStyle: TextStyle(
+            labelStyle: AppTypography.chip(
+              active: isSelected,
               color: isSelected ? primary : const Color(0xFF374151),
-              fontWeight: FontWeight.w700,
             ),
             side: BorderSide(color: isSelected ? primary : const Color(0xFFE5E7EB)),
           );
@@ -688,9 +690,11 @@ class _ClubCalendarScreenState extends State<ClubCalendarScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TextField(
+            style: AppTypography.formText(),
             decoration: InputDecoration(
               prefixIcon: const Icon(Icons.search),
               hintText: "Поиск по событиям, местам, командам...",
+              hintStyle: AppTypography.formHint(),
               filled: true,
               fillColor: const Color(0xFFF3F5F8),
               border: OutlineInputBorder(
@@ -728,9 +732,9 @@ class _ClubCalendarScreenState extends State<ClubCalendarScreen> {
   Widget _buildSectionHeader({required String title, required String subtitle}) {
     return Row(
       children: [
-        Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+        Text(title, style: AppTypography.subsectionTitle()),
         const Spacer(),
-        Text(subtitle, style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+        Text(subtitle, style: AppTypography.secondary()),
       ],
     );
   }
@@ -831,8 +835,8 @@ class _ClubCalendarScreenState extends State<ClubCalendarScreen> {
           backgroundColor: const Color(0xFFF3F5F8),
           selectedColor: primary.withOpacity(0.16),
           checkmarkColor: primary,
-          labelStyle: TextStyle(
-            fontWeight: FontWeight.w800,
+          labelStyle: AppTypography.chip(
+            active: selectedTypes.isEmpty,
             color: selectedTypes.isEmpty ? primary : const Color(0xFF374151),
           ),
           side: BorderSide(
@@ -859,8 +863,8 @@ class _ClubCalendarScreenState extends State<ClubCalendarScreen> {
             backgroundColor: const Color(0xFFF3F5F8),
             selectedColor: color.withOpacity(0.16),
             checkmarkColor: color,
-            labelStyle: TextStyle(
-              fontWeight: FontWeight.w800,
+            labelStyle: AppTypography.chip(
+              active: selected,
               color: selected ? color : const Color(0xFF374151),
             ),
             side: BorderSide(
@@ -878,7 +882,7 @@ class _ClubCalendarScreenState extends State<ClubCalendarScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("Легенда событий", style: TextStyle(fontWeight: FontWeight.w800)),
+          Text("Легенда событий", style: AppTypography.subsectionTitle()),
           const SizedBox(height: 10),
           Wrap(
             spacing: 12,
@@ -896,7 +900,7 @@ class _ClubCalendarScreenState extends State<ClubCalendarScreen> {
                     ),
                   ),
                   const SizedBox(width: 6),
-                  Text(eventTypeLabel(type), style: const TextStyle(fontSize: 12)),
+                  Text(eventTypeLabel(type), style: AppTypography.caption()),
                 ],
               );
             }).toList(),
@@ -917,15 +921,15 @@ class _ClubCalendarScreenState extends State<ClubCalendarScreen> {
           children: [
             Icon(Icons.event_busy, size: 64, color: Colors.grey[300]),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               "Событий не найдено",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              style: AppTypography.emptyTitle(),
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               "Попробуйте изменить фильтры или добавьте новое событие",
               textAlign: TextAlign.center,
-              style: TextStyle(color: Color(0xFF6B7280)),
+              style: AppTypography.emptyText(),
             ),
           ],
         ),
@@ -962,16 +966,13 @@ class _ClubCalendarScreenState extends State<ClubCalendarScreen> {
                     ),
                     child: Text(
                       "${_weekdayShort(day)} • ${_formatDate(day)}",
-                      style: TextStyle(fontWeight: FontWeight.w900, color: primary),
+                      style: AppTypography.actionStrong(color: primary),
                     ),
                   ),
                   const Spacer(),
                   Text(
                     "${dayList.length} ${_pluralize(dayList.length, 'событие', 'события', 'событий')}",
-                    style: const TextStyle(
-                      color: Color(0xFF6B7280),
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: AppTypography.secondaryMedium(),
                   ),
                 ],
               ),
@@ -1089,16 +1090,13 @@ class _ClubCalendarScreenState extends State<ClubCalendarScreen> {
               Expanded(
                 child: Text(
                   "События на ${_formatDate(day)}",
-                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                  style: AppTypography.sectionTitle(),
                 ),
               ),
               if (items.isNotEmpty)
                 Text(
                   "${items.length} ${_pluralize(items.length, 'событие', 'события', 'событий')}",
-                  style: const TextStyle(
-                    color: Color(0xFF6B7280),
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: AppTypography.secondaryMedium(),
                 ),
             ],
           ),
@@ -1135,7 +1133,7 @@ class _ClubCalendarScreenState extends State<ClubCalendarScreen> {
             child: ElevatedButton.icon(
               onPressed: () => _openCreate(day),
               icon: const Icon(Icons.add),
-              label: const Text("Добавить событие"),
+              label: Text("Добавить событие", style: AppTypography.action(color: Colors.white)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: primary,
                 foregroundColor: Colors.white,
@@ -1159,14 +1157,14 @@ class _ClubCalendarScreenState extends State<ClubCalendarScreen> {
       children: [
         Icon(icon, size: 48, color: Colors.grey[300]),
         const SizedBox(height: 12),
-        Text(text, style: const TextStyle(color: Color(0xFF6B7280))),
+        Text(text, style: AppTypography.emptyText()),
         const SizedBox(height: 16),
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
             onPressed: onPressed,
             icon: const Icon(Icons.add),
-            label: Text(buttonText),
+            label: Text(buttonText, style: AppTypography.action(color: Colors.white)),
             style: ElevatedButton.styleFrom(
               backgroundColor: primary,
               foregroundColor: Colors.white,
@@ -1217,7 +1215,7 @@ class _InitialAvatar extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
+        style: AppTypography.captionMedium(),
       ),
     );
   }
@@ -1269,10 +1267,7 @@ class _TeamChipCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.fade, // 👌 выглядит чище, чем ellipsis
                   softWrap: false,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 13,
-                  ),
+                  style: AppTypography.itemTitle(),
                 ),
               ),
               const SizedBox(width: 10),
@@ -1284,9 +1279,8 @@ class _TeamChipCard extends StatelessWidget {
                 ),
                 child: Text(
                   "$badge",
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 12,
+                  style: AppTypography.chip(
+                    active: selected,
                     color: selected ? Colors.white : const Color(0xFF111827),
                   ),
                 ),
@@ -1340,14 +1334,12 @@ class _StatCard extends StatelessWidget {
               children: [
                 Text(
                   value,
-                  style: TextStyle(
+                  style: AppTypography.metricStrong(color: color).copyWith(
                     fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    color: color,
                   ),
                 ),
                 const SizedBox(height: 2),
-                Text(title, style: const TextStyle(fontSize: 12, color: Color(0xFF374151))),
+                Text(title, style: AppTypography.secondary(color: const Color(0xFF374151))),
               ],
             ),
           ),
@@ -1373,7 +1365,7 @@ class _Pill extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: color),
+        style: AppTypography.chip(active: true, color: color),
       ),
     );
   }
@@ -1427,7 +1419,7 @@ class _ManagerEventRow extends StatelessWidget {
               width: 70,
               child: Text(
                 time,
-                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                style: AppTypography.secondaryMedium(color: const Color(0xFF111827)),
               ),
             ),
             const SizedBox(width: 10),
@@ -1439,7 +1431,7 @@ class _ManagerEventRow extends StatelessWidget {
                     event.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                    style: AppTypography.itemTitle(),
                   ),
                   const SizedBox(height: 6),
                   Wrap(
@@ -1456,20 +1448,12 @@ class _ManagerEventRow extends StatelessWidget {
                         ),
                         child: Text(
                           eventTypeLabel(event.type),
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            color: color,
-                          ),
+                          style: AppTypography.chip(active: true, color: color),
                         ),
                       ),
                       Text(
                         teamName,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF374151),
-                          fontWeight: FontWeight.w700,
-                        ),
+                        style: AppTypography.secondaryMedium(color: const Color(0xFF374151)),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1484,7 +1468,7 @@ class _ManagerEventRow extends StatelessWidget {
                         Expanded(
                           child: Text(
                             event.location,
-                            style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                            style: AppTypography.secondary(),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1569,7 +1553,7 @@ class _EventAgendaTile extends StatelessWidget {
               width: 74,
               child: Text(
                 time,
-                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                style: AppTypography.secondaryMedium(color: const Color(0xFF111827)),
               ),
             ),
             const SizedBox(width: 12),
@@ -1581,7 +1565,7 @@ class _EventAgendaTile extends StatelessWidget {
                     event.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+                    style: AppTypography.itemTitle(),
                   ),
                   const SizedBox(height: 8),
                   Container(
@@ -1612,11 +1596,7 @@ class _EventAgendaTile extends StatelessWidget {
                             teamName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 13,
-                              color: Color(0xFF111827),
-                            ),
+                            style: AppTypography.itemTitle(),
                           ),
                         ),
                       ],
@@ -1637,11 +1617,7 @@ class _EventAgendaTile extends StatelessWidget {
                         ),
                         child: Text(
                           eventTypeLabel(event.type),
-                          style: TextStyle(
-                            color: color,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 11,
-                          ),
+                          style: AppTypography.chip(active: true, color: color),
                         ),
                       ),
                       if (event.location.trim().isNotEmpty)
@@ -1656,11 +1632,7 @@ class _EventAgendaTile extends StatelessWidget {
                                 event.location,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF6B7280),
-                                ),
+                                style: AppTypography.secondaryMedium(),
                               ),
                             ),
                           ],
@@ -1673,23 +1645,23 @@ class _EventAgendaTile extends StatelessWidget {
             PopupMenuButton(
               icon: const Icon(Icons.more_vert, size: 20),
               itemBuilder: (_) => [
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'edit',
                   child: Row(
                     children: [
-                      Icon(Icons.edit, size: 18),
-                      SizedBox(width: 8),
-                      Text("Редактировать"),
+                      const Icon(Icons.edit, size: 18),
+                      const SizedBox(width: 8),
+                      Text("Редактировать", style: AppTypography.action()),
                     ],
                   ),
                 ),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'delete',
                   child: Row(
                     children: [
-                      Icon(Icons.delete, size: 18, color: Colors.red),
-                      SizedBox(width: 8),
-                      Text("Удалить", style: TextStyle(color: Colors.red)),
+                      const Icon(Icons.delete, size: 18, color: Colors.red),
+                      const SizedBox(width: 8),
+                      Text("Удалить", style: AppTypography.action(color: Colors.red)),
                     ],
                   ),
                 ),
@@ -1723,7 +1695,7 @@ class _TeamMiniAvatar extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+        style: AppTypography.secondaryMedium(color: const Color(0xFF111827)),
       ),
     );
   }
@@ -1785,7 +1757,7 @@ class _DayEventsBottomSheet extends StatelessWidget {
                   Expanded(
                     child: Text(
                       "События • ${_title(day)}",
-                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
+                      style: AppTypography.screenTitle(),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1805,7 +1777,12 @@ class _DayEventsBottomSheet extends StatelessWidget {
                     onAdd();
                   },
                   icon: const Icon(Icons.add),
-                  label: const Text("Добавить событие"),
+                  label: Text(
+                    "Добавить событие",
+                    style: AppTypography.action(
+                      color: Theme.of(context).colorScheme.onPrimary,
+                    ),
+                  ),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -1918,7 +1895,7 @@ class _AllEventsBottomSheet extends StatelessWidget {
                   Expanded(
                     child: Text(
                       "Все события • ${_title(day)}",
-                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
+                      style: AppTypography.screenTitle(),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -2028,7 +2005,7 @@ class _EventSheetTile extends StatelessWidget {
               children: [
                 Text(
                   event.title,
-                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+                  style: AppTypography.itemTitle(),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -2046,11 +2023,7 @@ class _EventSheetTile extends StatelessWidget {
                       ),
                       child: Text(
                         eventTypeLabel(event.type),
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w900,
-                          color: color,
-                        ),
+                        style: AppTypography.chip(active: true, color: color),
                       ),
                     ),
                     Container(
@@ -2062,11 +2035,7 @@ class _EventSheetTile extends StatelessWidget {
                       ),
                       child: Text(
                         time,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF111827),
-                        ),
+                        style: AppTypography.chip(active: true, color: const Color(0xFF111827)),
                       ),
                     ),
                   ],
@@ -2100,11 +2069,7 @@ class _EventSheetTile extends StatelessWidget {
                           teamName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 13,
-                            color: Color(0xFF111827),
-                          ),
+                          style: AppTypography.itemTitle(),
                         ),
                       ),
                     ],
@@ -2121,11 +2086,7 @@ class _EventSheetTile extends StatelessWidget {
                           event.location,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF6B7280),
-                          ),
+                          style: AppTypography.secondaryMedium(),
                         ),
                       ),
                     ],
@@ -2211,12 +2172,12 @@ class _EmptySheetState extends StatelessWidget {
         children: [
           Icon(icon, size: 56, color: Colors.grey[300]),
           const SizedBox(height: 12),
-          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          Text(title, style: AppTypography.emptyTitle()),
           const SizedBox(height: 6),
           Text(
             subtitle,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Color(0xFF6B7280)),
+            style: AppTypography.emptyText(),
           ),
         ],
       ),

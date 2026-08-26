@@ -14,6 +14,7 @@ import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/presentation/player_profile_screen/cmr_player_profile_screen.dart';
 import 'package:sportoteka/presentation/player_profile_screen/models/player_profile_models.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_player_parent_access_panel.dart';
+import 'package:sportoteka/presentation/add_player_screen/add_player_screen.dart';
 
 // ==================== Цветовая схема ====================
 
@@ -71,13 +72,8 @@ class _CmrRosterText {
         ],
       );
 
-  static TextStyle section() => AppTypography.custom(
-        size: 12.2,
-        weight: FontWeight.w600,
-        color: _CmrRosterColors.text,
-        height: 1.20,
-        letterSpacing: 0,
-      );
+  static TextStyle section() =>
+      AppTypography.subsectionTitle(color: _CmrRosterColors.text);
 
   static TextStyle value(double size) => AppTypography.custom(
         size: size,
@@ -98,41 +94,20 @@ class _CmrRosterText {
         letterSpacing: 0,
       );
 
-  static TextStyle caption() => AppTypography.custom(
-        size: 10.8,
-        weight: FontWeight.w500,
-        color: _CmrRosterColors.subtle,
-        height: 1.18,
-        letterSpacing: 0,
-      );
+  static TextStyle caption() =>
+      AppTypography.captionMedium(color: _CmrRosterColors.subtle);
 
-  static TextStyle pill() => AppTypography.custom(
-        size: 11.2,
-        weight: FontWeight.w600,
-        color: _CmrRosterColors.text,
-        letterSpacing: 0,
-      );
+  static TextStyle pill() =>
+      AppTypography.chip(color: _CmrRosterColors.text, active: true);
 
-  static TextStyle tab() => AppTypography.custom(
-        size: 11.8,
-        weight: FontWeight.w600,
-        color: _CmrRosterColors.text,
-        letterSpacing: 0,
-      );
+  static TextStyle tab() =>
+      AppTypography.tab(color: _CmrRosterColors.text);
 
-  static TextStyle tabSelected() => AppTypography.custom(
-        size: 11.8,
-        weight: FontWeight.w700,
-        color: _CmrRosterColors.text,
-        letterSpacing: 0,
-      );
+  static TextStyle tabSelected() =>
+      AppTypography.tab(color: _CmrRosterColors.text, active: true);
 
-  static TextStyle action() => AppTypography.custom(
-        size: 11.8,
-        weight: FontWeight.w600,
-        color: _CmrRosterColors.text,
-        letterSpacing: 0,
-      );
+  static TextStyle action() =>
+      AppTypography.action(color: _CmrRosterColors.text);
 
   static TextStyle danger() => AppTypography.custom(
         size: 11.8,
@@ -142,22 +117,15 @@ class _CmrRosterText {
       );
 
   // Точная типографика внутреннего меню Tracker -> Аналитика.
-  static TextStyle navLabel({required bool active}) => AppTypography.custom(
-        size: 11.0,
-        weight: active ? FontWeight.w600 : FontWeight.w500,
+  static TextStyle navLabel({required bool active}) => AppTypography.menuTitle(
         color: active ? _CmrRosterColors.greenDark : _CmrRosterColors.text,
-        height: 1.30,
-        letterSpacing: 0,
+        weight: active ? FontWeight.w600 : FontWeight.w500,
       );
 
-  static TextStyle navSubtitle({required bool active}) => AppTypography.custom(
-        size: 10.2,
-        weight: FontWeight.w400,
+  static TextStyle navSubtitle({required bool active}) => AppTypography.menuSubtitle(
         color: active
             ? _CmrRosterColors.greenDark.withOpacity(.68)
             : _CmrRosterColors.muted2,
-        height: 1.30,
-        letterSpacing: 0,
       );
 }
 
@@ -291,6 +259,7 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
 
   bool _showProfileMenu = false;
   bool _showFullProfileInRightPane = false;
+  bool _showAddPlayerInRightPane = false;
   Map<String, dynamic>? _rightPanePlayer;
   PlayerProfileSection _profileSection = PlayerProfileSection.card;
 
@@ -1366,6 +1335,7 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
         _rightPanePlayer = null;
         _showProfileMenu = false;
         _showFullProfileInRightPane = false;
+        if (teamChanged) _showAddPlayerInRightPane = false;
       }
       return;
     }
@@ -1498,6 +1468,7 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
         _profileSection = PlayerProfileSection.card;
         _showProfileMenu = true;
         _showFullProfileInRightPane = true;
+        _showAddPlayerInRightPane = false;
       });
       return;
     }
@@ -1522,6 +1493,7 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
       _profileSection = section;
       _showProfileMenu = true;
       _showFullProfileInRightPane = true;
+      _showAddPlayerInRightPane = false;
     });
   }
 
@@ -1530,6 +1502,7 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
     setState(() {
       _showProfileMenu = false;
       _showFullProfileInRightPane = false;
+      _showAddPlayerInRightPane = false;
       // _rightPanePlayer и ScrollController сохраняем намеренно:
       // при возврате состав открывается на том же игроке и том же scroll offset.
     });
@@ -1554,6 +1527,7 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
       _profileSection = PlayerProfileSection.card;
       _showProfileMenu = false;
       _showFullProfileInRightPane = false;
+      _showAddPlayerInRightPane = false;
     });
 
     if (!mobile) return;
@@ -1834,7 +1808,64 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
       return;
     }
 
+    final teamId = widget.selectedTeamId ?? 0;
+    if (teamId <= 0) {
+      Get.snackbar(
+        'Команда',
+        'Сначала выберите команду',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    final width = MediaQuery.maybeOf(context)?.size.width ?? 0;
+
+    // На планшете/ПК форма живёт в той же правой области состава.
+    // На телефоне сохраняем старый отдельный маршрут через callback родителя.
+    if (width >= 640) {
+      setState(() {
+        _showAddPlayerInRightPane = true;
+        _showProfileMenu = false;
+        _showFullProfileInRightPane = false;
+      });
+      return;
+    }
+
     widget.onAddPlayer();
+  }
+
+  Future<void> _handleEmbeddedPlayerSaved(
+    Map<String, dynamic> createdPlayer,
+  ) async {
+    await widget.onRefresh?.call();
+    if (!mounted) return;
+
+    final createdId = _rosterInt(
+      createdPlayer['id'] ??
+          createdPlayer['player_id'] ??
+          createdPlayer['playerId'],
+    );
+    final createdEmail = _rosterText(createdPlayer['email']).toLowerCase();
+
+    Map<String, dynamic>? resolved;
+    for (final player in widget.players) {
+      final id = _rosterInt(
+        player['id'] ?? player['player_id'] ?? player['playerId'],
+      );
+      final email = _rosterText(player['email']).toLowerCase();
+      if ((createdId > 0 && id == createdId) ||
+          (createdEmail.isNotEmpty && email == createdEmail)) {
+        resolved = Map<String, dynamic>.from(player);
+        break;
+      }
+    }
+
+    setState(() {
+      _showAddPlayerInRightPane = false;
+      _showProfileMenu = false;
+      _showFullProfileInRightPane = false;
+      _rightPanePlayer = resolved ?? Map<String, dynamic>.from(createdPlayer);
+    });
   }
 
   @override
@@ -1952,9 +1983,25 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
                     SizedBox(width: listWidth, child: list),
                     Container(width: 1, color: _CmrRosterColors.line),
                     Expanded(
-                      child: _showFullProfileInRightPane &&
-                              (_rightPanePlayer ?? widget.selectedPlayer) != null
-                          ? CmrPlayerProfileScreen(
+                      child: _showAddPlayerInRightPane
+                          ? AddPlayerScreen(
+                              key: ValueKey(
+                                'right-add-player-${widget.selectedTeamId ?? 0}',
+                              ),
+                              teamId: widget.selectedTeamId ?? 0,
+                              teamName: widget.teamName,
+                              embeddedInWorkspace: true,
+                              onCancel: () {
+                                if (!mounted) return;
+                                setState(() {
+                                  _showAddPlayerInRightPane = false;
+                                });
+                              },
+                              onSaved: _handleEmbeddedPlayerSaved,
+                            )
+                          : _showFullProfileInRightPane &&
+                                  (_rightPanePlayer ?? widget.selectedPlayer) != null
+                              ? CmrPlayerProfileScreen(
                               key: ValueKey(
                                 'right-profile-${_playerIdentity(_rightPanePlayer ?? widget.selectedPlayer)}',
                               ),
@@ -2158,14 +2205,16 @@ class _RosterToolbar extends StatelessWidget {
                     'Игроки',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: _CmrRosterText.title(mobile ? 15.5 : 16.5),
+                    style: mobile
+                        ? AppTypography.screenTitle(color: _CmrRosterColors.text)
+                        : _CmrRosterText.title(16.5),
                   ),
                   const SizedBox(height: 3),
                   Text(
                     teamName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: _CmrRosterText.muted(mobile ? 11 : 11.5),
+                    style: _CmrRosterText.muted(mobile ? 12 : 11.5),
                   ),
                 ],
               ),
@@ -2261,7 +2310,7 @@ class _RosterToolbar extends StatelessWidget {
                       mobile ? 'Без ком.' : 'Без команды',
                       style: _CmrRosterText.action().copyWith(
                         color: _CmrRosterColors.graphiteSoft,
-                        fontSize: mobile ? 10.2 : 10.7,
+                        fontSize: mobile ? 11.2 : 10.7,
                       ),
                     ),
                   ),
@@ -2283,7 +2332,7 @@ class _RosterToolbar extends StatelessWidget {
                       'Архив',
                       style: _CmrRosterText.action().copyWith(
                         color: _CmrRosterColors.greenDark,
-                        fontSize: mobile ? 10.2 : 10.7,
+                        fontSize: mobile ? 11.2 : 10.7,
                       ),
                     ),
                   ),
@@ -2333,7 +2382,9 @@ class _RosterSearch extends StatelessWidget {
                 border: InputBorder.none,
                 isDense: true,
               ),
-              style: _CmrRosterText.value(mobile ? 12.5 : 13),
+              style: mobile
+                  ? AppTypography.formText(color: _CmrRosterColors.text)
+                  : _CmrRosterText.value(13),
             ),
           ),
           if (controller.text.trim().isNotEmpty)
@@ -2463,7 +2514,7 @@ class _FilterPill extends StatelessWidget {
                   color: active
                       ? _CmrRosterColors.greenDark
                       : _CmrRosterColors.muted2,
-                  fontSize: dense ? 11.0 : 11.4,
+                  fontSize: dense ? 12.0 : 11.4,
                   fontWeight: active
                       ? FontWeight.w700
                       : FontWeight.w500,
@@ -2564,14 +2615,18 @@ class _PlayerTile extends StatelessWidget {
                       name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _CmrRosterText.navLabel(active: active),
+                      style: _CmrRosterText.navLabel(active: active).copyWith(
+                        fontSize: mobile ? 12.0 : 11.0,
+                      ),
                     ),
                     const SizedBox(height: 3),
                     Text(
                       subtitleParts.join(' · '),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: _CmrRosterText.navSubtitle(active: active),
+                      style: _CmrRosterText.navSubtitle(active: active).copyWith(
+                        fontSize: mobile ? 11.2 : 10.2,
+                      ),
                     ),
                   ],
                 ),

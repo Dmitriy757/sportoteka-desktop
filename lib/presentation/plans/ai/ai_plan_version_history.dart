@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:http/http.dart' as http;
 
 class AiPlanVersionHistory extends StatefulWidget {
@@ -99,7 +100,7 @@ class _AiPlanVersionHistoryState extends State<AiPlanVersionHistory> {
     }
 
     if (_error.isNotEmpty) {
-      return Text(_error, style: const TextStyle(color: Colors.red));
+      return Text(_error, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.red));
     }
 
     return ListView.separated(
@@ -131,7 +132,7 @@ class _AiPlanVersionHistoryState extends State<AiPlanVersionHistory> {
                 ),
                 child: Text(
                   'v${item['version_no']}',
-                  style: const TextStyle(
+                  style: const TextStyle(fontFamily: AppTypography.fontFamily, 
                     color: Color(0xFF067A46),
                     fontWeight: FontWeight.w900,
                   ),
@@ -144,7 +145,7 @@ class _AiPlanVersionHistoryState extends State<AiPlanVersionHistory> {
                   children: [
                     Text(
                       '${item['command_text'] ?? 'Изменение плана'}',
-                      style: const TextStyle(
+                      style: const TextStyle(fontFamily: AppTypography.fontFamily, 
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -152,7 +153,7 @@ class _AiPlanVersionHistoryState extends State<AiPlanVersionHistory> {
                       const SizedBox(height: 4),
                       Text(
                         changes.first,
-                        style: const TextStyle(
+                        style: const TextStyle(fontFamily: AppTypography.fontFamily, 
                           color: Color(0xFF667085),
                         ),
                       ),

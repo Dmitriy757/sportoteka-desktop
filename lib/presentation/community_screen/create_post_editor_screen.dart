@@ -470,14 +470,11 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Align(
+                Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
                     "Добавить видео",
-                    style: TextStyle(
-                      fontSize: 15.5,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: AppTypography.screenTitle(),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -523,10 +520,8 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
                           const SizedBox(height: 10),
                           Text(
                             "Можно добавить ссылку с любого источника. Если это прямая ссылка на видеофайл, такое видео можно использовать внутри поста. Если это страница с видео, она будет открываться отдельно.",
-                            style: TextStyle(
+                            style: AppTypography.secondaryMedium(
                               color: Colors.grey.shade700,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],
@@ -1090,9 +1085,9 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
         spans.add(
           TextSpan(
             text: text.substring(current, match.start),
-            style: const TextStyle(
-              color: Color(0xFF1A1A1A),
-              fontSize: 15,
+            style: AppTypography.body(
+              color: const Color(0xFF1A1A1A),
+            ).copyWith(
               height: 1.45,
               fontWeight: FontWeight.w500,
             ),
@@ -1106,12 +1101,11 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
       spans.add(
         TextSpan(
           text: rawUrl,
-          style: const TextStyle(
+          style: AppTypography.bodyMedium(
             color: Colors.blue,
+          ).copyWith(
             decoration: TextDecoration.underline,
-            fontSize: 15,
             height: 1.45,
-            fontWeight: FontWeight.w600,
           ),
           recognizer: TapGestureRecognizer()
             ..onTap = () {
@@ -1127,9 +1121,9 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
       spans.add(
         TextSpan(
           text: text.substring(current),
-          style: const TextStyle(
-            color: Color(0xFF1A1A1A),
-            fontSize: 15,
+          style: AppTypography.body(
+            color: const Color(0xFF1A1A1A),
+          ).copyWith(
             height: 1.45,
             fontWeight: FontWeight.w500,
           ),
@@ -1141,9 +1135,9 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
       spans.add(
         TextSpan(
           text: text,
-          style: const TextStyle(
-            color: Color(0xFF1A1A1A),
-            fontSize: 15,
+          style: AppTypography.body(
+            color: const Color(0xFF1A1A1A),
+          ).copyWith(
             height: 1.45,
             fontWeight: FontWeight.w500,
           ),
@@ -1232,10 +1226,7 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
           const SizedBox(height: 10),
           Text(
             title,
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 15,
-            ),
+            style: AppTypography.itemTitle(),
           ),
           const SizedBox(height: 8),
           TextButton.icon(
@@ -1243,7 +1234,7 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
             icon: const Icon(Icons.open_in_new, size: 18),
             label: Text(
               direct ? "Открыть видео" : "Открыть источник",
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              style: AppTypography.action(),
             ),
             style: TextButton.styleFrom(
               padding: EdgeInsets.zero,
@@ -1259,12 +1250,10 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
                 : externalPage
                     ? "Видео доступно по внешней ссылке."
                     : "Ссылка добавлена как внешний источник. При необходимости можно указать отдельное превью.",
-            style: TextStyle(
+            style: AppTypography.secondaryMedium(
               color: direct || externalPage
                   ? Colors.green.shade700
                   : Colors.orange.shade800,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -1381,17 +1370,26 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
     double size, {
     FontWeight weight = FontWeight.w400,
     Color color = const Color(0xFF5F6670),
-  }) =>
-      AppTypography.custom(
-        size: size,
-        weight: weight,
-        color: color,
-        height: 1.25,
-        letterSpacing: 0,
-      );
+  }) {
+    final TextStyle base;
+    if (size >= 14) {
+      base = AppTypography.sectionTitle(color: color);
+    } else if (size >= 13) {
+      base = AppTypography.subsectionTitle(color: color);
+    } else if (size >= 11.2) {
+      base = AppTypography.formText(color: color);
+    } else if (size >= 10) {
+      base = AppTypography.formHint(color: color);
+    } else {
+      base = AppTypography.commentMeta(color: color);
+    }
+    return base.copyWith(fontWeight: weight);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final isPhone = MediaQuery.sizeOf(context).width < 600;
+
     final editorBody = ListView(
       padding: EdgeInsets.fromLTRB(
         widget.embedded ? 12 : 16,
@@ -1420,7 +1418,7 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
         child: Column(
           children: [
             Container(
-              constraints: const BoxConstraints(minHeight: 56),
+              constraints: BoxConstraints(minHeight: isPhone ? 74 : 56),
               padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
               color: Colors.white,
               child: Row(
@@ -1469,36 +1467,39 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
                       ],
                     ),
                   ),
-                  FilledButton.icon(
-                    onPressed: _saving ? null : _save,
-                    style: FilledButton.styleFrom(
-                      elevation: 0,
-                      backgroundColor: const Color(0xFF00A750),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 11,
-                        vertical: 10,
+                  Transform.translate(
+                    offset: Offset(0, isPhone ? 16 : 0),
+                    child: FilledButton.icon(
+                      onPressed: _saving ? null : _save,
+                      style: FilledButton.styleFrom(
+                        elevation: 0,
+                        backgroundColor: const Color(0xFF00A750),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 11,
+                          vertical: 10,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(9),
+                        ),
                       ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(9),
-                      ),
-                    ),
-                    icon: _saving
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.check_rounded, size: 16),
-                    label: Text(
-                      widget.isEdit ? 'Сохранить' : 'Опубликовать',
-                      style: _editorText(
-                        10.3,
-                        weight: FontWeight.w600,
-                        color: Colors.white,
+                      icon: _saving
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.check_rounded, size: 16),
+                      label: Text(
+                        widget.isEdit ? 'Сохранить' : 'Опубликовать',
+                        style: _editorText(
+                          10.3,
+                          weight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ),

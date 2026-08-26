@@ -136,13 +136,17 @@ class _CommunityScreenState extends State<CommunityScreen> {
     FontWeight weight = FontWeight.w600,
     Color color = const Color(0xFF0B0F14),
   }) {
-    return AppTypography.custom(
-      size: size,
-      weight: weight,
-      color: color,
-      height: 1.18,
-      letterSpacing: 0,
-    );
+    final TextStyle base;
+    if (size >= 15.5) {
+      base = AppTypography.screenTitle(color: color);
+    } else if (size >= 14) {
+      base = AppTypography.sectionTitle(color: color);
+    } else if (size >= 13) {
+      base = AppTypography.subsectionTitle(color: color);
+    } else {
+      base = AppTypography.menuTitle(color: color);
+    }
+    return base.copyWith(fontWeight: weight);
   }
 
   TextStyle _text(
@@ -150,13 +154,17 @@ class _CommunityScreenState extends State<CommunityScreen> {
     FontWeight weight = FontWeight.w400,
     Color color = const Color(0xFF5F6670),
   }) {
-    return AppTypography.custom(
-      size: size,
-      weight: weight,
-      color: color,
-      height: 1.28,
-      letterSpacing: 0,
-    );
+    final TextStyle base;
+    if (size >= 12.2) {
+      base = AppTypography.body(color: color);
+    } else if (size >= 11.2) {
+      base = AppTypography.secondary(color: color);
+    } else if (size >= 10) {
+      base = AppTypography.caption(color: color);
+    } else {
+      base = AppTypography.commentMeta(color: color);
+    }
+    return base.copyWith(fontWeight: weight);
   }
 
   Widget _brandDots({Color color = const Color(0xFF00A750)}) {
@@ -344,13 +352,13 @@ class _CommunityScreenState extends State<CommunityScreen> {
           SliverPadding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             sliver: _filtered.isEmpty
-                ? const SliverToBoxAdapter(
+                ? SliverToBoxAdapter(
                     child: Padding(
-                      padding: EdgeInsets.only(top: 40),
+                      padding: const EdgeInsets.only(top: 40),
                       child: Center(
                         child: Text(
                           'Ничего не найдено',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          style: AppTypography.screenTitle(),
                         ),
                       ),
                     ),

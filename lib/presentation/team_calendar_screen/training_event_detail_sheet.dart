@@ -161,11 +161,11 @@ class _CmrText {
     );
   }
 
-  static TextStyle title(double size) => base(size, FontWeight.w600, _CmrColors.text, height: 1.10);
-  static TextStyle section(Color color) => base(12.0, FontWeight.w600, color, height: 1.08);
-  static TextStyle body() => base(11.7, FontWeight.w400, _CmrColors.softText, height: 1.35);
-  static TextStyle muted() => base(11.2, FontWeight.w400, _CmrColors.muted, height: 1.32);
-  static TextStyle chip(Color color) => base(10.4, FontWeight.w600, color, height: 1.0);
+  static TextStyle title(double size) => AppTypography.sectionTitle(color: _CmrColors.text);
+  static TextStyle section(Color color) => AppTypography.subsectionTitle(color: color);
+  static TextStyle body() => AppTypography.body(color: _CmrColors.softText);
+  static TextStyle muted() => AppTypography.secondary(color: _CmrColors.muted);
+  static TextStyle chip(Color color) => AppTypography.chip(color: color, active: true);
 }
 
 Color _eventAccent(TeamEventType type) {

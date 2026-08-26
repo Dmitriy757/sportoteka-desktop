@@ -449,7 +449,7 @@ class _TrackerActionAnalyticsSuiteState
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: Color(0xFF66716A),
-                  fontSize: 9.8,
+                  fontSize: AppTypography.captionSize,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -462,7 +462,7 @@ class _TrackerActionAnalyticsSuiteState
                 textAlign: TextAlign.right,
                 style: const TextStyle(
                   color: _AA.green,
-                  fontSize: 10.2,
+                  fontSize: AppTypography.captionSize,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -1251,7 +1251,7 @@ class _TrackerActionAnalyticsSuiteState
                             Text(
                               'СПОРТОТЕКА ИИ',
                               style: AppTypography.custom(
-                                size: 14.2,
+                                size: AppTypography.sectionTitleSize,
                                 weight: FontWeight.w700,
                                 color: const Color(0xFF171B18),
                                 height: 1.05,
@@ -1263,7 +1263,7 @@ class _TrackerActionAnalyticsSuiteState
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: AppTypography.custom(
-                                size: 10.4,
+                                size: AppTypography.captionSize,
                                 weight: FontWeight.w500,
                                 color: const Color(0xFF66716A),
                                 height: 1.05,
@@ -1968,7 +1968,7 @@ class _TrackerActionAnalyticsSuiteState
                         'Загружаем данные выбранной сессии…',
                         style: TextStyle(
                           color: Color(0xFF66716A),
-                          fontSize: 11.5,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -2121,7 +2121,7 @@ class _TrackerActionAnalyticsSuiteState
                   const Text('Тип тренировок',
                       style: TextStyle(
                           color: _AA.text,
-                          fontSize: 15,
+                          fontSize: AppTypography.sectionTitleSize,
                           fontWeight: FontWeight.w900)),
                   const SizedBox(height: 10),
                   for (final mode in options) ...[
@@ -2261,7 +2261,7 @@ class _TrackerActionAnalyticsSuiteState
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             color: danger ? _AA.red : _AA.text,
-                            fontSize: 12.6,
+                            fontSize: AppTypography.bodySize,
                             fontWeight: FontWeight.w700,
                             letterSpacing: -.08),
                       ),
@@ -2272,7 +2272,7 @@ class _TrackerActionAnalyticsSuiteState
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _AA.muted,
-                            fontSize: 10.4,
+                            fontSize: AppTypography.captionSize,
                             fontWeight: FontWeight.w600),
                       ),
                     ])),
@@ -2325,7 +2325,7 @@ class _TrackerActionAnalyticsSuiteState
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                       color: _AA.text,
-                                      fontSize: 13.4,
+                                      fontSize: AppTypography.itemTitleSize,
                                       fontWeight: FontWeight.w700,
                                       letterSpacing: -.12),
                                 ),
@@ -2336,7 +2336,7 @@ class _TrackerActionAnalyticsSuiteState
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                       color: _AA.muted,
-                                      fontSize: 10.4,
+                                      fontSize: AppTypography.captionSize,
                                       fontWeight: FontWeight.w600),
                                 ),
                               ])),
@@ -2954,7 +2954,7 @@ class _TrackerActionAnalyticsSuiteState
                   Text(label,
                       style: TextStyle(
                           color: active ? _AA.green : _AA.text,
-                          fontSize: 12.2,
+                          fontSize: AppTypography.bodySize,
                           fontWeight: FontWeight.w700,
                           letterSpacing: -.15)),
                 ]),
@@ -3016,7 +3016,7 @@ class _TrackerActionAnalyticsSuiteState
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
                                           color: _AA.muted,
-                                          fontSize: 12.2,
+                                          fontSize: AppTypography.bodySize,
                                           fontWeight: FontWeight.w600,
                                           height: 1.05)),
                                 ]),
@@ -3029,7 +3029,7 @@ class _TrackerActionAnalyticsSuiteState
                                   textAlign: TextAlign.right,
                                   style: const TextStyle(
                                       color: _AA.green,
-                                      fontSize: 12.2,
+                                      fontSize: AppTypography.bodySize,
                                       fontWeight: FontWeight.w700))),
                           const SizedBox(width: 8),
                           _NoHoverTap(
@@ -3103,7 +3103,7 @@ class _TrackerActionAnalyticsSuiteState
                                 () => query = value.trim().toLowerCase()),
                             style: const TextStyle(
                                 color: _AA.text,
-                                fontSize: 13.2,
+                                fontSize: AppTypography.itemTitleSize,
                                 fontWeight: FontWeight.w600),
                             decoration: const InputDecoration(
                               isDense: true,
@@ -3112,7 +3112,7 @@ class _TrackerActionAnalyticsSuiteState
                               hintText: 'Поиск игрока, номера или позиции',
                               hintStyle: TextStyle(
                                   color: _AA.muted,
-                                  fontSize: 13.2,
+                                  fontSize: AppTypography.itemTitleSize,
                                   fontWeight: FontWeight.w500),
                               border: InputBorder.none,
                               contentPadding: EdgeInsets.symmetric(
@@ -3174,7 +3174,7 @@ class _TrackerActionAnalyticsSuiteState
                                                       TextOverflow.ellipsis,
                                                   style: const TextStyle(
                                                       color: _AA.text,
-                                                      fontSize: 14.4,
+                                                      fontSize: AppTypography.sectionTitleSize,
                                                       fontWeight:
                                                           FontWeight.w700,
                                                       height: 1.05,
@@ -3187,7 +3187,7 @@ class _TrackerActionAnalyticsSuiteState
                                                       TextOverflow.ellipsis,
                                                   style: const TextStyle(
                                                       color: _AA.muted,
-                                                      fontSize: 12.2,
+                                                      fontSize: AppTypography.bodySize,
                                                       fontWeight:
                                                           FontWeight.w600,
                                                       height: 1.05)),
@@ -3221,7 +3221,7 @@ class _TrackerActionAnalyticsSuiteState
                                       : 'Отфильтруем карту, график и рейтинг.',
                                   style: const TextStyle(
                                       color: _AA.muted,
-                                      fontSize: 12.2,
+                                      fontSize: AppTypography.bodySize,
                                       fontWeight: FontWeight.w600,
                                       height: 1.15))),
                           const SizedBox(width: 8),
@@ -3279,7 +3279,7 @@ class _TrackerActionAnalyticsSuiteState
                                     Text('Применить',
                                         style: TextStyle(
                                             color: Colors.white,
-                                            fontSize: 13.2,
+                                            fontSize: AppTypography.itemTitleSize,
                                             fontWeight: FontWeight.w700)),
                                   ]),
                             ),
@@ -3455,7 +3455,7 @@ class _TrackerActionAnalyticsSuiteState
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                               color: primary ? Colors.white : _AA.text,
-                              fontSize: 12.2,
+                              fontSize: AppTypography.bodySize,
                               fontWeight: FontWeight.w900,
                               letterSpacing: -.12)),
                     ]),
@@ -3500,7 +3500,7 @@ class _TrackerActionAnalyticsSuiteState
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                                 color: _AA.text,
-                                fontSize: 13.4,
+                                fontSize: AppTypography.itemTitleSize,
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: -.15)),
                         const SizedBox(height: 7),
@@ -3566,7 +3566,7 @@ class _TrackerActionAnalyticsSuiteState
                           child: Text('Игроки',
                               style: TextStyle(
                                   color: _AA.text,
-                                  fontSize: 15,
+                                  fontSize: AppTypography.sectionTitleSize,
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: -.2))),
                       Text(
@@ -3575,7 +3575,7 @@ class _TrackerActionAnalyticsSuiteState
                               : '${tempPlayers.length} выбрано',
                           style: const TextStyle(
                               color: _AA.green,
-                              fontSize: 11.5,
+                              fontSize: AppTypography.secondarySize,
                               fontWeight: FontWeight.w900)),
                     ]),
                   ),
@@ -3614,13 +3614,13 @@ class _TrackerActionAnalyticsSuiteState
                           child: Text('Тренировки периода',
                               style: const TextStyle(
                                   color: _AA.text,
-                                  fontSize: 15,
+                                  fontSize: AppTypography.sectionTitleSize,
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: -.2))),
                       Text('$selectedCount выбрано',
                           style: const TextStyle(
                               color: _AA.green,
-                              fontSize: 11.5,
+                              fontSize: AppTypography.secondarySize,
                               fontWeight: FontWeight.w900)),
                     ]),
                   ),
@@ -3746,14 +3746,14 @@ class _TrackerActionAnalyticsSuiteState
                                           'Командная тренировка показана одной карточкой с числом участников',
                                           style: TextStyle(
                                               color: _AA.muted,
-                                              fontSize: 12.2,
+                                              fontSize: AppTypography.bodySize,
                                               fontWeight: FontWeight.w700)),
                                     ])),
                                 const SizedBox(width: 6),
                                 Text('$selectedCount выбрано',
                                     style: const TextStyle(
                                         color: _AA.green,
-                                        fontSize: 13,
+                                        fontSize: AppTypography.itemTitleSize,
                                         fontWeight: FontWeight.w900)),
                                 const SizedBox(width: 6),
                                 _NoHoverTap(
@@ -3846,7 +3846,7 @@ class _TrackerActionAnalyticsSuiteState
                                                       color: active
                                                           ? _AA.green
                                                           : _AA.muted,
-                                                      fontSize: 12.2,
+                                                      fontSize: AppTypography.bodySize,
                                                       fontWeight: active
                                                           ? FontWeight.w900
                                                           : FontWeight.w700,
@@ -3934,7 +3934,7 @@ class _TrackerActionAnalyticsSuiteState
                                       () => query = value.trim().toLowerCase()),
                                   style: const TextStyle(
                                       color: _AA.text,
-                                      fontSize: 13,
+                                      fontSize: AppTypography.itemTitleSize,
                                       fontWeight: FontWeight.w700),
                                   decoration: const InputDecoration(
                                     isDense: true,
@@ -3944,7 +3944,7 @@ class _TrackerActionAnalyticsSuiteState
                                         'Поиск по игроку, позиции или ID записи',
                                     hintStyle: TextStyle(
                                         color: _AA.muted,
-                                        fontSize: 13,
+                                        fontSize: AppTypography.itemTitleSize,
                                         fontWeight: FontWeight.w700),
                                     border: InputBorder.none,
                                     contentPadding: EdgeInsets.symmetric(
@@ -3970,7 +3970,7 @@ class _TrackerActionAnalyticsSuiteState
                                             : 'Будут учтены только отмеченные тренировки.',
                                         style: const TextStyle(
                                             color: _AA.muted,
-                                            fontSize: 12,
+                                            fontSize: AppTypography.bodySize,
                                             fontWeight: FontWeight.w800))),
                                 const SizedBox(width: 8),
                                 SizedBox(
@@ -5276,7 +5276,7 @@ class _HeartRateAnalyticsTabState extends State<_HeartRateAnalyticsTab> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _AA.text,
-                      fontSize: 11.8,
+                      fontSize: AppTypography.bodySize,
                       fontWeight: FontWeight.w700))),
           Text(
               teamMode
@@ -5284,7 +5284,7 @@ class _HeartRateAnalyticsTabState extends State<_HeartRateAnalyticsTab> {
                   : '${_selectedHrPlayerKeys.length} выбрано',
               style: const TextStyle(
                   color: _AA.green,
-                  fontSize: 11.2,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w700)),
         ]),
       );
@@ -5745,7 +5745,7 @@ class _AnalyticsHrPlayerFilterBar extends StatelessWidget {
         child: const Text(
             'Фильтр игроков появится, когда сервер отдаст player_id/name для Polar H10.',
             style: TextStyle(
-                color: _AA.muted, fontSize: 11.2, fontWeight: FontWeight.w700)),
+                color: _AA.muted, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700)),
       );
     }
     return Container(
@@ -5823,14 +5823,14 @@ class _AnalyticsHrFilterChip extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             color: active ? _AA.green : _AA.text,
-                            fontSize: 10.4,
+                            fontSize: AppTypography.captionSize,
                             fontWeight: FontWeight.w700))),
                 Text(note,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _AA.muted,
-                        fontSize: 9.6,
+                        fontSize: AppTypography.menuGroupSize,
                         fontWeight: FontWeight.w700)),
               ]),
         ]),
@@ -6021,12 +6021,12 @@ class _HrDetailLauncher extends StatelessWidget {
                         Text(title,
                             style: const TextStyle(
                                 color: _AA.text,
-                                fontSize: 14,
+                                fontSize: AppTypography.sectionTitleSize,
                                 fontWeight: FontWeight.w900)),
                         Text(note,
                             style: const TextStyle(
                                 color: _AA.muted,
-                                fontSize: 10.4,
+                                fontSize: AppTypography.captionSize,
                                 fontWeight: FontWeight.w600)),
                       ])),
                   IconButton(
@@ -6074,7 +6074,7 @@ class _HrDetailLauncher extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _AA.text,
-                          fontSize: 12.2,
+                          fontSize: AppTypography.bodySize,
                           fontWeight: FontWeight.w700)),
                   const SizedBox(height: 2),
                   Text(note,
@@ -6082,7 +6082,7 @@ class _HrDetailLauncher extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _AA.muted,
-                          fontSize: 9.6,
+                          fontSize: AppTypography.menuGroupSize,
                           fontWeight: FontWeight.w600)),
                 ])),
             const SizedBox(width: 8),
@@ -6093,7 +6093,7 @@ class _HrDetailLauncher extends StatelessWidget {
                   Text(value,
                       style: TextStyle(
                           color: tone,
-                          fontSize: 11,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w900)),
                   const Icon(Icons.chevron_right_rounded,
                       color: _AA.muted, size: 16),
@@ -6186,11 +6186,11 @@ class _AnalyticsHrLineChartState extends State<_AnalyticsHrLineChart> {
                       : 'Красная зона нагрузки: Z4–Z5 (от 160 bpm)',
                   style: const TextStyle(
                       color: _AA.text,
-                      fontSize: 10.4,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w800))),
           Text('Масштаб ${_zoom.toStringAsFixed(1)}×',
               style: const TextStyle(
-                  color: _AA.red, fontSize: 9.6, fontWeight: FontWeight.w900)),
+                  color: _AA.red, fontSize: AppTypography.menuGroupSize, fontWeight: FontWeight.w900)),
         ]),
       ),
       Row(children: [
@@ -6213,7 +6213,7 @@ class _AnalyticsHrLineChartState extends State<_AnalyticsHrLineChart> {
               const Text('Положение',
                   style: TextStyle(
                       color: _AA.muted,
-                      fontSize: 9.6,
+                      fontSize: AppTypography.menuGroupSize,
                       fontWeight: FontWeight.w700)),
               Expanded(
                   child: Slider(
@@ -6252,13 +6252,13 @@ class _AnalyticsHrLineChartState extends State<_AnalyticsHrLineChart> {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _AA.text,
-                        fontSize: 10.4,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w800))),
             Text(
                 '${_selectedPoint!.bpm} bpm · ${_selectedPoint!.zone.toUpperCase()}',
                 style: TextStyle(
                     color: _analyticsZoneColor(_selectedPoint!.zone),
-                    fontSize: 10.4,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w900)),
           ]),
         ),
@@ -6331,11 +6331,11 @@ class _AnalyticsHrTimelineLegend extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _AA.text,
-                    fontSize: 10.4,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w700))),
         Text('${points.length} HR',
             style: const TextStyle(
-                color: _AA.muted, fontSize: 9.6, fontWeight: FontWeight.w700)),
+                color: _AA.muted, fontSize: AppTypography.menuGroupSize, fontWeight: FontWeight.w700)),
       ]),
     );
   }
@@ -6433,7 +6433,7 @@ class _AnalyticsHrActivityBar extends StatelessWidget {
                 child: Text(e.value,
                     style: TextStyle(
                         color: active ? _AA.green : _AA.muted,
-                        fontSize: 10.4,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w800)),
               ),
             ),
@@ -6547,7 +6547,7 @@ class _AnalyticsHrLoadEventsPanel extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                   color: _AA.text,
-                                  fontSize: 11.4,
+                                  fontSize: AppTypography.secondarySize,
                                   fontWeight: FontWeight.w700))),
                       Container(
                           padding: const EdgeInsets.symmetric(
@@ -6558,7 +6558,7 @@ class _AnalyticsHrLoadEventsPanel extends StatelessWidget {
                           child: Text('${p.bpm} bpm',
                               style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 10.4,
+                                  fontSize: AppTypography.captionSize,
                                   fontWeight: FontWeight.w700))),
                     ]),
                     const SizedBox(height: 3),
@@ -6566,7 +6566,7 @@ class _AnalyticsHrLoadEventsPanel extends StatelessWidget {
                         '${_analyticsHrTimeLabel(p, all)} · ${_analyticsHrMinuteFromStart(p, all)} мин от старта · ${p.zone.toUpperCase()} · ${_activityLabel(p.activityType)}',
                         style: const TextStyle(
                             color: _AA.muted,
-                            fontSize: 9.6,
+                            fontSize: AppTypography.menuGroupSize,
                             fontWeight: FontWeight.w700)),
                     const SizedBox(height: 4),
                     Text(_hrAiAssessment(p),
@@ -6574,7 +6574,7 @@ class _AnalyticsHrLoadEventsPanel extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _AA.text,
-                            fontSize: 9.6,
+                            fontSize: AppTypography.menuGroupSize,
                             height: 1.25,
                             fontWeight: FontWeight.w600)),
                     const SizedBox(height: 4),
@@ -6589,7 +6589,7 @@ class _AnalyticsHrLoadEventsPanel extends StatelessWidget {
                                   : 'Открыть точку в ИИ-чате',
                               style: const TextStyle(
                                   color: _AA.red,
-                                  fontSize: 10.4,
+                                  fontSize: AppTypography.captionSize,
                                   fontWeight: FontWeight.w700))),
                       if (onOpenAi != null)
                         const Icon(Icons.arrow_forward_rounded,
@@ -6784,13 +6784,13 @@ class _HrAiPassportPanel extends StatelessWidget {
                   Text(risk ? 'Внимание тренера' : 'ИИ-оценка нагрузки',
                       style: TextStyle(
                           color: risk ? _AA.red : _AA.green,
-                          fontSize: 10.4,
+                          fontSize: AppTypography.captionSize,
                           fontWeight: FontWeight.w900)),
                   const SizedBox(height: 3),
                   Text(assessment,
                       style: const TextStyle(
                           color: _AA.text,
-                          fontSize: 9.6,
+                          fontSize: AppTypography.menuGroupSize,
                           height: 1.3,
                           fontWeight: FontWeight.w600)),
                 ])),
@@ -6799,7 +6799,7 @@ class _HrAiPassportPanel extends StatelessWidget {
         const SizedBox(height: 8),
         const Text('Восстановление после выбранного пика',
             style: TextStyle(
-                color: _AA.text, fontSize: 10.4, fontWeight: FontWeight.w900)),
+                color: _AA.text, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w900)),
         const SizedBox(height: 5),
         Row(children: [
           Expanded(child: _HrRecoveryCell(label: '30 сек', value: r30)),
@@ -6814,17 +6814,17 @@ class _HrAiPassportPanel extends StatelessWidget {
               child: Text('Продолжительные интервалы Z4–Z5',
                   style: TextStyle(
                       color: _AA.text,
-                      fontSize: 10.4,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w900))),
           Text('${intervals.length}',
               style: const TextStyle(
-                  color: _AA.red, fontSize: 11.2, fontWeight: FontWeight.w900)),
+                  color: _AA.red, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w900)),
         ]),
         const SizedBox(height: 5),
         if (intervals.isEmpty)
           const Text('Интервалы высокой нагрузки не обнаружены.',
               style: TextStyle(
-                  color: _AA.muted, fontSize: 9.6, fontWeight: FontWeight.w600))
+                  color: _AA.muted, fontSize: AppTypography.menuGroupSize, fontWeight: FontWeight.w600))
         else
           for (final i in intervals.take(5))
             InkWell(
@@ -6854,13 +6854,13 @@ class _HrAiPassportPanel extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                                 color: _AA.text,
-                                fontSize: 9.6,
+                                fontSize: AppTypography.menuGroupSize,
                                 fontWeight: FontWeight.w900)),
                         Text(
                             '${_analyticsHrTimeLabel(i.start, heartRate.timelineForChart)}–${_analyticsHrTimeLabel(i.end, heartRate.timelineForChart)} · ${math.max(1, (i.durationSec / 60).ceil())} мин · ${_activityLabel(i.peak.activityType)}',
                             style: const TextStyle(
                                 color: _AA.muted,
-                                fontSize: 9.6,
+                                fontSize: AppTypography.menuGroupSize,
                                 fontWeight: FontWeight.w700)),
                       ])),
                   Container(
@@ -6872,7 +6872,7 @@ class _HrAiPassportPanel extends StatelessWidget {
                       child: Text('${i.peak.bpm}',
                           style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 9.6,
+                              fontSize: AppTypography.menuGroupSize,
                               fontWeight: FontWeight.w900))),
                 ]),
               ),
@@ -6899,11 +6899,11 @@ class _HrPassportScore extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(label,
             style: const TextStyle(
-                color: _AA.muted, fontSize: 9.6, fontWeight: FontWeight.w700)),
+                color: _AA.muted, fontSize: AppTypography.menuGroupSize, fontWeight: FontWeight.w700)),
         const SizedBox(height: 2),
         Text('$value$suffix',
             style: TextStyle(
-                color: color, fontSize: 13, fontWeight: FontWeight.w900))
+                color: color, fontSize: AppTypography.itemTitleSize, fontWeight: FontWeight.w900))
       ]));
 }
 
@@ -6926,13 +6926,13 @@ class _HrRecoveryCell extends StatelessWidget {
           Text(label,
               style: const TextStyle(
                   color: _AA.muted,
-                  fontSize: 9.6,
+                  fontSize: AppTypography.menuGroupSize,
                   fontWeight: FontWeight.w700)),
           const SizedBox(height: 2),
           Text(value == null ? 'нет данных' : '−$value bpm',
               style: TextStyle(
                   color: poor ? _AA.red : (good ? _AA.green : _AA.text),
-                  fontSize: 10.4,
+                  fontSize: AppTypography.captionSize,
                   fontWeight: FontWeight.w900))
         ]));
   }
@@ -6999,7 +6999,7 @@ class _AnalyticsHrZonesPanel extends StatelessWidget {
                 child: Text(labels[i],
                     style: const TextStyle(
                         color: _AA.text,
-                        fontSize: 11.2,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w700))),
             Expanded(
                 child: ClipRRect(
@@ -7021,7 +7021,7 @@ class _AnalyticsHrZonesPanel extends StatelessWidget {
                     textAlign: TextAlign.right,
                     style: const TextStyle(
                         color: _AA.muted,
-                        fontSize: 10.4,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w700))),
           ]),
           if (i != z.length - 1) const SizedBox(height: 9),
@@ -7126,7 +7126,7 @@ class _AnalyticsHrPlayersList extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _AA.text,
-                            fontSize: 11.5,
+                            fontSize: AppTypography.secondarySize,
                             fontWeight: FontWeight.w800)),
                     const SizedBox(height: 4),
                     Text(
@@ -7135,7 +7135,7 @@ class _AnalyticsHrPlayersList extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _AA.muted,
-                            fontSize: 9.6,
+                            fontSize: AppTypography.menuGroupSize,
                             fontWeight: FontWeight.w600)),
                     const Spacer(),
                     Row(children: [
@@ -7148,7 +7148,7 @@ class _AnalyticsHrPlayersList extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                   color: _AA.text,
-                                  fontSize: 9.6,
+                                  fontSize: AppTypography.menuGroupSize,
                                   fontWeight: FontWeight.w800))),
                     ]),
                     const SizedBox(height: 3),
@@ -7157,7 +7157,7 @@ class _AnalyticsHrPlayersList extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _AA.muted,
-                            fontSize: 9.6,
+                            fontSize: AppTypography.menuGroupSize,
                             fontWeight: FontWeight.w600)),
                     const SizedBox(height: 5),
                     ClipRRect(
@@ -7174,7 +7174,7 @@ class _AnalyticsHrPlayersList extends StatelessWidget {
                     Text('Z4–Z5 ${highPct.toStringAsFixed(0)}%',
                         style: TextStyle(
                             color: highPct >= 20 ? _AA.red : _AA.muted,
-                            fontSize: 9.6,
+                            fontSize: AppTypography.menuGroupSize,
                             fontWeight: FontWeight.w800)),
                   ])),
             ]),
@@ -7273,7 +7273,7 @@ class _AnalyticsHrPlayerSummaryChart extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _AA.text,
-                          fontSize: 12.2,
+                          fontSize: AppTypography.bodySize,
                           fontWeight: FontWeight.w700))),
               if (highPct >= 20)
                 Container(
@@ -7285,7 +7285,7 @@ class _AnalyticsHrPlayerSummaryChart extends StatelessWidget {
                     child: Text('Z4–Z5 ${highPct.toStringAsFixed(0)}%',
                         style: const TextStyle(
                             color: _AA.red,
-                            fontSize: 10.4,
+                            fontSize: AppTypography.captionSize,
                             fontWeight: FontWeight.w700))),
             ]),
             const SizedBox(height: 7),
@@ -7331,14 +7331,14 @@ class _HrCompareValue extends StatelessWidget {
           Text(label,
               style: const TextStyle(
                   color: _AA.muted,
-                  fontSize: 10.4,
+                  fontSize: AppTypography.captionSize,
                   fontWeight: FontWeight.w500)),
           const SizedBox(height: 2),
           Text('$value bpm',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                  color: color, fontSize: 11.4, fontWeight: FontWeight.w700)),
+                  color: color, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700)),
         ]),
       );
 }
@@ -8168,7 +8168,7 @@ class _AnalyticsReportEmptyState extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                   color: _AA.muted,
-                  fontSize: 12.5,
+                  fontSize: AppTypography.bodySize,
                   height: 1.45,
                   fontWeight: FontWeight.w500),
             ),
@@ -8250,73 +8250,55 @@ class _AA {
 }
 
 class _AText {
-  // V182: та же шкала типографики, что в Player Profile (PpText).
-  static double _titleSize(double requested) {
-    if (requested >= 17) return 18;
-    if (requested >= 15) return 16;
-    return 14;
+  static TextStyle title(double size, {Color color = _AA.text}) {
+    final base = size >= 17
+        ? AppTypography.screenTitle(color: color)
+        : size >= 15
+            ? AppTypography.sectionTitle(color: color)
+            : AppTypography.subsectionTitle(color: color);
+    return base.copyWith(
+      fontWeight: FontWeight.w600,
+      fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+    );
   }
-
-  static double _bodySize(double requested) {
-    if (requested < 9.4) return 9.5;
-    if (requested < 10.6) return 10.2;
-    if (requested < 11.7) return 11;
-    if (requested < 12.7) return 12;
-    return 13;
-  }
-
-  static double _valueSize(double requested) {
-    if (requested >= 16.5) return 17;
-    if (requested >= 14.5) return 15;
-    return 14;
-  }
-
-  static double _captionSize(double requested) => requested < 10 ? 9.5 : 10.2;
-
-  static TextStyle title(double size, {Color color = _AA.text}) =>
-      AppTypography.custom(
-        size: _titleSize(size),
-        weight: FontWeight.w600,
-        color: color,
-        height: 1.18,
-        letterSpacing: 0,
-        features: const <FontFeature>[FontFeature.tabularFigures()],
-      );
 
   static TextStyle body(
     double size, {
     Color color = _AA.muted,
     FontWeight weight = FontWeight.w400,
-  }) =>
-      AppTypography.custom(
-        size: _bodySize(size),
-        weight: weight,
-        color: color,
-        height: 1.30,
-        letterSpacing: 0,
-      );
+  }) {
+    final base = size < 9.4
+        ? AppTypography.commentMeta(color: color)
+        : size < 10.6
+            ? AppTypography.caption(color: color)
+            : size < 11.7
+                ? AppTypography.secondary(color: color)
+                : AppTypography.body(color: color);
+    return base.copyWith(fontWeight: weight);
+  }
 
-  static TextStyle value(double size, {Color color = _AA.text}) =>
-      AppTypography.custom(
-        size: _valueSize(size),
-        weight: FontWeight.w600,
-        color: color,
-        height: 1.12,
-        letterSpacing: 0,
-        features: const <FontFeature>[FontFeature.tabularFigures()],
-      );
+  static TextStyle value(double size, {Color color = _AA.text}) {
+    final metricSize = size >= 16.5
+        ? 17.0
+        : size >= 14.5
+            ? 15.0
+            : 14.0;
+    return AppTypography.metricStrong(color: color).copyWith(
+      fontSize: metricSize,
+      fontWeight: FontWeight.w600,
+      height: 1.12,
+    );
+  }
 
   static TextStyle caption({
     double size = 10.2,
     Color color = _AA.muted2,
-  }) =>
-      AppTypography.custom(
-        size: _captionSize(size),
-        weight: FontWeight.w500,
-        color: color,
-        height: 1.18,
-        letterSpacing: 0,
-      );
+  }) {
+    final base = size < 10
+        ? AppTypography.commentMeta(color: color)
+        : AppTypography.caption(color: color);
+    return base.copyWith(fontWeight: FontWeight.w500);
+  }
 }
 
 class _CoachInsightMetric {
@@ -8452,14 +8434,14 @@ class _CoachInsightPanel extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _AA.text,
-                            fontSize: 10.4,
+                            fontSize: AppTypography.captionSize,
                             fontWeight: FontWeight.w700)),
                     Text(insight.subtitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _AA.muted,
-                            fontSize: 10.4,
+                            fontSize: AppTypography.captionSize,
                             fontWeight: FontWeight.w700)),
                   ])),
               _NoHoverTap(
@@ -8500,7 +8482,7 @@ class _CoachInsightPanel extends StatelessWidget {
                         const Text('Что важно тренеру',
                             style: TextStyle(
                                 color: _AA.text,
-                                fontSize: 11.2,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w700)),
                         const SizedBox(height: 7),
                         for (final b in insight.bullets)
@@ -8522,7 +8504,7 @@ class _CoachInsightPanel extends StatelessWidget {
                                       child: Text(b,
                                           style: const TextStyle(
                                               color: _AA.text,
-                                              fontSize: 10.4,
+                                              fontSize: AppTypography.captionSize,
                                               height: 1.25,
                                               fontWeight: FontWeight.w700))),
                                 ]),
@@ -8562,7 +8544,7 @@ class _CoachMetricCell extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _AA.muted,
-                    fontSize: 9.6,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w700)),
             const SizedBox(height: 2),
             Text(metric.value,
@@ -8570,7 +8552,7 @@ class _CoachMetricCell extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                     color: accent,
-                    fontSize: 12.4,
+                    fontSize: AppTypography.bodySize,
                     fontWeight: FontWeight.w700)),
             if (metric.note.isNotEmpty)
               Text(metric.note,
@@ -8578,7 +8560,7 @@ class _CoachMetricCell extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _AA.muted,
-                      fontSize: 9.6,
+                      fontSize: AppTypography.menuGroupSize,
                       fontWeight: FontWeight.w700)),
           ]),
     );
@@ -8747,7 +8729,7 @@ class _SessionPickerSessionTile extends StatelessWidget {
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       color: _AA.text,
-                                      fontSize: 13.2,
+                                      fontSize: AppTypography.itemTitleSize,
                                       fontWeight: FontWeight.w900,
                                     ),
                                   ),
@@ -8758,7 +8740,7 @@ class _SessionPickerSessionTile extends StatelessWidget {
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       color: _AA.muted,
-                                      fontSize: 11.2,
+                                      fontSize: AppTypography.secondarySize,
                                       fontWeight: FontWeight.w800,
                                     ),
                                   ),
@@ -8802,7 +8784,7 @@ class _SessionPickerSessionTile extends StatelessWidget {
                             const Text('Polar',
                                 style: TextStyle(
                                     color: Color(0xFFDC2626),
-                                    fontSize: 11.2,
+                                    fontSize: AppTypography.secondarySize,
                                     fontWeight: FontWeight.w900)),
                           ],
                           if (hasPolar && hasTracker) const SizedBox(width: 10),
@@ -8813,7 +8795,7 @@ class _SessionPickerSessionTile extends StatelessWidget {
                             const Text('Трекер',
                                 style: TextStyle(
                                     color: _AA.green,
-                                    fontSize: 11.2,
+                                    fontSize: AppTypography.secondarySize,
                                     fontWeight: FontWeight.w900)),
                           ],
                           const Spacer(),
@@ -8821,7 +8803,7 @@ class _SessionPickerSessionTile extends StatelessWidget {
                             checked ? 'ВЫБРАНО' : 'Выбрать',
                             style: TextStyle(
                               color: checked ? _AA.green : _AA.muted,
-                              fontSize: 11.2,
+                              fontSize: AppTypography.secondarySize,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
@@ -9061,7 +9043,7 @@ class _TrackerInlineCalendarPaneState
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _AA.text,
-                            fontSize: 15.0,
+                            fontSize: AppTypography.sectionTitleSize,
                             fontWeight: FontWeight.w600,
                             height: 1.05,
                             letterSpacing: -.12)),
@@ -9072,7 +9054,7 @@ class _TrackerInlineCalendarPaneState
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _AA.muted,
-                            fontSize: 11.0,
+                            fontSize: AppTypography.secondarySize,
                             fontWeight: FontWeight.w500,
                             height: 1.0)),
                   ])),
@@ -9484,7 +9466,7 @@ class _TrackerSessionCalendarPickerState
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                     color: _AA.muted,
-                                    fontSize: 12,
+                                    fontSize: AppTypography.bodySize,
                                     fontWeight: FontWeight.w800)),
                           ])),
                       _IconOnlyButton(icon: Icons.today_rounded, onTap: _today),
@@ -9507,7 +9489,7 @@ class _TrackerSessionCalendarPickerState
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                   color: _AA.text,
-                                  fontSize: 11.8,
+                                  fontSize: AppTypography.bodySize,
                                   fontWeight: FontWeight.w700)),
                         ),
                       ),
@@ -9630,7 +9612,7 @@ class _TrackerSessionCalendarPickerState
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                   color: _AA.muted,
-                                  fontSize: 11.2,
+                                  fontSize: AppTypography.secondarySize,
                                   fontWeight: FontWeight.w700))),
                       _SmallButton(
                           icon: Icons.done_all_rounded,
@@ -9990,7 +9972,7 @@ class _TrackerInlineMonthCalendar extends StatelessWidget {
                       child: Text(d,
                           style: const TextStyle(
                               color: _AA.muted,
-                              fontSize: 11.2,
+                              fontSize: AppTypography.secondarySize,
                               fontWeight: FontWeight.w600,
                               height: 1.0)))))
               .toList(),
@@ -10099,7 +10081,7 @@ class _TrackerCalendarDayCell extends StatelessWidget {
                     child: Text('$count',
                         style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 9.6,
+                            fontSize: AppTypography.menuGroupSize,
                             fontWeight: FontWeight.w700,
                             height: 1.0))),
               ),
@@ -10225,7 +10207,7 @@ class _TrackerSelectedDayPanelState extends State<_TrackerSelectedDayPanel> {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                                 color: _AA.text,
-                                fontSize: 13.2,
+                                fontSize: AppTypography.itemTitleSize,
                                 fontWeight: FontWeight.w800,
                                 height: 1.0)),
                         const SizedBox(height: 3),
@@ -10235,7 +10217,7 @@ class _TrackerSelectedDayPanelState extends State<_TrackerSelectedDayPanel> {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               color: _AA.muted,
-                              fontSize: 11.0,
+                              fontSize: AppTypography.secondarySize,
                               fontWeight: FontWeight.w600,
                               height: 1.0),
                         ),
@@ -10276,7 +10258,7 @@ class _TrackerSelectedDayPanelState extends State<_TrackerSelectedDayPanel> {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                                 color: _AA.text,
-                                fontSize: 14.2,
+                                fontSize: AppTypography.sectionTitleSize,
                                 fontWeight: FontWeight.w600,
                                 height: 1.05,
                                 letterSpacing: -.10)),
@@ -10287,7 +10269,7 @@ class _TrackerSelectedDayPanelState extends State<_TrackerSelectedDayPanel> {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                                 color: _AA.muted,
-                                fontSize: 11.2,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w500,
                                 height: 1.0)),
                       ])),
@@ -10338,7 +10320,7 @@ class _TrackerSelectedDayPanelState extends State<_TrackerSelectedDayPanel> {
                         textAlign: TextAlign.center,
                         style: TextStyle(
                             color: _AA.muted,
-                            fontSize: 12.2,
+                            fontSize: AppTypography.bodySize,
                             fontWeight: FontWeight.w600)),
                   ),
                 )
@@ -10496,7 +10478,7 @@ class _TrackerSessionPreview extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               color: _AA.text,
-                              fontSize: 13.4,
+                              fontSize: AppTypography.itemTitleSize,
                               fontWeight: FontWeight.w800)),
                       const SizedBox(height: 2),
                       Text(
@@ -10505,7 +10487,7 @@ class _TrackerSessionPreview extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _AA.muted,
-                            fontSize: 10.4,
+                            fontSize: AppTypography.captionSize,
                             fontWeight: FontWeight.w600),
                       ),
                     ]),
@@ -10522,7 +10504,7 @@ class _TrackerSessionPreview extends StatelessWidget {
                         color: qualityOk
                             ? _AA.green
                             : const Color(0xFFEA580C),
-                        fontSize: 9.4,
+                        fontSize: AppTypography.menuGroupSize,
                         fontWeight: FontWeight.w800)),
               ),
             ]),
@@ -10613,7 +10595,7 @@ class _TrackerSessionPreview extends StatelessWidget {
             const Text('Покрытие датчиками',
                 style: TextStyle(
                     color: _AA.text,
-                    fontSize: 11.2,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w800)),
             const SizedBox(height: 7),
             _TrackerPreviewCoverage(
@@ -10644,12 +10626,12 @@ class _TrackerSessionPreview extends StatelessWidget {
                   child: Text('Игроки сессии · $participants',
                       style: const TextStyle(
                           color: _AA.text,
-                          fontSize: 11.2,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w800))),
               Text('${participantRows.length} показано',
                   style: const TextStyle(
                       color: _AA.muted,
-                      fontSize: 9.6,
+                      fontSize: AppTypography.menuGroupSize,
                       fontWeight: FontWeight.w700)),
             ]),
             const SizedBox(height: 8),
@@ -10678,7 +10660,7 @@ class _TrackerSessionPreview extends StatelessWidget {
               const Text('Качество данных',
                   style: TextStyle(
                       color: Color(0xFF9A3412),
-                      fontSize: 11.2,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w800)),
               const SizedBox(height: 5),
               for (final warning in warnings)
@@ -10687,7 +10669,7 @@ class _TrackerSessionPreview extends StatelessWidget {
                   child: Text('• $warning',
                       style: const TextStyle(
                           color: Color(0xFF9A3412),
-                          fontSize: 10.2,
+                          fontSize: AppTypography.captionSize,
                           fontWeight: FontWeight.w600)),
                 ),
             ]),
@@ -10748,14 +10730,14 @@ class _TrackerPreviewInfoLine extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _AA.muted,
-                    fontSize: 9.4,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w600)),
             Text(value,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _AA.text,
-                    fontSize: 10.2,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w800)),
           ]),
         ),
@@ -10829,14 +10811,14 @@ class _TrackerPreviewPlayerTile extends StatelessWidget {
                     child: Text(initials,
                         style: const TextStyle(
                             color: _AA.green,
-                            fontSize: 10.2,
+                            fontSize: AppTypography.captionSize,
                             fontWeight: FontWeight.w900)),
                   ),
                 )
               : Text(initials,
                   style: const TextStyle(
                       color: _AA.green,
-                      fontSize: 10.2,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w900)),
         ),
         const SizedBox(width: 7),
@@ -10850,7 +10832,7 @@ class _TrackerPreviewPlayerTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _AA.text,
-                        fontSize: 10.4,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w800)),
                 if (details.isNotEmpty) ...[
                   const SizedBox(height: 2),
@@ -10859,7 +10841,7 @@ class _TrackerPreviewPlayerTile extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _AA.muted,
-                          fontSize: 8.8,
+                          fontSize: AppTypography.badgeSize,
                           fontWeight: FontWeight.w600)),
                 ],
               ]),
@@ -10927,7 +10909,7 @@ class _TrackerPreviewMetric extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _AA.muted,
-                        fontSize: 9.2,
+                        fontSize: AppTypography.menuGroupSize,
                         fontWeight: FontWeight.w600)),
                 const SizedBox(height: 2),
                 Text(value,
@@ -10935,7 +10917,7 @@ class _TrackerPreviewMetric extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _AA.text,
-                        fontSize: 11.0,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w800)),
               ])),
         ]),
@@ -10964,14 +10946,14 @@ class _TrackerPreviewCoverage extends StatelessWidget {
             width: 42,
             child: Text(label,
                 style: TextStyle(
-                    color: color, fontSize: 10.2, fontWeight: FontWeight.w800))),
+                    color: color, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w800))),
         Expanded(
             child: Text(value,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _AA.text,
-                    fontSize: 10.2,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w600))),
         Icon(complete ? Icons.check_circle_rounded : Icons.info_rounded,
             size: 16, color: complete ? _AA.green : const Color(0xFFEA580C)),
@@ -11033,7 +11015,7 @@ class _TrackerPreviewAction extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: primary ? _AA.greenDark : _AA.text,
-                        fontSize: 10.9,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -11044,7 +11026,7 @@ class _TrackerPreviewAction extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: _AA.muted,
-                        fontSize: 8.9,
+                        fontSize: AppTypography.badgeSize,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -11129,7 +11111,7 @@ class _TrackerCalendarSessionCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _AA.text,
-                            fontSize: 11.7,
+                            fontSize: AppTypography.secondarySize,
                             fontWeight: FontWeight.w800,
                             height: 1.0)),
                     const SizedBox(height: 4),
@@ -11139,7 +11121,7 @@ class _TrackerCalendarSessionCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _AA.muted,
-                            fontSize: 9.3,
+                            fontSize: AppTypography.menuGroupSize,
                             fontWeight: FontWeight.w600,
                             height: 1.0)),
                   ]),
@@ -11155,7 +11137,7 @@ class _TrackerCalendarSessionCard extends StatelessWidget {
                   Text(selected ? 'Выбрано' : 'Подробнее',
                       style: TextStyle(
                           color: selected ? _AA.greenDark : _AA.graphite2,
-                          fontSize: 9.2,
+                          fontSize: AppTypography.menuGroupSize,
                           fontWeight: FontWeight.w800)),
                   const SizedBox(width: 2),
                   Icon(
@@ -11209,7 +11191,7 @@ class _TrackerCalendarSessionCard extends StatelessWidget {
             Text('${group.sprintCount} спр.',
                 style: const TextStyle(
                     color: _AA.muted,
-                    fontSize: 9.1,
+                    fontSize: AppTypography.badgeSize,
                     fontWeight: FontWeight.w700)),
           ]),
         ]),
@@ -11265,7 +11247,7 @@ class _TrackerSessionCompactMetric extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _AA.text,
-                          fontSize: 10.2,
+                          fontSize: AppTypography.captionSize,
                           fontWeight: FontWeight.w800,
                           height: 1.0)),
                   const SizedBox(height: 3),
@@ -11310,7 +11292,7 @@ class _TrackerSessionStatus extends StatelessWidget {
           Text(label,
               style: TextStyle(
                   color: active ? color : _AA.muted,
-                  fontSize: 8.6,
+                  fontSize: AppTypography.badgeSize,
                   fontWeight: FontWeight.w700)),
         ]),
       );
@@ -11343,7 +11325,7 @@ class _TrackerCalendarMetricPill extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: _AA.muted,
-                  fontSize: 9.6,
+                  fontSize: AppTypography.menuGroupSize,
                   fontWeight: FontWeight.w600,
                   height: 1.0)),
           const SizedBox(width: 3),
@@ -11353,7 +11335,7 @@ class _TrackerCalendarMetricPill extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
                 color: _AA.text,
-                fontSize: 10.4,
+                fontSize: AppTypography.captionSize,
                 fontWeight: FontWeight.w700,
                 height: 1.0)),
       ]),
@@ -11380,7 +11362,7 @@ class _TrackerSessionTinyBadge extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-              color: color, fontSize: 9.6, fontWeight: FontWeight.w700)),
+              color: color, fontSize: AppTypography.menuGroupSize, fontWeight: FontWeight.w700)),
     );
   }
 }
@@ -11455,7 +11437,7 @@ class _TrackerCalendarKpi extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _AA.muted,
-                      fontSize: 9.6,
+                      fontSize: AppTypography.menuGroupSize,
                       fontWeight: FontWeight.w700)),
               const SizedBox(height: 1),
               Text(value,
@@ -11463,7 +11445,7 @@ class _TrackerCalendarKpi extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _AA.text,
-                      fontSize: 10.4,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w800)),
             ])),
       ]),
@@ -11626,7 +11608,7 @@ class _SessionKindOptionTile extends StatelessWidget {
                     style: TextStyle(
                         color: active ? _AA.green : _AA.text,
                         fontWeight: FontWeight.w900,
-                        fontSize: 12.5)),
+                        fontSize: AppTypography.bodySize)),
                 const SizedBox(height: 2),
                 Text(subtitle,
                     maxLines: 2,
@@ -11634,7 +11616,7 @@ class _SessionKindOptionTile extends StatelessWidget {
                     style: const TextStyle(
                         color: _AA.muted,
                         fontWeight: FontWeight.w700,
-                        fontSize: 11.2,
+                        fontSize: AppTypography.secondarySize,
                         height: 1.15)),
               ])),
           if (active)
@@ -11841,7 +11823,7 @@ class _DateFilterBar extends StatelessWidget {
                                           style: TextStyle(
                                               color: _AA.text,
                                               fontWeight: FontWeight.w900,
-                                              fontSize: 17,
+                                              fontSize: AppTypography.screenTitleSize,
                                               height: 1.05)),
                                       SizedBox(height: 3),
                                       Text(
@@ -11849,7 +11831,7 @@ class _DateFilterBar extends StatelessWidget {
                                           style: TextStyle(
                                               color: _AA.muted,
                                               fontWeight: FontWeight.w700,
-                                              fontSize: 11.2)),
+                                              fontSize: AppTypography.secondarySize)),
                                     ]),
                               ),
                               _NoHoverTap(
@@ -11879,7 +11861,7 @@ class _DateFilterBar extends StatelessWidget {
                                   style: const TextStyle(
                                       color: _AA.text,
                                       fontWeight: FontWeight.w800,
-                                      fontSize: 12.6,
+                                      fontSize: AppTypography.bodySize,
                                       height: 1.18)),
                             ),
                             const SizedBox(height: 8),
@@ -11952,7 +11934,7 @@ class _DateFilterBar extends StatelessWidget {
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                         color: _AA.text,
-                                        fontSize: 12.4,
+                                        fontSize: AppTypography.bodySize,
                                         fontWeight: FontWeight.w900,
                                         height: 1.18),
                                   ),
@@ -12070,7 +12052,7 @@ class _DateFilterBar extends StatelessWidget {
                     style: const TextStyle(
                         color: _AA.green,
                         fontWeight: FontWeight.w700,
-                        fontSize: 12)),
+                        fontSize: AppTypography.bodySize)),
               ]),
             ),
           ],
@@ -12290,7 +12272,7 @@ class _InlineAnalyticsFilterCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _AA.muted,
-                        fontSize: 10.4,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w600,
                         height: 1.0)),
                 const SizedBox(height: 4),
@@ -12299,7 +12281,7 @@ class _InlineAnalyticsFilterCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                         color: active ? _AA.green : _AA.text,
-                        fontSize: 12.0,
+                        fontSize: AppTypography.bodySize,
                         fontWeight: FontWeight.w700,
                         height: 1.0)),
               ])),
@@ -12458,7 +12440,7 @@ class _TrackerInlineAnalyticsOverlay extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                                 color: _AA.text,
-                                fontSize: 13.2,
+                                fontSize: AppTypography.itemTitleSize,
                                 fontWeight: FontWeight.w700,
                                 height: 1.0,
                                 letterSpacing: -.10)),
@@ -12468,7 +12450,7 @@ class _TrackerInlineAnalyticsOverlay extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                                 color: _AA.muted,
-                                fontSize: 11.2,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w500,
                                 height: 1.0)),
                       ])),
@@ -12653,7 +12635,7 @@ class _TrackerInlineAnalyticsSelector extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                                 color: _AA.text,
-                                fontSize: 13.4,
+                                fontSize: AppTypography.itemTitleSize,
                                 fontWeight: FontWeight.w600,
                                 height: 1.0,
                                 letterSpacing: -.08)),
@@ -12663,7 +12645,7 @@ class _TrackerInlineAnalyticsSelector extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                                 color: _AA.muted,
-                                fontSize: 11.2,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w500,
                                 height: 1.0)),
                       ])),
@@ -13141,7 +13123,7 @@ class _InlineKindFilterPanel extends StatelessWidget {
                                     color: selected == item.$1
                                         ? _AA.green
                                         : _AA.text,
-                                    fontSize: 13.0,
+                                    fontSize: AppTypography.itemTitleSize,
                                     fontWeight: FontWeight.w700)),
                             const SizedBox(height: 3),
                             Text(item.$4,
@@ -13149,7 +13131,7 @@ class _InlineKindFilterPanel extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                     color: _AA.muted,
-                                    fontSize: 11.0,
+                                    fontSize: AppTypography.secondarySize,
                                     fontWeight: FontWeight.w600)),
                           ])),
                     ]),
@@ -13206,7 +13188,7 @@ class _AnalyticsFilterHubButton extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _AA.text,
-                        fontSize: 12.2,
+                        fontSize: AppTypography.bodySize,
                         fontWeight: FontWeight.w900,
                         height: 1.0)),
                 const SizedBox(height: 3),
@@ -13215,7 +13197,7 @@ class _AnalyticsFilterHubButton extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _AA.muted,
-                        fontSize: 10.4,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w700,
                         height: 1.0)),
               ])),
@@ -13288,7 +13270,7 @@ class _FilterHubAction extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _AA.muted,
-                        fontSize: 11.2,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w800)),
                 const SizedBox(height: 3),
                 Text(value,
@@ -13296,7 +13278,7 @@ class _FilterHubAction extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _AA.text,
-                        fontSize: 12.8,
+                        fontSize: AppTypography.itemTitleSize,
                         fontWeight: FontWeight.w900)),
               ])),
           const Icon(Icons.chevron_right_rounded, color: _AA.muted, size: 20),
@@ -13338,7 +13320,7 @@ class _FilterHubSmallButton extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                       color: primary ? Colors.white : _AA.text,
-                      fontSize: 11.2,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w900))),
         ]),
       ),
@@ -13390,7 +13372,7 @@ class _TabletFilterCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _AA.muted,
-                        fontSize: 9.6,
+                        fontSize: AppTypography.menuGroupSize,
                         fontWeight: FontWeight.w600,
                         height: 1)),
                 const SizedBox(height: 2),
@@ -13399,7 +13381,7 @@ class _TabletFilterCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _AA.text,
-                        fontSize: 10.4,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w800,
                         height: 1)),
               ],
@@ -13455,7 +13437,7 @@ class _FilterPill extends StatelessWidget {
                 Text('$label: ',
                     style: const TextStyle(
                         color: _AA.muted,
-                        fontSize: 9.6,
+                        fontSize: AppTypography.menuGroupSize,
                         fontWeight: FontWeight.w600)),
               Flexible(
                   child: Text(value,
@@ -13517,7 +13499,7 @@ class _MobileFilterCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _AA.muted,
-                          fontSize: 9.6,
+                          fontSize: AppTypography.menuGroupSize,
                           fontWeight: FontWeight.w600,
                           height: 1.0,
                           letterSpacing: -.12)),
@@ -13527,7 +13509,7 @@ class _MobileFilterCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _AA.text,
-                          fontSize: 11.2,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w700,
                           height: 1.0,
                           letterSpacing: -.15)),
@@ -13569,7 +13551,7 @@ class _TogglePill extends StatelessWidget {
           Text(label,
               style: TextStyle(
                   color: value ? Colors.white : _AA.text,
-                  fontSize: 9.6,
+                  fontSize: AppTypography.menuGroupSize,
                   fontWeight: FontWeight.w700)),
         ]),
       ),
@@ -13641,14 +13623,14 @@ class _Header extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _AA.text,
-                      fontSize: 13,
+                      fontSize: AppTypography.itemTitleSize,
                       fontWeight: FontWeight.w700)),
               Text(subtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _AA.muted,
-                      fontSize: 10.4,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w600)),
             ])),
         if (liveRunning) ...[
@@ -13665,7 +13647,7 @@ class _Header extends StatelessWidget {
               Text('Live идёт',
                   style: TextStyle(
                       color: _AA.green,
-                      fontSize: 10.4,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w700)),
             ]),
           ),
@@ -13953,7 +13935,7 @@ class _TabStrip extends StatelessWidget {
                           'Все разделы аналитики',
                           style: TextStyle(
                             color: _AA.text,
-                            fontSize: 14.0,
+                            fontSize: AppTypography.sectionTitleSize,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
@@ -13983,7 +13965,7 @@ class _TabStrip extends StatelessWidget {
                     'На телефоне основные вкладки закреплены в панели, остальные находятся здесь.',
                     style: TextStyle(
                       color: _AA.muted,
-                      fontSize: 10.2,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w500,
                       height: 1.25,
                     ),
@@ -14037,7 +14019,7 @@ class _TabStrip extends StatelessWidget {
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     color: active ? _AA.greenDark : _AA.text,
-                                    fontSize: 10.2,
+                                    fontSize: AppTypography.captionSize,
                                     fontWeight: active
                                         ? FontWeight.w700
                                         : FontWeight.w600,
@@ -14751,7 +14733,7 @@ class _MobileOverviewDashboard extends StatelessWidget {
                 'Все показатели сессии',
                 style: TextStyle(
                   color: _AA.text,
-                  fontSize: 12.4,
+                  fontSize: AppTypography.bodySize,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -14932,7 +14914,7 @@ class _MobileAnalyticsHeaderCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: _AA.text,
-                  fontSize: 15.2,
+                  fontSize: AppTypography.screenTitleSize,
                   fontWeight: FontWeight.w700,
                   height: 1.03,
                   letterSpacing: -.22)),
@@ -14942,7 +14924,7 @@ class _MobileAnalyticsHeaderCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: _AA.muted,
-                  fontSize: 11.2,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w600,
                   height: 1.0)),
         ])),
@@ -14993,7 +14975,7 @@ class _MobileNoticeCard extends StatelessWidget {
             child: Text(text,
                 style: const TextStyle(
                     color: _AA.text,
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySize,
                     fontWeight: FontWeight.w700))),
       ]),
     );
@@ -15064,7 +15046,7 @@ class _MobileKpiCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTypography.custom(
-                    size: 8.9,
+                    size: AppTypography.badgeSize,
                     weight: FontWeight.w500,
                     color: const Color(0xFF66716A),
                     height: 1.05,
@@ -15081,7 +15063,7 @@ class _MobileKpiCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTypography.custom(
-                          size: 12.8,
+                          size: AppTypography.itemTitleSize,
                           weight: FontWeight.w600,
                           color: const Color(0xFF171B18),
                           height: 1.16,
@@ -15099,7 +15081,7 @@ class _MobileKpiCard extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTypography.custom(
-                            size: 8.9,
+                            size: AppTypography.badgeSize,
                             weight: FontWeight.w500,
                             color: const Color(0xFF66716A),
                             height: 1,
@@ -15177,7 +15159,7 @@ class _MobileTeamSummaryCard extends StatelessWidget {
                   style: TextStyle(
                       fontFamily: 'Inter',
                       color: _AA.text,
-                      fontSize: 14,
+                      fontSize: AppTypography.sectionTitleSize,
                       fontWeight: FontWeight.w600))),
           _CmrDotCluster(count: 3, size: 3.4),
         ]),
@@ -15309,7 +15291,7 @@ class _MobileRadarCard extends StatelessWidget {
                   style: TextStyle(
                       fontFamily: 'Inter',
                       color: _AA.text,
-                      fontSize: 14,
+                      fontSize: AppTypography.sectionTitleSize,
                       fontWeight: FontWeight.w600))),
           _CmrDotCluster(count: 3, size: 3.4),
         ]),
@@ -15342,7 +15324,7 @@ class _MobileRadarCard extends StatelessWidget {
           Text('Интенсивность',
               style: TextStyle(
                   color: _AA.muted,
-                  fontSize: 10.4,
+                  fontSize: AppTypography.captionSize,
                   fontWeight: FontWeight.w700)),
           Spacer(),
           _MobileDot(active: true),
@@ -15369,7 +15351,7 @@ class _MobileLeadersCard extends StatelessWidget {
               child: Text('Лидеры дня',
                   style: TextStyle(
                       color: _AA.text,
-                      fontSize: 13.2,
+                      fontSize: AppTypography.itemTitleSize,
                       fontWeight: FontWeight.w700))),
           Icon(Icons.chevron_right_rounded, color: _AA.text, size: 24),
         ]),
@@ -15427,18 +15409,18 @@ class _MobileLeaderTile extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-                color: _AA.text, fontSize: 10.4, fontWeight: FontWeight.w700)),
+                color: _AA.text, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w700)),
         const SizedBox(height: 2),
         Text(metric,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-                color: _AA.muted, fontSize: 9.6, fontWeight: FontWeight.w600)),
+                color: _AA.muted, fontSize: AppTypography.menuGroupSize, fontWeight: FontWeight.w600)),
         Text(value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-                color: _AA.green, fontSize: 12.6, fontWeight: FontWeight.w700)),
+                color: _AA.green, fontSize: AppTypography.bodySize, fontWeight: FontWeight.w700)),
       ]),
     );
   }
@@ -15473,13 +15455,13 @@ class _MobileLeaderAvatar extends StatelessWidget {
                   child: Text(initials.isEmpty ? 'И' : initials,
                       style: const TextStyle(
                           color: _AA.text,
-                          fontSize: 12,
+                          fontSize: AppTypography.bodySize,
                           fontWeight: FontWeight.w700))))
           : Center(
               child: Text(initials.isEmpty ? 'И' : initials,
                   style: const TextStyle(
                       color: _AA.text,
-                      fontSize: 12,
+                      fontSize: AppTypography.bodySize,
                       fontWeight: FontWeight.w700))),
     );
   }
@@ -15519,14 +15501,14 @@ class _MobileLastSessionCard extends StatelessWidget {
           const Text('Последняя сессия',
               style: TextStyle(
                   color: _AA.muted,
-                  fontSize: 11.4,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w700)),
           const SizedBox(height: 2),
           Text(date,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: AppTypography.custom(
-                  size: 12.8,
+                  size: AppTypography.itemTitleSize,
                   weight: FontWeight.w600,
                   color: const Color(0xFF171B18),
                   height: 1.16)),
@@ -15536,7 +15518,7 @@ class _MobileLastSessionCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: _AA.muted,
-                  fontSize: 11.2,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w600)),
         ])),
         const SizedBox(width: 7),
@@ -15550,7 +15532,7 @@ class _MobileLastSessionCard extends StatelessWidget {
           child: const Text('Открыть сессию',
               style: TextStyle(
                   color: _AA.green,
-                  fontSize: 10.4,
+                  fontSize: AppTypography.captionSize,
                   fontWeight: FontWeight.w700)),
         ),
       ]),
@@ -15655,7 +15637,7 @@ class _MobileMapDashboardState extends State<_MobileMapDashboard> {
                         widget.heatMode ? 'Тепловая карта' : 'Карта активности',
                         style: const TextStyle(
                             color: _AA.text,
-                            fontSize: 14,
+                            fontSize: AppTypography.sectionTitleSize,
                             fontWeight: FontWeight.w700)),
                     Text(
                         widget.localPoints.isEmpty
@@ -15665,7 +15647,7 @@ class _MobileMapDashboardState extends State<_MobileMapDashboard> {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _AA.muted,
-                            fontSize: 11.2,
+                            fontSize: AppTypography.secondarySize,
                             fontWeight: FontWeight.w600)),
                   ])),
               _NoHoverTap(
@@ -15783,7 +15765,7 @@ class _MobileMapDashboardState extends State<_MobileMapDashboard> {
                             ? const Text('Ждём GPS-точки',
                                 style: TextStyle(
                                     color: Colors.white,
-                                    fontSize: 15,
+                                    fontSize: AppTypography.sectionTitleSize,
                                     fontWeight: FontWeight.w700))
                             : null),
                   ),
@@ -15803,7 +15785,7 @@ class _MobileMapDashboardState extends State<_MobileMapDashboard> {
                   child: Text('Скорость по фильтру',
                       style: const TextStyle(
                           color: _AA.text,
-                          fontSize: 14,
+                          fontSize: AppTypography.sectionTitleSize,
                           fontWeight: FontWeight.w700))),
               Text(
                   maxSpeed > 0
@@ -15811,7 +15793,7 @@ class _MobileMapDashboardState extends State<_MobileMapDashboard> {
                       : 'нет скорости',
                   style: const TextStyle(
                       color: _AA.muted,
-                      fontSize: 11.2,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700)),
             ]),
             const SizedBox(height: 8),
@@ -15881,7 +15863,7 @@ class _MobileMapDashboardState extends State<_MobileMapDashboard> {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: _AA.text,
-                            fontSize: 15,
+                            fontSize: AppTypography.sectionTitleSize,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
@@ -15892,7 +15874,7 @@ class _MobileMapDashboardState extends State<_MobileMapDashboard> {
                             : '#${widget.selectedSession!.id}',
                         style: const TextStyle(
                           color: _AA.muted,
-                          fontSize: 11,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -16014,14 +15996,14 @@ class _MobileSpeedDashboard extends StatelessWidget {
             const Text('График скорости',
                 style: TextStyle(
                     color: _AA.text,
-                    fontSize: 14,
+                    fontSize: AppTypography.sectionTitleSize,
                     fontWeight: FontWeight.w700)),
             const SizedBox(height: 2),
             Text(
                 'пороги HIR ${hsrThresholdKmh.toStringAsFixed(1)} / SPR ${sprintThresholdKmh.toStringAsFixed(1)} км/ч',
                 style: const TextStyle(
                     color: _AA.muted,
-                    fontSize: 11.2,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w600)),
             const SizedBox(height: 10),
             SizedBox(
@@ -16040,7 +16022,7 @@ class _MobileSpeedDashboard extends StatelessWidget {
           _MobileCardShell(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Лидеры скорости',
-                style: TextStyle(color: _AA.text, fontSize: 14, fontWeight: FontWeight.w700)),
+                style: TextStyle(color: _AA.text, fontSize: AppTypography.sectionTitleSize, fontWeight: FontWeight.w700)),
             const SizedBox(height: 10),
             if (rows.isEmpty)
               const _Empty(icon: Icons.speed_rounded, text: 'После сохранения сессии появятся игроки с максимальной скоростью.')
@@ -16082,7 +16064,7 @@ class _MobileHeartDashboard extends StatelessWidget {
                   child: Text(scopeLabel,
                       style: const TextStyle(
                           color: _AA.text,
-                          fontSize: 12,
+                          fontSize: AppTypography.bodySize,
                           fontWeight: FontWeight.w700))),
             ]),
           ),
@@ -16112,7 +16094,7 @@ class _MobileHeartDashboard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _AA.text,
-                        fontSize: 12,
+                        fontSize: AppTypography.bodySize,
                         fontWeight: FontWeight.w700,
                         height: 1.25))),
           ]),
@@ -16181,12 +16163,12 @@ class _MobileHeartDashboard extends StatelessWidget {
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Text('Пульс по времени',
               style: TextStyle(
-                  color: _AA.text, fontSize: 14, fontWeight: FontWeight.w700)),
+                  color: _AA.text, fontSize: AppTypography.sectionTitleSize, fontWeight: FontWeight.w700)),
           const SizedBox(height: 2),
           Text(personalMode ? 'личная линия Polar H10' : 'командные линии Polar H10',
               style: TextStyle(
                   color: _AA.muted,
-                  fontSize: 11.2,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w600)),
           const SizedBox(height: 10),
           SizedBox(
@@ -16198,7 +16180,7 @@ class _MobileHeartDashboard extends StatelessWidget {
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Text('Зоны ЧСС',
               style: TextStyle(
-                  color: _AA.text, fontSize: 14, fontWeight: FontWeight.w700)),
+                  color: _AA.text, fontSize: AppTypography.sectionTitleSize, fontWeight: FontWeight.w700)),
           const SizedBox(height: 10),
           SizedBox(
               height: 180, child: _AnalyticsHrZonesPanel(heartRate: heartRate)),
@@ -16250,7 +16232,7 @@ class _MobileTeamDashboard extends StatelessWidget {
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Text('Игроки команды',
               style: TextStyle(
-                  color: _AA.text, fontSize: 14, fontWeight: FontWeight.w700)),
+                  color: _AA.text, fontSize: AppTypography.sectionTitleSize, fontWeight: FontWeight.w700)),
           const SizedBox(height: 10),
           if (rows.isEmpty)
             const _Empty(
@@ -16378,7 +16360,7 @@ class _MobileRatingBlock extends StatelessWidget {
               child: Text(title,
                   style: const TextStyle(
                       color: _AA.text,
-                      fontSize: 14,
+                      fontSize: AppTypography.sectionTitleSize,
                       fontWeight: FontWeight.w700))),
           if (rows.isNotEmpty)
             const Icon(Icons.chevron_right_rounded, color: _AA.text, size: 22),
@@ -16454,7 +16436,7 @@ class _MobileRatingDetailSheet extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                   color: _AA.text,
-                                  fontSize: 16,
+                                  fontSize: AppTypography.screenTitleSize,
                                   fontWeight: FontWeight.w700)),
                           const SizedBox(height: 2),
                           Text(detailNote,
@@ -16462,7 +16444,7 @@ class _MobileRatingDetailSheet extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                   color: _AA.muted,
-                                  fontSize: 11,
+                                  fontSize: AppTypography.secondarySize,
                                   fontWeight: FontWeight.w600)),
                         ])),
                     _NoHoverTap(
@@ -16494,7 +16476,7 @@ class _MobileRatingDetailSheet extends StatelessWidget {
                               const Text('График лидеров',
                                   style: TextStyle(
                                       color: _AA.text,
-                                      fontSize: 13,
+                                      fontSize: AppTypography.itemTitleSize,
                                       fontWeight: FontWeight.w700)),
                               const SizedBox(height: 10),
                               if (sourceRows.isEmpty)
@@ -16522,7 +16504,7 @@ class _MobileRatingDetailSheet extends StatelessWidget {
                               const Text('Список игроков',
                                   style: TextStyle(
                                       color: _AA.text,
-                                      fontSize: 13,
+                                      fontSize: AppTypography.itemTitleSize,
                                       fontWeight: FontWeight.w700)),
                               const SizedBox(height: 8),
                               if (rows.isEmpty)
@@ -16573,13 +16555,13 @@ class _MobileRatingBarRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _AA.text,
-                    fontSize: 11.6,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w700))),
         Text(valueText,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-                color: _AA.green, fontSize: 11.8, fontWeight: FontWeight.w700)),
+                color: _AA.green, fontSize: AppTypography.bodySize, fontWeight: FontWeight.w700)),
       ]),
       const SizedBox(height: 7),
       ClipRRect(
@@ -16643,7 +16625,7 @@ class _MobileModeChip extends StatelessWidget {
           Text(label,
               style: TextStyle(
                   color: active ? _AA.green : _AA.text,
-                  fontSize: 10.4,
+                  fontSize: AppTypography.captionSize,
                   fontWeight: FontWeight.w800)),
         ]),
       ),
@@ -16679,7 +16661,7 @@ class _MobileFilterPill extends StatelessWidget {
           child: Text(label,
               style: TextStyle(
                   color: active ? Colors.white : _AA.text,
-                  fontSize: 11.2,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w700)),
         ),
       ),
@@ -16704,7 +16686,7 @@ class _MobileTinyStat extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: AppTypography.custom(
-                  size: 8.9,
+                  size: AppTypography.badgeSize,
                   weight: FontWeight.w500,
                   color: const Color(0xFF66716A),
                   height: 1.05,
@@ -16714,7 +16696,7 @@ class _MobileTinyStat extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: AppTypography.custom(
-                  size: 12.8,
+                  size: AppTypography.itemTitleSize,
                   weight: FontWeight.w600,
                   color: const Color(0xFF171B18),
                   height: 1.16,
@@ -16725,7 +16707,7 @@ class _MobileTinyStat extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: AppTypography.custom(
-                  size: 8.9,
+                  size: AppTypography.badgeSize,
                   weight: FontWeight.w500,
                   color: const Color(0xFF66716A),
                   height: 1,
@@ -16772,7 +16754,7 @@ class _MobileSimpleKpi extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTypography.custom(
-                      size: 8.9,
+                      size: AppTypography.badgeSize,
                       weight: FontWeight.w500,
                       color: const Color(0xFF66716A),
                       height: 1.05,
@@ -16788,7 +16770,7 @@ class _MobileSimpleKpi extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTypography.custom(
-                          size: 12.8,
+                          size: AppTypography.itemTitleSize,
                           weight: FontWeight.w600,
                           color: const Color(0xFF171B18),
                           height: 1.16,
@@ -16806,7 +16788,7 @@ class _MobileSimpleKpi extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTypography.custom(
-                            size: 8.9,
+                            size: AppTypography.badgeSize,
                             weight: FontWeight.w500,
                             color: const Color(0xFF66716A),
                             height: 1,
@@ -16852,14 +16834,14 @@ class _MobileHrChip extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                         color: active ? _AA.green : _AA.text,
-                        fontSize: 11,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w700))),
             Text(note,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _AA.muted,
-                    fontSize: 10.4,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w600)),
           ]),
         ]),
@@ -16889,14 +16871,14 @@ class _MobilePlayerRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _AA.text,
-                        fontSize: 11.6,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w700)),
                 Text(metric,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _AA.muted,
-                        fontSize: 10.4,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w600)),
               ])),
           Text(value,
@@ -16904,7 +16886,7 @@ class _MobilePlayerRow extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: _AA.green,
-                  fontSize: 12.2,
+                  fontSize: AppTypography.bodySize,
                   fontWeight: FontWeight.w700)),
         ]),
       );
@@ -18039,7 +18021,7 @@ class _MapTabState extends State<_MapTab> {
                       : 'нет скорости',
                   style: const TextStyle(
                       color: _AA.muted,
-                      fontSize: 10.4,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w700)),
             ]),
           ),
@@ -18257,7 +18239,7 @@ class _MapTabState extends State<_MapTab> {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: _AA.text,
-                              fontSize: 14.0,
+                              fontSize: AppTypography.sectionTitleSize,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
@@ -18390,7 +18372,7 @@ class _MapTabState extends State<_MapTab> {
                         'ПОДЛОЖКА',
                         style: TextStyle(
                           color: _AA.muted2,
-                          fontSize: 8.8,
+                          fontSize: AppTypography.badgeSize,
                           fontWeight: FontWeight.w700,
                           letterSpacing: .45,
                         ),
@@ -19955,7 +19937,7 @@ class _ExpandedMovementInspectorState extends State<_ExpandedMovementInspector> 
           child: Text(
             label,
             style: AppTypography.custom(
-              size: 9.5,
+              size: AppTypography.menuGroupSize,
               weight: FontWeight.w600,
               color: _AA.muted2,
               height: 1.22,
@@ -21697,7 +21679,7 @@ class _ExpandedMovementInspectorState extends State<_ExpandedMovementInspector> 
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                   color: _AA.text,
-                                  fontSize: 8.8,
+                                  fontSize: AppTypography.badgeSize,
                                   fontWeight: FontWeight.w800),
                             ),
                           ),
@@ -21707,7 +21689,7 @@ class _ExpandedMovementInspectorState extends State<_ExpandedMovementInspector> 
                             maxLines: 1,
                             style: const TextStyle(
                                 color: _AA.green,
-                                fontSize: 8.6,
+                                fontSize: AppTypography.badgeSize,
                                 fontWeight: FontWeight.w800),
                           ),
                         ]),
@@ -22099,7 +22081,7 @@ class _PersonalMapPlayerStrip extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: _AA.text,
-              fontSize: 9.2,
+              fontSize: AppTypography.menuGroupSize,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -22138,7 +22120,7 @@ class _PersonalMapPlayerStrip extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: ghostEnabled ? _AA.greenDark : _AA.text,
-                    fontSize: 9.2,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -22488,7 +22470,7 @@ class _MapPlayerCard extends StatelessWidget {
                               initials,
                               style: const TextStyle(
                                 color: _AA.text,
-                                fontSize: 8.8,
+                                fontSize: AppTypography.badgeSize,
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
@@ -22497,7 +22479,7 @@ class _MapPlayerCard extends StatelessWidget {
                             initials,
                             style: const TextStyle(
                               color: _AA.text,
-                              fontSize: 8.8,
+                              fontSize: AppTypography.badgeSize,
                               fontWeight: FontWeight.w900,
                             ),
                           )),
@@ -22702,7 +22684,7 @@ class _MatchLiveRosterPanel extends StatelessWidget {
                                   initials,
                                   style: const TextStyle(
                                     color: _AA.text,
-                                    fontSize: 9,
+                                    fontSize: AppTypography.badgeSize,
                                     fontWeight: FontWeight.w900,
                                   ),
                                 ),
@@ -22711,7 +22693,7 @@ class _MatchLiveRosterPanel extends StatelessWidget {
                                 initials,
                                 style: const TextStyle(
                                   color: _AA.text,
-                                  fontSize: 9,
+                                  fontSize: AppTypography.badgeSize,
                                   fontWeight: FontWeight.w900,
                                 ),
                               ),
@@ -22876,7 +22858,7 @@ class _MatchPlaybackRatePicker extends StatelessWidget {
                 '${rate.toInt()}×',
                 style: TextStyle(
                   color: active ? _AA.green : _AA.muted,
-                  fontSize: 9.6,
+                  fontSize: AppTypography.menuGroupSize,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -23044,7 +23026,7 @@ class _MatchPlaybackField extends StatelessWidget {
           'Для режима матча нет GPS-точек',
           style: TextStyle(
             color: _AA.muted,
-            fontSize: 12,
+            fontSize: AppTypography.bodySize,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -23138,7 +23120,7 @@ class _MatchPlaybackField extends StatelessWidget {
                   '$modeLabel · ${_movementMatchClockLabel(elapsed)}',
                   style: const TextStyle(
                     color: _AA.text,
-                    fontSize: 10.5,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -23149,7 +23131,7 @@ class _MatchPlaybackField extends StatelessWidget {
                       : '$freshCount GPS синхронно',
                   style: TextStyle(
                     color: staleCount > 0 ? _AA.orange : _AA.muted,
-                    fontSize: 9.4,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -23181,14 +23163,14 @@ class _MatchPlaybackField extends StatelessWidget {
                   const Text('ПИТ-УОЛЛ · АКТИВЕН',
                       style: TextStyle(
                           color: Colors.white,
-                          fontSize: 9.4,
+                          fontSize: AppTypography.menuGroupSize,
                           fontWeight: FontWeight.w900,
                           letterSpacing: .35)),
                   const SizedBox(width: 8),
                   Text('${pitWallConfidence.toStringAsFixed(0)}% GPS',
                       style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 8.6,
+                          fontSize: AppTypography.badgeSize,
                           fontWeight: FontWeight.w700)),
                   if (pitWallAlertCount > 0) ...[
                     const SizedBox(width: 7),
@@ -23414,7 +23396,7 @@ class _MatchPlaybackField extends StatelessWidget {
                               initials,
                               style: const TextStyle(
                                 color: _AA.text,
-                                fontSize: 9.5,
+                                fontSize: AppTypography.menuGroupSize,
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
@@ -23423,7 +23405,7 @@ class _MatchPlaybackField extends StatelessWidget {
                             initials,
                             style: const TextStyle(
                               color: _AA.text,
-                              fontSize: 9.5,
+                              fontSize: AppTypography.menuGroupSize,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
@@ -24569,7 +24551,7 @@ class _MovementTinyMetric extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: _AA.muted,
-                fontSize: 8.7,
+                fontSize: AppTypography.badgeSize,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -24579,7 +24561,7 @@ class _MovementTinyMetric extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: _AA.text,
-                fontSize: 12.2,
+                fontSize: AppTypography.bodySize,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -24729,7 +24711,7 @@ class _MovementKpi extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: _AA.muted,
-                    fontSize: 8.9,
+                    fontSize: AppTypography.badgeSize,
                     fontWeight: FontWeight.w700,
                     height: 1.05,
                   ),
@@ -24747,7 +24729,7 @@ class _MovementKpi extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: _AA.text,
-                      fontSize: 15,
+                      fontSize: AppTypography.sectionTitleSize,
                       fontWeight: FontWeight.w800,
                       height: 1.0,
                     ),
@@ -26328,7 +26310,7 @@ class _TelemetryHeroAction extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: primary ? Colors.white : _AA.text,
-                      fontSize: 9.6,
+                      fontSize: AppTypography.menuGroupSize,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -26588,14 +26570,14 @@ class _TelemetryWeatherCardState extends State<_TelemetryWeatherCard> {
               ? const Text('Погода · загружаю условия сессии…',
                   style: TextStyle(
                       color: _AA.muted,
-                      fontSize: 8.9,
+                      fontSize: AppTypography.badgeSize,
                       fontWeight: FontWeight.w700))
               : data == null
                   ? Text(
                       _error.isEmpty ? 'Погода · нет данных' : _error,
                       style: const TextStyle(
                           color: _AA.muted,
-                          fontSize: 8.9,
+                          fontSize: AppTypography.badgeSize,
                           fontWeight: FontWeight.w700),
                     )
                   : Column(
@@ -26609,7 +26591,7 @@ class _TelemetryWeatherCardState extends State<_TelemetryWeatherCard> {
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                   color: _AA.text,
-                                  fontSize: 9.0,
+                                  fontSize: AppTypography.badgeSize,
                                   fontWeight: FontWeight.w800),
                             ),
                           ),
@@ -26766,8 +26748,8 @@ class _TelemetryPitWallPanel extends StatelessWidget {
             child: Row(children: [
               const Icon(Icons.hub_rounded, size: 15, color: _AA.green),
               const SizedBox(width: 6),
-              Expanded(child: Text('Тактическая форма · ${teamShape.players} игроков', style: const TextStyle(color: _AA.text, fontSize: 9.6, fontWeight: FontWeight.w800))),
-              Text('${teamShape.lengthM.toStringAsFixed(0)}×${teamShape.widthM.toStringAsFixed(0)} м · ${teamShape.compactness.toStringAsFixed(0)}%', style: const TextStyle(color: _AA.muted, fontSize: 8.8, fontWeight: FontWeight.w700)),
+              Expanded(child: Text('Тактическая форма · ${teamShape.players} игроков', style: const TextStyle(color: _AA.text, fontSize: AppTypography.menuGroupSize, fontWeight: FontWeight.w800))),
+              Text('${teamShape.lengthM.toStringAsFixed(0)}×${teamShape.widthM.toStringAsFixed(0)} м · ${teamShape.compactness.toStringAsFixed(0)}%', style: const TextStyle(color: _AA.muted, fontSize: AppTypography.badgeSize, fontWeight: FontWeight.w700)),
             ]),
           ),
         const SizedBox(height: 6),
@@ -26814,7 +26796,7 @@ class _TelemetryMetricCard extends StatelessWidget {
             Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.muted, fontSize: 8.1, fontWeight: FontWeight.w700))),
           ]),
           const Spacer(),
-          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.text, fontSize: 13, fontWeight: FontWeight.w900)),
+          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.text, fontSize: AppTypography.itemTitleSize, fontWeight: FontWeight.w900)),
           Text(note, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.muted, fontSize: 7.4, fontWeight: FontWeight.w600)),
         ]),
       );
@@ -26860,7 +26842,7 @@ class _TelemetrySectionTitle extends StatelessWidget {
         child: Row(children: [
           Icon(icon, size: 13, color: _AA.green),
           const SizedBox(width: 5),
-          Text(label, style: const TextStyle(color: _AA.text, fontSize: 9.3, fontWeight: FontWeight.w900)),
+          Text(label, style: const TextStyle(color: _AA.text, fontSize: AppTypography.menuGroupSize, fontWeight: FontWeight.w900)),
         ]),
       );
 }
@@ -26879,7 +26861,7 @@ class _TelemetryAlertRow extends StatelessWidget {
         Container(width: 25, height: 25, alignment: Alignment.center, decoration: BoxDecoration(color: color.withOpacity(.09), borderRadius: BorderRadius.circular(8)), child: Icon(alert.icon, size: 14, color: color)),
         const SizedBox(width: 7),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(alert.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.text, fontSize: 8.8, fontWeight: FontWeight.w900)),
+          Text(alert.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.text, fontSize: AppTypography.badgeSize, fontWeight: FontWeight.w900)),
           const SizedBox(height: 2),
           Text(alert.detail, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.muted, fontSize: 7.6, fontWeight: FontWeight.w600)),
         ])),
@@ -26921,7 +26903,7 @@ class _TelemetryMomentRow extends StatelessWidget {
             Icon(moment.icon, size: 14, color: _AA.green),
             const SizedBox(width: 7),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(moment.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.text, fontSize: 8.5, fontWeight: FontWeight.w900)),
+              Text(moment.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.text, fontSize: AppTypography.badgeSize, fontWeight: FontWeight.w900)),
               Text(moment.detail, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _AA.muted, fontSize: 7.3, fontWeight: FontWeight.w600)),
             ])),
             Text(_movementMatchClockLabel(math.max(0, moment.timeMs - startTimeMs)), style: const TextStyle(color: _AA.muted, fontSize: 7.7, fontWeight: FontWeight.w800)),
@@ -26954,7 +26936,7 @@ class _TelemetryStackPanel extends StatelessWidget {
           const Row(children: [
             Icon(Icons.show_chart_rounded, size: 13, color: _AA.green),
             SizedBox(width: 5),
-            Text('Телеметрический стек', style: TextStyle(color: _AA.text, fontSize: 9.0, fontWeight: FontWeight.w900)),
+            Text('Телеметрический стек', style: TextStyle(color: _AA.text, fontSize: AppTypography.badgeSize, fontWeight: FontWeight.w900)),
           ]),
           const SizedBox(height: 4),
           Expanded(child: CustomPaint(
@@ -27711,7 +27693,7 @@ class _ReplayJournalEventRow extends StatelessWidget {
                   Text(
                     elapsed,
                     style: AppTypography.custom(
-                      size: 9.5,
+                      size: AppTypography.menuGroupSize,
                       weight: FontWeight.w600,
                       color: _AA.muted,
                       features: const <FontFeature>[FontFeature.tabularFigures()],
@@ -27905,7 +27887,7 @@ class _MovementEventCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _AA.text,
-                          fontSize: 10.3,
+                          fontSize: AppTypography.captionSize,
                           fontWeight: FontWeight.w800))),
               const Icon(Icons.chevron_right_rounded, color: _AA.muted, size: 16),
             ]),
@@ -27914,7 +27896,7 @@ class _MovementEventCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _AA.muted,
-                    fontSize: 9.2,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w600)),
             if (hrProfile != null && hrProfile!.hasData)
               Text(hrProfile!.label,
@@ -27922,7 +27904,7 @@ class _MovementEventCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _AA.green,
-                      fontSize: 8.8,
+                      fontSize: AppTypography.badgeSize,
                       fontWeight: FontWeight.w700)),
             if (zone.isNotEmpty)
               Text(zone,
@@ -27930,7 +27912,7 @@ class _MovementEventCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _AA.muted,
-                      fontSize: 8.6,
+                      fontSize: AppTypography.badgeSize,
                       fontWeight: FontWeight.w600)),
           ])),
         ]),
@@ -28005,7 +27987,7 @@ class _ActivityFilterChip extends StatelessWidget {
               label,
               style: TextStyle(
                 color: active ? _AA.text : _AA.muted,
-                fontSize: 11.2,
+                fontSize: AppTypography.secondarySize,
                 fontWeight: active ? FontWeight.w700 : FontWeight.w600,
               ),
             ),
@@ -28203,7 +28185,7 @@ class _MovementPointsMenu extends StatelessWidget {
                       'Метки журнала',
                       style: TextStyle(
                         color: journalMarkersEnabled ? _AA.greenDark : _AA.text,
-                        fontSize: 11.2,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: journalMarkersEnabled
                             ? FontWeight.w700
                             : FontWeight.w500,
@@ -28260,7 +28242,7 @@ class _MovementPointsMenu extends StatelessWidget {
                   item.label,
                   style: TextStyle(
                     color: item.value == current ? _AA.greenDark : _AA.text,
-                    fontSize: 11.2,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight:
                         item.value == current ? FontWeight.w700 : FontWeight.w500,
                   ),
@@ -28294,7 +28276,7 @@ class _MovementPointsMenu extends StatelessWidget {
             'Точки',
             style: TextStyle(
               color: active ? _AA.greenDark : _AA.text,
-              fontSize: 10.8,
+              fontSize: AppTypography.secondarySize,
               fontWeight: active ? FontWeight.w700 : FontWeight.w600,
             ),
           ),
@@ -31030,7 +31012,7 @@ class _TeamCompareRow extends StatelessWidget {
       child: Row(children: [
         Text('$rank',
             style: const TextStyle(
-                color: _AA.muted, fontSize: 11.2, fontWeight: FontWeight.w700)),
+                color: _AA.muted, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700)),
         const SizedBox(width: 8),
         Expanded(
             child: Column(
@@ -31042,7 +31024,7 @@ class _TeamCompareRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _AA.text,
-                      fontSize: 11.2,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700)),
               Text(note,
                   maxLines: 1,
@@ -31051,7 +31033,7 @@ class _TeamCompareRow extends StatelessWidget {
             ])),
         Text(value,
             style: const TextStyle(
-                color: _AA.green, fontSize: 11.2, fontWeight: FontWeight.w700)),
+                color: _AA.green, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700)),
       ]),
     );
   }
@@ -31251,7 +31233,7 @@ class _OfflineTab extends StatelessWidget {
                 style: TextStyle(fontWeight: FontWeight.w700, color: _AA.text)),
             subtitle: const Text(
                 'Сначала читаем список записей с датчика, затем загружаем GPS-точки и сохраняем как сессию.',
-                style: TextStyle(color: _AA.muted, fontSize: 11.2)),
+                style: TextStyle(color: _AA.muted, fontSize: AppTypography.secondarySize)),
           ),
           _InfoLine(
               title: 'BLE канал',
@@ -31390,7 +31372,7 @@ class _SettingsTab extends StatelessWidget {
                 style: TextStyle(fontWeight: FontWeight.w700, color: _AA.text)),
             subtitle: const Text(
                 'Коррекция смещения GPS перед построением карты.',
-                style: TextStyle(color: _AA.muted, fontSize: 11.2)),
+                style: TextStyle(color: _AA.muted, fontSize: AppTypography.secondarySize)),
           ),
           _ChoiceLine(
             label: 'Режим коррекции',
@@ -31423,7 +31405,7 @@ class _SettingsTab extends StatelessWidget {
                 style: TextStyle(fontWeight: FontWeight.w700, color: _AA.text)),
             subtitle: const Text(
                 'На карте спринты показываются направленными стрелками.',
-                style: TextStyle(color: _AA.muted, fontSize: 11.2)),
+                style: TextStyle(color: _AA.muted, fontSize: AppTypography.secondarySize)),
           ),
         ]));
     final thresholdsPanel = _Panel(
@@ -31649,7 +31631,7 @@ class _InlineNotice extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _AA.text,
-                    fontSize: 10.4,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w700))),
       ]),
     );
@@ -31927,12 +31909,12 @@ class _PlayerComparisonPanel extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _AA.text,
-                      fontSize: 10.4,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w700))),
           const Text('дист. / max / SPR',
               style: TextStyle(
                   color: _AA.muted,
-                  fontSize: 9.6,
+                  fontSize: AppTypography.menuGroupSize,
                   fontWeight: FontWeight.w700)),
         ]),
         const SizedBox(height: 6),
@@ -31950,13 +31932,13 @@ class _PlayerComparisonPanel extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _AA.text,
-                            fontSize: 10.4,
+                            fontSize: AppTypography.captionSize,
                             fontWeight: FontWeight.w700))),
                 Text(
                     '${_meters(r.distanceM)} · ${r.maxSpeedKmh.toStringAsFixed(1)} · ${r.sprintCount}',
                     style: const TextStyle(
                         color: _AA.green,
-                        fontSize: 10.4,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w700)),
               ]),
               const SizedBox(height: 4),
@@ -31989,7 +31971,7 @@ class _TinyCompareBar extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _AA.muted,
-                    fontSize: 9.6,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w700))),
         Expanded(
           child: ClipRRect(
@@ -32252,7 +32234,7 @@ class _MapQuickMetricsStrip extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTypography.custom(
-                  size: 8.8,
+                  size: AppTypography.badgeSize,
                   weight: FontWeight.w500,
                   color: _AA.muted,
                   height: 1.05,
@@ -32264,7 +32246,7 @@ class _MapQuickMetricsStrip extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTypography.custom(
-                  size: 10.7,
+                  size: AppTypography.captionSize,
                   weight: FontWeight.w600,
                   color: _AA.text,
                   height: 1.05,
@@ -32396,7 +32378,7 @@ class _MapSidebarItem extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTypography.custom(
-                      size: 10.6,
+                      size: AppTypography.captionSize,
                       weight: active ? FontWeight.w700 : FontWeight.w600,
                       color: active ? _AA.green : _AA.text,
                       height: 1.22,
@@ -32409,7 +32391,7 @@ class _MapSidebarItem extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: AppTypography.custom(
-                      size: 9.5,
+                      size: AppTypography.menuGroupSize,
                       weight: FontWeight.w400,
                       color: active
                           ? _AA.green.withOpacity(.72)
@@ -32573,7 +32555,7 @@ class _MapSidebarBackItem extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.custom(
-                        size: 10,
+                        size: AppTypography.captionSize,
                         weight: FontWeight.w600,
                         color: _AA.text,
                         height: 1.18,
@@ -33010,13 +32992,13 @@ class _SessionAvatar extends StatelessWidget {
                   child: Text(initials.isEmpty ? 'И' : initials,
                       style: const TextStyle(
                           color: _AA.text,
-                          fontSize: 10.4,
+                          fontSize: AppTypography.captionSize,
                           fontWeight: FontWeight.w700))))
           : Center(
               child: Text(initials.isEmpty ? 'И' : initials,
                   style: const TextStyle(
                       color: _AA.text,
-                      fontSize: 10.4,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w700))),
     );
   }
@@ -33071,7 +33053,7 @@ class _ListRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _AA.text,
-                        fontSize: 11.2,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w700)),
                 const SizedBox(height: 1),
                 Text(subtitle,
@@ -33079,7 +33061,7 @@ class _ListRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _AA.muted,
-                        fontSize: 9.6,
+                        fontSize: AppTypography.menuGroupSize,
                         fontWeight: FontWeight.w600)),
               ])),
           if (trailing != null)
@@ -33093,7 +33075,7 @@ class _ListRow extends StatelessWidget {
                     textAlign: TextAlign.right,
                     style: const TextStyle(
                         color: _AA.green,
-                        fontSize: 9.6,
+                        fontSize: AppTypography.menuGroupSize,
                         fontWeight: FontWeight.w700)),
               ),
             ),
@@ -33284,7 +33266,7 @@ class _Empty extends StatelessWidget {
       Text(text,
           textAlign: TextAlign.center,
           style: const TextStyle(
-              color: _AA.muted, fontSize: 11.2, fontWeight: FontWeight.w700)),
+              color: _AA.muted, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700)),
     ]));
   }
 }
@@ -34528,7 +34510,7 @@ class _TrackerTimePickerSheetState extends State<_TrackerTimePickerSheet> {
                   child: Text(widget.title,
                       style: const TextStyle(
                           color: _AA.text,
-                          fontSize: 12.4,
+                          fontSize: AppTypography.bodySize,
                           fontWeight: FontWeight.w700))),
               _NoHoverTap(
                   onTap: () => _popAfterMouseSettled<void>(context),

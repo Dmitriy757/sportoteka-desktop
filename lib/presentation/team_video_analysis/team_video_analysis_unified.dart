@@ -6171,35 +6171,35 @@ class CmrAiText {
     'Arial',
   ];
 
-  static TextStyle title(double size) => TextStyle(
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: size,
-        fontWeight: FontWeight.w600,
-        letterSpacing: -0.28,
-        height: 1.08,
-        color: CmrAiWindowColors.text,
-      );
+  static TextStyle title(double size) {
+    if (size >= 17) return AppTypography.screenTitle(color: CmrAiWindowColors.text);
+    if (size >= 14) return AppTypography.sectionTitle(color: CmrAiWindowColors.text);
+    return AppTypography.subsectionTitle(color: CmrAiWindowColors.text);
+  }
 
-  static TextStyle body(double size, {Color? color, FontWeight? weight}) => TextStyle(
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: size,
-        fontWeight: weight ?? FontWeight.w400,
-        letterSpacing: -0.05,
-        height: 1.18,
-        color: color ?? CmrAiWindowColors.muted,
-      );
+  static TextStyle body(double size, {Color? color, FontWeight? weight}) {
+    final c = color ?? CmrAiWindowColors.muted;
+    if (size >= 12.5) {
+      return (weight ?? FontWeight.w400).index >= FontWeight.w600.index
+          ? AppTypography.bodyMedium(color: c)
+          : AppTypography.body(color: c);
+    }
+    if (size >= 11.2) {
+      return (weight ?? FontWeight.w400).index >= FontWeight.w600.index
+          ? AppTypography.secondaryMedium(color: c)
+          : AppTypography.secondary(color: c);
+    }
+    return (weight ?? FontWeight.w400).index >= FontWeight.w600.index
+        ? AppTypography.captionMedium(color: c)
+        : AppTypography.caption(color: c);
+  }
 
-  static TextStyle label(double size, {Color? color}) => TextStyle(
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: size,
-        fontWeight: FontWeight.w600,
-        letterSpacing: -0.06,
-        height: 1.12,
-        color: color ?? CmrAiWindowColors.text,
-      );
+  static TextStyle label(double size, {Color? color}) {
+    final c = color ?? CmrAiWindowColors.text;
+    return size >= 11.5
+        ? AppTypography.action(color: c)
+        : AppTypography.captionMedium(color: c);
+  }
 }
 
 Future<T?> showCmrAiWindow<T>({
@@ -7137,25 +7137,17 @@ class _AiTrackingPanelWidgetState extends State<AiTrackingPanelWidget> {
                 ),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'AI Трекинг',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                      ),
+                      style: AppTypography.screenTitle(color: Colors.white),
                     ),
                     Text(
                       'Автоматический анализ движения',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
+                      style: AppTypography.secondary(color: Colors.white70),
                     ),
                   ],
                 ),
@@ -9453,25 +9445,18 @@ class AiMatchAnalysisPanelWidget extends StatelessWidget {
         children: [
           const Icon(Icons.auto_graph_rounded, color: Colors.white, size: 24),
           const SizedBox(width: 12),
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'AI Анализ матча',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                  ),
+                  style: AppTypography.screenTitle(color: Colors.white),
                 ),
-                SizedBox(height: 4),
+                const SizedBox(height: 4),
                 Text(
                   'Авто-ТТД и match stats',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                  ),
+                  style: AppTypography.secondary(color: Colors.white70),
                 ),
               ],
             ),
@@ -10121,12 +10106,9 @@ class EpisodesListWidget extends StatelessWidget {
                 const Icon(Icons.photo_library,
                     size: 20, color: Color(0xFF2563EB)),
                 const SizedBox(width: 8),
-                const Text(
+                Text(
                   "Эпизоды матча",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                  ),
+                  style: AppTypography.screenTitle(),
                 ),
                 const Spacer(),
                 Container(
@@ -10480,11 +10462,7 @@ class _MatchPlayersSelectionWidgetState
                     children: [
                       Text(
                         widget.title,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF0F172A),
-                        ),
+                        style: AppTypography.screenTitle(color: const Color(0xFF0F172A)),
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -11321,32 +11299,25 @@ class ReportTablesWidget extends StatelessWidget {
   static const Color _cmrLine = Color(0xFFE9ECEA);
   static const Color _cmrRed = Color(0xFFD92D20);
 
-  TextStyle _cmrTitle(double size) => TextStyle(
-        fontFamily: AppTypography.fontFamily,
-        color: _cmrText,
-        fontSize: size,
-        fontWeight: FontWeight.w600,
-        height: 1.12,
-        letterSpacing: -0.25,
-      );
+  TextStyle _cmrTitle(double size) {
+    if (size >= 16) return AppTypography.screenTitle(color: _cmrText);
+    if (size >= 14) return AppTypography.sectionTitle(color: _cmrText);
+    return AppTypography.subsectionTitle(color: _cmrText);
+  }
 
-  TextStyle _cmrValue(double size, {Color? color}) => TextStyle(
-        fontFamily: AppTypography.fontFamily,
-        color: color ?? _cmrText2,
-        fontSize: size,
-        fontWeight: FontWeight.w600,
-        height: 1.15,
-        letterSpacing: -0.12,
-      );
+  TextStyle _cmrValue(double size, {Color? color}) {
+    final c = color ?? _cmrText2;
+    if (size >= 18) return AppTypography.metricStrong(color: c).copyWith(fontSize: size);
+    if (size >= 13) return AppTypography.itemTitle(color: c);
+    return AppTypography.bodyMedium(color: c);
+  }
 
-  TextStyle _cmrMutedStyle(double size, {Color? color, FontWeight? weight}) => TextStyle(
-        fontFamily: AppTypography.fontFamily,
-        color: color ?? _cmrMuted,
-        fontSize: size,
-        fontWeight: weight ?? FontWeight.w500,
-        height: 1.25,
-        letterSpacing: -0.05,
-      );
+  TextStyle _cmrMutedStyle(double size, {Color? color, FontWeight? weight}) {
+    final c = color ?? _cmrMuted;
+    if (size >= 12.5) return AppTypography.body(color: c).copyWith(fontWeight: weight ?? FontWeight.w500);
+    if (size >= 11.2) return AppTypography.secondary(color: c).copyWith(fontWeight: weight ?? FontWeight.w500);
+    return AppTypography.caption(color: c).copyWith(fontWeight: weight ?? FontWeight.w500);
+  }
 
   BoxDecoration _cmrPanelDecoration({double radius = 14, bool elevated = false}) {
     return BoxDecoration(
@@ -12447,9 +12418,9 @@ List<Map<String, dynamic>> get _filteredGoalkeeperReportRows =>
               ),
             ),
             const SizedBox(height: 20),
-            const Text(
+            Text(
               'Экспорт отчета',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+              style: AppTypography.sectionTitle(),
             ),
             const SizedBox(height: 20),
             ListTile(
@@ -13872,25 +13843,18 @@ class _TtdPanelWidgetState extends State<TtdPanelWidget> {
     }
   }
 
-  TextStyle _title(double size) => TextStyle(
-        fontFamily: _family,
-        fontFamilyFallback: _fallback,
-        color: _text,
-        fontSize: size,
-        fontWeight: FontWeight.w700,
-        height: 1.08,
-        letterSpacing: -0.18,
-      );
+  TextStyle _title(double size) {
+    if (size >= 16) return AppTypography.screenTitle(color: _text);
+    if (size >= 14) return AppTypography.sectionTitle(color: _text);
+    return AppTypography.subsectionTitle(color: _text);
+  }
 
-  TextStyle _body(double size, {Color? color, FontWeight? weight}) => TextStyle(
-        fontFamily: _family,
-        fontFamilyFallback: _fallback,
-        color: color ?? _muted,
-        fontSize: size,
-        fontWeight: weight ?? FontWeight.w500,
-        height: 1.16,
-        letterSpacing: -0.04,
-      );
+  TextStyle _body(double size, {Color? color, FontWeight? weight}) {
+    final c = color ?? _muted;
+    if (size >= 12.5) return AppTypography.body(color: c).copyWith(fontWeight: weight ?? FontWeight.w500);
+    if (size >= 11.2) return AppTypography.secondary(color: c).copyWith(fontWeight: weight ?? FontWeight.w500);
+    return AppTypography.caption(color: c).copyWith(fontWeight: weight ?? FontWeight.w500);
+  }
 
   @override
   void initState() {
@@ -17171,13 +17135,9 @@ class _EpisodeTtdDetailScreenState extends State<EpisodeTtdDetailScreen>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(
+                    Text(
                       'Редактировать действие',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        color: _EpisodeColors.text,
-                      ),
+                      style: AppTypography.screenTitle(color: _EpisodeColors.text),
                     ),
                     const SizedBox(height: 16),
                     TextField(
@@ -17383,13 +17343,9 @@ class _EpisodeTtdDetailScreenState extends State<EpisodeTtdDetailScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
+              Text(
                 'Удалить действие?',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  color: _EpisodeColors.text,
-                ),
+                style: AppTypography.screenTitle(color: _EpisodeColors.text),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -17783,11 +17739,7 @@ class _EpisodeTtdDetailScreenState extends State<EpisodeTtdDetailScreen>
             children: [
               Text(
                 title,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  color: _EpisodeColors.text,
-                ),
+                style: AppTypography.screenTitle(color: _EpisodeColors.text),
               ),
               const SizedBox(height: 3),
               Text(
@@ -17934,11 +17886,7 @@ class _EpisodeTtdDetailScreenState extends State<EpisodeTtdDetailScreen>
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w900,
-                    color: _EpisodeColors.text,
-                  ),
+                  style: AppTypography.screenTitle(color: _EpisodeColors.text),
                 ),
               ),
               if (trailing != null) trailing,
@@ -19914,11 +19862,7 @@ void dispose() {
                   widget.matchTitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF0F172A),
-                  ),
+                  style: AppTypography.screenTitle(color: const Color(0xFF0F172A)),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -20414,16 +20358,13 @@ void dispose() {
   }
 
   Widget _buildPortraitFallback() {
-    return const Center(
+    return Center(
       child: Padding(
-        padding: EdgeInsets.all(24),
+        padding: const EdgeInsets.all(24),
         child: Text(
           'Для быстрого анализа открой экран в горизонтальном режиме',
           textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w700,
-          ),
+          style: AppTypography.screenTitle(),
         ),
       ),
     );
@@ -21842,23 +21783,15 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                           ),
                         ),
                         const SizedBox(height: 16),
-                        const Text(
+                        Text(
                           "Загрузка видео",
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: FeedPalette.text,
-                          ),
+                          style: AppTypography.screenTitle(color: FeedPalette.text),
                         ),
                         const SizedBox(height: 8),
-                        const Text(
+                        Text(
                           "Пожалуйста, не закрывай приложение",
                           textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: FeedPalette.textMuted,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          style: AppTypography.secondaryMedium(color: FeedPalette.textMuted),
                         ),
                         const SizedBox(height: 18),
                         ClipRRect(
@@ -21875,11 +21808,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                         const SizedBox(height: 12),
                         Text(
                           text,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: FeedPalette.primaryGreen,
-                          ),
+                          style: AppTypography.subsectionTitle(color: FeedPalette.primaryGreen),
                         ),
                       ],
                     ),
@@ -22466,24 +22395,16 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
+                                Text(
                                   "Загрузить видео матча",
-                                  style: TextStyle(
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.w600,
-                                    color: FeedPalette.text,
-                                  ),
+                                  style: AppTypography.screenTitle(color: FeedPalette.text),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
                                   _buildMatchTitle(match),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: FeedPalette.textMuted,
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 12,
-                                  ),
+                                  style: AppTypography.secondary(color: FeedPalette.textMuted),
                                 ),
                               ],
                             ),
@@ -22496,10 +22417,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                         maxLines: 3,
                         decoration: InputDecoration(
                           hintText: "Комментарий к видео",
-                          hintStyle: const TextStyle(
-                            color: FeedPalette.textMuted,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          hintStyle: AppTypography.formHint(color: FeedPalette.textMuted),
                           filled: true,
                           fillColor: FeedPalette.white,
                           border: OutlineInputBorder(
@@ -24312,11 +24230,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
             const SizedBox(height: 14),
             Text(
               isSearching ? "Ничего не найдено" : "Пока нет добавленных матчей",
-              style: const TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-                color: FeedPalette.text,
-              ),
+              style: AppTypography.screenTitle(color: FeedPalette.text),
             ),
             const SizedBox(height: 8),
             Text(
@@ -24561,36 +24475,28 @@ class FeedPalette {
 
 
 class _VideoT {
-  static TextStyle title(double size, {Color color = FeedPalette.text}) =>
-      AppTypography.custom(
-        size: size,
-        weight: FontWeight.w600,
-        color: color,
-        height: 1.18,
-        letterSpacing: 0,
-      );
+  static TextStyle title(double size, {Color color = FeedPalette.text}) {
+    if (size >= 16) return AppTypography.screenTitle(color: color);
+    if (size >= 14) return AppTypography.sectionTitle(color: color);
+    if (size >= 13) return AppTypography.subsectionTitle(color: color);
+    return AppTypography.itemTitle(color: color);
+  }
 
   static TextStyle body(
     double size, {
     Color color = FeedPalette.textMuted,
     FontWeight weight = FontWeight.w400,
-  }) =>
-      AppTypography.custom(
-        size: size,
-        weight: weight,
-        color: color,
-        height: 1.28,
-        letterSpacing: 0,
-      );
+  }) {
+    if (size >= 12.5) return AppTypography.body(color: color).copyWith(fontWeight: weight);
+    if (size >= 11.2) return AppTypography.secondary(color: color).copyWith(fontWeight: weight);
+    if (size >= 10) return AppTypography.caption(color: color).copyWith(fontWeight: weight);
+    return AppTypography.badge(color: color).copyWith(fontWeight: weight);
+  }
 
-  static TextStyle value(double size, {Color color = FeedPalette.text}) =>
-      AppTypography.custom(
-        size: size,
-        weight: FontWeight.w600,
-        color: color,
-        height: 1.12,
-        letterSpacing: 0,
-      );
+  static TextStyle value(double size, {Color color = FeedPalette.text}) {
+    if (size >= 18) return AppTypography.metricStrong(color: color).copyWith(fontSize: size);
+    return AppTypography.itemTitle(color: color);
+  }
 }
 
 class _VideoGlowDot extends StatelessWidget {
@@ -24835,7 +24741,7 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
       AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Удалить видео?', style: TextStyle(fontWeight: FontWeight.w600)),
+        title: Text('Удалить видео?', style: AppTypography.subsectionTitle()),
         content: Text('Видео матча «${_matchTitle(item)}» будет удалено.'),
         actions: [
           TextButton(onPressed: () => Get.back(result: false), child: const Text('Отмена')),
@@ -24886,7 +24792,7 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
       AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Удалить матч?', style: TextStyle(fontWeight: FontWeight.w600)),
+        title: Text('Удалить матч?', style: AppTypography.subsectionTitle()),
         content: Text('Матч «${_matchTitle(item)}» будет удалён.'),
         actions: [
           TextButton(onPressed: () => Get.back(result: false), child: const Text('Отмена')),
@@ -25280,7 +25186,7 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
                       'Видеоанализ',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _C.title.copyWith(fontSize: 18),
+                      style: AppTypography.screenTitle(color: _C.text),
                     ),
                     const SizedBox(height: 3),
                     Text(
@@ -31293,12 +31199,9 @@ Future<void> _pickOwnPlayerForAi() async {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     'Выбор игрока команды',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                    ),
+                    style: AppTypography.screenTitle(),
                   ),
                   const SizedBox(height: 12),
                   Padding(
@@ -32070,7 +31973,7 @@ Future<void> _bindAiTrackToSelectedPlayer() async {
             Expanded(
               child: Text(
                 eventTitle,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: AppTypography.screenTitle(),
               ),
             ),
           ],
@@ -32492,11 +32395,7 @@ Future<void> _showTtdEventsList(String metricCode, String metricTitle) async {
                       const SizedBox(height: 12),
                       Text(
                         metricTitle,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF0F172A),
-                        ),
+                        style: AppTypography.screenTitle(color: const Color(0xFF0F172A)),
                       ),
                       Text(
                         _playerFullName(_selectedPlayer!),
@@ -34094,11 +33993,7 @@ Future<void> _saveQuickTtd(
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF0F172A),
-                  ),
+                  style: AppTypography.screenTitle(color: const Color(0xFF0F172A)),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -34250,11 +34145,7 @@ Future<void> _saveQuickTtd(
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF0F172A),
-                  ),
+                  style: AppTypography.screenTitle(color: const Color(0xFF0F172A)),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -34310,12 +34201,7 @@ Future<void> _saveQuickTtd(
               _displayMatchTitle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w900,
-                color: Color(0xFF0F172A),
-                letterSpacing: -0.2,
-              ),
+              style: AppTypography.screenTitle(color: const Color(0xFF0F172A)),
             ),
           ),
         ),
@@ -38296,33 +38182,25 @@ if (_showAiPanelInline) ...[
                   ),
                 ],
               ),
-              child: const Column(
+              child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
+                  const Icon(
                     Icons.screen_rotation_alt_rounded,
                     size: 56,
                     color: Color(0xFF1F7A4D),
                   ),
-                  SizedBox(height: 16),
+                  const SizedBox(height: 16),
                   Text(
                     'Поверни устройство',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF0F172A),
-                    ),
+                    style: AppTypography.screenTitle(color: const Color(0xFF0F172A)),
                   ),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   Text(
                     'Для удобной работы с видеоанализом открой экран в горизонтальном режиме.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF64748B),
-                    ),
+                    style: AppTypography.body(color: const Color(0xFF64748B)),
                   ),
                 ],
               ),

@@ -69,6 +69,7 @@ class PlayerSectionTabs extends StatelessWidget {
   Widget _sectionTile(
     PlayerProfileSection item, {
     required bool active,
+    required bool mobile,
   }) {
     final color = _dotColor(item);
     return Material(
@@ -102,6 +103,8 @@ class PlayerSectionTabs extends StatelessWidget {
                     weight: active
                         ? FontWeight.w600
                         : FontWeight.w500,
+                  ).copyWith(
+                    fontSize: mobile ? 11.2 : null,
                   ),
                 ),
               ],
@@ -112,7 +115,7 @@ class PlayerSectionTabs extends StatelessWidget {
     );
   }
 
-  Widget _mediaTile() {
+  Widget _mediaTile({required bool mobile}) {
     final active = mediaActive;
     return Material(
       color: active ? PpColors.greenSoft : Colors.transparent,
@@ -143,6 +146,8 @@ class PlayerSectionTabs extends StatelessWidget {
                     weight: active
                         ? FontWeight.w600
                         : FontWeight.w500,
+                  ).copyWith(
+                    fontSize: mobile ? 11.2 : null,
                   ),
                 ),
               ],
@@ -155,6 +160,7 @@ class PlayerSectionTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mobile = MediaQuery.sizeOf(context).width < 640;
     final visible = order.where((section) {
       if (allowedSections == null) return true;
       if (allowedSections!.contains(section)) return true;
@@ -203,7 +209,7 @@ class PlayerSectionTabs extends StatelessWidget {
               showMedia ? (matchesIndex >= 0 ? matchesIndex + 1 : visible.length) : -1;
 
           if (showMedia && index == mediaIndex) {
-            return _mediaTile();
+            return _mediaTile(mobile: mobile);
           }
 
           var sectionIndex = index;
@@ -215,6 +221,7 @@ class PlayerSectionTabs extends StatelessWidget {
           return _sectionTile(
             item,
             active: !mediaActive && item == selected,
+            mobile: mobile,
           );
         },
       ),

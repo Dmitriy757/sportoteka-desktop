@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 import 'package:http/http.dart' as http;
 
@@ -61,7 +62,7 @@ class _PlanExportViewerScreenState extends State<PlanExportViewerScreen> {
           widget.title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontWeight: FontWeight.w900, color: ClubDashboardPalette.text, fontSize: 15),
+          style: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w900, color: ClubDashboardPalette.text, fontSize: AppTypography.sectionTitleSize),
         ),
       ),
       body: FutureBuilder<Uint8List>(
@@ -86,7 +87,7 @@ class _PlanExportViewerScreenState extends State<PlanExportViewerScreen> {
                     ElevatedButton(
                       onPressed: () => setState(() => _future = _downloadBytes()),
                       style: ElevatedButton.styleFrom(backgroundColor: ClubDashboardPalette.primaryGreen),
-                      child: const Text("Повторить", style: TextStyle(color: Colors.white)),
+                      child: const Text("Повторить", style: TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.white)),
                     ),
                   ],
                 ),

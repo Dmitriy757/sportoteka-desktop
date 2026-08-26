@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 
 import '../models/action_tracker_protocol.dart';
 import '../models/tracker_live_models.dart';
@@ -869,14 +870,14 @@ class _PlayerMyTrainingsScreenState extends State<PlayerMyTrainingsScreen> {
           children: [
             const Text('Мои тренировки',
                 style: TextStyle(
-                    color: _text, fontWeight: FontWeight.w900, fontSize: 17)),
+                    color: _text, fontWeight: FontWeight.w900, fontSize: AppTypography.screenTitleSize)),
             Text(widget.teamName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _muted,
                     fontWeight: FontWeight.w700,
-                    fontSize: 11)),
+                    fontSize: AppTypography.secondarySize)),
           ],
         ),
       ),
@@ -948,7 +949,7 @@ class _PlayerMyTrainingsScreenState extends State<PlayerMyTrainingsScreen> {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: active ? _darkGreen : _text,
-                  fontSize: 11.2,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: active ? FontWeight.w900 : FontWeight.w700,
                 ),
               ),
@@ -1131,9 +1132,9 @@ class _PlayerMyTrainingsScreenState extends State<PlayerMyTrainingsScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Выбор тренировки', style: TextStyle(color: _text, fontSize: 14, fontWeight: FontWeight.w900)),
+                            Text('Выбор тренировки', style: TextStyle(color: _text, fontSize: AppTypography.sectionTitleSize, fontWeight: FontWeight.w900)),
                             SizedBox(height: 2),
-                            Text('Только мои личные сессии', style: TextStyle(color: _muted, fontSize: 10.5, fontWeight: FontWeight.w700)),
+                            Text('Только мои личные сессии', style: TextStyle(color: _muted, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w700)),
                           ],
                         ),
                       ),
@@ -1192,13 +1193,13 @@ class _PlayerMyTrainingsScreenState extends State<PlayerMyTrainingsScreen> {
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            Text('Тренировка #${session.id}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _text, fontSize: 12.3, fontWeight: FontWeight.w900)),
+                                            Text('Тренировка #${session.id}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _text, fontSize: AppTypography.bodySize, fontWeight: FontWeight.w900)),
                                             const SizedBox(height: 2),
-                                            Text(date.isEmpty ? 'Дата не указана' : date, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontSize: 10.2, fontWeight: FontWeight.w700)),
+                                            Text(date.isEmpty ? 'Дата не указана' : date, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w700)),
                                           ],
                                         ),
                                       ),
-                                      Text(_fmtDistance(session.distanceM), style: const TextStyle(color: _darkGreen, fontSize: 11.4, fontWeight: FontWeight.w900)),
+                                      Text(_fmtDistance(session.distanceM), style: const TextStyle(color: _darkGreen, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w900)),
                                     ],
                                   ),
                                 ),
@@ -1281,7 +1282,7 @@ class _PlayerMyTrainingsScreenState extends State<PlayerMyTrainingsScreen> {
                           : 'Тренировка #${current.id} · сравнение с предыдущей',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _text, fontSize: 10.8, fontWeight: FontWeight.w800),
+                  style: const TextStyle(color: _text, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w800),
                 ),
               ),
               TextButton.icon(
@@ -1292,7 +1293,7 @@ class _PlayerMyTrainingsScreenState extends State<PlayerMyTrainingsScreen> {
                   minimumSize: const Size(0, 28),
                 ),
                 icon: const Icon(Icons.swap_horiz_rounded, size: 15),
-                label: const Text('Сессия', style: TextStyle(fontSize: 10.2, fontWeight: FontWeight.w900)),
+                label: const Text('Сессия', style: TextStyle(fontSize: AppTypography.captionSize, fontWeight: FontWeight.w900)),
               ),
             ],
           ),
@@ -1341,7 +1342,7 @@ class _PlayerMyTrainingsScreenState extends State<PlayerMyTrainingsScreen> {
         children: [
           Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontSize: 8.2, fontWeight: FontWeight.w700)),
           const SizedBox(height: 1),
-          Text(deltaText, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: delta >= 0 ? _darkGreen : const Color(0xFFB04A42), fontSize: 9.5, fontWeight: FontWeight.w900)),
+          Text(deltaText, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: delta >= 0 ? _darkGreen : const Color(0xFFB04A42), fontSize: AppTypography.menuGroupSize, fontWeight: FontWeight.w900)),
         ],
       ),
     );
@@ -1360,12 +1361,12 @@ class _PlayerMyTrainingsScreenState extends State<PlayerMyTrainingsScreen> {
             children: [
               Container(width: 10, height: 10, decoration: BoxDecoration(shape: BoxShape.circle, color: _live ? _green : _line)),
               const SizedBox(width: 8),
-              Expanded(child: Text(status, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: _text))),
+              Expanded(child: Text(status, style: const TextStyle(fontSize: AppTypography.screenTitleSize, fontWeight: FontWeight.w900, color: _text))),
               _pill(_activityLabels[_activityType] ?? _activityType, active: true),
             ],
           ),
           const SizedBox(height: 6),
-          Text(subtitle, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _muted)),
+          Text(subtitle, style: const TextStyle(fontSize: AppTypography.bodySize, fontWeight: FontWeight.w700, color: _muted)),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -1571,15 +1572,15 @@ class _PlayerMyTrainingsScreenState extends State<PlayerMyTrainingsScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('${row['title'] ?? 'Личная тренировка'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: 13)),
+              Text('${row['title'] ?? 'Личная тренировка'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: AppTypography.itemTitleSize)),
               const SizedBox(height: 3),
-              Text(date.isEmpty ? 'дата не указана' : date, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontWeight: FontWeight.w700, fontSize: 11)),
+              Text(date.isEmpty ? 'дата не указана' : date, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontWeight: FontWeight.w700, fontSize: AppTypography.secondarySize)),
             ]),
           ),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text(_fmtDistance(distance), style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: 12)),
+            Text(_fmtDistance(distance), style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: AppTypography.bodySize)),
             const SizedBox(height: 3),
-            Text('${_fmtDuration(duration)}${hrAvg > 0 ? ' · $hrAvg bpm' : ''}', style: const TextStyle(color: _muted, fontWeight: FontWeight.w700, fontSize: 10)),
+            Text('${_fmtDuration(duration)}${hrAvg > 0 ? ' · $hrAvg bpm' : ''}', style: const TextStyle(color: _muted, fontWeight: FontWeight.w700, fontSize: AppTypography.captionSize)),
           ]),
         ],
         ),
@@ -1593,7 +1594,7 @@ class _PlayerMyTrainingsScreenState extends State<PlayerMyTrainingsScreen> {
           const SizedBox(height: 8),
           ..._logs.take(8).map((e) => Padding(
                 padding: const EdgeInsets.only(bottom: 6),
-                child: Text(e, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontSize: 10, fontWeight: FontWeight.w600)),
+                child: Text(e, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w600)),
               )),
         ]),
       );
@@ -1616,7 +1617,7 @@ class _PlayerMyTrainingsScreenState extends State<PlayerMyTrainingsScreen> {
   Widget _pill(String text, {bool active = false}) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(color: active ? _green.withOpacity(.1) : const Color(0xFFF2F4F7), borderRadius: BorderRadius.circular(999), border: Border.all(color: active ? _green.withOpacity(.25) : _line)),
-        child: Text(text, style: TextStyle(color: active ? _darkGreen : _muted, fontSize: 11, fontWeight: FontWeight.w900)),
+        child: Text(text, style: TextStyle(color: active ? _darkGreen : _muted, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w900)),
       );
 
   Widget _deviceTile({required IconData icon, required String title, required String subtitle, required bool active, required bool loading, required VoidCallback onTap}) {
@@ -1629,9 +1630,9 @@ class _PlayerMyTrainingsScreenState extends State<PlayerMyTrainingsScreen> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [Icon(icon, color: active ? _darkGreen : _muted, size: 20), const Spacer(), if (loading) const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: _green)) else Icon(active ? Icons.check_circle_rounded : Icons.add_circle_outline_rounded, size: 18, color: active ? _green : _muted)]),
           const SizedBox(height: 9),
-          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: 12)),
+          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: AppTypography.bodySize)),
           const SizedBox(height: 3),
-          Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontWeight: FontWeight.w700, fontSize: 10)),
+          Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontWeight: FontWeight.w700, fontSize: AppTypography.captionSize)),
         ]),
       ),
     );
@@ -1641,11 +1642,11 @@ class _PlayerMyTrainingsScreenState extends State<PlayerMyTrainingsScreen> {
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: _line)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontWeight: FontWeight.w800, fontSize: 10)),
+          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontWeight: FontWeight.w800, fontSize: AppTypography.captionSize)),
           const SizedBox(height: 4),
           Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Flexible(child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: 18))),
-            if (unit.isNotEmpty) ...[const SizedBox(width: 4), Padding(padding: const EdgeInsets.only(bottom: 2), child: Text(unit, style: const TextStyle(color: _muted, fontWeight: FontWeight.w800, fontSize: 10)))],
+            if (unit.isNotEmpty) ...[const SizedBox(width: 4), Padding(padding: const EdgeInsets.only(bottom: 2), child: Text(unit, style: const TextStyle(color: _muted, fontWeight: FontWeight.w800, fontSize: AppTypography.captionSize)))],
           ]),
         ]),
       );
@@ -1812,9 +1813,9 @@ class _StaticSectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(title, style: const TextStyle(color: _PlayerMyTrainingsScreenState._text, fontWeight: FontWeight.w900, fontSize: 14)),
+      Text(title, style: const TextStyle(color: _PlayerMyTrainingsScreenState._text, fontWeight: FontWeight.w900, fontSize: AppTypography.sectionTitleSize)),
       const SizedBox(height: 2),
-      Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _PlayerMyTrainingsScreenState._muted, fontWeight: FontWeight.w700, fontSize: 11)),
+      Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _PlayerMyTrainingsScreenState._muted, fontWeight: FontWeight.w700, fontSize: AppTypography.secondarySize)),
     ]);
   }
 }

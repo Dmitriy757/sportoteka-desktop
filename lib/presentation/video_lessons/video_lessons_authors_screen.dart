@@ -185,21 +185,13 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
         Expanded(
           child: Text(
             title,
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 15,
-              color: VideoLessonsAuthorsPalette.text,
-            ),
+            style: CmrVideoText.title(15, color: VideoLessonsAuthorsPalette.text),
           ),
         ),
         if (action != null)
           Text(
             action,
-            style: const TextStyle(
-              color: VideoLessonsAuthorsPalette.textMuted,
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
-            ),
+            style: CmrVideoText.body(12, color: VideoLessonsAuthorsPalette.textMuted, weight: FontWeight.w600),
           ),
       ],
     );
@@ -224,11 +216,7 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
           const SizedBox(width: 6),
           Text(
             text,
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
-              color: VideoLessonsAuthorsPalette.textMuted,
-            ),
+            style: CmrVideoText.body(12, color: VideoLessonsAuthorsPalette.textMuted, weight: FontWeight.w600),
           ),
         ],
       ),
@@ -291,26 +279,18 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
                 ),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Авторы видеоуроков',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                        color: VideoLessonsAuthorsPalette.text,
-                      ),
+                      style: CmrVideoText.title(15, color: VideoLessonsAuthorsPalette.text),
                     ),
                     SizedBox(height: 2),
                     Text(
                       'Поиск тренеров и каталог их видеоуроков',
-                      style: TextStyle(
-                        color: VideoLessonsAuthorsPalette.textMuted,
-                        fontWeight: FontWeight.w500,
-                        fontSize: 12,
-                      ),
+                      style: CmrVideoText.body(12, color: VideoLessonsAuthorsPalette.textMuted, weight: FontWeight.w500),
                     ),
                   ],
                 ),
@@ -325,11 +305,7 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
                 ),
                 child: Text(
                   '${_authors.length} авторов',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                    color: VideoLessonsAuthorsPalette.textMuted,
-                  ),
+                  style: CmrVideoText.body(12, color: VideoLessonsAuthorsPalette.textMuted, weight: FontWeight.w600),
                 ),
               ),
             ],
@@ -367,11 +343,10 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
           Expanded(
             child: TextField(
               controller: _searchCtrl,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: 'Поиск по тренеру или видеоуроку',
-                hintStyle: TextStyle(
+                hintStyle: CmrVideoText.formHint(
                   color: VideoLessonsAuthorsPalette.textMuted,
-                  fontWeight: FontWeight.w600,
                 ),
                 border: InputBorder.none,
                 isDense: true,
@@ -496,11 +471,7 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
                     fullName.isEmpty ? 'Автор' : fullName,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15.5,
-                      color: VideoLessonsAuthorsPalette.text,
-                    ),
+                    style: CmrVideoText.title(15, color: VideoLessonsAuthorsPalette.text),
                   ),
                   const SizedBox(height: 4),
                   _buildStars(author.rating),
@@ -582,21 +553,15 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
             color: Colors.redAccent,
           ),
           const SizedBox(height: 10),
-          const Text(
+          Text(
             'Ошибка загрузки',
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: VideoLessonsAuthorsPalette.text,
-            ),
+            style: CmrVideoText.body(13, color: VideoLessonsAuthorsPalette.text, weight: FontWeight.w600),
           ),
           const SizedBox(height: 6),
           Text(
             _errorMessage ?? 'Попробуйте ещё раз',
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: VideoLessonsAuthorsPalette.textMuted,
-              fontWeight: FontWeight.w500,
-            ),
+            style: CmrVideoText.body(12, color: VideoLessonsAuthorsPalette.textMuted, weight: FontWeight.w500),
           ),
           const SizedBox(height: 12),
           Container(
@@ -606,12 +571,9 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
             ),
             child: TextButton(
               onPressed: _loadAll,
-              child: const Text(
+              child: Text(
                 'Повторить',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: CmrVideoText.body(13, color: Colors.white, weight: FontWeight.w600),
               ),
             ),
           ),
@@ -623,7 +585,7 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
   Widget _buildEmptyState() {
     return _whiteCard(
       child: Column(
-        children: const [
+        children: [
           Icon(
             Icons.video_library_outlined,
             size: 36,
@@ -632,10 +594,7 @@ class _VideoLessonsAuthorsScreenState extends State<VideoLessonsAuthorsScreen> {
           SizedBox(height: 10),
           Text(
             'Пока нет авторов видеоуроков',
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: VideoLessonsAuthorsPalette.text,
-            ),
+            style: CmrVideoText.body(13, color: VideoLessonsAuthorsPalette.text, weight: FontWeight.w600),
           ),
         ],
       ),
@@ -728,11 +687,7 @@ class _HashChip extends StatelessWidget {
         ),
         child: Text(
           label,
-          style: TextStyle(
-            color: text,
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
-          ),
+          style: CmrVideoText.body(13, color: text, weight: FontWeight.w600),
         ),
       ),
     );

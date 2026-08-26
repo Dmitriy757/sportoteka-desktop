@@ -763,7 +763,7 @@ class _TrackerTrainingReportScreenState
                                     : 'Выбрано игроков: ${temp.length}',
                                 style: const TextStyle(
                                     color: _R.muted,
-                                    fontSize: 9.5,
+                                    fontSize: AppTypography.menuGroupSize,
                                     fontWeight: FontWeight.w700)),
                           ])),
                       TextButton(
@@ -790,7 +790,7 @@ class _TrackerTrainingReportScreenState
                                 'Выберите одного или нескольких игроков',
                                 style: TextStyle(
                                     color: _R.muted,
-                                    fontSize: 11.2,
+                                    fontSize: AppTypography.secondarySize,
                                     fontWeight: FontWeight.w700))),
                       ]),
                     ),
@@ -839,7 +839,7 @@ class _TrackerTrainingReportScreenState
                                         overflow: TextOverflow.ellipsis,
                                         style: const TextStyle(
                                             color: _R.text,
-                                            fontSize: 13,
+                                            fontSize: AppTypography.itemTitleSize,
                                             fontWeight: FontWeight.w900)),
                                     const SizedBox(height: 3),
                                     Text(
@@ -848,7 +848,7 @@ class _TrackerTrainingReportScreenState
                                         overflow: TextOverflow.ellipsis,
                                         style: const TextStyle(
                                             color: _R.muted,
-                                            fontSize: 10,
+                                            fontSize: AppTypography.captionSize,
                                             fontWeight: FontWeight.w700)),
                                   ])),
                               const SizedBox(width: 8),
@@ -1085,7 +1085,7 @@ class _TrackerTrainingReportScreenState
                           child: Text('Что показать в предпросмотре',
                               style: TextStyle(
                                   color: _R.text,
-                                  fontSize: 12.5,
+                                  fontSize: AppTypography.bodySize,
                                   fontWeight: FontWeight.w900))),
                       TextButton(
                           onPressed: () => modalSetState(() => tempSections
@@ -1653,7 +1653,7 @@ class _TrackerTrainingReportScreenState
     );
 
     final reportBaseStyle = AppTypography.custom(
-      size: 11.4,
+      size: AppTypography.secondarySize,
       weight: FontWeight.w500,
       color: _R.graphite,
       height: 1.28,
@@ -1775,7 +1775,7 @@ class _ReportLoadingProgressState extends State<_ReportLoadingProgress>
                   '${widget.label} · $percent%',
                   style: const TextStyle(
                     color: _R.text,
-                    fontSize: 10.8,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -2072,7 +2072,7 @@ class _ReportSelectorTab extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: _ReportType.action().copyWith(
                         color: selected ? _R.greenDark : _R.text,
-                        fontSize: 10.6))),
+                        fontSize: AppTypography.captionSize))),
           ]),
         ),
       ),
@@ -2144,7 +2144,7 @@ class _ReportMiniPill extends StatelessWidget {
           Text(text,
               style: const TextStyle(
                   color: _R.greenDark,
-                  fontSize: 9.0,
+                  fontSize: AppTypography.badgeSize,
                   fontWeight: FontWeight.w500))
         ]),
       );
@@ -2524,7 +2524,7 @@ class _DzenReportTopHeader extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                         color: _R.text,
-                        fontSize: 14.8,
+                        fontSize: AppTypography.sectionTitleSize,
                         fontWeight: FontWeight.w900,
                         letterSpacing: -.1)),
                 const SizedBox(height: 2),
@@ -2533,7 +2533,7 @@ class _DzenReportTopHeader extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _R.muted,
-                        fontSize: 9.5,
+                        fontSize: AppTypography.menuGroupSize,
                         fontWeight: FontWeight.w700)),
               ],
             ),
@@ -2563,7 +2563,7 @@ class _DzenReportTopHeader extends StatelessWidget {
                 Text('Меню',
                     style: TextStyle(
                         color: _R.text,
-                        fontSize: 11.2,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w800)),
               ]),
             ),
@@ -2627,13 +2627,13 @@ class _DzenReportTopHeader extends StatelessWidget {
                         Text(title,
                             style: const TextStyle(
                                 color: _R.text,
-                                fontSize: 12.4,
+                                fontSize: AppTypography.bodySize,
                                 fontWeight: FontWeight.w800)),
                         const SizedBox(height: 2),
                         Text(subtitle,
                             style: const TextStyle(
                                 color: _R.muted,
-                                fontSize: 10.2,
+                                fontSize: AppTypography.captionSize,
                                 fontWeight: FontWeight.w600)),
                       ],
                     ),
@@ -2676,13 +2676,13 @@ class _DzenReportTopHeader extends StatelessWidget {
                       const Text('Меню отчёта',
                           style: TextStyle(
                               color: _R.text,
-                              fontSize: 17,
+                              fontSize: AppTypography.screenTitleSize,
                               fontWeight: FontWeight.w900)),
                       const SizedBox(height: 3),
                       Text(_mobileReportSessionLine(report),
                           style: const TextStyle(
                               color: _R.muted,
-                              fontSize: 10.8,
+                              fontSize: AppTypography.secondarySize,
                               fontWeight: FontWeight.w700)),
                       const SizedBox(height: 12),
                       action(
@@ -2757,7 +2757,7 @@ class _DzenReportHeroCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _R.text,
-                    fontSize: 15.2,
+                    fontSize: AppTypography.screenTitleSize,
                     fontWeight: FontWeight.w900,
                     height: 1)),
             const SizedBox(height: 3),
@@ -2766,7 +2766,7 @@ class _DzenReportHeroCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _R.muted,
-                    fontSize: 9.4,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w700)),
           ]),
         ),
@@ -2788,7 +2788,7 @@ class _DzenReportHeroCard extends StatelessWidget {
           Text('$label $count/${math.max(1, players.length)}',
               style: TextStyle(
                   color: active ? _R.greenDark : _R.muted,
-                  fontSize: 9.8,
+                  fontSize: AppTypography.captionSize,
                   fontWeight: FontWeight.w800)),
         ]),
       );
@@ -2841,7 +2841,7 @@ class _DzenReportHeroCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _R.graphite,
-                        fontSize: 10.8,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w700)),
               ],
             ),
@@ -2856,7 +2856,7 @@ class _DzenReportHeroCard extends StatelessWidget {
             child: Text(report.hasData ? 'ГОТОВО' : 'ОЖИДАНИЕ',
                 style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 8.8,
+                    fontSize: AppTypography.badgeSize,
                     fontWeight: FontWeight.w900)),
           ),
         ]),
@@ -2886,7 +2886,7 @@ class _DzenReportHeroCard extends StatelessWidget {
             style: TextButton.styleFrom(
               foregroundColor: _R.greenDark,
               textStyle:
-                  const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800),
+                  const TextStyle(fontSize: AppTypography.captionSize, fontWeight: FontWeight.w800),
             ),
           ),
         ]),
@@ -2938,20 +2938,20 @@ class _DzenCoachBriefCard extends StatelessWidget {
                   child: Text(title,
                       style: const TextStyle(
                           color: _R.text,
-                          fontSize: 11.4,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w800)),
                 ),
                 Text(value,
                     style: const TextStyle(
                         color: _R.greenDark,
-                        fontSize: 11.4,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w900)),
               ]),
               const SizedBox(height: 3),
               Text(note,
                   style: const TextStyle(
                       color: _R.muted,
-                      fontSize: 10.0,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w600,
                       height: 1.25)),
             ]),
@@ -2975,7 +2975,7 @@ class _DzenCoachBriefCard extends StatelessWidget {
             child: Text('Главное для тренера',
                 style: TextStyle(
                     color: _R.text,
-                    fontSize: 15.4,
+                    fontSize: AppTypography.screenTitleSize,
                     fontWeight: FontWeight.w900)),
           ),
           Container(
@@ -2989,7 +2989,7 @@ class _DzenCoachBriefCard extends StatelessWidget {
                     color: coverageComplete
                         ? _R.greenDark
                         : const Color(0xFFF59E0B),
-                    fontSize: 8.8,
+                    fontSize: AppTypography.badgeSize,
                     fontWeight: FontWeight.w900)),
           ),
         ]),
@@ -3031,7 +3031,7 @@ class _DzenCoachBriefCard extends StatelessWidget {
               'Покрытие данных: GPS $gpsCount/${math.max(1, players.length)}, кардиодатчик $polarCount/${math.max(1, players.length)}. Итоги считаются только по доступным датчикам.',
               style: const TextStyle(
                   color: Color(0xFF92400E),
-                  fontSize: 9.8,
+                  fontSize: AppTypography.captionSize,
                   fontWeight: FontWeight.w700,
                   height: 1.3),
             ),
@@ -3108,7 +3108,7 @@ class _DzenReportJournalCard extends StatelessWidget {
               child: Text('${report.events.length} · открыть',
                   style: const TextStyle(
                       color: _R.greenDark,
-                      fontSize: 9.5,
+                      fontSize: AppTypography.menuGroupSize,
                       fontWeight: FontWeight.w800)),
             ),
           ),
@@ -3117,7 +3117,7 @@ class _DzenReportJournalCard extends StatelessWidget {
         if (events.isEmpty)
           const Text('События появятся после GPS-движения.',
               style: TextStyle(
-                  color: _R.muted, fontSize: 10, fontWeight: FontWeight.w600))
+                  color: _R.muted, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w600))
         else
           for (var i = 0; i < events.length; i++) ...[
             _DzenReportJournalMiniRow(event: events[i]),
@@ -3151,21 +3151,21 @@ class _DzenReportJournalMiniRow extends StatelessWidget {
               borderRadius: BorderRadius.circular(8)),
           child: Text(_reportEventGlyph(event),
               style: TextStyle(
-                  color: color, fontSize: 10, fontWeight: FontWeight.w900)),
+                  color: color, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w900)),
         ),
         const SizedBox(width: 8),
         SizedBox(
           width: 44,
           child: Text(_reportElapsedLabel(event.elapsedMs),
               style: const TextStyle(
-                  color: _R.muted, fontSize: 9.3, fontWeight: FontWeight.w800)),
+                  color: _R.muted, fontSize: AppTypography.menuGroupSize, fontWeight: FontWeight.w800)),
         ),
         Expanded(
           child: Text('${_reportEventPlayerShortName(event.playerName)} · $title',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                  color: _R.text, fontSize: 10.2, fontWeight: FontWeight.w700)),
+                  color: _R.text, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w700)),
         ),
         if (event.hasPoint)
           Padding(
@@ -3210,13 +3210,13 @@ class _DzenReportPlayersCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                               color: _R.text,
-                              fontSize: 15.2,
+                              fontSize: AppTypography.screenTitleSize,
                               fontWeight: FontWeight.w900)),
                       const SizedBox(height: 2),
                       Text(label,
                           style: TextStyle(
                               color: _R.muted,
-                              fontSize: 10.4,
+                              fontSize: AppTypography.captionSize,
                               fontWeight: FontWeight.w800)),
                     ]),
               ),
@@ -3228,7 +3228,7 @@ class _DzenReportPlayersCard extends StatelessWidget {
             const Text('Игроки появятся после загрузки сессии.',
                 style: TextStyle(
                     color: _R.muted,
-                    fontSize: 10.2,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w500))
           else
             Row(
@@ -3249,7 +3249,7 @@ class _DzenReportPlayersCard extends StatelessWidget {
                     child: Text('+${players.length - visible.length}',
                         style: const TextStyle(
                             color: _R.graphite,
-                            fontSize: 12,
+                            fontSize: AppTypography.bodySize,
                             fontWeight: FontWeight.w900)),
                   ),
               ],
@@ -3299,7 +3299,7 @@ class _DzenReportExportCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                           color: _R.text,
-                          fontSize: 15.2,
+                          fontSize: AppTypography.screenTitleSize,
                           fontWeight: FontWeight.w900)),
                   const SizedBox(height: 2),
                   Text('$sectionsLabel · $playerLabel',
@@ -3307,7 +3307,7 @@ class _DzenReportExportCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                           color: _R.muted,
-                          fontSize: 10.4,
+                          fontSize: AppTypography.captionSize,
                           fontWeight: FontWeight.w800)),
                 ])),
             _DzenOutlineButton(label: 'Настроить', onTap: onSettings),
@@ -3442,7 +3442,7 @@ class _ReportExportOptionTile extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: _R.text,
-                        fontSize: 12.0,
+                        fontSize: AppTypography.bodySize,
                         fontWeight: FontWeight.w600,
                         height: 1.15,
                       ),
@@ -3454,7 +3454,7 @@ class _ReportExportOptionTile extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: _R.muted,
-                        fontSize: 10.0,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w400,
                         height: 1.2,
                       ),
@@ -3621,13 +3621,13 @@ class _DzenReportModuleTile extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                  color: _R.text, fontSize: 12.2, fontWeight: FontWeight.w900)),
+                  color: _R.text, fontSize: AppTypography.bodySize, fontWeight: FontWeight.w900)),
           const SizedBox(height: 1),
           Text(module.note,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                  color: _R.muted, fontSize: 9.3, fontWeight: FontWeight.w800)),
+                  color: _R.muted, fontSize: AppTypography.menuGroupSize, fontWeight: FontWeight.w800)),
         ]),
       ),
     );
@@ -3909,7 +3909,7 @@ class _DzenCardTitle extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _R.text,
-                    fontSize: 14.8,
+                    fontSize: AppTypography.sectionTitleSize,
                     fontWeight: FontWeight.w900))),
       ],
     );
@@ -3969,7 +3969,7 @@ class _DzenPdfButton extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                     color: Colors.white,
-                    fontSize: 12.2,
+                    fontSize: AppTypography.bodySize,
                     fontWeight: FontWeight.w900)),
           ],
         ),
@@ -3999,7 +3999,7 @@ class _DzenOutlineButton extends StatelessWidget {
         child: Text(label,
             style: const TextStyle(
                 color: _R.greenDark,
-                fontSize: 12.2,
+                fontSize: AppTypography.bodySize,
                 fontWeight: FontWeight.w900)),
       ),
     );
@@ -4060,7 +4060,7 @@ class _DzenMetricView extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: const TextStyle(
-                  color: _R.text, fontSize: 12.8, fontWeight: FontWeight.w900)),
+                  color: _R.text, fontSize: AppTypography.itemTitleSize, fontWeight: FontWeight.w900)),
           const SizedBox(height: 1),
           Text(metric.label,
               maxLines: 1,
@@ -4068,7 +4068,7 @@ class _DzenMetricView extends StatelessWidget {
               textAlign: TextAlign.center,
               style: const TextStyle(
                   color: _R.graphite,
-                  fontSize: 9.3,
+                  fontSize: AppTypography.menuGroupSize,
                   fontWeight: FontWeight.w700)),
         ],
       ),
@@ -4094,7 +4094,7 @@ class _DzenPlayerPreview extends StatelessWidget {
               textAlign: TextAlign.center,
               style: const TextStyle(
                   color: _R.graphite,
-                  fontSize: 10,
+                  fontSize: AppTypography.captionSize,
                   fontWeight: FontWeight.w800)),
         ],
       ),
@@ -4129,7 +4129,7 @@ class _DzenMiniPanel extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                     color: _R.text,
-                    fontSize: 11.2,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w900)),
             const SizedBox(height: 8),
             Expanded(child: child),
@@ -4193,7 +4193,7 @@ class _DzenMapSummaryPanel extends StatelessWidget {
             const Text('Низкая',
                 style: TextStyle(
                     color: _R.muted,
-                    fontSize: 9.2,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w800)),
             const SizedBox(width: 7),
             Expanded(
@@ -4214,7 +4214,7 @@ class _DzenMapSummaryPanel extends StatelessWidget {
             const Text('Высокая',
                 style: TextStyle(
                     color: _R.muted,
-                    fontSize: 9.2,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w800)),
           ]),
         ],
@@ -4257,13 +4257,13 @@ class _DzenSmallKpi extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-                color: _R.text, fontSize: 12.5, fontWeight: FontWeight.w900)),
+                color: _R.text, fontSize: AppTypography.bodySize, fontWeight: FontWeight.w900)),
         Text(label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
                 color: _R.graphite,
-                fontSize: 9.4,
+                fontSize: AppTypography.menuGroupSize,
                 fontWeight: FontWeight.w700)),
       ])),
     ]);
@@ -4283,14 +4283,14 @@ class _DzenPlainStat extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-                color: _R.text, fontSize: 13.2, fontWeight: FontWeight.w600)),
+                color: _R.text, fontSize: AppTypography.itemTitleSize, fontWeight: FontWeight.w600)),
         const SizedBox(height: 2),
         Text(label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             style: const TextStyle(
-                color: _R.graphite, fontSize: 10, fontWeight: FontWeight.w700)),
+                color: _R.graphite, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w700)),
       ],
     );
   }
@@ -4343,7 +4343,7 @@ class _DzenSessionRow extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _R.text,
-                          fontSize: 12.4,
+                          fontSize: AppTypography.bodySize,
                           fontWeight: FontWeight.w900)),
                   const SizedBox(height: 2),
                   Text(subtitle,
@@ -4351,7 +4351,7 @@ class _DzenSessionRow extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _R.graphite,
-                          fontSize: 10,
+                          fontSize: AppTypography.captionSize,
                           fontWeight: FontWeight.w700)),
                 ])),
             Icon(Icons.chevron_right_rounded,
@@ -4377,7 +4377,7 @@ class _DzenHrMiniChart extends StatelessWidget {
           child: Text('Нет HR-данных',
               style: TextStyle(
                   color: _R.muted,
-                  fontSize: 10.4,
+                  fontSize: AppTypography.captionSize,
                   fontWeight: FontWeight.w500)));
     }
     return CustomPaint(
@@ -4641,7 +4641,7 @@ class _MobileReportHeader extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _R.muted,
-                        fontSize: 10,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w800)),
               ]),
         ),
@@ -4730,7 +4730,7 @@ class _MobileReportHeader extends StatelessWidget {
                         Text(title,
                             style: const TextStyle(
                                 color: _R.text,
-                                fontSize: 13.0,
+                                fontSize: AppTypography.itemTitleSize,
                                 fontWeight: FontWeight.w800)),
                         const SizedBox(height: 3),
                         Text(subtitle,
@@ -4738,7 +4738,7 @@ class _MobileReportHeader extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                                 color: _R.muted,
-                                fontSize: 10.8,
+                                fontSize: AppTypography.secondarySize,
                                 height: 1.25,
                                 fontWeight: FontWeight.w600)),
                       ],
@@ -4787,7 +4787,7 @@ class _MobileReportHeader extends StatelessWidget {
                               const Text('Управление отчётом',
                                   style: TextStyle(
                                       color: _R.text,
-                                      fontSize: 15.2,
+                                      fontSize: AppTypography.screenTitleSize,
                                       fontWeight: FontWeight.w800)),
                               const SizedBox(height: 2),
                               Text(
@@ -4796,7 +4796,7 @@ class _MobileReportHeader extends StatelessWidget {
                                     : 'Сейчас показана вся команда',
                                 style: const TextStyle(
                                     color: _R.muted,
-                                    fontSize: 11.0,
+                                    fontSize: AppTypography.secondarySize,
                                     fontWeight: FontWeight.w600),
                               ),
                             ],
@@ -5016,7 +5016,7 @@ class _ReportPlayerQuickChip extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             color: active ? _R.greenDark : _R.text,
-                            fontSize: 11.2,
+                            fontSize: AppTypography.secondarySize,
                             fontWeight: FontWeight.w900))),
                 const SizedBox(height: 2),
                 ConstrainedBox(
@@ -5026,7 +5026,7 @@ class _ReportPlayerQuickChip extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _R.muted,
-                            fontSize: 9.2,
+                            fontSize: AppTypography.menuGroupSize,
                             fontWeight: FontWeight.w700))),
               ]),
         ]),
@@ -5104,7 +5104,7 @@ class _MobileTabButton extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             color: active ? _R.greenDark : _R.graphite,
-                            fontSize: 14.0,
+                            fontSize: AppTypography.sectionTitleSize,
                             fontWeight:
                                 active ? FontWeight.w700 : FontWeight.w600))),
               ]),
@@ -5324,7 +5324,7 @@ class _MobileHeroCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _R.text,
-                        fontSize: 14,
+                        fontSize: AppTypography.sectionTitleSize,
                         fontWeight: FontWeight.w900)),
                 const SizedBox(height: 2),
                 Text(
@@ -5335,7 +5335,7 @@ class _MobileHeroCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _R.muted,
-                        fontSize: 11.2,
+                        fontSize: AppTypography.secondarySize,
                         height: 1.2,
                         fontWeight: FontWeight.w800)),
               ])),
@@ -5389,14 +5389,14 @@ class _MobileCoachCard extends StatelessWidget {
           SizedBox(width: 8),
           Text('Итог тренера',
               style: TextStyle(
-                  color: _R.text, fontSize: 11.8, fontWeight: FontWeight.w900)),
+                  color: _R.text, fontSize: AppTypography.bodySize, fontWeight: FontWeight.w900)),
         ]),
         const SizedBox(height: 8),
         for (final message in messages) ...[
           Text(message,
               style: const TextStyle(
                   color: _R.graphite,
-                  fontSize: 11.2,
+                  fontSize: AppTypography.secondarySize,
                   height: 1.32,
                   fontWeight: FontWeight.w700)),
           if (message != messages.last) const SizedBox(height: 6),
@@ -5463,7 +5463,7 @@ class _MobilePreviewCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               color: _R.text,
-                              fontSize: 13,
+                              fontSize: AppTypography.itemTitleSize,
                               fontWeight: FontWeight.w900)),
                       const SizedBox(height: 2),
                       Text(subtitle,
@@ -5471,7 +5471,7 @@ class _MobilePreviewCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               color: _R.muted,
-                              fontSize: 9.8,
+                              fontSize: AppTypography.captionSize,
                               fontWeight: FontWeight.w800)),
                     ])),
                 const SizedBox(width: 6),
@@ -5523,7 +5523,7 @@ class _MobileMapPreview extends StatelessWidget {
                     child: Text('Нет GPS-точек',
                         style: TextStyle(
                             color: Colors.white70,
-                            fontSize: 9.5,
+                            fontSize: AppTypography.menuGroupSize,
                             fontWeight: FontWeight.w900)))
                 : const SizedBox.expand(),
           ),
@@ -5602,11 +5602,11 @@ class _MobileSectionHeader extends StatelessWidget {
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(title,
             style: const TextStyle(
-                color: _R.text, fontSize: 13.2, fontWeight: FontWeight.w600)),
+                color: _R.text, fontSize: AppTypography.itemTitleSize, fontWeight: FontWeight.w600)),
         const SizedBox(height: 2),
         Text(subtitle,
             style: const TextStyle(
-                color: _R.muted, fontSize: 10.4, fontWeight: FontWeight.w800)),
+                color: _R.muted, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w800)),
       ])),
       if (actionLabel != null && onAction != null)
         TextButton(
@@ -5891,7 +5891,7 @@ class _HeaderButton extends StatelessWidget {
               style: const TextStyle(
                 color: _R.graphite,
                 fontWeight: FontWeight.w600,
-                fontSize: 11.4,
+                fontSize: AppTypography.secondarySize,
               ),
             ),
           ]),
@@ -5960,7 +5960,7 @@ class _Tabs extends StatelessWidget {
                   style: TextStyle(
                     color: active ? _R.greenDark : _R.graphite,
                     fontWeight: active ? FontWeight.w700 : FontWeight.w600,
-                    fontSize: 11.4,
+                    fontSize: AppTypography.secondarySize,
                   ),
                 ),
                 if (active) ...[
@@ -6027,7 +6027,7 @@ class _ReportModalLivePreview extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _R.muted,
-                        fontSize: 9.0,
+                        fontSize: AppTypography.badgeSize,
                         fontWeight: FontWeight.w500)),
                 const SizedBox(height: 2),
                 Text(value,
@@ -6035,7 +6035,7 @@ class _ReportModalLivePreview extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _R.text,
-                        fontSize: 13.2,
+                        fontSize: AppTypography.itemTitleSize,
                         fontWeight: FontWeight.w600)),
                 Text(note,
                     maxLines: 1,
@@ -6081,7 +6081,7 @@ class _ReportModalLivePreview extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _R.text,
-                        fontSize: 12.0,
+                        fontSize: AppTypography.bodySize,
                         fontWeight: FontWeight.w600))),
           ]),
           const SizedBox(height: 8),
@@ -6551,14 +6551,14 @@ class _TabletReportQuickBlock extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _R.text,
-                          fontSize: 10.8,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w900)),
                   Text(subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _R.muted,
-                          fontSize: 8.7,
+                          fontSize: AppTypography.badgeSize,
                           fontWeight: FontWeight.w700)),
                 ])),
           ]),
@@ -6591,7 +6591,7 @@ class _TabletReportCoachNotes extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('Кратко для тренера',
             style: TextStyle(
-                color: _R.text, fontSize: 9.8, fontWeight: FontWeight.w900)),
+                color: _R.text, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w900)),
         const SizedBox(height: 6),
         _TabletReportNoteLine(
             icon: Icons.route_rounded,
@@ -6695,7 +6695,7 @@ class _ReportBrandStrip extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                     color: _R.text,
-                    fontSize: 13.2,
+                    fontSize: AppTypography.itemTitleSize,
                     fontWeight: FontWeight.w600)),
             const SizedBox(height: 3),
             Text(
@@ -6703,7 +6703,7 @@ class _ReportBrandStrip extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                  color: _R.muted, fontSize: 10.2, fontWeight: FontWeight.w500),
+                  color: _R.muted, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w500),
             ),
           ]),
         ),
@@ -6735,7 +6735,7 @@ class _ReportStatusPill extends StatelessWidget {
         Text(ok ? 'данные готовы' : 'нет движения',
             style: TextStyle(
                 color: ok ? _R.greenDark : const Color(0xFF92400E),
-                fontSize: 10,
+                fontSize: AppTypography.captionSize,
                 fontWeight: FontWeight.w900)),
       ]),
     );
@@ -6852,7 +6852,7 @@ class _PlayerDeepDiveCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _R.text,
-                        fontSize: 12,
+                        fontSize: AppTypography.bodySize,
                         fontWeight: FontWeight.w900)),
                 Text(
                     '${player.duration} · ${player.distanceM.toStringAsFixed(0)} м · max ${player.maxSpeedKmh.toStringAsFixed(1)} · HR ${player.heartRateSamplesCount}',
@@ -6860,7 +6860,7 @@ class _PlayerDeepDiveCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _R.muted,
-                        fontSize: 9,
+                        fontSize: AppTypography.badgeSize,
                         fontWeight: FontWeight.w800)),
               ])),
         ]),
@@ -6878,7 +6878,7 @@ class _PlayerDeepDiveCard extends StatelessWidget {
                         child: Text('нет GPS',
                             style: TextStyle(
                                 color: Colors.white70,
-                                fontSize: 10,
+                                fontSize: AppTypography.captionSize,
                                 fontWeight: FontWeight.w900)))
                     : const SizedBox.expand(),
               ),
@@ -7018,7 +7018,7 @@ class _PlayerReportCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _R.text,
-                        fontSize: 11.5,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w900)),
                 const SizedBox(height: 2),
                 Text(
@@ -7031,7 +7031,7 @@ class _PlayerReportCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _R.muted,
-                        fontSize: 9.2,
+                        fontSize: AppTypography.menuGroupSize,
                         fontWeight: FontWeight.w800)),
               ])),
         ]),
@@ -7080,7 +7080,7 @@ class _PlayerReportCompactCard extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                    color: _R.text, fontSize: 12, fontWeight: FontWeight.w900)),
+                    color: _R.text, fontSize: AppTypography.bodySize, fontWeight: FontWeight.w900)),
             const SizedBox(height: 3),
             Wrap(spacing: 5, runSpacing: 5, children: [
               _TinyPill(
@@ -7210,7 +7210,7 @@ class _ActivityMapPanelState extends State<_ActivityMapPanel> {
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                           color: _R.muted,
-                          fontSize: 10.4,
+                          fontSize: AppTypography.captionSize,
                           fontWeight: FontWeight.w800)),
                 ]),
           );
@@ -7235,7 +7235,7 @@ class _ActivityMapPanelState extends State<_ActivityMapPanel> {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _R.muted,
-                    fontSize: 9.7,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w800)),
           ]),
         );
@@ -7311,7 +7311,7 @@ class _ActivityMapPanelState extends State<_ActivityMapPanel> {
                       child: Text('Нет GPS-точек для карты выбранной сессии',
                           style: TextStyle(
                               color: Colors.white70,
-                              fontSize: 10.2,
+                              fontSize: AppTypography.captionSize,
                               fontWeight: FontWeight.w500))),
                 ),
         );
@@ -7328,7 +7328,7 @@ class _ActivityMapPanelState extends State<_ActivityMapPanel> {
               Text('Нет GPS-точек для выбранной сессии',
                   style: TextStyle(
                       color: _R.muted,
-                      fontSize: 10.4,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w500)),
             ]),
           );
@@ -7378,7 +7378,7 @@ class _MapModeButton extends StatelessWidget {
                   style: TextStyle(
                       color: active ? _R.green : _R.text,
                       fontWeight: FontWeight.w900,
-                      fontSize: 11))),
+                      fontSize: AppTypography.secondarySize))),
         ]),
       ),
     );
@@ -7672,7 +7672,7 @@ class _ReportEventsPanelState extends State<_ReportEventsPanel> {
         Text('Показано ${visible.length} из ${filtered.length} событий',
             textAlign: TextAlign.center,
             style: const TextStyle(
-                color: _R.muted, fontSize: 9.5, fontWeight: FontWeight.w700)),
+                color: _R.muted, fontSize: AppTypography.menuGroupSize, fontWeight: FontWeight.w700)),
       ],
     ]);
   }
@@ -7700,7 +7700,7 @@ class _ReportEventFilterChip extends StatelessWidget {
             child: Text(label,
                 style: TextStyle(
                     color: active ? Colors.white : _R.graphite,
-                    fontSize: 9.4,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w800)),
           ),
         ),
@@ -7730,7 +7730,7 @@ class _ReportEventRow extends StatelessWidget {
           color: color.withOpacity(.10), borderRadius: BorderRadius.circular(9)),
       child: Text(_reportEventGlyph(event),
           style: TextStyle(
-              color: color, fontSize: 11, fontWeight: FontWeight.w900)),
+              color: color, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w900)),
     );
     return LayoutBuilder(builder: (context, c) {
       if (c.maxWidth < 520) {
@@ -7745,7 +7745,7 @@ class _ReportEventRow extends StatelessWidget {
                   Text(elapsed,
                       style: const TextStyle(
                           color: _R.graphite,
-                          fontSize: 10.2,
+                          fontSize: AppTypography.captionSize,
                           fontWeight: FontWeight.w900)),
                   const SizedBox(width: 8),
                   Expanded(
@@ -7754,7 +7754,7 @@ class _ReportEventRow extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _R.text,
-                            fontSize: 10.2,
+                            fontSize: AppTypography.captionSize,
                             fontWeight: FontWeight.w800)),
                   ),
                   if (event.hasPoint)
@@ -7766,7 +7766,7 @@ class _ReportEventRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _R.text,
-                        fontSize: 10.4,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w800)),
                 if (event.detail.trim().isNotEmpty || metric.isNotEmpty)
                   Text(
@@ -7775,7 +7775,7 @@ class _ReportEventRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _R.muted,
-                        fontSize: 9.1,
+                        fontSize: AppTypography.badgeSize,
                         fontWeight: FontWeight.w500),
                   ),
               ]),
@@ -7793,7 +7793,7 @@ class _ReportEventRow extends StatelessWidget {
             child: Text(elapsed,
                 style: const TextStyle(
                     color: _R.graphite,
-                    fontSize: 10.3,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w900)),
           ),
           SizedBox(
@@ -7803,7 +7803,7 @@ class _ReportEventRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _R.text,
-                    fontSize: 10.5,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w800)),
           ),
           Expanded(
@@ -7813,7 +7813,7 @@ class _ReportEventRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _R.text,
-                      fontSize: 10.5,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w800)),
               if (event.detail.trim().isNotEmpty)
                 Text(event.detail.trim(),
@@ -7821,7 +7821,7 @@ class _ReportEventRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _R.muted,
-                        fontSize: 9.2,
+                        fontSize: AppTypography.menuGroupSize,
                         fontWeight: FontWeight.w500)),
             ]),
           ),
@@ -7831,7 +7831,7 @@ class _ReportEventRow extends StatelessWidget {
                 textAlign: TextAlign.right,
                 style: const TextStyle(
                     color: _R.graphite,
-                    fontSize: 9.5,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w800)),
           ],
           if (event.hasPoint) ...[
@@ -7879,7 +7879,7 @@ class _SpeedZonesPanel extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _R.text,
-                        fontSize: 11.2,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w900))),
             Expanded(
                 child: ClipRRect(
@@ -7897,7 +7897,7 @@ class _SpeedZonesPanel extends StatelessWidget {
                     textAlign: TextAlign.right,
                     style: const TextStyle(
                         color: _R.graphite,
-                        fontSize: 10,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w900))),
           ]);
         }),
@@ -8428,14 +8428,14 @@ class _RadarMiniCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _R.text,
-                    fontSize: 11.5,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w900)),
             Text(subtitle,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _R.muted,
-                    fontSize: 9.6,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w800)),
           ]),
         ),
@@ -8605,14 +8605,14 @@ class _NoMovementNotice extends StatelessWidget {
             const Text('В этой сессии нет подтверждённого движения',
                 style: TextStyle(
                     color: _R.text,
-                    fontSize: 11.5,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w900)),
             const SizedBox(height: 4),
             Text(
               '$players · дистанция и скорость равны нулю. Карты и рейтинги не должны строиться как полноценная тренировка, пока датчик не отдаст реальные GPS-точки.',
               style: const TextStyle(
                   color: _R.muted,
-                  fontSize: 10.2,
+                  fontSize: AppTypography.captionSize,
                   height: 1.3,
                   fontWeight: FontWeight.w700),
             ),
@@ -9217,7 +9217,7 @@ class _HrRecommendations extends StatelessWidget {
                             child: Text(m,
                                 style: const TextStyle(
                                     color: _R.text,
-                                    fontSize: 11.2,
+                                    fontSize: AppTypography.secondarySize,
                                     height: 1.35,
                                     fontWeight: FontWeight.w700))),
                       ]),
@@ -9487,7 +9487,7 @@ class _AiCoachNotesPanelState extends State<_AiCoachNotesPanel> {
                   'Журнал решений тренера',
                   style: TextStyle(
                     color: _R.text,
-                    fontSize: 13,
+                    fontSize: AppTypography.itemTitleSize,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -9499,7 +9499,7 @@ class _AiCoachNotesPanelState extends State<_AiCoachNotesPanel> {
             'Оценка и заметка сохраняются для выбранной тренировки и игрока.',
             style: TextStyle(
               color: _R.muted,
-              fontSize: 10.5,
+              fontSize: AppTypography.captionSize,
               height: 1.3,
               fontWeight: FontWeight.w600,
             ),
@@ -9532,7 +9532,7 @@ class _AiCoachNotesPanelState extends State<_AiCoachNotesPanel> {
                     ),
                     labelStyle: TextStyle(
                       color: active ? _R.greenDark : _R.graphite,
-                      fontSize: 10,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w800,
                     ),
                     visualDensity: VisualDensity.compact,
@@ -9613,7 +9613,7 @@ class _ReportAiPlaceholder extends StatelessWidget {
                   child: const Text('ПРОВЕРЕННЫЕ МЕТРИКИ',
                       style: TextStyle(
                           color: _R.greenDark,
-                          fontSize: 8.6,
+                          fontSize: AppTypography.badgeSize,
                           fontWeight: FontWeight.w900))),
             ]),
             SizedBox(height: compact ? 8 : 12),
@@ -9686,14 +9686,14 @@ class _AiPlayerSignals extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _R.text,
-                        fontSize: 9.5,
+                        fontSize: AppTypography.menuGroupSize,
                         fontWeight: FontWeight.w900)),
                 Text(_aiSignalText(p),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _R.muted,
-                        fontSize: 9.2,
+                        fontSize: AppTypography.menuGroupSize,
                         height: 1.25,
                         fontWeight: FontWeight.w800)),
               ])),
@@ -9768,7 +9768,7 @@ class _MicrocycleTab extends StatelessWidget {
         child: Text('Дни микроцикла',
             style: TextStyle(
                 color: _R.text,
-                fontSize: 15,
+                fontSize: AppTypography.sectionTitleSize,
                 fontWeight: FontWeight.w900,
                 letterSpacing: -.3)),
       ),
@@ -9840,7 +9840,7 @@ class _MicrocycleDayCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _R.text,
-                      fontSize: 12.5,
+                      fontSize: AppTypography.bodySize,
                       fontWeight: FontWeight.w900))),
         ]),
         const SizedBox(height: 8),
@@ -9995,7 +9995,7 @@ class _Card extends StatelessWidget {
                 style: const TextStyle(
                     color: _R.text,
                     fontWeight: FontWeight.w800,
-                    fontSize: 11.5)),
+                    fontSize: AppTypography.secondarySize)),
           ),
           if (boundedHeight) Expanded(child: body) else body,
         ]),
@@ -10016,7 +10016,7 @@ class _SectionTitle extends StatelessWidget {
           child: Text(text,
               style: const TextStyle(
                   color: _R.text,
-                  fontSize: 12.5,
+                  fontSize: AppTypography.bodySize,
                   fontWeight: FontWeight.w800,
                   letterSpacing: .1))),
     );
@@ -10301,7 +10301,7 @@ class _MiniMetric extends StatelessWidget {
                     maxLines: 1,
                     style: const TextStyle(
                         color: _R.text,
-                        fontSize: 11.8,
+                        fontSize: AppTypography.bodySize,
                         fontWeight: FontWeight.w900))),
           ]),
     );
@@ -10545,11 +10545,11 @@ class _ReportHrTimelineLegend extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _R.text,
-                    fontSize: 10,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w900))),
         Text('${points.length} HR',
             style: const TextStyle(
-                color: _R.muted, fontSize: 9.4, fontWeight: FontWeight.w900)),
+                color: _R.muted, fontSize: AppTypography.menuGroupSize, fontWeight: FontWeight.w900)),
       ]),
     );
   }
@@ -10651,7 +10651,7 @@ class _HrZoneSummaryRow extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                  color: _R.text, fontSize: 10, fontWeight: FontWeight.w900))),
+                  color: _R.text, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w900))),
       Expanded(
         child: ClipRRect(
           borderRadius: BorderRadius.circular(999),
@@ -10670,7 +10670,7 @@ class _HrZoneSummaryRow extends StatelessWidget {
               textAlign: TextAlign.right,
               style: const TextStyle(
                   color: _R.muted,
-                  fontSize: 10.4,
+                  fontSize: AppTypography.captionSize,
                   fontWeight: FontWeight.w900))),
     ]);
   }
@@ -11170,13 +11170,13 @@ class _PercentCards extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _R.text,
-                          fontSize: 9.7,
+                          fontSize: AppTypography.captionSize,
                           fontWeight: FontWeight.w800))),
               const SizedBox(width: 7),
               Text('${v.toStringAsFixed(0)}%',
                   style: const TextStyle(
                       color: _R.darkGreen,
-                      fontSize: 11.5,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w900)),
               const SizedBox(width: 7),
               SizedBox(
@@ -11588,7 +11588,7 @@ Widget _cell(String text,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
             color: _R.text,
-            fontSize: 10.4,
+            fontSize: AppTypography.captionSize,
             fontWeight: bold ? FontWeight.w800 : FontWeight.w600)),
   );
 }
@@ -11610,7 +11610,7 @@ Widget _playerCell(TrackerTrainingPlayerRow p, bool average) {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _R.text,
-                    fontSize: 9.8,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w900)),
             Text(
                 [
@@ -11665,7 +11665,7 @@ class _EmptyBlock extends StatelessWidget {
         child: Text(text,
             textAlign: TextAlign.center,
             style: const TextStyle(
-                color: _R.muted, fontSize: 11.2, fontWeight: FontWeight.w700)),
+                color: _R.muted, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700)),
       );
 }
 
@@ -12632,44 +12632,25 @@ class _Kpi {
 }
 
 class _ReportType {
-  static TextStyle title([double size = 16]) => AppTypography.custom(
-        size: size,
-        weight: FontWeight.w600,
-        color: _R.text,
-        height: 1.18,
-        letterSpacing: 0,
+  static TextStyle title([double size = 16]) =>
+      AppTypography.screenTitle(color: _R.text).copyWith(
+        fontWeight: FontWeight.w600,
       );
 
-  static TextStyle section([double size = 12.2]) => AppTypography.custom(
-        size: size,
-        weight: FontWeight.w600,
-        color: _R.text,
-        height: 1.20,
-        letterSpacing: 0,
+  static TextStyle section([double size = 12.2]) =>
+      AppTypography.subsectionTitle(color: _R.text);
+
+  static TextStyle body([double size = 11.4]) =>
+      AppTypography.bodyMedium(color: _R.graphite).copyWith(
+        fontWeight: FontWeight.w500,
       );
 
-  static TextStyle body([double size = 11.4]) => AppTypography.custom(
-        size: size,
-        weight: FontWeight.w500,
-        color: _R.graphite,
-        height: 1.28,
-        letterSpacing: 0,
-      );
+  static TextStyle caption([double size = 10.4]) =>
+      AppTypography.caption(color: _R.muted);
 
-  static TextStyle caption([double size = 10.4]) => AppTypography.custom(
-        size: size,
-        weight: FontWeight.w400,
-        color: _R.muted,
-        height: 1.25,
-        letterSpacing: 0,
-      );
-
-  static TextStyle action({bool primary = false}) => AppTypography.custom(
-        size: 11.3,
-        weight: FontWeight.w600,
+  static TextStyle action({bool primary = false}) =>
+      AppTypography.action(
         color: primary ? Colors.white : _R.greenDark,
-        height: 1.0,
-        letterSpacing: 0,
       );
 }
 
@@ -12704,66 +12685,49 @@ class _R {
 }
 
 class _RText {
-  // V182: та же визуальная шкала, что PpText в Player Profile.
-  static double _titleSize(double requested) {
-    if (requested >= 17) return 18;
-    if (requested >= 15) return 16;
-    return 14;
+  static TextStyle title(double size, {Color color = _R.text}) {
+    final base = size >= 17
+        ? AppTypography.screenTitle(color: color)
+        : size >= 15
+            ? AppTypography.sectionTitle(color: color)
+            : AppTypography.subsectionTitle(color: color);
+    return base.copyWith(fontWeight: FontWeight.w600);
   }
-
-  static double _bodySize(double requested) {
-    if (requested < 9.4) return 9.5;
-    if (requested < 10.6) return 10.2;
-    if (requested < 11.7) return 11;
-    if (requested < 12.7) return 12;
-    return 13;
-  }
-
-  static double _valueSize(double requested) {
-    if (requested >= 16.5) return 17;
-    if (requested >= 14.5) return 15;
-    return 14;
-  }
-
-  static TextStyle title(double size, {Color color = _R.text}) =>
-      AppTypography.custom(
-        size: _titleSize(size),
-        weight: FontWeight.w600,
-        color: color,
-        height: 1.18,
-        letterSpacing: 0,
-      );
 
   static TextStyle body(
     double size, {
     Color color = _R.muted,
     FontWeight weight = FontWeight.w400,
-  }) =>
-      AppTypography.custom(
-        size: _bodySize(size),
-        weight: weight,
-        color: color,
-        height: 1.30,
-        letterSpacing: 0,
-      );
+  }) {
+    final base = size < 9.4
+        ? AppTypography.commentMeta(color: color)
+        : size < 10.6
+            ? AppTypography.caption(color: color)
+            : size < 11.7
+                ? AppTypography.secondary(color: color)
+                : AppTypography.body(color: color);
+    return base.copyWith(fontWeight: weight);
+  }
 
-  static TextStyle value(double size, {Color color = _R.text}) =>
-      AppTypography.custom(
-        size: _valueSize(size),
-        weight: FontWeight.w600,
-        color: color,
-        height: 1.12,
-        letterSpacing: 0,
-      );
+  static TextStyle value(double size, {Color color = _R.text}) {
+    final metricSize = size >= 16.5
+        ? 17.0
+        : size >= 14.5
+            ? 15.0
+            : 14.0;
+    return AppTypography.metricStrong(color: color).copyWith(
+      fontSize: metricSize,
+      fontWeight: FontWeight.w600,
+      height: 1.12,
+    );
+  }
 
-  static TextStyle caption({double size = 10.2, Color color = _R.muted2}) =>
-      AppTypography.custom(
-        size: size < 10 ? 9.5 : 10.2,
-        weight: FontWeight.w500,
-        color: color,
-        height: 1.18,
-        letterSpacing: 0,
-      );
+  static TextStyle caption({double size = 10.2, Color color = _R.muted2}) {
+    final base = size < 10
+        ? AppTypography.commentMeta(color: color)
+        : AppTypography.caption(color: color);
+    return base.copyWith(fontWeight: FontWeight.w500);
+  }
 }
 
 class _NoHoverTap extends StatelessWidget {
@@ -13012,7 +12976,7 @@ class _PerformanceMatrix extends StatelessWidget {
         child: Text(text,
             maxLines: 1,
             style: const TextStyle(
-                fontSize: 10.2, fontWeight: FontWeight.w800, color: _R.text)));
+                fontSize: AppTypography.captionSize, fontWeight: FontWeight.w800, color: _R.text)));
   }
 
   Widget _statusCell(String status) {
@@ -13031,7 +12995,7 @@ class _PerformanceMatrix extends StatelessWidget {
         child: Text(status,
             textAlign: TextAlign.center,
             style: const TextStyle(
-                fontSize: 8.6, fontWeight: FontWeight.w900, color: _R.text)));
+                fontSize: AppTypography.badgeSize, fontWeight: FontWeight.w900, color: _R.text)));
   }
 
   Widget _groupCell(String text, Color color,
@@ -13066,6 +13030,6 @@ class _MatrixLegend extends StatelessWidget {
         const SizedBox(width: 5),
         Text(label,
             style: const TextStyle(
-                fontSize: 10, fontWeight: FontWeight.w700, color: _R.muted))
+                fontSize: AppTypography.captionSize, fontWeight: FontWeight.w700, color: _R.muted))
       ]);
 }

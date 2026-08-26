@@ -218,14 +218,29 @@ class _BookingScreenState extends State<BookingScreen> {
     double size, {
     FontWeight weight = FontWeight.w400,
     Color color = _BookingUi.text,
-    double height = 1.2,
+    double height = 1.25,
   }) {
-    return AppTypography.custom(
-      size: size,
-      weight: weight,
+    final TextStyle base;
+
+    if (size >= 14.0) {
+      base = AppTypography.screenTitle(color: color);
+    } else if (size >= 12.3) {
+      base = AppTypography.subsectionTitle(color: color);
+    } else if (size >= 11.3) {
+      base = AppTypography.itemTitle(color: color);
+    } else if (size >= 10.1) {
+      base = AppTypography.body(color: color);
+    } else if (size >= 9.5) {
+      base = AppTypography.secondary(color: color);
+    } else if (size >= 9.0) {
+      base = AppTypography.caption(color: color);
+    } else {
+      base = AppTypography.menuGroup(color: color);
+    }
+
+    return base.copyWith(
+      fontWeight: weight,
       color: color,
-      height: height,
-      letterSpacing: 0,
     );
   }
 

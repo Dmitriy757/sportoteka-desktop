@@ -638,7 +638,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                   widget.clubName.trim().isEmpty ? 'Команда' : widget.clubName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _C.muted, fontSize: 10.05, fontWeight: FontWeight.w600, height: 1),
+                  style: AppTypography.captionMedium(color: _C.muted),
                 ),
               ],
             ),
@@ -822,7 +822,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                   selectedTitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _C.muted, fontSize: 10.75, fontWeight: FontWeight.w600),
+                  style: AppTypography.captionMedium(color: _C.muted),
                 ),
               ],
             ),
@@ -894,7 +894,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                     mode == CmrCalendarMode.month ? _monthTitle(cursor) : _weekTitle(cursor),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: _C.muted, fontSize: 10.25, fontWeight: FontWeight.w600),
+                    style: AppTypography.captionMedium(color: _C.muted),
                   ),
                 ],
               ),
@@ -1149,7 +1149,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                   'События за ${_dateTitle(selectedDay)}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: _C.title.copyWith(fontSize: 16.75, fontWeight: FontWeight.w600),
+                  style: AppTypography.screenTitle(color: _C.text).copyWith(fontWeight: FontWeight.w600),
                 ),
               ),
               if (canEdit) _ProfileActionButton(icon: Icons.add_rounded, text: 'Событие', onTap: () => _openCreate(selectedDay)),
@@ -1244,7 +1244,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                   child: Center(
                     child: Text(
                       d,
-                      style: const TextStyle(color: _C.muted, fontSize: 10.55, fontWeight: FontWeight.w600, height: 1.15),
+                      style: AppTypography.captionMedium(color: _C.muted),
                     ),
                   ),
                 ),
@@ -1564,7 +1564,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
           children: [
             Container(width: 7, height: 7, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(2))),
             const SizedBox(width: 6),
-            Text(eventTypeLabel(t), style: const TextStyle(fontSize: 10.75, fontWeight: FontWeight.w600, color: _C.text, height: 1)),
+            Text(eventTypeLabel(t), style: AppTypography.chip(color: _C.text, active: true)),
           ],
         ),
       );
@@ -1709,20 +1709,15 @@ class _C {
         borderRadius: BorderRadius.circular(radius),
       );
 
-  static TextStyle get title => _base(
-        size: 16.0,
-        weight: FontWeight.w600,
+  static TextStyle get title => AppTypography.sectionTitle(
         color: text,
-        height: 1.10,
-        letterSpacing: -0.34,
+      ).copyWith(
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.18,
       );
 
-  static TextStyle section() => _base(
-        size: 12.8,
-        weight: FontWeight.w600,
+  static TextStyle section() => AppTypography.subsectionTitle(
         color: text,
-        height: 1.12,
-        letterSpacing: -0.22,
       );
 
   static TextStyle value(double size) => _base(
@@ -1742,35 +1737,23 @@ class _C {
         letterSpacing: -0.05,
       );
 
-  static TextStyle caption() => _base(
-        size: 10.6,
-        weight: FontWeight.w600,
+  static TextStyle caption() => AppTypography.captionMedium(
         color: muted2,
-        height: 1.10,
-        letterSpacing: .08,
       );
 
-  static TextStyle tab({bool active = false}) => _base(
-        size: 11.2,
-        weight: FontWeight.w600,
+  static TextStyle tab({bool active = false}) => AppTypography.tab(
+        active: active,
         color: active ? greenDark : text,
-        height: 1,
       );
 
   static TextStyle tabSelected() => tab(active: true);
 
-  static TextStyle action() => _base(
-        size: 11.8,
-        weight: FontWeight.w600,
+  static TextStyle action() => AppTypography.action(
         color: text,
-        height: 1.05,
       );
 
-  static TextStyle danger() => _base(
-        size: 11.8,
-        weight: FontWeight.w600,
+  static TextStyle danger() => AppTypography.action(
         color: red,
-        height: 1,
       );
 }
 
@@ -1922,7 +1905,7 @@ class _CalendarHeaderSide extends StatelessWidget {
       children: [
         Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: alignEnd ? TextAlign.right : TextAlign.left, style: const TextStyle(color: _C.text, fontSize: 14.05, fontWeight: FontWeight.w600, height: 1.0)),
         const SizedBox(height: 5),
-        Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: alignEnd ? TextAlign.right : TextAlign.left, style: const TextStyle(color: _C.muted, fontSize: 10.25, fontWeight: FontWeight.w600, height: 1.0)),
+        Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: alignEnd ? TextAlign.right : TextAlign.left, style: AppTypography.captionMedium(color: _C.muted)),
         const SizedBox(height: 6),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
@@ -2251,13 +2234,13 @@ class _CalendarKpiTile extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 9.45, fontWeight: FontWeight.w600, height: 1)),
+                Text(item.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.captionMedium(color: _C.muted)),
                 const SizedBox(height: 2),
                 Row(
                   children: [
                     Text(item.value, maxLines: 1, style: const TextStyle(color: _C.text, fontSize: 14.55, fontWeight: FontWeight.w600, height: 1)),
                     const SizedBox(width: 6),
-                    Expanded(child: Text(item.hint, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 8.95, fontWeight: FontWeight.w600, height: 1))),
+                    Expanded(child: Text(item.hint, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.badge(color: _C.muted))),
                   ],
                 ),
               ],
@@ -2394,11 +2377,8 @@ class _CalendarTypeTile extends StatelessWidget {
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: AppTypography.captionMedium(
                 color: _C.text,
-                fontSize: 10.4,
-                fontWeight: FontWeight.w600,
-                height: 1.05,
               ),
             ),
           ),
@@ -2687,9 +2667,8 @@ class _CmrEventTile extends StatelessWidget {
                         'Оценка тренера: $coachRating',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: _C.caption().copyWith(
+                        style: AppTypography.badge(
                           color: _C.greenDark,
-                          fontSize: 9.8,
                         ),
                       ),
                     ],
@@ -2743,9 +2722,9 @@ class _CalendarRatingChip extends StatelessWidget {
         children: [
           Icon(icon, color: color, size: 12),
           const SizedBox(width: 4),
-          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 9.25, fontWeight: FontWeight.w600, height: 1)),
+          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.badge(color: _C.muted)),
           const SizedBox(width: 4),
-          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontSize: 10.05, fontWeight: FontWeight.w600, height: 1)),
+          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.captionMedium(color: color)),
         ],
       ),
     );
@@ -2935,9 +2914,8 @@ class _InlineTabButton extends StatelessWidget {
                   text,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                  style: AppTypography.tab(
+                    active: active,
                     color: active ? _C.text : _C.muted2,
                   ),
                 ),
@@ -2992,7 +2970,7 @@ class _InlineEventEditorPanel extends StatelessWidget {
                     children: [
                       Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 13.45, fontWeight: FontWeight.w600, height: 1.05)),
                       const SizedBox(height: 3),
-                      Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 10.05, fontWeight: FontWeight.w600, height: 1.05)),
+                      Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.captionMedium(color: _C.muted)),
                     ],
                   ),
                 ),
@@ -3037,9 +3015,9 @@ class _DetailMetric extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 10.35, fontWeight: FontWeight.w600)),
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.captionMedium(color: _C.muted)),
                 const SizedBox(height: 3),
-                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 11.85, fontWeight: FontWeight.w600)),
+                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.secondaryMedium(color: _C.text)),
               ],
             ),
           ),
@@ -3103,7 +3081,7 @@ class _HeroStat extends StatelessWidget {
         children: [
           Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 16.75, fontWeight: FontWeight.w600)),
           const SizedBox(height: 2),
-          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.muted, fontSize: 10.35, fontWeight: FontWeight.w600)),
+          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.captionMedium(color: _C.muted)),
         ],
       ),
     );
@@ -3201,9 +3179,9 @@ class _CmrEmptyState extends StatelessWidget {
             children: [
               Icon(icon, color: _C.greenDark, size: 48),
               const SizedBox(height: 14),
-              Text(title, textAlign: TextAlign.center, style: _C.title.copyWith(fontSize: 20.4)),
+              Text(title, textAlign: TextAlign.center, style: AppTypography.emptyTitle(color: _C.text)),
               const SizedBox(height: 8),
-              Text(text, textAlign: TextAlign.center, style: const TextStyle(color: _C.muted, height: 1.45, fontWeight: FontWeight.w600)),
+              Text(text, textAlign: TextAlign.center, style: AppTypography.emptyText(color: _C.muted).copyWith(fontWeight: FontWeight.w500)),
               if (actionText != null && onAction != null) ...[
                 const SizedBox(height: 18),
                 ElevatedButton.icon(

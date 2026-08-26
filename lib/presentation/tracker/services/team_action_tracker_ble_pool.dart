@@ -132,10 +132,11 @@ class TeamActionTrackerBlePool {
   int _orphanLiveDrops = 0;
   int _crossRoutedLiveDrops = 0;
   static const Duration _gpsResponseTimeout = Duration(milliseconds: 350);
-  // Прямой UUID/MAC reconnect остаётся основным путём. Но после Android GATT
-  // 133 (и после sleep/wake Apple) старый GATT может быть мёртвым, хотя датчик
-  // уже снова advertising-ится. Разрешаем один редкий общий rescue scan.
-  static const Duration _liveRescueScanCooldown = Duration(seconds: 45);
+  // Прямой UUID/MAC reconnect остаётся основным путём. Общий rescue scan
+  // во время Team Live нужен только Apple для обновления CoreBluetooth runtime
+  // UUID. На Android scan во время Live запрещён: он повышает риск GATT 133 и
+  // разрыва уже работающих каналов. Apple rescue дополнительно ограничен 90s.
+  static const Duration _liveRescueScanCooldown = Duration(seconds: 90);
 
   Stream<TeamTrackerBleEvent> get dataStream => _data.stream;
   Stream<TeamTrackerBleLog> get logStream => _logs.stream;
@@ -875,8 +876,10 @@ class TeamActionTrackerBlePool {
         ));
         final now = DateTime.now();
         final lastRescueScan = _lastLiveRescueScanAt;
-        final allowLiveRescueScan = lastRescueScan == null ||
+        final rescueCooldownPassed = lastRescueScan == null ||
             now.difference(lastRescueScan) >= _liveRescueScanCooldown;
+        final allowLiveRescueScan =
+            ActionTrackerBleService.appleRuntime && rescueCooldownPassed;
         final scanBefore = ActionTrackerBleService.lastReconnectScanAt;
         recovered = await conn.service.forceReconnectCommandChannel(
           allowScanFallback: allowLiveRescueScan,

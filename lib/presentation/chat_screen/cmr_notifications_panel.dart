@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
@@ -96,7 +97,9 @@ class _CmrNotificationsPanelState extends State<CmrNotificationsPanel> {
 
       if (res.statusCode != 200 || data is! Map || data['success'] != true) {
         throw Exception(
-          data is Map ? (data['error'] ?? 'HTTP ${res.statusCode}') : 'HTTP ${res.statusCode}',
+          data is Map
+              ? (data['error'] ?? 'HTTP ${res.statusCode}')
+              : 'HTTP ${res.statusCode}',
         );
       }
 
@@ -135,38 +138,92 @@ class _CmrNotificationsPanelState extends State<CmrNotificationsPanel> {
     final id = _asInt(item['id']);
     if (id <= 0 || _truthy(item['is_read'])) return;
 
-    item['is_read'] = 1;
-    if (_unread > 0) _unread--;
-    if (mounted) setState(() {});
-    widget.onUnreadChanged?.call(_unread);
-
     try {
-      await http.post(
+      final response = await http.post(
         Uri.parse(_markReadUrl),
         body: {
           'user_id': widget.userId.toString(),
           'notification_id': id.toString(),
         },
+      ).timeout(const Duration(seconds: 10));
+
+      final data = _decode(response.body);
+      final ok = response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          data is Map &&
+          data['success'] == true;
+
+      if (!ok) {
+        throw Exception(
+          data is Map
+              ? (data['error'] ?? 'HTTP ${response.statusCode}')
+              : 'HTTP ${response.statusCode}',
+        );
+      }
+
+      item['is_read'] = 1;
+      if (_unread > 0) _unread--;
+      if (mounted) setState(() {});
+      widget.onUnreadChanged?.call(_unread);
+
+      // Подтверждаем итог сервером, чтобы badge нигде не зависал.
+      await _load(silent: true);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('NOTIFICATION MARK READ ERROR: $e');
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Не удалось отметить уведомление прочитанным'),
+        ),
       );
-    } catch (_) {}
+    }
   }
 
   Future<void> _markAllRead() async {
     if (_unread <= 0) return;
 
-    for (final item in _items) {
-      item['is_read'] = 1;
-    }
-    _unread = 0;
-    if (mounted) setState(() {});
-    widget.onUnreadChanged?.call(0);
-
     try {
-      await http.post(
+      final response = await http.post(
         Uri.parse(_markAllReadUrl),
         body: {'user_id': widget.userId.toString()},
+      ).timeout(const Duration(seconds: 10));
+
+      final data = _decode(response.body);
+      final ok = response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          data is Map &&
+          data['success'] == true;
+
+      if (!ok) {
+        throw Exception(
+          data is Map
+              ? (data['error'] ?? 'HTTP ${response.statusCode}')
+              : 'HTTP ${response.statusCode}',
+        );
+      }
+
+      for (final item in _items) {
+        item['is_read'] = 1;
+      }
+      _unread = 0;
+      if (mounted) setState(() {});
+      widget.onUnreadChanged?.call(0);
+
+      // Сервер — единственный источник истины.
+      await _load(silent: true);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('NOTIFICATION MARK ALL ERROR: $e');
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Не удалось обновить уведомления'),
+        ),
       );
-    } catch (_) {}
+    }
   }
 
   Future<void> _open(Map<String, dynamic> item) async {
@@ -211,20 +268,20 @@ class _CmrNotificationsPanelState extends State<CmrNotificationsPanel> {
   IconData _icon(String type) {
     final t = type.toLowerCase();
     if (t.contains('diary') || t.contains('note')) {
-      return Icons.edit_note_rounded;
+      return Icons.note_alt_outlined;
     }
     if (t.contains('training') || t.contains('live')) {
-      return Icons.sports_soccer_rounded;
+      return Icons.sports_soccer_outlined;
     }
-    if (t.contains('test')) return Icons.speed_rounded;
-    if (t.contains('attendance')) return Icons.fact_check_rounded;
+    if (t.contains('test')) return Icons.science_outlined;
+    if (t.contains('attendance')) return Icons.fact_check_outlined;
     if (t.contains('document') || t.contains('report')) {
-      return Icons.description_rounded;
+      return Icons.description_outlined;
     }
-    if (t.contains('match')) return Icons.stadium_rounded;
-    if (t.contains('readiness')) return Icons.favorite_rounded;
-    if (t.contains('call')) return Icons.call_rounded;
-    return Icons.notifications_rounded;
+    if (t.contains('match')) return Icons.sports_soccer_outlined;
+    if (t.contains('readiness')) return Icons.favorite_border_rounded;
+    if (t.contains('call')) return Icons.call_outlined;
+    return Icons.notifications_none_rounded;
   }
 
   String _time(dynamic raw) {
@@ -236,9 +293,7 @@ class _CmrNotificationsPanelState extends State<CmrNotificationsPanel> {
     final now = DateTime.now();
     String two(int n) => n.toString().padLeft(2, '0');
 
-    if (now.year == dt.year &&
-        now.month == dt.month &&
-        now.day == dt.day) {
+    if (now.year == dt.year && now.month == dt.month && now.day == dt.day) {
       return '${two(dt.hour)}:${two(dt.minute)}';
     }
 
@@ -289,7 +344,8 @@ class _CmrNotificationsPanelState extends State<CmrNotificationsPanel> {
                             color: _N.green,
                             onRefresh: () => _load(),
                             child: ListView.separated(
-                              padding: const EdgeInsets.fromLTRB(14, 10, 14, 24),
+                              padding:
+                                  const EdgeInsets.fromLTRB(14, 10, 14, 24),
                               itemCount: _items.length,
                               separatorBuilder: (_, __) =>
                                   const SizedBox(height: 5),
@@ -351,7 +407,7 @@ class _Header extends StatelessWidget {
               borderRadius: BorderRadius.circular(11),
             ),
             child: const Icon(
-              Icons.notifications_rounded,
+              Icons.notifications_none_rounded,
               size: 18,
               color: _N.greenDark,
             ),
@@ -602,40 +658,30 @@ class _Empty extends StatelessWidget {
 }
 
 class _Text {
-  static TextStyle title(double size) => AppTypography.custom(
-        size: size,
-        weight: FontWeight.w600,
-        color: _N.text,
-        height: 1.18,
-      );
+  static TextStyle title(double size) {
+    if (size >= 15) {
+      return AppTypography.screenTitle(color: _N.text);
+    }
+    if (size >= 13.5) {
+      return AppTypography.sectionTitle(color: _N.text);
+    }
+    return AppTypography.itemTitle(color: _N.text);
+  }
 
-  static TextStyle muted(double size) => AppTypography.custom(
-        size: size,
-        weight: FontWeight.w400,
-        color: _N.muted,
-        height: 1.3,
-      );
+  static TextStyle muted(double size) {
+    if (size >= 11.5) {
+      return AppTypography.secondary(color: _N.muted);
+    }
+    return AppTypography.caption(color: _N.muted);
+  }
 
-  static TextStyle time() => AppTypography.custom(
-        size: 10.2,
-        weight: FontWeight.w500,
-        color: _N.muted2,
-        height: 1.15,
-      );
+  static TextStyle time() => AppTypography.commentMeta(color: _N.muted2)
+      .copyWith(fontWeight: FontWeight.w500);
 
-  static TextStyle action() => AppTypography.custom(
-        size: 11.2,
-        weight: FontWeight.w600,
-        color: _N.greenDark,
-        height: 1.1,
-      );
+  static TextStyle action() => AppTypography.action(color: _N.greenDark);
 
-  static TextStyle badge() => AppTypography.custom(
-        size: 10,
-        weight: FontWeight.w600,
-        color: Colors.white,
-        height: 1,
-      );
+  static TextStyle badge() => AppTypography.badge(color: Colors.white)
+      .copyWith(fontWeight: FontWeight.w600);
 }
 
 class _N {

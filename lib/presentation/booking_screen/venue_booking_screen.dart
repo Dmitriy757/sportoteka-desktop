@@ -52,14 +52,30 @@ class _VenueBookingScreenState extends State<VenueBookingScreen> {
     FontWeight weight = FontWeight.w400,
     Color color = _BookingUi.text,
     double height = 1.25,
-  }) =>
-      AppTypography.custom(
-        size: size,
-        weight: weight,
-        color: color,
-        height: height,
-        letterSpacing: 0,
-      );
+  }) {
+    final TextStyle base;
+
+    if (size >= 14.0) {
+      base = AppTypography.screenTitle(color: color);
+    } else if (size >= 12.3) {
+      base = AppTypography.subsectionTitle(color: color);
+    } else if (size >= 11.3) {
+      base = AppTypography.itemTitle(color: color);
+    } else if (size >= 10.1) {
+      base = AppTypography.body(color: color);
+    } else if (size >= 9.5) {
+      base = AppTypography.secondary(color: color);
+    } else if (size >= 9.0) {
+      base = AppTypography.caption(color: color);
+    } else {
+      base = AppTypography.menuGroup(color: color);
+    }
+
+    return base.copyWith(
+      fontWeight: weight,
+      color: color,
+    );
+  }
 
   Widget _dot(
     Color color, {
@@ -588,16 +604,13 @@ class _VenueBookingScreenState extends State<VenueBookingScreen> {
         Expanded(
           child: RichText(
             text: TextSpan(
-              style: _t(
-                9.7,
+              style: AppTypography.body(
                 color: _BookingUi.muted,
               ),
               children: <InlineSpan>[
                 TextSpan(
                   text: '$title: ',
-                  style: _t(
-                    9.7,
-                    weight: FontWeight.w600,
+                  style: AppTypography.bodyMedium(
                     color: _BookingUi.text,
                   ),
                 ),

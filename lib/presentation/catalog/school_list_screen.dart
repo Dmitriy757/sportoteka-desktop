@@ -1,7 +1,6 @@
 // lib/presentation/catalog/school_list_screen.dart
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -923,41 +922,38 @@ class _CatalogColors {
 }
 
 class _CatalogText {
-  static TextStyle title(double size) => AppTypography.custom(
-        size: size,
-        weight: FontWeight.w600,
-        color: _CatalogColors.text,
-        height: 1.18,
-        letterSpacing: 0,
-        features: const [FontFeature.tabularFigures()],
-      );
+  static TextStyle title(double size) {
+    if (size >= 16) {
+      return AppTypography.screenTitle(color: _CatalogColors.text);
+    }
+    if (size >= 14.2) {
+      return AppTypography.sectionTitle(color: _CatalogColors.text);
+    }
+    if (size >= 13.35) {
+      return AppTypography.subsectionTitle(color: _CatalogColors.text);
+    }
+    if (size >= 12.7) {
+      return AppTypography.itemTitle(color: _CatalogColors.text);
+    }
+    return AppTypography.menuTitle(color: _CatalogColors.text);
+  }
 
-  static TextStyle section() => AppTypography.custom(
-        size: 12.2,
-        weight: FontWeight.w600,
-        color: _CatalogColors.text,
-        height: 1.18,
-        letterSpacing: 0,
-      );
+  static TextStyle section() =>
+      AppTypography.menuTitle(color: _CatalogColors.text);
 
-  static TextStyle muted(double size) => AppTypography.custom(
-        size: size,
-        weight: FontWeight.w400,
-        color: _CatalogColors.muted,
-        height: 1.32,
-        letterSpacing: 0,
-      );
+  static TextStyle muted(double size) {
+    if (size >= 11.5) {
+      return AppTypography.secondary(color: _CatalogColors.muted);
+    }
+    if (size >= 10.3) {
+      return AppTypography.caption(color: _CatalogColors.muted);
+    }
+    return AppTypography.commentMeta(color: _CatalogColors.muted);
+  }
 
   static TextStyle action({Color color = _CatalogColors.text}) =>
-      AppTypography.custom(
-        size: 11.8,
-        weight: FontWeight.w600,
-        color: color,
-        height: 1.16,
-        letterSpacing: 0,
-      );
+      AppTypography.action(color: color);
 }
-
 class _CatalogDecor {
   static List<BoxShadow> get windowShadow => [
         BoxShadow(
@@ -1218,13 +1214,7 @@ class _CatalogDetailHero extends StatelessWidget {
                 eyebrow,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: AppTypography.custom(
-                  size: 9,
-                  weight: FontWeight.w600,
-                  color: _CatalogColors.greenDark,
-                  height: 1.1,
-                  letterSpacing: .35,
-                ),
+                style: AppTypography.menuGroup(color: _CatalogColors.greenDark),
               ),
               const SizedBox(height: 6),
               Text(title, maxLines: 3, overflow: TextOverflow.ellipsis, style: _CatalogText.title(16.5)),

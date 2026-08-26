@@ -631,12 +631,12 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                           children: [
                             Text(
                               'План не сохранён',
-                              style: _C.h1.copyWith(fontSize: isMobile ? 18 : 21),
+                              style: _C.h1.copyWith(fontSize: AppTypography.screenTitleSize),
                             ),
                             const SizedBox(height: 5),
                             Text(
                               'Открыт новый черновик. Сохраните его или подтвердите переход, чтобы не потерять данные.',
-                              style: _C.body.copyWith(fontSize: isMobile ? 12.5 : 13.2),
+                              style: _C.body.copyWith(fontSize: AppTypography.bodySize),
                             ),
                           ],
                         ),
@@ -668,8 +668,8 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                             ),
-                            textStyle: const TextStyle(
-                              fontSize: 13.5,
+                            textStyle: const TextStyle(fontFamily: AppTypography.fontFamily, 
+                              fontSize: AppTypography.subsectionTitleSize,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -689,8 +689,8 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                             ),
-                            textStyle: const TextStyle(
-                              fontSize: 13.5,
+                            textStyle: const TextStyle(fontFamily: AppTypography.fontFamily, 
+                              fontSize: AppTypography.subsectionTitleSize,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -709,8 +709,8 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                             ),
-                            textStyle: const TextStyle(
-                              fontSize: 13.2,
+                            textStyle: const TextStyle(fontFamily: AppTypography.fontFamily, 
+                              fontSize: AppTypography.itemTitleSize,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -1317,9 +1317,9 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                           title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                          style: TextStyle(fontFamily: AppTypography.fontFamily, 
                             color: selected ? _C.greenDark : _C.text,
-                            fontSize: 12.5,
+                            fontSize: AppTypography.bodySize,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -1378,7 +1378,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                               children: [
                                 Text(
                                   'Новая папка',
-                                  style: _C.h1.copyWith(fontSize: isMobile ? 18 : 20),
+                                  style: _C.h1.copyWith(fontSize: AppTypography.screenTitleSize),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
@@ -1387,7 +1387,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                                       : 'Создаём подпапку внутри «$selectedFolderTitle»',
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: _C.body.copyWith(fontSize: 12.2),
+                                  style: _C.body.copyWith(fontSize: AppTypography.bodySize),
                                 ),
                               ],
                             ),
@@ -1411,9 +1411,9 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                             autofocus: true,
                             textInputAction: TextInputAction.done,
                             onSubmitted: (_) => closeFolderDialog(context, true),
-                            style: const TextStyle(
+                            style: const TextStyle(fontFamily: AppTypography.fontFamily, 
                               color: _C.text,
-                              fontSize: 15,
+                              fontSize: AppTypography.sectionTitleSize,
                               fontWeight: FontWeight.w500,
                             ),
                             decoration: InputDecoration(
@@ -1439,7 +1439,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                           const SizedBox(height: 16),
                           const Text(
                             'Тип папки',
-                            style: TextStyle(color: _C.text, fontSize: 12.5, fontWeight: FontWeight.w500),
+                            style: TextStyle(fontFamily: AppTypography.fontFamily, color: _C.text, fontSize: AppTypography.bodySize, fontWeight: FontWeight.w500),
                           ),
                           const SizedBox(height: 9),
                           isMobile
@@ -1501,7 +1501,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                                     side: const BorderSide(color: _C.line),
                                     minimumSize: const Size.fromHeight(46),
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                    textStyle: const TextStyle(fontWeight: FontWeight.w500),
+                                    textStyle: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w500),
                                   ),
                                   child: const Text('Отмена'),
                                 ),
@@ -1518,7 +1518,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                                     elevation: 0,
                                     minimumSize: const Size.fromHeight(46),
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                    textStyle: const TextStyle(fontWeight: FontWeight.w500),
+                                    textStyle: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w500),
                                   ),
                                 ),
                               ),
@@ -1613,13 +1613,13 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Переименовать папку', style: _C.h1.copyWith(fontSize: 16)),
+                            Text('Переименовать папку', style: _C.h1.copyWith(fontSize: AppTypography.screenTitleSize)),
                             const SizedBox(height: 4),
                             Text(
                               'Новое название будет видно в дереве папок и в сетке материалов.',
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: _C.body.copyWith(fontSize: 12.2),
+                              style: _C.body.copyWith(fontSize: AppTypography.bodySize),
                             ),
                           ],
                         ),
@@ -1642,9 +1642,9 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                         autofocus: true,
                         textInputAction: TextInputAction.done,
                         onSubmitted: (_) => Get.back(result: true),
-                        style: const TextStyle(
+                        style: const TextStyle(fontFamily: AppTypography.fontFamily, 
                           color: _C.text,
-                          fontSize: 15,
+                          fontSize: AppTypography.sectionTitleSize,
                           fontWeight: FontWeight.w500,
                         ),
                         decoration: InputDecoration(
@@ -1678,7 +1678,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                                 side: const BorderSide(color: _C.line),
                                 minimumSize: const Size.fromHeight(46),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                textStyle: const TextStyle(fontWeight: FontWeight.w500),
+                                textStyle: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w500),
                               ),
                               child: const Text('Отмена'),
                             ),
@@ -1695,7 +1695,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                                 elevation: 0,
                                 minimumSize: const Size.fromHeight(46),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                textStyle: const TextStyle(fontWeight: FontWeight.w500),
+                                textStyle: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w500),
                               ),
                             ),
                           ),
@@ -2089,14 +2089,14 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                             children: [
                               Text(
                                 isDraft ? 'Закрыть новый план?' : 'Закрыть план?',
-                                style: _C.h1.copyWith(fontSize: 18),
+                                style: _C.h1.copyWith(fontSize: AppTypography.screenTitleSize),
                               ),
                               const SizedBox(height: 4),
                               Text(
                                 isDraft
                                     ? 'Черновик ещё не сохранён. После закрытия введённые данные будут потеряны.'
                                     : 'Редактор закроется, а вы вернётесь к содержимому текущей папки.',
-                                style: _C.body.copyWith(fontSize: 12.2),
+                                style: _C.body.copyWith(fontSize: AppTypography.bodySize),
                               ),
                             ],
                           ),
@@ -2121,7 +2121,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                               side: const BorderSide(color: _C.line),
                               minimumSize: const Size.fromHeight(46),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                              textStyle: const TextStyle(fontWeight: FontWeight.w500),
+                              textStyle: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w500),
                             ),
                             child: const Text('Остаться'),
                           ),
@@ -2138,7 +2138,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                               elevation: 0,
                               minimumSize: const Size.fromHeight(46),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                              textStyle: const TextStyle(fontWeight: FontWeight.w500),
+                              textStyle: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w500),
                             ),
                           ),
                         ),
@@ -2199,7 +2199,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                         child: const Icon(Icons.delete_outline_rounded, color: _C.red, size: 23),
                       ),
                       const SizedBox(width: 12),
-                      Expanded(child: Text('Удалить файл?', style: _C.h1.copyWith(fontSize: 18))),
+                      Expanded(child: Text('Удалить файл?', style: _C.h1.copyWith(fontSize: AppTypography.screenTitleSize))),
                       _SquareTool(
                         icon: Icons.close_rounded,
                         onTap: () => Navigator.of(dialogContext).pop(false),
@@ -2207,7 +2207,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Text('«$title» будет удалён из папки и с сервера. Отменить это действие нельзя.', style: _C.body.copyWith(fontSize: 12.3)),
+                  Text('«$title» будет удалён из папки и с сервера. Отменить это действие нельзя.', style: _C.body.copyWith(fontSize: AppTypography.bodySize)),
                   const SizedBox(height: 18),
                   Row(
                     children: [
@@ -2596,22 +2596,13 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
 
     final baseTheme = Theme.of(context);
     final plansTextTheme = baseTheme.textTheme.apply(
-      fontFamily: AppTypography.custom(
-        size: 14,
-        weight: FontWeight.w400,
-        color: _C.text,
-      ).fontFamily,
+      fontFamily: AppTypography.fontFamily,
     );
 
     return Theme(
       data: baseTheme.copyWith(textTheme: plansTextTheme),
       child: DefaultTextStyle.merge(
-        style: AppTypography.custom(
-          size: 13,
-          weight: FontWeight.w500,
-          color: _C.text,
-          height: 1.25,
-        ),
+        style: AppTypography.bodyMedium(color: _C.text),
         child: CallbackShortcuts(
           bindings: <ShortcutActivator, VoidCallback>{
             const SingleActivator(LogicalKeyboardKey.keyF, meta: true): () => _searchFocusNode.requestFocus(),
@@ -2673,7 +2664,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
               Text(
                 'Загружаем файловый журнал планов',
                 textAlign: TextAlign.center,
-                style: _C.h1.copyWith(fontSize: isMobile ? 18 : 22),
+                style: _C.h1.copyWith(fontSize: AppTypography.screenTitleSize),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -2785,7 +2776,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                         'Планы',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: _C.h1.copyWith(fontSize: 15.4),
+                        style: _C.h1.copyWith(fontSize: AppTypography.screenTitleSize),
                       ),
                     ),
                   ],
@@ -2795,7 +2786,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                   subtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: _C.caption.copyWith(fontSize: 10.6),
+                  style: _C.caption.copyWith(fontSize: AppTypography.captionSize),
                 ),
               ],
             ),
@@ -2847,18 +2838,18 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
               '$selectedFolderTitle • $total объект${_ruPlural(total, '', 'а', 'ов')} • ${plans.length} план${_ruPlural(plans.length, '', 'а', 'ов')}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: _C.caption.copyWith(fontSize: 10.3),
+              style: _C.caption.copyWith(fontSize: AppTypography.captionSize),
             ),
           ),
           if (!showPreview)
             Text(
               'Просмотр скрыт • ⌘/Ctrl+1 список • ⌘/Ctrl+2 плитка • F2 имя',
-              style: _C.caption.copyWith(fontSize: 9.8),
+              style: _C.caption.copyWith(fontSize: AppTypography.captionSize),
             )
           else
             Text(
               '⌘/Ctrl+F поиск • ⌘/Ctrl+R обновить • ПКМ меню',
-              style: _C.caption.copyWith(fontSize: 9.8),
+              style: _C.caption.copyWith(fontSize: AppTypography.captionSize),
             ),
         ],
       ),
@@ -2912,7 +2903,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                       : 'Материалы',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: _C.h1.copyWith(fontSize: 15),
+              style: _C.h1.copyWith(fontSize: AppTypography.sectionTitleSize),
             ),
           ),
           const SizedBox(width: 8),
@@ -2957,7 +2948,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                               'Навигация',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: _C.h1.copyWith(fontSize: mobile ? 14.2 : 13.6),
+                              style: _C.h1.copyWith(fontSize: AppTypography.subsectionTitleSize),
                             ),
                           ),
                         ],
@@ -3655,10 +3646,10 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                   focusNode: _searchFocusNode,
                   onChanged: _onSearchChanged,
                   onSubmitted: (_) => _loadPlansForTeam(),
-                  style: const TextStyle(fontSize: 11.3, fontWeight: FontWeight.w500, color: _C.text),
+                  style: const TextStyle(fontFamily: AppTypography.fontFamily, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w500, color: _C.text),
                   decoration: InputDecoration(
                     hintText: 'Поиск в планах, схемах и файлах',
-                    hintStyle: const TextStyle(fontSize: 11, color: _C.muted, fontWeight: FontWeight.w500),
+                    hintStyle: const TextStyle(fontFamily: AppTypography.fontFamily, fontSize: AppTypography.secondarySize, color: _C.muted, fontWeight: FontWeight.w500),
                     prefixIcon: const Icon(Icons.search_rounded, size: 18, color: _C.muted),
                     suffixIcon: searchCtrl.text.isEmpty
                         ? null
@@ -3738,9 +3729,9 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
                   c.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: TextStyle(fontFamily: AppTypography.fontFamily, 
                     color: active ? _C.text : _C.muted,
-                    fontSize: 11.2,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: active ? FontWeight.w600 : FontWeight.w600,
                   ),
                 ),
@@ -4059,7 +4050,7 @@ class _ExplorerInfoDialog extends StatelessWidget {
                           title,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: _C.h1.copyWith(fontSize: 14.2),
+                          style: _C.h1.copyWith(fontSize: AppTypography.sectionTitleSize),
                         ),
                       ],
                     ),
@@ -4092,13 +4083,13 @@ class _ExplorerInfoDialog extends StatelessWidget {
                       const SizedBox(width: 8),
                       SizedBox(
                         width: 78,
-                        child: Text(row.key, style: _C.caption.copyWith(fontSize: 9.7)),
+                        child: Text(row.key, style: _C.caption.copyWith(fontSize: AppTypography.captionSize)),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: SelectableText(
                           row.value,
-                          style: _C.body.copyWith(color: _C.text, fontSize: 10.8, height: 1.3),
+                          style: _C.body.copyWith(color: _C.text, fontSize: AppTypography.captionSize, height: 1.3),
                         ),
                       ),
                     ],
@@ -4164,23 +4155,23 @@ class _C {
         borderRadius: BorderRadius.circular(radius),
       );
 
-  static const TextStyle h1 = TextStyle(
+  static const TextStyle h1 = TextStyle(fontFamily: AppTypography.fontFamily, 
     color: text,
-    fontSize: 14.5,
+    fontSize: AppTypography.sectionTitleSize,
     fontWeight: FontWeight.w600,
     height: 1.12,
   );
 
-  static const TextStyle body = TextStyle(
+  static const TextStyle body = TextStyle(fontFamily: AppTypography.fontFamily, 
     color: muted,
-    fontSize: 11.1,
+    fontSize: AppTypography.secondarySize,
     fontWeight: FontWeight.w400,
     height: 1.4,
   );
 
-  static const TextStyle caption = TextStyle(
+  static const TextStyle caption = TextStyle(fontFamily: AppTypography.fontFamily, 
     color: muted,
-    fontSize: 9.8,
+    fontSize: AppTypography.captionSize,
     fontWeight: FontWeight.w400,
   );
 }
@@ -4225,7 +4216,7 @@ class _GenericFilePreviewDialog extends StatelessWidget {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: _C.h1.copyWith(fontSize: 15),
+                    style: _C.h1.copyWith(fontSize: AppTypography.sectionTitleSize),
                   ),
                 ),
                 _RoundTool(icon: Icons.close_rounded, onTap: () => Get.back(), size: 36),
@@ -4247,7 +4238,7 @@ class _GenericFilePreviewDialog extends StatelessWidget {
               ),
               child: SelectableText(
                 url,
-                style: _C.caption.copyWith(fontSize: 10.5),
+                style: _C.caption.copyWith(fontSize: AppTypography.captionSize),
               ),
             ),
           ],
@@ -4363,7 +4354,7 @@ class _CmrFileWindowDialogState extends State<_CmrFileWindowDialog> {
                 widget.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: _C.text, fontSize: 12.4, fontWeight: FontWeight.w500),
+                style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _C.text, fontSize: AppTypography.bodySize, fontWeight: FontWeight.w500),
               ),
             ),
             const SizedBox(width: 8),
@@ -4431,14 +4422,14 @@ class _CmrFileWindowDialogState extends State<_CmrFileWindowDialog> {
                             widget.title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: _C.text, fontSize: 14.2, fontWeight: FontWeight.w500),
+                            style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _C.text, fontSize: AppTypography.sectionTitleSize, fontWeight: FontWeight.w500),
                           ),
                           const SizedBox(height: 2),
                           Text(
                             widget.subtitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: _C.caption.copyWith(fontSize: 10.5),
+                            style: _C.caption.copyWith(fontSize: AppTypography.captionSize),
                           ),
                         ],
                       ),
@@ -4523,13 +4514,13 @@ class _CmrFileViewerFallback extends StatelessWidget {
                     Expanded(
                       child: Text(
                         'Файл найден',
-                        style: _C.h1.copyWith(fontSize: 14),
+                        style: _C.h1.copyWith(fontSize: AppTypography.subsectionTitleSize),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
-                Text(text, style: _C.body.copyWith(fontSize: 11.8)),
+                Text(text, style: _C.body.copyWith(fontSize: AppTypography.secondarySize)),
                 const SizedBox(height: 12),
                 Container(
                   width: double.infinity,
@@ -4539,7 +4530,7 @@ class _CmrFileViewerFallback extends StatelessWidget {
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: _C.line),
                   ),
-                  child: SelectableText(url, style: _C.caption.copyWith(fontSize: 10.5)),
+                  child: SelectableText(url, style: _C.caption.copyWith(fontSize: AppTypography.captionSize)),
                 ),
               ],
             ),
@@ -4576,9 +4567,9 @@ class _ExplorerMenuRow extends StatelessWidget {
         const SizedBox(width: 8),
         Text(
           label,
-          style: TextStyle(
+          style: TextStyle(fontFamily: AppTypography.fontFamily, 
             color: danger ? _C.red : _C.text,
-            fontSize: 11.6,
+            fontSize: AppTypography.secondarySize,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -4740,9 +4731,9 @@ class _ExplorerCommand extends StatelessWidget {
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
+                style: TextStyle(fontFamily: AppTypography.fontFamily, 
                   color: primary ? _C.greenDark : _C.text,
-                  fontSize: compact ? 11.2 : 11.7,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -4803,9 +4794,9 @@ class _ExplorerListHeader extends StatelessWidget {
       child: Row(
         children: [
           const SizedBox(width: 42),
-          Expanded(flex: 5, child: Text('Имя', style: _C.caption.copyWith(fontSize: 10.3))),
-          Expanded(flex: 2, child: Text('Тип', style: _C.caption.copyWith(fontSize: 10.3))),
-          Expanded(flex: 2, child: Text('Дата', style: _C.caption.copyWith(fontSize: 10.3))),
+          Expanded(flex: 5, child: Text('Имя', style: _C.caption.copyWith(fontSize: AppTypography.captionSize))),
+          Expanded(flex: 2, child: Text('Тип', style: _C.caption.copyWith(fontSize: AppTypography.captionSize))),
+          Expanded(flex: 2, child: Text('Дата', style: _C.caption.copyWith(fontSize: AppTypography.captionSize))),
           const SizedBox(width: 38),
         ],
       ),
@@ -4883,14 +4874,14 @@ class _ExplorerListRow extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 11.8, fontWeight: FontWeight.w500)),
+                      Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _C.text, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w500)),
                       const SizedBox(height: 2),
-                      Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.caption.copyWith(fontSize: 9.8)),
+                      Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.caption.copyWith(fontSize: AppTypography.captionSize)),
                     ],
                   ),
                 ),
-                Expanded(flex: 2, child: Text(type, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.caption.copyWith(fontSize: 10.2))),
-                Expanded(flex: 2, child: Text(meta, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.caption.copyWith(fontSize: 10.2))),
+                Expanded(flex: 2, child: Text(type, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.caption.copyWith(fontSize: AppTypography.captionSize))),
+                Expanded(flex: 2, child: Text(meta, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.caption.copyWith(fontSize: AppTypography.captionSize))),
                 if (badge.isNotEmpty) _TinyBadge(text: badge),
                 SizedBox(
                   width: onDelete != null && onRename != null ? 72 : 36,
@@ -5120,9 +5111,9 @@ class _FinderFolderTile extends StatelessWidget {
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
+                        style: TextStyle(fontFamily: AppTypography.fontFamily, 
                           color: active ? _C.graphite : _C.text,
-                          fontSize: 12,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -5131,7 +5122,7 @@ class _FinderFolderTile extends StatelessWidget {
                         subtitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: _C.caption.copyWith(fontSize: 9.8),
+                        style: _C.caption.copyWith(fontSize: AppTypography.captionSize),
                       ),
                     ],
                   ),
@@ -5171,7 +5162,7 @@ class _MiniSectionHeader extends StatelessWidget {
             title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: _C.text, fontSize: 12.5, fontWeight: FontWeight.w500),
+            style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _C.text, fontSize: AppTypography.bodySize, fontWeight: FontWeight.w500),
           ),
         ),
         Container(
@@ -5180,7 +5171,7 @@ class _MiniSectionHeader extends StatelessWidget {
             color: _C.input,
             borderRadius: BorderRadius.circular(999),
           ),
-          child: Text('$count', style: const TextStyle(color: _C.muted, fontSize: 10.5, fontWeight: FontWeight.w500)),
+          child: Text('$count', style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _C.muted, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w500)),
         ),
         if (actionIcon != null) ...[
           const SizedBox(width: 6),
@@ -5255,9 +5246,9 @@ class _CreatePlanGridCard extends StatelessWidget {
                 title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: const TextStyle(fontFamily: AppTypography.fontFamily, 
                   color: _C.graphite,
-                  fontSize: 13.6,
+                  fontSize: AppTypography.subsectionTitleSize,
                   fontWeight: FontWeight.w500,
                   height: 1.1,
                 ),
@@ -5267,7 +5258,7 @@ class _CreatePlanGridCard extends StatelessWidget {
                 text,
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
-                style: _C.caption.copyWith(fontSize: 10.5, height: 1.25),
+                style: _C.caption.copyWith(fontSize: AppTypography.captionSize, height: 1.25),
               ),
             ],
           ),
@@ -5318,7 +5309,7 @@ class _FinderGridInfoCard extends StatelessWidget {
             title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: _C.text, fontSize: 12.8, fontWeight: FontWeight.w500),
+            style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _C.text, fontSize: AppTypography.bodySize, fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 5),
           Text(
@@ -5470,9 +5461,9 @@ class _FinderGridItem extends StatelessWidget {
                 title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
+                style: TextStyle(fontFamily: AppTypography.fontFamily, 
                   color: active ? _C.graphite : _C.text,
-                  fontSize: 12.5,
+                  fontSize: AppTypography.bodySize,
                   fontWeight: FontWeight.w500,
                   height: 1.12,
                 ),
@@ -5485,12 +5476,12 @@ class _FinderGridItem extends StatelessWidget {
                       subtitle.isEmpty ? 'Материал' : subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _C.caption.copyWith(fontSize: 10.2),
+                      style: _C.caption.copyWith(fontSize: AppTypography.captionSize),
                     ),
                   ),
                   if (meta.isNotEmpty) ...[
                     const SizedBox(width: 6),
-                    Text(meta, style: _C.caption.copyWith(fontSize: 9.8)),
+                    Text(meta, style: _C.caption.copyWith(fontSize: AppTypography.captionSize)),
                   ],
                 ],
               ),
@@ -5649,7 +5640,7 @@ class _CompactEmptyBlock extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(color: _C.text, fontSize: 12.5, fontWeight: FontWeight.w500)),
+          Text(title, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _C.text, fontSize: AppTypography.bodySize, fontWeight: FontWeight.w500)),
           const SizedBox(height: 4),
           Text(text, style: _C.caption.copyWith(height: 1.35)),
         ],
@@ -5745,13 +5736,13 @@ class _BrowserTableHeader extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             flex: 5,
-            child: Text('Название', style: _C.caption.copyWith(fontSize: 9.8)),
+            child: Text('Название', style: _C.caption.copyWith(fontSize: AppTypography.captionSize)),
           ),
           if (!mobile) ...[
             const SizedBox(width: 8),
             SizedBox(
               width: 58,
-              child: Text('Дата', textAlign: TextAlign.right, style: _C.caption.copyWith(fontSize: 9.8)),
+              child: Text('Дата', textAlign: TextAlign.right, style: _C.caption.copyWith(fontSize: AppTypography.captionSize)),
             ),
           ],
           const SizedBox(width: 30),
@@ -5784,13 +5775,13 @@ class _BrowserGroupLabel extends StatelessWidget {
           const SizedBox(width: 7),
           Text(
             title,
-            style: const TextStyle(color: _C.text, fontSize: 10.8, fontWeight: FontWeight.w500),
+            style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _C.text, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w500),
           ),
           const SizedBox(width: 6),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(999), border: Border.all(color: _C.line)),
-            child: Text('$count', style: const TextStyle(color: _C.muted, fontSize: 10, fontWeight: FontWeight.w500)),
+            child: Text('$count', style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _C.muted, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w500)),
           ),
           if (hint != null) ...[
             const SizedBox(width: 7),
@@ -5799,7 +5790,7 @@ class _BrowserGroupLabel extends StatelessWidget {
                 hint!,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: _C.caption.copyWith(fontSize: 9.8),
+                style: _C.caption.copyWith(fontSize: AppTypography.captionSize),
               ),
             ),
           ] else
@@ -5877,9 +5868,9 @@ class _BrowserFileRow extends StatelessWidget {
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
+                        style: TextStyle(fontFamily: AppTypography.fontFamily, 
                           color: active ? _C.graphite : _C.text,
-                          fontSize: 11.8,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w500,
                           height: 1.1,
                         ),
@@ -5892,7 +5883,7 @@ class _BrowserFileRow extends StatelessWidget {
                               subtitle.isEmpty ? 'Материал' : subtitle,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: _C.caption.copyWith(fontSize: 9.8),
+                              style: _C.caption.copyWith(fontSize: AppTypography.captionSize),
                             ),
                           ),
                           if (badge.isNotEmpty) ...[
@@ -5913,7 +5904,7 @@ class _BrowserFileRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.right,
-                      style: _C.caption.copyWith(fontSize: 9.8),
+                      style: _C.caption.copyWith(fontSize: AppTypography.captionSize),
                     ),
                   ),
                 ],
@@ -6076,7 +6067,7 @@ class _SchemePreviewDialog extends StatelessWidget {
                               title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: _C.text, fontSize: 15, fontWeight: FontWeight.w500),
+                              style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _C.text, fontSize: AppTypography.sectionTitleSize, fontWeight: FontWeight.w500),
                             ),
                             const SizedBox(height: 2),
                             Text(
@@ -6141,7 +6132,7 @@ class _SchemePreviewDialog extends StatelessWidget {
                                   Text(
                                     'Не удалось открыть изображение схемы',
                                     textAlign: TextAlign.center,
-                                    style: TextStyle(color: _C.text, fontWeight: FontWeight.w500),
+                                    style: TextStyle(fontFamily: AppTypography.fontFamily, color: _C.text, fontWeight: FontWeight.w500),
                                   ),
                                 ],
                               ),
@@ -6179,7 +6170,7 @@ class _TinyBadge extends StatelessWidget {
         text,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(color: _C.muted, fontSize: 9.5, fontWeight: FontWeight.w500),
+        style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _C.muted, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w500),
       ),
     );
   }
@@ -6239,7 +6230,7 @@ class _FinderPlanRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.text, fontSize: 13.5, fontWeight: FontWeight.w500)),
+                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _C.text, fontSize: AppTypography.subsectionTitleSize, fontWeight: FontWeight.w500)),
                     const SizedBox(height: 3),
                     Text(meta.isEmpty ? 'План-конспект' : meta, maxLines: 1, overflow: TextOverflow.ellipsis, style: _C.caption),
                     if (materials.isNotEmpty) ...[
@@ -6290,9 +6281,9 @@ class _PinnedPlanChip extends StatelessWidget {
               title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: const TextStyle(fontFamily: AppTypography.fontFamily, 
                 color: _C.graphite,
-                fontSize: 11.5,
+                fontSize: AppTypography.secondarySize,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -6332,9 +6323,9 @@ class _InlineBadges extends StatelessWidget {
               const SizedBox(width: 4),
               Text(
                 part,
-                style: TextStyle(
+                style: TextStyle(fontFamily: AppTypography.fontFamily, 
                   color: isScheme ? const Color(0xFF1D4ED8) : _C.muted,
-                  fontSize: 10.5,
+                  fontSize: AppTypography.captionSize,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -6394,7 +6385,7 @@ class _FullEditorBanner extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.graphite, fontSize: 13.2, fontWeight: FontWeight.w500)),
+                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _C.graphite, fontSize: AppTypography.itemTitleSize, fontWeight: FontWeight.w500)),
                     const SizedBox(height: 3),
                     Text(text, maxLines: 2, overflow: TextOverflow.ellipsis, style: _C.caption.copyWith(height: 1.28)),
                   ],
@@ -6410,7 +6401,7 @@ class _FullEditorBanner extends StatelessWidget {
                   children: [
                     Icon(Icons.fullscreen_rounded, color: _C.green, size: 16),
                     SizedBox(width: 6),
-                    Text('Открыть', style: TextStyle(color: Colors.white, fontSize: 11.8, fontWeight: FontWeight.w500)),
+                    Text('Открыть', style: TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.white, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w500)),
                   ],
                 ),
               ),
@@ -6449,13 +6440,13 @@ class _FinderEditorSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(color: _C.muted, fontSize: 11.5, fontWeight: FontWeight.w500)),
+          Text(title, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _C.muted, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w500)),
           const SizedBox(height: 8),
           if (editMode)
             TextField(
               controller: controller,
               maxLines: maxLines,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              style: const TextStyle(fontFamily: AppTypography.fontFamily, fontSize: AppTypography.subsectionTitleSize, fontWeight: FontWeight.w500),
               decoration: InputDecoration(
                 filled: true,
                 fillColor: _C.input,
@@ -6471,7 +6462,7 @@ class _FinderEditorSection extends StatelessWidget {
               ),
             )
           else
-            Text(value, style: const TextStyle(color: _C.text, fontSize: 14, fontWeight: FontWeight.w500, height: 1.42)),
+            Text(value, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _C.text, fontSize: AppTypography.subsectionTitleSize, fontWeight: FontWeight.w500, height: 1.42)),
         ],
       ),
     );
@@ -6496,8 +6487,8 @@ class _MetaPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('$label: ', style: const TextStyle(color: _C.muted, fontSize: 11.5, fontWeight: FontWeight.w500)),
-          Text(value, style: const TextStyle(color: _C.text, fontSize: 11.5, fontWeight: FontWeight.w500)),
+          Text('$label: ', style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _C.muted, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w500)),
+          Text(value, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _C.text, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w500)),
         ],
       ),
     );
@@ -6539,7 +6530,7 @@ class _HintStrip extends StatelessWidget {
             child: const Icon(Icons.info_outline_rounded, color: _C.greenDark, size: 17),
           ),
           const SizedBox(width: 9),
-          Expanded(child: Text(text, style: const TextStyle(color: _C.graphite, fontSize: 12, fontWeight: FontWeight.w500, height: 1.35))),
+          Expanded(child: Text(text, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _C.graphite, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w500, height: 1.35))),
         ],
       ),
     );
@@ -6600,7 +6591,7 @@ class _ActionPill extends StatelessWidget {
           children: [
             Icon(icon, color: _C.greenDark, size: 17),
             const SizedBox(width: 7),
-            Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _C.greenDark, fontSize: 11.8, fontWeight: FontWeight.w500))),
+            Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _C.greenDark, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w500))),
           ],
         ),
       ),
@@ -6627,7 +6618,7 @@ class _PrimaryButton extends StatelessWidget {
         elevation: 0,
         minimumSize: const Size.fromHeight(46),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        textStyle: const TextStyle(fontWeight: FontWeight.w500),
+        textStyle: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w500),
       ),
     );
   }
@@ -6651,7 +6642,7 @@ class _DangerButton extends StatelessWidget {
         side: const BorderSide(color: _C.line),
         minimumSize: const Size(126, 46),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        textStyle: const TextStyle(fontWeight: FontWeight.w500),
+        textStyle: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w500),
       ),
     );
   }
@@ -6676,7 +6667,7 @@ class _FinderEmpty extends StatelessWidget {
           children: [
             const _PlanMark(size: 58),
             const SizedBox(height: 14),
-            Text(title, textAlign: TextAlign.center, style: _C.h1.copyWith(fontSize: 18)),
+            Text(title, textAlign: TextAlign.center, style: _C.h1.copyWith(fontSize: AppTypography.screenTitleSize)),
             const SizedBox(height: 6),
             Text(text, textAlign: TextAlign.center, style: _C.body),
             if (actionText != null && onTap != null) ...[
