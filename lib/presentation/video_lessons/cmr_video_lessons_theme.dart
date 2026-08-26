@@ -26,73 +26,79 @@ class CmrVideoColors {
 }
 
 class CmrVideoText {
-  static double _titleSize(double requested) {
-    if (requested >= 17) return 18;
-    if (requested >= 15) return 16;
-    return 14;
+  static TextStyle title(double size, {Color color = CmrVideoColors.text}) {
+    if (size >= 17) return AppTypography.screenTitle(color: color);
+    if (size >= 15) return AppTypography.sectionTitle(color: color);
+    return AppTypography.subsectionTitle(color: color);
   }
-
-  static double _bodySize(double requested) {
-    if (requested < 9.4) return 9.5;
-    if (requested < 10.6) return 10.2;
-    if (requested < 11.7) return 11;
-    if (requested < 12.7) return 12;
-    return 13;
-  }
-
-  static double _captionSize(double requested) => requested < 10 ? 9.5 : 10.2;
-
-  static TextStyle title(double size) => AppTypography.custom(
-        size: _titleSize(size),
-        weight: FontWeight.w600,
-        color: CmrVideoColors.text,
-        height: 1.18,
-        letterSpacing: 0,
-        features: const <FontFeature>[FontFeature.tabularFigures()],
-      );
 
   static TextStyle body(
     double size, {
     Color color = CmrVideoColors.muted,
     FontWeight weight = FontWeight.w400,
-  }) =>
-      AppTypography.custom(
-        size: _bodySize(size),
-        weight: weight,
-        color: color,
-        height: 1.30,
-        letterSpacing: 0,
-      );
+  }) {
+    final medium = weight.index >= FontWeight.w600.index;
+    if (size >= 12.7) {
+      return medium
+          ? AppTypography.bodyMedium(color: color)
+          : AppTypography.body(color: color);
+    }
+    if (size >= 11.4) {
+      return medium
+          ? AppTypography.secondaryMedium(color: color)
+          : AppTypography.secondary(color: color);
+    }
+    return medium
+        ? AppTypography.captionMedium(color: color)
+        : AppTypography.caption(color: color);
+  }
 
-  static TextStyle value(double size) => AppTypography.custom(
-        size: size >= 16.5 ? 17 : (size >= 14.5 ? 15 : 14),
-        weight: FontWeight.w600,
-        color: CmrVideoColors.text,
-        height: 1.12,
-        letterSpacing: 0,
-        features: const <FontFeature>[FontFeature.tabularFigures()],
-      );
+  static TextStyle value(double size, {Color color = CmrVideoColors.text}) {
+    if (size >= 18) return AppTypography.metricStrong(color: color);
+    if (size >= 15) return AppTypography.sectionTitle(color: color);
+    return AppTypography.itemTitle(color: color);
+  }
 
   static TextStyle action([Color color = CmrVideoColors.text]) =>
-      AppTypography.custom(
-        size: 10.2,
-        weight: FontWeight.w600,
-        color: color,
-        height: 1.2,
-        letterSpacing: 0,
-      );
+      AppTypography.action(color: color);
+
+  static TextStyle secondary({Color color = CmrVideoColors.muted}) =>
+      AppTypography.secondary(color: color);
 
   static TextStyle caption({
-    double size = 10.2,
+    double size = 10.8,
     Color color = CmrVideoColors.subtle,
+  }) {
+    if (size <= 10.5) return AppTypography.commentMeta(color: color);
+    return AppTypography.caption(color: color);
+  }
+
+  static TextStyle chip({
+    Color color = CmrVideoColors.muted,
+    bool active = false,
   }) =>
-      AppTypography.custom(
-        size: _captionSize(size),
-        weight: FontWeight.w500,
-        color: color,
-        height: 1.18,
-        letterSpacing: 0,
-      );
+      AppTypography.chip(color: color, active: active);
+
+  static TextStyle commentAuthor({Color color = CmrVideoColors.text}) =>
+      AppTypography.commentAuthor(color: color);
+
+  static TextStyle commentText({Color color = CmrVideoColors.text}) =>
+      AppTypography.commentText(color: color);
+
+  static TextStyle commentMeta({Color color = CmrVideoColors.subtle}) =>
+      AppTypography.commentMeta(color: color);
+
+  static TextStyle formText({Color color = CmrVideoColors.text}) =>
+      AppTypography.formText(color: color);
+
+  static TextStyle formHint({Color color = CmrVideoColors.subtle}) =>
+      AppTypography.formHint(color: color);
+
+  static TextStyle emptyTitle({Color color = CmrVideoColors.text}) =>
+      AppTypography.emptyTitle(color: color);
+
+  static TextStyle emptyText({Color color = CmrVideoColors.muted}) =>
+      AppTypography.emptyText(color: color);
 }
 
 class CmrVideoDecor {

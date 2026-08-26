@@ -2885,7 +2885,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
       SnackBar(
         content: Text(text,
             style: const TextStyle(
-                color: _OF.text, fontSize: 11.5, fontWeight: FontWeight.w500)),
+                color: _OF.text, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w500)),
         backgroundColor: Colors.white,
         behavior: SnackBarBehavior.floating,
         elevation: 0,
@@ -2999,7 +2999,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
       // Inter подключается через единый AppTypography, как во флагманских CMR-экранах.
       // Локальные размеры/насыщенность сохраняются, но семейство шрифта едино во всём Live.
       style: AppTypography.custom(
-        size: 12,
+        size: AppTypography.bodySize,
         weight: FontWeight.w500,
         color: _OF.text,
         height: 1.22,
@@ -3259,7 +3259,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: accent ?? _OF.text,
-                      fontSize: 12.4,
+                      fontSize: AppTypography.bodySize,
                       height: 1,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -.2,
@@ -5644,7 +5644,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: _OF.muted2,
-                          fontSize: 8.5,
+                          fontSize: AppTypography.badgeSize,
                           height: 1.28,
                           fontWeight: FontWeight.w700,
                         ),
@@ -5715,7 +5715,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                           '${_monitorPlayersForGrid().length} игроков',
                           style: const TextStyle(
                             color: _OF.graphite,
-                            fontSize: 10.2,
+                            fontSize: AppTypography.captionSize,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -5775,7 +5775,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                     reviewing ? 'Момент · карта · кардио' : 'Карта · нагрузка · кардио',
                     style: TextStyle(
                       color: reviewing ? _OF.orange : _OF.green,
-                      fontSize: 9.2,
+                      fontSize: AppTypography.menuGroupSize,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -5914,7 +5914,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: _OF.text,
-                          fontSize: 11.8,
+                          fontSize: AppTypography.bodySize,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
@@ -5924,7 +5924,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: redCount > 0 ? _OF.red : _OF.green,
-                          fontSize: 8.8,
+                          fontSize: AppTypography.badgeSize,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -5989,7 +5989,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     color: _OF.muted2,
-                                    fontSize: 10.5,
+                                    fontSize: AppTypography.captionSize,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
@@ -6061,7 +6061,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
                                           color: _OF.text,
-                                          fontSize: 10.8,
+                                          fontSize: AppTypography.secondarySize,
                                           fontWeight: FontWeight.w900,
                                         ),
                                       ),
@@ -6104,7 +6104,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                                         textAlign: TextAlign.center,
                                         style: TextStyle(
                                           color: _OF.muted2,
-                                          fontSize: 9.0,
+                                          fontSize: AppTypography.badgeSize,
                                           height: 1.28,
                                           fontWeight: FontWeight.w700,
                                         ),
@@ -6240,7 +6240,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: _OF.text,
-                    fontSize: 10.2,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -6270,7 +6270,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               '$count',
               style: TextStyle(
                 color: color,
-                fontSize: 8.8,
+                fontSize: AppTypography.badgeSize,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -6336,7 +6336,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                     player.number ?? '${index + 1}',
                     style: TextStyle(
                       color: focused ? Colors.white : _OF.graphite,
-                      fontSize: 8.7,
+                      fontSize: AppTypography.badgeSize,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -6523,7 +6523,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: color ?? _OF.text,
-                fontSize: 9.1,
+                fontSize: AppTypography.badgeSize,
                 fontWeight: FontWeight.w900,
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
@@ -6604,7 +6604,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: _OF.text,
-                            fontSize: 9.2,
+                            fontSize: AppTypography.menuGroupSize,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
@@ -6689,7 +6689,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                     color: _OF.muted2,
-                    fontSize: 10.4,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w700),
               ),
             ),
@@ -6972,7 +6972,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: focused ? Colors.white : _OF.graphite,
-                              fontSize: 9.3,
+                              fontSize: AppTypography.menuGroupSize,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
@@ -7187,7 +7187,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                       'Подробнее',
                       style: TextStyle(
                         color: _OF.green,
-                        fontSize: 9.5,
+                        fontSize: AppTypography.menuGroupSize,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -7253,7 +7253,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
                 color: color,
-                fontSize: 9.8,
+                fontSize: AppTypography.captionSize,
                 fontWeight: FontWeight.w900,
                 fontFeatures: const [FontFeature.tabularFigures()])),
       ],
@@ -7282,7 +7282,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                   textAlign: TextAlign.center,
                   style: TextStyle(
                       color: _OF.text,
-                      fontSize: 13.5,
+                      fontSize: AppTypography.itemTitleSize,
                       fontWeight: FontWeight.w800),
                 ),
                 SizedBox(height: 5),
@@ -7291,7 +7291,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                   textAlign: TextAlign.center,
                   style: TextStyle(
                       color: _OF.muted2,
-                      fontSize: 11.0,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700,
                       height: 1.3),
                 ),
@@ -7488,7 +7488,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                                 : 'Ожидаем движение игрока',
                             style: const TextStyle(
                                 color: _OF.muted2,
-                                fontSize: 11,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w700),
                           ),
                         ),
@@ -7521,7 +7521,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                           : 'Только выбранный игрок',
                       style: const TextStyle(
                           color: _OF.text,
-                          fontSize: 9.6,
+                          fontSize: AppTypography.menuGroupSize,
                           fontWeight: FontWeight.w800),
                     ),
                   ],
@@ -8627,7 +8627,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
           child: Text(
             _loadMarkLabel(load, heartRateBpm: heartRate?.bpm),
             style: TextStyle(
-                color: markColor, fontSize: 9.2, fontWeight: FontWeight.w900),
+                color: markColor, fontSize: AppTypography.menuGroupSize, fontWeight: FontWeight.w900),
           ),
         ),
       ],
@@ -8661,7 +8661,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                       'Назад к списку игроков',
                       style: TextStyle(
                         color: _OF.green,
-                        fontSize: 10.0,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -8708,7 +8708,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                           'Нет данных Polar · GPS-нагрузка пока не поступает',
                           style: TextStyle(
                               color: _OF.muted2,
-                              fontSize: 10.6,
+                              fontSize: AppTypography.captionSize,
                               fontWeight: FontWeight.w700),
                         ),
                       )
@@ -8839,7 +8839,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _OF.text,
-                            fontSize: 9.7,
+                            fontSize: AppTypography.captionSize,
                             fontWeight: FontWeight.w700,
                             height: 1.2),
                       ),
@@ -8970,7 +8970,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                   Text('Z${index + 1}',
                       style: TextStyle(
                           color: colors[index],
-                          fontSize: 8.8,
+                          fontSize: AppTypography.badgeSize,
                           fontWeight: FontWeight.w900)),
                   const Spacer(),
                   Text('${(ratio * 100).round()}%',
@@ -9116,7 +9116,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                         child: Text('${pages.length} стр.',
                             style: const TextStyle(
                                 color: _OF.muted2,
-                                fontSize: 9.6,
+                                fontSize: AppTypography.menuGroupSize,
                                 fontWeight: FontWeight.w800)),
                       ),
                     ),
@@ -9142,7 +9142,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                 textAlign: TextAlign.center,
                 style: TextStyle(
                     color: _OF.text,
-                    fontSize: 13,
+                    fontSize: AppTypography.itemTitleSize,
                     fontWeight: FontWeight.w800)),
             SizedBox(height: 5),
             Text(
@@ -9150,7 +9150,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                 textAlign: TextAlign.center,
                 style: TextStyle(
                     color: _OF.muted2,
-                    fontSize: 11.0,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w700,
                     height: 1.25)),
           ],
@@ -9575,19 +9575,19 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               const Text('Оператор / трекер',
                   style: TextStyle(
                       color: _OF.text,
-                      fontSize: 11.2,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700)),
               const SizedBox(width: 8),
               Text('$online/$active онлайн',
                   style: const TextStyle(
                       color: _OF.muted2,
-                      fontSize: 10.4,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w600)),
               const Spacer(),
               Text(_bottomOperatorExpanded ? 'Скрыть' : 'Показать',
                   style: const TextStyle(
                       color: _OF.green,
-                      fontSize: 9.6,
+                      fontSize: AppTypography.menuGroupSize,
                       fontWeight: FontWeight.w700)),
             ],
           ),
@@ -9808,7 +9808,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: _OF.muted2,
-                fontSize: 9.2,
+                fontSize: AppTypography.menuGroupSize,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -9838,7 +9838,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                       suffix,
                       style: const TextStyle(
                         color: _OF.muted2,
-                        fontSize: 8.5,
+                        fontSize: AppTypography.badgeSize,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -9863,7 +9863,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                 'КОМАНДА',
                 style: TextStyle(
                   color: _OF.text,
-                  fontSize: 13.4,
+                  fontSize: AppTypography.itemTitleSize,
                   fontWeight: FontWeight.w900,
                   letterSpacing: -.2,
                 ),
@@ -9902,7 +9902,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                         color: _paused
                             ? _OF.orange
                             : (_running ? _OF.green : _OF.muted2),
-                        fontSize: 9.2,
+                        fontSize: AppTypography.menuGroupSize,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -10010,7 +10010,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                         ? 'ПРОДОЛЖИТЬ LIVE'
                         : (_running ? 'ЗАВЕРШИТЬ LIVE' : 'НАЧАТЬ LIVE')),
                 style: const TextStyle(
-                  fontSize: 12.0,
+                  fontSize: AppTypography.bodySize,
                   fontWeight: FontWeight.w900,
                   letterSpacing: .05,
                 ),
@@ -10072,7 +10072,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               'Выберите игрока',
               style: TextStyle(
                 color: _OF.text,
-                fontSize: 15.2,
+                fontSize: AppTypography.screenTitleSize,
                 fontWeight: FontWeight.w900,
                 letterSpacing: -.25,
               ),
@@ -10083,7 +10083,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: _OF.muted2,
-                fontSize: 10.8,
+                fontSize: AppTypography.secondarySize,
                 fontWeight: FontWeight.w600,
                 height: 1.35,
               ),
@@ -10107,7 +10107,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                 label: const Text(
                   'ВЫБРАТЬ ИГРОКА',
                   style: TextStyle(
-                    fontSize: 11.8,
+                    fontSize: AppTypography.bodySize,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -10172,7 +10172,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                 label,
                 style: const TextStyle(
                   color: _OF.muted2,
-                  fontSize: 10.8,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -10185,7 +10185,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               value,
               style: TextStyle(
                 color: valueColor ?? _OF.text,
-                fontSize: 12.6,
+                fontSize: AppTypography.bodySize,
                 fontWeight: FontWeight.w900,
                 letterSpacing: -.15,
               ),
@@ -10196,7 +10196,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                 suffix,
                 style: const TextStyle(
                   color: _OF.muted2,
-                  fontSize: 9.6,
+                  fontSize: AppTypography.menuGroupSize,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -10219,7 +10219,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                   'КАРТОЧКА ИГРОКА В LIVE',
                   style: TextStyle(
                     color: _OF.muted2,
-                    fontSize: 9.8,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w900,
                     letterSpacing: .35,
                   ),
@@ -10262,7 +10262,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                           : '${player.number}',
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 10.5,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -10279,7 +10279,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: _OF.text,
-              fontSize: 15.4,
+              fontSize: AppTypography.screenTitleSize,
               fontWeight: FontWeight.w900,
               letterSpacing: -.3,
             ),
@@ -10292,7 +10292,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: _OF.muted2,
-              fontSize: 10.5,
+              fontSize: AppTypography.captionSize,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -10353,7 +10353,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               label: const Text(
                 'ПОДРОБНАЯ АНАЛИТИКА',
                 style: TextStyle(
-                  fontSize: 11.5,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w900,
                 ),
               ),
@@ -10486,7 +10486,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                   title,
                   style: const TextStyle(
                     color: _OF.text,
-                    fontSize: 9.9,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -10495,7 +10495,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                 range,
                 style: const TextStyle(
                   color: _OF.muted2,
-                  fontSize: 9.5,
+                  fontSize: AppTypography.menuGroupSize,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -10580,7 +10580,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: _OF.text,
-                        fontSize: 13.6,
+                        fontSize: AppTypography.itemTitleSize,
                         fontWeight: FontWeight.w900,
                         letterSpacing: -.25,
                       ),
@@ -10590,7 +10590,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                       'нажмите или проведите пальцем по графику',
                       style: TextStyle(
                         color: _OF.muted2,
-                        fontSize: 9.9,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -10628,7 +10628,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                               : 'СРЕДНЯЯ НАГРУЗКА',
                       style: const TextStyle(
                         color: _OF.muted2,
-                        fontSize: 8.9,
+                        fontSize: AppTypography.badgeSize,
                         fontWeight: FontWeight.w900,
                         letterSpacing: .25,
                       ),
@@ -10650,7 +10650,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                             text: ' ${unit()}',
                             style: const TextStyle(
                               color: _OF.muted2,
-                              fontSize: 9.7,
+                              fontSize: AppTypography.captionSize,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -10678,7 +10678,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                               : 'ПИК НАГРУЗКИ',
                       style: const TextStyle(
                         color: _OF.muted2,
-                        fontSize: 8.9,
+                        fontSize: AppTypography.badgeSize,
                         fontWeight: FontWeight.w900,
                         letterSpacing: .25,
                       ),
@@ -10700,7 +10700,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                             text: ' ${unit()}',
                             style: const TextStyle(
                               color: _OF.muted2,
-                              fontSize: 9.7,
+                              fontSize: AppTypography.captionSize,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -10736,7 +10736,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               'ЗОНЫ',
               style: TextStyle(
                 color: _OF.muted2,
-                fontSize: 8.9,
+                fontSize: AppTypography.badgeSize,
                 fontWeight: FontWeight.w900,
                 letterSpacing: .35,
               ),
@@ -10791,7 +10791,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: active ? _OF.green : _OF.orange,
-            fontSize: 11.6,
+            fontSize: AppTypography.secondarySize,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -10810,7 +10810,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
           color: active ? _OF.text : _OF.muted2,
-          fontSize: 10.4,
+          fontSize: AppTypography.captionSize,
           fontWeight: active ? FontWeight.w700 : FontWeight.w500,
         ),
       ),
@@ -10849,7 +10849,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: accent ? _OF.green : _OF.text,
-                fontSize: 11.4,
+                fontSize: AppTypography.secondarySize,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -10860,7 +10860,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: _OF.muted2,
-                fontSize: 11.0,
+                fontSize: AppTypography.secondarySize,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -10901,7 +10901,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _OF.muted2,
-                      fontSize: 11.2,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700))),
         ],
       ),
@@ -10944,7 +10944,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _OF.text,
-                            fontSize: 13.4,
+                            fontSize: AppTypography.itemTitleSize,
                             fontWeight: FontWeight.w700,
                             letterSpacing: -.25)),
                     const SizedBox(height: 1),
@@ -10954,7 +10954,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _OF.muted2,
-                            fontSize: 11.2,
+                            fontSize: AppTypography.secondarySize,
                             fontWeight: FontWeight.w600)),
                   ],
                 ),
@@ -11172,7 +11172,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
         initials,
         style: const TextStyle(
           color: _OF.green,
-          fontSize: 10.5,
+          fontSize: AppTypography.captionSize,
           fontWeight: FontWeight.w800,
         ),
       ),
@@ -11330,7 +11330,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                     color: active ? _OF.green : _OF.muted2,
-                    fontSize: 12.0,
+                    fontSize: AppTypography.bodySize,
                     fontWeight: FontWeight.w700,
                     letterSpacing: -.04)),
           ],
@@ -11399,7 +11399,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             color: _OF.text,
-                            fontSize: 13.0,
+                            fontSize: AppTypography.itemTitleSize,
                             fontWeight: FontWeight.w700)),
                     SizedBox(height: 2),
                     Text('после выбора откроется анализ и live-метрики',
@@ -11407,7 +11407,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             color: _OF.muted2,
-                            fontSize: 11.0,
+                            fontSize: AppTypography.secondarySize,
                             fontWeight: FontWeight.w700)),
                   ],
                 ),
@@ -11466,14 +11466,14 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _OF.text,
-                            fontSize: 11.8,
+                            fontSize: AppTypography.bodySize,
                             fontWeight: FontWeight.w700)),
                     Text('${_activity.shortTitle} · $fieldLabel · $liveLine',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _OF.muted2,
-                            fontSize: 10.4,
+                            fontSize: AppTypography.captionSize,
                             fontWeight: FontWeight.w700)),
                   ],
                 ),
@@ -11561,7 +11561,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                                 color: _OF.text,
-                                fontSize: 12.0,
+                                fontSize: AppTypography.bodySize,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: -.15)),
                         const SizedBox(height: 2),
@@ -11570,7 +11570,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                                 color: _OF.muted2,
-                                fontSize: 11.0,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w700)),
                       ],
                     ),
@@ -11722,7 +11722,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _OF.muted2,
-                          fontSize: 11.2,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w700)),
                 ],
               ),
@@ -11776,7 +11776,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
             _combinedLiveRecommendation(track: local, sample: heartRate),
             style: const TextStyle(
                 color: _OF.muted,
-                fontSize: 11.2,
+                fontSize: AppTypography.secondarySize,
                 fontWeight: FontWeight.w700,
                 height: 1.35),
           ),
@@ -11800,7 +11800,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
             ),
             icon: const Icon(Icons.analytics_rounded, size: 18),
             label: const Text('Открыть полный анализ',
-                style: TextStyle(fontSize: 11.4, fontWeight: FontWeight.w700)),
+                style: TextStyle(fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700)),
           ),
         ),
       ],
@@ -11823,7 +11823,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               Text(title,
                   style: const TextStyle(
                       color: _OF.text,
-                      fontSize: 11.4,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700)),
             ],
           ),
@@ -11843,7 +11843,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
       child: Text(text,
           style: const TextStyle(
               color: _OF.muted2,
-              fontSize: 10.4,
+              fontSize: AppTypography.captionSize,
               fontWeight: FontWeight.w600,
               height: 1.3)),
     );
@@ -11862,7 +11862,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: _OF.muted2,
-                  fontSize: 9.6,
+                  fontSize: AppTypography.menuGroupSize,
                   fontWeight: FontWeight.w700)),
           const SizedBox(height: 2),
           Text(value,
@@ -11870,7 +11870,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: _OF.text,
-                  fontSize: 11.0,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w700)),
         ],
       ),
@@ -11886,7 +11886,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
             child: Text(label,
                 style: const TextStyle(
                     color: _OF.text,
-                    fontSize: 9.6,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w700))),
         Expanded(
           child: ClipRRect(
@@ -11906,7 +11906,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                 textAlign: TextAlign.right,
                 style: const TextStyle(
                     color: _OF.muted2,
-                    fontSize: 9.6,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w700))),
       ],
     );
@@ -11923,7 +11923,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
           border: Border.all(color: color.withOpacity(.22))),
       child: Text(label,
           style: TextStyle(
-              color: color, fontSize: 10.4, fontWeight: FontWeight.w700)),
+              color: color, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w700)),
     );
   }
 
@@ -11939,7 +11939,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: _OF.text,
-              fontSize: 12.2,
+              fontSize: AppTypography.bodySize,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -11950,7 +11950,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: _OF.muted2,
-              fontSize: 10.4,
+              fontSize: AppTypography.captionSize,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -11993,7 +11993,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                           color: _OF.text,
-                          fontSize: 14.5,
+                          fontSize: AppTypography.sectionTitleSize,
                           fontWeight: FontWeight.w700,
                           letterSpacing: -.18)),
                   const SizedBox(height: 2),
@@ -12002,7 +12002,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _OF.muted2,
-                          fontSize: 11.2,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w600)),
                 ],
               ),
@@ -12053,7 +12053,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                       color: primary ? _OF.green : _OF.text,
-                      fontSize: 11.0,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700,
                       letterSpacing: -.12)),
               const SizedBox(width: 4),
@@ -12062,7 +12062,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _OF.muted2,
-                      fontSize: 11.0,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700)),
             ],
           ),
@@ -12096,7 +12096,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                 Text(_running ? 'LIVE' : 'ГОТОВО',
                     style: TextStyle(
                         color: _running ? _OF.green : _OF.text,
-                        fontSize: 9.6,
+                        fontSize: AppTypography.menuGroupSize,
                         fontWeight: FontWeight.w700)),
               ],
             ),
@@ -12195,7 +12195,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                                 color: danger ? _OF.red : _OF.text,
-                                fontSize: 12.6,
+                                fontSize: AppTypography.bodySize,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: -.08)),
                         const SizedBox(height: 2),
@@ -12204,7 +12204,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                                 color: _OF.muted2,
-                                fontSize: 10.4,
+                                fontSize: AppTypography.captionSize,
                                 fontWeight: FontWeight.w600)),
                       ],
                     ),
@@ -12262,7 +12262,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                         color: _OF.text,
-                                        fontSize: 14.0,
+                                        fontSize: AppTypography.sectionTitleSize,
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: -.12)),
                                 SizedBox(height: 2),
@@ -12271,7 +12271,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                         color: _OF.muted2,
-                                        fontSize: 11.2,
+                                        fontSize: AppTypography.secondarySize,
                                         fontWeight: FontWeight.w600)),
                               ],
                             ),
@@ -12403,7 +12403,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                                             overflow: TextOverflow.ellipsis,
                                             style: const TextStyle(
                                                 color: _OF.text,
-                                                fontSize: 13.4,
+                                                fontSize: AppTypography.itemTitleSize,
                                                 fontWeight: FontWeight.w700,
                                                 letterSpacing: -.18)),
                                         Text(
@@ -12413,7 +12413,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                                             overflow: TextOverflow.ellipsis,
                                             style: const TextStyle(
                                                 color: _OF.muted2,
-                                                fontSize: 11.2,
+                                                fontSize: AppTypography.secondarySize,
                                                 fontWeight: FontWeight.w600)),
                                       ],
                                     ),
@@ -12483,7 +12483,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                   color: active ? _OF.green : _OF.muted2,
-                  fontSize: 11.3,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w700,
                   letterSpacing: -.02)),
           Positioned(
@@ -12558,7 +12558,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                 Text(label,
                     style: TextStyle(
                         color: active ? _OF.green : _OF.graphite,
-                        fontSize: 11,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w700)),
               ],
             ),
@@ -12702,7 +12702,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                         color: _OF.text,
-                                        fontSize: 15,
+                                        fontSize: AppTypography.sectionTitleSize,
                                         fontWeight: FontWeight.w700))),
                             _phoneSheetCloseButton(
                                 () => Navigator.of(sheetContext).pop()),
@@ -12818,7 +12818,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _OF.muted2,
-                        fontSize: 10.4,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w700)),
                 const SizedBox(height: 1),
                 Text(value,
@@ -12826,7 +12826,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                         color: active ? _OF.text : _OF.muted2,
-                        fontSize: 11.2,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w700)),
               ],
             ),
@@ -12846,7 +12846,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
         child: const Text('Игроки появятся после загрузки состава',
             style: TextStyle(
                 color: _OF.muted2,
-                fontSize: 11.2,
+                fontSize: AppTypography.secondarySize,
                 fontWeight: FontWeight.w700)),
       );
     }
@@ -12909,7 +12909,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                                 color: online || selected || focused
                                     ? Colors.white
                                     : _OF.graphite,
-                                fontSize: 11.2,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w700))
                         : null,
                   ),
@@ -12930,7 +12930,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                               color: online ? _OF.green : _OF.muted2,
-                              fontSize: 9.6,
+                              fontSize: AppTypography.menuGroupSize,
                               fontWeight: FontWeight.w700)),
                     ),
                   ),
@@ -12970,7 +12970,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                     color: markColor,
-                                    fontSize: 9.6,
+                                    fontSize: AppTypography.menuGroupSize,
                                     fontWeight: FontWeight.w700))),
                       ],
                     ),
@@ -13022,7 +13022,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
           Text(text,
               style: TextStyle(
                   color: active ? _OF.text : _OF.muted2,
-                  fontSize: 9.6,
+                  fontSize: AppTypography.menuGroupSize,
                   fontWeight: FontWeight.w700)),
         ],
       ),
@@ -13043,7 +13043,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
                 color: _OF.muted2,
-                fontSize: 10.4,
+                fontSize: AppTypography.captionSize,
                 fontWeight: FontWeight.w600)),
       );
     }
@@ -13136,7 +13136,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             color: _OF.text,
-                            fontSize: 14.2,
+                            fontSize: AppTypography.sectionTitleSize,
                             fontWeight: FontWeight.w700,
                             letterSpacing: -.35)),
                     SizedBox(height: 2),
@@ -13145,7 +13145,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             color: _OF.muted2,
-                            fontSize: 11.0,
+                            fontSize: AppTypography.secondarySize,
                             fontWeight: FontWeight.w700)),
                   ],
                 ),
@@ -13161,7 +13161,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                     'max ${maxLoad.toStringAsFixed(maxLoad < 10 ? 1 : 0)}',
                     style: const TextStyle(
                         color: _OF.green,
-                        fontSize: 11.0,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w700)),
               ),
             ],
@@ -13206,7 +13206,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                         color: _OF.text,
-                        fontSize: 14.0,
+                        fontSize: AppTypography.sectionTitleSize,
                         fontWeight: FontWeight.w700,
                         letterSpacing: -.35))),
             _phoneTextAction(
@@ -13263,7 +13263,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
             Text(label,
                 style: TextStyle(
                     color: color,
-                    fontSize: 11.2,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w600,
                     letterSpacing: -.02)),
           ],
@@ -13352,7 +13352,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: _OF.text,
-                            fontSize: 12.7,
+                            fontSize: AppTypography.bodySize,
                             fontWeight: FontWeight.w800,
                             letterSpacing: -.22,
                           ),
@@ -13364,7 +13364,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: _OF.muted2,
-                            fontSize: 10.5,
+                            fontSize: AppTypography.captionSize,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -13384,7 +13384,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                       online ? 'В ЭФИРЕ' : (_running ? 'ОЖИДАЕТ' : 'ГОТОВ'),
                       style: TextStyle(
                         color: online ? _OF.green : _OF.muted2,
-                        fontSize: 8.7,
+                        fontSize: AppTypography.badgeSize,
                         fontWeight: FontWeight.w800,
                         letterSpacing: .2,
                       ),
@@ -13439,7 +13439,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: accent ? _OF.green : _OF.text,
-            fontSize: 12.1,
+            fontSize: AppTypography.bodySize,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -13450,7 +13450,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             color: _OF.muted2,
-            fontSize: 8.9,
+            fontSize: AppTypography.badgeSize,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -13523,7 +13523,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             color: _OF.text,
-                            fontSize: 15.2,
+                            fontSize: AppTypography.screenTitleSize,
                             fontWeight: FontWeight.w700,
                             letterSpacing: -.22))),
                 _phoneStatusPill(_durationText(), _OF.graphite),
@@ -13571,7 +13571,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                       child: Text('Подробный анализ',
                           style: TextStyle(
                               color: _OF.green,
-                              fontSize: 12.0,
+                              fontSize: AppTypography.bodySize,
                               fontWeight: FontWeight.w700))),
                   Icon(Icons.expand_less_rounded, color: _OF.green, size: 18),
                 ],
@@ -13604,7 +13604,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _OF.muted2,
-                          fontSize: 9.6,
+                          fontSize: AppTypography.menuGroupSize,
                           fontWeight: FontWeight.w700))),
             ],
           ),
@@ -13614,7 +13614,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: _OF.text,
-                  fontSize: 15.0,
+                  fontSize: AppTypography.sectionTitleSize,
                   fontWeight: FontWeight.w700,
                   letterSpacing: -.25)),
         ],
@@ -13656,7 +13656,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                 child: Text('Анализ команды',
                     style: TextStyle(
                         color: _OF.text,
-                        fontSize: 17,
+                        fontSize: AppTypography.screenTitleSize,
                         fontWeight: FontWeight.w700,
                         letterSpacing: -.25))),
             _phoneStatusPill(_durationText(), _OF.graphite),
@@ -13709,7 +13709,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                     child: Text('Подробный анализ',
                         style: TextStyle(
                             color: _OF.text,
-                            fontSize: 12.4,
+                            fontSize: AppTypography.bodySize,
                             fontWeight: FontWeight.w700))),
                 Icon(Icons.chevron_right_rounded, color: _OF.muted2),
               ],
@@ -13747,7 +13747,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _OF.muted2,
-                        fontSize: 10.4,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w700)),
                 const SizedBox(height: 3),
                 RichText(
@@ -13763,7 +13763,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                       text: ' $unit',
                       style: const TextStyle(
                           color: _OF.muted2,
-                          fontSize: 11.2,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w700)),
                 ])),
               ],
@@ -14115,7 +14115,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                                 color: _OF.text,
-                                fontSize: 11.7,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w700)),
                         Text(
                             _bottomOperatorExpanded
@@ -14125,7 +14125,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                                 color: _OF.muted2,
-                                fontSize: 9.6,
+                                fontSize: AppTypography.menuGroupSize,
                                 fontWeight: FontWeight.w700)),
                       ],
                     ),
@@ -14261,14 +14261,14 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                                 Text('Выберите тип трекинга',
                                     style: TextStyle(
                                         color: _OF.text,
-                                        fontSize: 13,
+                                        fontSize: AppTypography.itemTitleSize,
                                         fontWeight: FontWeight.w700)),
                                 SizedBox(height: 2),
                                 Text(
                                     'Поле требуется только для футбола. Кросс и зал запускаются без field_id.',
                                     style: TextStyle(
                                         color: _OF.muted,
-                                        fontSize: 11.2,
+                                        fontSize: AppTypography.secondarySize,
                                         fontWeight: FontWeight.w600)),
                               ],
                             ),
@@ -14406,7 +14406,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                             title,
                             style: const TextStyle(
                               color: _OF.text,
-                              fontSize: 10.8,
+                              fontSize: AppTypography.secondarySize,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
@@ -14469,7 +14469,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                           label,
                           style: TextStyle(
                             color: active ? _OF.green : _OF.graphite,
-                            fontSize: 9.6,
+                            fontSize: AppTypography.menuGroupSize,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
@@ -14518,7 +14518,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                                     'Настройка Live-экрана',
                                     style: TextStyle(
                                       color: _OF.text,
-                                      fontSize: 13.2,
+                                      fontSize: AppTypography.itemTitleSize,
                                       fontWeight: FontWeight.w900,
                                     ),
                                   ),
@@ -14527,7 +14527,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                                     'Выберите, какие рабочие блоки и слои показывать. Сбор данных не отключается.',
                                     style: TextStyle(
                                       color: _OF.muted2,
-                                      fontSize: 9.0,
+                                      fontSize: AppTypography.badgeSize,
                                       height: 1.2,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -14552,7 +14552,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                           'Блоки рабочего экрана',
                           style: TextStyle(
                             color: _OF.graphite,
-                            fontSize: 9.2,
+                            fontSize: AppTypography.menuGroupSize,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
@@ -14594,7 +14594,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                           'Слои на поле',
                           style: TextStyle(
                             color: _OF.graphite,
-                            fontSize: 9.2,
+                            fontSize: AppTypography.menuGroupSize,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
@@ -14621,7 +14621,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                             'Что открыть справа',
                             style: TextStyle(
                               color: _OF.graphite,
-                              fontSize: 9.2,
+                              fontSize: AppTypography.menuGroupSize,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
@@ -14923,7 +14923,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: _OF.text,
-                  fontSize: 11.6,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w700,
                   letterSpacing: -.12),
             ),
@@ -14980,7 +14980,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                   label: Text(
                       widget.scanningBluetooth ? 'Поиск...' : 'Bluetooth',
                       style: const TextStyle(
-                          fontSize: 11.2, fontWeight: FontWeight.w700)),
+                          fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700)),
                 ),
               ),
               const SizedBox(width: 6),
@@ -15243,7 +15243,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _OF.text,
-                      fontSize: 11.4,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w500,
                       letterSpacing: -.1),
                 ),
@@ -15254,7 +15254,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _OF.muted,
-                        fontSize: 11.2,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w500),
                   ),
               ],
@@ -15360,7 +15360,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
         child: Text(text,
             style: TextStyle(
                 color: active ? _OF.green : _OF.muted,
-                fontSize: 11.5,
+                fontSize: AppTypography.secondarySize,
                 fontWeight: FontWeight.w600)),
       ),
     );
@@ -15378,13 +15378,13 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
         Text(label,
             style: TextStyle(
                 color: light ? _OF.muted : Colors.white54,
-                fontSize: 10.4,
+                fontSize: AppTypography.captionSize,
                 fontWeight: FontWeight.w500)),
         const SizedBox(width: 5),
         Text(value,
             style: TextStyle(
                 color: light ? _OF.text : Colors.white,
-                fontSize: 11.2,
+                fontSize: AppTypography.secondarySize,
                 fontWeight: FontWeight.w500)),
       ]),
     );
@@ -15447,7 +15447,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
             'Подключённые GPS/Polar игроки появятся здесь сразу после первых live-данных.',
             textAlign: TextAlign.center,
             style: TextStyle(
-                color: _OF.muted, fontSize: 11.2, fontWeight: FontWeight.w700),
+                color: _OF.muted, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700),
           ),
         ),
       );
@@ -15546,7 +15546,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               color: _OF.text,
-                              fontSize: 10.6,
+                              fontSize: AppTypography.captionSize,
                               fontWeight: FontWeight.w800)),
                       const SizedBox(height: 2),
                       Text(
@@ -15573,7 +15573,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                         Text(speed.toStringAsFixed(1),
                             style: const TextStyle(
                                 color: _OF.text,
-                                fontSize: 10.3,
+                                fontSize: AppTypography.captionSize,
                                 fontWeight: FontWeight.w800)),
                         const Text('км/ч',
                             style: TextStyle(
@@ -15595,7 +15595,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                                 color: heartRateBpm == null
                                     ? _OF.muted2
                                     : _OF.red,
-                                fontSize: 10.3,
+                                fontSize: AppTypography.captionSize,
                                 fontWeight: FontWeight.w800)),
                         const Text('ЧСС',
                             style: TextStyle(
@@ -15615,7 +15615,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                         Text(load.toStringAsFixed(0),
                             style: TextStyle(
                                 color: load > 70 ? _OF.orange : _OF.text,
-                                fontSize: 10.3,
+                                fontSize: AppTypography.captionSize,
                                 fontWeight: FontWeight.w800)),
                         const Text('AU',
                             style: TextStyle(
@@ -15920,7 +15920,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               label,
               style: TextStyle(
                 color: active ? _OF.green : _OF.text,
-                fontSize: 11.2,
+                fontSize: AppTypography.secondarySize,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -17199,7 +17199,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                   'ТАКТИЧЕСКИЙ РАДАР',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 8.6,
+                    fontSize: AppTypography.badgeSize,
                     fontWeight: FontWeight.w900,
                     letterSpacing: .25,
                   ),
@@ -17406,7 +17406,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 8.8,
+                    fontSize: AppTypography.badgeSize,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -17580,7 +17580,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 8.5,
+                fontSize: AppTypography.badgeSize,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -17819,7 +17819,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
             Text(label,
                 style: TextStyle(
                     color: active ? _OF.green : _OF.text,
-                    fontSize: 9.6,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w800)),
           ]),
         ),
@@ -18008,7 +18008,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               label,
               style: TextStyle(
                 color: active ? _OF.green : _OF.graphite,
-                fontSize: 9.2,
+                fontSize: AppTypography.menuGroupSize,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -18172,7 +18172,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: _OF.muted2,
-                        fontSize: 8.7,
+                        fontSize: AppTypography.badgeSize,
                         height: 1.3,
                         fontWeight: FontWeight.w700,
                       ),
@@ -18335,7 +18335,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               textAlign: TextAlign.center,
               style: TextStyle(
                   color: _OF.muted,
-                  fontSize: 11,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w700)));
     }
     final sortedPlayers = List<TrackerPlayerOption>.from(players);
@@ -18505,7 +18505,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                   color: highlight ? Colors.white : _OF.green,
-                                  fontSize: 9.6,
+                                  fontSize: AppTypography.menuGroupSize,
                                   fontWeight: FontWeight.w700)),
                         ),
                       ),
@@ -18521,7 +18521,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                                 color: _OF.text,
-                                fontSize: 11.0,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w700)),
                         Text(connectionText,
                             maxLines: 1,
@@ -18529,7 +18529,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                             style: TextStyle(
                                 color:
                                     online || gpsReady ? _OF.green : _OF.muted2,
-                                fontSize: 9.6,
+                                fontSize: AppTypography.menuGroupSize,
                                 fontWeight: FontWeight.w700)),
                       ],
                     ),
@@ -18582,11 +18582,11 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
           Text('$label ',
               style: const TextStyle(
                   color: _OF.muted2,
-                  fontSize: 9.6,
+                  fontSize: AppTypography.menuGroupSize,
                   fontWeight: FontWeight.w700)),
           Text(value,
               style: const TextStyle(
-                  color: _OF.text, fontSize: 9.6, fontWeight: FontWeight.w700)),
+                  color: _OF.text, fontSize: AppTypography.menuGroupSize, fontWeight: FontWeight.w700)),
         ],
       ),
     );
@@ -18613,7 +18613,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
         child: Row(children: [
           const Expanded(
             child: Center(
-              child: Text('№', style: TextStyle(color: _OF.muted2, fontSize: 9.8, fontWeight: FontWeight.w800)),
+              child: Text('№', style: TextStyle(color: _OF.muted2, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w800)),
             ),
           ),
           const Expanded(
@@ -18622,7 +18622,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               padding: EdgeInsets.only(left: 8),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text('ИГРОК', style: TextStyle(color: _OF.text, fontSize: 10.2, fontWeight: FontWeight.w800)),
+                child: Text('ИГРОК', style: TextStyle(color: _OF.text, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w800)),
               ),
             ),
           ),
@@ -18660,7 +18660,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
         ...cells.map((c) => Expanded(
           flex: c == 'ИГРОК' ? 4 : (c == 'МЕТКА' ? 2 : 1),
           child: Center(
-            child: Text(c, style: const TextStyle(color: _OF.text, fontSize: 10.4, fontWeight: FontWeight.w700)),
+            child: Text(c, style: const TextStyle(color: _OF.text, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w700)),
           ),
         )),
         const SizedBox(
@@ -19126,7 +19126,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                       color: highlighted ? Colors.white : _OF.green,
-                      fontSize: 11.2,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700)),
             ],
           ),
@@ -19318,7 +19318,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                         style: TextStyle(
                             color: online ? Colors.white : _OF.graphite,
                             fontWeight: FontWeight.w700,
-                            fontSize: 11))
+                            fontSize: AppTypography.secondarySize))
                     : null,
               ),
               const SizedBox(width: 8),
@@ -19332,7 +19332,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _OF.text,
-                            fontSize: 14.5,
+                            fontSize: AppTypography.sectionTitleSize,
                             fontWeight: FontWeight.w700,
                             letterSpacing: -.2)),
                     const SizedBox(height: 3),
@@ -19348,7 +19348,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                   color: _OF.muted,
-                                  fontSize: 11.2,
+                                  fontSize: AppTypography.secondarySize,
                                   fontWeight: FontWeight.w600))),
                     ]),
                   ],
@@ -19447,14 +19447,14 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
           const Text('Онлайн-показ данных',
               style: TextStyle(
                   color: _OF.text,
-                  fontSize: 13,
+                  fontSize: AppTypography.itemTitleSize,
                   fontWeight: FontWeight.w700,
                   letterSpacing: -.1)),
           const SizedBox(height: 4),
           const Text('Показатели обновляются во время Live-сессии',
               style: TextStyle(
                   color: _OF.muted,
-                  fontSize: 10.4,
+                  fontSize: AppTypography.captionSize,
                   fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
           GridView.count(
@@ -19511,7 +19511,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               const Text('Интенсивность',
                   style: TextStyle(
                       color: _OF.text,
-                      fontSize: 11.5,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
               _detailBandRow(
@@ -19591,12 +19591,12 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                       color: color,
-                      fontSize: 11.5,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700))),
           Text(heartRate == null ? 'пульс —' : '${heartRate.bpm} bpm',
               style: const TextStyle(
                   color: _OF.text,
-                  fontSize: 11.2,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w700)),
         ],
       ),
@@ -19637,7 +19637,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _OF.text,
-                        fontSize: 12.5,
+                        fontSize: AppTypography.bodySize,
                         fontWeight: FontWeight.w700)),
                 const SizedBox(height: 2),
                 Text(
@@ -19650,7 +19650,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _OF.muted,
-                        fontSize: 11.2,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w700)),
               ])),
           if (_activity.requiresField) ...[
@@ -19700,7 +19700,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                                   : 'Ожидание движения игрока',
                               style: const TextStyle(
                                   color: _OF.muted,
-                                  fontSize: 11,
+                                  fontSize: AppTypography.secondarySize,
                                   fontWeight: FontWeight.w700))),
                     ),
             ),
@@ -19719,7 +19719,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
             child: Text(label,
                 style: const TextStyle(
                     color: _OF.text,
-                    fontSize: 10.4,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w600))),
         Expanded(
             child: ClipRRect(
@@ -19736,7 +19736,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                 textAlign: TextAlign.right,
                 style: const TextStyle(
                     color: _OF.text,
-                    fontSize: 11.2,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w700))),
       ]),
     );
@@ -19803,7 +19803,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                           child: Text(id,
                               style: const TextStyle(
                                   color: _OF.text,
-                                  fontSize: 11.2,
+                                  fontSize: AppTypography.secondarySize,
                                   fontWeight: FontWeight.w500)),
                         ))
                     .toList()));
@@ -19824,7 +19824,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _OF.text,
-                      fontSize: 11.2,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700))),
           if (player != null) ...[
             const SizedBox(width: 6),
@@ -19843,7 +19843,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                 icon: const Icon(Icons.analytics_rounded, size: 13),
                 label: const Text('Анализ',
                     style:
-                        TextStyle(fontSize: 10.4, fontWeight: FontWeight.w700)),
+                        TextStyle(fontSize: AppTypography.captionSize, fontWeight: FontWeight.w700)),
               ),
             ),
           ],
@@ -19881,7 +19881,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
             child: Text(label,
                 style: const TextStyle(
                     color: _OF.text,
-                    fontSize: 11.2,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w500))),
         Expanded(
             child: ClipRRect(
@@ -19898,7 +19898,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                 textAlign: TextAlign.right,
                 style: const TextStyle(
                     color: _OF.text,
-                    fontSize: 10.4,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w500))),
       ]),
     );
@@ -19947,7 +19947,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _OF.text,
-                        fontSize: 11.2,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w500)),
                 const SizedBox(height: 3),
                 Row(children: [
@@ -19968,7 +19968,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               color: _OF.text,
-                              fontSize: 11.2,
+                              fontSize: AppTypography.secondarySize,
                               fontWeight: FontWeight.w500)))
                 ]),
                 const SizedBox(height: 3),
@@ -19977,7 +19977,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _OF.muted2,
-                        fontSize: 11.0,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w600)),
                 const SizedBox(height: 5),
                 SizedBox(
@@ -20031,14 +20031,14 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _OF.text,
-                      fontSize: 11.4,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700))),
           Text(subtitle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: _OF.muted2,
-                  fontSize: 11.0,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w600)),
         ]),
         const SizedBox(height: 8),
@@ -20128,7 +20128,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style:
-                      TextStyle(fontSize: 11.2, fontWeight: FontWeight.w700)),
+                      TextStyle(fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700)),
             ),
           ),
           const SizedBox(height: 6),
@@ -20382,13 +20382,13 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                             Text('Полная отладка Live',
                                 style: TextStyle(
                                     color: _OF.text,
-                                    fontSize: 14,
+                                    fontSize: AppTypography.sectionTitleSize,
                                     fontWeight: FontWeight.w600)),
                             Text(
                                 'Реальные данные: BLE → GPS → локально → запрос → сервер → состояние → стоп',
                                 style: TextStyle(
                                     color: _OF.muted,
-                                    fontSize: 11.2,
+                                    fontSize: AppTypography.secondarySize,
                                     fontWeight: FontWeight.w500)),
                           ],
                         ),
@@ -20438,7 +20438,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                             _debugDumpText(),
                             style: const TextStyle(
                                 color: Colors.white70,
-                                fontSize: 11.2,
+                                fontSize: AppTypography.secondarySize,
                                 height: 1.35,
                                 fontFamily: 'monospace'),
                           ),
@@ -20455,7 +20455,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                             'Важно: кнопки тестовых точек ниже создают искусственные данные. Для проверки реального трекера не нажимай их — смотри LOCAL/PAYLOAD/SERVER/STATE после движения с подключённым устройством.',
                             style: TextStyle(
                                 color: _OF.text,
-                                fontSize: 11.2,
+                                fontSize: AppTypography.secondarySize,
                                 fontWeight: FontWeight.w500),
                           ),
                         ),
@@ -20530,7 +20530,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                 Text(_running ? 'LIVE' : 'ГОТОВО',
                     style: TextStyle(
                         color: _running ? _OF.green : _OF.text,
-                        fontSize: 10.4,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w700)),
               ],
             ),
@@ -20560,7 +20560,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               ),
               icon: const Icon(Icons.tune_rounded, size: 12),
               label: const Text('ОПЕРАТОР',
-                  style: TextStyle(fontSize: 9.6, fontWeight: FontWeight.w700)),
+                  style: TextStyle(fontSize: AppTypography.menuGroupSize, fontWeight: FontWeight.w700)),
             ),
           ),
         ],
@@ -20581,13 +20581,13 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
           Text(label,
               style: const TextStyle(
                   color: _OF.muted2,
-                  fontSize: 11.2,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w700)),
           const SizedBox(width: 5),
           Text(value,
               style: const TextStyle(
                   color: _OF.text,
-                  fontSize: 10.4,
+                  fontSize: AppTypography.captionSize,
                   fontWeight: FontWeight.w700)),
         ],
       ),
@@ -20924,7 +20924,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _OF.text,
-                          fontSize: 11.2,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w700))),
               const SizedBox(width: 8),
               _NoHoverTap(
@@ -20987,7 +20987,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                                 color: _OF.text,
-                                fontSize: 14,
+                                fontSize: AppTypography.sectionTitleSize,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: -.2),
                           ),
@@ -21111,7 +21111,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                       color: _OF.text,
-                                      fontSize: 12.8,
+                                      fontSize: AppTypography.itemTitleSize,
                                       fontWeight: FontWeight.w700,
                                       letterSpacing: -.2),
                                 ),
@@ -21271,7 +21271,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                         style: TextStyle(
                           fontFamily: 'Inter',
                           color: _C.text,
-                          fontSize: 15,
+                          fontSize: AppTypography.sectionTitleSize,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -21282,7 +21282,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                         style: TextStyle(
                           fontFamily: 'Inter',
                           color: _C.subtle,
-                          fontSize: 11.2,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -21461,7 +21461,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
             icon: Icon(_activity.icon, size: 15),
             label: Text('Режим: ${_activity.title}',
                 style: const TextStyle(
-                    fontSize: 11.2, fontWeight: FontWeight.w700)),
+                    fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700)),
           ),
           const SizedBox(height: 8),
           if (_mode == TrackerLiveSourceMode.trackerExperimental) ...[
@@ -21840,7 +21840,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     color: _OF.text,
-                    fontSize: 11.2,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w900)),
             const SizedBox(height: 4),
             Row(children: [
@@ -21849,7 +21849,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               Text(rssi == null ? _signalLabelForPlayer(player) : '$rssi dBm',
                   style: TextStyle(
                       color: color,
-                      fontSize: 9.6,
+                      fontSize: AppTypography.menuGroupSize,
                       fontWeight: FontWeight.w900)),
             ]),
           ]),
@@ -21859,7 +21859,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
           Text(battery == null ? 'бат. —' : 'бат. $battery%',
               style: const TextStyle(
                   color: _OF.muted2,
-                  fontSize: 9.6,
+                  fontSize: AppTypography.menuGroupSize,
                   fontWeight: FontWeight.w800)),
           const SizedBox(height: 5),
           Text(
@@ -21868,7 +21868,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                   : '${hr.bpm} bpm${hrAge != null && hrAge > 25 ? ' · ${hrAge}s' : ''}',
               style: TextStyle(
                   color: hr == null ? _OF.muted2 : _OF.red,
-                  fontSize: 9.6,
+                  fontSize: AppTypography.menuGroupSize,
                   fontWeight: FontWeight.w900)),
         ]),
       ]),
@@ -21896,12 +21896,12 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                  color: _OF.text, fontSize: 11, fontWeight: FontWeight.w900))),
+                  color: _OF.text, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w900))),
       Text(value,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
-              color: _OF.muted2, fontSize: 10.4, fontWeight: FontWeight.w800)),
+              color: _OF.muted2, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w800)),
     ]);
   }
 
@@ -21936,7 +21936,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: _OF.muted2,
-                    fontSize: 11.0,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w700,
                     height: 1.25,
                   ),
@@ -21961,13 +21961,13 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-                color: color, fontSize: 10.4, fontWeight: FontWeight.w900)),
+                color: color, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w900)),
         const SizedBox(height: 2),
         Text(value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-                color: _OF.text, fontSize: 11.2, fontWeight: FontWeight.w900)),
+                color: _OF.text, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w900)),
       ]),
     );
   }
@@ -22066,13 +22066,13 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                       Text(_activity.title,
                           style: const TextStyle(
                               color: _OF.text,
-                              fontSize: 13,
+                              fontSize: AppTypography.itemTitleSize,
                               fontWeight: FontWeight.w700)),
                       const SizedBox(height: 3),
                       Text(_activity.subtitle,
                           style: const TextStyle(
                               color: _OF.muted,
-                              fontSize: 11.2,
+                              fontSize: AppTypography.secondarySize,
                               fontWeight: FontWeight.w600)),
                     ],
                   ),
@@ -22119,7 +22119,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                         : 'Активность записывается без привязки к полю',
                     style: const TextStyle(
                         color: _OF.muted,
-                        fontSize: 11.2,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w700),
                   ),
                 ),
@@ -22266,7 +22266,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                         style: const TextStyle(
                           color: _C.subtle,
                           fontFamily: 'Inter',
-                          fontSize: 11.4,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w500,
                           height: 1.35,
                         ),
@@ -22540,7 +22540,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                             _logs[i],
                             style: const TextStyle(
                               color: Color(0xFFE1E5E2),
-                              fontSize: 11.2,
+                              fontSize: AppTypography.secondarySize,
                               fontWeight: FontWeight.w500,
                               fontFamily: 'monospace',
                               height: 1.25,
@@ -25276,7 +25276,7 @@ class _RuntimePlayerTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _C.muted,
-                      fontSize: 11.7,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w500),
                 ),
               ],
@@ -25285,7 +25285,7 @@ class _RuntimePlayerTile extends StatelessWidget {
           const SizedBox(width: 5),
           Text('LIVE',
               style: TextStyle(
-                  color: color, fontWeight: FontWeight.w500, fontSize: 12)),
+                  color: color, fontWeight: FontWeight.w500, fontSize: AppTypography.bodySize)),
         ],
       ),
     );
@@ -25335,13 +25335,13 @@ class _ServerPlayerTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _C.subtle,
-                      fontSize: 11.7,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w500)),
             ]),
           ),
           Text(session.isOnline ? 'СЕРВЕР' : 'ВЫКЛ',
               style: TextStyle(
-                  color: color, fontWeight: FontWeight.w500, fontSize: 11)),
+                  color: color, fontWeight: FontWeight.w500, fontSize: AppTypography.secondarySize)),
         ],
       ),
     );
@@ -25383,7 +25383,7 @@ class _CoachAlert extends StatelessWidget {
               style: TextStyle(
                   color: color,
                   fontWeight: FontWeight.w500,
-                  fontSize: 11.5,
+                  fontSize: AppTypography.secondarySize,
                   height: 1.25),
             ),
           ),
@@ -25448,7 +25448,7 @@ class _ProMetricRow extends StatelessWidget {
                   style: const TextStyle(
                     color: _C.text,
                     fontFamily: 'Inter',
-                    fontSize: 11.4,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w500,
                     letterSpacing: -0.15,
                     height: 1.12,
@@ -25462,7 +25462,7 @@ class _ProMetricRow extends StatelessWidget {
                   style: const TextStyle(
                     color: _C.subtle,
                     fontFamily: 'Inter',
-                    fontSize: 11.2,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w500,
                     height: 1.18,
                   ),
@@ -25481,7 +25481,7 @@ class _ProMetricRow extends StatelessWidget {
               style: const TextStyle(
                 color: _C.text,
                 fontFamily: 'Inter',
-                fontSize: 15,
+                fontSize: AppTypography.sectionTitleSize,
                 fontWeight: FontWeight.w500,
                 height: 1.1,
                 fontFeatures: [FontFeature.tabularFigures()],
@@ -25533,7 +25533,7 @@ class _ProTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _C.subtle,
-                        fontSize: 11.2,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w500,
                         letterSpacing: .05)),
                 Text(value,
@@ -25541,7 +25541,7 @@ class _ProTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _C.text,
-                        fontSize: 15,
+                        fontSize: AppTypography.sectionTitleSize,
                         fontWeight: FontWeight.w500,
                         letterSpacing: -.15,
                         fontFeatures: [FontFeature.tabularFigures()])),
@@ -25550,7 +25550,7 @@ class _ProTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _C.muted,
-                        fontSize: 11.0,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w500)),
               ],
             ),
@@ -25585,7 +25585,7 @@ class _SpeedLoadChart extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                   color: _C.subtle,
-                  fontSize: 11.2,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w500),
             ),
           ),
@@ -25625,7 +25625,7 @@ class _ZoneDistribution extends StatelessWidget {
         children: [
           const Text('Зоны интенсивности',
               style: TextStyle(
-                  color: _C.text, fontWeight: FontWeight.w500, fontSize: 12)),
+                  color: _C.text, fontWeight: FontWeight.w500, fontSize: AppTypography.bodySize)),
           const SizedBox(height: 8),
           _ZoneLine(
               label: 'Ходьба', value: walk, total: total, color: _C.subtle),
@@ -25669,7 +25669,7 @@ class _ZoneLine extends StatelessWidget {
               child: Text(label,
                   style: const TextStyle(
                       color: _C.muted,
-                      fontSize: 11.2,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w500))),
           Expanded(
             child: ClipRRect(
@@ -25689,7 +25689,7 @@ class _ZoneLine extends StatelessWidget {
                   textAlign: TextAlign.right,
                   style: const TextStyle(
                       color: _C.text,
-                      fontSize: 11.2,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w500))),
         ],
       ),
@@ -25733,7 +25733,7 @@ class _FootballMovementProfileBox extends StatelessWidget {
                 style: TextStyle(
                   color: _C.text,
                   fontFamily: 'Inter',
-                  fontSize: 11.4,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w500,
                   letterSpacing: -0.15,
                 ),
@@ -25793,7 +25793,7 @@ class _MiniFmpTile extends StatelessWidget {
               style: const TextStyle(
                 color: _C.subtle,
                 fontFamily: 'Inter',
-                fontSize: 11.0,
+                fontSize: AppTypography.secondarySize,
                 fontWeight: FontWeight.w500,
                 height: 1.05,
               ),
@@ -25805,7 +25805,7 @@ class _MiniFmpTile extends StatelessWidget {
             style: const TextStyle(
               color: _C.text,
               fontFamily: 'Inter',
-              fontSize: 11.4,
+              fontSize: AppTypography.secondarySize,
               fontWeight: FontWeight.w500,
               fontFeatures: [FontFeature.tabularFigures()],
             ),
@@ -25835,7 +25835,7 @@ class _RecommendationBox extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: _C.greenDark,
-                  fontSize: 11.2,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w500,
                   height: 1.25),
             ),
@@ -25863,7 +25863,7 @@ class _LiveDetailHeaderChip extends StatelessWidget {
         const SizedBox(width: 5),
         Text(label,
             style: const TextStyle(
-                color: _OF.text, fontSize: 10.4, fontWeight: FontWeight.w600)),
+                color: _OF.text, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w600)),
       ]),
     );
   }
@@ -25903,7 +25903,7 @@ class _PlayerMetricTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _OF.text,
-                      fontSize: 12.8,
+                      fontSize: AppTypography.itemTitleSize,
                       fontWeight: FontWeight.w700,
                       letterSpacing: -.15)),
               const SizedBox(height: 2),
@@ -25912,7 +25912,7 @@ class _PlayerMetricTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: _OF.muted,
-                      fontSize: 11.0,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700)),
             ])),
       ]),
@@ -25946,7 +25946,7 @@ class _LiveSourceSelector extends StatelessWidget {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const Text('Источник Live',
           style: TextStyle(
-              color: _OF.text, fontSize: 11.2, fontWeight: FontWeight.w700)),
+              color: _OF.text, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700)),
       const SizedBox(height: 6),
       Wrap(
         spacing: 6,
@@ -25975,7 +25975,7 @@ class _LiveSourceSelector extends StatelessWidget {
                 Text('${titleOf(mode)}$hint',
                     style: TextStyle(
                         color: active ? _OF.green : _OF.graphite,
-                        fontSize: 11.0,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w700)),
               ]),
             ),
@@ -25987,7 +25987,7 @@ class _LiveSourceSelector extends StatelessWidget {
         const Text(
             'Этот режим запускает Live без GPS-трекера: online bpm от всех привязанных Polar H10 сохраняется в live_session_id и затем попадает в отчёт.',
             style: TextStyle(
-                color: _OF.muted, fontSize: 10.4, fontWeight: FontWeight.w700)),
+                color: _OF.muted, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w700)),
       ],
     ]);
   }
@@ -26037,12 +26037,12 @@ class _TeamHeartRateOnlineCard extends StatelessWidget {
               child: Text('Команда Polar H10 online',
                   style: const TextStyle(
                       color: _OF.text,
-                      fontSize: 11.5,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700))),
           Text('${entries.length} игрок.',
               style: const TextStyle(
                   color: _OF.muted,
-                  fontSize: 11.2,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w700)),
         ]),
         const SizedBox(height: 8),
@@ -26050,7 +26050,7 @@ class _TeamHeartRateOnlineCard extends StatelessWidget {
           const Text('Нет назначенных Polar H10.',
               style: TextStyle(
                   color: _OF.muted,
-                  fontSize: 10.4,
+                  fontSize: AppTypography.captionSize,
                   fontWeight: FontWeight.w700))
         else
           ...entries.take(12).map((entry) {
@@ -26070,13 +26070,13 @@ class _TeamHeartRateOnlineCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _OF.text,
-                            fontSize: 11.2,
+                            fontSize: AppTypography.secondarySize,
                             fontWeight: FontWeight.w700))),
                 Text(
                     '${sample.bpm} bpm · ${_zone(sample.bpm)}${fresh ? '' : ' · ${age}s'}',
                     style: TextStyle(
                         color: fresh ? _OF.text : _OF.muted,
-                        fontSize: 11.2,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w700)),
               ]),
             );
@@ -26148,13 +26148,13 @@ class _HeartRateLiveCard extends StatelessWidget {
                     Text('Polar H10 online',
                         style: TextStyle(
                             color: _OF.text,
-                            fontSize: 11.8,
+                            fontSize: AppTypography.bodySize,
                             fontWeight: FontWeight.w700)),
                     SizedBox(height: 2),
                     Text('пульс игрока + командный контроль',
                         style: TextStyle(
                             color: _OF.muted,
-                            fontSize: 11.2,
+                            fontSize: AppTypography.secondarySize,
                             fontWeight: FontWeight.w700)),
                   ],
                 ),
@@ -26168,7 +26168,7 @@ class _HeartRateLiveCard extends StatelessWidget {
                 child: Text('online $teamOnlineCount',
                     style: const TextStyle(
                         color: _OF.green,
-                        fontSize: 10.4,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w700)),
               ),
             ],
@@ -26193,7 +26193,7 @@ class _HeartRateLiveCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
                 color: _OF.text,
-                fontSize: 11.2,
+                fontSize: AppTypography.secondarySize,
                 fontWeight: FontWeight.w600,
                 height: 1.25),
           ),
@@ -26217,11 +26217,11 @@ class _SmallEventCounter extends StatelessWidget {
       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Text(value,
             style: const TextStyle(
-                color: _OF.text, fontSize: 15, fontWeight: FontWeight.w700)),
+                color: _OF.text, fontSize: AppTypography.sectionTitleSize, fontWeight: FontWeight.w700)),
         const SizedBox(height: 2),
         Text(label,
             style: const TextStyle(
-                color: _OF.muted, fontSize: 11.2, fontWeight: FontWeight.w700)),
+                color: _OF.muted, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700)),
       ]),
     );
   }
@@ -26254,7 +26254,7 @@ class _ActivityModeCard extends StatelessWidget {
           activity.title,
           textAlign: vertical ? TextAlign.center : TextAlign.start,
           style: const TextStyle(
-              color: _OF.text, fontSize: 11.6, fontWeight: FontWeight.w700),
+              color: _OF.text, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 3),
         Text(
@@ -26264,7 +26264,7 @@ class _ActivityModeCard extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
               color: _OF.muted,
-              fontSize: 11.2,
+              fontSize: AppTypography.secondarySize,
               fontWeight: FontWeight.w600,
               height: 1.25),
         ),
@@ -26342,14 +26342,14 @@ class _NoFieldMetricTile extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: _OF.muted,
-                  fontSize: 10.4,
+                  fontSize: AppTypography.captionSize,
                   fontWeight: FontWeight.w700)),
           const SizedBox(height: 4),
           Text(value,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                  color: _OF.text, fontSize: 12, fontWeight: FontWeight.w700)),
+                  color: _OF.text, fontSize: AppTypography.bodySize, fontWeight: FontWeight.w700)),
         ],
       ),
     );
@@ -26394,7 +26394,7 @@ class _LayerChip extends StatelessWidget {
               label,
               style: TextStyle(
                 color: active ? _C.greenDark : _C.muted,
-                fontSize: 11.2,
+                fontSize: AppTypography.secondarySize,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -26427,12 +26427,12 @@ class _TinyMetric extends StatelessWidget {
           Text(label,
               style: const TextStyle(
                   color: _C.subtle,
-                  fontSize: 9.6,
+                  fontSize: AppTypography.menuGroupSize,
                   fontWeight: FontWeight.w500)),
           const SizedBox(width: 4),
           Text(value,
               style: const TextStyle(
-                  color: _C.text, fontSize: 10.4, fontWeight: FontWeight.w500)),
+                  color: _C.text, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w500)),
         ],
       ),
     );
@@ -26935,31 +26935,27 @@ class _OFText {
   static TextStyle title(
     double size, {
     Color color = _OF.text,
-  }) =>
-      AppTypography.custom(
-        size: size,
-        weight: FontWeight.w600,
-        color: color,
-        height: 1.18,
-        letterSpacing: 0,
-        features: const <FontFeature>[
-          FontFeature.tabularFigures(),
-        ],
-      );
+  }) {
+    final base = size >= 17
+        ? AppTypography.screenTitle(color: color)
+        : size >= 14.5
+            ? AppTypography.sectionTitle(color: color)
+            : AppTypography.subsectionTitle(color: color);
+    return base.copyWith(
+      fontWeight: FontWeight.w600,
+      fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+    );
+  }
 
   static TextStyle value(
     double size, {
     Color color = _OF.text,
   }) =>
-      AppTypography.custom(
-        size: size,
-        weight: FontWeight.w600,
-        color: color,
+      AppTypography.metricStrong(color: color).copyWith(
+        fontSize: size,
+        fontWeight: FontWeight.w600,
         height: 1.15,
-        letterSpacing: 0,
-        features: const <FontFeature>[
-          FontFeature.tabularFigures(),
-        ],
+        fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
       );
 
   static TextStyle body({
@@ -26967,26 +26963,25 @@ class _OFText {
     required Color color,
     FontWeight weight = FontWeight.w400,
     double height = 1.22,
-  }) =>
-      AppTypography.custom(
-        size: size,
-        weight: weight,
-        color: color,
-        height: height,
-        letterSpacing: 0,
-      );
+  }) {
+    final base = size < 9.4
+        ? AppTypography.commentMeta(color: color)
+        : size < 10.8
+            ? AppTypography.caption(color: color)
+            : size < 12
+                ? AppTypography.secondary(color: color)
+                : AppTypography.body(color: color);
+    return base.copyWith(fontWeight: weight, height: height);
+  }
 
   static TextStyle button({
     required Color color,
     required double size,
     FontWeight weight = FontWeight.w600,
   }) =>
-      AppTypography.custom(
-        size: size,
-        weight: weight,
-        color: color,
+      AppTypography.action(color: color).copyWith(
+        fontWeight: weight,
         height: 1,
-        letterSpacing: 0,
       );
 }
 
@@ -27034,7 +27029,7 @@ class _KpiCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: _C.subtle,
-                    fontSize: 10.4,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w500,
                     height: 1,
                   ),
@@ -27046,7 +27041,7 @@ class _KpiCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: _C.text,
-                    fontSize: 15,
+                    fontSize: AppTypography.sectionTitleSize,
                     fontWeight: FontWeight.w500,
                     height: 1,
                     letterSpacing: -.15,
@@ -27083,7 +27078,7 @@ class _DebugLine extends StatelessWidget {
               child: Text(label,
                   style: const TextStyle(
                       color: _C.subtle,
-                      fontSize: 11.2,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w500))),
           Expanded(
             child: Text(
@@ -27092,7 +27087,7 @@ class _DebugLine extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   color: _C.text,
-                  fontSize: 11.2,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w500,
                   fontFamily: 'monospace'),
             ),
@@ -27141,14 +27136,14 @@ class _FullDebugLine extends StatelessWidget {
               child: Text(label,
                   style: const TextStyle(
                       color: _C.subtle,
-                      fontSize: 11.2,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w600))),
           Expanded(
             child: SelectableText(
               value,
               style: const TextStyle(
                   color: _C.text,
-                  fontSize: 11.2,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w500,
                   fontFamily: 'monospace',
                   height: 1.25),
@@ -27200,7 +27195,7 @@ class _ProblemBox extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                   color: isBad ? _C.red : _C.text,
-                  fontSize: 11.5,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w500,
                   height: 1.25),
             ),
@@ -27246,7 +27241,7 @@ class _StatePill extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                   color: ok ? _C.text : _C.orange,
-                  fontSize: 11.5,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w500),
             ),
           ),
@@ -27290,7 +27285,7 @@ class _TitleRow extends StatelessWidget {
                 style: const TextStyle(
                   color: _C.text,
                   fontFamily: 'Inter',
-                  fontSize: 15,
+                  fontSize: AppTypography.sectionTitleSize,
                   fontWeight: FontWeight.w500,
                   letterSpacing: -0.25,
                   height: 1.08,
@@ -27305,7 +27300,7 @@ class _TitleRow extends StatelessWidget {
                   style: const TextStyle(
                     color: _C.subtle,
                     fontFamily: 'Inter',
-                    fontSize: 11.2,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w500,
                     height: 1.28,
                   ),

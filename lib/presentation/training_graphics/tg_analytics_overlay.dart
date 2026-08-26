@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:sportoteka/presentation/training_graphics/tg_models.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 
 /// Lightweight Training Graphics editor adapted for Tracker analytics.
 ///
@@ -1512,8 +1513,9 @@ class _TgAnalyticsTextEntryPanelState
                                   ? 'Заметка эпизода'
                                   : 'Текст на поле',
                               style: const TextStyle(
+                                fontFamily: AppTypography.fontFamily,
                                 color: Color(0xFF17201B),
-                                fontSize: 17,
+                                fontSize: AppTypography.screenTitleSize,
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
@@ -1523,8 +1525,9 @@ class _TgAnalyticsTextEntryPanelState
                                   ? 'Стоп-кадр ${widget.elapsed} · заметка сохранится вместе с разбором'
                                   : 'Подпись можно перемещать, вращать и менять по размеру',
                               style: const TextStyle(
+                                fontFamily: AppTypography.fontFamily,
                                 color: Color(0xFF718078),
-                                fontSize: 10.5,
+                                fontSize: AppTypography.captionSize,
                                 height: 1.3,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -1558,8 +1561,9 @@ class _TgAnalyticsTextEntryPanelState
                             ? TextInputAction.newline
                             : TextInputAction.done,
                     style: const TextStyle(
+                      fontFamily: AppTypography.fontFamily,
                       color: Color(0xFF17201B),
-                      fontSize: 14,
+                      fontSize: AppTypography.sectionTitleSize,
                       height: 1.35,
                       fontWeight: FontWeight.w700,
                     ),
@@ -1568,6 +1572,7 @@ class _TgAnalyticsTextEntryPanelState
                           ? 'Что важно в этом эпизоде?'
                           : 'Введите подпись',
                       hintStyle: const TextStyle(
+                        fontFamily: AppTypography.fontFamily,
                         color: Color(0xFF9AA69F),
                         fontWeight: FontWeight.w600,
                       ),
@@ -1645,7 +1650,7 @@ class _TgAnalyticsTextEntryPanelState
                         ),
                         child: const Text(
                           'Отмена',
-                          style: TextStyle(fontWeight: FontWeight.w800),
+                          style: TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w800),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -1666,7 +1671,7 @@ class _TgAnalyticsTextEntryPanelState
                         icon: const Icon(Icons.add_rounded, size: 18),
                         label: const Text(
                           'Добавить',
-                          style: TextStyle(fontWeight: FontWeight.w900),
+                          style: TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w900),
                         ),
                       ),
                     ],
@@ -1935,8 +1940,9 @@ class TgAnalyticsToolbar extends StatelessWidget {
                     child: Text(
                       '${controller.count} объектов',
                       style: const TextStyle(
+                        fontFamily: AppTypography.fontFamily,
                         color: Color(0xFF157347),
-                        fontSize: 9.2,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -2310,8 +2316,9 @@ class _TgAnalyticsObjectLibraryPanelState
                             const Text(
                               'Объекты Training Graphics',
                               style: TextStyle(
+                                fontFamily: AppTypography.fontFamily,
                                 color: Color(0xFF17201B),
-                                fontSize: 17,
+                                fontSize: AppTypography.screenTitleSize,
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
@@ -2323,8 +2330,9 @@ class _TgAnalyticsObjectLibraryPanelState
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
+                                fontFamily: AppTypography.fontFamily,
                                 color: Color(0xFF718078),
-                                fontSize: 10.5,
+                                fontSize: AppTypography.captionSize,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -2345,8 +2353,9 @@ class _TgAnalyticsObjectLibraryPanelState
                     controller: _search,
                     onChanged: (_) => setState(() {}),
                     style: const TextStyle(
+                      fontFamily: AppTypography.fontFamily,
                       color: Color(0xFF17201B),
-                      fontSize: 12.5,
+                      fontSize: AppTypography.bodySize,
                       fontWeight: FontWeight.w700,
                     ),
                     decoration: InputDecoration(
@@ -2394,10 +2403,11 @@ class _TgAnalyticsObjectLibraryPanelState
                         backgroundColor: const Color(0xFFF4F6F5),
                         selectedColor: const Color(0xFFE1F4E7),
                         labelStyle: TextStyle(
+                          fontFamily: AppTypography.fontFamily,
                           color: active
                               ? const Color(0xFF0D6A3A)
                               : const Color(0xFF59675F),
-                          fontSize: 10,
+                          fontSize: AppTypography.captionSize,
                           fontWeight: FontWeight.w800,
                         ),
                         shape: RoundedRectangleBorder(
@@ -2414,6 +2424,7 @@ class _TgAnalyticsObjectLibraryPanelState
                           child: Text(
                             'Ничего не найдено',
                             style: TextStyle(
+                              fontFamily: AppTypography.fontFamily,
                               color: Color(0xFF718078),
                               fontWeight: FontWeight.w700,
                             ),
@@ -2482,8 +2493,9 @@ class _TgAnalyticsObjectCard extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
+                  fontFamily: AppTypography.fontFamily,
                   color: Color(0xFF17201B),
-                  fontSize: 10.5,
+                  fontSize: AppTypography.captionSize,
                   height: 1.12,
                   fontWeight: FontWeight.w900,
                 ),
@@ -2495,8 +2507,9 @@ class _TgAnalyticsObjectCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
+                    fontFamily: AppTypography.fontFamily,
                     color: Color(0xFF7D8982),
-                    fontSize: 8.5,
+                    fontSize: AppTypography.badgeSize,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -2552,8 +2565,9 @@ class _TgAnalyticsObjectThumb extends StatelessWidget {
                   label,
                   maxLines: 1,
                   style: const TextStyle(
+                    fontFamily: AppTypography.fontFamily,
                     color: Color(0xFF17201B),
-                    fontSize: 13,
+                    fontSize: AppTypography.bodySize,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -2564,7 +2578,7 @@ class _TgAnalyticsObjectThumb extends StatelessWidget {
                 errorBuilder: (_, __, ___) => Center(
                   child: Text(
                     label,
-                    style: const TextStyle(fontWeight: FontWeight.w900),
+                    style: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w900),
                   ),
                 ),
               ),
@@ -2640,8 +2654,9 @@ class _TgStyleButton extends StatelessWidget {
           Text(
             label,
             style: const TextStyle(
+              fontFamily: AppTypography.fontFamily,
               color: Color(0xFF465149),
-              fontSize: 9.2,
+              fontSize: AppTypography.captionSize,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -2761,10 +2776,11 @@ class _TgAnalyticsToolChip extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
+            fontFamily: AppTypography.fontFamily,
             color: active
                 ? const Color(0xFF0D6A3A)
                 : const Color(0xFF465149),
-            fontSize: 9.2,
+            fontSize: AppTypography.captionSize,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -2976,6 +2992,7 @@ class _TgAnalyticsPainter extends CustomPainter {
         text: TextSpan(
           text: element.text,
           style: TextStyle(
+            fontFamily: AppTypography.fontFamily,
             color: element.color.withOpacity(element.opacity),
             fontSize: element.size,
             fontWeight: element.weight,
@@ -3267,6 +3284,7 @@ class _TgAnalyticsPainter extends CustomPainter {
       text: TextSpan(
         text: initials,
         style: TextStyle(
+          fontFamily: AppTypography.fontFamily,
           color: const Color(0xFF0F172A),
           fontSize: size * .23,
           fontWeight: FontWeight.w900,
@@ -3289,6 +3307,7 @@ class _TgAnalyticsPainter extends CustomPainter {
         text: TextSpan(
           text: number,
           style: TextStyle(
+            fontFamily: AppTypography.fontFamily,
             color: Colors.white,
             fontSize: size * .15,
             fontWeight: FontWeight.w900,

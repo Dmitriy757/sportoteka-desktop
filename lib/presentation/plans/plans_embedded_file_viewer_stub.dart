@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -145,9 +146,9 @@ class _PlansEmbeddedFileViewerState extends State<PlansEmbeddedFileViewer> {
                         : 'Microsoft Office Viewer',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: const TextStyle(fontFamily: AppTypography.fontFamily, 
                       color: Color(0xFF101828),
-                      fontSize: 11.5,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -275,9 +276,9 @@ class _ErrorPanel extends StatelessWidget {
                 const SizedBox(height: 12),
                 const Text(
                   'Документ пока не открылся',
-                  style: TextStyle(
+                  style: TextStyle(fontFamily: AppTypography.fontFamily, 
                     color: Color(0xFF101828),
-                    fontSize: 15,
+                    fontSize: AppTypography.sectionTitleSize,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -285,9 +286,9 @@ class _ErrorPanel extends StatelessWidget {
                 Text(
                   error,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: const TextStyle(fontFamily: AppTypography.fontFamily, 
                     color: Color(0xFF667085),
-                    fontSize: 11.5,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -352,9 +353,9 @@ class _Fallback extends StatelessWidget {
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: const TextStyle(fontFamily: AppTypography.fontFamily, 
                   color: Color(0xFF101828),
-                  fontSize: 14,
+                  fontSize: AppTypography.subsectionTitleSize,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -363,9 +364,9 @@ class _Fallback extends StatelessWidget {
                 Text(
                   error!,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: const TextStyle(fontFamily: AppTypography.fontFamily, 
                     color: Color(0xFF667085),
-                    fontSize: 11.5,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w600,
                   ),
                 ),

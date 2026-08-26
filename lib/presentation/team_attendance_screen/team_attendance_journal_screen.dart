@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 
 class TeamAttendanceJournalScreen extends StatefulWidget {
@@ -960,9 +961,9 @@ class _TeamAttendanceJournalScreenState
       return Container(
         decoration: _J.glassCard,
         alignment: Alignment.center,
-        child: const Text(
+        child: Text(
           "Выберите игрока для отметки",
-          style: TextStyle(fontSize: 11.55, fontWeight: FontWeight.w700, color: _J.muted),
+          style: AppTypography.emptyText(color: _J.muted).copyWith(fontWeight: FontWeight.w600),
         ),
       );
     }
@@ -1006,12 +1007,12 @@ class _TeamAttendanceJournalScreenState
                 child: const Icon(Icons.edit_calendar_rounded, color: Colors.white, size: 17),
               ),
               const SizedBox(width: 10),
-              const Expanded(
+              Expanded(
                 child: Text(
                   "Редактирование отметки",
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 13.55, fontWeight: FontWeight.w800, color: _J.text, letterSpacing: -.2),
+                  style: AppTypography.subsectionTitle(color: _J.text).copyWith(fontWeight: FontWeight.w700),
                 ),
               ),
               InkWell(
@@ -1046,15 +1047,15 @@ class _TeamAttendanceJournalScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.85, fontWeight: FontWeight.w900, color: _J.text)),
+                      Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.itemTitle(color: _J.text).copyWith(fontWeight: FontWeight.w700)),
                       const SizedBox(height: 4),
-                      Text(position.isEmpty ? "Игрок команды" : position, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.05, fontWeight: FontWeight.w700, color: _J.muted)),
+                      Text(position.isEmpty ? "Игрок команды" : position, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.secondaryMedium(color: _J.muted)),
                       const SizedBox(height: 7),
                       Text(
                         "${_eventDateLabel(event).replaceAll('\n', ' · ')} · ${_eventTitle(event)}",
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 10.35, fontWeight: FontWeight.w800, color: currentColor),
+                        style: AppTypography.commentMeta(color: currentColor).copyWith(fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
@@ -1140,7 +1141,7 @@ class _TeamAttendanceJournalScreenState
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10.75, fontWeight: FontWeight.w800, color: active ? color : _J.text)),
+                child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.chip(color: active ? color : _J.text, active: active).copyWith(fontWeight: FontWeight.w600)),
               ),
             ],
           ),
@@ -1190,19 +1191,15 @@ class _TeamAttendanceJournalScreenState
               children: [
                 Text(
                   _monthTitle(),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 15.75,
-                    color: Color(0xFF111827),
+                  style: AppTypography.screenTitle(
+                    color: const Color(0xFF111827),
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   "${events.length} мероприятий",
-                  style: const TextStyle(
-                    fontSize: 12.35,
-                    color: Color(0xFF6B7280),
-                    fontWeight: FontWeight.w700,
+                  style: AppTypography.secondaryMedium(
+                    color: const Color(0xFF6B7280),
                   ),
                 ),
               ],
@@ -1255,11 +1252,9 @@ class _TeamAttendanceJournalScreenState
               const SizedBox(width: 8),
               Text(
                 "Мероприятие",
-                style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 14.05,
+                style: AppTypography.sectionTitle(
                   color: eventColor,
-                ),
+                ).copyWith(fontWeight: FontWeight.w700),
               ),
             ],
           ),
@@ -1291,12 +1286,10 @@ class _TeamAttendanceJournalScreenState
                             ),
                           ),
                           const SizedBox(height: 16),
-                          const Text(
+                          Text(
                             "Выберите мероприятие",
-                            style: TextStyle(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 16.75,
-                              color: Color(0xFF111827),
+                            style: AppTypography.screenTitle(
+                              color: const Color(0xFF111827),
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -1340,12 +1333,11 @@ class _TeamAttendanceJournalScreenState
                                           : const Color(0xFF6B7280),
                                     ),
                                     const SizedBox(width: 12),
-                                    const Expanded(
+                                    Expanded(
                                       child: Text(
                                         "Все мероприятия месяца",
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 14.05,
+                                        style: AppTypography.subsectionTitle().copyWith(
+                                          fontWeight: FontWeight.w700,
                                         ),
                                       ),
                                     ),
@@ -1494,9 +1486,7 @@ class _TeamAttendanceJournalScreenState
                         children: [
                           Text(
                             selectedEventTitle,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 14.05,
+                            style: AppTypography.itemTitle(
                               color: eventColor,
                             ),
                             maxLines: 1,
@@ -1506,10 +1496,8 @@ class _TeamAttendanceJournalScreenState
                           if (selectedEventId != null)
                             Text(
                               "Выбрано для отметки",
-                              style: TextStyle(
-                                fontSize: 11.55,
+                              style: AppTypography.captionMedium(
                                 color: eventColor.withOpacity(0.7),
-                                fontWeight: FontWeight.w700,
                               ),
                             ),
                         ],
@@ -1873,20 +1861,17 @@ class _TeamAttendanceJournalScreenState
               color: const Color(0xFFD1D5DB),
             ),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               "Игроки не найдены",
-              style: TextStyle(
-                color: Color(0xFF6B7280),
-                fontWeight: FontWeight.w800,
-                fontSize: 15.05,
+              style: AppTypography.emptyTitle(
+                color: const Color(0xFF6B7280),
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               "Попробуйте изменить поиск или фильтр",
-              style: TextStyle(
-                color: Color(0xFF9CA3AF),
-                fontSize: 13.05,
+              style: AppTypography.emptyText(
+                color: const Color(0xFF9CA3AF),
               ),
               textAlign: TextAlign.center,
             ),
@@ -1967,11 +1952,9 @@ class _TeamAttendanceJournalScreenState
                     children: [
                       Text(
                         name,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize: 15.05,
-                          color: Color(0xFF111827),
-                        ),
+                        style: AppTypography.itemTitle(
+                          color: const Color(0xFF111827),
+                        ).copyWith(fontWeight: FontWeight.w700),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1986,10 +1969,8 @@ class _TeamAttendanceJournalScreenState
                           ),
                           child: Text(
                             position,
-                            style: const TextStyle(
-                              fontSize: 11.55,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF374151),
+                            style: AppTypography.secondaryMedium(
+                              color: const Color(0xFF374151),
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -2032,10 +2013,9 @@ class _TeamAttendanceJournalScreenState
                           textAlign: TextAlign.center,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 10.55,
-                            fontWeight: FontWeight.w800,
+                          style: AppTypography.chip(
                             color: statusColor,
+                            active: true,
                           ),
                         ),
                       ] else ...[
@@ -2190,11 +2170,8 @@ class _TeamAttendanceJournalScreenState
                   children: [
                     Text(
                       name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 13.05,
-                        color: Color(0xFF111827),
-                        height: 1.2,
+                      style: AppTypography.itemTitle(
+                        color: const Color(0xFF111827),
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -2222,10 +2199,9 @@ class _TeamAttendanceJournalScreenState
                         ),
                         child: Text(
                           statusFullText,
-                          style: TextStyle(
-                            fontSize: 10.55,
-                            fontWeight: FontWeight.w800,
+                          style: AppTypography.chip(
                             color: statusColor,
+                            active: true,
                           ),
                         ),
                       )
@@ -2452,10 +2428,8 @@ class _TeamAttendanceJournalScreenState
                   name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 13.05,
-                    color: Color(0xFF111827),
+                  style: AppTypography.itemTitle(
+                    color: const Color(0xFF111827),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -2470,10 +2444,8 @@ class _TeamAttendanceJournalScreenState
                       ),
                       child: Text(
                         position,
-                        style: const TextStyle(
-                          fontSize: 11.55,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF374151),
+                        style: AppTypography.secondaryMedium(
+                          color: const Color(0xFF374151),
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -2754,11 +2726,9 @@ class _TeamAttendanceJournalScreenState
                                     const SizedBox(height: 4),
                                     Text(
                                       "Для отметки посещаемости выберите конкретное мероприятие в списке выше",
-                                      style: TextStyle(
-                                        fontSize: 12.35,
+                                      style: AppTypography.secondaryMedium(
                                         color: const Color(0xFF92400E)
                                             .withOpacity(0.8),
-                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
                                   ],
@@ -2772,10 +2742,8 @@ class _TeamAttendanceJournalScreenState
                         children: [
                           Text(
                             "Игроки (${_filteredPlayers.length})",
-                            style: const TextStyle(
-                              fontSize: 14.05,
-                              fontWeight: FontWeight.w900,
-                              color: Color(0xFF111827),
+                            style: AppTypography.sectionTitle(
+                              color: const Color(0xFF111827),
                             ),
                           ),
                           Container(
@@ -2797,10 +2765,8 @@ class _TeamAttendanceJournalScreenState
                                 const SizedBox(width: 6),
                                 Text(
                                   viewLabel,
-                                  style: const TextStyle(
-                                    fontSize: 11.55,
-                                    fontWeight: FontWeight.w800,
-                                    color: Color(0xFF6B7280),
+                                  style: AppTypography.secondaryMedium(
+                                    color: const Color(0xFF6B7280),
                                   ),
                                 ),
                               ],

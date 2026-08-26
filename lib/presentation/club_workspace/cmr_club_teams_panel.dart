@@ -66,13 +66,8 @@ class _CmrText {
         letterSpacing: 0,
       );
 
-  static TextStyle section() => AppTypography.custom(
-        size: 12.2,
-        weight: FontWeight.w600,
-        color: _CmrColors.text,
-        height: 1.18,
-        letterSpacing: 0,
-      );
+  static TextStyle section() =>
+      AppTypography.subsectionTitle(color: _CmrColors.text);
 
   static TextStyle value(double size) => AppTypography.custom(
         size: size,
@@ -101,39 +96,22 @@ class _CmrText {
         letterSpacing: 0,
       );
 
-  static TextStyle caption() => AppTypography.custom(
-        size: 10.8,
-        weight: FontWeight.w500,
-        color: _CmrColors.subtle,
-        height: 1.18,
-        letterSpacing: 0,
-      );
+  static TextStyle caption() =>
+      AppTypography.captionMedium(color: _CmrColors.subtle);
 
-  static TextStyle action() => AppTypography.custom(
-        size: 12,
-        weight: FontWeight.w600,
-        color: _CmrColors.text,
-        height: 1.16,
-        letterSpacing: 0,
-      );
+  static TextStyle action() =>
+      AppTypography.action(color: _CmrColors.text);
 
   // Типографика левого меню в геометрии Tracker -> Аналитика.
-  static TextStyle navLabel({required bool active}) => AppTypography.custom(
-        size: 11.0,
-        weight: active ? FontWeight.w600 : FontWeight.w500,
+  static TextStyle navLabel({required bool active}) => AppTypography.menuTitle(
         color: active ? _CmrColors.greenDark : _CmrColors.text,
-        height: 1.30,
-        letterSpacing: 0,
+        weight: active ? FontWeight.w600 : FontWeight.w500,
       );
 
-  static TextStyle navSubtitle({required bool active}) => AppTypography.custom(
-        size: 10.2,
-        weight: FontWeight.w400,
+  static TextStyle navSubtitle({required bool active}) => AppTypography.menuSubtitle(
         color: active
             ? _CmrColors.greenDark.withOpacity(.68)
             : _CmrColors.secondary,
-        height: 1.30,
-        letterSpacing: 0,
       );
 
   static TextStyle whiteAction({double size = 11.4}) =>
@@ -158,13 +136,7 @@ class _CmrText {
       );
 
   static TextStyle microCaps({Color? color}) =>
-      AppTypography.custom(
-        size: 9.4,
-        weight: FontWeight.w600,
-        color: color ?? _CmrColors.subtle,
-        height: 1.12,
-        letterSpacing: 0.18,
-      );
+      AppTypography.menuGroup(color: color ?? _CmrColors.subtle);
 }
 
 class _LiquidGlass extends StatelessWidget {
@@ -375,7 +347,7 @@ class CmrClubTeamsPanel extends StatefulWidget {
 }
 
 enum _TeamsFilter { all, active, football, emptyLogo }
-enum _TeamsRightMode { overview, create }
+enum _TeamsRightMode { overview, create, edit }
 
 class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
   static const String apiBase = 'https://sportotekaapp.ru/api';
@@ -434,6 +406,54 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
       setState(() => _rightMode = _TeamsRightMode.overview);
     }
     widget.onCreateModeChanged?.call(false);
+  }
+
+  void _requestEditTeam(Map<String, dynamic> team) {
+    final teamId = _teamId(team);
+    if (teamId <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось определить ID команды.')),
+      );
+      return;
+    }
+
+    final index = widget.teams.indexWhere((item) => _teamId(item) == teamId);
+    setState(() {
+      _localSelectedTeamId = teamId;
+      if (index >= 0) _selectedIndex = index;
+      _rightMode = _TeamsRightMode.edit;
+    });
+    widget.onCreateModeChanged?.call(false);
+  }
+
+  void _closeEditTeam() {
+    if (!mounted) return;
+    setState(() => _rightMode = _TeamsRightMode.overview);
+  }
+
+  Future<void> _teamUpdated(Map<String, dynamic> updatedTeam) async {
+    final teamId = _teamId(updatedTeam);
+    if (!mounted) return;
+
+    setState(() {
+      _localSelectedTeamId = teamId > 0 ? teamId : _localSelectedTeamId;
+      _rightMode = _TeamsRightMode.overview;
+    });
+
+    // Сразу синхронизируем выбранную команду с родительским workspace,
+    // чтобы название/поля паспорта изменились без ухода на другой экран.
+    final selectCallback = widget.onSelectTeam;
+    if (selectCallback != null) {
+      selectCallback(updatedTeam);
+    }
+
+    await widget.onRefresh?.call();
+    if (!mounted) return;
+
+    if (selectCallback == null) {
+      // Обратная совместимость со старыми местами подключения панели.
+      widget.onOpenTeam(updatedTeam);
+    }
   }
 
   Future<void> _teamCreated(int teamId, String teamName) async {
@@ -865,6 +885,7 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
             maxPlayersPerTeam: _playersLimit,
             countsLoading: _countsLoading,
             onOpenTeam: () => _openTeamOverview(selected),
+            onEditTeam: () => _requestEditTeam(selected),
             onOpenRoster: widget.onOpenRoster,
             onOpenTrainers: widget.onOpenTrainers,
             onOpenCalendar: widget.onOpenCalendar,
@@ -905,9 +926,11 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
 
         final overview = overviewForSelected();
         final createActive = _rightMode == _TeamsRightMode.create;
+        final editActive = _rightMode == _TeamsRightMode.edit && selected != null;
+        final detailsIndex = createActive ? 1 : (editActive ? 2 : 0);
 
         final details = IndexedStack(
-          index: createActive ? 1 : 0,
+          index: detailsIndex,
           sizing: StackFit.expand,
           children: [
             overview,
@@ -921,6 +944,17 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
               onCancel: _closeCreateTeam,
               onCreated: _teamCreated,
             ),
+            selected == null
+                ? const SizedBox.shrink()
+                : _CmrEditTeamPane(
+                    key: ValueKey('edit_team_${_teamId(selected)}'),
+                    active: editActive,
+                    clubId: widget.clubId,
+                    clubName: widget.clubName,
+                    team: selected,
+                    onCancel: _closeEditTeam,
+                    onSaved: _teamUpdated,
+                  ),
           ],
         );
 
@@ -1275,7 +1309,7 @@ class _CmrCreateTeamPaneState extends State<_CmrCreateTeamPane> {
                   onSubmitted: (_) => _submit(),
                   decoration: InputDecoration(
                     hintText: 'Например: U14 / 2012',
-                    hintStyle: _CmrText.muted(12),
+                    hintStyle: AppTypography.formHint(color: _CmrColors.secondary),
                     filled: true,
                     fillColor: _CmrColors.soft,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 13),
@@ -1466,6 +1500,537 @@ class _CmrCreateSecondaryButton extends StatelessWidget {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
         child: Text(text, style: _CmrText.action()),
+      ),
+    );
+  }
+}
+
+
+class _CmrEditTeamPane extends StatefulWidget {
+  final bool active;
+  final int clubId;
+  final String clubName;
+  final Map<String, dynamic> team;
+  final VoidCallback onCancel;
+  final Future<void> Function(Map<String, dynamic> updatedTeam) onSaved;
+
+  const _CmrEditTeamPane({
+    super.key,
+    required this.active,
+    required this.clubId,
+    required this.clubName,
+    required this.team,
+    required this.onCancel,
+    required this.onSaved,
+  });
+
+  @override
+  State<_CmrEditTeamPane> createState() => _CmrEditTeamPaneState();
+}
+
+class _CmrEditTeamPaneState extends State<_CmrEditTeamPane> {
+  static const String _updateTeamUrl =
+      'https://sportotekaapp.ru/api/update_team_profile.php';
+
+  final ImagePicker _picker = ImagePicker();
+  final TextEditingController _nameC = TextEditingController();
+  final TextEditingController _sportC = TextEditingController();
+  final TextEditingController _groupC = TextEditingController();
+  final TextEditingController _seasonC = TextEditingController();
+  final TextEditingController _locationC = TextEditingController();
+  final TextEditingController _coachC = TextEditingController();
+  final TextEditingController _statusC = TextEditingController();
+  final TextEditingController _descriptionC = TextEditingController();
+
+  Uint8List? _logoBytes;
+  String _logoName = 'team_logo.jpg';
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _fillFromTeam();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CmrEditTeamPane oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldId = _teamId(oldWidget.team);
+    final newId = _teamId(widget.team);
+    if (oldId != newId || (!oldWidget.active && widget.active)) {
+      _fillFromTeam();
+    }
+  }
+
+  void _fillFromTeam() {
+    _nameC.text = _teamName(widget.team);
+    _sportC.text = _teamSport(widget.team);
+    _groupC.text = _rawTeamGroup(widget.team);
+    _seasonC.text = _rawTeamSeason(widget.team);
+    _locationC.text = _rawTeamCity(widget.team);
+    _coachC.text = _rawTeamCoach(widget.team);
+    _statusC.text = _rawTeamStatus(widget.team);
+    _descriptionC.text = _teamLongDescription(widget.team);
+    _logoBytes = null;
+    _logoName = 'team_logo.jpg';
+    _error = null;
+  }
+
+  @override
+  void dispose() {
+    _nameC.dispose();
+    _sportC.dispose();
+    _groupC.dispose();
+    _seasonC.dispose();
+    _locationC.dispose();
+    _coachC.dispose();
+    _statusC.dispose();
+    _descriptionC.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickLogo() async {
+    try {
+      final picked = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 88,
+        maxWidth: 1400,
+      );
+      if (picked == null) return;
+      final bytes = await picked.readAsBytes();
+      if (!mounted) return;
+      setState(() {
+        _logoBytes = bytes;
+        _logoName = picked.name.trim().isEmpty ? 'team_logo.jpg' : picked.name;
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = 'Не удалось выбрать логотип: $e');
+    }
+  }
+
+  Future<void> _save() async {
+    final teamId = _teamId(widget.team);
+    final name = _nameC.text.trim();
+    final sport = _sportC.text.trim();
+    final group = _groupC.text.trim();
+    final season = _seasonC.text.trim();
+    final location = _locationC.text.trim();
+    final coach = _coachC.text.trim();
+    final status = _statusC.text.trim();
+    final description = _descriptionC.text.trim();
+
+    if (teamId <= 0) {
+      setState(() => _error = 'Не удалось определить ID команды.');
+      return;
+    }
+    if (name.isEmpty) {
+      setState(() => _error = 'Введите название команды.');
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      final req = http.MultipartRequest('POST', Uri.parse(_updateTeamUrl));
+
+      // Оставляем совместимость со старым update_team_profile.php и
+      // одновременно передаём расширенный паспорт. Неизвестные PHP-поля
+      // безопасно игнорируются, а поддерживаемые сохраняются.
+      req.fields.addAll({
+        'team_id': '$teamId',
+        'id': '$teamId',
+        'club_id': '${widget.clubId}',
+        'team_name': name,
+        'name': name,
+        'sport': sport.isEmpty ? 'Футбол' : sport,
+        'sport_name': sport.isEmpty ? 'Футбол' : sport,
+        'category': sport.isEmpty ? 'Футбол' : sport,
+        'age_group': group,
+        'ageGroup': group,
+        'stage': group,
+        'group_name': group,
+        'season': season,
+        'season_title': season,
+        'city': location,
+        'location': location,
+        'head_coach': coach,
+        'headCoach': coach,
+        'coach': coach,
+        'trainer_name': coach,
+        'status': status,
+        'team_status': status,
+        'description': description,
+        'team_description': description,
+      });
+
+      final bytes = _logoBytes;
+      if (bytes != null && bytes.isNotEmpty) {
+        req.files.add(
+          http.MultipartFile.fromBytes(
+            'logo',
+            bytes,
+            filename: _logoName,
+          ),
+        );
+      }
+
+      final streamed = await req.send().timeout(const Duration(seconds: 22));
+      final response = await http.Response.fromStream(streamed);
+      final decoded = _tryDecode(response.body);
+      final ok = decoded is Map &&
+          (decoded['success'] == true ||
+              '${decoded['status'] ?? ''}'.toLowerCase() == 'success' ||
+              '${decoded['status'] ?? ''}'.toLowerCase() == 'ok');
+
+      if (!ok) {
+        final serverMessage = decoded is Map
+            ? _s(decoded['message'] ?? decoded['error'])
+            : '';
+        throw Exception(
+          serverMessage.isEmpty
+              ? 'Сервер не подтвердил сохранение паспорта команды'
+              : serverMessage,
+        );
+      }
+
+      final serverTeam = decoded is Map
+          ? (decoded['team'] ?? decoded['data'])
+          : null;
+
+      final updated = <String, dynamic>{
+        ...widget.team,
+        if (serverTeam is Map) ...Map<String, dynamic>.from(serverTeam),
+        'id': teamId,
+        'team_id': teamId,
+        'name': name,
+        'team_name': name,
+        'sport': sport.isEmpty ? 'Футбол' : sport,
+        'sport_name': sport.isEmpty ? 'Футбол' : sport,
+        'category': sport.isEmpty ? 'Футбол' : sport,
+        'age_group': group,
+        'stage': group,
+        'season': season,
+        'city': location,
+        'location': location,
+        'head_coach': coach,
+        'coach': coach,
+        'status': status,
+        'description': description,
+        'team_description': description,
+      };
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Паспорт команды сохранён')),
+      );
+      await widget.onSaved(updated);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = '$e'.replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  InputDecoration _fieldDecoration(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: AppTypography.formHint(color: _CmrColors.secondary),
+      filled: true,
+      fillColor: _CmrColors.soft,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 13),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(
+          color: _CmrColors.divider.withOpacity(.65),
+          width: .7,
+        ),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: _CmrColors.green, width: 1.2),
+      ),
+    );
+  }
+
+  Widget _field({
+    required String label,
+    required TextEditingController controller,
+    required String hint,
+    int maxLines = 1,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: _CmrText.section()),
+        const SizedBox(height: 7),
+        TextField(
+          controller: controller,
+          enabled: !_saving,
+          maxLines: maxLines,
+          textInputAction:
+              maxLines > 1 ? TextInputAction.newline : TextInputAction.next,
+          decoration: _fieldDecoration(hint),
+          style: _CmrText.value(13.0),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final compact = width < 720;
+    final currentLogo = _teamLogo(widget.team);
+
+    return Container(
+      color: _CmrColors.panel,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          compact ? 14 : 22,
+          compact ? 14 : 22,
+          compact ? 14 : 22,
+          compact ? 112 : 22,
+        ),
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 780),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: _CmrColors.greenSoft,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _CmrColors.greenBorder,
+                          width: .8,
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.badge_outlined,
+                        color: _CmrColors.greenDark,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Паспорт команды',
+                            style: _CmrText.title(compact ? 19 : 22),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            '${widget.clubName} · редактирование в CMR',
+                            style: _CmrText.muted(11.5),
+                          ),
+                        ],
+                      ),
+                    ),
+                    _CmrCreateCloseButton(onTap: widget.onCancel),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: _saving ? null : _pickLogo,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: _CmrColors.soft,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _CmrColors.divider.withOpacity(.7),
+                          width: .7,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 64,
+                            height: 64,
+                            clipBehavior: Clip.antiAlias,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: _logoBytes != null
+                                ? Image.memory(_logoBytes!, fit: BoxFit.cover)
+                                : _TeamLogo(
+                                    url: currentLogo,
+                                    name: _nameC.text.trim().isEmpty
+                                        ? _teamName(widget.team)
+                                        : _nameC.text.trim(),
+                                    size: 64,
+                                    active: true,
+                                  ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Логотип команды', style: _CmrText.value(12.8)),
+                                const SizedBox(height: 3),
+                                Text(
+                                  _logoBytes == null
+                                      ? 'Нажмите, чтобы заменить изображение'
+                                      : 'Новый логотип выбран',
+                                  style: _CmrText.muted(10.8),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(
+                            Icons.edit_rounded,
+                            color: _CmrColors.greenDark,
+                            size: 18,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _field(
+                  label: 'Название команды',
+                  controller: _nameC,
+                  hint: 'Например: U14 / 2012',
+                ),
+                const SizedBox(height: 14),
+                LayoutBuilder(
+                  builder: (context, c) {
+                    final twoColumns = !compact && c.maxWidth >= 620;
+                    final left = Column(
+                      children: [
+                        _field(
+                          label: 'Вид спорта',
+                          controller: _sportC,
+                          hint: 'Футбол',
+                        ),
+                        const SizedBox(height: 14),
+                        _field(
+                          label: 'Сезон',
+                          controller: _seasonC,
+                          hint: '2026/27',
+                        ),
+                        const SizedBox(height: 14),
+                        _field(
+                          label: 'Главный тренер',
+                          controller: _coachC,
+                          hint: 'Фамилия Имя',
+                        ),
+                      ],
+                    );
+                    final right = Column(
+                      children: [
+                        _field(
+                          label: 'Группа',
+                          controller: _groupC,
+                          hint: 'U14 / 2012',
+                        ),
+                        const SizedBox(height: 14),
+                        _field(
+                          label: 'Локация',
+                          controller: _locationC,
+                          hint: 'Город / база / стадион',
+                        ),
+                        const SizedBox(height: 14),
+                        _field(
+                          label: 'Статус',
+                          controller: _statusC,
+                          hint: 'Активна',
+                        ),
+                      ],
+                    );
+                    if (!twoColumns) {
+                      return Column(
+                        children: [
+                          left,
+                          const SizedBox(height: 14),
+                          right,
+                        ],
+                      );
+                    }
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: left),
+                        const SizedBox(width: 14),
+                        Expanded(child: right),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 14),
+                _field(
+                  label: 'Описание команды',
+                  controller: _descriptionC,
+                  hint:
+                      'Возрастная группа, цели сезона, игровая модель и особенности тренировочного процесса',
+                  maxLines: 5,
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(11),
+                    decoration: BoxDecoration(
+                      color: _CmrColors.redSoft,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      _error!,
+                      style: _CmrText.muted(11.2).copyWith(color: _CmrColors.red),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _CmrCreateSecondaryButton(
+                        text: 'Отмена',
+                        onTap: _saving ? null : widget.onCancel,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 2,
+                      child: _CmrCreatePrimaryButton(
+                        text: _saving ? 'Сохранение...' : 'Сохранить паспорт',
+                        onTap: _saving ? null : _save,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -1886,9 +2451,9 @@ class _TeamSelectorHeader extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.title(mobile ? 14.6 : 14.6)),
+                            Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.title(mobile ? 15.6 : 14.6)),
                             const SizedBox(height: 3),
-                            Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.subtle(mobile ? 11.2 : 10.8)),
+                            Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.subtle(mobile ? 12.2 : 10.8)),
                           ],
                         ),
                       ),
@@ -1908,7 +2473,7 @@ class _TeamSelectorHeader extends StatelessWidget {
                           mobile ? 'Выбор' : 'Выбрать команду',
                           style: _CmrText.action().copyWith(
                             color: _CmrColors.greenDark,
-                            fontSize: mobile ? 11.8 : 11.4,
+                            fontSize: mobile ? 12.8 : 11.4,
                           ),
                         ),
                       ),
@@ -2121,9 +2686,9 @@ class _TeamsPickerSheetState extends State<_TeamsPickerSheet> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Выбор команды', maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.title(mobile ? 15.2 : 16.0)),
+                Text('Выбор команды', maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.title(mobile ? 16.2 : 16.0)),
                 const SizedBox(height: 3),
-                Text('${widget.clubName} · ${widget.teams.length} команд${visibleCount == widget.teams.length ? '' : ' · найдено $visibleCount'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.subtle(mobile ? 11.2 : 10.8)),
+                Text('${widget.clubName} · ${widget.teams.length} команд${visibleCount == widget.teams.length ? '' : ' · найдено $visibleCount'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.subtle(mobile ? 12.2 : 10.8)),
               ],
             ),
           ),
@@ -2442,13 +3007,15 @@ class _TeamsListHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Команды', maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.title(mobile ? 16.0 : 16.5)),
+              Text('Команды', maxLines: 1, overflow: TextOverflow.ellipsis, style: mobile
+                  ? AppTypography.screenTitle(color: _CmrColors.text)
+                  : _CmrText.title(16.5)),
               const SizedBox(height: 3),
               Text(
                 clubName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: _CmrText.muted(mobile ? 11.8 : 11.5),
+                style: _CmrText.muted(mobile ? 12.8 : 11.5),
               ),
             ],
           ),
@@ -2770,7 +3337,7 @@ class _TeamTileText extends StatelessWidget {
                 name,
                 maxLines: mobile ? 1 : 2,
                 overflow: TextOverflow.ellipsis,
-                style: _CmrText.value(mobile ? 12.5 : 13.5),
+                style: _CmrText.value(mobile ? 13.5 : 13.5),
               ),
             ),
           ],
@@ -2780,7 +3347,7 @@ class _TeamTileText extends StatelessWidget {
           subtitle,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: _CmrText.subtle(mobile ? 10.5 : 11),
+          style: _CmrText.subtle(mobile ? 11.5 : 11),
         ),
         if (!mobile) ...[
           const SizedBox(height: 7),
@@ -2893,6 +3460,7 @@ class _TeamDetails extends StatelessWidget {
   final int? maxPlayersPerTeam;
   final bool countsLoading;
   final VoidCallback onOpenTeam;
+  final VoidCallback onEditTeam;
   final VoidCallback? onOpenRoster;
   final VoidCallback? onOpenTrainers;
   final VoidCallback? onOpenCalendar;
@@ -2917,6 +3485,7 @@ class _TeamDetails extends StatelessWidget {
     required this.maxPlayersPerTeam,
     required this.countsLoading,
     required this.onOpenTeam,
+    required this.onEditTeam,
     required this.onOpenRoster,
     required this.onOpenTrainers,
     required this.onOpenCalendar,
@@ -3069,6 +3638,7 @@ class _TeamDetails extends StatelessWidget {
                   const SizedBox(height: 12),
                   _safePassport(
                     compact: compact,
+                    team: team,
                     name: name,
                     clubName: clubName,
                     sport: sport,
@@ -3514,6 +4084,7 @@ class _TeamDetails extends StatelessWidget {
 
   Widget _safePassport({
     required bool compact,
+    required Map<String, dynamic> team,
     required String name,
     required String clubName,
     required String sport,
@@ -3559,6 +4130,10 @@ class _TeamDetails extends StatelessWidget {
             label: 'Группа',
             value: subtitle.trim().isEmpty ? 'Не указана' : subtitle,
           ),
+          _TeamPassportRow(label: 'Сезон', value: _teamSeason(team)),
+          _TeamPassportRow(label: 'Локация', value: _teamCity(team)),
+          _TeamPassportRow(label: 'Главный тренер', value: _teamCoach(team)),
+          _TeamPassportRow(label: 'Статус', value: _teamStatus(team)),
           SizedBox(height: compact ? 10 : 8),
           Text(
             description.isEmpty
@@ -3569,7 +4144,7 @@ class _TeamDetails extends StatelessWidget {
           SizedBox(height: compact ? 12 : 10),
           _safeSmallButton(
             'Редактировать',
-            onOpenTeam,
+            onEditTeam,
             compact: compact,
           ),
         ],
@@ -6407,7 +6982,9 @@ class _SearchField extends StatelessWidget {
                 border: InputBorder.none,
                 isDense: true,
               ),
-              style: _CmrText.value(mobile ? 13.2 : 12.8),
+              style: mobile
+                  ? AppTypography.formText(color: _CmrColors.text)
+                  : _CmrText.value(12.8),
             ),
           ),
           if (controller.text.trim().isNotEmpty)
@@ -6488,7 +7065,7 @@ class _FilterChip extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: _CmrText.chip(
-                  size: dense ? 11.0 : 11.4,
+                  size: dense ? 12.0 : 11.4,
                   color: selected ? _CmrColors.greenDark : _CmrColors.secondary,
                 ).copyWith(
                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
@@ -6988,6 +7565,53 @@ dynamic _tryDecode(String body) {
 String _teamName(Map<String, dynamic> team) {
   final value = _s(team['name'] ?? team['team_name'] ?? team['teamName'] ?? team['title']);
   return value.isEmpty ? 'Команда' : value;
+}
+
+
+String _rawTeamGroup(Map<String, dynamic> team) {
+  return _s(
+    team['age_group'] ??
+        team['ageGroup'] ??
+        team['stage'] ??
+        team['group_name'] ??
+        team['groupName'],
+  );
+}
+
+String _rawTeamSeason(Map<String, dynamic> team) {
+  return _s(
+    team['season'] ??
+        team['season_title'] ??
+        team['seasonTitle'] ??
+        team['year'] ??
+        team['period'],
+  );
+}
+
+String _rawTeamCity(Map<String, dynamic> team) {
+  return _s(
+    team['city'] ??
+        team['location'] ??
+        team['region'] ??
+        team['stadium'] ??
+        team['base'],
+  );
+}
+
+String _rawTeamCoach(Map<String, dynamic> team) {
+  return _s(
+    team['head_coach'] ??
+        team['headCoach'] ??
+        team['coach'] ??
+        team['trainer_name'] ??
+        team['trainerName'],
+  );
+}
+
+String _rawTeamStatus(Map<String, dynamic> team) {
+  final explicit = _s(team['status'] ?? team['team_status'] ?? team['state']);
+  if (explicit.isNotEmpty) return explicit;
+  return _teamStatus(team);
 }
 
 String _teamSubtitle(Map<String, dynamic> team) {

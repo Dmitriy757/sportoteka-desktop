@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 
 class AiPlanLibraryResultCard extends StatelessWidget {
   final String title;
@@ -45,7 +46,7 @@ class AiPlanLibraryResultCard extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(
+                      style: const TextStyle(fontFamily: AppTypography.fontFamily, 
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -54,9 +55,9 @@ class AiPlanLibraryResultCard extends StatelessWidget {
                       [date, folderName]
                           .where((e) => e.trim().isNotEmpty)
                           .join(' · '),
-                      style: const TextStyle(
+                      style: const TextStyle(fontFamily: AppTypography.fontFamily, 
                         color: Color(0xFF667085),
-                        fontSize: 11.5,
+                        fontSize: AppTypography.secondarySize,
                       ),
                     ),
                   ],

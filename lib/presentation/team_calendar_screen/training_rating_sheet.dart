@@ -109,11 +109,8 @@ class _TrainingRatingRightPane extends StatelessWidget {
                                 'Оценки тренировки',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: AppTypography.custom(
-                                  size: 13.4,
-                                  weight: FontWeight.w600,
+                                style: AppTypography.subsectionTitle(
                                   color: const Color(0xFF0B0F14),
-                                  height: 1.05,
                                 ),
                               ),
                               const SizedBox(height: 3),
@@ -121,11 +118,8 @@ class _TrainingRatingRightPane extends StatelessWidget {
                                 title,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: AppTypography.custom(
-                                  size: 10.2,
-                                  weight: FontWeight.w400,
+                                style: AppTypography.caption(
                                   color: const Color(0xFF667085),
-                                  height: 1.05,
                                 ),
                               ),
                             ],
@@ -581,21 +575,15 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
               Expanded(
                 child: Text(
                   'Оценки игроков',
-                  style: AppTypography.custom(
-                    size: 11.8,
-                    weight: FontWeight.w600,
+                  style: AppTypography.formLabel(
                     color: const Color(0xFF0B0F14),
-                    height: 1,
                   ),
                 ),
               ),
               Text(
                 '${ratingByPlayerId.values.where((v) => v > 0).length}/${players.length}',
-                style: AppTypography.custom(
-                  size: 10.2,
-                  weight: FontWeight.w500,
+                style: AppTypography.captionMedium(
                   color: const Color(0xFF667085),
-                  height: 1,
                 ),
               ),
             ],
@@ -1112,8 +1100,8 @@ class _WinText {
     );
   }
 
-  static TextStyle title(double size) => base(size, FontWeight.w600, _WinColors.text, height: 1.10);
-  static TextStyle muted(double size) => base(size, FontWeight.w400, _WinColors.muted2, height: 1.22);
+  static TextStyle title(double size) => AppTypography.sectionTitle(color: _WinColors.text);
+  static TextStyle muted(double size) => AppTypography.secondary(color: _WinColors.muted2);
 }
 
 class _Player {

@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import 'package:sportoteka/core/theme/app_typography.dart';
+
 class _CreateChatUi {
   static const Color bg = Color(0xFFF6F7F9);
   static const Color card = Colors.white;
@@ -12,20 +14,21 @@ class _CreateChatUi {
   static const Color text = Color(0xFF0B0F14);
   static const Color muted = Color(0xFF6B7280);
 
-  static TextStyle title(double size) => TextStyle(
-        color: text,
-        fontSize: size,
-        fontWeight: FontWeight.w700,
-        height: 1.08,
-        letterSpacing: -0.3,
-      );
+  static TextStyle title(double size) {
+    final base = size >= 15
+        ? AppTypography.screenTitle(color: text)
+        : size >= 13.4
+            ? AppTypography.subsectionTitle(color: text)
+            : AppTypography.itemTitle(color: text);
+    return base.copyWith(fontWeight: FontWeight.w700);
+  }
 
-  static TextStyle mutedText(double size) => TextStyle(
-        color: muted,
-        fontSize: size,
-        fontWeight: FontWeight.w500,
-        height: 1.22,
-      );
+  static TextStyle mutedText(double size) {
+    final base = size >= 11.5
+        ? AppTypography.secondary(color: muted)
+        : AppTypography.caption(color: muted);
+    return base.copyWith(fontWeight: FontWeight.w500);
+  }
 }
 
 Future<int?> showCreatePrivateChatModal(
@@ -225,7 +228,8 @@ class _CreatePrivateChatSheetState extends State<_CreatePrivateChatSheet> {
                   child: TextField(
                     controller: _search,
                     decoration: const InputDecoration(hintText: 'Поиск пользователя...', border: InputBorder.none, isDense: true, prefixIcon: Icon(Icons.search_rounded, size: 18)),
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                    style: AppTypography.formText(color: _CreateChatUi.text)
+                        .copyWith(fontWeight: FontWeight.w500),
                   ),
                 ),
               ),

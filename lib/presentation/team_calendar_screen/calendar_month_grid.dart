@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'dart:math' as math;
 import 'team_calendar_models.dart';
 
@@ -124,10 +125,7 @@ class CalendarMonthGrid extends StatelessWidget {
                 child: Center(
                   child: Text(
                     weekNames[i],
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: -0.2,
+                    style: AppTypography.menuTitle(
                       color: isWeekend
                           ? const Color(0xFF6B7280)
                           : const Color(0xFF374151),

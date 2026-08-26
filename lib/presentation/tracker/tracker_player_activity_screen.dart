@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' show FontFeature;
 
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 
 import 'models/action_tracker_protocol.dart';
 import 'models/tracker_pro_models.dart';
@@ -571,7 +572,7 @@ class _PlayerActivitySidebar extends StatelessWidget {
                     'Игроки',
                     style: TextStyle(
                       color: _AA.text,
-                      fontSize: 13.4,
+                      fontSize: AppTypography.itemTitleSize,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -580,7 +581,7 @@ class _PlayerActivitySidebar extends StatelessWidget {
                   players.isEmpty ? 'нет состава' : '${players.length}',
                   style: const TextStyle(
                     color: _AA.muted,
-                    fontSize: 10.2,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -610,7 +611,7 @@ class _PlayerActivitySidebar extends StatelessWidget {
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: _AA.muted,
-                          fontSize: 11.4,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -723,7 +724,7 @@ class _PlayerListTile extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: _AA.text,
-                        fontSize: 12.2,
+                        fontSize: AppTypography.bodySize,
                         fontWeight: active ? FontWeight.w700 : FontWeight.w600,
                         letterSpacing: -.12,
                       ),
@@ -735,7 +736,7 @@ class _PlayerListTile extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: _AA.muted,
-                        fontSize: 9.8,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -749,7 +750,7 @@ class _PlayerListTile extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: active ? _AA.green : _AA.text,
-                  fontSize: 11.6,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w700,
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
@@ -850,7 +851,7 @@ class _PlayerSelectorBar extends StatelessWidget {
             'Игрок',
             style: TextStyle(
               color: _AA.text,
-              fontSize: 12.2,
+              fontSize: AppTypography.bodySize,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -868,7 +869,7 @@ class _PlayerSelectorBar extends StatelessWidget {
                 dropdownColor: _AA.card,
                 style: const TextStyle(
                   color: _AA.text,
-                  fontSize: 12,
+                  fontSize: AppTypography.bodySize,
                   fontWeight: FontWeight.w600,
                 ),
                 items: [
@@ -977,7 +978,7 @@ class _ActivityCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: _AA.text,
-                          fontSize: 13,
+                          fontSize: AppTypography.itemTitleSize,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -989,7 +990,7 @@ class _ActivityCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: _AA.muted,
-                            fontSize: 9.8,
+                            fontSize: AppTypography.captionSize,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -1019,7 +1020,7 @@ class _SpeedChartCard extends StatelessWidget {
     return _ActivityCard(
       title: 'График скорости',
       subtitle: 'скорость по сессиям / онлайн-профиль',
-      trailing: Text('${maxSpeed.toStringAsFixed(1)} км/ч макс.', style: const TextStyle(color: _AA.green, fontSize: 11, fontWeight: FontWeight.w500)),
+      trailing: Text('${maxSpeed.toStringAsFixed(1)} км/ч макс.', style: const TextStyle(color: _AA.green, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w500)),
       child: CustomPaint(
         painter: _SpeedDiagramPainter(points: points),
         child: const SizedBox.expand(),
@@ -1094,7 +1095,7 @@ class _StatsGrid extends StatelessWidget {
         ),
         child: const Text(
           'Развернуть',
-          style: TextStyle(fontSize: 10.2, fontWeight: FontWeight.w700),
+          style: TextStyle(fontSize: AppTypography.captionSize, fontWeight: FontWeight.w700),
         ),
       ),
       child: LayoutBuilder(
@@ -1138,7 +1139,7 @@ class _StatsGrid extends StatelessWidget {
                   decoration: const BoxDecoration(color: _AA.card),
                   child: const Row(
                     children: [
-                      Expanded(child: Text('Онлайн обзор KPI', style: TextStyle(color: _AA.text, fontSize: 15, fontWeight: FontWeight.w700))),
+                      Expanded(child: Text('Онлайн обзор KPI', style: TextStyle(color: _AA.text, fontSize: AppTypography.sectionTitleSize, fontWeight: FontWeight.w700))),
                       _DialogCloseButton(),
                     ],
                   ),
@@ -1235,7 +1236,7 @@ class _MetricTile extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: _AA.dim,
-                fontSize: 9.8,
+                fontSize: AppTypography.captionSize,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -1405,7 +1406,7 @@ class _MiniButton extends StatelessWidget {
             label,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 11,
+              fontSize: AppTypography.secondarySize,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -1433,9 +1434,9 @@ class _ActivityError extends StatelessWidget {
           children: [
             const Icon(Icons.error_outline_rounded, color: _AA.red, size: 36),
             const SizedBox(height: 10),
-            const Text('Не удалось загрузить активность', style: TextStyle(color: _AA.text, fontSize: 15, fontWeight: FontWeight.w500)),
+            const Text('Не удалось загрузить активность', style: TextStyle(color: _AA.text, fontSize: AppTypography.sectionTitleSize, fontWeight: FontWeight.w500)),
             const SizedBox(height: 6),
-            Text(error, textAlign: TextAlign.center, style: const TextStyle(color: _AA.muted, fontSize: 12, fontWeight: FontWeight.w500)),
+            Text(error, textAlign: TextAlign.center, style: const TextStyle(color: _AA.muted, fontSize: AppTypography.bodySize, fontWeight: FontWeight.w500)),
             const SizedBox(height: 6),
             _MiniButton(icon: Icons.refresh_rounded, label: 'Повторить', onTap: onRetry),
           ],

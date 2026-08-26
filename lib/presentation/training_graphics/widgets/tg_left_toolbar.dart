@@ -209,7 +209,7 @@ class TgLeftToolbar extends StatelessWidget {
                             children: [
                               const Text(
                                 'Наложение',
-                                style: TextStyle(fontSize: 9.2, fontWeight: FontWeight.w600, color: _muted),
+                                style: TextStyle(fontFamily: AppTypography.fontFamily, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w600, color: _muted),
                               ),
                               const SizedBox(width: 8),
                               Expanded(
@@ -236,7 +236,7 @@ class TgLeftToolbar extends StatelessWidget {
                                 child: Text(
                                   '${(state.customFieldTextureOpacity * 100).round()}%',
                                   textAlign: TextAlign.right,
-                                  style: const TextStyle(fontSize: 8.8, fontWeight: FontWeight.w700, color: _muted),
+                                  style: const TextStyle(fontFamily: AppTypography.fontFamily, fontSize: AppTypography.badgeSize, fontWeight: FontWeight.w700, color: _muted),
                                 ),
                               ),
                             ],
@@ -317,8 +317,9 @@ class TgLeftToolbar extends StatelessWidget {
       child: Text(
         text,
         style: const TextStyle(
+          fontFamily: AppTypography.fontFamily,
           color: _muted2,
-          fontSize: 8.8,
+          fontSize: AppTypography.badgeSize,
           fontWeight: FontWeight.w700,
           letterSpacing: .45,
         ),
@@ -392,7 +393,7 @@ class TgLeftToolbar extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.custom(
-                        size: 10.6,
+                        size: AppTypography.captionSize,
                         weight: active ? FontWeight.w700 : FontWeight.w600,
                         color: active ? _green : (onTap == null ? _muted2 : _text),
                         height: 1.22,
@@ -405,7 +406,7 @@ class TgLeftToolbar extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.custom(
-                        size: 9.5,
+                        size: AppTypography.captionSize,
                         weight: FontWeight.w400,
                         color: active ? _green.withOpacity(.72) : _muted,
                         height: 1.22,
@@ -487,7 +488,7 @@ class TgLeftToolbar extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.custom(
-                        size: 10,
+                        size: AppTypography.captionSize,
                         weight: FontWeight.w600,
                         color: _text,
                         height: 1.18,
@@ -500,7 +501,7 @@ class TgLeftToolbar extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.custom(
-                        size: 8,
+                        size: AppTypography.badgeSize,
                         weight: FontWeight.w500,
                         color: _muted2,
                         height: 1.22,

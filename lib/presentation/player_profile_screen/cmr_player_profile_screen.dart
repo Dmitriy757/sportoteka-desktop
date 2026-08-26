@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
+import 'package:sportoteka/call/audio_call_screen.dart';
 import 'package:sportoteka/core/app_export.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/chat_screen/chat_room_screen.dart';
@@ -34,6 +35,7 @@ class CmrPlayerProfileScreen extends StatefulWidget {
   final VoidCallback? onClose;
   final VoidCallback? onEdit;
   final VoidCallback? onMessage;
+  final VoidCallback? onCall;
   final bool readOnly;
   final Set<PlayerProfileSection>? allowedSections;
   final bool showSectionTabs;
@@ -47,6 +49,7 @@ class CmrPlayerProfileScreen extends StatefulWidget {
     this.onClose,
     this.onEdit,
     this.onMessage,
+    this.onCall,
     this.readOnly = false,
     this.allowedSections,
     this.showSectionTabs = true,
@@ -73,7 +76,8 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen> {
   @override
   void initState() {
     super.initState();
-    controller = PlayerProfileController(player: widget.player)..addListener(_refresh);
+    controller = PlayerProfileController(player: widget.player)
+      ..addListener(_refresh);
     if (widget.externalSection != null) {
       controller.selectSection(widget.externalSection!);
     }
@@ -89,7 +93,8 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen> {
     if (oldId != newId) {
       controller.removeListener(_refresh);
       controller.dispose();
-      controller = PlayerProfileController(player: widget.player)..addListener(_refresh);
+      controller = PlayerProfileController(player: widget.player)
+        ..addListener(_refresh);
       _mediaSectionOpen = false;
       if (widget.externalSection != null) {
         controller.selectSection(widget.externalSection!);
@@ -125,12 +130,16 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen> {
     if (mounted) setState(() {});
   }
 
-  int _i(dynamic value) => value is num ? value.toInt() : int.tryParse('${value ?? ''}') ?? 0;
+  int _i(dynamic value) =>
+      value is num ? value.toInt() : int.tryParse('${value ?? ''}') ?? 0;
 
   String _name() {
-    final full = '${widget.player['full_name'] ?? widget.player['fullName'] ?? widget.player['name'] ?? ''}'.trim();
+    final full =
+        '${widget.player['full_name'] ?? widget.player['fullName'] ?? widget.player['name'] ?? ''}'
+            .trim();
     if (full.isNotEmpty) return full;
-    return '${widget.player['first_name'] ?? ''} ${widget.player['last_name'] ?? ''}'.trim();
+    return '${widget.player['first_name'] ?? ''} ${widget.player['last_name'] ?? ''}'
+        .trim();
   }
 
   Future<void> _handlePhotoEdit() async {
@@ -154,7 +163,8 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen> {
     if (myId <= 0 || peerId <= 0) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не удалось определить пользователя для чата')),
+        const SnackBar(
+            content: Text('Не удалось определить пользователя для чата')),
       );
       return;
     }
@@ -165,7 +175,8 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen> {
         body: {'me': '$myId', 'peer_id': '$peerId'},
       ).timeout(const Duration(seconds: 15));
       final decoded = jsonDecode(response.body);
-      final chatId = decoded is Map ? _i(decoded['chat_id'] ?? decoded['id']) : 0;
+      final chatId =
+          decoded is Map ? _i(decoded['chat_id'] ?? decoded['id']) : 0;
       if (chatId <= 0) throw Exception('Сервер не вернул chat_id');
       if (!mounted) return;
 
@@ -186,19 +197,90 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen> {
     }
   }
 
+  Future<void> _handleCall() async {
+    if (widget.onCall != null) {
+      widget.onCall!();
+      return;
+    }
+
+    final myId = await PrefUtils.getUserId() ?? 0;
+    final peerId = _i(widget.player['user_id'] ?? widget.player['userId']);
+
+    if (myId <= 0 || peerId <= 0 || myId == peerId) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Не удалось определить пользователя для звонка'),
+        ),
+      );
+      return;
+    }
+
+    try {
+      final channelId =
+          'player_${myId}_${peerId}_${DateTime.now().millisecondsSinceEpoch}';
+
+      final response = await http.post(
+        Uri.parse('$_apiBase/calls/create.php'),
+        body: {
+          'caller_id': myId.toString(),
+          'callee_id': peerId.toString(),
+          'channel_id': channelId,
+        },
+      ).timeout(const Duration(seconds: 15));
+
+      final decoded = jsonDecode(response.body);
+      final callId = decoded is Map ? _i(decoded['call_id']) : 0;
+      final ok = response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          decoded is Map &&
+          decoded['status'] == 'ok' &&
+          callId > 0;
+
+      if (!ok) {
+        throw Exception('Сервер не создал звонок');
+      }
+
+      if (!mounted) return;
+
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => AudioCallScreen(
+            callId: callId,
+            userId: myId,
+            isCaller: true,
+            peerName: _name().isEmpty ? 'Игрок' : _name(),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Не удалось начать звонок'),
+        ),
+      );
+    }
+  }
+
   void _openReadiness() {
     final teamId = controller.teamId;
     final playerId = controller.playerId;
     final clubId = _i(widget.player['club_id'] ?? widget.player['clubId']);
     final userId = controller.userId;
     final playerName = _name();
-    final teamName = '${widget.player['team_name'] ?? widget.player['teamName'] ?? ''}'.trim();
-    final clubName = '${widget.player['club_name'] ?? widget.player['clubName'] ?? ''}'.trim();
+    final teamName =
+        '${widget.player['team_name'] ?? widget.player['teamName'] ?? ''}'
+            .trim();
+    final clubName =
+        '${widget.player['club_name'] ?? widget.player['clubName'] ?? ''}'
+            .trim();
 
     if (teamId <= 0 || playerId <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Не хватает team_id или player_id для открытия готовности.'),
+          content:
+              Text('Не хватает team_id или player_id для открытия готовности.'),
         ),
       );
       return;
@@ -231,7 +313,8 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen> {
     );
   }
 
-  void _openEditor(PlayerProfileEditorMode mode, {Map<String, dynamic>? record}) {
+  void _openEditor(PlayerProfileEditorMode mode,
+      {Map<String, dynamic>? record}) {
     setState(() {
       _aiOpen = false;
       _customPanelBuilder = null;
@@ -248,7 +331,6 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen> {
       _aiOpen = !_aiOpen;
     });
   }
-
 
   void _openCustomPanel(Widget Function(VoidCallback close) builder) {
     setState(() {
@@ -314,6 +396,7 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen> {
             onClose: widget.onClose,
             onPhotoEdit: widget.readOnly ? null : _handlePhotoEdit,
             onMessage: widget.readOnly ? null : _handleMessage,
+            onCall: widget.readOnly ? null : _handleCall,
             onAi: widget.readOnly ? null : _toggleAi,
           ),
           if (widget.showSectionTabs)
@@ -333,7 +416,34 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen> {
               },
               allowedSections: widget.allowedSections,
             ),
-          Expanded(child: _content()),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final content = _content();
+                if (constraints.maxWidth >= 640) return content;
+
+                final media = MediaQuery.of(context);
+                final currentScaler = MediaQuery.textScalerOf(context);
+                final currentFactor = currentScaler.scale(14) / 14;
+
+                // На телефоне слегка увеличиваем именно содержимое разделов.
+                // Если пользователь уже увеличил системный шрифт, его настройку
+                // не переопределяем дополнительным масштабированием.
+                if (currentFactor > 1.12) return content;
+
+                final boostedFactor = (currentFactor * 1.08)
+                    .clamp(currentFactor, 1.18)
+                    .toDouble();
+
+                return MediaQuery(
+                  data: media.copyWith(
+                    textScaler: TextScaler.linear(boostedFactor),
+                  ),
+                  child: content,
+                );
+              },
+            ),
+          ),
         ],
       ),
     );
@@ -400,7 +510,8 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen> {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(10),
-          child: ClipRRect(borderRadius: BorderRadius.circular(18), child: body),
+          child:
+              ClipRRect(borderRadius: BorderRadius.circular(18), child: body),
         ),
       ),
     );
@@ -408,7 +519,8 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen> {
 
   Widget _content() {
     if (controller.loading && controller.snapshot == null) {
-      return const Center(child: CircularProgressIndicator(color: PpColors.green));
+      return const Center(
+          child: CircularProgressIndicator(color: PpColors.green));
     }
     if (controller.error != null && controller.snapshot == null) {
       return Center(
@@ -453,7 +565,8 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen> {
             int pain = 0,
             int rpe = 0,
             String note = '',
-          }) => controller.saveDiaryEntry(
+          }) =>
+              controller.saveDiaryEntry(
             authorUserId: _currentUserId,
             authorRole: authorRole,
             entryDate: entryDate,
@@ -472,7 +585,8 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen> {
             String goalText = '',
             int progress = 0,
             bool isDone = false,
-          }) => controller.saveWeekGoal(
+          }) =>
+              controller.saveWeekGoal(
             authorUserId: _currentUserId,
             authorRole: _currentRole,
             goalId: goalId,
@@ -524,10 +638,18 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen> {
       case PlayerProfileSection.health:
         return PlayerHealthSection(
           data: data,
-          onEditMetrics: widget.readOnly ? () {} : () => _openEditor(PlayerProfileEditorMode.metrics),
-          onAddMedical: widget.readOnly ? () {} : () => _openEditor(PlayerProfileEditorMode.medical),
-          onEditMedical: widget.readOnly ? (_) {} : (record) => _openEditor(PlayerProfileEditorMode.medical, record: record),
-          onDeleteMedical: widget.readOnly ? (_) async {} : controller.deleteMedical,
+          onEditMetrics: widget.readOnly
+              ? () {}
+              : () => _openEditor(PlayerProfileEditorMode.metrics),
+          onAddMedical: widget.readOnly
+              ? () {}
+              : () => _openEditor(PlayerProfileEditorMode.medical),
+          onEditMedical: widget.readOnly
+              ? (_) {}
+              : (record) =>
+                  _openEditor(PlayerProfileEditorMode.medical, record: record),
+          onDeleteMedical:
+              widget.readOnly ? (_) async {} : controller.deleteMedical,
           onOpenDocument: (record) => _openCustomPanel(
             (close) => DocumentPreviewPanel(
               playerId: controller.playerId,
@@ -541,8 +663,7 @@ class _CmrPlayerProfileScreenState extends State<CmrPlayerProfileScreen> {
           data: data,
           readOnly: widget.readOnly,
           onAdd: () => _openDocumentEditor(),
-          onEdit: (document) =>
-              _openDocumentEditor(document: document),
+          onEdit: (document) => _openDocumentEditor(document: document),
           onDelete: controller.deleteDocument,
           onOpen: (document) => _openCustomPanel(
             (close) => DocumentPreviewPanel(

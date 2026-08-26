@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
 
@@ -17,7 +18,7 @@ class PdfPreviewScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(fileName, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+        title: Text(fileName, style: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w800, fontSize: AppTypography.subsectionTitleSize)),
       ),
       body: PdfPreview(
         canChangeOrientation: false,

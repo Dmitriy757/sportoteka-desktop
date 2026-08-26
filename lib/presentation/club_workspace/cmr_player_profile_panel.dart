@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'dart:ui' show FontFeature;
 
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 
 class CmrPlayerProfilePanel extends StatefulWidget {
   final Map<String, dynamic>? player;
@@ -1616,111 +1617,49 @@ class _ProfileDecor {
 
 
 class _ProfileText {
-  static const String family = 'Segoe UI';
-  static const List<String> fallback = <String>[
-    'SF Pro Display',
-    'SF Pro Text',
-    'Inter',
-    'Roboto',
-    'Arial',
-  ];
-
-  static TextStyle title(double size) => TextStyle(
+  static TextStyle title(double size) => AppTypography.custom(
+        size: size,
+        weight: FontWeight.w600,
         color: _ProfileColors.text,
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: size,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -.38,
-        height: 1.08,
-        fontFeatures: const [FontFeature.tabularFigures()],
-      );
-
-  static TextStyle section() => const TextStyle(
-        color: _ProfileColors.text,
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: 14.2,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -.22,
         height: 1.12,
+        features: const [FontFeature.tabularFigures()],
       );
 
-  static TextStyle value(double size) => TextStyle(
+  static TextStyle section() =>
+      AppTypography.sectionTitle(color: _ProfileColors.text);
+
+  static TextStyle value(double size) => AppTypography.custom(
+        size: size,
+        weight: FontWeight.w600,
         color: _ProfileColors.text,
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: size,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -.22,
         height: 1.22,
-        fontFeatures: const [FontFeature.tabularFigures()],
+        features: const [FontFeature.tabularFigures()],
       );
 
-  static TextStyle muted(double size) => TextStyle(
+  static TextStyle muted(double size) => AppTypography.custom(
+        size: size,
+        weight: FontWeight.w400,
         color: _ProfileColors.muted,
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: size,
-        fontWeight: FontWeight.w500,
-        letterSpacing: -.05,
         height: 1.36,
       );
 
-  static TextStyle caption() => const TextStyle(
-        color: _ProfileColors.muted,
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: 11.1,
-        fontWeight: FontWeight.w600,
-        letterSpacing: .08,
-        height: 1.12,
-      );
+  static TextStyle caption() =>
+      AppTypography.captionMedium(color: _ProfileColors.muted);
 
-  static TextStyle pill() => const TextStyle(
-        color: _ProfileColors.text,
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: 11.3,
-        fontWeight: FontWeight.w600,
-        letterSpacing: -.02,
-      );
+  static TextStyle pill() =>
+      AppTypography.chip(color: _ProfileColors.text);
 
-  static TextStyle tab() => const TextStyle(
-        color: _ProfileColors.text,
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: 12,
-        fontWeight: FontWeight.w600,
-        letterSpacing: -.04,
-      );
+  static TextStyle tab() =>
+      AppTypography.tab(color: _ProfileColors.text);
 
-  static TextStyle tabSelected() => const TextStyle(
-        color: _ProfileColors.green,
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: 12,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -.04,
-      );
+  static TextStyle tabSelected() =>
+      AppTypography.tab(color: _ProfileColors.green, active: true);
 
-  static TextStyle action() => const TextStyle(
-        color: _ProfileColors.green,
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: 12,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -.08,
-      );
+  static TextStyle action() =>
+      AppTypography.action(color: _ProfileColors.green);
 
-  static TextStyle danger() => const TextStyle(
-        color: _ProfileColors.red,
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: 12,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -.08,
-      );
+  static TextStyle danger() =>
+      AppTypography.action(color: _ProfileColors.red);
 }
 
 class _KnownMetric {

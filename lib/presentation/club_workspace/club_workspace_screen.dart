@@ -1,4 +1,5 @@
 // lib/presentation/club_workspace/club_workspace_screen.dart
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -48,10 +49,13 @@ import 'package:sportoteka/presentation/club_workspace/cmr_club_parents_panel.da
 import 'package:sportoteka/presentation/club_workspace/cmr_medical_cabinet_panel.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_context_ai_layer.dart';
 import 'package:sportoteka/presentation/tracker/screens/tracker_match_workspace_screen.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_finder_panel.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_finder_models.dart';
 
 enum ClubSection {
   coachDashboard,
   overview,
+  finder,
   teams,
   teamDashboard,
   roster,
@@ -224,7 +228,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   bool hasActiveSubscription = false;
   String subscriptionPlanCode = '';
 
-  bool get _isClubBasic => subscriptionPlanCode.trim().toLowerCase() == 'club_basic';
+  bool get _isClubBasic =>
+      subscriptionPlanCode.trim().toLowerCase() == 'club_basic';
 
   List<Map<String, dynamic>> teams = [];
   List<Map<String, dynamic>> trainers = [];
@@ -248,11 +253,14 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       <_WorkspaceWindowState>[];
   int _workspaceWindowZCounter = 0;
   int _chatPanelRevision = 0;
+  int _chatUnreadCount = 0;
+  Timer? _chatUnreadTimer;
   bool _openCreateTeamInline = false;
   bool? _contextAiExpanded;
   int _contextAiRevision = 0;
 
   final Set<ClubSection> _desktopIconSections = <ClubSection>{
+    ClubSection.finder,
     ClubSection.teams,
     ClubSection.roster,
     ClubSection.trainers,
@@ -266,6 +274,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   };
 
   final Set<ClubSection> _dockSections = <ClubSection>{
+    ClubSection.finder,
     ClubSection.teams,
     ClubSection.roster,
     ClubSection.trainers,
@@ -322,20 +331,105 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
 
   @override
   void dispose() {
+    _chatUnreadTimer?.cancel();
     _introController.dispose();
     super.dispose();
   }
 
+  void _startChatUnreadPolling() {
+    _chatUnreadTimer?.cancel();
+    unawaited(_refreshChatUnreadCount());
+    _chatUnreadTimer = Timer.periodic(
+      const Duration(seconds: 6),
+      (_) => unawaited(_refreshChatUnreadCount()),
+    );
+  }
+
+  int _workspaceUnreadFromRows(dynamic raw) {
+    if (raw is! List) return 0;
+    var total = 0;
+    for (final entry in raw.whereType<Map>()) {
+      final count = int.tryParse('${entry['unread_count'] ?? 0}') ?? 0;
+      if (count > 0) total += count;
+    }
+    return total;
+  }
+
+  bool _workspacePrivateChat(Map<dynamic, dynamic> chat) {
+    final type =
+        '${chat['type'] ?? chat['chat_type'] ?? ''}'.trim().toLowerCase();
+    if (type == 'private' || type == 'personal' || type == 'direct') {
+      return true;
+    }
+    final flag = chat['is_private'];
+    return flag == 1 || flag == '1' || flag == true;
+  }
+
+  bool _workspaceGroupMember(Map<dynamic, dynamic> group) {
+    final flag = group['i_am_member'];
+    return flag == null || flag == 1 || flag == '1' || flag == true;
+  }
+
+  Future<int> _loadWorkspaceRealUnread(int userId) async {
+    var total = 0;
+
+    try {
+      final response = await http
+          .get(Uri.parse('$apiBase/get_user_chats.php?user_id=$userId'))
+          .timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        final decoded = _decode(response.body);
+        if (decoded is List) {
+          total += _workspaceUnreadFromRows(
+            decoded.whereType<Map>().where(_workspacePrivateChat).toList(),
+          );
+        }
+      }
+    } catch (_) {}
+
+    try {
+      final response = await http
+          .get(Uri.parse('$apiBase/get_groups_feed.php?user_id=$userId'))
+          .timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        final decoded = _decode(response.body);
+        if (decoded is Map && decoded['success'] == true) {
+          final raw = decoded['groups'];
+          if (raw is List) {
+            total += _workspaceUnreadFromRows(
+              raw.whereType<Map>().where(_workspaceGroupMember).toList(),
+            );
+          }
+        }
+      }
+    } catch (_) {}
+
+    return total.clamp(0, 9999);
+  }
+
+  Future<void> _refreshChatUnreadCount() async {
+    final userId = currentUserId > 0 ? currentUserId : clubId;
+    if (userId <= 0) {
+      if (mounted && _chatUnreadCount != 0) {
+        setState(() => _chatUnreadCount = 0);
+      }
+      return;
+    }
+
+    final value = await _loadWorkspaceRealUnread(userId);
+
+    if (!mounted || value == _chatUnreadCount) return;
+    setState(() => _chatUnreadCount = value);
+  }
+
   Future<void> _boot() async {
     currentUserId = await PrefUtils.getUserId() ?? 0;
+    _startChatUnreadPolling();
 
-    final trainerFirstName =
-        (await PrefUtils.getUserFirstName()).trim();
-    final trainerLastName =
-        (await PrefUtils.getUserLastName()).trim();
+    final trainerFirstName = (await PrefUtils.getUserFirstName()).trim();
+    final trainerLastName = (await PrefUtils.getUserLastName()).trim();
 
-    trainerWorkspaceName =
-        '$trainerFirstName $trainerLastName'.trim();
+    trainerWorkspaceName = '$trainerFirstName $trainerLastName'.trim();
 
     final args = Get.arguments;
     if (args is Map) {
@@ -375,6 +469,20 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     if (!trainerAssignedMode && clubId <= 0) clubId = currentUserId;
 
     await _loadAll(initial: true);
+
+    // Для клуба стартовый экран — выбор команд, а не Спортотека OS.
+    // Тренерский кабинет сохраняет персональный Overview.
+    if (!trainerAssignedMode && mounted) {
+      setState(() => selectedSection = ClubSection.teams);
+
+      // На macOS/Windows рабочая область построена как OS с отдельными окнами.
+      // Поэтому недостаточно только выбрать section: сразу открываем окно
+      // «Команды», чтобы пользователь видел выбор команд при входе.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_isDesktopWide(context)) return;
+        _openModuleWindow(ClubSection.teams);
+      });
+    }
   }
 
   Future<void> _loadAll({bool initial = false}) async {
@@ -804,8 +912,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         'team_id': selectedTeamId.toString(),
       if (trainerAssignedMode && trainerWorkspaceId > 0)
         'trainer_id': trainerWorkspaceId.toString(),
-      if (trainerAssignedMode &&
-          trainerWorkspaceName.trim().isNotEmpty)
+      if (trainerAssignedMode && trainerWorkspaceName.trim().isNotEmpty)
         'trainer_name': trainerWorkspaceName.trim(),
     };
 
@@ -1847,6 +1954,12 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   }
 
   List<_FullMenuItem> get _fullMenuItems => [
+        const _FullMenuItem(
+          ClubSection.finder,
+          Icons.folder_open_rounded,
+          'Спортотека OS',
+          'Единое пространство клуба',
+        ),
         const _FullMenuItem(
           ClubSection.teams,
           Icons.account_tree_rounded,
@@ -3864,8 +3977,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                           _activateInlineSection(ClubSection.calendar)),
                   dockIcon(
                       index: 4,
-                      icon: Icons.near_me_outlined,
-                      badge: 1,
+                      icon: Icons.forum_outlined,
+                      badge: _chatUnreadCount,
                       onTap: () => _activateInlineSection(ClubSection.chat)),
                   dockIcon(
                       index: 5,
@@ -3946,6 +4059,13 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
           currentSection: selectedSection,
           groups: _clubWorkspaceNavGroups,
           hasActiveSubscription: hasActiveSubscription,
+          onSportotekaOs: () {
+            Navigator.of(sheetContext).pop();
+            Future<void>.delayed(
+              const Duration(milliseconds: 80),
+              () => _activateInlineSection(ClubSection.finder),
+            );
+          },
           onWorkspace: () {
             Navigator.of(sheetContext).pop();
             Future<void>.delayed(
@@ -4469,6 +4589,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         return 'Панель трекера';
       case ClubSection.overview:
         return 'Рабочий кабинет клуба';
+      case ClubSection.finder:
+        return 'Спортотека OS';
       case ClubSection.teams:
         return 'Команды клуба';
       case ClubSection.teamDashboard:
@@ -4534,6 +4656,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         return 'Главная панель GPS-комплекса: готовность команды, онлайн, отчёты и трекеры';
       case ClubSection.overview:
         return 'Команды, игроки, матчи, тренировки и аналитика в одном экране';
+      case ClubSection.finder:
+        return 'Папки, заметки, игроки, тренеры, команды и рабочие модули клуба';
       case ClubSection.teams:
         return 'Крупные карточки команд и быстрое создание новой команды';
       case ClubSection.teamDashboard:
@@ -4731,6 +4855,87 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     );
   }
 
+  void _openFinderModule(String key) {
+    switch (key) {
+      case 'teams':
+        _selectWorkspaceSection(ClubSection.teams);
+        break;
+      case 'players':
+        _selectWorkspaceSection(ClubSection.roster);
+        break;
+      case 'trainers':
+        _selectWorkspaceSection(ClubSection.trainers);
+        break;
+      case 'matches':
+        _selectWorkspaceSection(ClubSection.matches);
+        break;
+      case 'trainings':
+        _selectWorkspaceSection(ClubSection.calendar);
+        break;
+      case 'plans':
+        _selectWorkspaceSection(ClubSection.plans);
+        break;
+      case 'tracker':
+      case 'reports':
+        _selectWorkspaceSection(ClubSection.tracker);
+        break;
+      case 'testing':
+        _selectWorkspaceSection(ClubSection.testing);
+        break;
+      case 'calendar':
+        _selectWorkspaceSection(ClubSection.calendar);
+        break;
+      case 'video':
+      case 'videoAnalysis':
+        _selectWorkspaceSection(ClubSection.videoAnalysis);
+        break;
+      case 'videoLessons':
+        _selectWorkspaceSection(ClubSection.videoLessons);
+        break;
+      case 'attendance':
+        _selectWorkspaceSection(ClubSection.attendance);
+        break;
+      case 'medical':
+        _selectWorkspaceSection(ClubSection.medical);
+        break;
+      case 'chat':
+        _selectWorkspaceSection(ClubSection.chat);
+        break;
+      case 'parents':
+        _selectWorkspaceSection(ClubSection.parents);
+        break;
+      case 'documents':
+        Get.snackbar(
+          'Документы',
+          'Документы открываются из карточек игроков, тренеров и медицинского кабинета.',
+        );
+        break;
+      default:
+        Get.snackbar(
+            'Спортотека OS', 'Раздел пока не подключён к пространству клуба.');
+    }
+  }
+
+  Future<bool> _handleFinderMove(
+    WorkspaceFinderNode source,
+    WorkspaceFinderNode target,
+  ) async {
+    // Системное перетаскивание здесь специально проходит через единый bridge.
+    // Когда для сущности есть безопасный API раздела, операция подключается здесь,
+    // а оболочка OS остаётся неизменной. Локальные папки и ярлыки она обрабатывает сама.
+    if (source.kind == WorkspaceFinderNodeKind.player &&
+        target.kind == WorkspaceFinderNodeKind.team &&
+        target.payload != null) {
+      Get.snackbar(
+        'Перевод игрока',
+        'Перенос игрока между командами требует подтверждения. Откройте карточку команды — Спортотека OS уже передала выбранную команду.',
+      );
+      await _selectTeam(target.payload!, openTeam: false);
+      return false;
+    }
+    return false;
+  }
+
   Widget _buildSectionContent(ClubSection section) {
     switch (section) {
       case ClubSection.coachDashboard:
@@ -4767,16 +4972,14 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
               if (!mounted) return;
               setState(() {
                 _showOwnTrainerProfile = true;
-                selectedSection =
-                    ClubSection.trainers;
+                selectedSection = ClubSection.trainers;
               });
             },
             onOpenTrainers: () {
               if (!mounted) return;
               setState(() {
                 _showOwnTrainerProfile = false;
-                selectedSection =
-                    ClubSection.trainers;
+                selectedSection = ClubSection.trainers;
               });
             },
             onOpenTeams: () =>
@@ -4826,6 +5029,22 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
           onOpenPlans: () =>
               setState(() => selectedSection = ClubSection.plans),
           onOpenChats: () => setState(() => selectedSection = ClubSection.chat),
+        );
+      case ClubSection.finder:
+        return SportotekaWorkspaceFinderPanel(
+          clubId: clubId,
+          clubName: clubName,
+          teams: teams,
+          players: players,
+          trainers: trainers,
+          selectedTeamId: selectedTeamId,
+          selectedTeamName: selectedTeamName,
+          onRefresh: () => _loadAll(),
+          onOpenModule: _openFinderModule,
+          onOpenPlayer: _openPlayerProfileWindow,
+          onOpenTeam: (team) => _selectTeam(team, openTeam: false),
+          onOpenTrainer: (_) => _selectWorkspaceSection(ClubSection.trainers),
+          onMoveEntity: _handleFinderMove,
         );
       case ClubSection.teams:
         return CmrClubTeamsPanel(
@@ -4932,12 +5151,10 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         );
       case ClubSection.trainers:
       case ClubSection.teamTrainers:
-        if (trainerAssignedMode &&
-            _showOwnTrainerProfile) {
+        if (trainerAssignedMode && _showOwnTrainerProfile) {
           return TrainerSelfProfilePanel(
-            trainerId: trainerWorkspaceId > 0
-                ? trainerWorkspaceId
-                : currentUserId,
+            trainerId:
+                trainerWorkspaceId > 0 ? trainerWorkspaceId : currentUserId,
             clubId: clubId,
             clubName: clubName,
             teams: teams,
@@ -4945,8 +5162,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
               if (!mounted) return;
               setState(() {
                 _showOwnTrainerProfile = false;
-                selectedSection =
-                    ClubSection.trainers;
+                selectedSection = ClubSection.trainers;
               });
             },
             onChanged: () async {
@@ -5035,12 +5251,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
               clubName: clubName,
               teamId: selectedTeamId,
               teamName: selectedTeamName,
-              trainerId: trainerAssignedMode
-                  ? trainerWorkspaceId
-                  : 0,
-              trainerName: trainerAssignedMode
-                  ? trainerWorkspaceName
-                  : '',
+              trainerId: trainerAssignedMode ? trainerWorkspaceId : 0,
+              trainerName: trainerAssignedMode ? trainerWorkspaceName : '',
             ));
       case ClubSection.graphics:
         return _TeamModulePanel(
@@ -5132,6 +5344,10 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
           clubName: clubName,
           teamId: selectedTeamId,
           teamName: selectedTeamName,
+          onUnreadChanged: (value) {
+            if (!mounted) return;
+            setState(() => _chatUnreadCount = value);
+          },
           onAiNavigate: _handleAiNavigate,
           onAiOpenPdf: _handleAiOpenDocument,
         );
@@ -5365,6 +5581,7 @@ class _C {
       case ClubSection.coachDashboard:
         return purple;
       case ClubSection.overview:
+      case ClubSection.finder:
         return primaryGreen;
       case ClubSection.teams:
       case ClubSection.trainers:
@@ -6212,7 +6429,7 @@ class _TaskbarAppButtonState extends State<_TaskbarAppButton> {
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: textColor,
-                            fontSize: 9.2,
+                            fontSize: 10.2,
                             height: 1,
                             fontWeight: FontWeight.w600,
                           ),
@@ -6757,6 +6974,8 @@ class _Sidebar extends StatelessWidget {
     switch (item.section) {
       case ClubSection.overview:
         return 'Обзор';
+      case ClubSection.finder:
+        return 'OS';
       case ClubSection.teams:
         return 'Команды';
       case ClubSection.trainers:
@@ -13082,6 +13301,7 @@ class _MobileMoreBottomSheet extends StatelessWidget {
   final ClubSection currentSection;
   final List<_NavGroup> groups;
   final bool hasActiveSubscription;
+  final VoidCallback onSportotekaOs;
   final VoidCallback onWorkspace;
   final ValueChanged<ClubSection> onSelect;
 
@@ -13094,6 +13314,7 @@ class _MobileMoreBottomSheet extends StatelessWidget {
     required this.currentSection,
     required this.groups,
     required this.hasActiveSubscription,
+    required this.onSportotekaOs,
     required this.onWorkspace,
     required this.onSelect,
   });
@@ -13148,9 +13369,7 @@ class _MobileMoreBottomSheet extends StatelessWidget {
     final team = selectedTeamName.trim();
 
     if (trainerMode) {
-      if (hasTeam &&
-          team.isNotEmpty &&
-          team != 'Команда не выбрана') {
+      if (hasTeam && team.isNotEmpty && team != 'Команда не выбрана') {
         return 'Вы вошли как тренер · $team';
       }
       return 'Вы вошли как тренер';
@@ -13159,20 +13378,13 @@ class _MobileMoreBottomSheet extends StatelessWidget {
     return 'Вы вошли как клуб';
   }
 
-  String get _roleLabel =>
-      trainerMode ? 'ТРЕНЕР' : 'КЛУБ';
+  String get _roleLabel => trainerMode ? 'ТРЕНЕР' : 'КЛУБ';
 
   TextStyle _titleStyle({
     required bool active,
   }) {
-    return AppTypography.custom(
-      size: 11.4,
-      weight: FontWeight.w600,
-      color: active
-          ? const Color(0xFF067A46)
-          : const Color(0xFF111827),
-      height: 1.15,
-      letterSpacing: 0,
+    return AppTypography.menuTitle(
+      color: active ? const Color(0xFF067A46) : const Color(0xFF111827),
     );
   }
 
@@ -13180,16 +13392,12 @@ class _MobileMoreBottomSheet extends StatelessWidget {
     required bool active,
     required bool disabled,
   }) {
-    return AppTypography.custom(
-      size: 9.7,
-      weight: FontWeight.w400,
+    return AppTypography.menuSubtitle(
       color: disabled
           ? const Color(0xFF98A2B3)
           : active
               ? const Color(0xFF667085)
               : const Color(0xFF667085),
-      height: 1.2,
-      letterSpacing: 0,
     );
   }
 
@@ -13201,7 +13409,7 @@ class _MobileMoreBottomSheet extends StatelessWidget {
       borderRadius: BorderRadius.circular(15),
       child: InkWell(
         borderRadius: BorderRadius.circular(15),
-        onTap: onWorkspace,
+        onTap: onSportotekaOs,
         child: Container(
           width: double.infinity,
           constraints: const BoxConstraints(
@@ -13226,7 +13434,7 @@ class _MobileMoreBottomSheet extends StatelessWidget {
                   borderRadius: BorderRadius.circular(11),
                 ),
                 child: const Icon(
-                  Icons.account_tree_outlined,
+                  Icons.folder_open_rounded,
                   size: 18,
                   color: accent,
                 ),
@@ -13235,32 +13443,23 @@ class _MobileMoreBottomSheet extends StatelessWidget {
               Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      'К выбору Workspace',
+                      'Спортотека OS',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTypography.custom(
-                        size: 11.4,
-                        weight: FontWeight.w600,
+                      style: AppTypography.menuTitle(
                         color: accent,
-                        height: 1.15,
-                        letterSpacing: 0,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'выбрать личный или рабочий кабинет',
+                      'файлы, окна и рабочее пространство клуба',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTypography.custom(
-                        size: 9.7,
-                        weight: FontWeight.w400,
+                      style: AppTypography.menuSubtitle(
                         color: const Color(0xFF667085),
-                        height: 1.2,
-                        letterSpacing: 0,
                       ),
                     ),
                   ],
@@ -13279,17 +13478,83 @@ class _MobileMoreBottomSheet extends StatelessWidget {
     );
   }
 
+  Widget _backToWorkspaceTile() {
+    const textColor = Color(0xFF344054);
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(15),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(15),
+        onTap: onWorkspace,
+        child: Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(minHeight: 50),
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF7F9F8),
+            borderRadius: BorderRadius.circular(15),
+          ),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 32,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: const Icon(
+                  Icons.dashboard_customize_rounded,
+                  size: 18,
+                  color: textColor,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'К выбору Workspace',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.menuTitle(color: textColor),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'сменить рабочее пространство',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.menuSubtitle(
+                        color: const Color(0xFF667085),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(
+                Icons.arrow_outward_rounded,
+                size: 17,
+                color: Color(0xFF98A2B3),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _moduleTile(_NavItem item) {
     final active = _sectionIsActive(item.section);
-    final needsTeam =
-        _needsTeam(item.section) && !hasTeam;
-    final locked =
-        item.pro && !hasActiveSubscription;
+    final needsTeam = _needsTeam(item.section) && !hasTeam;
+    final locked = item.pro && !hasActiveSubscription;
 
     final opacity = needsTeam ? .48 : 1.0;
-    final accent = active
-        ? const Color(0xFF067A46)
-        : const Color(0xFF344054);
+    final accent = active ? const Color(0xFF067A46) : const Color(0xFF344054);
 
     return Opacity(
       opacity: opacity,
@@ -13319,9 +13584,7 @@ class _MobileMoreBottomSheet extends StatelessWidget {
               vertical: 6,
             ),
             decoration: BoxDecoration(
-              color: active
-                  ? const Color(0xFFF3FAF6)
-                  : Colors.transparent,
+              color: active ? const Color(0xFFF3FAF6) : Colors.transparent,
               borderRadius: BorderRadius.circular(15),
             ),
             child: Row(
@@ -13334,8 +13597,7 @@ class _MobileMoreBottomSheet extends StatelessWidget {
                     color: active
                         ? const Color(0xFFEAF8F0)
                         : const Color(0xFFF7F9F8),
-                    borderRadius:
-                        BorderRadius.circular(11),
+                    borderRadius: BorderRadius.circular(11),
                   ),
                   child: Icon(
                     item.icon,
@@ -13347,8 +13609,7 @@ class _MobileMoreBottomSheet extends StatelessWidget {
                 Expanded(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Row(
                         children: <Widget>[
@@ -13356,8 +13617,7 @@ class _MobileMoreBottomSheet extends StatelessWidget {
                             child: Text(
                               item.label,
                               maxLines: 1,
-                              overflow:
-                                  TextOverflow.ellipsis,
+                              overflow: TextOverflow.ellipsis,
                               style: _titleStyle(
                                 active: active,
                               ),
@@ -13366,8 +13626,7 @@ class _MobileMoreBottomSheet extends StatelessWidget {
                           if (item.pro) ...<Widget>[
                             const SizedBox(width: 5),
                             Container(
-                              padding:
-                                  const EdgeInsets.symmetric(
+                              padding: const EdgeInsets.symmetric(
                                 horizontal: 6,
                                 vertical: 3,
                               ),
@@ -13375,16 +13634,11 @@ class _MobileMoreBottomSheet extends StatelessWidget {
                                 color: locked
                                     ? const Color(0xFFFFF7ED)
                                     : const Color(0xFFECFDF3),
-                                borderRadius:
-                                    BorderRadius.circular(999),
+                                borderRadius: BorderRadius.circular(999),
                               ),
                               child: Text(
                                 'PRO',
-                                style:
-                                    AppTypography.custom(
-                                  size: 8.2,
-                                  weight:
-                                      FontWeight.w600,
+                                style: AppTypography.badge(
                                   color: locked
                                       ? const Color(
                                           0xFFEA580C,
@@ -13392,8 +13646,6 @@ class _MobileMoreBottomSheet extends StatelessWidget {
                                       : const Color(
                                           0xFF00A750,
                                         ),
-                                  height: 1,
-                                  letterSpacing: 0,
                                 ),
                               ),
                             ),
@@ -13402,9 +13654,7 @@ class _MobileMoreBottomSheet extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        needsTeam
-                            ? 'Сначала выберите команду'
-                            : item.subtitle,
+                        needsTeam ? 'Сначала выберите команду' : item.subtitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: _subtitleStyle(
@@ -13441,12 +13691,8 @@ class _MobileMoreBottomSheet extends StatelessWidget {
         title.toUpperCase(),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: AppTypography.custom(
-          size: 8.4,
-          weight: FontWeight.w700,
+        style: AppTypography.menuGroup(
           color: const Color(0xFF98A2B3),
-          height: 1.1,
-          letterSpacing: .45,
         ),
       ),
     );
@@ -13470,8 +13716,7 @@ class _MobileMoreBottomSheet extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
                   _safeClubName,
@@ -13528,10 +13773,8 @@ class _MobileMoreBottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final height =
-        MediaQuery.of(context).size.height;
-    final bottom =
-        MediaQuery.of(context).padding.bottom;
+    final height = MediaQuery.of(context).size.height;
+    final bottom = MediaQuery.of(context).padding.bottom;
 
     return Container(
       constraints: BoxConstraints(
@@ -13568,8 +13811,7 @@ class _MobileMoreBottomSheet extends StatelessWidget {
             height: 5,
             decoration: BoxDecoration(
               color: const Color(0xFFD0D5DD),
-              borderRadius:
-                  BorderRadius.circular(999),
+              borderRadius: BorderRadius.circular(999),
             ),
           ),
           const SizedBox(height: 12),
@@ -13595,48 +13837,42 @@ class _MobileMoreBottomSheet extends StatelessWidget {
             child: ListView(
               shrinkWrap: true,
               padding: EdgeInsets.zero,
-              physics:
-                  const BouncingScrollPhysics(),
+              physics: const BouncingScrollPhysics(),
               children: <Widget>[
                 Padding(
-                  padding:
-                      const EdgeInsets.only(
+                  padding: const EdgeInsets.only(
                     bottom: 10,
                   ),
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       _sectionTitle('Навигация'),
                       Padding(
-                        padding:
-                            const EdgeInsets.only(
-                          bottom: 3,
-                        ),
+                        padding: const EdgeInsets.only(bottom: 3),
                         child: _workspaceTile(),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 3),
+                        child: _backToWorkspaceTile(),
                       ),
                     ],
                   ),
                 ),
                 for (final group in groups)
                   Padding(
-                    padding:
-                        const EdgeInsets.only(
+                    padding: const EdgeInsets.only(
                       bottom: 10,
                     ),
                     child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         _sectionTitle(group.title),
                         ...group.items.map(
                           (item) => Padding(
-                            padding:
-                                const EdgeInsets.only(
+                            padding: const EdgeInsets.only(
                               bottom: 3,
                             ),
-                            child:
-                                _moduleTile(item),
+                            child: _moduleTile(item),
                           ),
                         ),
                       ],
@@ -13650,7 +13886,6 @@ class _MobileMoreBottomSheet extends StatelessWidget {
     );
   }
 }
-
 
 class _TrainersModuleContent extends StatefulWidget {
   final List<Map<String, dynamic>> trainers;

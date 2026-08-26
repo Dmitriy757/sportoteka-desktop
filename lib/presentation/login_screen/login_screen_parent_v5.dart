@@ -263,14 +263,20 @@ class _LoginScreenState extends State<LoginScreen> {
           SizedBox(height: desktop ? 72 : 52),
           Text(
             'Вход в систему',
-            style: _titleStyle(desktop ? 30 : 27),
+            style: AppTypography.screenTitle(
+              color: _text,
+              scale: desktop ? 1.18 : 1.08,
+            ),
           ),
           const SizedBox(height: 12),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 390),
             child: Text(
               'Добро пожаловать в Sportoteka. Войдите, чтобы открыть профиль, клубный кабинет и рабочие модули.',
-              style: _bodyStyle(desktop ? 14.2 : 13.8),
+              style: AppTypography.body(
+                color: _secondary,
+                scale: desktop ? 1.03 : 1,
+              ),
             ),
           ),
           SizedBox(height: desktop ? 44 : 32),
@@ -313,13 +319,9 @@ class _LoginScreenState extends State<LoginScreen> {
         const SizedBox(width: 10),
         Text(
           'SPORTOTEKA',
-          style: AppTypography.custom(
-            size: compact ? 15.2 : 16.5,
-            weight: FontWeight.w700,
-            color: _text,
-            height: 1,
-            letterSpacing: .15,
-          ),
+          style: compact
+              ? AppTypography.sectionTitle(color: _text, scale: 1.05)
+              : AppTypography.screenTitle(color: _text),
         ),
       ],
     );
@@ -349,12 +351,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   Text(
                     'Вход',
-                    style: _titleStyle(mobile ? 25 : 28),
+                    style: AppTypography.screenTitle(color: _text),
                   ),
                   const SizedBox(height: 7),
                   Text(
                     'Введите данные вашей учётной записи',
-                    style: _bodyStyle(mobile ? 12.8 : 13.2),
+                    style: AppTypography.body(color: _secondary),
                   ),
                   SizedBox(height: mobile ? 26 : 32),
                   _fieldLabel('Эл. почта'),
@@ -382,13 +384,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _fieldLabel(String text) {
     return Text(
       text,
-      style: AppTypography.custom(
-        size: 12,
-        weight: FontWeight.w600,
-        color: _text,
-        height: 1.18,
-        letterSpacing: 0,
-      ),
+      style: AppTypography.formLabel(color: _text),
     );
   }
 
@@ -489,20 +485,26 @@ class _LoginScreenState extends State<LoginScreen> {
                     children: [
                       Text(
                         'Я согласен с ',
-                        style: _captionStyle(),
+                        style: AppTypography.caption(color: _secondary),
                       ),
                       _LinkText(
                         text: 'Условиями использования',
                         onTap: () =>
                             _openUrl('https://sportoteka.by/terms'),
                       ),
-                      Text(' и ', style: _captionStyle()),
+                      Text(
+                        ' и ',
+                        style: AppTypography.caption(color: _secondary),
+                      ),
                       _LinkText(
                         text: 'Политикой конфиденциальности',
                         onTap: () =>
                             _openUrl('https://sportoteka.by/privacy'),
                       ),
-                      Text('.', style: _captionStyle()),
+                      Text(
+                        '.',
+                        style: AppTypography.caption(color: _secondary),
+                      ),
                     ],
                   ),
                 ),
@@ -550,13 +552,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     Text(
                       'Войти',
-                      style: AppTypography.custom(
-                        size: 13.2,
-                        weight: FontWeight.w700,
-                        color: Colors.white,
-                        height: 1,
-                        letterSpacing: 0,
-                      ),
+                      style: AppTypography.actionStrong(color: Colors.white),
                     ),
                     const SizedBox(width: 8),
                     const Icon(
@@ -576,13 +572,7 @@ class _LoginScreenState extends State<LoginScreen> {
       children: [
         Text(
           'Нет аккаунта?',
-          style: AppTypography.custom(
-            size: 12.2,
-            weight: FontWeight.w400,
-            color: _secondary,
-            height: 1.2,
-            letterSpacing: 0,
-          ),
+          style: AppTypography.secondary(color: _secondary),
         ),
         const SizedBox(width: 5),
         InkWell(
@@ -597,13 +587,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             child: Text(
               'Зарегистрироваться',
-              style: AppTypography.custom(
-                size: 12.2,
-                weight: FontWeight.w600,
-                color: _greenDark,
-                height: 1.2,
-                letterSpacing: 0,
-              ),
+              style: AppTypography.action(color: _greenDark),
             ),
           ),
         ),
@@ -648,46 +632,11 @@ class _LoginScreenState extends State<LoginScreen> {
       child: Text(
         '© Sportoteka\nВсе права защищены',
         textAlign: mobile ? TextAlign.center : TextAlign.left,
-        style: AppTypography.custom(
-          size: 10.6,
-          weight: FontWeight.w400,
-          color: _subtle,
-          height: 1.45,
-          letterSpacing: 0,
-        ),
+        style: AppTypography.commentMeta(color: _subtle).copyWith(height: 1.4),
       ),
     );
   }
 
-  TextStyle _titleStyle(double size) {
-    return AppTypography.custom(
-      size: size,
-      weight: FontWeight.w600,
-      color: _text,
-      height: 1.12,
-      letterSpacing: 0,
-    );
-  }
-
-  TextStyle _bodyStyle(double size) {
-    return AppTypography.custom(
-      size: size,
-      weight: FontWeight.w400,
-      color: _secondary,
-      height: 1.48,
-      letterSpacing: 0,
-    );
-  }
-
-  TextStyle _captionStyle() {
-    return AppTypography.custom(
-      size: 11.5,
-      weight: FontWeight.w400,
-      color: _secondary,
-      height: 1.42,
-      letterSpacing: 0,
-    );
-  }
 
   Future<void> onTapLogIn() async {
     final email = controller.emailController.text.trim();
@@ -843,22 +792,10 @@ class _LoginTextField extends StatelessWidget {
       onFieldSubmitted: onFieldSubmitted,
       autofillHints: autofillHints,
       cursorColor: _LoginScreenState._green,
-      style: AppTypography.custom(
-        size: 13.2,
-        weight: FontWeight.w500,
-        color: _LoginScreenState._text,
-        height: 1.2,
-        letterSpacing: 0,
-      ),
+      style: AppTypography.formText(color: _LoginScreenState._text),
       decoration: InputDecoration(
         hintText: hintText,
-        hintStyle: AppTypography.custom(
-          size: 12.6,
-          weight: FontWeight.w400,
-          color: _LoginScreenState._subtle,
-          height: 1.2,
-          letterSpacing: 0,
-        ),
+        hintStyle: AppTypography.formHint(color: _LoginScreenState._subtle),
         filled: true,
         fillColor: _LoginScreenState._panel,
         suffixIcon: suffixIcon,
@@ -901,12 +838,8 @@ class _LoginTextField extends StatelessWidget {
             width: 1,
           ),
         ),
-        errorStyle: AppTypography.custom(
-          size: 10.8,
-          weight: FontWeight.w400,
+        errorStyle: AppTypography.commentMeta(
           color: const Color(0xFFDC2626),
-          height: 1.2,
-          letterSpacing: 0,
         ),
       ),
     );
@@ -984,23 +917,13 @@ class _LoginBenefit extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: AppTypography.custom(
-                  size: 12.6,
-                  weight: FontWeight.w600,
-                  color: _LoginScreenState._text,
-                  height: 1.2,
-                  letterSpacing: 0,
-                ),
+                style: AppTypography.itemTitle(color: _LoginScreenState._text),
               ),
               const SizedBox(height: 4),
               Text(
                 subtitle,
-                style: AppTypography.custom(
-                  size: 11.4,
-                  weight: FontWeight.w400,
+                style: AppTypography.secondary(
                   color: _LoginScreenState._secondary,
-                  height: 1.42,
-                  letterSpacing: 0,
                 ),
               ),
             ],
@@ -1051,23 +974,13 @@ class _MobileBenefitRow extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: AppTypography.custom(
-                  size: 12.2,
-                  weight: FontWeight.w600,
-                  color: _LoginScreenState._text,
-                  height: 1.2,
-                  letterSpacing: 0,
-                ),
+                style: AppTypography.menuTitle(color: _LoginScreenState._text),
               ),
               const SizedBox(height: 3),
               Text(
                 subtitle,
-                style: AppTypography.custom(
-                  size: 10.8,
-                  weight: FontWeight.w400,
+                style: AppTypography.caption(
                   color: _LoginScreenState._secondary,
-                  height: 1.35,
-                  letterSpacing: 0,
                 ),
               ),
             ],
@@ -1093,12 +1006,8 @@ class _LinkText extends StatelessWidget {
       onTap: onTap,
       child: Text(
         text,
-        style: AppTypography.custom(
-          size: 11.5,
-          weight: FontWeight.w600,
+        style: AppTypography.captionMedium(
           color: _LoginScreenState._greenDark,
-          height: 1.42,
-          letterSpacing: 0,
         ),
       ),
     );

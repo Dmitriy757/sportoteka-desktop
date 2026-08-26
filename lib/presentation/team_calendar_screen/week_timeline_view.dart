@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'team_calendar_models.dart';
 
 class WeekTimelineView extends StatefulWidget {
@@ -135,9 +136,7 @@ class _WeekTimelineViewState extends State<WeekTimelineView> {
                             ),
                             child: Text(
                               "${_dowShort(d.weekday)} ${d.day}",
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 12,
+                              style: AppTypography.menuTitle(
                                 color: active ? Theme.of(context).colorScheme.primary : const Color(0xFF111827),
                               ),
                             ),
@@ -177,7 +176,7 @@ class _WeekTimelineViewState extends State<WeekTimelineView> {
                             alignment: Alignment.topCenter,
                             child: Text(
                               "${h.toString().padLeft(2, '0')}:00",
-                              style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280), fontWeight: FontWeight.w600),
+                              style: AppTypography.captionMedium(color: const Color(0xFF6B7280)),
                             ),
                           ),
                         ));
@@ -396,7 +395,7 @@ class _EventBlockCompact extends StatelessWidget {
                     event.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF111827)),
+                    style: AppTypography.itemTitle(color: const Color(0xFF111827)),
                   ),
                 ),
               ),

@@ -445,7 +445,9 @@ class _CmrGameZonePanelState extends State<CmrGameZonePanel> {
                         'Игровая зона',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: _CmrText.title(mobile ? 15.5 : 16.5),
+                        style: mobile
+                            ? AppTypography.screenTitle(color: _CmrColors.text)
+                            : _CmrText.title(16.5),
                       ),
                       const SizedBox(height: 3),
                       Text(
@@ -936,13 +938,8 @@ class _CmrText {
         features: const <FontFeature>[FontFeature.tabularFigures()],
       );
 
-  static TextStyle section() => AppTypography.custom(
-        size: 12.2,
-        weight: FontWeight.w600,
-        color: _CmrColors.text,
-        height: 1.20,
-        letterSpacing: 0,
-      );
+  static TextStyle section() =>
+      AppTypography.subsectionTitle(color: _CmrColors.text);
 
   static TextStyle muted(double size) => AppTypography.custom(
         size: size,
@@ -952,37 +949,21 @@ class _CmrText {
         letterSpacing: 0,
       );
 
-  static TextStyle caption() => AppTypography.custom(
-        size: 10.8,
-        weight: FontWeight.w500,
-        color: _CmrColors.subtle,
-        height: 1.18,
-        letterSpacing: 0,
-      );
+  static TextStyle caption() =>
+      AppTypography.captionMedium(color: _CmrColors.subtle);
 
-  static TextStyle action() => AppTypography.custom(
-        size: 11.8,
-        weight: FontWeight.w600,
-        color: _CmrColors.text,
-        letterSpacing: 0,
-      );
+  static TextStyle action() =>
+      AppTypography.action(color: _CmrColors.text);
 
-  static TextStyle navLabel({required bool active}) => AppTypography.custom(
-        size: 11.0,
-        weight: active ? FontWeight.w600 : FontWeight.w500,
+  static TextStyle navLabel({required bool active}) => AppTypography.menuTitle(
         color: active ? _CmrColors.greenDark : _CmrColors.text,
-        height: 1.30,
-        letterSpacing: 0,
+        weight: active ? FontWeight.w600 : FontWeight.w500,
       );
 
-  static TextStyle navSubtitle({required bool active}) => AppTypography.custom(
-        size: 10.2,
-        weight: FontWeight.w400,
+  static TextStyle navSubtitle({required bool active}) => AppTypography.menuSubtitle(
         color: active
             ? _CmrColors.greenDark.withOpacity(.68)
             : _CmrColors.muted2,
-        height: 1.30,
-        letterSpacing: 0,
       );
 }
 
@@ -1183,7 +1164,7 @@ class _CmrSearch extends StatelessWidget {
           Expanded(
             child: TextField(
               controller: controller,
-              style: _CmrText.value(12.5),
+              style: AppTypography.formText(color: _CmrColors.text),
               decoration: const InputDecoration(
                 hintText: 'Поиск по названию или статусу...',
                 border: InputBorder.none,

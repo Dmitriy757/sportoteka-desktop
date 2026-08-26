@@ -611,11 +611,7 @@ class _VideoTile extends StatelessWidget {
                             ),
                             child: Text(
                               lesson.duration.trim(),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w600,
-                              ),
+                              style: CmrVideoText.commentMeta(color: Colors.white),
                             ),
                           ),
                         ),

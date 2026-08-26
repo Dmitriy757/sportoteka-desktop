@@ -157,20 +157,16 @@ class _AppVideoPlayerScreenState extends State<AppVideoPlayerScreen> {
           children: [
             const Icon(Icons.error_outline, size: 42, color: Colors.redAccent),
             const SizedBox(height: 12),
-            const Text(
+            Text(
               "Не удалось открыть видео",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-              ),
+              style: AppTypography.sectionTitle(color: Colors.white),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
               _errorText.isEmpty ? "Неизвестная ошибка" : _errorText,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white70),
+              style: AppTypography.emptyText(color: Colors.white70),
             ),
           ],
         ),
@@ -192,10 +188,7 @@ class _AppVideoPlayerScreenState extends State<AppVideoPlayerScreen> {
           pageTitle,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
+          style: AppTypography.subsectionTitle(color: Colors.white),
         ),
       ),
       body: _loading

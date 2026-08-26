@@ -319,21 +319,13 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
         Expanded(
           child: Text(
             title,
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 16,
-              color: VideoLessonFolderPalette.text,
-            ),
+            style: CmrVideoText.title(15, color: VideoLessonFolderPalette.text),
           ),
         ),
         if (action != null)
           Text(
             action,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: VideoLessonFolderPalette.textMuted,
-            ),
+            style: CmrVideoText.body(12, color: VideoLessonFolderPalette.textMuted, weight: FontWeight.w600),
           ),
       ],
     );
@@ -357,11 +349,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
           const SizedBox(width: 6),
           Text(
             text,
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
-              color: VideoLessonFolderPalette.textMuted,
-            ),
+            style: CmrVideoText.body(12, color: VideoLessonFolderPalette.textMuted, weight: FontWeight.w600),
           ),
         ],
       ),
@@ -398,26 +386,18 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'Папка видеоуроков',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                          color: VideoLessonFolderPalette.text,
-                        ),
+                        style: CmrVideoText.title(15, color: VideoLessonFolderPalette.text),
                       ),
                       SizedBox(height: 3),
                       Text(
                         'Материалы, вложенные папки и уроки',
-                        style: TextStyle(
-                          color: VideoLessonFolderPalette.textMuted,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12.5,
-                        ),
+                        style: CmrVideoText.body(12, color: VideoLessonFolderPalette.textMuted, weight: FontWeight.w600),
                       ),
                     ],
                   ),
@@ -432,13 +412,9 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                       color: VideoLessonFolderPalette.white,
                       borderRadius: BorderRadius.circular(999),
                     ),
-                    child: const Text(
+                    child: Text(
                       'Управление',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                        color: VideoLessonFolderPalette.primaryGreen,
-                      ),
+                      style: CmrVideoText.body(12, color: VideoLessonFolderPalette.primaryGreen, weight: FontWeight.w600),
                     ),
                   ),
               ],
@@ -448,12 +424,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
               widget.folder.title,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: VideoLessonFolderPalette.text,
-                fontWeight: FontWeight.w600,
-                fontSize: 24,
-                height: 1.12,
-              ),
+              style: CmrVideoText.title(17, color: VideoLessonFolderPalette.text),
             ),
             const SizedBox(height: 14),
             Wrap(
@@ -506,7 +477,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
           title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontWeight: FontWeight.w600),
+          style: CmrVideoText.body(13, color: VideoLessonFolderPalette.text, weight: FontWeight.w600),
         ),
       ),
     );
@@ -603,23 +574,14 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                       folder.title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: VideoLessonFolderPalette.text,
-                        height: 1.2,
-                      ),
+                      style: CmrVideoText.title(14, color: VideoLessonFolderPalette.text),
                     ),
                     const SizedBox(height: 5),
                     Text(
                       'Папок: ${folder.subfoldersCount}, уроков: ${folder.lessonsCount}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: VideoLessonFolderPalette.textMuted,
-                      ),
+                      style: CmrVideoText.body(12, color: VideoLessonFolderPalette.textMuted, weight: FontWeight.w500),
                     ),
                   ],
                 ),
@@ -634,7 +596,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                       _deleteFolder(folder);
                     }
                   },
-                  itemBuilder: (context) => const [
+                  itemBuilder: (context) => [
                     PopupMenuItem<String>(
                       value: 'edit',
                       child: Row(
@@ -657,9 +619,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                           SizedBox(width: 8),
                           Text(
                             'Удалить',
-                            style: TextStyle(
-                              color: VideoLessonFolderPalette.danger,
-                            ),
+                            style: CmrVideoText.body(12, color: VideoLessonFolderPalette.danger),
                           ),
                         ],
                       ),
@@ -739,32 +699,19 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                       lesson.title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: VideoLessonFolderPalette.text,
-                        height: 1.2,
-                      ),
+                      style: CmrVideoText.title(14, color: VideoLessonFolderPalette.text),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       '${lesson.authorName} ${lesson.authorSurname}'.trim(),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: VideoLessonFolderPalette.textMuted,
-                      ),
+                      style: CmrVideoText.body(12, color: VideoLessonFolderPalette.textMuted, weight: FontWeight.w500),
                     ),
                     const SizedBox(height: 3),
                     Text(
                       'Комментарии: ${lesson.commentsCount}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: VideoLessonFolderPalette.textMuted,
-                      ),
+                      style: CmrVideoText.body(12, color: VideoLessonFolderPalette.textMuted, weight: FontWeight.w500),
                     ),
                   ],
                 ),
@@ -874,7 +821,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                           color: Colors.white.withOpacity(0.92),
                           borderRadius: BorderRadius.circular(999),
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
@@ -885,11 +832,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                             SizedBox(width: 5),
                             Text(
                               'Урок',
-                              style: TextStyle(
-                                color: VideoLessonFolderPalette.text,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 11,
-                              ),
+                              style: CmrVideoText.caption(color: VideoLessonFolderPalette.text),
                             ),
                           ],
                         ),
@@ -927,34 +870,21 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                               lesson.title,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: VideoLessonFolderPalette.text,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                height: 1.18,
-                              ),
+                              style: CmrVideoText.title(14, color: VideoLessonFolderPalette.text),
                             ),
                             const SizedBox(height: 5),
                             Text(
                               author.isEmpty ? 'Автор урока' : author,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: VideoLessonFolderPalette.textMuted,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                              ),
+                              style: CmrVideoText.body(12, color: VideoLessonFolderPalette.textMuted, weight: FontWeight.w500),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               'Комментарии: ${lesson.commentsCount}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: VideoLessonFolderPalette.textSoft,
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w500,
-                              ),
+                              style: CmrVideoText.body(12, color: VideoLessonFolderPalette.textSoft, weight: FontWeight.w500),
                             ),
                           ],
                         ),
@@ -1015,11 +945,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
           widget.folder.title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w600,
-            color: VideoLessonFolderPalette.text,
-          ),
+          style: CmrVideoText.title(17, color: VideoLessonFolderPalette.text),
         ),
       ),
       body: isLoading
@@ -1057,7 +983,7 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                     _whiteCard(
                       padding: const EdgeInsets.all(22),
                       color: VideoLessonFolderPalette.soft,
-                      child: const Column(
+                      child: Column(
                         children: [
                           Icon(
                             Icons.video_library_outlined,
@@ -1067,21 +993,13 @@ class _VideoLessonFolderScreenState extends State<VideoLessonFolderScreen> {
                           SizedBox(height: 10),
                           Text(
                             'Пока нет видеоуроков в этой папке',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: VideoLessonFolderPalette.text,
-                            ),
+                            style: CmrVideoText.title(14, color: VideoLessonFolderPalette.text),
                           ),
                           SizedBox(height: 4),
                           Text(
                             'Добавьте первый видеоурок или создайте вложенную папку',
                             textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: VideoLessonFolderPalette.textMuted,
-                            ),
+                            style: CmrVideoText.body(12, color: VideoLessonFolderPalette.textMuted, weight: FontWeight.w500),
                           ),
                         ],
                       ),

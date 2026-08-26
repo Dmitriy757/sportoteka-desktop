@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:sportoteka/core/theme/app_typography.dart';
+import 'package:sportoteka/presentation/chat_screen/chat_room_screen.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_player_parent_access_panel.dart';
 
 class CmrClubParentsPanel extends StatefulWidget {
@@ -43,6 +44,7 @@ class _CmrClubParentsPanelState extends State<CmrClubParentsPanel> {
   static const _createInviteUrl = '$_apiBase/create_parent_invite.php';
   static const _revokeAccessUrl = '$_apiBase/revoke_parent_access.php';
   static const _revokeInviteUrl = '$_apiBase/revoke_parent_invite.php';
+  static const _createChatUrl = '$_apiBase/create_chat.php';
 
   final _searchC = TextEditingController();
   final _scrollC = ScrollController();
@@ -322,6 +324,69 @@ class _CmrClubParentsPanelState extends State<CmrClubParentsPanel> {
     }
   }
 
+  Future<void> _openParentChat(Map<String, dynamic> parent) async {
+    final parentUserId = _i(
+      parent['parent_user_id'] ?? parent['user_id'] ?? parent['id'],
+    );
+
+    if (parentUserId <= 0) {
+      Get.snackbar('Чат', 'Не удалось определить аккаунт родителя');
+      return;
+    }
+
+    if (widget.currentUserId <= 0) {
+      Get.snackbar('Чат', 'Не удалось определить текущего пользователя');
+      return;
+    }
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse(_createChatUrl),
+            body: {
+              'type': 'private',
+              'user_id': widget.currentUserId.toString(),
+              'peer_id': parentUserId.toString(),
+            },
+          )
+          .timeout(const Duration(seconds: 18));
+
+      final decoded = _decode(response.body);
+      if (response.statusCode != 200 || decoded is! Map) {
+        throw Exception('Не удалось открыть личный чат');
+      }
+
+      final data = Map<String, dynamic>.from(decoded);
+      if (data['success'] != true) {
+        final message = _s(data['message'] ?? data['error']);
+        throw Exception(message.isEmpty ? 'Не удалось открыть личный чат' : message);
+      }
+
+      final chatId = _i(data['chat_id'] ?? data['id']);
+      if (chatId <= 0) {
+        throw Exception('Сервер не вернул ID чата');
+      }
+
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ChatRoomScreen(
+            chatId: chatId,
+            userId: widget.currentUserId,
+            chatName: _parentName(parent),
+            embedded: false,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Get.snackbar(
+        'Чат',
+        e.toString().replaceFirst('Exception: ', ''),
+      );
+    }
+  }
+
   Future<bool?> _confirm({required String title, required String text, required String confirm}) {
     return showDialog<bool>(
       context: context,
@@ -389,6 +454,7 @@ class _CmrClubParentsPanelState extends State<CmrClubParentsPanel> {
                       : _ParentDetail(
                           row: _selectedRow,
                           onOpenPlayer: widget.onOpenPlayer,
+                          onOpenChat: _openParentChat,
                           onRevokeAccess: _revokeAccess,
                           onRevokeInvite: _revokeInvite,
                         ),
@@ -567,7 +633,7 @@ class _CmrClubParentsPanelState extends State<CmrClubParentsPanel> {
               Expanded(child: TextField(
                 controller: _searchC,
                 decoration: const InputDecoration(border: InputBorder.none, hintText: 'Родитель, email или игрок', isDense: true),
-                style: _ParentsText.value(12.5),
+                style: AppTypography.formText(color: _ParentsColors.text),
               )),
               if (_searchC.text.trim().isNotEmpty)
                 InkWell(onTap: _searchC.clear, child: const Padding(padding: EdgeInsets.all(4), child: Icon(Icons.close_rounded, size: 17))),
@@ -644,6 +710,7 @@ class _CmrClubParentsPanelState extends State<CmrClubParentsPanel> {
             row: row,
             scrollController: controller,
             onOpenPlayer: widget.onOpenPlayer,
+            onOpenChat: _openParentChat,
             onRevokeAccess: _revokeAccess,
             onRevokeInvite: _revokeInvite,
           ),
@@ -657,6 +724,7 @@ class _ParentDetail extends StatelessWidget {
   final Map<String, dynamic>? row;
   final ScrollController? scrollController;
   final ValueChanged<Map<String, dynamic>>? onOpenPlayer;
+  final Future<void> Function(Map<String, dynamic> parent) onOpenChat;
   final Future<void> Function(Map<String, dynamic> parent, Map<String, dynamic> child) onRevokeAccess;
   final Future<void> Function(Map<String, dynamic> invite) onRevokeInvite;
 
@@ -664,6 +732,7 @@ class _ParentDetail extends StatelessWidget {
     required this.row,
     this.scrollController,
     required this.onOpenPlayer,
+    required this.onOpenChat,
     required this.onRevokeAccess,
     required this.onRevokeInvite,
   });
@@ -713,6 +782,12 @@ class _ParentDetail extends StatelessWidget {
           icon: Icons.verified_user_outlined,
           title: 'Доступ подтверждён',
           text: 'Этот аккаунт связан только с перечисленными ниже игроками. Доступ к другому игроку требует отдельного ключа.',
+        ),
+        const SizedBox(height: 10),
+        _SoftButton(
+          title: 'Чат с родителем',
+          icon: Icons.chat_bubble_outline_rounded,
+          onTap: () => onOpenChat(parent),
         ),
         const SizedBox(height: 18),
         Text('Дети', style: _ParentsText.section()),
@@ -879,7 +954,7 @@ class _ParentsText {
   static TextStyle title(double size) => AppTypography.custom(size: size, weight: FontWeight.w600, color: _ParentsColors.text, height: 1.18);
   static TextStyle value(double size) => AppTypography.custom(size: size, weight: FontWeight.w600, color: _ParentsColors.text, height: 1.18);
   static TextStyle muted(double size) => AppTypography.custom(size: size, weight: FontWeight.w400, color: _ParentsColors.muted, height: 1.32);
-  static TextStyle section() => AppTypography.custom(size: 12.2, weight: FontWeight.w600, color: _ParentsColors.text, height: 1.2);
+  static TextStyle section() => AppTypography.subsectionTitle(color: _ParentsColors.text);
 }
 
 class _Avatar extends StatelessWidget {

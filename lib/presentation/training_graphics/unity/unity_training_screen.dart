@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_embed_unity/flutter_embed_unity.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 
 class UnityTrainingScreen extends StatefulWidget {
   const UnityTrainingScreen({
@@ -119,7 +120,7 @@ class _UnityTrainingScreenState extends State<UnityTrainingScreen> {
                     _lastUnityMsg!,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                    style: const TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.white, fontSize: AppTypography.secondarySize),
                   ),
                 ),
               ),

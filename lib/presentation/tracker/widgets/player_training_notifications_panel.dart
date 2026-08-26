@@ -144,29 +144,31 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
   static const _liveLineStrong = Color(0xFFE1E5E2);
   static const _liveGreenBorder = Color(0xFFD7F0E2);
 
-  TextStyle _liveTitle(double size, {Color color = _liveText}) =>
-      AppTypography.custom(
-        size: size,
-        weight: FontWeight.w600,
-        color: color,
-        height: 1.18,
-        letterSpacing: 0,
-        features: const <FontFeature>[FontFeature.tabularFigures()],
-      );
+  TextStyle _liveTitle(double size, {Color color = _liveText}) {
+    final base = size >= 17
+        ? AppTypography.screenTitle(color: color)
+        : size >= 14.5
+            ? AppTypography.sectionTitle(color: color)
+            : AppTypography.subsectionTitle(color: color);
+    return base.copyWith(
+      fontWeight: FontWeight.w600,
+      fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+    );
+  }
 
   TextStyle _liveBody(
     double size, {
     Color color = _liveText,
     FontWeight weight = FontWeight.w400,
     double height = 1.22,
-  }) =>
-      AppTypography.custom(
-        size: size,
-        weight: weight,
-        color: color,
-        height: height,
-        letterSpacing: 0,
-      );
+  }) {
+    final base = size < 10.8
+        ? AppTypography.caption(color: color)
+        : size < 12
+            ? AppTypography.secondary(color: color)
+            : AppTypography.body(color: color);
+    return base.copyWith(fontWeight: weight, height: height);
+  }
 
   Timer? _timer;
   Timer? _clockTimer;
@@ -1254,7 +1256,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                   '${rows.length} ${rows.length == 1 ? 'игрок в Live' : 'игроков в Live'}',
                   style: const TextStyle(
                     color: _text,
-                    fontSize: 11.5,
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -1263,7 +1265,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                   'Открываю полноэкранный режим как командный Live…',
                   style: TextStyle(
                     color: _muted,
-                    fontSize: 9.2,
+                    fontSize: AppTypography.menuGroupSize,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -1534,7 +1536,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                         style: TextStyle(
                           color: _text,
                           fontWeight: FontWeight.w900,
-                          fontSize: 13.2,
+                          fontSize: AppTypography.itemTitleSize,
                         ),
                       ),
                       SizedBox(height: 2),
@@ -1543,7 +1545,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                         style: TextStyle(
                           color: _muted,
                           fontWeight: FontWeight.w600,
-                          fontSize: 8.8,
+                          fontSize: AppTypography.badgeSize,
                         ),
                       ),
                     ],
@@ -1602,7 +1604,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                               style: TextStyle(
                                 color: _text,
                                 fontWeight: FontWeight.w800,
-                                fontSize: 10.2,
+                                fontSize: AppTypography.captionSize,
                               ),
                             ),
                           ),
@@ -1659,7 +1661,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                     label,
                     style: TextStyle(
                       color: selected ? _green : _text,
-                      fontSize: 10.8,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -2426,7 +2428,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
             label,
             style: const TextStyle(
               color: _muted,
-              fontSize: 9.3,
+              fontSize: AppTypography.menuGroupSize,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -2435,7 +2437,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
           value,
           style: TextStyle(
             color: active ? _green : _text,
-            fontSize: 9.5,
+            fontSize: AppTypography.menuGroupSize,
             fontWeight: FontWeight.w900,
           ),
         ),
@@ -2498,7 +2500,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: _text,
-                        fontSize: 13.6,
+                        fontSize: AppTypography.itemTitleSize,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -2509,7 +2511,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: _muted,
-                        fontSize: 9.2,
+                        fontSize: AppTypography.menuGroupSize,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -2523,7 +2525,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                     '● LIVE',
                     style: TextStyle(
                       color: _green,
-                      fontSize: 9.8,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -2536,7 +2538,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                   style: TextButton.styleFrom(
                     foregroundColor: _green,
                     textStyle: const TextStyle(
-                      fontSize: 10.2,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -2743,7 +2745,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                   style: const TextStyle(
                     color: _text,
                     fontWeight: FontWeight.w900,
-                    fontSize: 15.2,
+                    fontSize: AppTypography.screenTitleSize,
                     letterSpacing: -.2,
                   ),
                 ),
@@ -2758,7 +2760,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                     style: const TextStyle(
                       color: _muted,
                       fontWeight: FontWeight.w500,
-                      fontSize: 9.5,
+                      fontSize: AppTypography.menuGroupSize,
                     ),
                   ),
                 ),
@@ -2838,7 +2840,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(value, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: 10.4, height: 1)),
+              Text(value, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: AppTypography.captionSize, height: 1)),
               const SizedBox(height: 2),
               Text(label, style: const TextStyle(color: _muted, fontWeight: FontWeight.w600, fontSize: 7.2, height: 1)),
             ],
@@ -2927,7 +2929,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                       style: TextStyle(
                         color: selected ? _darkTextForGreen() : _text,
                         fontWeight: FontWeight.w800,
-                        fontSize: 9.7,
+                        fontSize: AppTypography.captionSize,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -3026,7 +3028,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                     style: TextStyle(
                       color: selected ? _green : _text,
                       fontWeight: FontWeight.w800,
-                      fontSize: 10.2,
+                      fontSize: AppTypography.captionSize,
                     ),
                   ),
                 ],
@@ -3194,7 +3196,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: 11.4),
+                        style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: AppTypography.secondarySize),
                       ),
                     ),
                     const SizedBox(width: 6),
@@ -3206,7 +3208,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                   subtitle,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _muted, fontWeight: FontWeight.w600, fontSize: 8.6, height: 1.2),
+                  style: const TextStyle(color: _muted, fontWeight: FontWeight.w600, fontSize: AppTypography.badgeSize, height: 1.2),
                 ),
               ],
             ),
@@ -3223,7 +3225,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
             ),
             icon: const Icon(Icons.arrow_forward_rounded, size: 14),
-            label: const Text('Открыть Live', style: TextStyle(fontSize: 8.8, fontWeight: FontWeight.w900)),
+            label: const Text('Открыть Live', style: TextStyle(fontSize: AppTypography.badgeSize, fontWeight: FontWeight.w900)),
           ),
         ],
       ),
@@ -4542,7 +4544,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: accent ?? _liveText,
-                      fontSize: 12.4,
+                      fontSize: AppTypography.bodySize,
                       height: 1,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -.2,
@@ -4641,7 +4643,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                 label,
                 style: TextStyle(
                   color: active ? _green : _liveGraphite,
-                  fontSize: 9.2,
+                  fontSize: AppTypography.menuGroupSize,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -4889,7 +4891,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: _liveMuted2,
-                            fontSize: 8.7,
+                            fontSize: AppTypography.badgeSize,
                             height: 1.3,
                             fontWeight: FontWeight.w700,
                           ),
@@ -5270,7 +5272,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                   style: const TextStyle(
                     color: _text,
                     fontWeight: FontWeight.w700,
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySize,
                   ),
                 ),
               ),
@@ -5352,7 +5354,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
     return Expanded(
       child: Column(
         children: [
-          Text(value > 0 ? '${value.round()}%' : '—', style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12)),
+          Text(value > 0 ? '${value.round()}%' : '—', style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: AppTypography.bodySize)),
           const SizedBox(height: 2),
           Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(color: _muted, fontSize: 7.2, fontWeight: FontWeight.w600)),
         ],
@@ -5464,7 +5466,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: _text,
-              fontSize: 9.2,
+              fontSize: AppTypography.menuGroupSize,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -5480,7 +5482,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: 11)),
+        Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: AppTypography.secondarySize)),
         const SizedBox(height: 2),
         Text(label, style: const TextStyle(color: _muted, fontSize: 7.5, fontWeight: FontWeight.w600)),
       ],
@@ -5589,7 +5591,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                         borderRadius: BorderRadius.circular(9),
                       ),
                       textStyle: const TextStyle(
-                        fontSize: 10.2,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -5608,7 +5610,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                       borderRadius: BorderRadius.circular(9),
                     ),
                     textStyle: const TextStyle(
-                      fontSize: 10.2,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -5672,7 +5674,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
                                             color: _text,
-                                            fontSize: 12.5,
+                                            fontSize: AppTypography.bodySize,
                                             fontWeight: FontWeight.w900,
                                           ),
                                         ),
@@ -5685,7 +5687,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
                                             color: running ? _green : _muted,
-                                            fontSize: 9.2,
+                                            fontSize: AppTypography.menuGroupSize,
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),
@@ -6009,7 +6011,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: _text,
-                fontSize: 10.2,
+                fontSize: AppTypography.captionSize,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -6107,7 +6109,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                         'Журнал Live',
                         style: TextStyle(
                           color: _text,
-                          fontSize: 11.2,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
@@ -6135,7 +6137,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                       '${rows.length}',
                       style: const TextStyle(
                         color: _muted,
-                        fontSize: 9,
+                        fontSize: AppTypography.badgeSize,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -6267,7 +6269,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: _muted,
-                            fontSize: 8.8,
+                            fontSize: AppTypography.badgeSize,
                             height: 1.3,
                             fontWeight: FontWeight.w600,
                           ),
@@ -6433,15 +6435,15 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(icon, size: 16, color: connected ? _green : _muted),
         const SizedBox(width: 7),
-        Text('$title ${connected ? 'подключён' : 'не подключён'}', style: TextStyle(color: connected ? _text : _muted, fontWeight: FontWeight.w800, fontSize: 10.5)),
+        Text('$title ${connected ? 'подключён' : 'не подключён'}', style: TextStyle(color: connected ? _text : _muted, fontWeight: FontWeight.w800, fontSize: AppTypography.captionSize)),
         const SizedBox(width: 10),
         const Icon(Icons.signal_cellular_alt_rounded, size: 14, color: _muted),
         const SizedBox(width: 3),
-        Text(signal, style: const TextStyle(color: _muted, fontWeight: FontWeight.w700, fontSize: 9.8)),
+        Text(signal, style: const TextStyle(color: _muted, fontWeight: FontWeight.w700, fontSize: AppTypography.captionSize)),
         const SizedBox(width: 8),
         const Icon(Icons.battery_5_bar_rounded, size: 14, color: _muted),
         const SizedBox(width: 3),
-        Text(battery, style: const TextStyle(color: _muted, fontWeight: FontWeight.w700, fontSize: 9.8)),
+        Text(battery, style: const TextStyle(color: _muted, fontWeight: FontWeight.w700, fontSize: AppTypography.captionSize)),
       ]),
     );
   }
@@ -6508,7 +6510,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                 style: TextStyle(
                   color: _text,
                   fontWeight: FontWeight.w700,
-                  fontSize: 12.4,
+                  fontSize: AppTypography.bodySize,
                 ),
               ),
             ),
@@ -6517,7 +6519,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
               style: const TextStyle(
                 color: _muted,
                 fontWeight: FontWeight.w500,
-                fontSize: 10.4,
+                fontSize: AppTypography.captionSize,
               ),
             ),
           ],
@@ -6561,7 +6563,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                           color: selected ? _text : _muted,
                           fontWeight:
                               selected ? FontWeight.w700 : FontWeight.w500,
-                          fontSize: 10.4,
+                          fontSize: AppTypography.captionSize,
                         ),
                       ),
                       if (count > 0) ...[
@@ -6571,7 +6573,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                           style: TextStyle(
                             color: selected ? _green : _muted,
                             fontWeight: FontWeight.w700,
-                            fontSize: 9.6,
+                            fontSize: AppTypography.menuGroupSize,
                           ),
                         ),
                       ],
@@ -6591,7 +6593,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
               style: TextStyle(
                 color: _muted,
                 fontWeight: FontWeight.w500,
-                fontSize: 11.2,
+                fontSize: AppTypography.secondarySize,
               ),
             ),
           )
@@ -6688,7 +6690,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                             style: TextStyle(
                               color: _text,
                               fontWeight: FontWeight.w600,
-                              fontSize: 14,
+                              fontSize: AppTypography.sectionTitleSize,
                             ),
                           ),
                           const Spacer(),
@@ -6712,7 +6714,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                               phone ? 'Аналитика' : 'Подробнее в аналитике',
                               style: const TextStyle(
                                 fontWeight: FontWeight.w600,
-                                fontSize: 11.5,
+                                fontSize: AppTypography.secondarySize,
                               ),
                             ),
                           ),
@@ -6858,7 +6860,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                       style: const TextStyle(
                         color: _text,
                         fontWeight: FontWeight.w700,
-                        fontSize: 11.3,
+                        fontSize: AppTypography.secondarySize,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -6869,7 +6871,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                       style: const TextStyle(
                         color: _muted,
                         fontWeight: FontWeight.w500,
-                        fontSize: 10.4,
+                        fontSize: AppTypography.captionSize,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -6880,7 +6882,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                       style: const TextStyle(
                         color: _muted,
                         fontWeight: FontWeight.w500,
-                        fontSize: 9.6,
+                        fontSize: AppTypography.menuGroupSize,
                       ),
                     ),
                   ],
@@ -6897,7 +6899,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                     style: const TextStyle(
                       color: _muted,
                       fontWeight: FontWeight.w500,
-                      fontSize: 9.6,
+                      fontSize: AppTypography.menuGroupSize,
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -6906,7 +6908,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                     style: const TextStyle(
                       color: _green,
                       fontWeight: FontWeight.w700,
-                      fontSize: 10.4,
+                      fontSize: AppTypography.captionSize,
                     ),
                   ),
                 ],
@@ -6925,16 +6927,16 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
     child: Row(mainAxisSize: MainAxisSize.min, children: [
       Icon(icon, color: accent, size: 12),
       const SizedBox(width: 4),
-      Text(value, style: TextStyle(color: accent == _muted ? _text : accent, fontWeight: FontWeight.w900, fontSize: 9.6)),
+      Text(value, style: TextStyle(color: accent == _muted ? _text : accent, fontWeight: FontWeight.w900, fontSize: AppTypography.menuGroupSize)),
     ]),
   );
 
   Widget _compactMetric(String label, String value, {Color valueColor = _text}) => Padding(
     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: valueColor, fontSize: 11.8, fontWeight: FontWeight.w700)),
+      Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: valueColor, fontSize: AppTypography.bodySize, fontWeight: FontWeight.w700)),
       const SizedBox(height: 2),
-      Text(label, style: const TextStyle(color: _muted, fontSize: 9.6, fontWeight: FontWeight.w500)),
+      Text(label, style: const TextStyle(color: _muted, fontSize: AppTypography.menuGroupSize, fontWeight: FontWeight.w500)),
     ]),
   );
 
@@ -6942,8 +6944,8 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
     width: 150, padding: const EdgeInsets.all(10),
     decoration: BoxDecoration(color: const Color(0xFFF6F8F7), borderRadius: BorderRadius.circular(10)),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: const TextStyle(color: _muted, fontSize: 10.4, fontWeight: FontWeight.w800)),
-      const SizedBox(height: 3), Text(value, style: const TextStyle(color: _text, fontSize: 12, fontWeight: FontWeight.w900)),
+      Text(label, style: const TextStyle(color: _muted, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w800)),
+      const SizedBox(height: 3), Text(value, style: const TextStyle(color: _text, fontSize: AppTypography.bodySize, fontWeight: FontWeight.w900)),
     ]),
   );
 
@@ -6970,7 +6972,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
           active ? 'LIVE $count' : 'OFFLINE',
           style: TextStyle(
             color: active ? _green : _muted,
-            fontSize: 10.4,
+            fontSize: AppTypography.captionSize,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -6983,9 +6985,9 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
     if (count > 0) Positioned(right: -4, top: -5, child: _smallBadge(count)),
   ]));
 
-  Widget _countPill(int count) { final active = count > 0; return Container(height: 28, padding: const EdgeInsets.symmetric(horizontal: 9), alignment: Alignment.center, decoration: BoxDecoration(color: active ? _green : _soft, borderRadius: BorderRadius.circular(999)), child: Text('$count онлайн', style: TextStyle(color: active ? Colors.white : _muted, fontSize: 11.2, fontWeight: FontWeight.w900))); }
-  Widget _smallBadge(int count) => Container(constraints: const BoxConstraints(minWidth: 18, minHeight: 18), padding: const EdgeInsets.symmetric(horizontal: 4), alignment: Alignment.center, decoration: BoxDecoration(color: _green, borderRadius: BorderRadius.circular(999), border: Border.all(color: Colors.white, width: 2)), child: Text('$count', style: const TextStyle(color: Colors.white, fontSize: 9.6, fontWeight: FontWeight.w900)));
-  Widget _liveDot() => Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: _greenSoft, borderRadius: BorderRadius.circular(999)), child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.circle, size: 6, color: _green), SizedBox(width: 4), Text('LIVE', style: TextStyle(color: _green, fontSize: 9.6, fontWeight: FontWeight.w900))]));
+  Widget _countPill(int count) { final active = count > 0; return Container(height: 28, padding: const EdgeInsets.symmetric(horizontal: 9), alignment: Alignment.center, decoration: BoxDecoration(color: active ? _green : _soft, borderRadius: BorderRadius.circular(999)), child: Text('$count онлайн', style: TextStyle(color: active ? Colors.white : _muted, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w900))); }
+  Widget _smallBadge(int count) => Container(constraints: const BoxConstraints(minWidth: 18, minHeight: 18), padding: const EdgeInsets.symmetric(horizontal: 4), alignment: Alignment.center, decoration: BoxDecoration(color: _green, borderRadius: BorderRadius.circular(999), border: Border.all(color: Colors.white, width: 2)), child: Text('$count', style: const TextStyle(color: Colors.white, fontSize: AppTypography.menuGroupSize, fontWeight: FontWeight.w900)));
+  Widget _liveDot() => Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: _greenSoft, borderRadius: BorderRadius.circular(999)), child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.circle, size: 6, color: _green), SizedBox(width: 4), Text('LIVE', style: TextStyle(color: _green, fontSize: AppTypography.menuGroupSize, fontWeight: FontWeight.w900))]));
 
   Widget _avatar(String url, {double size = 42}) {
     if (url.trim().isNotEmpty) return ClipRRect(borderRadius: BorderRadius.circular(size * .3), child: Image.network(url, width: size, height: size, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _avatarFallback(size)));
@@ -6994,13 +6996,13 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
   Widget _avatarFallback(double size) => Container(width: size, height: size, decoration: BoxDecoration(color: _greenSoft, borderRadius: BorderRadius.circular(size * .3)), child: Icon(Icons.person_rounded, color: _green, size: size * .52));
   Widget _errorBox(String error) => Text(
     error,
-    style: const TextStyle(color: _red, fontWeight: FontWeight.w600, fontSize: 11.2),
+    style: const TextStyle(color: _red, fontWeight: FontWeight.w600, fontSize: AppTypography.secondarySize),
   );
   Widget _emptyState() => const Padding(
     padding: EdgeInsets.symmetric(vertical: 12),
     child: Text(
       'Сейчас никто из игроков не ведёт личную тренировку.',
-      style: TextStyle(color: _muted, fontWeight: FontWeight.w500, fontSize: 11.2),
+      style: TextStyle(color: _muted, fontWeight: FontWeight.w500, fontSize: AppTypography.secondarySize),
     ),
   );
 
@@ -7096,9 +7098,9 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
   Widget _summaryMetric(String label, String value, IconData icon) => Padding(
     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(value, style: const TextStyle(color: _text, fontWeight: FontWeight.w700, fontSize: 15.2)),
+      Text(value, style: const TextStyle(color: _text, fontWeight: FontWeight.w700, fontSize: AppTypography.screenTitleSize)),
       const SizedBox(height: 2),
-      Text(label, style: const TextStyle(color: _muted, fontWeight: FontWeight.w500, fontSize: 9.6)),
+      Text(label, style: const TextStyle(color: _muted, fontWeight: FontWeight.w500, fontSize: AppTypography.menuGroupSize)),
     ]),
   );
 
@@ -7563,7 +7565,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: _text,
-                      fontSize: 10.2,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -7789,11 +7791,11 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(name, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: 13)),
+                    Text(name, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: AppTypography.itemTitleSize)),
                     const SizedBox(height: 2),
                     Text(
                       previous == null ? 'Есть 1 завершённая тренировка' : 'Последняя ↔ предыдущая',
-                      style: const TextStyle(color: _muted, fontWeight: FontWeight.w600, fontSize: 9.2),
+                      style: const TextStyle(color: _muted, fontWeight: FontWeight.w600, fontSize: AppTypography.menuGroupSize),
                     ),
                   ],
                 ),
@@ -7861,11 +7863,11 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
             children: [
               Icon(icon, size: 15, color: accent),
               const SizedBox(width: 5),
-              Expanded(child: Text(label, style: const TextStyle(color: _muted, fontWeight: FontWeight.w700, fontSize: 8.8))),
+              Expanded(child: Text(label, style: const TextStyle(color: _muted, fontWeight: FontWeight.w700, fontSize: AppTypography.badgeSize))),
             ],
           ),
           const SizedBox(height: 6),
-          Text(value, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: 13)),
+          Text(value, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: AppTypography.itemTitleSize)),
           const SizedBox(height: 3),
           Text(
             hasDelta ? '${delta >= 0 ? '+' : ''}${delta.toStringAsFixed(0)}% к предыдущей' : 'нужна предыдущая сессия',
@@ -7909,16 +7911,16 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: 11.2)),
+                      Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: AppTypography.secondarySize)),
                       const SizedBox(height: 2),
-                      Text(_shortDate('${latest['ended_at'] ?? latest['created_at'] ?? ''}'), style: const TextStyle(color: _muted, fontSize: 8.6, fontWeight: FontWeight.w600)),
+                      Text(_shortDate('${latest['ended_at'] ?? latest['created_at'] ?? ''}'), style: const TextStyle(color: _muted, fontSize: AppTypography.badgeSize, fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ),
                 if (previous != null)
                   Text(
                     '${delta >= 0 ? '+' : ''}${delta.toStringAsFixed(0)}%',
-                    style: TextStyle(color: delta >= 0 ? _green : _orange, fontWeight: FontWeight.w900, fontSize: 10.2),
+                    style: TextStyle(color: delta >= 0 ? _green : _orange, fontWeight: FontWeight.w900, fontSize: AppTypography.captionSize),
                   ),
               ],
             ),
@@ -7941,7 +7943,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: 9.6)),
+        Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: AppTypography.menuGroupSize)),
         const SizedBox(height: 2),
         Text(label, style: const TextStyle(color: _muted, fontWeight: FontWeight.w600, fontSize: 7.7)),
       ],
@@ -7975,11 +7977,11 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_playerName(row), style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: 13.5)),
+                    Text(_playerName(row), style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: AppTypography.itemTitleSize)),
                     const SizedBox(height: 2),
                     Text(
                       '${_activityLabel(row)} · ${_shortDate('${row['ended_at'] ?? row['created_at'] ?? ''}')}',
-                      style: const TextStyle(color: _muted, fontWeight: FontWeight.w600, fontSize: 9.2),
+                      style: const TextStyle(color: _muted, fontWeight: FontWeight.w600, fontSize: AppTypography.menuGroupSize),
                     ),
                   ],
                 ),
@@ -8043,7 +8045,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
               children: [
                 Text(label.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontWeight: FontWeight.w800, fontSize: 7.2)),
                 const SizedBox(height: 3),
-                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: 10.5)),
+                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: AppTypography.captionSize)),
               ],
             ),
           ),
@@ -8067,7 +8069,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
               minimumSize: const Size(0, 34),
               padding: const EdgeInsets.symmetric(horizontal: 10),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
-              textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 10.2),
+              textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: AppTypography.captionSize),
             ),
           ),
         ),
@@ -8083,7 +8085,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
               minimumSize: const Size(0, 34),
               padding: const EdgeInsets.symmetric(horizontal: 10),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
-              textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 10.2),
+              textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: AppTypography.captionSize),
             ),
           ),
         ),
@@ -8208,15 +8210,15 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
             children: [
               Icon(alerts.isEmpty ? Icons.check_circle_outline_rounded : Icons.warning_amber_rounded, size: 17, color: alerts.isEmpty ? _green : _orange),
               const SizedBox(width: 6),
-              const Expanded(child: Text('Внимание тренера', style: TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: 11.3))),
-              Text('${alerts.length}', style: TextStyle(color: alerts.isEmpty ? _green : _orange, fontWeight: FontWeight.w900, fontSize: 10.2)),
+              const Expanded(child: Text('Внимание тренера', style: TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: AppTypography.secondarySize))),
+              Text('${alerts.length}', style: TextStyle(color: alerts.isEmpty ? _green : _orange, fontWeight: FontWeight.w900, fontSize: AppTypography.captionSize)),
             ],
           ),
           const SizedBox(height: 7),
           if (alerts.isEmpty)
             const Text(
               'Критичных отклонений по доступным Live-данным сейчас не найдено.',
-              style: TextStyle(color: _muted, fontWeight: FontWeight.w600, fontSize: 9.1, height: 1.3),
+              style: TextStyle(color: _muted, fontWeight: FontWeight.w600, fontSize: AppTypography.badgeSize, height: 1.3),
             )
           else
             for (final alert in alerts.take(5)) ...[
@@ -8240,7 +8242,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('${alert['title']}', style: const TextStyle(color: _text, fontWeight: FontWeight.w800, fontSize: 9.4)),
+                            Text('${alert['title']}', style: const TextStyle(color: _text, fontWeight: FontWeight.w800, fontSize: AppTypography.menuGroupSize)),
                             const SizedBox(height: 2),
                             Text('${alert['detail']}', style: const TextStyle(color: _muted, fontWeight: FontWeight.w500, fontSize: 8.4, height: 1.25)),
                           ],
@@ -8286,7 +8288,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
             children: [
               Icon(Icons.fact_check_outlined, size: 16, color: Color(0xFF1677D2)),
               SizedBox(width: 6),
-              Expanded(child: Text('Полнота данных', style: TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: 11.1))),
+              Expanded(child: Text('Полнота данных', style: TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: AppTypography.secondarySize))),
             ],
           ),
           const SizedBox(height: 8),
@@ -8333,17 +8335,17 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
             children: [
               const Icon(Icons.history_rounded, size: 16, color: _green),
               const SizedBox(width: 6),
-              const Expanded(child: Text('Последние тренировки', style: TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: 11.1))),
+              const Expanded(child: Text('Последние тренировки', style: TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: AppTypography.secondarySize))),
               TextButton(
                 onPressed: () => setState(() => _coachView = _CoachPersonalView.journal),
-                child: const Text('Все', style: TextStyle(fontSize: 9.2, fontWeight: FontWeight.w800)),
+                child: const Text('Все', style: TextStyle(fontSize: AppTypography.menuGroupSize, fontWeight: FontWeight.w800)),
               ),
             ],
           ),
           if (rows.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('Событий пока нет.', style: TextStyle(color: _muted, fontSize: 9, fontWeight: FontWeight.w600)),
+              child: Text('Событий пока нет.', style: TextStyle(color: _muted, fontSize: AppTypography.badgeSize, fontWeight: FontWeight.w600)),
             )
           else
             for (final row in rows.take(5))
@@ -8360,7 +8362,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(_playerName(row), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _text, fontWeight: FontWeight.w800, fontSize: 9.2)),
+                            Text(_playerName(row), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _text, fontWeight: FontWeight.w800, fontSize: AppTypography.menuGroupSize)),
                             const SizedBox(height: 2),
                             Text(
                               '${_activityLabel(row)} · ${_duration(_sessionDuration(row))} · ${_meters(_num(row, const ['total_distance_m', 'distance_m', 'distance']))}',
@@ -8401,9 +8403,9 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: 11.5)),
+              Text(title, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: AppTypography.secondarySize)),
               const SizedBox(height: 1),
-              Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontWeight: FontWeight.w500, fontSize: 8.7)),
+              Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontWeight: FontWeight.w500, fontSize: AppTypography.badgeSize)),
             ],
           ),
         ),
@@ -8428,9 +8430,9 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
             child: Icon(icon, color: _green, size: 24),
           ),
           const SizedBox(height: 9),
-          Text(title, textAlign: TextAlign.center, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: 12)),
+          Text(title, textAlign: TextAlign.center, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: AppTypography.bodySize)),
           const SizedBox(height: 4),
-          Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(color: _muted, fontWeight: FontWeight.w500, fontSize: 9.2, height: 1.35)),
+          Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(color: _muted, fontWeight: FontWeight.w500, fontSize: AppTypography.menuGroupSize, height: 1.35)),
         ],
       ),
     );
@@ -8507,7 +8509,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(color: _text, fontWeight: FontWeight.w700, fontSize: 9.4),
+                        style: const TextStyle(color: _text, fontWeight: FontWeight.w700, fontSize: AppTypography.menuGroupSize),
                       ),
                     ],
                   ),
@@ -8563,7 +8565,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
               style: TextStyle(
                 color: hasValue ? _text : _muted,
                 fontWeight: FontWeight.w800,
-                fontSize: 8.8,
+                fontSize: AppTypography.badgeSize,
               ),
             ),
           ],
@@ -8741,7 +8743,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                                 style: const TextStyle(
                                   color: _text,
                                   fontWeight: FontWeight.w600,
-                                  fontSize: 16,
+                                  fontSize: AppTypography.screenTitleSize,
                                 ),
                               ),
                             ),
@@ -8769,7 +8771,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                           '${_activityLabel(row)} · ${_sourceLabel(row)}',
                           style: const TextStyle(
                             color: _muted,
-                            fontSize: 10.5,
+                            fontSize: AppTypography.captionSize,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -8789,7 +8791,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                         children: [
                           const Icon(Icons.sensors_rounded, size: 17, color: _green),
                           const SizedBox(width: 6),
-                          Text(archived ? 'Трекер подключался' : 'Трекер онлайн', style: const TextStyle(color: _green, fontWeight: FontWeight.w600, fontSize: 11)),
+                          Text(archived ? 'Трекер подключался' : 'Трекер онлайн', style: const TextStyle(color: _green, fontWeight: FontWeight.w600, fontSize: AppTypography.secondarySize)),
                           const SizedBox(width: 12),
                           _trackerMiniInfo(icon: Icons.network_cell_rounded, value: trackerSignal, tooltip: 'Сигнал трекера'),
                           const SizedBox(width: 6),
@@ -8814,7 +8816,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                               Row(
                                 children: [
                                   Flexible(
-                                    child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _text, fontWeight: FontWeight.w600, fontSize: 14)),
+                                    child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _text, fontWeight: FontWeight.w600, fontSize: AppTypography.sectionTitleSize)),
                                   ),
                                   const SizedBox(width: 6),
                                   archived ? _archiveStatusChip() : _liveDot(),
@@ -8825,7 +8827,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                                 '${_activityLabel(row)} · ${_sourceLabel(row)}',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(color: _muted, fontSize: 9.5, fontWeight: FontWeight.w600),
+                                style: const TextStyle(color: _muted, fontSize: AppTypography.menuGroupSize, fontWeight: FontWeight.w600),
                               ),
                               const SizedBox(height: 4),
                               Wrap(
@@ -8861,7 +8863,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                           children: [
                             const Icon(Icons.sensors_rounded, size: 15, color: _green),
                             const SizedBox(width: 5),
-                            Expanded(child: Text(archived ? 'Трекер подключался' : 'Трекер онлайн', style: const TextStyle(color: _green, fontWeight: FontWeight.w600, fontSize: 10.2))),
+                            Expanded(child: Text(archived ? 'Трекер подключался' : 'Трекер онлайн', style: const TextStyle(color: _green, fontWeight: FontWeight.w600, fontSize: AppTypography.captionSize))),
                             _trackerMiniInfo(icon: Icons.network_cell_rounded, value: trackerSignal, tooltip: 'Сигнал трекера'),
                             const SizedBox(width: 5),
                             _trackerMiniInfo(icon: Icons.battery_5_bar_rounded, value: trackerBattery, tooltip: 'Заряд трекера'),
@@ -9017,7 +9019,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
         children: [
           Icon(Icons.check_circle_rounded, size: 11, color: _green),
           SizedBox(width: 4),
-          Text('Завершено', style: TextStyle(color: _green, fontWeight: FontWeight.w900, fontSize: 9.5)),
+          Text('Завершено', style: TextStyle(color: _green, fontWeight: FontWeight.w900, fontSize: AppTypography.menuGroupSize)),
         ],
       ),
     );
@@ -9109,7 +9111,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
           text,
           style: const TextStyle(
             color: _muted,
-            fontSize: 9.8,
+            fontSize: AppTypography.captionSize,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -9269,7 +9271,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: _text,
-                    fontSize: 10,
+                    fontSize: AppTypography.captionSize,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -9301,7 +9303,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: _text,
-                          fontSize: 11.5,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
@@ -9351,7 +9353,7 @@ class _PlayerTrainingNotificationsPanelState extends State<PlayerTrainingNotific
                 style: const TextStyle(
                   color: _red,
                   fontWeight: FontWeight.w800,
-                  fontSize: 10.5,
+                  fontSize: AppTypography.captionSize,
                 ),
               ),
               const Spacer(),
@@ -10341,7 +10343,7 @@ class _PersonalGpsMap extends StatelessWidget {
                         style: TextStyle(
                           color: Color(0xFF171B18),
                           fontWeight: FontWeight.w700,
-                          fontSize: 9.2,
+                          fontSize: AppTypography.menuGroupSize,
                         ),
                       ),
                     ],
@@ -10915,7 +10917,7 @@ class _HrChartState extends State<_HrChart> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Color(0xFF98A2B3),
-                    fontSize: 8.8,
+                    fontSize: AppTypography.badgeSize,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -10947,7 +10949,7 @@ class _HrChartState extends State<_HrChart> {
                         ? const Color(0xFF12B85A)
                         : const Color(0xFFDC2626),
                     fontWeight: FontWeight.w900,
-                    fontSize: 9,
+                    fontSize: AppTypography.badgeSize,
                   ),
                 ),
               ),
@@ -10961,7 +10963,7 @@ class _HrChartState extends State<_HrChart> {
       const SizedBox(height: 4),
       Row(children: [
         IconButton(onPressed: () => _shift(-windowSec * .65), icon: const Icon(Icons.chevron_left_rounded, size: 19), tooltip: 'Раньше'),
-        Expanded(child: Text('Интервал ${(_startSec/60).floor()}–${(_endSec/60).ceil()} мин', textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF98A2B3), fontSize: 9.6, fontWeight: FontWeight.w700))),
+        Expanded(child: Text('Интервал ${(_startSec/60).floor()}–${(_endSec/60).ceil()} мин', textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF98A2B3), fontSize: AppTypography.menuGroupSize, fontWeight: FontWeight.w700))),
         IconButton(onPressed: () => _shift(windowSec * .65), icon: const Icon(Icons.chevron_right_rounded, size: 19), tooltip: 'Позже'),
         TextButton.icon(
           onPressed: () => setState(() { followLive = true; viewEndSec = null; }),

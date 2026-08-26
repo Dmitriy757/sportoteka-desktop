@@ -74,6 +74,7 @@ class TrackerLiveApi {
     bool fieldRequired = false,
     String? clientSessionKey,
     int? startedAtMs,
+    String? bleLeaseToken,
   }) async {
     final json =
         await _post('$apiBaseUrl/start_team_tracker_live_sessions.php', {
@@ -85,6 +86,7 @@ class TrackerLiveApi {
       'field_required': fieldRequired ? 1 : 0,
       'client_session_key': clientSessionKey,
       'started_at_ms': startedAtMs,
+      'ble_lease_token': bleLeaseToken,
     }, timeout: const Duration(seconds: 4));
     final sessions = (json['sessions'] as List? ?? const []);
     return sessions
@@ -95,6 +97,56 @@ class TrackerLiveApi {
 
   Future<Map<String, dynamic>> saveLivePoint(TrackerLivePointPayload payload) {
     return _post('$apiBaseUrl/save_tracker_live_point.php', payload.toJson());
+  }
+
+
+  /// Серверный BLE lease не даёт второму планшету открыть тот же физический
+  /// ATP/Polar, пока первый планшет держит активную тренировку.
+  Future<Map<String, dynamic>> claimBleTrackerLeases({
+    required int teamId,
+    required String leaseToken,
+    required List<Map<String, dynamic>> devices,
+  }) {
+    return _post(
+      '$apiBaseUrl/tracker_ble_lease.php',
+      {
+        'action': 'claim',
+        'team_id': teamId,
+        'lease_token': leaseToken,
+        'devices': devices,
+      },
+      timeout: const Duration(seconds: 4),
+    );
+  }
+
+  Future<void> heartbeatBleTrackerLeases({
+    required int teamId,
+    required String leaseToken,
+  }) async {
+    await _post(
+      '$apiBaseUrl/tracker_ble_lease.php',
+      {
+        'action': 'heartbeat',
+        'team_id': teamId,
+        'lease_token': leaseToken,
+      },
+      timeout: const Duration(seconds: 4),
+    );
+  }
+
+  Future<void> releaseBleTrackerLeases({
+    required int teamId,
+    required String leaseToken,
+  }) async {
+    await _post(
+      '$apiBaseUrl/tracker_ble_lease.php',
+      {
+        'action': 'release',
+        'team_id': teamId,
+        'lease_token': leaseToken,
+      },
+      timeout: const Duration(seconds: 4),
+    );
   }
 
   Future<Map<String, dynamic>> saveHeartRateSample({

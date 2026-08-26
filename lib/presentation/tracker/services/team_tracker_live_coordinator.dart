@@ -159,6 +159,7 @@ class TeamTrackerLiveCoordinator {
   int? fieldId;
   final TeamActionTrackerBlePool pool;
   final TrackerLiveApi api;
+  final String bleLeaseToken;
   final Map<String, _Runtime> _runtime = {};
   StreamSubscription<TeamTrackerBleEvent>? _dataSub;
   Timer? _heartbeat;
@@ -189,6 +190,7 @@ class TeamTrackerLiveCoordinator {
     required this.clubId,
     required this.teamId,
     required this.pool,
+    required this.bleLeaseToken,
     TrackerLiveApi? api,
     this.fieldId,
     this.onRecoveryChanged,
@@ -387,6 +389,9 @@ class TeamTrackerLiveCoordinator {
           startedAt: startedAt,
         );
       } catch (e) {
+        // Конфликт BLE lease — это не потеря интернета. Второй планшет не должен
+        // переходить в local-only и физически отбирать занятый GPS у владельца.
+        if (_isBleLeaseConflict(e)) rethrow;
         // Интернет не является условием старта BLE Live. Назначаем локальные
         // положительные id, включаем GPS polling и позже автоматически
         // поднимаем серверные строки с тем же client_session_key.
@@ -459,6 +464,15 @@ class TeamTrackerLiveCoordinator {
             await _promoteActiveLocalLiveIfPossible();
             if (_localOnly) return;
           }
+          try {
+            await api.heartbeatBleTrackerLeases(
+              teamId: teamId,
+              leaseToken: bleLeaseToken,
+            );
+          } catch (_) {
+            // Live GPS не зависит от сети. Lease продлится при следующем
+            // успешном heartbeat; серверный TTL защищает от вечной блокировки.
+          }
           await Future.wait(_runtime.values.map((r) async {
             final id = r.liveSessionId;
             if (id == null) return;
@@ -479,6 +493,12 @@ class TeamTrackerLiveCoordinator {
     } catch (_) {
       _running = false;
       pool.setLivePolling(false);
+      try {
+        await api.releaseBleTrackerLeases(
+          teamId: teamId,
+          leaseToken: bleLeaseToken,
+        );
+      } catch (_) {}
       _gpsScheduler?.cancel();
       _gpsScheduler = null;
       _bleWatchdog?.cancel();
@@ -885,6 +905,23 @@ class TeamTrackerLiveCoordinator {
         if (createFinalSession) _requireFullMatchRecovery(r, stoppedAt);
       }
       _ensureOfflineRecoveryRetryTimer();
+      // Если полный recovery не нужен, BLE можно сразу отдать другому
+      // планшету. Иначе lease удерживает recovery timer до завершения выгрузки.
+      if (_stoppedLocalRunPending) {
+        try {
+          await api.heartbeatBleTrackerLeases(
+            teamId: teamId,
+            leaseToken: bleLeaseToken,
+          );
+        } catch (_) {}
+      } else {
+        try {
+          await api.releaseBleTrackerLeases(
+            teamId: teamId,
+            leaseToken: bleLeaseToken,
+          );
+        } catch (_) {}
+      }
       return;
     }
 
@@ -967,6 +1004,25 @@ class TeamTrackerLiveCoordinator {
       _ensureOfflineRecoveryRetryTimer();
     }
 
+    // Пока идёт чтение finished-файла ATP, физический BLE остаётся занят этим
+    // планшетом. Не отдаём lease второму планшету до завершения recovery.
+    final keepBleLeaseForRecovery = _stoppedLocalRunPending ||
+        recoveryBindings.isNotEmpty ||
+        _pendingRecoveryKeys.isNotEmpty;
+    try {
+      if (keepBleLeaseForRecovery) {
+        await api.heartbeatBleTrackerLeases(
+          teamId: teamId,
+          leaseToken: bleLeaseToken,
+        );
+      } else {
+        await api.releaseBleTrackerLeases(
+          teamId: teamId,
+          leaseToken: bleLeaseToken,
+        );
+      }
+    } catch (_) {}
+
     // Задача полного матча уже надёжно записана на сервере, а выгрузку запускаем
     // сразу в фоне. Новый Team Live не блокируется длинным файлом: start()
     // безопасно поставит активный transfer на паузу и продолжит его после Stop.
@@ -998,21 +1054,9 @@ class TeamTrackerLiveCoordinator {
   }) async {
     final rows = bindings.toList(growable: false);
 
-    // Локальный состав — источник истины для старта. Если GPS ранее был
-    // назначен другому игроку, start_team_tracker_live_sessions.php отклоняет
-    // ВСЮ команду. Сначала синхронизируем назначения с replace_existing=1.
-    // Это также выполняется при автоподъёме локального Live после возврата сети.
-    for (final b in rows) {
-      await api.syncTrackerBinding(
-        clubId: clubId,
-        teamId: teamId,
-        playerId: b.playerId,
-        deviceUuid: b.deviceUuid,
-        deviceName: b.deviceName,
-        batteryPercent: b.batteryPercent,
-      );
-    }
-
+    // Привязки обновляет сам start_team_tracker_live_sessions.php внутри
+    // одной транзакции. Отдельный pre-sync здесь опасен: второй планшет мог бы
+    // перепривязать GPS ещё до проверки BLE lease.
     return api.startTeamLiveSessions(
       clubId: clubId,
       teamId: teamId,
@@ -1029,6 +1073,7 @@ class TeamTrackerLiveCoordinator {
       fieldRequired: fieldId != null,
       clientSessionKey: _clientSessionKey,
       startedAtMs: startedAt.millisecondsSinceEpoch,
+      bleLeaseToken: bleLeaseToken,
     );
   }
 
@@ -1303,6 +1348,14 @@ class TeamTrackerLiveCoordinator {
     _offlineRecoveryRetryTickInFlight = true;
     try {
       if (_running || _starting) return;
+      if (_stoppedLocalRunPending || _pendingRecoveryKeys.isNotEmpty) {
+        try {
+          await api.heartbeatBleTrackerLeases(
+            teamId: teamId,
+            leaseToken: bleLeaseToken,
+          );
+        } catch (_) {}
+      }
       if (_stoppedLocalRunPending) {
         await _finalizeStoppedLocalRunIfPossible();
         if (_stoppedLocalRunPending) return;
@@ -1315,6 +1368,14 @@ class TeamTrackerLiveCoordinator {
         await tryRecoverPendingForBinding(binding);
       }
       _releasePersistentRecoveryLeaseIfIdle();
+      if (!_stoppedLocalRunPending && _pendingRecoveryKeys.isEmpty) {
+        try {
+          await api.releaseBleTrackerLeases(
+            teamId: teamId,
+            leaseToken: bleLeaseToken,
+          );
+        } catch (_) {}
+      }
     } finally {
       _offlineRecoveryRetryTickInFlight = false;
     }
@@ -2034,6 +2095,12 @@ class TeamTrackerLiveCoordinator {
     final namedTracker =
         a.startsWith(r'$ATP') || a.startsWith(r'$ACT') || a.startsWith(r'$GPS');
     return namedTracker && a.isNotEmpty && a == b;
+  }
+
+  bool _isBleLeaseConflict(Object error) {
+    final text = error.toString().toUpperCase();
+    return text.contains('BLE_LEASE_BUSY') ||
+        text.contains('ИСПОЛЬЗУЕТСЯ ДРУГОЙ АКТИВНОЙ СЕССИЕЙ');
   }
 
   int _localSessionId(int playerId) {

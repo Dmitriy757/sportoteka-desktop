@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:http/http.dart' as http;
 import 'package:sportoteka/presentation/testing/cmr_testing_panel.dart';
 
@@ -23,70 +24,47 @@ class _CmrColors {
 // ==================== Текстовые стили один в один как в CmrClubTrainersPanel ====================
 
 class _CmrText {
-  static TextStyle title(double size) => TextStyle(
+  static TextStyle title(double size) => AppTypography.custom(
+        size: size,
+        weight: FontWeight.w600,
         color: _CmrColors.text,
-        fontSize: size,
-        fontWeight: FontWeight.w600,
-        height: 1.12,
-      );
-
-  static TextStyle section() => const TextStyle(
-        color: _CmrColors.text,
-        fontSize: 16,
-        fontWeight: FontWeight.w600,
         height: 1.18,
       );
 
-  static TextStyle value(double size) => TextStyle(
+  static TextStyle section() =>
+      AppTypography.sectionTitle(color: _CmrColors.text);
+
+  static TextStyle value(double size) => AppTypography.custom(
+        size: size,
+        weight: FontWeight.w600,
         color: _CmrColors.text,
-        fontSize: size,
-        fontWeight: FontWeight.w700,
-        height: 1.35,
+        height: 1.28,
       );
 
-  static TextStyle muted(double size) => TextStyle(
+  static TextStyle muted(double size) => AppTypography.custom(
+        size: size,
+        weight: FontWeight.w400,
         color: _CmrColors.muted,
-        fontSize: size,
-        fontWeight: FontWeight.w600,
-        height: 1.42,
+        height: 1.36,
       );
 
-  static TextStyle caption() => const TextStyle(
-        color: _CmrColors.muted,
-        fontSize: 12,
-        fontWeight: FontWeight.w700,
-        height: 1.15,
-      );
+  static TextStyle caption() =>
+      AppTypography.captionMedium(color: _CmrColors.muted);
 
-  static TextStyle pill() => const TextStyle(
-        color: _CmrColors.text,
-        fontSize: 12,
-        fontWeight: FontWeight.w700,
-      );
+  static TextStyle pill() =>
+      AppTypography.chip(color: _CmrColors.text);
 
-  static TextStyle tab() => const TextStyle(
-        color: _CmrColors.text,
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-      );
+  static TextStyle tab() =>
+      AppTypography.tab(color: _CmrColors.text);
 
-  static TextStyle tabSelected() => const TextStyle(
-        color: _CmrColors.green,
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-      );
+  static TextStyle tabSelected() =>
+      AppTypography.tab(color: _CmrColors.green, active: true);
 
-  static TextStyle action() => const TextStyle(
-        color: _CmrColors.green,
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-      );
+  static TextStyle action() =>
+      AppTypography.action(color: _CmrColors.green);
 
-  static TextStyle danger() => const TextStyle(
-        color: _CmrColors.red,
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-      );
+  static TextStyle danger() =>
+      AppTypography.action(color: _CmrColors.red);
 }
 
 // ==================== Декораторы один в один как в CmrClubTrainersPanel ====================

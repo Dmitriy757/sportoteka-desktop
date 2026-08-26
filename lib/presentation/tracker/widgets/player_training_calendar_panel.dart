@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:http/http.dart' as http;
 
 class PlayerTrainingCalendarPlayer {
@@ -293,7 +294,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
                 label,
                 style: TextStyle(
                   color: active ? _green : _text,
-                  fontSize: 11.0,
+                  fontSize: AppTypography.secondarySize,
                   fontWeight: FontWeight.w800,
                   letterSpacing: -.05,
                 ),
@@ -343,7 +344,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: _text,
-                            fontSize: 13.4,
+                            fontSize: AppTypography.itemTitleSize,
                             fontWeight: FontWeight.w800,
                             height: 1.0,
                             letterSpacing: -.1,
@@ -356,7 +357,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: _muted,
-                            fontSize: 11.1,
+                            fontSize: AppTypography.secondarySize,
                             fontWeight: FontWeight.w500,
                             height: 1.0,
                           ),
@@ -494,7 +495,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: _text,
-                        fontSize: 11.6,
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -505,7 +506,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: active ? _green : _muted,
-                        fontSize: 9.7,
+                        fontSize: AppTypography.captionSize,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -627,7 +628,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: _text,
-                          fontSize: 15.2,
+                          fontSize: AppTypography.screenTitleSize,
                           fontWeight: FontWeight.w800,
                           height: 1.0,
                           letterSpacing: -.12,
@@ -640,7 +641,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: _muted,
-                          fontSize: 11.0,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w500,
                           height: 1.0,
                         ),
@@ -713,7 +714,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
                     d,
                     style: const TextStyle(
                       color: _muted,
-                      fontSize: 11.2,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -801,7 +802,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
                 '${day.day}',
                 style: TextStyle(
                   color: color,
-                  fontSize: 12.0,
+                  fontSize: AppTypography.bodySize,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -824,7 +825,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
                     '$count',
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 9.4,
+                      fontSize: AppTypography.menuGroupSize,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -907,7 +908,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: _text,
-                          fontSize: 15.0,
+                          fontSize: AppTypography.sectionTitleSize,
                           fontWeight: FontWeight.w800,
                           height: 1.0,
                         ),
@@ -919,7 +920,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: _muted,
-                          fontSize: 11.0,
+                          fontSize: AppTypography.secondarySize,
                           fontWeight: FontWeight.w500,
                           height: 1.0,
                         ),
@@ -954,7 +955,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: _muted,
-                              fontSize: 12.2,
+                              fontSize: AppTypography.bodySize,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -994,7 +995,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: _muted,
-                      fontSize: 9.7,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w700,
                     )),
                 Text(value,
@@ -1002,7 +1003,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: _text,
-                      fontSize: 11.5,
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w800,
                     )),
               ],
@@ -1058,7 +1059,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: _text,
-                      fontSize: 12.2,
+                      fontSize: AppTypography.bodySize,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -1069,7 +1070,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: _muted,
-                      fontSize: 9.8,
+                      fontSize: AppTypography.captionSize,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -1084,7 +1085,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: _muted,
-                      fontSize: 9.1,
+                      fontSize: AppTypography.badgeSize,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -1171,7 +1172,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
                           style: TextStyle(
                             color: _text,
                             fontWeight: FontWeight.w900,
-                            fontSize: 11.5,
+                            fontSize: AppTypography.secondarySize,
                           ),
                         ),
                       ],
@@ -1231,7 +1232,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
                   style: const TextStyle(
                     color: _text,
                     fontWeight: FontWeight.w800,
-                    fontSize: 12.5,
+                    fontSize: AppTypography.bodySize,
                   ),
                 ),
                 const SizedBox(height: 1),
@@ -1244,7 +1245,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
                   style: const TextStyle(
                     color: _muted,
                     fontWeight: FontWeight.w500,
-                    fontSize: 9.2,
+                    fontSize: AppTypography.menuGroupSize,
                   ),
                 ),
               ],
@@ -1271,7 +1272,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
                 style: const TextStyle(
                   color: _text,
                   fontWeight: FontWeight.w700,
-                  fontSize: 14,
+                  fontSize: AppTypography.sectionTitleSize,
                 ),
               ),
               const SizedBox(height: 2),
@@ -1284,7 +1285,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
                 style: const TextStyle(
                   color: _muted,
                   fontWeight: FontWeight.w500,
-                  fontSize: 10.6,
+                  fontSize: AppTypography.captionSize,
                 ),
               ),
             ],
@@ -1363,7 +1364,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
             style: const TextStyle(
               color: _text,
               fontWeight: FontWeight.w700,
-              fontSize: 12,
+              fontSize: AppTypography.bodySize,
             ),
           ),
           const SizedBox(height: 2),
@@ -1374,7 +1375,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
             style: const TextStyle(
               color: _muted,
               fontWeight: FontWeight.w500,
-              fontSize: 9.4,
+              fontSize: AppTypography.menuGroupSize,
             ),
           ),
         ],
@@ -1428,7 +1429,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
           children: [
             if (player != null) _avatar(player, size: 26) else Icon(widget.allowAllPlayers ? Icons.groups_rounded : Icons.person_search_rounded, color: _green, size: 20),
             const SizedBox(width: 8),
-            Expanded(child: Text(player?.name ?? (widget.allowAllPlayers ? 'Все игроки' : 'Выбрать игрока'), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: 12))),
+            Expanded(child: Text(player?.name ?? (widget.allowAllPlayers ? 'Все игроки' : 'Выбрать игрока'), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: AppTypography.bodySize))),
             const Icon(Icons.expand_more_rounded, color: _muted, size: 18),
           ],
         ),
@@ -1462,7 +1463,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
           style: TextStyle(
             color: active ? _text : _muted,
             fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-            fontSize: 10.8,
+            fontSize: AppTypography.secondarySize,
           ),
         ),
       ),
@@ -1606,7 +1607,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
             style: const TextStyle(
               color: _text,
               fontWeight: FontWeight.w700,
-              fontSize: 11.8,
+              fontSize: AppTypography.bodySize,
             ),
           ),
           const SizedBox(height: 2),
@@ -1617,7 +1618,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
             style: const TextStyle(
               color: _muted,
               fontWeight: FontWeight.w500,
-              fontSize: 8.8,
+              fontSize: AppTypography.badgeSize,
             ),
           ),
         ],
@@ -1667,11 +1668,11 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
-                Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: 12))),
+                Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _text, fontWeight: FontWeight.w900, fontSize: AppTypography.bodySize))),
 
               ]),
               const SizedBox(height: 3),
-              Text('$playerPrefix${_time(date)} · $distanceLabel · $durationLabel', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontWeight: FontWeight.w700, fontSize: 10)),
+              Text('$playerPrefix${_time(date)} · $distanceLabel · $durationLabel', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontWeight: FontWeight.w700, fontSize: AppTypography.captionSize)),
               const SizedBox(height: 4),
               Text(
                 [
@@ -1686,7 +1687,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
                 style: const TextStyle(
                   color: _muted,
                   fontWeight: FontWeight.w500,
-                  fontSize: 8.9,
+                  fontSize: AppTypography.badgeSize,
                 ),
               ),
             ]),
@@ -1700,7 +1701,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
   Widget _miniPill(String text) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
         decoration: BoxDecoration(color: _soft, borderRadius: BorderRadius.circular(999)),
-        child: Text(text, style: const TextStyle(color: _muted, fontWeight: FontWeight.w800, fontSize: 9)),
+        child: Text(text, style: const TextStyle(color: _muted, fontWeight: FontWeight.w800, fontSize: AppTypography.badgeSize)),
       );
 
   String _emptyMessageForMode() {
@@ -1854,7 +1855,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
             style: const TextStyle(
               color: _muted,
               fontWeight: FontWeight.w500,
-              fontSize: 11,
+              fontSize: AppTypography.secondarySize,
             ),
           ),
         ),
@@ -1865,7 +1866,7 @@ class _PlayerTrainingCalendarPanelState extends State<PlayerTrainingCalendarPane
         style: const TextStyle(
           color: Color(0xFFDC2626),
           fontWeight: FontWeight.w600,
-          fontSize: 10,
+          fontSize: AppTypography.captionSize,
         ),
       );
 

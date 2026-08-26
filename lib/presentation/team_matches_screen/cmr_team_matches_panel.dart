@@ -79,12 +79,8 @@ class _CmrMatchText {
         features: const <FontFeature>[FontFeature.tabularFigures()],
       );
 
-  static TextStyle section() => AppTypography.custom(
-        size: 12.2,
-        weight: FontWeight.w600,
+  static TextStyle section() => AppTypography.subsectionTitle(
         color: _CmrMatchColors.text,
-        height: 1.16,
-        letterSpacing: 0,
       );
 
   static TextStyle value(double size) => AppTypography.custom(
@@ -104,53 +100,31 @@ class _CmrMatchText {
         letterSpacing: 0,
       );
 
-  static TextStyle caption() => AppTypography.custom(
-        size: 10.2,
-        weight: FontWeight.w500,
+  static TextStyle caption() => AppTypography.captionMedium(
         color: _CmrMatchColors.muted2,
-        height: 1.12,
-        letterSpacing: 0,
       );
 
   static TextStyle pill({Color color = _CmrMatchColors.text}) =>
-      AppTypography.custom(
-        size: 10.4,
-        weight: FontWeight.w600,
+      AppTypography.chip(
         color: color,
-        height: 1.08,
-        letterSpacing: 0,
+        active: true,
       );
 
-  static TextStyle tab() => AppTypography.custom(
-        size: 11.2,
-        weight: FontWeight.w500,
+  static TextStyle tab() => AppTypography.tab(
         color: _CmrMatchColors.text,
-        height: 1.08,
-        letterSpacing: 0,
       );
 
-  static TextStyle tabSelected() => AppTypography.custom(
-        size: 11.2,
-        weight: FontWeight.w700,
+  static TextStyle tabSelected() => AppTypography.tab(
         color: _CmrMatchColors.text,
-        height: 1.08,
-        letterSpacing: 0,
+        active: true,
       );
 
-  static TextStyle action() => AppTypography.custom(
-        size: 11.4,
-        weight: FontWeight.w600,
+  static TextStyle action() => AppTypography.action(
         color: _CmrMatchColors.text,
-        height: 1.08,
-        letterSpacing: 0,
       );
 
-  static TextStyle danger() => AppTypography.custom(
-        size: 11.4,
-        weight: FontWeight.w600,
+  static TextStyle danger() => AppTypography.action(
         color: _CmrMatchColors.red,
-        height: 1.08,
-        letterSpacing: 0,
       );
 }
 
@@ -225,7 +199,7 @@ class _CmrMatchDecor {
 enum CmrMatchesFilter { all, upcoming, past }
 enum CmrMatchKindFilter { all, tournament, friendly, home, away }
 enum _MatchesCalendarMode { month, week }
-enum _MatchesWorkPanel { list, details, editor }
+enum _MatchesWorkPanel { list, details, editor, matchEditor, documents, video }
 
 class CmrTeamMatchesPanel extends StatefulWidget {
   final int teamId;
@@ -1203,7 +1177,7 @@ Widget _buildTabletMatchesWorkspace({
       width: double.infinity,
       height: height,
       child: Container(
-        color: const Color(0xFFF6F7F6),
+        color: Colors.white,
         padding: EdgeInsets.all(constraints.maxWidth < 980 ? 8 : 10),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(constraints.maxWidth < 980 ? 18 : 20),
@@ -1269,8 +1243,19 @@ Widget _buildTabletMatchesWorkspace({
       return _buildInlineMatchEditorPane(compact: compact);
     }
 
-    if (_workPanel == _MatchesWorkPanel.details && selected != null) {
-      return _buildMatchDetailsPane(selected, compact: compact);
+    if (selected != null) {
+      if (_workPanel == _MatchesWorkPanel.matchEditor) {
+        return _buildSelectedMatchEditorPane(selected);
+      }
+      if (_workPanel == _MatchesWorkPanel.documents) {
+        return _buildSelectedMatchDocumentsPane(selected);
+      }
+      if (_workPanel == _MatchesWorkPanel.video) {
+        return _buildSelectedMatchVideoPane(selected);
+      }
+      if (_workPanel == _MatchesWorkPanel.details) {
+        return _buildMatchDetailsPane(selected, compact: compact);
+      }
     }
 
     return _buildMatchesRightListPanel(timeline, monthList, compact: compact);
@@ -1288,6 +1273,89 @@ Widget _buildTabletMatchesWorkspace({
         onClose: _closeWorkPanel,
         onSaved: _handleInlineMatchSaved,
       ),
+    );
+  }
+
+
+  void _openMatchDocumentsPane(Map<String, dynamic> match) {
+    final id = _matchId(match);
+    if (id <= 0) return;
+    setState(() {
+      selectedMatchId = id;
+      _workPanel = _MatchesWorkPanel.documents;
+    });
+  }
+
+  void _openMatchEditorPane(Map<String, dynamic> match) {
+    final id = _matchId(match);
+    if (id <= 0 || !canEdit) return;
+    setState(() {
+      selectedMatchId = id;
+      _workPanel = _MatchesWorkPanel.matchEditor;
+    });
+  }
+
+  void _openMatchVideoPane(Map<String, dynamic> match) {
+    final id = _matchId(match);
+    if (id <= 0) return;
+    setState(() {
+      selectedMatchId = id;
+      _workPanel = _MatchesWorkPanel.video;
+    });
+  }
+
+  Future<void> _refreshSelectedMatchAndReturn() async {
+    await _fetch();
+    if (!mounted) return;
+    setState(() => _workPanel = _MatchesWorkPanel.details);
+  }
+
+  Widget _buildSelectedMatchEditorPane(Map<String, dynamic> match) {
+    final id = _matchId(match);
+    return TeamMatchDetailScreen(
+      key: ValueKey('cmr-match-editor-$id-${calendarRevision}'),
+      matchId: id,
+      teamId: widget.teamId,
+      clubId: widget.clubId,
+      teamName: widget.teamName,
+      clubName: widget.clubName,
+      initialMatch: Map<String, dynamic>.from(match),
+      embedded: true,
+      editorOnly: true,
+      onClose: () => setState(() => _workPanel = _MatchesWorkPanel.details),
+      onSaved: _refreshSelectedMatchAndReturn,
+    );
+  }
+
+  Widget _buildSelectedMatchDocumentsPane(Map<String, dynamic> match) {
+    final id = _matchId(match);
+    return TeamMatchDetailScreen(
+      key: ValueKey('cmr-match-documents-$id-${calendarRevision}'),
+      matchId: id,
+      teamId: widget.teamId,
+      clubId: widget.clubId,
+      teamName: widget.teamName,
+      clubName: widget.clubName,
+      initialMatch: Map<String, dynamic>.from(match),
+      embedded: true,
+      documentsOnly: true,
+      onClose: () => setState(() => _workPanel = _MatchesWorkPanel.details),
+    );
+  }
+
+  Widget _buildSelectedMatchVideoPane(Map<String, dynamic> match) {
+    final id = _matchId(match);
+    return TeamMatchDetailScreen(
+      key: ValueKey('cmr-match-video-$id-${calendarRevision}'),
+      matchId: id,
+      teamId: widget.teamId,
+      clubId: widget.clubId,
+      teamName: widget.teamName,
+      clubName: widget.clubName,
+      initialMatch: Map<String, dynamic>.from(match),
+      embedded: true,
+      videoOnly: true,
+      onClose: () => setState(() => _workPanel = _MatchesWorkPanel.details),
     );
   }
 
@@ -1536,14 +1604,14 @@ Widget _buildTabletMatchesWorkspace({
                   widget.teamName.trim().isEmpty ? 'Команда' : widget.teamName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _CmrMatchColors.text, fontSize: 13.65, fontWeight: FontWeight.w600, height: 1),
+                  style: AppTypography.itemTitle(color: _CmrMatchColors.text),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   widget.clubName.trim().isEmpty ? 'Матчи команды' : widget.clubName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _CmrMatchColors.muted, fontSize: 10.05, fontWeight: FontWeight.w600, height: 1),
+                  style: AppTypography.captionMedium(color: _CmrMatchColors.muted),
                 ),
               ],
             ),
@@ -2509,6 +2577,7 @@ Widget _buildTabletMatchesWorkspace({
                   readinessLine('Видео матча', hasVideo, Icons.movie_creation_outlined),
                   readinessLine('ТТД / статистика', hasTtd, Icons.bar_chart_rounded),
                   readinessLine('Комментарий тренера', notes.isNotEmpty, Icons.format_quote_rounded),
+                  readinessLine('Документы и заметки', true, Icons.folder_copy_outlined),
                 ],
               ),
             ),
@@ -2534,15 +2603,35 @@ Widget _buildTabletMatchesWorkspace({
                   child: _DetailsActionButton(
                     icon: Icons.play_circle_outline_rounded,
                     label: 'Видео',
-                    onTap: hasVideo && id > 0 ? () => _openDetails(match) : null,
+                    onTap: id > 0 ? () => _openMatchVideoPane(match) : null,
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: _DetailsActionButton(
+                    icon: Icons.folder_copy_outlined,
+                    label: 'Документы',
+                    onTap: id > 0 ? () => _openMatchDocumentsPane(match) : null,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _DetailsActionButton(
                     icon: Icons.analytics_outlined,
                     label: 'ТТД',
                     onTap: hasTtd && id > 0 ? () => _openDetails(match) : null,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _DetailsActionButton(
+                    icon: Icons.edit_calendar_outlined,
+                    label: 'Редактировать',
+                    onTap: canEdit && id > 0 ? () => _openMatchEditorPane(match) : null,
                   ),
                 ),
               ],
@@ -3757,6 +3846,29 @@ class _MatchTopLine extends StatelessWidget {
 
 
 
+class _CmrProfileBrandDots extends StatelessWidget {
+  const _CmrProfileBrandDots();
+
+  @override
+  Widget build(BuildContext context) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(
+          3,
+          (index) => Padding(
+            padding: EdgeInsets.only(left: index == 0 ? 0 : 4),
+            child: Container(
+              width: 5.5,
+              height: 5.5,
+              decoration: BoxDecoration(
+                color: index == 1 ? _CmrMatchColors.green : const Color(0xFFB8D9C6),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+        ),
+      );
+}
+
 class _StrictMatchesCard extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -3790,11 +3902,19 @@ class _StrictMatchesCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: _CmrMatchText.title(dense ? 14.2 : 16.2),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _CmrMatchText.title(dense ? 14.2 : 16.2),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const _CmrProfileBrandDots(),
+                      ],
                     ),
                     const SizedBox(height: 3),
                     Text(
@@ -5628,11 +5748,12 @@ class _CmrTextField extends StatelessWidget {
             keyboardType: keyboardType,
             maxLines: maxLines,
             onChanged: onChanged,
+            style: AppTypography.formText(color: _CmrMatchColors.text),
             decoration: InputDecoration(
               hintText: hint,
               border: InputBorder.none,
               isDense: true,
-              hintStyle: _CmrMatchText.muted(13),
+              hintStyle: AppTypography.formHint(color: _CmrMatchColors.muted2),
             ),
           ),
         ),

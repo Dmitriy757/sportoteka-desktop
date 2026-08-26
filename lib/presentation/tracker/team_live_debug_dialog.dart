@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 
 import 'services/team_tracker_live_coordinator.dart';
 
@@ -74,7 +75,7 @@ class _TeamLiveDebugDialogState extends State<TeamLiveDebugDialog> {
                               fontSize: 19, fontWeight: FontWeight.w800)),
                       Text('Обновление каждую секунду',
                           style:
-                              TextStyle(fontSize: 11, color: Colors.black54)),
+                              TextStyle(fontSize: AppTypography.secondarySize, color: Colors.black54)),
                     ],
                   ),
                 ),
@@ -196,7 +197,7 @@ class _HeaderBadge extends StatelessWidget {
           borderRadius: BorderRadius.circular(999)),
       child: Text(text,
           style: TextStyle(
-              color: color, fontSize: 11, fontWeight: FontWeight.w800)),
+              color: color, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w800)),
     );
   }
 }

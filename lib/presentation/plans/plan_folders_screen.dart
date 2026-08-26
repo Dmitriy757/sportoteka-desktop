@@ -124,18 +124,18 @@ class _HeaderStatChip extends StatelessWidget {
           const SizedBox(width: 7),
           Text(
             value,
-            style: const TextStyle(
+            style: const TextStyle(fontFamily: AppTypography.fontFamily, 
               color: ClubDashboardPalette.text,
-              fontSize: 12.5,
+              fontSize: AppTypography.bodySize,
               fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(width: 5),
           Text(
             label,
-            style: const TextStyle(
+            style: const TextStyle(fontFamily: AppTypography.fontFamily, 
               color: ClubDashboardPalette.textMuted,
-              fontSize: 10.2,
+              fontSize: AppTypography.captionSize,
               fontWeight: FontWeight.w400,
             ),
           ),
@@ -1052,22 +1052,13 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
   Widget build(BuildContext context) {
     final baseTheme = Theme.of(context);
     final plansTextTheme = baseTheme.textTheme.apply(
-      fontFamily: AppTypography.custom(
-        size: 13,
-        weight: FontWeight.w400,
-        color: ClubDashboardPalette.text,
-      ).fontFamily,
+      fontFamily: AppTypography.fontFamily,
     );
 
     return Theme(
       data: baseTheme.copyWith(textTheme: plansTextTheme),
       child: DefaultTextStyle.merge(
-        style: AppTypography.custom(
-          size: 12.5,
-          weight: FontWeight.w400,
-          color: ClubDashboardPalette.text,
-          height: 1.25,
-        ),
+        style: AppTypography.body(color: ClubDashboardPalette.text),
         child: Scaffold(
           backgroundColor: ClubDashboardPalette.background,
           appBar: _buildAppBar(),
@@ -1101,10 +1092,10 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: const TextStyle(fontFamily: AppTypography.fontFamily, 
                     fontWeight: FontWeight.w600,
                     color: ClubDashboardPalette.text,
-                    fontSize: 16,
+                    fontSize: AppTypography.screenTitleSize,
                     height: 1.05,
                   ),
                 ),
@@ -1116,10 +1107,10 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
             widget.clubName,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: const TextStyle(fontFamily: AppTypography.fontFamily, 
               fontWeight: FontWeight.w500,
               color: ClubDashboardPalette.textMuted,
-              fontSize: 12,
+              fontSize: AppTypography.secondarySize,
             ),
           ),
         ],
@@ -1130,7 +1121,7 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
             onPressed: _selectedGraphics.isEmpty ? null : _attachSelectedAndClose,
             child: Text(
               "Прикрепить (${_selectedGraphics.length})",
-              style: TextStyle(
+              style: TextStyle(fontFamily: AppTypography.fontFamily, 
                 fontWeight: FontWeight.w500,
                 color: _selectedGraphics.isEmpty
                     ? const Color(0xFF9CA3AF)
@@ -1193,7 +1184,7 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
         uploadingFile
             ? "Загрузка ${fileUploadProgress.toStringAsFixed(0)}%"
             : "Добавить",
-        style: const TextStyle(fontWeight: FontWeight.w500),
+        style: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w500),
       ),
     );
   }
@@ -1286,10 +1277,10 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
                   widget.clubName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: TextStyle(fontFamily: AppTypography.fontFamily, 
                     color: ClubDashboardPalette.text,
                     fontWeight: FontWeight.w600,
-                    fontSize: isTablet ? 16 : 14.5,
+                    fontSize: AppTypography.sectionTitleSize,
                     height: 1.08,
                   ),
                 ),
@@ -1298,10 +1289,10 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
                   "Папки, планы, схемы и файлы тренировочного процесса",
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: TextStyle(fontFamily: AppTypography.fontFamily, 
                     color: ClubDashboardPalette.textMuted,
                     fontWeight: FontWeight.w400,
-                    fontSize: isTablet ? 11.2 : 10.5,
+                    fontSize: AppTypography.captionSize,
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -1338,10 +1329,10 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
                 const SizedBox(width: 6),
                 Text(
                   folderLabel,
-                  style: const TextStyle(
+                  style: const TextStyle(fontFamily: AppTypography.fontFamily, 
                     color: ClubDashboardPalette.text,
                     fontWeight: FontWeight.w500,
-                    fontSize: 10.5,
+                    fontSize: AppTypography.captionSize,
                   ),
                 ),
               ],
@@ -1380,8 +1371,8 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
                     ),
                     child: Text(
                       crumb["title"]?.toString() ?? "",
-                      style: TextStyle(
-                        fontSize: 13,
+                      style: TextStyle(fontFamily: AppTypography.fontFamily, 
+                        fontSize: AppTypography.bodySize,
                         fontWeight: FontWeight.w500,
                         color: isLast
                             ? ClubDashboardPalette.primaryGreen
@@ -1418,14 +1409,14 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
       child: TextField(
         controller: searchCtrl,
         onChanged: (_) => _load(),
-        style: const TextStyle(
+        style: const TextStyle(fontFamily: AppTypography.fontFamily, 
           color: ClubDashboardPalette.text,
           fontWeight: FontWeight.w500,
-          fontSize: 14,
+          fontSize: AppTypography.subsectionTitleSize,
         ),
         decoration: InputDecoration(
           hintText: "Поиск по папкам, планам, схемам и файлам…",
-          hintStyle: const TextStyle(
+          hintStyle: const TextStyle(fontFamily: AppTypography.fontFamily, 
             color: ClubDashboardPalette.textLight,
             fontWeight: FontWeight.w500,
           ),
@@ -1515,7 +1506,7 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
           const SizedBox(width: 7),
           Text(
             label,
-            style: TextStyle(
+            style: TextStyle(fontFamily: AppTypography.fontFamily, 
               fontWeight: FontWeight.w500,
               color: isActive ? Colors.white : ClubDashboardPalette.textMuted,
             ),
@@ -1826,9 +1817,9 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
           Expanded(
             child: Text(
               title,
-              style: const TextStyle(
+              style: const TextStyle(fontFamily: AppTypography.fontFamily, 
                 fontWeight: FontWeight.w500,
-                fontSize: 18,
+                fontSize: AppTypography.screenTitleSize,
                 color: ClubDashboardPalette.text,
                 height: 1.1,
               ),
@@ -1843,7 +1834,7 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
             ),
             child: Text(
               "$count",
-              style: const TextStyle(
+              style: const TextStyle(fontFamily: AppTypography.fontFamily, 
                 fontWeight: FontWeight.w500,
                 color: ClubDashboardPalette.text,
               ),
@@ -1950,7 +1941,7 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
                   ),
                   title: const Text(
                     "Создать папку",
-                    style: TextStyle(fontWeight: FontWeight.w500),
+                    style: TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w500),
                   ),
                   subtitle: const Text("Добавить новую папку в текущий раздел"),
                   onTap: () {
@@ -1973,7 +1964,7 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
                   ),
                   title: const Text(
                     "Создать план",
-                    style: TextStyle(fontWeight: FontWeight.w500),
+                    style: TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w500),
                   ),
                   subtitle: const Text("Добавить новый тренировочный план"),
                   onTap: () {
@@ -2007,7 +1998,7 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
                   ),
                   title: const Text(
                     "Загрузить файл",
-                    style: TextStyle(fontWeight: FontWeight.w500),
+                    style: TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w500),
                   ),
                   subtitle: const Text(
                     "PDF, DOC, DOCX, TXT, XLS, PPT и другие",
@@ -2189,16 +2180,16 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
                     children: [
                       const Text(
                         "Загрузка файла",
-                        style: TextStyle(
-                          fontSize: 15,
+                        style: TextStyle(fontFamily: AppTypography.fontFamily, 
+                          fontSize: AppTypography.sectionTitleSize,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         uploadFileLabel.isEmpty ? "Подготовка..." : uploadFileLabel,
-                        style: TextStyle(
-                          fontSize: 12,
+                        style: TextStyle(fontFamily: AppTypography.fontFamily, 
+                          fontSize: AppTypography.secondarySize,
                           color: ClubDashboardPalette.textMuted,
                         ),
                       ),
@@ -2216,8 +2207,8 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
                   ),
                   child: Text(
                     "${fileUploadProgress.toStringAsFixed(0)}%",
-                    style: const TextStyle(
-                      fontSize: 14,
+                    style: const TextStyle(fontFamily: AppTypography.fontFamily, 
+                      fontSize: AppTypography.subsectionTitleSize,
                       fontWeight: FontWeight.w500,
                       color: ClubDashboardPalette.primaryGreenDark,
                     ),
@@ -2249,8 +2240,8 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
                 const SizedBox(width: 4),
                 Text(
                   "Осталось примерно ${_getEstimatedTime()}",
-                  style: TextStyle(
-                    fontSize: 11,
+                  style: TextStyle(fontFamily: AppTypography.fontFamily, 
+                    fontSize: AppTypography.secondarySize,
                     color: ClubDashboardPalette.textMuted,
                   ),
                 ),
@@ -2562,8 +2553,8 @@ class _FileUploadDialogState extends State<_FileUploadDialog> {
                 const Expanded(
                   child: Text(
                     "Загрузка файла",
-                    style: TextStyle(
-                      fontSize: 18,
+                    style: TextStyle(fontFamily: AppTypography.fontFamily, 
+                      fontSize: AppTypography.screenTitleSize,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -2595,9 +2586,9 @@ class _FileUploadDialogState extends State<_FileUploadDialog> {
                       Expanded(
                         child: Text(
                           widget.fileName,
-                          style: const TextStyle(
+                          style: const TextStyle(fontFamily: AppTypography.fontFamily, 
                             fontWeight: FontWeight.w500,
-                            fontSize: 14,
+                            fontSize: AppTypography.subsectionTitleSize,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -2615,8 +2606,8 @@ class _FileUploadDialogState extends State<_FileUploadDialog> {
                         ),
                         child: Text(
                           widget.fileExt.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 11,
+                          style: TextStyle(fontFamily: AppTypography.fontFamily, 
+                            fontSize: AppTypography.secondarySize,
                             fontWeight: FontWeight.w500,
                             color: fileColor,
                           ),
@@ -2627,8 +2618,8 @@ class _FileUploadDialogState extends State<_FileUploadDialog> {
                   const SizedBox(height: 6),
                   Text(
                     "Размер: $fileSizeFormatted",
-                    style: const TextStyle(
-                      fontSize: 12,
+                    style: const TextStyle(fontFamily: AppTypography.fontFamily, 
+                      fontSize: AppTypography.secondarySize,
                       color: ClubDashboardPalette.textMuted,
                     ),
                   ),
@@ -2713,7 +2704,7 @@ class _FileUploadDialogState extends State<_FileUploadDialog> {
                     ),
                     child: const Text(
                       "Загрузить",
-                      style: TextStyle(fontWeight: FontWeight.w500),
+                      style: TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w500),
                     ),
                   ),
                 ),
@@ -2889,8 +2880,8 @@ class _UploadProgressWidgetState extends State<_UploadProgressWidget>
                               ),
                               Text(
                                 "${(_progress * 100).toStringAsFixed(0)}%",
-                                style: const TextStyle(
-                                  fontSize: 14,
+                                style: const TextStyle(fontFamily: AppTypography.fontFamily, 
+                                  fontSize: AppTypography.subsectionTitleSize,
                                   fontWeight: FontWeight.w500,
                                   color: ClubDashboardPalette.primaryGreenDark,
                                 ),
@@ -2904,8 +2895,8 @@ class _UploadProgressWidgetState extends State<_UploadProgressWidget>
               // Название файла
               Text(
                 widget.fileName,
-                style: const TextStyle(
-                  fontSize: 16,
+                style: const TextStyle(fontFamily: AppTypography.fontFamily, 
+                  fontSize: AppTypography.screenTitleSize,
                   fontWeight: FontWeight.w500,
                 ),
                 maxLines: 2,
@@ -2918,8 +2909,8 @@ class _UploadProgressWidgetState extends State<_UploadProgressWidget>
               // Статус
               Text(
                 _status,
-                style: TextStyle(
-                  fontSize: 14,
+                style: TextStyle(fontFamily: AppTypography.fontFamily, 
+                  fontSize: AppTypography.subsectionTitleSize,
                   color: _isError ? Colors.red : ClubDashboardPalette.textMuted,
                 ),
                 textAlign: TextAlign.center,
@@ -3032,7 +3023,7 @@ class _FolderGridItem extends StatelessWidget {
 
     final screenWidth = MediaQuery.of(context).size.width;
     final isCompact = screenWidth < 400;
-    final fontSize = isCompact ? 11.0 : 12.5;
+    final fontSize = isCompact ? AppTypography.secondarySize : AppTypography.bodySize;
     final iconSize = isCompact ? 20.0 : 22.0;
 
     return GestureDetector(
@@ -3083,8 +3074,8 @@ class _FolderGridItem extends StatelessWidget {
                             const SizedBox(width: 8),
                             Text(
                               "Переименовать",
-                              style: TextStyle(
-                                fontSize: 13,
+                              style: TextStyle(fontFamily: AppTypography.fontFamily, 
+                                fontSize: AppTypography.bodySize,
                                 color: ClubDashboardPalette.text,
                               ),
                             ),
@@ -3104,7 +3095,7 @@ class _FolderGridItem extends StatelessWidget {
                             const SizedBox(width: 8),
                             Text(
                               "Удалить",
-                              style: TextStyle(fontSize: 13, color: Colors.red),
+                              style: TextStyle(fontFamily: AppTypography.fontFamily, fontSize: AppTypography.bodySize, color: Colors.red),
                             ),
                           ],
                         ),
@@ -3138,7 +3129,7 @@ class _FolderGridItem extends StatelessWidget {
                   Expanded(
                     child: Text(
                       title.isNotEmpty ? title : "Папка",
-                      style: TextStyle(
+                      style: TextStyle(fontFamily: AppTypography.fontFamily, 
                         fontWeight: FontWeight.w500,
                         fontSize: fontSize,
                         height: 1.2,
@@ -3164,8 +3155,8 @@ class _FolderGridItem extends StatelessWidget {
                           ),
                           child: Text(
                             label.toUpperCase(),
-                            style: const TextStyle(
-                              fontSize: 8.5,
+                            style: const TextStyle(fontFamily: AppTypography.fontFamily, 
+                              fontSize: AppTypography.badgeSize,
                               fontWeight: FontWeight.w500,
                               color: ClubDashboardPalette.primaryGreenDark,
                               letterSpacing: 0.2,
@@ -3194,8 +3185,8 @@ class _FolderGridItem extends StatelessWidget {
                           children: [
                             Text(
                               "$itemsCount",
-                              style: const TextStyle(
-                                fontSize: 10,
+                              style: const TextStyle(fontFamily: AppTypography.fontFamily, 
+                                fontSize: AppTypography.captionSize,
                                 fontWeight: FontWeight.w500,
                                 color: ClubDashboardPalette.text,
                               ),
@@ -3265,12 +3256,12 @@ class _FolderListItem extends StatelessWidget {
         ),
         title: Text(
           title.isNotEmpty ? title : "Папка",
-          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+          style: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w500, fontSize: AppTypography.subsectionTitleSize),
         ),
         subtitle: Text(
           "$label • $itemsCount материалов",
-          style: const TextStyle(
-            fontSize: 12,
+          style: const TextStyle(fontFamily: AppTypography.fontFamily, 
+            fontSize: AppTypography.secondarySize,
             color: ClubDashboardPalette.textMuted,
           ),
         ),
@@ -3290,8 +3281,8 @@ class _FolderListItem extends StatelessWidget {
                 ),
                 child: Text(
                   "$itemsCount",
-                  style: const TextStyle(
-                    fontSize: 11,
+                  style: const TextStyle(fontFamily: AppTypography.fontFamily, 
+                    fontSize: AppTypography.secondarySize,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -3319,7 +3310,7 @@ class _FolderListItem extends StatelessWidget {
                         children: [
                           Icon(Icons.delete_rounded, size: 18, color: Colors.red),
                           SizedBox(width: 8),
-                          Text("Удалить", style: TextStyle(color: Colors.red)),
+                          Text("Удалить", style: TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.red)),
                         ],
                       ),
                     ),
@@ -3361,7 +3352,7 @@ class _PlanGridItem extends StatelessWidget {
 
     final screenWidth = MediaQuery.of(context).size.width;
     final isCompact = screenWidth < 400;
-    final fontSize = isCompact ? 11.5 : 12.5;
+    final fontSize = isCompact ? AppTypography.secondarySize : AppTypography.bodySize;
 
     return GestureDetector(
       onTap: () => onTap(plan),
@@ -3403,7 +3394,7 @@ class _PlanGridItem extends StatelessWidget {
                             children: [
                               Icon(Icons.delete_rounded, size: 18, color: Colors.red),
                               SizedBox(width: 8),
-                              Text("Удалить", style: TextStyle(color: Colors.red)),
+                              Text("Удалить", style: TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.red)),
                             ],
                           ),
                         ),
@@ -3417,7 +3408,7 @@ class _PlanGridItem extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 title.isNotEmpty ? title : "План",
-                style: TextStyle(
+                style: TextStyle(fontFamily: AppTypography.fontFamily, 
                   fontWeight: FontWeight.w500,
                   fontSize: fontSize,
                   height: 1.2,
@@ -3429,8 +3420,8 @@ class _PlanGridItem extends StatelessWidget {
               if (date.isNotEmpty)
                 Text(
                   date.length > 10 ? date.substring(0, 10) : date,
-                  style: const TextStyle(
-                    fontSize: 10,
+                  style: const TextStyle(fontFamily: AppTypography.fontFamily, 
+                    fontSize: AppTypography.captionSize,
                     color: ClubDashboardPalette.textMuted,
                     fontWeight: FontWeight.w500,
                   ),
@@ -3438,8 +3429,8 @@ class _PlanGridItem extends StatelessWidget {
               if (team.isNotEmpty)
                 Text(
                   team,
-                  style: const TextStyle(
-                    fontSize: 10,
+                  style: const TextStyle(fontFamily: AppTypography.fontFamily, 
+                    fontSize: AppTypography.captionSize,
                     color: ClubDashboardPalette.textMuted,
                     fontWeight: FontWeight.w500,
                   ),
@@ -3449,8 +3440,8 @@ class _PlanGridItem extends StatelessWidget {
               if (trainer.isNotEmpty)
                 Text(
                   trainer,
-                  style: const TextStyle(
-                    fontSize: 10,
+                  style: const TextStyle(fontFamily: AppTypography.fontFamily, 
+                    fontSize: AppTypography.captionSize,
                     color: ClubDashboardPalette.primaryGreenDark,
                     fontWeight: FontWeight.w500,
                   ),
@@ -3462,8 +3453,8 @@ class _PlanGridItem extends StatelessWidget {
                 children: const [
                   Text(
                     "Открыть",
-                    style: TextStyle(
-                      fontSize: 11,
+                    style: TextStyle(fontFamily: AppTypography.fontFamily, 
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w500,
                       color: ClubDashboardPalette.primaryGreenDark,
                     ),
@@ -3526,7 +3517,7 @@ class _PlanListItem extends StatelessWidget {
         ),
         title: Text(
           title.isNotEmpty ? title : "План",
-          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+          style: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w500, fontSize: AppTypography.subsectionTitleSize),
         ),
         subtitle: Text(
           [
@@ -3534,8 +3525,8 @@ class _PlanListItem extends StatelessWidget {
             if (team.isNotEmpty) "Команда: $team",
             if (trainer.isNotEmpty) "Тренер: $trainer",
           ].join("\n"),
-          style: const TextStyle(
-            fontSize: 12,
+          style: const TextStyle(fontFamily: AppTypography.fontFamily, 
+            fontSize: AppTypography.secondarySize,
             color: ClubDashboardPalette.textMuted,
             height: 1.25,
           ),
@@ -3553,7 +3544,7 @@ class _PlanListItem extends StatelessWidget {
                       children: [
                         Icon(Icons.delete_rounded, size: 18, color: Colors.red),
                         SizedBox(width: 8),
-                        Text("Удалить", style: TextStyle(color: Colors.red)),
+                        Text("Удалить", style: TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.red)),
                       ],
                     ),
                   ),
@@ -3600,7 +3591,7 @@ class _GraphicGridItem extends StatelessWidget {
 
     final screenWidth = MediaQuery.of(context).size.width;
     final isCompact = screenWidth < 400;
-    final fontSize = isCompact ? 11.5 : 12.5;
+    final fontSize = isCompact ? AppTypography.secondarySize : AppTypography.bodySize;
     final previewHeight = isCompact ? 70.0 : 80.0;
 
     return GestureDetector(
@@ -3654,7 +3645,7 @@ class _GraphicGridItem extends StatelessWidget {
                             children: [
                               Icon(Icons.delete_rounded, size: 18, color: Colors.red),
                               SizedBox(width: 8),
-                              Text("Удалить", style: TextStyle(color: Colors.red)),
+                              Text("Удалить", style: TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.red)),
                             ],
                           ),
                         ),
@@ -3677,7 +3668,7 @@ class _GraphicGridItem extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 title.isNotEmpty ? title : "Схема",
-                style: TextStyle(
+                style: TextStyle(fontFamily: AppTypography.fontFamily, 
                   fontWeight: FontWeight.w500,
                   fontSize: fontSize,
                   height: 1.2,
@@ -3689,8 +3680,8 @@ class _GraphicGridItem extends StatelessWidget {
               if (createdAt.isNotEmpty)
                 Text(
                   createdAt.length > 10 ? createdAt.substring(0, 10) : createdAt,
-                  style: const TextStyle(
-                    fontSize: 10,
+                  style: const TextStyle(fontFamily: AppTypography.fontFamily, 
+                    fontSize: AppTypography.captionSize,
                     color: ClubDashboardPalette.textMuted,
                     fontWeight: FontWeight.w500,
                   ),
@@ -3713,7 +3704,7 @@ class _GraphicGridItem extends StatelessWidget {
                     ),
                     child: Text(
                       selected ? "Выбрано" : "Прикрепить",
-                      style: const TextStyle(fontWeight: FontWeight.w500),
+                      style: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w500),
                     ),
                   ),
                 )
@@ -3722,8 +3713,8 @@ class _GraphicGridItem extends StatelessWidget {
                   children: const [
                     Text(
                       "Просмотр",
-                      style: TextStyle(
-                        fontSize: 11,
+                      style: TextStyle(fontFamily: AppTypography.fontFamily, 
+                        fontSize: AppTypography.secondarySize,
                         fontWeight: FontWeight.w500,
                         color: ClubDashboardPalette.primaryGreenDark,
                       ),
@@ -3801,14 +3792,14 @@ class _GraphicListItem extends StatelessWidget {
         ),
         title: Text(
           title.isNotEmpty ? title : "Схема",
-          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+          style: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w500, fontSize: AppTypography.subsectionTitleSize),
         ),
         subtitle: Text(
           createdAt.isNotEmpty
               ? "Создана: ${createdAt.length > 10 ? createdAt.substring(0, 10) : createdAt}"
               : "",
-          style: const TextStyle(
-            fontSize: 12,
+          style: const TextStyle(fontFamily: AppTypography.fontFamily, 
+            fontSize: AppTypography.secondarySize,
             color: ClubDashboardPalette.textMuted,
           ),
         ),
@@ -3830,7 +3821,7 @@ class _GraphicListItem extends StatelessWidget {
                 ),
                 child: Text(
                   selected ? "Выбрано" : "Прикрепить",
-                  style: const TextStyle(fontWeight: FontWeight.w500),
+                  style: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w500),
                 ),
               )
             : Row(
@@ -3846,7 +3837,7 @@ class _GraphicListItem extends StatelessWidget {
                             children: [
                               Icon(Icons.delete_rounded, size: 18, color: Colors.red),
                               SizedBox(width: 8),
-                              Text("Удалить", style: TextStyle(color: Colors.red)),
+                              Text("Удалить", style: TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.red)),
                             ],
                           ),
                         ),
@@ -3980,7 +3971,7 @@ class _FileGridItem extends StatelessWidget {
                             children: [
                               Icon(Icons.delete_rounded, size: 18, color: Colors.red),
                               SizedBox(width: 8),
-                              Text("Удалить", style: TextStyle(color: Colors.red)),
+                              Text("Удалить", style: TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.red)),
                             ],
                           ),
                         ),
@@ -3994,9 +3985,9 @@ class _FileGridItem extends StatelessWidget {
               const SizedBox(height: 10),
               Text(
                 title.isNotEmpty ? title : "Файл",
-                style: const TextStyle(
+                style: const TextStyle(fontFamily: AppTypography.fontFamily, 
                   fontWeight: FontWeight.w500,
-                  fontSize: 13,
+                  fontSize: AppTypography.bodySize,
                   height: 1.2,
                 ),
                 maxLines: 2,
@@ -4008,8 +3999,8 @@ class _FileGridItem extends StatelessWidget {
                   fileName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 10,
+                  style: const TextStyle(fontFamily: AppTypography.fontFamily, 
+                    fontSize: AppTypography.captionSize,
                     color: ClubDashboardPalette.textMuted,
                     fontWeight: FontWeight.w500,
                   ),
@@ -4017,8 +4008,8 @@ class _FileGridItem extends StatelessWidget {
               if (ext.isNotEmpty)
                 Text(
                   ext.toUpperCase(),
-                  style: TextStyle(
-                    fontSize: 10,
+                  style: TextStyle(fontFamily: AppTypography.fontFamily, 
+                    fontSize: AppTypography.captionSize,
                     color: color,
                     fontWeight: FontWeight.w500,
                   ),
@@ -4026,8 +4017,8 @@ class _FileGridItem extends StatelessWidget {
               if (sizeText.isNotEmpty)
                 Text(
                   sizeText,
-                  style: const TextStyle(
-                    fontSize: 10,
+                  style: const TextStyle(fontFamily: AppTypography.fontFamily, 
+                    fontSize: AppTypography.captionSize,
                     color: ClubDashboardPalette.textMuted,
                     fontWeight: FontWeight.w500,
                   ),
@@ -4035,8 +4026,8 @@ class _FileGridItem extends StatelessWidget {
               if (createdAt.isNotEmpty)
                 Text(
                   createdAt.length > 10 ? createdAt.substring(0, 10) : createdAt,
-                  style: const TextStyle(
-                    fontSize: 10,
+                  style: const TextStyle(fontFamily: AppTypography.fontFamily, 
+                    fontSize: AppTypography.captionSize,
                     color: ClubDashboardPalette.textMuted,
                     fontWeight: FontWeight.w500,
                   ),
@@ -4046,8 +4037,8 @@ class _FileGridItem extends StatelessWidget {
                 children: [
                   Text(
                     "Открыть",
-                    style: TextStyle(
-                      fontSize: 11,
+                    style: TextStyle(fontFamily: AppTypography.fontFamily, 
+                      fontSize: AppTypography.secondarySize,
                       fontWeight: FontWeight.w500,
                       color: color,
                     ),
@@ -4170,15 +4161,15 @@ class _FileListItem extends StatelessWidget {
         ),
         title: Text(
           title.isNotEmpty ? title : "Файл",
-          style: const TextStyle(
+          style: const TextStyle(fontFamily: AppTypography.fontFamily, 
             fontWeight: FontWeight.w500,
-            fontSize: 14,
+            fontSize: AppTypography.subsectionTitleSize,
           ),
         ),
         subtitle: Text(
           subtitleParts.join("\n"),
-          style: const TextStyle(
-            fontSize: 12,
+          style: const TextStyle(fontFamily: AppTypography.fontFamily, 
+            fontSize: AppTypography.secondarySize,
             color: ClubDashboardPalette.textMuted,
             height: 1.25,
           ),
@@ -4196,7 +4187,7 @@ class _FileListItem extends StatelessWidget {
                       children: [
                         Icon(Icons.delete_rounded, size: 18, color: Colors.red),
                         SizedBox(width: 8),
-                        Text("Удалить", style: TextStyle(color: Colors.red)),
+                        Text("Удалить", style: TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.red)),
                       ],
                     ),
                   ),
@@ -4276,8 +4267,8 @@ class __FolderCreateSheetState extends State<_FolderCreateSheet> {
                   children: [
                     Text(
                       widget.isEdit ? "Переименовать папку" : "Новая папка",
-                      style: const TextStyle(
-                        fontSize: 20,
+                      style: const TextStyle(fontFamily: AppTypography.fontFamily, 
+                        fontSize: AppTypography.screenTitleSize,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -4286,9 +4277,9 @@ class __FolderCreateSheetState extends State<_FolderCreateSheet> {
                       widget.isEdit
                           ? "В папке: ${widget.parentTitle}"
                           : "Будет создана в папке: ${widget.parentTitle}",
-                      style: const TextStyle(
+                      style: const TextStyle(fontFamily: AppTypography.fontFamily, 
                         color: ClubDashboardPalette.textMuted,
-                        fontSize: 13,
+                        fontSize: AppTypography.bodySize,
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -4311,9 +4302,9 @@ class __FolderCreateSheetState extends State<_FolderCreateSheet> {
                       const SizedBox(height: 20),
                       const Text(
                         "Тип папки",
-                        style: TextStyle(
+                        style: TextStyle(fontFamily: AppTypography.fontFamily, 
                           fontWeight: FontWeight.w500,
-                          fontSize: 14,
+                          fontSize: AppTypography.subsectionTitleSize,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -4430,7 +4421,7 @@ class _TypeChip extends StatelessWidget {
           child: Center(
             child: Text(
               label,
-              style: TextStyle(
+              style: TextStyle(fontFamily: AppTypography.fontFamily, 
                 fontWeight: FontWeight.w500,
                 color: selected
                     ? ClubDashboardPalette.primaryGreen
@@ -4479,8 +4470,8 @@ class _EmptyState extends StatelessWidget {
             const SizedBox(height: 20),
             Text(
               title,
-              style: const TextStyle(
-                fontSize: 18,
+              style: const TextStyle(fontFamily: AppTypography.fontFamily, 
+                fontSize: AppTypography.screenTitleSize,
                 fontWeight: FontWeight.w500,
                 color: ClubDashboardPalette.text,
               ),
@@ -4489,9 +4480,9 @@ class _EmptyState extends StatelessWidget {
             Text(
               subtitle,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: const TextStyle(fontFamily: AppTypography.fontFamily, 
                 color: ClubDashboardPalette.textMuted,
-                fontSize: 14,
+                fontSize: AppTypography.subsectionTitleSize,
               ),
             ),
           ],
@@ -4527,8 +4518,8 @@ class _ErrorView extends StatelessWidget {
             Text(
               text,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 16,
+              style: const TextStyle(fontFamily: AppTypography.fontFamily, 
+                fontSize: AppTypography.screenTitleSize,
                 fontWeight: FontWeight.w500,
                 color: ClubDashboardPalette.text,
               ),

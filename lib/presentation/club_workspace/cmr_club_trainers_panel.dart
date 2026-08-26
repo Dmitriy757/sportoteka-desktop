@@ -188,13 +188,8 @@ class _CmrText {
         ],
       );
 
-  static TextStyle section() => AppTypography.custom(
-        size: 12.2,
-        weight: FontWeight.w600,
-        color: _CmrColors.text,
-        height: 1.18,
-        letterSpacing: 0,
-      );
+  static TextStyle section() =>
+      AppTypography.subsectionTitle(color: _CmrColors.text);
 
   static TextStyle value(double size) => AppTypography.custom(
         size: size,
@@ -215,45 +210,20 @@ class _CmrText {
         letterSpacing: 0,
       );
 
-  static TextStyle caption() => AppTypography.custom(
-        size: 10.8,
-        weight: FontWeight.w500,
-        color: _CmrColors.muted2,
-        height: 1.18,
-        letterSpacing: 0,
-      );
+  static TextStyle caption() =>
+      AppTypography.captionMedium(color: _CmrColors.muted2);
 
-  static TextStyle pill() => AppTypography.custom(
-        size: 11.2,
-        weight: FontWeight.w500,
-        color: _CmrColors.text,
-        height: 1.16,
-        letterSpacing: 0,
-      );
+  static TextStyle pill() =>
+      AppTypography.chip(color: _CmrColors.text);
 
-  static TextStyle tab() => AppTypography.custom(
-        size: 11.4,
-        weight: FontWeight.w500,
-        color: _CmrColors.text,
-        height: 1.16,
-        letterSpacing: 0,
-      );
+  static TextStyle tab() =>
+      AppTypography.tab(color: _CmrColors.text);
 
-  static TextStyle tabSelected() => AppTypography.custom(
-        size: 11.4,
-        weight: FontWeight.w700,
-        color: _CmrColors.text,
-        height: 1.16,
-        letterSpacing: 0,
-      );
+  static TextStyle tabSelected() =>
+      AppTypography.tab(color: _CmrColors.text, active: true);
 
-  static TextStyle action() => AppTypography.custom(
-        size: 11.8,
-        weight: FontWeight.w600,
-        color: _CmrColors.text,
-        height: 1.16,
-        letterSpacing: 0,
-      );
+  static TextStyle action() =>
+      AppTypography.action(color: _CmrColors.text);
 
   static TextStyle danger() => AppTypography.custom(
         size: 11.8,
@@ -263,22 +233,15 @@ class _CmrText {
         letterSpacing: 0,
       );
 
-  static TextStyle navLabel({required bool active}) => AppTypography.custom(
-        size: 11.0,
-        weight: active ? FontWeight.w600 : FontWeight.w500,
+  static TextStyle navLabel({required bool active}) => AppTypography.menuTitle(
         color: active ? _CmrColors.greenDark : _CmrColors.text,
-        height: 1.30,
-        letterSpacing: 0,
+        weight: active ? FontWeight.w600 : FontWeight.w500,
       );
 
-  static TextStyle navSubtitle({required bool active}) => AppTypography.custom(
-        size: 10.2,
-        weight: FontWeight.w400,
+  static TextStyle navSubtitle({required bool active}) => AppTypography.menuSubtitle(
         color: active
             ? _CmrColors.greenDark.withOpacity(.68)
             : _CmrColors.muted2,
-        height: 1.30,
-        letterSpacing: 0,
       );
 }
 
@@ -2497,14 +2460,16 @@ class _TrainerHeader extends StatelessWidget {
                 'Тренеры',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: _CmrText.title(mobile ? 15.5 : 16.5),
+                style: mobile
+                    ? AppTypography.screenTitle(color: _CmrColors.text)
+                    : _CmrText.title(16.5),
               ),
               const SizedBox(height: 3),
               Text(
                 subtitle,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: _CmrText.muted(mobile ? 11 : 11.5),
+                style: _CmrText.muted(mobile ? 12 : 11.5),
               ),
             ],
           ),
@@ -2671,7 +2636,9 @@ class _TrainerSearch extends StatelessWidget {
                 border: InputBorder.none,
                 isDense: true,
               ),
-              style: _CmrText.value(mobile ? 12.4 : 12.9),
+              style: mobile
+                  ? AppTypography.formText(color: _CmrColors.text)
+                  : _CmrText.value(12.9),
             ),
           ),
           if (controller.text.trim().isNotEmpty)
@@ -2793,7 +2760,7 @@ class _StaffFilterPill extends StatelessWidget {
               color: active
                   ? _CmrColors.greenDark
                   : _CmrColors.muted2,
-              fontSize: dense ? 11.0 : 11.4,
+              fontSize: dense ? 12.0 : 11.4,
               fontWeight:
                   active ? FontWeight.w600 : FontWeight.w500,
               height: 1,
@@ -2873,14 +2840,18 @@ class _TrainerTile extends StatelessWidget {
                       name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _CmrText.navLabel(active: active),
+                      style: _CmrText.navLabel(active: active).copyWith(
+                        fontSize: mobile ? 12.0 : 11.0,
+                      ),
                     ),
                     const SizedBox(height: 3),
                     Text(
                       subtitleParts.join(' · '),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: _CmrText.navSubtitle(active: active),
+                      style: _CmrText.navSubtitle(active: active).copyWith(
+                        fontSize: mobile ? 11.2 : 10.2,
+                      ),
                     ),
                   ],
                 ),
@@ -3483,14 +3454,12 @@ class _TrainerAddRightPanelState
                     controller: _emailC,
                     onSubmitted:
                         (_) => _search(),
-                    style:
-                        _CmrText.value(10.5),
+                    style: AppTypography.formText(color: _CmrColors.text),
                     decoration:
                         InputDecoration(
                       hintText:
                           'Email тренера',
-                      hintStyle:
-                          _CmrText.muted(9.5),
+                      hintStyle: AppTypography.formHint(color: _CmrColors.muted2),
                       filled: true,
                       fillColor:
                           _CmrColors.soft,
@@ -6489,10 +6458,10 @@ class _CompactSearchBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
-      style: _CmrText.title(13),
+      style: AppTypography.formText(color: _CmrColors.text),
       decoration: InputDecoration(
         hintText: 'Поиск тренера...',
-        hintStyle: _CmrText.muted(12),
+        hintStyle: AppTypography.formHint(color: _CmrColors.muted2),
         prefixIcon: Icon(Icons.search_rounded, color: _CmrColors.muted, size: 16),
         filled: true,
         fillColor: _CmrColors.soft,
@@ -6905,10 +6874,10 @@ class _CmrInput extends StatelessWidget {
       maxLines: maxLines,
       keyboardType: keyboardType,
       onSubmitted: onSubmitted,
-      style: _CmrText.title(13),
+      style: AppTypography.formText(color: _CmrColors.text),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: _CmrText.muted(12.5),
+        hintStyle: AppTypography.formHint(color: _CmrColors.muted2),
         prefixIcon: Icon(icon, color: _CmrColors.muted, size: 18),
         suffixIcon: suffix,
         filled: true,

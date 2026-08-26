@@ -25,6 +25,7 @@ import 'package:sportoteka/presentation/reels_screen/user_reels_screen.dart';
 import 'package:sportoteka/presentation/reels_screen/reels_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/chat_room_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/chat_screen.dart';
+import 'package:sportoteka/presentation/chat_screen/cmr_notifications_panel.dart';
 import 'package:sportoteka/presentation/club_workspace/club_workspace_screen.dart';
 import 'package:sportoteka/presentation/booking_screen/booking_screen.dart';
 import 'package:sportoteka/presentation/catalog/events_list_screen.dart';
@@ -260,9 +261,12 @@ class ProfileDesign {
       backgroundColorValue: backgroundColorValue ?? this.backgroundColorValue,
       surfaceColorValue: surfaceColorValue ?? this.surfaceColorValue,
       cardColorValue: cardColorValue ?? this.cardColorValue,
-      textPrimaryColorValue: textPrimaryColorValue ?? this.textPrimaryColorValue,
-      textSecondaryColorValue: textSecondaryColorValue ?? this.textSecondaryColorValue,
-      textTertiaryColorValue: textTertiaryColorValue ?? this.textTertiaryColorValue,
+      textPrimaryColorValue:
+          textPrimaryColorValue ?? this.textPrimaryColorValue,
+      textSecondaryColorValue:
+          textSecondaryColorValue ?? this.textSecondaryColorValue,
+      textTertiaryColorValue:
+          textTertiaryColorValue ?? this.textTertiaryColorValue,
       fontFamily: fontFamily ?? this.fontFamily,
       titleFontSize: titleFontSize ?? this.titleFontSize,
       headingFontSize: headingFontSize ?? this.headingFontSize,
@@ -277,11 +281,13 @@ class ProfileDesign {
       buttonRadius: buttonRadius ?? this.buttonRadius,
       spacing: spacing ?? this.spacing,
       contentPadding: contentPadding ?? this.contentPadding,
-      avatarBorderColorValue: avatarBorderColorValue ?? this.avatarBorderColorValue,
+      avatarBorderColorValue:
+          avatarBorderColorValue ?? this.avatarBorderColorValue,
       avatarGlowEnabled: avatarGlowEnabled ?? this.avatarGlowEnabled,
       avatarGlowRadius: avatarGlowRadius ?? this.avatarGlowRadius,
       avatarGlowOpacity: avatarGlowOpacity ?? this.avatarGlowOpacity,
-      headerGradientEnabled: headerGradientEnabled ?? this.headerGradientEnabled,
+      headerGradientEnabled:
+          headerGradientEnabled ?? this.headerGradientEnabled,
       headerGradientColors: headerGradientColors ?? this.headerGradientColors,
       headerGradientBeginX: headerGradientBeginX ?? this.headerGradientBeginX,
       headerGradientBeginY: headerGradientBeginY ?? this.headerGradientBeginY,
@@ -289,17 +295,21 @@ class ProfileDesign {
       headerGradientEndY: headerGradientEndY ?? this.headerGradientEndY,
       cardShadowEnabled: cardShadowEnabled ?? this.cardShadowEnabled,
       cardShadowBlurRadius: cardShadowBlurRadius ?? this.cardShadowBlurRadius,
-      cardShadowSpreadRadius: cardShadowSpreadRadius ?? this.cardShadowSpreadRadius,
+      cardShadowSpreadRadius:
+          cardShadowSpreadRadius ?? this.cardShadowSpreadRadius,
       cardShadowOffsetX: cardShadowOffsetX ?? this.cardShadowOffsetX,
       cardShadowOffsetY: cardShadowOffsetY ?? this.cardShadowOffsetY,
       cardShadowColorValue: cardShadowColorValue ?? this.cardShadowColorValue,
       cardShadowOpacity: cardShadowOpacity ?? this.cardShadowOpacity,
       avatarShadowEnabled: avatarShadowEnabled ?? this.avatarShadowEnabled,
-      avatarShadowBlurRadius: avatarShadowBlurRadius ?? this.avatarShadowBlurRadius,
-      avatarShadowSpreadRadius: avatarShadowSpreadRadius ?? this.avatarShadowSpreadRadius,
+      avatarShadowBlurRadius:
+          avatarShadowBlurRadius ?? this.avatarShadowBlurRadius,
+      avatarShadowSpreadRadius:
+          avatarShadowSpreadRadius ?? this.avatarShadowSpreadRadius,
       avatarShadowOffsetX: avatarShadowOffsetX ?? this.avatarShadowOffsetX,
       avatarShadowOffsetY: avatarShadowOffsetY ?? this.avatarShadowOffsetY,
-      avatarShadowColorValue: avatarShadowColorValue ?? this.avatarShadowColorValue,
+      avatarShadowColorValue:
+          avatarShadowColorValue ?? this.avatarShadowColorValue,
       avatarShadowOpacity: avatarShadowOpacity ?? this.avatarShadowOpacity,
       blocks: blocks ?? this.blocks,
       sectionVisibility: sectionVisibility ?? this.sectionVisibility,
@@ -323,142 +333,152 @@ class ProfileDesign {
   Color get textTertiaryColor => Color(textTertiaryColorValue);
   Color get avatarBorderColor => Color(avatarBorderColorValue);
 
- factory ProfileDesign.fromJson(Map<String, dynamic> json) {
-  final rawBlocks = json['blocks'];
-  final rawSectionVisibility = json['sectionVisibility'];
-  final rawSectionOrder = json['sectionOrder'];
+  factory ProfileDesign.fromJson(Map<String, dynamic> json) {
+    final rawBlocks = json['blocks'];
+    final rawSectionVisibility = json['sectionVisibility'];
+    final rawSectionOrder = json['sectionOrder'];
 
-  return ProfileDesign(
-    primaryColorValue: json['primaryColorValue'] ?? 0xFF00A750,
-    secondaryColorValue: json['secondaryColorValue'] ?? 0xFF008C40,
-    accentColorValue: json['accentColorValue'] ?? 0xFF7ED321,
-    backgroundColorValue: json['backgroundColorValue'] ?? 0xFFF3F5F7,
-    surfaceColorValue: json['surfaceColorValue'] ?? 0xFFE8F5E9,
-    cardColorValue: json['cardColorValue'] ?? 0xFFFFFFFF,
-    textPrimaryColorValue: json['textPrimaryColorValue'] ?? 0xFF1A1A1A,
-    textSecondaryColorValue: json['textSecondaryColorValue'] ?? 0xFF666666,
-    textTertiaryColorValue: json['textTertiaryColorValue'] ?? 0xFF999999,
-
-    fontFamily: (json['fontFamily'] ?? 'default').toString(),
-    titleFontSize: (json['titleFontSize'] as num?)?.toDouble() ?? 22,
-    headingFontSize: (json['headingFontSize'] as num?)?.toDouble() ?? 18,
-    bodyFontSize: (json['bodyFontSize'] as num?)?.toDouble() ?? 14,
-    smallFontSize: (json['smallFontSize'] as num?)?.toDouble() ?? 12,
-
-    titleWeight: _parseFontWeight((json['titleWeight'] ?? 'w900').toString()),
-    headingWeight: _parseFontWeight((json['headingWeight'] ?? 'w700').toString()),
-    bodyWeight: _parseFontWeight((json['bodyWeight'] ?? 'w500').toString()),
-
-    avatarSize: (json['avatarSize'] as num?)?.toDouble() ?? 96,
-    avatarBorderWidth: (json['avatarBorderWidth'] as num?)?.toDouble() ?? 2,
-    cardRadius: (json['cardRadius'] as num?)?.toDouble() ?? 16,
-    buttonRadius: (json['buttonRadius'] as num?)?.toDouble() ?? 14,
-    spacing: (json['spacing'] as num?)?.toDouble() ?? 12,
-    contentPadding: (json['contentPadding'] as num?)?.toDouble() ?? 16,
-
-    avatarBorderColorValue: json['avatarBorderColorValue'] ?? 0xFF00A750,
-    avatarGlowEnabled: json['avatarGlowEnabled'] == true,
-    avatarGlowRadius: (json['avatarGlowRadius'] as num?)?.toDouble() ?? 20,
-    avatarGlowOpacity: (json['avatarGlowOpacity'] as num?)?.toDouble() ?? 0.3,
-
-    headerGradientEnabled: json['headerGradientEnabled'] == true,
-    headerGradientColors: (json['headerGradientColors'] is List)
-        ? List<int>.from((json['headerGradientColors'] as List).map((e) {
-            if (e is int) return e;
-            return int.tryParse('$e') ?? 0xFF00A750;
-          }))
-        : <int>[0xFF00A750, 0xFF008C40],
-    headerGradientBeginX: (json['headerGradientBeginX'] as num?)?.toDouble() ?? 0,
-    headerGradientBeginY: (json['headerGradientBeginY'] as num?)?.toDouble() ?? 0,
-    headerGradientEndX: (json['headerGradientEndX'] as num?)?.toDouble() ?? 1,
-    headerGradientEndY: (json['headerGradientEndY'] as num?)?.toDouble() ?? 1,
-
-    cardShadowEnabled: json['cardShadowEnabled'] != false,
-    cardShadowBlurRadius: (json['cardShadowBlurRadius'] as num?)?.toDouble() ?? 8,
-    cardShadowSpreadRadius: (json['cardShadowSpreadRadius'] as num?)?.toDouble() ?? 0,
-    cardShadowOffsetX: (json['cardShadowOffsetX'] as num?)?.toDouble() ?? 0,
-    cardShadowOffsetY: (json['cardShadowOffsetY'] as num?)?.toDouble() ?? 4,
-    cardShadowColorValue: json['cardShadowColorValue'] ?? 0xFF000000,
-    cardShadowOpacity: (json['cardShadowOpacity'] as num?)?.toDouble() ?? 0.05,
-
-    avatarShadowEnabled: json['avatarShadowEnabled'] != false,
-    avatarShadowBlurRadius: (json['avatarShadowBlurRadius'] as num?)?.toDouble() ?? 8,
-    avatarShadowSpreadRadius: (json['avatarShadowSpreadRadius'] as num?)?.toDouble() ?? 0,
-    avatarShadowOffsetX: (json['avatarShadowOffsetX'] as num?)?.toDouble() ?? 0,
-    avatarShadowOffsetY: (json['avatarShadowOffsetY'] as num?)?.toDouble() ?? 4,
-    avatarShadowColorValue: json['avatarShadowColorValue'] ?? 0xFF000000,
-    avatarShadowOpacity: (json['avatarShadowOpacity'] as num?)?.toDouble() ?? 0.1,
-
-    blocks: rawBlocks is List
-        ? rawBlocks
-            .whereType<Map>()
-            .map((e) => ProfileBlock.fromJson(Map<String, dynamic>.from(e)))
-            .toList()
-        : ProfileBlock.defaultBlocks(),
-
-    sectionVisibility: rawSectionVisibility is Map
-        ? Map<String, bool>.from(
-            rawSectionVisibility.map(
-              (key, value) => MapEntry(key.toString(), value == true),
-            ),
-          )
-        : <String, bool>{
-            'posts': true,
-            'reels': true,
-            'feed': true,
-            'skills': true,
-            'team': true,
-            'bio': true,
-            'location': true,
-            'ai': true,
-            'header': true,
-            'stats': true,
-            'actions': true,
-            'switcher': true,
-            'content': true,
-          },
-
-    sectionOrder: rawSectionOrder is Map
-        ? Map<String, int>.from(
-            rawSectionOrder.map(
-              (key, value) => MapEntry(
-                key.toString(),
-                value is num ? value.toInt() : int.tryParse('$value') ?? 0,
+    return ProfileDesign(
+      primaryColorValue: json['primaryColorValue'] ?? 0xFF00A750,
+      secondaryColorValue: json['secondaryColorValue'] ?? 0xFF008C40,
+      accentColorValue: json['accentColorValue'] ?? 0xFF7ED321,
+      backgroundColorValue: json['backgroundColorValue'] ?? 0xFFF3F5F7,
+      surfaceColorValue: json['surfaceColorValue'] ?? 0xFFE8F5E9,
+      cardColorValue: json['cardColorValue'] ?? 0xFFFFFFFF,
+      textPrimaryColorValue: json['textPrimaryColorValue'] ?? 0xFF1A1A1A,
+      textSecondaryColorValue: json['textSecondaryColorValue'] ?? 0xFF666666,
+      textTertiaryColorValue: json['textTertiaryColorValue'] ?? 0xFF999999,
+      fontFamily: (json['fontFamily'] ?? 'default').toString(),
+      titleFontSize: (json['titleFontSize'] as num?)?.toDouble() ?? 22,
+      headingFontSize: (json['headingFontSize'] as num?)?.toDouble() ?? 18,
+      bodyFontSize: (json['bodyFontSize'] as num?)?.toDouble() ?? 14,
+      smallFontSize: (json['smallFontSize'] as num?)?.toDouble() ?? 12,
+      titleWeight: _parseFontWeight((json['titleWeight'] ?? 'w900').toString()),
+      headingWeight:
+          _parseFontWeight((json['headingWeight'] ?? 'w700').toString()),
+      bodyWeight: _parseFontWeight((json['bodyWeight'] ?? 'w500').toString()),
+      avatarSize: (json['avatarSize'] as num?)?.toDouble() ?? 96,
+      avatarBorderWidth: (json['avatarBorderWidth'] as num?)?.toDouble() ?? 2,
+      cardRadius: (json['cardRadius'] as num?)?.toDouble() ?? 16,
+      buttonRadius: (json['buttonRadius'] as num?)?.toDouble() ?? 14,
+      spacing: (json['spacing'] as num?)?.toDouble() ?? 12,
+      contentPadding: (json['contentPadding'] as num?)?.toDouble() ?? 16,
+      avatarBorderColorValue: json['avatarBorderColorValue'] ?? 0xFF00A750,
+      avatarGlowEnabled: json['avatarGlowEnabled'] == true,
+      avatarGlowRadius: (json['avatarGlowRadius'] as num?)?.toDouble() ?? 20,
+      avatarGlowOpacity: (json['avatarGlowOpacity'] as num?)?.toDouble() ?? 0.3,
+      headerGradientEnabled: json['headerGradientEnabled'] == true,
+      headerGradientColors: (json['headerGradientColors'] is List)
+          ? List<int>.from((json['headerGradientColors'] as List).map((e) {
+              if (e is int) return e;
+              return int.tryParse('$e') ?? 0xFF00A750;
+            }))
+          : <int>[0xFF00A750, 0xFF008C40],
+      headerGradientBeginX:
+          (json['headerGradientBeginX'] as num?)?.toDouble() ?? 0,
+      headerGradientBeginY:
+          (json['headerGradientBeginY'] as num?)?.toDouble() ?? 0,
+      headerGradientEndX: (json['headerGradientEndX'] as num?)?.toDouble() ?? 1,
+      headerGradientEndY: (json['headerGradientEndY'] as num?)?.toDouble() ?? 1,
+      cardShadowEnabled: json['cardShadowEnabled'] != false,
+      cardShadowBlurRadius:
+          (json['cardShadowBlurRadius'] as num?)?.toDouble() ?? 8,
+      cardShadowSpreadRadius:
+          (json['cardShadowSpreadRadius'] as num?)?.toDouble() ?? 0,
+      cardShadowOffsetX: (json['cardShadowOffsetX'] as num?)?.toDouble() ?? 0,
+      cardShadowOffsetY: (json['cardShadowOffsetY'] as num?)?.toDouble() ?? 4,
+      cardShadowColorValue: json['cardShadowColorValue'] ?? 0xFF000000,
+      cardShadowOpacity:
+          (json['cardShadowOpacity'] as num?)?.toDouble() ?? 0.05,
+      avatarShadowEnabled: json['avatarShadowEnabled'] != false,
+      avatarShadowBlurRadius:
+          (json['avatarShadowBlurRadius'] as num?)?.toDouble() ?? 8,
+      avatarShadowSpreadRadius:
+          (json['avatarShadowSpreadRadius'] as num?)?.toDouble() ?? 0,
+      avatarShadowOffsetX:
+          (json['avatarShadowOffsetX'] as num?)?.toDouble() ?? 0,
+      avatarShadowOffsetY:
+          (json['avatarShadowOffsetY'] as num?)?.toDouble() ?? 4,
+      avatarShadowColorValue: json['avatarShadowColorValue'] ?? 0xFF000000,
+      avatarShadowOpacity:
+          (json['avatarShadowOpacity'] as num?)?.toDouble() ?? 0.1,
+      blocks: rawBlocks is List
+          ? rawBlocks
+              .whereType<Map>()
+              .map((e) => ProfileBlock.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+          : ProfileBlock.defaultBlocks(),
+      sectionVisibility: rawSectionVisibility is Map
+          ? Map<String, bool>.from(
+              rawSectionVisibility.map(
+                (key, value) => MapEntry(key.toString(), value == true),
               ),
-            ),
-          )
-        : <String, int>{
-            'header': 0,
-            'stats': 1,
-            'actions': 2,
-            'team': 3,
-            'ai': 4,
-            'skills': 5,
-            'bio': 6,
-            'location': 7,
-            'switcher': 8,
-            'content': 9,
-          },
-
-    statsCompactMode: json['statsCompactMode'] == true,
-    statsShowLabels: json['statsShowLabels'] != false,
-    statsShowIcons: json['statsShowIcons'] != false,
-    enableHoverEffects: json['enableHoverEffects'] == true,
-    enablePulseEffects: json['enablePulseEffects'] == true,
-  );
-}
+            )
+          : <String, bool>{
+              'posts': true,
+              'reels': true,
+              'feed': true,
+              'skills': true,
+              'team': true,
+              'bio': true,
+              'location': true,
+              'ai': true,
+              'header': true,
+              'stats': true,
+              'actions': true,
+              'switcher': true,
+              'content': true,
+            },
+      sectionOrder: rawSectionOrder is Map
+          ? Map<String, int>.from(
+              rawSectionOrder.map(
+                (key, value) => MapEntry(
+                  key.toString(),
+                  value is num ? value.toInt() : int.tryParse('$value') ?? 0,
+                ),
+              ),
+            )
+          : <String, int>{
+              'header': 0,
+              'stats': 1,
+              'actions': 2,
+              'team': 3,
+              'ai': 4,
+              'skills': 5,
+              'bio': 6,
+              'location': 7,
+              'switcher': 8,
+              'content': 9,
+            },
+      statsCompactMode: json['statsCompactMode'] == true,
+      statsShowLabels: json['statsShowLabels'] != false,
+      statsShowIcons: json['statsShowIcons'] != false,
+      enableHoverEffects: json['enableHoverEffects'] == true,
+      enablePulseEffects: json['enablePulseEffects'] == true,
+    );
+  }
   static FontWeight _parseFontWeight(String value) {
     switch (value) {
-      case 'w100': return FontWeight.w100;
-      case 'w200': return FontWeight.w200;
-      case 'w300': return FontWeight.w300;
-      case 'w400': return FontWeight.w400;
-      case 'w500': return FontWeight.w500;
-      case 'w600': return FontWeight.w600;
-      case 'w700': return FontWeight.w700;
-      case 'w800': return FontWeight.w800;
-      case 'w900': return FontWeight.w900;
-      default: return FontWeight.w500;
+      case 'w100':
+        return FontWeight.w100;
+      case 'w200':
+        return FontWeight.w200;
+      case 'w300':
+        return FontWeight.w300;
+      case 'w400':
+        return FontWeight.w400;
+      case 'w500':
+        return FontWeight.w500;
+      case 'w600':
+        return FontWeight.w600;
+      case 'w700':
+        return FontWeight.w700;
+      case 'w800':
+        return FontWeight.w800;
+      case 'w900':
+        return FontWeight.w900;
+      default:
+        return FontWeight.w500;
     }
   }
 
@@ -639,26 +659,26 @@ class ProfileBlock {
   });
 
   factory ProfileBlock.fromJson(Map<String, dynamic> json) {
-  final rawSettings = json['settings'];
+    final rawSettings = json['settings'];
 
-  Map<String, dynamic> parsedSettings;
-  if (rawSettings is Map) {
-    parsedSettings = Map<String, dynamic>.from(rawSettings);
-  } else {
-    parsedSettings = <String, dynamic>{};
+    Map<String, dynamic> parsedSettings;
+    if (rawSettings is Map) {
+      parsedSettings = Map<String, dynamic>.from(rawSettings);
+    } else {
+      parsedSettings = <String, dynamic>{};
+    }
+
+    return ProfileBlock(
+      id: (json['id'] ?? '').toString(),
+      title: (json['title'] ?? '').toString(),
+      type: (json['type'] ?? 'info').toString(),
+      enabled: json['enabled'] == null ? true : json['enabled'] == true,
+      order: (json['order'] is num)
+          ? (json['order'] as num).toInt()
+          : int.tryParse('${json['order']}') ?? 0,
+      settings: parsedSettings,
+    );
   }
-
-  return ProfileBlock(
-    id: (json['id'] ?? '').toString(),
-    title: (json['title'] ?? '').toString(),
-    type: (json['type'] ?? 'info').toString(),
-    enabled: json['enabled'] == null ? true : json['enabled'] == true,
-    order: (json['order'] is num)
-        ? (json['order'] as num).toInt()
-        : int.tryParse('${json['order']}') ?? 0,
-    settings: parsedSettings,
-  );
-}
 
   Map<String, dynamic> toJson() {
     return {
@@ -673,14 +693,62 @@ class ProfileBlock {
 
   static List<ProfileBlock> defaultBlocks() {
     return [
-      ProfileBlock(id: 'posts', title: 'Посты', type: 'grid', enabled: true, order: 0, settings: {}),
-      ProfileBlock(id: 'reels', title: 'Reels', type: 'grid', enabled: true, order: 1, settings: {}),
-      ProfileBlock(id: 'feed', title: 'Лента', type: 'grid', enabled: true, order: 2, settings: {}),
-      ProfileBlock(id: 'skills', title: 'Скиллы', type: 'card', enabled: true, order: 3, settings: {}),
-      ProfileBlock(id: 'team', title: 'Команда', type: 'card', enabled: true, order: 4, settings: {}),
-      ProfileBlock(id: 'ai', title: 'Спортотека AI', type: 'card', enabled: true, order: 5, settings: {}),
-      ProfileBlock(id: 'bio', title: 'О себе', type: 'text', enabled: true, order: 6, settings: {}),
-      ProfileBlock(id: 'location', title: 'Локация', type: 'text', enabled: true, order: 7, settings: {}),
+      ProfileBlock(
+          id: 'posts',
+          title: 'Посты',
+          type: 'grid',
+          enabled: true,
+          order: 0,
+          settings: {}),
+      ProfileBlock(
+          id: 'reels',
+          title: 'Reels',
+          type: 'grid',
+          enabled: true,
+          order: 1,
+          settings: {}),
+      ProfileBlock(
+          id: 'feed',
+          title: 'Лента',
+          type: 'grid',
+          enabled: true,
+          order: 2,
+          settings: {}),
+      ProfileBlock(
+          id: 'skills',
+          title: 'Скиллы',
+          type: 'card',
+          enabled: true,
+          order: 3,
+          settings: {}),
+      ProfileBlock(
+          id: 'team',
+          title: 'Команда',
+          type: 'card',
+          enabled: true,
+          order: 4,
+          settings: {}),
+      ProfileBlock(
+          id: 'ai',
+          title: 'Спортотека AI',
+          type: 'card',
+          enabled: true,
+          order: 5,
+          settings: {}),
+      ProfileBlock(
+          id: 'bio',
+          title: 'О себе',
+          type: 'text',
+          enabled: true,
+          order: 6,
+          settings: {}),
+      ProfileBlock(
+          id: 'location',
+          title: 'Локация',
+          type: 'text',
+          enabled: true,
+          order: 7,
+          settings: {}),
     ];
   }
 
@@ -712,19 +780,22 @@ class MyProfileScreen extends StatefulWidget {
   /// без личного кабинета, рабочих зон, настроек и текста «Вы вошли как ...».
   final bool publicView;
 
-  const MyProfileScreen({Key? key, this.userId, this.publicView = false}) : super(key: key);
+  const MyProfileScreen({Key? key, this.userId, this.publicView = false})
+      : super(key: key);
 
   @override
   State<MyProfileScreen> createState() => _MyProfileScreenState();
 }
 
-class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderStateMixin {
+class _MyProfileScreenState extends State<MyProfileScreen>
+    with TickerProviderStateMixin {
   // =============================
   // СТАРЫЕ КОНСТАНТЫ (ОСТАВЛЯЕМ)
   // =============================
   static const String _apiBase = 'https://sportotekaapp.ru/api';
   static const String _uploadsBase = 'https://sportotekaapp.ru/uploads';
-  static const String _getOrCreatePrivateChatUrl = '$_apiBase/get_or_create_private_chat.php';
+  static const String _getOrCreatePrivateChatUrl =
+      '$_apiBase/get_or_create_private_chat.php';
   static const String _deletePostUrl = '$_apiBase/delete_post.php';
   static const String _deleteReelUrl = '$_apiBase/delete_reel.php';
   static const String _deleteAccountUrl = '$_apiBase/delete_account.php';
@@ -772,6 +843,8 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
   // Подключим к API важных уведомлений на следующем этапе.
   // Пока 0 = без badge, но сам фирменный знак уже работает.
   int _importantNotificationCount = 0;
+  int _chatUnreadCount = 0;
+  Timer? _badgePollingTimer;
 
   // Мобильные окна поверх профиля. Так нижний Instagram-dock не исчезает
   // при открытии ленты, Reels, чата, сервисов и рабочей зоны.
@@ -787,7 +860,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
   Widget? _desktopRightPaneChild;
   String _desktopRightPaneTitle = '';
   IconData _desktopRightPaneIcon = Icons.newspaper_rounded;
-
 
   // Геометрия окон ПК — та же модель, что и в Club Workspace.
   Offset? _profileMainWindowPosition;
@@ -830,15 +902,24 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
   // ========== ВАЖНО: ГЕТТЕР ISPLAYER ==========
   bool get isPlayer {
     final r = role.trim().toLowerCase();
-    return r == 'player' || r == 'игрок' || r.contains('player') || r.contains('игрок');
+    return r == 'player' ||
+        r == 'игрок' ||
+        r.contains('player') ||
+        r.contains('игрок');
   }
+
   bool get isClubRole {
     final r = role.trim().toLowerCase();
     return r == 'club' || r == 'клуб' || r.contains('club');
   }
+
   bool get isCoachRole {
     final r = role.trim().toLowerCase();
-    return r == 'coach' || r == 'trainer' || r == 'тренер' || r.contains('coach') || r.contains('trainer');
+    return r == 'coach' ||
+        r == 'trainer' ||
+        r == 'тренер' ||
+        r.contains('coach') ||
+        r.contains('trainer');
   }
 
   bool get isParentRole {
@@ -851,7 +932,8 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
         r.contains('guardian');
   }
 
-  bool get _isPublicProfileView => !isOwnProfile && (widget.publicView || widget.userId != null);
+  bool get _isPublicProfileView =>
+      !isOwnProfile && (widget.publicView || widget.userId != null);
 
   String get _publicProfileTitle {
     if (isPlayer) return 'Публичный профиль игрока';
@@ -890,8 +972,14 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     final team = (playerTeamName ?? '').trim();
     final club = (playerClubName ?? '').trim();
     if (isClubRole) return 'Вы вошли как клуб';
-    if (isCoachRole) return team.isNotEmpty ? 'Вы вошли как тренер команды' : 'Вы вошли как тренер';
-    if (isPlayer) return team.isNotEmpty ? 'Вы вошли как игрок команды' : 'Вы вошли как игрок';
+    if (isCoachRole)
+      return team.isNotEmpty
+          ? 'Вы вошли как тренер команды'
+          : 'Вы вошли как тренер';
+    if (isPlayer)
+      return team.isNotEmpty
+          ? 'Вы вошли как игрок команды'
+          : 'Вы вошли как игрок';
     if (isParentRole) return 'Вы вошли как родитель';
     return 'Вы вошли как $_roleLabel';
   }
@@ -918,7 +1006,8 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     if (isPlayer) return 'личный прогресс, тренировки и матчи';
     if (isCoachRole) return 'команда, состав, календарь и матчи';
     if (isClubRole) return 'команды, тренеры, состав и аналитика';
-    if (isParentRole) return 'дневник, посещаемость, тестирование и успехи ребёнка';
+    if (isParentRole)
+      return 'дневник, посещаемость, тестирование и успехи ребёнка';
     return 'профиль, лента, чат и сервисы';
   }
 
@@ -947,13 +1036,17 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
   String _dockKeyForWindow(String title) {
     final value = title.trim().toLowerCase();
 
-    if (value.contains('лента') || value.contains('feed') || value.contains('новост')) {
+    if (value.contains('лента') ||
+        value.contains('feed') ||
+        value.contains('новост')) {
       return 'feed';
     }
     if (value.contains('видеоурок') || value.contains('обучен')) {
       return 'lessons';
     }
-    if (value.contains('reels') || value.contains('рилс') || value.contains('эфир')) {
+    if (value.contains('reels') ||
+        value.contains('рилс') ||
+        value.contains('эфир')) {
       return 'reels';
     }
     if (value.contains('чат') || value.contains('сообщ')) {
@@ -965,10 +1058,14 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     if (value.contains('площад')) {
       return 'venues';
     }
-    if (value.contains('трек') || value.contains('трениров') || value.contains('tracking')) {
+    if (value.contains('трек') ||
+        value.contains('трениров') ||
+        value.contains('tracking')) {
       return 'tracker';
     }
-    if (value.contains('профил') || value.contains('главная') || value.contains('обзор')) {
+    if (value.contains('профил') ||
+        value.contains('главная') ||
+        value.contains('обзор')) {
       return 'profile';
     }
 
@@ -1074,7 +1171,9 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
               ),
               const SizedBox(width: 7),
               _buildWorkspaceWindowDot(
-                icon: maximized ? Icons.fullscreen_exit_rounded : Icons.open_in_full_rounded,
+                icon: maximized
+                    ? Icons.fullscreen_exit_rounded
+                    : Icons.open_in_full_rounded,
                 color: const Color(0xFFF1F3F5),
                 iconColor: const Color(0xFF667085),
                 onTap: onMaximize ?? () {},
@@ -1169,7 +1268,10 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(99),
-      child: Container(width: 11, height: 11, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+      child: Container(
+          width: 11,
+          height: 11,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
     );
   }
 
@@ -1202,7 +1304,9 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
         maxHeight: 820,
         child: PlayerDashboardScreen(
           teamId: playerTeamId ?? 0,
-          teamName: (playerTeamName ?? '').trim().isNotEmpty ? (playerTeamName ?? '').trim() : 'Мой Dashboard',
+          teamName: (playerTeamName ?? '').trim().isNotEmpty
+              ? (playerTeamName ?? '').trim()
+              : 'Мой Dashboard',
           userId: myId,
           teamLogo: playerTeamLogoUrl,
         ),
@@ -1234,7 +1338,13 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
         icon: Icons.forum_rounded,
         maxWidth: 1180,
         maxHeight: 800,
-        child: ChatScreen(userId: myId),
+        child: ChatScreen(
+          userId: myId,
+          onUnreadChanged: (value) {
+            if (!mounted) return;
+            setState(() => _chatUnreadCount = value);
+          },
+        ),
       );
       return;
     }
@@ -1244,7 +1354,13 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
       icon: Icons.forum_rounded,
       maxWidth: 1180,
       maxHeight: 800,
-      child: ChatScreen(userId: myId),
+      child: ChatScreen(
+        userId: myId,
+        onUnreadChanged: (value) {
+          if (!mounted) return;
+          setState(() => _chatUnreadCount = value);
+        },
+      ),
     );
     if (mounted) setState(() => _mobileDockKey = 'chat');
   }
@@ -1340,6 +1456,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     );
     if (mounted) setState(() => _mobileDockKey = 'feed');
   }
+
   void _openHomeServices() => _openServicesWindow();
   void _openHomeTips() => _openTipsWindow();
 
@@ -1408,7 +1525,8 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
   void _openNearbyGamesWindow() {
     _openComingSoonSection(
       title: 'Игры рядом',
-      description: 'Раздел дополняется. Здесь появится поиск открытых игр, спаррингов и команд, которым нужны игроки.',
+      description:
+          'Раздел дополняется. Здесь появится поиск открытых игр, спаррингов и команд, которым нужны игроки.',
       icon: Icons.sports_soccer_rounded,
       features: const [
         'Открытые игры и спарринги рядом',
@@ -1422,7 +1540,8 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
   void _openNearbyTrainingsWindow() {
     _openComingSoonSection(
       title: 'Тренировки рядом',
-      description: 'Раздел дополняется. В нём тренеры и клубы смогут публиковать открытые индивидуальные и групповые тренировки.',
+      description:
+          'Раздел дополняется. В нём тренеры и клубы смогут публиковать открытые индивидуальные и групповые тренировки.',
       icon: Icons.directions_run_rounded,
       features: const [
         'Индивидуальные тренировки',
@@ -1436,7 +1555,8 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
   void _openSavedWindow() {
     _openComingSoonSection(
       title: 'Сохранённое',
-      description: 'Раздел дополняется. Здесь будут собраны материалы, которые пользователь сохранил для быстрого доступа.',
+      description:
+          'Раздел дополняется. Здесь будут собраны материалы, которые пользователь сохранил для быстрого доступа.',
       icon: Icons.bookmark_border_rounded,
       features: const [
         'Видеоуроки',
@@ -1568,7 +1688,8 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Material(
-              color: primary ? const Color(0xFFF1FBF6) : const Color(0xFFF7F8F7),
+              color:
+                  primary ? const Color(0xFFF1FBF6) : const Color(0xFFF7F8F7),
               borderRadius: BorderRadius.circular(16),
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
@@ -1586,13 +1707,15 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
                         width: 42,
                         height: 42,
                         decoration: BoxDecoration(
-                          color: primary ? const Color(0xFF00A750) : Colors.white,
+                          color:
+                              primary ? const Color(0xFF00A750) : Colors.white,
                           borderRadius: BorderRadius.circular(13),
                         ),
                         child: Icon(
                           icon,
                           size: 21,
-                          color: primary ? Colors.white : const Color(0xFF344054),
+                          color:
+                              primary ? Colors.white : const Color(0xFF344054),
                         ),
                       ),
                       const SizedBox(width: 11),
@@ -1666,7 +1789,8 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('Трекер и тренировки',
-                              style: _flagshipTitle(15.2, weight: FontWeight.w700)),
+                              style: _flagshipTitle(15.2,
+                                  weight: FontWeight.w700)),
                           const SizedBox(height: 2),
                           Text('Быстрый переход без входа в кабинет',
                               style: _flagshipText(10.4,
@@ -1685,7 +1809,8 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
                   quickItem(
                     icon: Icons.directions_run_rounded,
                     title: 'Личные тренировки',
-                    subtitle: 'тренировка, аналитика, календарь и сравнение с предыдущей',
+                    subtitle:
+                        'тренировка, аналитика, календарь и сравнение с предыдущей',
                     primary: true,
                     onTap: () {
                       _openPersonalTrainingsQuick();
@@ -1830,30 +1955,156 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     setState(() => _mode = _ProfileFeedMode.feed);
   }
 
+  void _startBadgePolling() {
+    _badgePollingTimer?.cancel();
+    unawaited(_refreshBadgeCounts());
+    _badgePollingTimer = Timer.periodic(
+      const Duration(seconds: 6),
+      (_) => unawaited(_refreshBadgeCounts()),
+    );
+  }
+
+  int _sumChatUnreadFromList(dynamic raw) {
+    if (raw is! List) return 0;
+    var total = 0;
+    for (final entry in raw.whereType<Map>()) {
+      final count = int.tryParse('${entry['unread_count'] ?? 0}') ?? 0;
+      if (count > 0) total += count;
+    }
+    return total;
+  }
+
+  bool _profileChatIsPrivate(Map<dynamic, dynamic> chat) {
+    final type =
+        '${chat['type'] ?? chat['chat_type'] ?? ''}'.trim().toLowerCase();
+    if (type == 'private' || type == 'personal' || type == 'direct') {
+      return true;
+    }
+
+    final flag = chat['is_private'];
+    return flag == 1 || flag == '1' || flag == true;
+  }
+
+  bool _profileGroupIsMember(Map<dynamic, dynamic> group) {
+    final flag = group['i_am_member'];
+    return flag == null || flag == 1 || flag == '1' || flag == true;
+  }
+
+  Future<int> _loadRealChatUnread(int userId) async {
+    var total = 0;
+
+    try {
+      final response = await http
+          .get(Uri.parse('$_apiBase/get_user_chats.php?user_id=$userId'))
+          .timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is List) {
+          final privateRows =
+              decoded.whereType<Map>().where(_profileChatIsPrivate).toList();
+          total += _sumChatUnreadFromList(privateRows);
+        }
+      }
+    } catch (_) {}
+
+    try {
+      final response = await http
+          .get(Uri.parse('$_apiBase/get_groups_feed.php?user_id=$userId'))
+          .timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map && decoded['success'] == true) {
+          final raw = decoded['groups'];
+          if (raw is List) {
+            final memberRows =
+                raw.whereType<Map>().where(_profileGroupIsMember).toList();
+            total += _sumChatUnreadFromList(memberRows);
+          }
+        }
+      }
+    } catch (_) {}
+
+    return total.clamp(0, 9999);
+  }
+
+  Future<void> _refreshBadgeCounts() async {
+    final myId = await PrefUtils.getUserId() ?? widget.userId ?? 0;
+    if (myId <= 0) {
+      if (mounted &&
+          (_chatUnreadCount != 0 || _importantNotificationCount != 0)) {
+        setState(() {
+          _chatUnreadCount = 0;
+          _importantNotificationCount = 0;
+        });
+      }
+      return;
+    }
+
+    int chatUnread = 0;
+    int importantUnread = 0;
+
+    // Источник истины для badge — unread_count в самих списках чатов.
+    // Старый get_unread_total.php мог возвращать устаревшее число.
+    chatUnread = await _loadRealChatUnread(myId);
+
+    try {
+      final response = await http
+          .get(Uri.parse(
+              '$_apiBase/notifications/unread_count.php?user_id=$myId'))
+          .timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data is Map && data['success'] == true) {
+          importantUnread = int.tryParse('${data['unread_count'] ?? 0}') ?? 0;
+        }
+      }
+    } catch (_) {
+      importantUnread = 0;
+    }
+
+    if (!mounted) return;
+
+    chatUnread = chatUnread.clamp(0, 9999);
+    importantUnread = importantUnread.clamp(0, 9999);
+
+    if (chatUnread == _chatUnreadCount &&
+        importantUnread == _importantNotificationCount) {
+      return;
+    }
+
+    setState(() {
+      _chatUnreadCount = chatUnread;
+      _importantNotificationCount = importantUnread;
+    });
+  }
+
   @override
-void initState() {
-  super.initState();
-  _aiCardSeed = _rnd.nextInt(999999);
-  _pulseController = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1500),
-  )..repeat(reverse: true);
-  
-  _loadInitialData().then((_) {
-    // После загрузки данных принудительно обновляем
-    if (mounted) setState(() {});
-  });
-}
+  void initState() {
+    super.initState();
+    _startBadgePolling();
+    _aiCardSeed = _rnd.nextInt(999999);
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+
+    _loadInitialData().then((_) {
+      // После загрузки данных принудительно обновляем
+      if (mounted) setState(() {});
+    });
+  }
+
   @override
   void dispose() {
+    _badgePollingTimer?.cancel();
     _newPostText.dispose();
-    
+
     // ===== НОВЫЙ КОД =====
     _pulseController.dispose();
     for (var c in _hoverControllers.values) {
       c.dispose();
     }
-    
+
     super.dispose();
   }
 
@@ -1881,7 +2132,8 @@ void initState() {
     if (dob == null) return null;
     final now = DateTime.now();
     int a = now.year - dob.year;
-    final hadBirthdayThisYear = (now.month > dob.month) || (now.month == dob.month && now.day >= dob.day);
+    final hadBirthdayThisYear = (now.month > dob.month) ||
+        (now.month == dob.month && now.day >= dob.day);
     if (!hadBirthdayThisYear) a -= 1;
     if (a < 0 || a > 120) return null;
     return a;
@@ -1919,7 +2171,11 @@ void initState() {
 
   bool _looksLikeHtml(String s) {
     final t = s.trim().toLowerCase();
-    return t.contains('<p') || t.contains('<br') || t.contains('</') || t.contains('<div') || t.contains('<span');
+    return t.contains('<p') ||
+        t.contains('<br') ||
+        t.contains('</') ||
+        t.contains('<div') ||
+        t.contains('<span');
   }
 
   String _htmlToPlain(String html) {
@@ -1947,9 +2203,12 @@ void initState() {
         title: Text(title),
         content: Text(message),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Отмена")),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("Отмена")),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red, foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(context, true),
             child: const Text("Удалить"),
           ),
@@ -1966,7 +2225,8 @@ void initState() {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
       builder: (_) {
         return SafeArea(
           top: false,
@@ -1975,18 +2235,29 @@ void initState() {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(width: 44, height: 5, decoration: BoxDecoration(color: Colors.black.withOpacity(0.08), borderRadius: BorderRadius.circular(99))),
+                Container(
+                    width: 44,
+                    height: 5,
+                    decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(99))),
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Expanded(child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900))),
-                    IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+                    Expanded(
+                        child: Text(title,
+                            style: const TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.w900))),
+                    IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close)),
                   ],
                 ),
                 const SizedBox(height: 6),
                 ListTile(
                   leading: const Icon(Icons.delete_outline, color: Colors.red),
-                  title: const Text("Удалить", style: TextStyle(fontWeight: FontWeight.w800)),
+                  title: const Text("Удалить",
+                      style: TextStyle(fontWeight: FontWeight.w800)),
                   subtitle: const Text("Действие нельзя отменить"),
                   onTap: () {
                     Navigator.pop(context);
@@ -2006,7 +2277,8 @@ void initState() {
     final myId = await PrefUtils.getUserId() ?? 0;
     if (myId <= 0 || postId <= 0) return;
 
-    final ok = await _confirmDeleteDialog(title: "Удалить пост?", message: "Пост будет удалён навсегда.");
+    final ok = await _confirmDeleteDialog(
+        title: "Удалить пост?", message: "Пост будет удалён навсегда.");
     if (!ok) return;
 
     try {
@@ -2016,15 +2288,24 @@ void initState() {
       );
 
       if (resp.statusCode != 200) {
-        Get.snackbar("Ошибка", "Сервер: ${resp.statusCode}", snackPosition: SnackPosition.BOTTOM);
+        Get.snackbar("Ошибка", "Сервер: ${resp.statusCode}",
+            snackPosition: SnackPosition.BOTTOM);
         return;
       }
 
       final data = jsonDecode(resp.body);
-      final success = (data is Map) && (data['success'] == true || data['status'] == 'success' || data['status'] == 'deleted');
+      final success = (data is Map) &&
+          (data['success'] == true ||
+              data['status'] == 'success' ||
+              data['status'] == 'deleted');
 
       if (!success) {
-        Get.snackbar("Не удалось удалить", (data is Map && data['error'] != null) ? data['error'].toString() : "Ошибка", snackPosition: SnackPosition.BOTTOM);
+        Get.snackbar(
+            "Не удалось удалить",
+            (data is Map && data['error'] != null)
+                ? data['error'].toString()
+                : "Ошибка",
+            snackPosition: SnackPosition.BOTTOM);
         return;
       }
 
@@ -2038,9 +2319,11 @@ void initState() {
       await _fetchUserPosts();
       await _fetchAuthorFeedPosts();
 
-      Get.snackbar("Готово", "Пост удалён", snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar("Готово", "Пост удалён",
+          snackPosition: SnackPosition.BOTTOM);
     } catch (e) {
-      Get.snackbar("Ошибка сети", e.toString(), snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar("Ошибка сети", e.toString(),
+          snackPosition: SnackPosition.BOTTOM);
     }
   }
 
@@ -2048,7 +2331,8 @@ void initState() {
     final myId = await PrefUtils.getUserId() ?? 0;
     if (myId <= 0 || reelId <= 0) return;
 
-    final ok = await _confirmDeleteDialog(title: "Удалить Reels?", message: "Видео будет удалено навсегда.");
+    final ok = await _confirmDeleteDialog(
+        title: "Удалить Reels?", message: "Видео будет удалено навсегда.");
     if (!ok) return;
 
     try {
@@ -2058,15 +2342,24 @@ void initState() {
       );
 
       if (resp.statusCode != 200) {
-        Get.snackbar("Ошибка", "Сервер: ${resp.statusCode}", snackPosition: SnackPosition.BOTTOM);
+        Get.snackbar("Ошибка", "Сервер: ${resp.statusCode}",
+            snackPosition: SnackPosition.BOTTOM);
         return;
       }
 
       final data = jsonDecode(resp.body);
-      final success = (data is Map) && (data['success'] == true || data['status'] == 'success' || data['status'] == 'deleted');
+      final success = (data is Map) &&
+          (data['success'] == true ||
+              data['status'] == 'success' ||
+              data['status'] == 'deleted');
 
       if (!success) {
-        Get.snackbar("Не удалось удалить", (data is Map && data['error'] != null) ? data['error'].toString() : "Ошибка", snackPosition: SnackPosition.BOTTOM);
+        Get.snackbar(
+            "Не удалось удалить",
+            (data is Map && data['error'] != null)
+                ? data['error'].toString()
+                : "Ошибка",
+            snackPosition: SnackPosition.BOTTOM);
         return;
       }
 
@@ -2078,9 +2371,11 @@ void initState() {
 
       await _fetchUserReels();
 
-      Get.snackbar("Готово", "Reels удалён", snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar("Готово", "Reels удалён",
+          snackPosition: SnackPosition.BOTTOM);
     } catch (e) {
-      Get.snackbar("Ошибка сети", e.toString(), snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar("Ошибка сети", e.toString(),
+          snackPosition: SnackPosition.BOTTOM);
     }
   }
 
@@ -2144,8 +2439,12 @@ void initState() {
         userData = root;
       }
 
-      final first = (userData['first_name'] ?? userData['firstName'] ?? '').toString().trim();
-      final last = (userData['last_name'] ?? userData['lastName'] ?? '').toString().trim();
+      final first = (userData['first_name'] ?? userData['firstName'] ?? '')
+          .toString()
+          .trim();
+      final last = (userData['last_name'] ?? userData['lastName'] ?? '')
+          .toString()
+          .trim();
       final mail = (userData['email'] ?? '').toString().trim();
       final r = (userData['role'] ?? '').toString().trim();
 
@@ -2154,8 +2453,10 @@ void initState() {
       final photo3 = _normalizePhotoUrl(userData['photo']);
       final resolvedPhoto = photo1 ?? photo2 ?? photo3;
 
-      final b = (userData['bio'] ?? userData['description'] ?? '').toString().trim();
-      final loc = (userData['location'] ?? userData['city'] ?? '').toString().trim();
+      final b =
+          (userData['bio'] ?? userData['description'] ?? '').toString().trim();
+      final loc =
+          (userData['location'] ?? userData['city'] ?? '').toString().trim();
 
       int? resolvedAge;
       String? resolvedBirthRaw;
@@ -2164,12 +2465,19 @@ void initState() {
       String? resolvedTeamLogo;
       int? resolvedTeamId;
 
-      final player = (root['player'] is Map) ? (root['player'] as Map).cast<String, dynamic>() : null;
-      final playerTeam = (root['player_team'] is Map) ? (root['player_team'] as Map).cast<String, dynamic>() : null;
+      final player = (root['player'] is Map)
+          ? (root['player'] as Map).cast<String, dynamic>()
+          : null;
+      final playerTeam = (root['player_team'] is Map)
+          ? (root['player_team'] as Map).cast<String, dynamic>()
+          : null;
 
       if (player != null) {
         final apiAge = _asInt(player['age']);
-        final birthAny = player['birth_date'] ?? player['dob'] ?? player['date_of_birth'] ?? player['birthday'];
+        final birthAny = player['birth_date'] ??
+            player['dob'] ??
+            player['date_of_birth'] ??
+            player['birthday'];
         final dob = _parseDate(birthAny);
         final computedAge = _calcAge(dob);
 
@@ -2183,13 +2491,21 @@ void initState() {
       if (playerTeam != null) {
         resolvedTeamId = _asInt(playerTeam['id'] ?? playerTeam['team_id']);
 
-        resolvedTeamName = (playerTeam['name'] ?? playerTeam['team_name'] ?? '').toString().trim();
+        resolvedTeamName = (playerTeam['name'] ?? playerTeam['team_name'] ?? '')
+            .toString()
+            .trim();
         if (resolvedTeamName.isEmpty) resolvedTeamName = null;
 
-        resolvedClubName = (playerTeam['club_name'] ?? playerTeam['clubName'] ?? '').toString().trim();
+        resolvedClubName =
+            (playerTeam['club_name'] ?? playerTeam['clubName'] ?? '')
+                .toString()
+                .trim();
         if (resolvedClubName.isEmpty) resolvedClubName = null;
 
-        resolvedTeamLogo = (playerTeam['logo_url'] ?? playerTeam['logoUrl'] ?? '').toString().trim();
+        resolvedTeamLogo =
+            (playerTeam['logo_url'] ?? playerTeam['logoUrl'] ?? '')
+                .toString()
+                .trim();
         if (resolvedTeamLogo.isEmpty) resolvedTeamLogo = null;
       }
 
@@ -2288,13 +2604,17 @@ void initState() {
     try {
       final response = await http.post(
         Uri.parse('$_apiBase/check_following.php'),
-        body: {'follower_id': currentUserId.toString(), 'following_id': viewedUserId.toString()},
+        body: {
+          'follower_id': currentUserId.toString(),
+          'following_id': viewedUserId.toString()
+        },
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (mounted) {
-          setState(() => isFollowing = (data is Map && data['following'] == true));
+          setState(
+              () => isFollowing = (data is Map && data['following'] == true));
         }
       }
     } catch (_) {}
@@ -2307,7 +2627,8 @@ void initState() {
     if (currentUserId == null || currentUserId <= 0) return;
     if (viewedUserId == null || viewedUserId <= 0) return;
 
-    final url = isFollowing ? '$_apiBase/unsubscribe.php' : '$_apiBase/subscribe.php';
+    final url =
+        isFollowing ? '$_apiBase/unsubscribe.php' : '$_apiBase/subscribe.php';
 
     try {
       final response = await http.post(Uri.parse(url), body: {
@@ -2317,7 +2638,11 @@ void initState() {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final ok = (data is Map) && (data['status'] == 'success' || data['status'] == 'subscribed' || data['status'] == 'unsubscribed' || data['success'] == true);
+        final ok = (data is Map) &&
+            (data['status'] == 'success' ||
+                data['status'] == 'subscribed' ||
+                data['status'] == 'unsubscribed' ||
+                data['success'] == true);
         if (ok) {
           if (mounted) {
             setState(() {
@@ -2333,11 +2658,17 @@ void initState() {
           _followers.clear();
           _followings.clear();
         } else {
-          Get.snackbar('Ошибка', 'Не удалось изменить подписку', backgroundColor: Colors.red, colorText: Colors.white, snackPosition: SnackPosition.BOTTOM);
+          Get.snackbar('Ошибка', 'Не удалось изменить подписку',
+              backgroundColor: Colors.red,
+              colorText: Colors.white,
+              snackPosition: SnackPosition.BOTTOM);
         }
       }
     } catch (_) {
-      Get.snackbar('Ошибка сети', 'Проверьте соединение', backgroundColor: Colors.red, colorText: Colors.white, snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar('Ошибка сети', 'Проверьте соединение',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+          snackPosition: SnackPosition.BOTTOM);
     }
   }
 
@@ -2347,11 +2678,13 @@ void initState() {
       final peerId = widget.userId ?? 0;
 
       if (myId <= 0) {
-        Get.snackbar("Чат", "Не найден мой user_id", snackPosition: SnackPosition.BOTTOM);
+        Get.snackbar("Чат", "Не найден мой user_id",
+            snackPosition: SnackPosition.BOTTOM);
         return;
       }
       if (peerId <= 0) {
-        Get.snackbar("Чат", "Не найден user_id профиля", snackPosition: SnackPosition.BOTTOM);
+        Get.snackbar("Чат", "Не найден user_id профиля",
+            snackPosition: SnackPosition.BOTTOM);
         return;
       }
       if (myId == peerId) return;
@@ -2362,20 +2695,27 @@ void initState() {
       );
 
       if (resp.statusCode != 200) {
-        Get.snackbar("Чат", "Ошибка сервера: ${resp.statusCode}", snackPosition: SnackPosition.BOTTOM);
+        Get.snackbar("Чат", "Ошибка сервера: ${resp.statusCode}",
+            snackPosition: SnackPosition.BOTTOM);
         return;
       }
 
       final data = jsonDecode(resp.body);
       final ok = (data is Map && data['success'] == true);
       if (!ok) {
-        Get.snackbar("Чат", (data is Map && data['error'] != null) ? data['error'].toString() : "Ошибка", snackPosition: SnackPosition.BOTTOM);
+        Get.snackbar(
+            "Чат",
+            (data is Map && data['error'] != null)
+                ? data['error'].toString()
+                : "Ошибка",
+            snackPosition: SnackPosition.BOTTOM);
         return;
       }
 
       final chatId = int.tryParse('${data['chat_id'] ?? ''}') ?? 0;
       if (chatId <= 0) {
-        Get.snackbar("Чат", "Не удалось получить chat_id", snackPosition: SnackPosition.BOTTOM);
+        Get.snackbar("Чат", "Не удалось получить chat_id",
+            snackPosition: SnackPosition.BOTTOM);
         return;
       }
 
@@ -2384,7 +2724,9 @@ void initState() {
       if (!mounted) return;
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => ChatRoomScreen(chatId: chatId, userId: myId, chatName: chatName)),
+        MaterialPageRoute(
+            builder: (_) => ChatRoomScreen(
+                chatId: chatId, userId: myId, chatName: chatName)),
       );
     } catch (e) {
       Get.snackbar("Чат", "Ошибка: $e", snackPosition: SnackPosition.BOTTOM);
@@ -2404,7 +2746,8 @@ void initState() {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
 
-        final ok = (data is Map) && (data['status'] == 'success' || data['success'] == true);
+        final ok = (data is Map) &&
+            (data['status'] == 'success' || data['success'] == true);
 
         if (ok && mounted) {
           setState(() {
@@ -2425,7 +2768,8 @@ void initState() {
 
       final response = await http.post(
         Uri.parse('$_apiBase/get_posts_by_user.php'),
-        body: jsonEncode({'user_id': userId, 'visibility': 'profile', 'post_type': 'post'}),
+        body: jsonEncode(
+            {'user_id': userId, 'visibility': 'profile', 'post_type': 'post'}),
         headers: {'Content-Type': 'application/json'},
       );
 
@@ -2433,7 +2777,8 @@ void initState() {
         final data = jsonDecode(response.body);
         if (data is Map && data['status'] == 'success') {
           if (mounted) {
-            setState(() => userPosts = (data['posts'] is List) ? data['posts'] : []);
+            setState(
+                () => userPosts = (data['posts'] is List) ? data['posts'] : []);
           }
         }
       }
@@ -2451,7 +2796,8 @@ void initState() {
       final userId = widget.userId ?? await PrefUtils.getUserId();
       if (userId == null || userId <= 0) return;
 
-      final url = Uri.parse("$_apiBase/get_reels.php?limit=200&offset=0&user_id=$userId");
+      final url = Uri.parse(
+          "$_apiBase/get_reels.php?limit=200&offset=0&user_id=$userId");
       final resp = await http.get(url);
       if (resp.statusCode != 200) return;
 
@@ -2459,7 +2805,8 @@ void initState() {
       final jsonAny = jsonDecode(body);
 
       final parsed = _parseReels(jsonAny);
-      final filtered = parsed.where((m) => (m['user_id'] ?? 0) == userId).toList();
+      final filtered =
+          parsed.where((m) => (m['user_id'] ?? 0) == userId).toList();
 
       if (mounted) setState(() => userReels = filtered);
     } catch (_) {
@@ -2472,7 +2819,12 @@ void initState() {
   List<Map<String, dynamic>> _parseReels(dynamic jsonAny) {
     List raw;
     if (jsonAny is Map) {
-      raw = (jsonAny['reels'] ?? jsonAny['data'] ?? jsonAny['items'] ?? jsonAny['list'] ?? []) as List? ?? [];
+      raw = (jsonAny['reels'] ??
+              jsonAny['data'] ??
+              jsonAny['items'] ??
+              jsonAny['list'] ??
+              []) as List? ??
+          [];
     } else if (jsonAny is List) {
       raw = jsonAny;
     } else {
@@ -2483,8 +2835,13 @@ void initState() {
         .map<Map<String, dynamic>>((e) {
           final m = Map<String, dynamic>.from(e as Map);
 
-          final String video = (m['video_url'] ?? m['video'] ?? m['url'] ?? m['src'] ?? '').toString().trim();
-          String thumb = (m['thumbnail'] ?? m['thumb'] ?? m['poster'] ?? '').toString().trim();
+          final String video =
+              (m['video_url'] ?? m['video'] ?? m['url'] ?? m['src'] ?? '')
+                  .toString()
+                  .trim();
+          String thumb = (m['thumbnail'] ?? m['thumb'] ?? m['poster'] ?? '')
+              .toString()
+              .trim();
           if (thumb.isEmpty && m['preview'] != null) {
             thumb = m['preview'].toString().trim();
           }
@@ -2496,7 +2853,10 @@ void initState() {
             'thumbnail': thumb,
             'description': (m['description'] ?? m['caption'] ?? '').toString(),
             'likes': _toInt(m['likes'] ?? m['like_count'] ?? 0),
-            'comments': _toInt(m['comments_count'] ?? m['comments'] ?? m['comment_count'] ?? 0),
+            'comments': _toInt(m['comments_count'] ??
+                m['comments'] ??
+                m['comment_count'] ??
+                0),
             'views': _toInt(m['views'] ?? m['view_count'] ?? 0),
             'rotation': m['rotation'],
             'crop_mode': m['crop_mode'],
@@ -2518,31 +2878,41 @@ void initState() {
 
       final response = await http.post(
         Uri.parse('$_apiBase/get_posts_by_user.php'),
-        body: jsonEncode({'user_id': userId, 'visibility': 'profile', 'post_type': 'post'}),
+        body: jsonEncode(
+            {'user_id': userId, 'visibility': 'profile', 'post_type': 'post'}),
         headers: {'Content-Type': 'application/json'},
       );
 
       if (response.statusCode != 200) return;
       final decoded = jsonDecode(response.body);
       final List<dynamic> data = decoded is Map
-          ? ((decoded['posts'] ?? decoded['data'] ?? decoded['items'] ?? []) as List? ?? [])
+          ? ((decoded['posts'] ?? decoded['data'] ?? decoded['items'] ?? [])
+                  as List? ??
+              [])
           : (decoded is List ? decoded : const []);
 
-      final authorName = ('$firstName $lastName').trim().isNotEmpty ? ('$firstName $lastName').trim() : 'Профиль';
+      final authorName = ('$firstName $lastName').trim().isNotEmpty
+          ? ('$firstName $lastName').trim()
+          : 'Профиль';
       final authorAvatar = _fixUrl(photo ?? '');
 
       final list = data.map<Map<String, dynamic>>((rawAny) {
         final raw = Map<String, dynamic>.from(rawAny as Map);
         final body = _safeStr(raw['body'] ?? raw['text'] ?? raw['caption']);
         final plainBody = _looksLikeHtml(body) ? _htmlToPlain(body) : body;
-        final image = _fixUrl(_safeStr(raw['image'] ?? raw['image_url'] ?? raw['photo']));
-        final createdAt = DateTime.tryParse(_safeStr(raw['created_at'] ?? raw['date'])) ?? DateTime.now();
+        final image =
+            _fixUrl(_safeStr(raw['image'] ?? raw['image_url'] ?? raw['photo']));
+        final createdAt =
+            DateTime.tryParse(_safeStr(raw['created_at'] ?? raw['date'])) ??
+                DateTime.now();
         final category = _safeStr(raw['category']).trim();
         final title = _safeStr(raw['title']).trim();
 
         return <String, dynamic>{
           'id': _safeInt(raw['id']),
-          'title': title.isNotEmpty ? title : (category.isNotEmpty ? category : 'Публикация профиля'),
+          'title': title.isNotEmpty
+              ? title
+              : (category.isNotEmpty ? category : 'Публикация профиля'),
           'text': plainBody,
           'imageUrl': image,
           'date': createdAt,
@@ -2559,7 +2929,8 @@ void initState() {
         return text.isNotEmpty || image.isNotEmpty;
       }).toList();
 
-      list.sort((a, b) => (b['date'] as DateTime).compareTo(a['date'] as DateTime));
+      list.sort(
+          (a, b) => (b['date'] as DateTime).compareTo(a['date'] as DateTime));
 
       if (!mounted) return;
       setState(() => feedPosts = list);
@@ -2615,7 +2986,8 @@ void initState() {
 
     final text = _newPostText.text.trim();
     if (text.isEmpty && _newPostImage == null) {
-      Get.snackbar("Публикация", "Напишите текст или добавьте фото", snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar("Публикация", "Напишите текст или добавьте фото",
+          snackPosition: SnackPosition.BOTTOM);
       return;
     }
 
@@ -2633,7 +3005,8 @@ void initState() {
       ..fields['post_type'] = 'post';
 
     if (_newPostImage != null) {
-      req.files.add(await http.MultipartFile.fromPath('image', _newPostImage!.path));
+      req.files
+          .add(await http.MultipartFile.fromPath('image', _newPostImage!.path));
     }
 
     try {
@@ -2653,10 +3026,12 @@ void initState() {
         await _fetchUserPosts();
         await _fetchAuthorFeedPosts();
       } else {
-        Get.snackbar("Ошибка", "Не удалось опубликовать: $body", snackPosition: SnackPosition.BOTTOM);
+        Get.snackbar("Ошибка", "Не удалось опубликовать: $body",
+            snackPosition: SnackPosition.BOTTOM);
       }
     } catch (e) {
-      Get.snackbar("Ошибка сети", e.toString(), snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar("Ошибка сети", e.toString(),
+          snackPosition: SnackPosition.BOTTOM);
     } finally {
       if (mounted) setState(() => _posting = false);
     }
@@ -2667,20 +3042,29 @@ void initState() {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (_) {
         return StatefulBuilder(
           builder: (context, setModalState) {
             return Padding(
-              padding: EdgeInsets.only(left: 16, right: 16, top: 20, bottom: MediaQuery.of(context).viewInsets.bottom + 16),
+              padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 20,
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 16),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text("Новая публикация", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                      IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+                      const Text("Новая публикация",
+                          style: TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.w800)),
+                      IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close)),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -2689,8 +3073,11 @@ void initState() {
                       Chip(
                         label: const Text("Профиль"),
                         avatar: const Icon(Icons.person, size: 18),
-                        backgroundColor: ProfilePalette.primaryGreen.withOpacity(0.10),
-                        side: BorderSide(color: ProfilePalette.primaryGreen.withOpacity(0.25)),
+                        backgroundColor:
+                            ProfilePalette.primaryGreen.withOpacity(0.10),
+                        side: BorderSide(
+                            color:
+                                ProfilePalette.primaryGreen.withOpacity(0.25)),
                       ),
                     ],
                   ),
@@ -2711,17 +3098,24 @@ void initState() {
                       children: [
                         ClipRRect(
                           borderRadius: BorderRadius.circular(12),
-                          child: Image.file(_newPostImage!, height: 200, width: double.infinity, fit: BoxFit.contain),
+                          child: Image.file(_newPostImage!,
+                              height: 200,
+                              width: double.infinity,
+                              fit: BoxFit.contain),
                         ),
                         Positioned(
                           top: 8,
                           right: 8,
                           child: GestureDetector(
-                            onTap: () => setModalState(() => _newPostImage = null),
+                            onTap: () =>
+                                setModalState(() => _newPostImage = null),
                             child: Container(
-                              decoration: BoxDecoration(color: Colors.black.withOpacity(0.45), shape: BoxShape.circle),
+                              decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.45),
+                                  shape: BoxShape.circle),
                               padding: const EdgeInsets.all(6),
-                              child: const Icon(Icons.close, color: Colors.white, size: 18),
+                              child: const Icon(Icons.close,
+                                  color: Colors.white, size: 18),
                             ),
                           ),
                         ),
@@ -2733,9 +3127,11 @@ void initState() {
                     children: [
                       IconButton(
                         onPressed: () async {
-                          final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+                          final picked = await ImagePicker()
+                              .pickImage(source: ImageSource.gallery);
                           if (picked != null) {
-                            setModalState(() => _newPostImage = File(picked.path));
+                            setModalState(
+                                () => _newPostImage = File(picked.path));
                           }
                         },
                         icon: const Icon(Icons.photo_library),
@@ -2747,12 +3143,18 @@ void initState() {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: ProfilePalette.primaryGreen,
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 22, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18)),
                           elevation: 0,
                         ),
                         child: _posting
-                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white))
                             : const Text("Опубликовать"),
                       ),
                     ],
@@ -2770,25 +3172,27 @@ void initState() {
   Future<void> _openUploadReels() async {
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => UploadReelScreen(onUploadComplete: () async {
-        await _fetchUserReels();
-      })),
+      MaterialPageRoute(
+          builder: (_) => UploadReelScreen(onUploadComplete: () async {
+                await _fetchUserReels();
+              })),
     );
     await _fetchUserReels();
   }
 
-  String get _profileMediaEditTitle => isClubRole ? 'Изменить логотип / аватарку' : 'Изменить аватарку';
+  String get _profileMediaEditTitle =>
+      isClubRole ? 'Изменить логотип / аватарку' : 'Изменить аватарку';
 
-  String get _profileMediaEditSubtitle => isClubRole
-      ? 'Обновить логотип клуба в профиле'
-      : 'Обновить фото профиля';
+  String get _profileMediaEditSubtitle =>
+      isClubRole ? 'Обновить логотип клуба в профиле' : 'Обновить фото профиля';
 
   Future<void> _uploadProfilePhoto(File imageFile) async {
     if (_uploadingProfilePhoto) return;
 
     final userId = await PrefUtils.getUserId();
     if (userId == null || userId <= 0) {
-      Get.snackbar('Профиль', 'Не удалось определить пользователя', snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar('Профиль', 'Не удалось определить пользователя',
+          snackPosition: SnackPosition.BOTTOM);
       return;
     }
 
@@ -2806,7 +3210,8 @@ void initState() {
       final body = await response.stream.bytesToString();
 
       if (response.statusCode != 200) {
-        Get.snackbar('Профиль', 'Сервер вернул ошибку ${response.statusCode}', snackPosition: SnackPosition.BOTTOM);
+        Get.snackbar('Профиль', 'Сервер вернул ошибку ${response.statusCode}',
+            snackPosition: SnackPosition.BOTTOM);
         return;
       }
 
@@ -2814,22 +3219,35 @@ void initState() {
       try {
         decoded = jsonDecode(body);
       } catch (_) {
-        Get.snackbar('Профиль', 'Сервер вернул некорректный ответ', snackPosition: SnackPosition.BOTTOM);
+        Get.snackbar('Профиль', 'Сервер вернул некорректный ответ',
+            snackPosition: SnackPosition.BOTTOM);
         return;
       }
 
-      final data = decoded is Map ? decoded.cast<String, dynamic>() : <String, dynamic>{};
+      final data = decoded is Map
+          ? decoded.cast<String, dynamic>()
+          : <String, dynamic>{};
       final success = data['status'] == 'success' || data['success'] == true;
 
       if (!success) {
-        final message = (data['message'] ?? data['error'] ?? 'Не удалось обновить изображение').toString();
+        final message = (data['message'] ??
+                data['error'] ??
+                'Не удалось обновить изображение')
+            .toString();
         Get.snackbar('Профиль', message, snackPosition: SnackPosition.BOTTOM);
         return;
       }
 
-      final serverPhotoUrl = (data['photo_url'] ?? data['photoUrl'] ?? data['url'] ?? '').toString().trim();
-      final fileName = (data['file_name'] ?? data['filename'] ?? data['photo'] ?? '').toString().trim();
-      final newUrl = _normalizePhotoUrl(serverPhotoUrl) ?? _normalizePhotoUrl(fileName);
+      final serverPhotoUrl =
+          (data['photo_url'] ?? data['photoUrl'] ?? data['url'] ?? '')
+              .toString()
+              .trim();
+      final fileName =
+          (data['file_name'] ?? data['filename'] ?? data['photo'] ?? '')
+              .toString()
+              .trim();
+      final newUrl =
+          _normalizePhotoUrl(serverPhotoUrl) ?? _normalizePhotoUrl(fileName);
 
       if (newUrl != null && mounted) {
         setState(() => photo = newUrl);
@@ -2850,13 +3268,15 @@ void initState() {
         snackPosition: SnackPosition.BOTTOM,
       );
     } catch (e) {
-      Get.snackbar('Профиль', 'Ошибка загрузки изображения', snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar('Профиль', 'Ошибка загрузки изображения',
+          snackPosition: SnackPosition.BOTTOM);
     } finally {
       if (mounted) setState(() => _uploadingProfilePhoto = false);
     }
   }
 
-  Future<void> _pickAndUploadPhoto({ImageSource source = ImageSource.gallery}) async {
+  Future<void> _pickAndUploadPhoto(
+      {ImageSource source = ImageSource.gallery}) async {
     if (!isOwnProfile || _uploadingProfilePhoto) return;
 
     try {
@@ -2869,7 +3289,8 @@ void initState() {
         await _uploadProfilePhoto(File(picked.path));
       }
     } catch (_) {
-      Get.snackbar('Профиль', 'Не удалось выбрать изображение', snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar('Профиль', 'Не удалось выбрать изображение',
+          snackPosition: SnackPosition.BOTTOM);
     }
   }
 
@@ -2879,7 +3300,8 @@ void initState() {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) {
         return SafeArea(
           top: false,
@@ -2893,13 +3315,23 @@ void initState() {
                   child: Container(
                     width: 42,
                     height: 4,
-                    decoration: BoxDecoration(color: const Color(0xFFE5E7EB), borderRadius: BorderRadius.circular(999)),
+                    decoration: BoxDecoration(
+                        color: const Color(0xFFE5E7EB),
+                        borderRadius: BorderRadius.circular(999)),
                   ),
                 ),
                 const SizedBox(height: 14),
-                Text(_profileMediaEditTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF111827))),
+                Text(_profileMediaEditTitle,
+                    style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF111827))),
                 const SizedBox(height: 4),
-                Text(_profileMediaEditSubtitle, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF667085))),
+                Text(_profileMediaEditSubtitle,
+                    style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF667085))),
                 const SizedBox(height: 14),
                 _buildSettingsRow(
                   icon: Icons.photo_library_outlined,
@@ -3004,8 +3436,7 @@ void initState() {
   }
 
   Future<void> _toggleSocialFollowing(int targetUserId) async {
-    if (targetUserId <= 0 ||
-        _socialFollowingBusy.contains(targetUserId)) {
+    if (targetUserId <= 0 || _socialFollowingBusy.contains(targetUserId)) {
       return;
     }
 
@@ -3016,8 +3447,7 @@ void initState() {
       await _ensureSocialFollowingState(targetUserId);
     }
 
-    final currentlyFollowing =
-        _socialFollowingState[targetUserId] == true;
+    final currentlyFollowing = _socialFollowingState[targetUserId] == true;
 
     if (mounted) {
       setState(() => _socialFollowingBusy.add(targetUserId));
@@ -3050,8 +3480,7 @@ void initState() {
       if (!ok || !mounted) return;
 
       setState(() {
-        _socialFollowingState[targetUserId] =
-            !currentlyFollowing;
+        _socialFollowingState[targetUserId] = !currentlyFollowing;
         _socialFollowingLoaded.add(targetUserId);
       });
 
@@ -3082,13 +3511,13 @@ void initState() {
 
     Navigator.of(context)
         .push<void>(
-          MaterialPageRoute<void>(
-            builder: (_) => MyProfileScreen(
-              userId: userId,
-              publicView: true,
-            ),
-          ),
-        )
+      MaterialPageRoute<void>(
+        builder: (_) => MyProfileScreen(
+          userId: userId,
+          publicView: true,
+        ),
+      ),
+    )
         .then((_) async {
       await _loadFollowersData();
       await _checkIfFollowing();
@@ -3113,8 +3542,12 @@ void initState() {
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        if (data is Map && data['status'] == 'success' && data['users'] is List) {
-          _followers = (data['users'] as List).map((e) => _UserShort.fromJson(e)).toList();
+        if (data is Map &&
+            data['status'] == 'success' &&
+            data['users'] is List) {
+          _followers = (data['users'] as List)
+              .map((e) => _UserShort.fromJson(e))
+              .toList();
         } else {
           _followers = [];
         }
@@ -3144,8 +3577,12 @@ void initState() {
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        if (data is Map && data['status'] == 'success' && data['users'] is List) {
-          _followings = (data['users'] as List).map((e) => _UserShort.fromJson(e)).toList();
+        if (data is Map &&
+            data['status'] == 'success' &&
+            data['users'] is List) {
+          _followings = (data['users'] as List)
+              .map((e) => _UserShort.fromJson(e))
+              .toList();
         } else {
           _followings = [];
         }
@@ -3178,11 +3615,9 @@ void initState() {
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (sheetContext, setSheetState) {
-            final allItems =
-                showFollowers ? _followers : _followings;
+            final allItems = showFollowers ? _followers : _followings;
 
-            final query =
-                searchController.text.trim().toLowerCase();
+            final query = searchController.text.trim().toLowerCase();
 
             final items = query.isEmpty
                 ? allItems
@@ -3200,10 +3635,8 @@ void initState() {
             final loading =
                 showFollowers ? _loadingFollowers : _loadingFollowings;
 
-            final viewportHeight =
-                MediaQuery.sizeOf(sheetContext).height;
-            final viewportWidth =
-                MediaQuery.sizeOf(sheetContext).width;
+            final viewportHeight = MediaQuery.sizeOf(sheetContext).height;
+            final viewportWidth = MediaQuery.sizeOf(sheetContext).width;
 
             final isPhone = viewportWidth < 720;
 
@@ -3238,16 +3671,14 @@ void initState() {
                         shape: BoxShape.circle,
                       ),
                     ),
-                    if (i != values.length - 1)
-                      const SizedBox(width: 3),
+                    if (i != values.length - 1) const SizedBox(width: 3),
                   ],
                 ],
               );
             }
 
             Widget avatar(_UserShort user) {
-              final hasPhoto =
-                  (user.photoUrl ?? '').trim().isNotEmpty;
+              final hasPhoto = (user.photoUrl ?? '').trim().isNotEmpty;
 
               return Container(
                 width: 46,
@@ -3298,13 +3729,10 @@ void initState() {
 
               final username = (user.username ?? '').trim();
               if (username.isNotEmpty) {
-                parts.add(username.startsWith('@')
-                    ? username
-                    : '@$username');
+                parts.add(username.startsWith('@') ? username : '@$username');
               }
 
-              final roleLabel =
-                  _socialRoleLabel(user.role);
+              final roleLabel = _socialRoleLabel(user.role);
               if (roleLabel.isNotEmpty) {
                 parts.add(roleLabel);
               }
@@ -3358,12 +3786,9 @@ void initState() {
                     );
                   }
 
-                  final loaded =
-                      _socialFollowingLoaded.contains(targetId);
-                  final busy =
-                      _socialFollowingBusy.contains(targetId);
-                  final following =
-                      _socialFollowingState[targetId] == true;
+                  final loaded = _socialFollowingLoaded.contains(targetId);
+                  final busy = _socialFollowingBusy.contains(targetId);
+                  final following = _socialFollowingState[targetId] == true;
 
                   if (!loaded && !busy) {
                     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -3414,9 +3839,7 @@ void initState() {
                         ),
                         alignment: Alignment.center,
                         child: Text(
-                          following
-                              ? 'Вы подписаны'
-                              : 'Подписаться',
+                          following ? 'Вы подписаны' : 'Подписаться',
                           style: AppTypography.custom(
                             size: 9.1,
                             weight: FontWeight.w600,
@@ -3440,8 +3863,7 @@ void initState() {
               return Material(
                 color: Colors.white,
                 child: InkWell(
-                  onTap: () =>
-                      _openSocialUserProfile(sheetContext, user),
+                  onTap: () => _openSocialUserProfile(sheetContext, user),
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(
                       14,
@@ -3455,8 +3877,7 @@ void initState() {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 user.fullName,
@@ -3522,8 +3943,7 @@ void initState() {
                             height: 4,
                             decoration: BoxDecoration(
                               color: const Color(0xFFD8DDDA),
-                              borderRadius:
-                                  BorderRadius.circular(99),
+                              borderRadius: BorderRadius.circular(99),
                             ),
                           ),
                         ),
@@ -3544,13 +3964,10 @@ void initState() {
                             const SizedBox(width: 9),
                             Expanded(
                               child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    showFollowers
-                                        ? 'Подписчики'
-                                        : 'Подписки',
+                                    showFollowers ? 'Подписчики' : 'Подписки',
                                     style: AppTypography.custom(
                                       size: 12.4,
                                       weight: FontWeight.w600,
@@ -3574,8 +3991,7 @@ void initState() {
                               ),
                             ),
                             InkWell(
-                              onTap: () =>
-                                  Navigator.of(sheetContext).pop(),
+                              onTap: () => Navigator.of(sheetContext).pop(),
                               borderRadius: BorderRadius.circular(8),
                               child: Container(
                                 width: 32,
@@ -3583,8 +3999,7 @@ void initState() {
                                 alignment: Alignment.center,
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFF7F9F8),
-                                  borderRadius:
-                                      BorderRadius.circular(8),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: const Icon(
                                   Icons.close_rounded,
@@ -3629,24 +4044,20 @@ void initState() {
                             ),
                             filled: true,
                             fillColor: const Color(0xFFF5F7F6),
-                            contentPadding:
-                                const EdgeInsets.symmetric(
+                            contentPadding: const EdgeInsets.symmetric(
                               horizontal: 10,
                               vertical: 9,
                             ),
                             border: OutlineInputBorder(
-                              borderRadius:
-                                  BorderRadius.circular(9),
+                              borderRadius: BorderRadius.circular(9),
                               borderSide: BorderSide.none,
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderRadius:
-                                  BorderRadius.circular(9),
+                              borderRadius: BorderRadius.circular(9),
                               borderSide: BorderSide.none,
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderRadius:
-                                  BorderRadius.circular(9),
+                              borderRadius: BorderRadius.circular(9),
                               borderSide: BorderSide.none,
                             ),
                           ),
@@ -3703,11 +4114,9 @@ void initState() {
                       else
                         Expanded(
                           child: ListView.builder(
-                            padding:
-                                const EdgeInsets.only(bottom: 16),
+                            padding: const EdgeInsets.only(bottom: 16),
                             itemCount: items.length,
-                            itemBuilder: (_, index) =>
-                                row(items[index]),
+                            itemBuilder: (_, index) => row(items[index]),
                           ),
                         ),
                     ],
@@ -3724,7 +4133,8 @@ void initState() {
   }
 
   void _onEditProfile() {
-    Get.snackbar("Профиль", "Редактирование профиля подключим следующим шагом.", snackPosition: SnackPosition.BOTTOM);
+    Get.snackbar("Профиль", "Редактирование профиля подключим следующим шагом.",
+        snackPosition: SnackPosition.BOTTOM);
   }
 
   void _openAiDetailsSheet({
@@ -3737,7 +4147,8 @@ void initState() {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
       builder: (_) {
         return SafeArea(
           top: false,
@@ -3746,18 +4157,34 @@ void initState() {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(width: 44, height: 5, decoration: BoxDecoration(color: Colors.black.withOpacity(0.08), borderRadius: BorderRadius.circular(99))),
+                Container(
+                    width: 44,
+                    height: 5,
+                    decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(99))),
                 const SizedBox(height: 14),
                 Row(
                   children: [
-                    Expanded(child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.black))),
-                    IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+                    Expanded(
+                        child: Text(title,
+                            style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.black))),
+                    IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close)),
                   ],
                 ),
                 const SizedBox(height: 4),
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: Text(subtitle, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black.withOpacity(0.55))),
+                  child: Text(subtitle,
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black.withOpacity(0.55))),
                 ),
                 const SizedBox(height: 14),
                 ...bullets.map((b) => _AiBulletTile(bullet: b)).toList(),
@@ -3769,11 +4196,14 @@ void initState() {
                         onPressed: () => Navigator.pop(context),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.black,
-                          side: BorderSide(color: Colors.black.withOpacity(0.12)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          side:
+                              BorderSide(color: Colors.black.withOpacity(0.12)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
-                        child: const Text("Закрыть", style: TextStyle(fontWeight: FontWeight.w800)),
+                        child: const Text("Закрыть",
+                            style: TextStyle(fontWeight: FontWeight.w800)),
                       ),
                     ),
                     if (primaryActionLabel != null) ...[
@@ -3786,18 +4216,22 @@ void initState() {
                               "Спортотека AI",
                               "Подключим этот модуль на сервере следующим шагом 🙂",
                               snackPosition: SnackPosition.BOTTOM,
-                              backgroundColor: ProfilePalette.primaryGreen.withOpacity(0.12),
+                              backgroundColor:
+                                  ProfilePalette.primaryGreen.withOpacity(0.12),
                               colorText: Colors.black,
                             );
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: ProfilePalette.primaryGreen,
                             foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14)),
                             elevation: 0,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
-                          child: Text(primaryActionLabel, style: const TextStyle(fontWeight: FontWeight.w900)),
+                          child: Text(primaryActionLabel,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w900)),
                         ),
                       ),
                     ],
@@ -3815,111 +4249,113 @@ void initState() {
   // НОВЫЕ МЕТОДЫ ДЛЯ ДИЗАЙНА
   // =============================
   Future<void> _loadProfileDesign() async {
-  final userId = widget.userId ?? await PrefUtils.getUserId();
-  if (userId == null || userId <= 0) return;
+    final userId = widget.userId ?? await PrefUtils.getUserId();
+    if (userId == null || userId <= 0) return;
 
-  if (mounted) {
-    setState(() => designLoading = true);
-  }
+    if (mounted) {
+      setState(() => designLoading = true);
+    }
 
-  try {
-    final uri = Uri.parse('$_loadDesignUrl?user_id=$userId');
-    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+    try {
+      final uri = Uri.parse('$_loadDesignUrl?user_id=$userId');
+      final response = await http.get(uri).timeout(const Duration(seconds: 10));
 
-    debugPrint('GET DESIGN STATUS: ${response.statusCode}');
-    debugPrint('GET DESIGN BODY: ${utf8.decode(response.bodyBytes)}');
+      debugPrint('GET DESIGN STATUS: ${response.statusCode}');
+      debugPrint('GET DESIGN BODY: ${utf8.decode(response.bodyBytes)}');
 
-    if (response.statusCode != 200) return;
+      if (response.statusCode != 200) return;
 
-    final body = utf8.decode(response.bodyBytes);
-    final data = jsonDecode(body);
+      final body = utf8.decode(response.bodyBytes);
+      final data = jsonDecode(body);
 
-    if (data is Map && data['success'] == true && data['design'] != null) {
-      final loadedDesign = ProfileDesign.fromJson(
-        Map<String, dynamic>.from(data['design']),
-      );
+      if (data is Map && data['success'] == true && data['design'] != null) {
+        final loadedDesign = ProfileDesign.fromJson(
+          Map<String, dynamic>.from(data['design']),
+        );
 
+        if (mounted) {
+          setState(() {
+            design = loadedDesign;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading design: $e');
+    } finally {
       if (mounted) {
-        setState(() {
-          design = loadedDesign;
-        });
+        setState(() => designLoading = false);
       }
     }
-  } catch (e) {
-    debugPrint('Error loading design: $e');
-  } finally {
-    if (mounted) {
-      setState(() => designLoading = false);
-    }
   }
-}
+
   Future<void> _saveProfileDesign() async {
-  final userId = await PrefUtils.getUserId();
-  if (userId == null || userId <= 0) return;
+    final userId = await PrefUtils.getUserId();
+    if (userId == null || userId <= 0) return;
 
-  if (mounted) {
-    setState(() => designSaving = true);
-  }
-
-  try {
-    final designJson = jsonEncode(design.toJson());
-
-    debugPrint('SAVE DESIGN USER ID: $userId');
-    debugPrint('SAVE DESIGN JSON: $designJson');
-
-    final response = await http.post(
-      Uri.parse(_saveDesignUrl),
-      body: {
-        'user_id': userId.toString(),
-        'design_json': designJson,
-      },
-    ).timeout(const Duration(seconds: 15));
-
-    final body = utf8.decode(response.bodyBytes);
-    debugPrint('SAVE DESIGN STATUS: ${response.statusCode}');
-    debugPrint('SAVE DESIGN BODY: $body');
-
-    if (response.statusCode != 200) {
-      Get.snackbar(
-        'Ошибка',
-        'Сервер вернул ${response.statusCode}',
-        snackPosition: SnackPosition.BOTTOM,
-      );
-      return;
-    }
-
-    final data = jsonDecode(body);
-
-    if (data is Map && data['success'] == true) {
-      Get.snackbar(
-        'Успешно',
-        'Дизайн профиля сохранён',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: design.primaryColor,
-        colorText: Colors.white,
-        duration: const Duration(seconds: 2),
-      );
-    } else {
-      Get.snackbar(
-        'Ошибка',
-        (data is Map && data['message'] != null)
-            ? data['message'].toString()
-            : 'Не удалось сохранить дизайн',
-        snackPosition: SnackPosition.BOTTOM,
-      );
-    }
-  } catch (e) {
-    Get.snackbar(
-      'Ошибка',
-      'Не удалось сохранить дизайн: $e',
-      snackPosition: SnackPosition.BOTTOM,
-    );
-  } finally {
     if (mounted) {
-      setState(() => designSaving = false);
+      setState(() => designSaving = true);
+    }
+
+    try {
+      final designJson = jsonEncode(design.toJson());
+
+      debugPrint('SAVE DESIGN USER ID: $userId');
+      debugPrint('SAVE DESIGN JSON: $designJson');
+
+      final response = await http.post(
+        Uri.parse(_saveDesignUrl),
+        body: {
+          'user_id': userId.toString(),
+          'design_json': designJson,
+        },
+      ).timeout(const Duration(seconds: 15));
+
+      final body = utf8.decode(response.bodyBytes);
+      debugPrint('SAVE DESIGN STATUS: ${response.statusCode}');
+      debugPrint('SAVE DESIGN BODY: $body');
+
+      if (response.statusCode != 200) {
+        Get.snackbar(
+          'Ошибка',
+          'Сервер вернул ${response.statusCode}',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+        return;
+      }
+
+      final data = jsonDecode(body);
+
+      if (data is Map && data['success'] == true) {
+        Get.snackbar(
+          'Успешно',
+          'Дизайн профиля сохранён',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: design.primaryColor,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 2),
+        );
+      } else {
+        Get.snackbar(
+          'Ошибка',
+          (data is Map && data['message'] != null)
+              ? data['message'].toString()
+              : 'Не удалось сохранить дизайн',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Ошибка',
+        'Не удалось сохранить дизайн: $e',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => designSaving = false);
+      }
     }
   }
-}
+
   void _openDesignEditor() {
     if (!isOwnProfile) return;
 
@@ -3941,36 +4377,36 @@ void initState() {
   // СТИЛИ ТЕКСТА
   // =============================
   TextStyle get _titleStyle => TextStyle(
-    fontFamily: design.fontFamily != 'default' ? design.fontFamily : null,
-    fontSize: design.titleFontSize,
-    fontWeight: design.titleWeight,
-    color: design.textPrimaryColor,
-    height: 1.2,
-  );
+        fontFamily: design.fontFamily != 'default' ? design.fontFamily : null,
+        fontSize: design.titleFontSize,
+        fontWeight: design.titleWeight,
+        color: design.textPrimaryColor,
+        height: 1.2,
+      );
 
   TextStyle get _headingStyle => TextStyle(
-    fontFamily: design.fontFamily != 'default' ? design.fontFamily : null,
-    fontSize: design.headingFontSize,
-    fontWeight: design.headingWeight,
-    color: design.textPrimaryColor,
-    height: 1.3,
-  );
+        fontFamily: design.fontFamily != 'default' ? design.fontFamily : null,
+        fontSize: design.headingFontSize,
+        fontWeight: design.headingWeight,
+        color: design.textPrimaryColor,
+        height: 1.3,
+      );
 
   TextStyle get _bodyStyle => TextStyle(
-    fontFamily: design.fontFamily != 'default' ? design.fontFamily : null,
-    fontSize: design.bodyFontSize,
-    fontWeight: design.bodyWeight,
-    color: design.textSecondaryColor,
-    height: 1.4,
-  );
+        fontFamily: design.fontFamily != 'default' ? design.fontFamily : null,
+        fontSize: design.bodyFontSize,
+        fontWeight: design.bodyWeight,
+        color: design.textSecondaryColor,
+        height: 1.4,
+      );
 
   TextStyle get _smallStyle => TextStyle(
-    fontFamily: design.fontFamily != 'default' ? design.fontFamily : null,
-    fontSize: design.smallFontSize,
-    fontWeight: design.bodyWeight,
-    color: design.textTertiaryColor,
-    height: 1.2,
-  );
+        fontFamily: design.fontFamily != 'default' ? design.fontFamily : null,
+        fontSize: design.smallFontSize,
+        fontWeight: design.bodyWeight,
+        color: design.textTertiaryColor,
+        height: 1.2,
+      );
 
   // =============================
   // BUILD МЕТОД — CMR / CLUB WORKSPACE FLAGSHIP
@@ -3988,9 +4424,8 @@ void initState() {
       appBar: isTabletWorkspace || _mobileWindowChild != null
           ? null
           : _buildFlagshipMobileAppBar(isVisitor),
-      bottomNavigationBar: isOwnProfile && width < 720
-          ? _buildSocialBottomBar()
-          : null,
+      bottomNavigationBar:
+          isOwnProfile && width < 720 ? _buildSocialBottomBar() : null,
       body: isLoadingProfile
           ? _buildFlagshipLoading()
           : isDesktopWorkspace
@@ -4003,7 +4438,6 @@ void initState() {
                     ),
     );
   }
-
 
   Widget _buildProfileTabletWorkspace({required bool isVisitor}) {
     return SafeArea(
@@ -4096,9 +4530,7 @@ void initState() {
                         : Colors.transparent,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: system
-                      ? const Color(0xFFEFF2F5)
-                      : Colors.transparent,
+                  color: system ? const Color(0xFFEFF2F5) : Colors.transparent,
                 ),
                 boxShadow: active
                     ? [
@@ -4125,7 +4557,8 @@ void initState() {
       button(
         icon: Icons.home_rounded,
         tooltip: 'Главная',
-        active: _profileWorkspaceSection == 'posts' && _mobileDockKey == 'profile',
+        active:
+            _profileWorkspaceSection == 'posts' && _mobileDockKey == 'profile',
         onTap: () {
           _closeMobileWindow(dockKey: 'profile');
           _selectProfileWorkspaceSection('posts');
@@ -4339,7 +4772,8 @@ void initState() {
             64,
           );
           _profileModuleWindowSize ??= Size(
-            min(1120.0, desktopSize.width - (desktopSize.width > 1380 ? 330 : 200)),
+            min(1120.0,
+                desktopSize.width - (desktopSize.width > 1380 ? 330 : 200)),
             min(760.0, desktopSize.height - 182),
           );
 
@@ -4350,7 +4784,8 @@ void initState() {
               child: _buildPositionedProfileMainWindow(desktopSize, isVisitor),
             ));
           }
-          if (_desktopRightPaneChild != null && !_profileModuleWindowMinimized) {
+          if (_desktopRightPaneChild != null &&
+              !_profileModuleWindowMinimized) {
             windows.add((
               z: _profileModuleWindowZ,
               child: _buildPositionedProfileModuleWindow(desktopSize),
@@ -4362,7 +4797,8 @@ void initState() {
             clipBehavior: Clip.none,
             children: [
               Positioned.fill(child: _buildProfileDesktopWallpaper()),
-              Positioned(left: 18, top: 24, child: _buildProfileDesktopShortcuts()),
+              Positioned(
+                  left: 18, top: 24, child: _buildProfileDesktopShortcuts()),
               for (final window in windows) window.child,
               Positioned(
                 left: 0,
@@ -4383,9 +4819,11 @@ void initState() {
       title: 'Мой профиль',
       subtitle: _activeWorkspaceName,
       icon: Icons.person_rounded,
-      active: _profileMainWindowZ >= _profileModuleWindowZ || _desktopRightPaneChild == null,
+      active: _profileMainWindowZ >= _profileModuleWindowZ ||
+          _desktopRightPaneChild == null,
       maximized: maximized,
-      onTap: () => setState(() => _profileMainWindowZ = ++_profileWindowZCounter),
+      onTap: () =>
+          setState(() => _profileMainWindowZ = ++_profileWindowZCounter),
       onClose: () => Navigator.of(context).maybePop(),
       onMinimize: () => setState(() => _profileMainWindowMinimized = true),
       onMaximize: () => setState(() {
@@ -4411,19 +4849,28 @@ void initState() {
       minWidth: 620,
       minHeight: 480,
     );
-    final pos = _safeProfileWindowPosition(_profileMainWindowPosition!, size, desktopSize);
-    return Positioned(left: pos.dx, top: pos.dy, width: size.width, height: size.height, child: frame);
+    final pos = _safeProfileWindowPosition(
+        _profileMainWindowPosition!, size, desktopSize);
+    return Positioned(
+        left: pos.dx,
+        top: pos.dy,
+        width: size.width,
+        height: size.height,
+        child: frame);
   }
 
   Widget _buildPositionedProfileModuleWindow(Size desktopSize) {
     final maximized = _profileModuleWindowMaximized;
     final frame = _buildProfileFloatingWindow(
-      title: _desktopRightPaneTitle.isEmpty ? 'Подробный просмотр' : _desktopRightPaneTitle,
+      title: _desktopRightPaneTitle.isEmpty
+          ? 'Подробный просмотр'
+          : _desktopRightPaneTitle,
       subtitle: _activeWorkspaceName,
       icon: _desktopRightPaneIcon,
       active: _profileModuleWindowZ >= _profileMainWindowZ,
       maximized: maximized,
-      onTap: () => setState(() => _profileModuleWindowZ = ++_profileWindowZCounter),
+      onTap: () =>
+          setState(() => _profileModuleWindowZ = ++_profileWindowZCounter),
       onClose: () => setState(() {
         _desktopRightPaneChild = null;
         _desktopRightPaneTitle = '';
@@ -4449,8 +4896,14 @@ void initState() {
       minWidth: 560,
       minHeight: 420,
     );
-    final pos = _safeProfileWindowPosition(_profileModuleWindowPosition!, size, desktopSize);
-    return Positioned(left: pos.dx, top: pos.dy, width: size.width, height: size.height, child: frame);
+    final pos = _safeProfileWindowPosition(
+        _profileModuleWindowPosition!, size, desktopSize);
+    return Positioned(
+        left: pos.dx,
+        top: pos.dy,
+        width: size.width,
+        height: size.height,
+        child: frame);
   }
 
   Size _safeProfileWindowSize(
@@ -4462,12 +4915,17 @@ void initState() {
     final availableWidth = max(360.0, desktopSize.width - 24);
     final availableHeight = max(300.0, desktopSize.height - 106);
     return Size(
-      requested.width.clamp(min(minWidth, availableWidth), availableWidth).toDouble(),
-      requested.height.clamp(min(minHeight, availableHeight), availableHeight).toDouble(),
+      requested.width
+          .clamp(min(minWidth, availableWidth), availableWidth)
+          .toDouble(),
+      requested.height
+          .clamp(min(minHeight, availableHeight), availableHeight)
+          .toDouble(),
     );
   }
 
-  Offset _safeProfileWindowPosition(Offset requested, Size size, Size desktopSize) {
+  Offset _safeProfileWindowPosition(
+      Offset requested, Size size, Size desktopSize) {
     final maxX = max(8.0, desktopSize.width - size.width - 8);
     final maxY = max(8.0, desktopSize.height - size.height - 96);
     return Offset(
@@ -4496,8 +4954,12 @@ void initState() {
       final position = _profileMainWindowPosition ?? const Offset(76, 34);
       final current = _profileMainWindowSize ?? const Size(1040, 680);
       _profileMainWindowSize = Size(
-        (current.width + delta.dx).clamp(620.0, max(620.0, desktopSize.width - position.dx - 12)).toDouble(),
-        (current.height + delta.dy).clamp(480.0, max(480.0, desktopSize.height - position.dy - 102)).toDouble(),
+        (current.width + delta.dx)
+            .clamp(620.0, max(620.0, desktopSize.width - position.dx - 12))
+            .toDouble(),
+        (current.height + delta.dy)
+            .clamp(480.0, max(480.0, desktopSize.height - position.dy - 102))
+            .toDouble(),
       );
     });
   }
@@ -4522,8 +4984,12 @@ void initState() {
       final position = _profileModuleWindowPosition ?? const Offset(130, 64);
       final current = _profileModuleWindowSize ?? const Size(1040, 680);
       _profileModuleWindowSize = Size(
-        (current.width + delta.dx).clamp(560.0, max(560.0, desktopSize.width - position.dx - 12)).toDouble(),
-        (current.height + delta.dy).clamp(420.0, max(420.0, desktopSize.height - position.dy - 102)).toDouble(),
+        (current.width + delta.dx)
+            .clamp(560.0, max(560.0, desktopSize.width - position.dx - 12))
+            .toDouble(),
+        (current.height + delta.dy)
+            .clamp(420.0, max(420.0, desktopSize.height - position.dy - 102))
+            .toDouble(),
       );
     });
   }
@@ -4565,7 +5031,8 @@ void initState() {
             children: [
               GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onPanUpdate: maximized ? null : (details) => onDragUpdate(details.delta),
+                onPanUpdate:
+                    maximized ? null : (details) => onDragUpdate(details.delta),
                 onDoubleTap: onMaximize,
                 child: _buildCmrWindowTitleBar(
                   title: title,
@@ -4592,7 +5059,8 @@ void initState() {
                         bottom: 0,
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
-                          onPanUpdate: (details) => onResizeUpdate(details.delta),
+                          onPanUpdate: (details) =>
+                              onResizeUpdate(details.delta),
                           child: const SizedBox(
                             width: 28,
                             height: 28,
@@ -4600,7 +5068,8 @@ void initState() {
                               alignment: Alignment.bottomRight,
                               child: Padding(
                                 padding: EdgeInsets.all(6),
-                                child: Icon(Icons.open_in_full_rounded, size: 13, color: Color(0xFF98A2B3)),
+                                child: Icon(Icons.open_in_full_rounded,
+                                    size: 13, color: Color(0xFF98A2B3)),
                               ),
                             ),
                           ),
@@ -4680,52 +5149,76 @@ void initState() {
 
   Widget _buildProfileDesktopShortcuts() {
     final items = <({IconData icon, String title, VoidCallback tap})>[
-      (icon: Icons.dynamic_feed_rounded, title: 'Лента', tap: _openCommunityFeedHome),
-      (icon: Icons.search_rounded, title: 'Поиск', tap: _openPeopleSearchWindow),
-      (icon: Icons.school_outlined, title: 'Уроки', tap: _openVideoLessonsWindow),
+      (
+        icon: Icons.dynamic_feed_rounded,
+        title: 'Лента',
+        tap: _openCommunityFeedHome
+      ),
+      (
+        icon: Icons.search_rounded,
+        title: 'Поиск',
+        tap: _openPeopleSearchWindow
+      ),
+      (
+        icon: Icons.school_outlined,
+        title: 'Уроки',
+        tap: _openVideoLessonsWindow
+      ),
       (icon: Icons.stadium_outlined, title: 'Площадки', tap: _openVenuesWindow),
       (icon: Icons.forum_outlined, title: 'Чаты', tap: _openMainChat),
-      (icon: Icons.person_outline_rounded, title: 'Профиль', tap: () => _selectProfileWorkspaceSection('profile')),
+      (
+        icon: Icons.person_outline_rounded,
+        title: 'Профиль',
+        tap: () => _selectProfileWorkspaceSection('profile')
+      ),
     ];
     return Column(
-      children: items.map((item) => Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: InkWell(
-          onTap: item.tap,
-          borderRadius: BorderRadius.circular(16),
-          child: SizedBox(
-            width: 76,
-            child: Column(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(.86),
-                    borderRadius: BorderRadius.circular(15),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(.08), blurRadius: 16, offset: const Offset(0, 7))],
+      children: items
+          .map((item) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: InkWell(
+                  onTap: item.tap,
+                  borderRadius: BorderRadius.circular(16),
+                  child: SizedBox(
+                    width: 76,
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(.86),
+                            borderRadius: BorderRadius.circular(15),
+                            boxShadow: [
+                              BoxShadow(
+                                  color: Colors.black.withOpacity(.08),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 7))
+                            ],
+                          ),
+                          child: Icon(item.icon,
+                              color: const Color(0xFF16794B), size: 24),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          item.title,
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.custom(
+                            size: 9.2,
+                            weight: FontWeight.w600,
+                            color: const Color(0xFF344054),
+                            height: 1.12,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  child: Icon(item.icon, color: const Color(0xFF16794B), size: 24),
                 ),
-                const SizedBox(height: 5),
-                Text(
-                  item.title,
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.custom(
-                    size: 9.2,
-                    weight: FontWeight.w600,
-                    color: const Color(0xFF344054),
-                    height: 1.12,
-                    letterSpacing: 0,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      )).toList(),
+              ))
+          .toList(),
     );
   }
 
@@ -4734,7 +5227,6 @@ void initState() {
     // Так навигация и «Ещё» выглядят одинаково на больших экранах.
     return _buildProfileTabletTaskbar();
   }
-
 
   Widget _buildFlagshipPhoneOrTabletBody({
     required double width,
@@ -4795,20 +5287,21 @@ void initState() {
     required bool isVisitor,
     bool desktopWindow = false,
   }) {
-    final dockInset = isOwnProfile
-        ? MediaQuery.paddingOf(context).bottom + 76.0
-        : 16.0;
+    final dockInset =
+        isOwnProfile ? MediaQuery.paddingOf(context).bottom + 76.0 : 16.0;
 
     return SafeArea(
       bottom: false,
       child: Container(
         color: desktopWindow ? Colors.white : const Color(0xFFF6F7F6),
-        padding: desktopWindow ? EdgeInsets.zero : EdgeInsets.fromLTRB(
-          compact ? 8 : 10,
-          compact ? 8 : 10,
-          compact ? 8 : 10,
-          dockInset,
-        ),
+        padding: desktopWindow
+            ? EdgeInsets.zero
+            : EdgeInsets.fromLTRB(
+                compact ? 8 : 10,
+                compact ? 8 : 10,
+                compact ? 8 : 10,
+                dockInset,
+              ),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1480),
@@ -4841,7 +5334,8 @@ void initState() {
                                     switchInCurve: Curves.easeOutCubic,
                                     switchOutCurve: Curves.easeInCubic,
                                     child: KeyedSubtree(
-                                      key: ValueKey('desktop-${_profileWorkspaceSection}'),
+                                      key: ValueKey(
+                                          'desktop-${_profileWorkspaceSection}'),
                                       child: _buildProfileWorkspaceBody(
                                         compact: false,
                                         isVisitor: isVisitor,
@@ -4849,7 +5343,8 @@ void initState() {
                                     ),
                                   )
                                 : Row(
-                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
                                     children: [
                                       SizedBox(
                                         width: compact ? 270 : 304,
@@ -4864,11 +5359,13 @@ void initState() {
                                       ),
                                       Expanded(
                                         child: AnimatedSwitcher(
-                                          duration: const Duration(milliseconds: 190),
+                                          duration:
+                                              const Duration(milliseconds: 190),
                                           switchInCurve: Curves.easeOutCubic,
                                           switchOutCurve: Curves.easeInCubic,
                                           child: KeyedSubtree(
-                                            key: ValueKey(_profileWorkspaceSection),
+                                            key: ValueKey(
+                                                _profileWorkspaceSection),
                                             child: _buildProfileWorkspaceBody(
                                               compact: compact,
                                               isVisitor: isVisitor,
@@ -5095,7 +5592,8 @@ void initState() {
 
     switch (_profileWorkspaceSection) {
       case 'embedded':
-        title = _desktopRightPaneTitle.isEmpty ? 'Раздел' : _desktopRightPaneTitle;
+        title =
+            _desktopRightPaneTitle.isEmpty ? 'Раздел' : _desktopRightPaneTitle;
         subtitle = 'Рабочая область SPORTOTEKA';
         icon = _desktopRightPaneIcon;
         break;
@@ -5308,7 +5806,8 @@ void initState() {
                 child: selected == null
                     ? _buildPublicationSelectionPlaceholder(compact: compact)
                     : Container(
-                        key: ValueKey('tablet-profile-post-${_safeInt(selected['id'])}'),
+                        key: ValueKey(
+                            'tablet-profile-post-${_safeInt(selected['id'])}'),
                         color: Colors.white,
                         child: _buildCmrPublicationDetail(
                           selected,
@@ -5380,7 +5879,8 @@ void initState() {
                         fullName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: _flagshipText(9.8, color: const Color(0xFF8A9099)),
+                        style:
+                            _flagshipText(9.8, color: const Color(0xFF8A9099)),
                       ),
                     ],
                   ],
@@ -5422,7 +5922,9 @@ void initState() {
                   ),
                   child: Row(
                     children: [
-                      _buildFlagshipAvatar(size: compact ? 46 : 52, hasAvatar: photo != null && photo!.trim().isNotEmpty),
+                      _buildFlagshipAvatar(
+                          size: compact ? 46 : 52,
+                          hasAvatar: photo != null && photo!.trim().isNotEmpty),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Column(
@@ -5432,12 +5934,14 @@ void initState() {
                               fullName,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: _flagshipTitle(12.6, weight: FontWeight.w700),
+                              style:
+                                  _flagshipTitle(12.6, weight: FontWeight.w700),
                             ),
                             const SizedBox(height: 3),
                             Text(
                               _roleLabel,
-                              style: _flagshipText(9.8, color: const Color(0xFF8A9099)),
+                              style: _flagshipText(9.8,
+                                  color: const Color(0xFF8A9099)),
                             ),
                           ],
                         ),
@@ -5469,7 +5973,8 @@ void initState() {
                 if (imageUrl.isNotEmpty) const SizedBox(height: 14),
                 Text(
                   title,
-                  style: _flagshipTitle(compact ? 17 : 19, weight: FontWeight.w700),
+                  style: _flagshipTitle(compact ? 17 : 19,
+                      weight: FontWeight.w700),
                 ),
                 if (body.isNotEmpty) ...[
                   const SizedBox(height: 9),
@@ -5484,20 +5989,25 @@ void initState() {
                 ],
                 const SizedBox(height: 16),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF7F8F7),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.favorite_border_rounded, size: 17, color: Color(0xFF5F6670)),
+                      const Icon(Icons.favorite_border_rounded,
+                          size: 17, color: Color(0xFF5F6670)),
                       const SizedBox(width: 6),
-                      Text('$likes', style: _flagshipText(10.8, weight: FontWeight.w600)),
+                      Text('$likes',
+                          style: _flagshipText(10.8, weight: FontWeight.w600)),
                       const SizedBox(width: 18),
-                      const Icon(Icons.mode_comment_outlined, size: 17, color: Color(0xFF5F6670)),
+                      const Icon(Icons.mode_comment_outlined,
+                          size: 17, color: Color(0xFF5F6670)),
                       const SizedBox(width: 6),
-                      Text('$comments', style: _flagshipText(10.8, weight: FontWeight.w600)),
+                      Text('$comments',
+                          style: _flagshipText(10.8, weight: FontWeight.w600)),
                     ],
                   ),
                 ),
@@ -5537,7 +6047,8 @@ void initState() {
               Text(
                 'Выберите публикацию',
                 textAlign: TextAlign.center,
-                style: _flagshipTitle(compact ? 17 : 19, weight: FontWeight.w700),
+                style:
+                    _flagshipTitle(compact ? 17 : 19, weight: FontWeight.w700),
               ),
               const SizedBox(height: 7),
               Text(
@@ -5699,8 +6210,7 @@ void initState() {
               shape: BoxShape.circle,
             ),
           ),
-          if (i != values.length - 1)
-            const SizedBox(width: 3),
+          if (i != values.length - 1) const SizedBox(width: 3),
         ],
       ],
     );
@@ -5723,27 +6233,39 @@ void initState() {
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                Center(
-                  child: SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CustomPaint(
-                      painter: _FlagshipNotificationPainter(
-                        color: const Color(0xFF111827),
-                      ),
-                    ),
+                const Center(
+                  child: Icon(
+                    Icons.notifications_none_rounded,
+                    size: 20,
+                    color: Color(0xFF111827),
                   ),
                 ),
                 if (hasImportant)
                   Positioned(
-                    top: 5,
-                    right: 5,
+                    top: 0,
+                    right: -1,
                     child: Container(
-                      width: 7,
-                      height: 7,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFD92D20),
-                        shape: BoxShape.circle,
+                      constraints: const BoxConstraints(
+                        minWidth: 15,
+                        minHeight: 15,
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD92D20),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: Colors.white, width: 1.2),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        _importantNotificationCount > 99
+                            ? '99+'
+                            : '$_importantNotificationCount',
+                        style: AppTypography.custom(
+                          size: 7.4,
+                          weight: FontWeight.w700,
+                          color: Colors.white,
+                          height: 1,
+                        ),
                       ),
                     ),
                   ),
@@ -5756,125 +6278,21 @@ void initState() {
   }
 
   Future<void> _openImportantNotifications() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withOpacity(.22),
-      builder: (sheetContext) {
-        return SafeArea(
-          top: false,
-          child: Container(
-            margin: const EdgeInsets.only(top: 72),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(
-                top: Radius.circular(16),
-              ),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
-                  child: Row(
-                    children: [
-                      _buildFlagshipDotCluster(
-                        color: const Color(0xFF00A750),
-                        compact: true,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Важные уведомления',
-                              style: _flagshipTitle(
-                                12.6,
-                                weight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 1),
-                            Text(
-                              'Только события, которые требуют внимания',
-                              style: _flagshipText(
-                                9.0,
-                                color: const Color(0xFF7A828D),
-                                weight: FontWeight.w400,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Material(
-                        color: const Color(0xFFF7F9F8),
-                        borderRadius: BorderRadius.circular(8),
-                        child: InkWell(
-                          onTap: () => Navigator.of(sheetContext).pop(),
-                          borderRadius: BorderRadius.circular(8),
-                          child: const SizedBox(
-                            width: 30,
-                            height: 30,
-                            child: Icon(
-                              Icons.close_rounded,
-                              size: 15,
-                              color: Color(0xFF667085),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(
-                  height: 1,
-                  thickness: .6,
-                  color: Color(0xFFEEF1EF),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 26, 18, 30),
-                  child: Column(
-                    children: [
-                      SizedBox(
-                        width: 26,
-                        height: 26,
-                        child: CustomPaint(
-                          painter: _FlagshipNotificationPainter(
-                            color: const Color(0xFF98A2B3),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'Пока важных уведомлений нет',
-                        textAlign: TextAlign.center,
-                        style: _flagshipText(
-                          10.6,
-                          color: const Color(0xFF344054),
-                          weight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Позже сюда подключим сообщения, новые подписки, '
-                        'приглашения, события клуба и другие важные действия.',
-                        textAlign: TextAlign.center,
-                        style: _flagshipText(
-                          9.2,
-                          color: const Color(0xFF7A828D),
-                          weight: FontWeight.w400,
-                          height: 1.35,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+    final myId = await PrefUtils.getUserId() ?? widget.userId ?? 0;
+    if (!mounted || myId <= 0) return;
+
+    _openCmrWindow(
+      title: 'Уведомления',
+      icon: Icons.notifications_none_rounded,
+      maxWidth: 900,
+      maxHeight: 760,
+      child: CmrNotificationsPanel(
+        userId: myId,
+        onUnreadChanged: (value) {
+          if (!mounted) return;
+          setState(() => _importantNotificationCount = value);
+        },
+      ),
     );
   }
 
@@ -5889,10 +6307,12 @@ void initState() {
             const SizedBox(
               width: 20,
               height: 20,
-              child: CircularProgressIndicator(color: Color(0xFF00A750), strokeWidth: 2.4),
+              child: CircularProgressIndicator(
+                  color: Color(0xFF00A750), strokeWidth: 2.4),
             ),
             const SizedBox(width: 12),
-            Text('Загружаем профиль', style: _flagshipText(12.5, weight: FontWeight.w800)),
+            Text('Загружаем профиль',
+                style: _flagshipText(12.5, weight: FontWeight.w800)),
           ],
         ),
       ),
@@ -5957,39 +6377,117 @@ void initState() {
   List<_ProfileFlagshipAction> get _flagshipWorkspaceActions {
     if (_isPublicProfileView) {
       return [
-        _ProfileFlagshipAction('Публикации', 'фото и посты профиля', Icons.grid_on_rounded, () => _selectProfileWorkspaceSection('posts'), group: 'Профиль', primary: true),
-        _ProfileFlagshipAction('Reels профиля', 'короткие видео игрока', Icons.play_circle_fill_rounded, () => setState(() => _mode = _ProfileFeedMode.reels), group: 'Профиль'),
-        _ProfileFlagshipAction('Лента профиля', 'публикации списком', Icons.article_outlined, () => setState(() => _mode = _ProfileFeedMode.feed), group: 'Профиль'),
-        _ProfileFlagshipAction(isFollowing ? 'Вы подписаны' : 'Подписаться', 'следить за обновлениями', Icons.person_add_alt_1_rounded, () { _toggleFollow(); }, group: 'Действия'),
-        _ProfileFlagshipAction('Написать', 'личное сообщение', Icons.chat_bubble_outline_rounded, () { _openPrivateChat(); }, group: 'Действия'),
+        _ProfileFlagshipAction(
+            'Публикации',
+            'фото и посты профиля',
+            Icons.grid_on_rounded,
+            () => _selectProfileWorkspaceSection('posts'),
+            group: 'Профиль',
+            primary: true),
+        _ProfileFlagshipAction(
+            'Reels профиля',
+            'короткие видео игрока',
+            Icons.play_circle_fill_rounded,
+            () => setState(() => _mode = _ProfileFeedMode.reels),
+            group: 'Профиль'),
+        _ProfileFlagshipAction(
+            'Лента профиля',
+            'публикации списком',
+            Icons.article_outlined,
+            () => setState(() => _mode = _ProfileFeedMode.feed),
+            group: 'Профиль'),
+        _ProfileFlagshipAction(isFollowing ? 'Вы подписаны' : 'Подписаться',
+            'следить за обновлениями', Icons.person_add_alt_1_rounded, () {
+          _toggleFollow();
+        }, group: 'Действия'),
+        _ProfileFlagshipAction(
+            'Написать', 'личное сообщение', Icons.chat_bubble_outline_rounded,
+            () {
+          _openPrivateChat();
+        }, group: 'Действия'),
       ];
     }
 
     return [
-        if (isOwnProfile)
-          _ProfileFlagshipAction('К выбору Workspace', 'выбрать личный или рабочий кабинет', Icons.account_tree_outlined, _goToWorkspaceHub, group: 'Навигация', primary: true),
-        _ProfileFlagshipAction('Лента', 'новости и публикации сообщества', Icons.dynamic_feed_rounded, _openCommunityFeedHome, group: 'Основное'),
-        _ProfileFlagshipAction('Поиск людей', 'игроки, тренеры и пользователи', Icons.person_search_outlined, _openPeopleSearchWindow, group: 'Основное'),
-        _ProfileFlagshipAction('Чаты', 'личные сообщения и группы', Icons.forum_rounded, _openMainChat, group: 'Основное'),
-
-        _ProfileFlagshipAction('Видеоуроки', 'обучение и спортивные материалы', Icons.school_rounded, _openVideoLessonsWindow, group: 'Обучение'),
-        _ProfileFlagshipAction('Сохранённое · скоро', 'уроки, публикации, люди и площадки', Icons.bookmark_border_rounded, _openSavedWindow, group: 'Обучение'),
-
-        _ProfileFlagshipAction('Площадки', 'каталог доступен · раздел дополняется', Icons.stadium_rounded, _openVenuesWindow, group: 'Сервисы'),
-        _ProfileFlagshipAction('Игры рядом · скоро', 'открытые игры, спарринги и поиск игроков', Icons.sports_soccer_rounded, _openNearbyGamesWindow, group: 'Сервисы'),
-        _ProfileFlagshipAction('Тренировки рядом · скоро', 'открытые занятия тренеров и клубов', Icons.directions_run_rounded, _openNearbyTrainingsWindow, group: 'Сервисы'),
-
-        _ProfileFlagshipAction('Публикации профиля', 'фото и посты пользователя', Icons.grid_on_rounded, () => _selectProfileWorkspaceSection('posts'), group: 'Профиль'),
-        _ProfileFlagshipAction('Reels профиля', 'короткие видео пользователя', Icons.play_circle_outline_rounded, () => setState(() => _mode = _ProfileFeedMode.reels), group: 'Профиль'),
-        if (isOwnProfile)
-          _ProfileFlagshipAction(isClubRole ? 'Логотип / аватар' : 'Аватарка', _profileMediaEditSubtitle, Icons.add_a_photo_outlined, _openProfileMediaPickerSheet, group: 'Профиль'),
-        _ProfileFlagshipAction('Настройки', 'профиль и доступ', Icons.settings_outlined, _openProfileSettingsSheet, group: 'Аккаунт'),
-        _ProfileFlagshipAction('PRO подписка', 'расширенные возможности', Icons.workspace_premium_rounded, _openSubscriptionWindow, group: 'Аккаунт', pro: true),
-        if (isOwnProfile)
-          _ProfileFlagshipAction('Выйти из профиля', 'завершить текущую сессию', Icons.logout_rounded, _logoutFromProfile, group: 'Аккаунт'),
-        if (isOwnProfile)
-          _ProfileFlagshipAction('Удалить профиль', 'безвозвратное удаление аккаунта', Icons.delete_forever_rounded, _deleteOwnProfileWithConfirmation, group: 'Аккаунт', danger: true),
-      ];
+      if (isOwnProfile)
+        _ProfileFlagshipAction(
+            'К выбору Workspace',
+            'выбрать личный или рабочий кабинет',
+            Icons.account_tree_outlined,
+            _goToWorkspaceHub,
+            group: 'Навигация',
+            primary: true),
+      _ProfileFlagshipAction('Лента', 'новости и публикации сообщества',
+          Icons.dynamic_feed_rounded, _openCommunityFeedHome,
+          group: 'Основное'),
+      _ProfileFlagshipAction('Поиск людей', 'игроки, тренеры и пользователи',
+          Icons.person_search_outlined, _openPeopleSearchWindow,
+          group: 'Основное'),
+      _ProfileFlagshipAction('Чаты', 'личные сообщения и группы',
+          Icons.forum_rounded, _openMainChat,
+          group: 'Основное'),
+      _ProfileFlagshipAction('Видеоуроки', 'обучение и спортивные материалы',
+          Icons.school_rounded, _openVideoLessonsWindow,
+          group: 'Обучение'),
+      _ProfileFlagshipAction(
+          'Сохранённое · скоро',
+          'уроки, публикации, люди и площадки',
+          Icons.bookmark_border_rounded,
+          _openSavedWindow,
+          group: 'Обучение'),
+      _ProfileFlagshipAction(
+          'Площадки',
+          'каталог доступен · раздел дополняется',
+          Icons.stadium_rounded,
+          _openVenuesWindow,
+          group: 'Сервисы'),
+      _ProfileFlagshipAction(
+          'Игры рядом · скоро',
+          'открытые игры, спарринги и поиск игроков',
+          Icons.sports_soccer_rounded,
+          _openNearbyGamesWindow,
+          group: 'Сервисы'),
+      _ProfileFlagshipAction(
+          'Тренировки рядом · скоро',
+          'открытые занятия тренеров и клубов',
+          Icons.directions_run_rounded,
+          _openNearbyTrainingsWindow,
+          group: 'Сервисы'),
+      _ProfileFlagshipAction('Публикации профиля', 'фото и посты пользователя',
+          Icons.grid_on_rounded, () => _selectProfileWorkspaceSection('posts'),
+          group: 'Профиль'),
+      _ProfileFlagshipAction(
+          'Reels профиля',
+          'короткие видео пользователя',
+          Icons.play_circle_outline_rounded,
+          () => setState(() => _mode = _ProfileFeedMode.reels),
+          group: 'Профиль'),
+      if (isOwnProfile)
+        _ProfileFlagshipAction(
+            isClubRole ? 'Логотип / аватар' : 'Аватарка',
+            _profileMediaEditSubtitle,
+            Icons.add_a_photo_outlined,
+            _openProfileMediaPickerSheet,
+            group: 'Профиль'),
+      _ProfileFlagshipAction('Настройки', 'профиль и доступ',
+          Icons.settings_outlined, _openProfileSettingsSheet,
+          group: 'Аккаунт'),
+      _ProfileFlagshipAction('PRO подписка', 'расширенные возможности',
+          Icons.workspace_premium_rounded, _openSubscriptionWindow,
+          group: 'Аккаунт', pro: true),
+      if (isOwnProfile)
+        _ProfileFlagshipAction('Выйти из профиля', 'завершить текущую сессию',
+            Icons.logout_rounded, _logoutFromProfile,
+            group: 'Аккаунт'),
+      if (isOwnProfile)
+        _ProfileFlagshipAction(
+            'Удалить профиль',
+            'безвозвратное удаление аккаунта',
+            Icons.delete_forever_rounded,
+            _deleteOwnProfileWithConfirmation,
+            group: 'Аккаунт',
+            danger: true),
+    ];
   }
 
   Widget _buildFlagshipDesktopProfile() {
@@ -6012,7 +6510,6 @@ void initState() {
         ],
       );
     }
-
 
     return SafeArea(
       child: Center(
@@ -6044,7 +6541,8 @@ void initState() {
                                     children: [
                                       Container(
                                         height: 54,
-                                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 14),
                                         decoration: const BoxDecoration(
                                           color: Colors.white,
                                           border: Border(
@@ -6061,7 +6559,8 @@ void initState() {
                                               height: 34,
                                               decoration: BoxDecoration(
                                                 color: const Color(0xFFF3FAF6),
-                                                borderRadius: BorderRadius.circular(10),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
                                               ),
                                               child: Icon(
                                                 _desktopRightPaneIcon,
@@ -6072,15 +6571,19 @@ void initState() {
                                             const SizedBox(width: 10),
                                             Expanded(
                                               child: Column(
-                                                mainAxisAlignment: MainAxisAlignment.center,
-                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
                                                 children: [
                                                   Text(
-                                                    _desktopRightPaneTitle.isEmpty
+                                                    _desktopRightPaneTitle
+                                                            .isEmpty
                                                         ? 'Публикация'
                                                         : _desktopRightPaneTitle,
                                                     maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
                                                     style: _flagshipTitle(
                                                       14.2,
                                                       weight: FontWeight.w700,
@@ -6091,7 +6594,8 @@ void initState() {
                                                     'Подробный просмотр',
                                                     style: _flagshipText(
                                                       10.2,
-                                                      color: const Color(0xFF8A9099),
+                                                      color: const Color(
+                                                          0xFF8A9099),
                                                     ),
                                                   ),
                                                 ],
@@ -6105,14 +6609,17 @@ void initState() {
                                                   _desktopRightPaneTitle = '';
                                                 });
                                               },
-                                              borderRadius: BorderRadius.circular(10),
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
                                               child: Container(
                                                 width: 36,
                                                 height: 36,
                                                 alignment: Alignment.center,
                                                 decoration: BoxDecoration(
-                                                  color: const Color(0xFFF7F8F7),
-                                                  borderRadius: BorderRadius.circular(10),
+                                                  color:
+                                                      const Color(0xFFF7F8F7),
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
                                                 ),
                                                 child: const Icon(
                                                   Icons.close_rounded,
@@ -6143,7 +6650,6 @@ void initState() {
     );
   }
 
-
   Widget _buildFlagshipDesktopPublicProfile() {
     return SafeArea(
       child: Center(
@@ -6167,7 +6673,6 @@ void initState() {
       ),
     );
   }
-
 
   Widget _buildFlagshipDesktopHeader() {
     return Container(
@@ -6221,7 +6726,10 @@ void initState() {
   }
 
   Widget _buildWindowDots() {
-    Widget dot(Color color) => Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle));
+    Widget dot(Color color) => Container(
+        width: 10,
+        height: 10,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle));
     return Row(
       children: [
         dot(const Color(0xFFFF5F57)),
@@ -6278,7 +6786,10 @@ void initState() {
                   return [
                     Padding(
                       padding: const EdgeInsets.fromLTRB(8, 10, 8, 6),
-                      child: Text(entry.key.toUpperCase(), style: _flagshipText(8.2, color: const Color(0xFF98A2B3), weight: FontWeight.w900)),
+                      child: Text(entry.key.toUpperCase(),
+                          style: _flagshipText(8.2,
+                              color: const Color(0xFF98A2B3),
+                              weight: FontWeight.w900)),
                     ),
                     ...entry.value.map(_buildDesktopMenuAction),
                   ];
@@ -6291,13 +6802,11 @@ void initState() {
     );
   }
 
-
   Widget _buildDesktopMenuAction(_ProfileFlagshipAction action) {
     final active = action.primary;
     final danger = action.danger;
-    final titleColor = danger
-        ? const Color(0xFFE11D48)
-        : const Color(0xFF111827);
+    final titleColor =
+        danger ? const Color(0xFFE11D48) : const Color(0xFF111827);
 
     return InkWell(
       borderRadius: BorderRadius.circular(8),
@@ -6331,9 +6840,7 @@ void initState() {
                           style: _flagshipText(
                             11.2,
                             color: titleColor,
-                            weight: active
-                                ? FontWeight.w700
-                                : FontWeight.w600,
+                            weight: active ? FontWeight.w700 : FontWeight.w600,
                           ),
                         ),
                       ),
@@ -6436,7 +6943,6 @@ void initState() {
     );
   }
 
-
   Widget _buildFlagshipProfileCard() {
     final hasAvatar = photo != null && photo!.trim().isNotEmpty;
     final width = MediaQuery.sizeOf(context).width;
@@ -6449,8 +6955,7 @@ void initState() {
         (playerClubName ?? '').trim(),
       if ((playerTeamName ?? '').trim().isNotEmpty)
         (playerTeamName ?? '').trim(),
-      if ((location ?? '').trim().isNotEmpty)
-        (location ?? '').trim(),
+      if ((location ?? '').trim().isNotEmpty) (location ?? '').trim(),
     ].join(' · ');
 
     final avatarSize = compactSocial ? 76.0 : 92.0;
@@ -6478,10 +6983,7 @@ void initState() {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (isClubRole ||
-                        isCoachRole ||
-                        isPlayer ||
-                        isParentRole)
+                    if (isClubRole || isCoachRole || isPlayer || isParentRole)
                       Padding(
                         padding: EdgeInsets.only(
                           bottom: compactSocial ? 3 : 6,
@@ -6574,8 +7076,7 @@ void initState() {
                 ),
                 Expanded(
                   child: GestureDetector(
-                    onTap: () =>
-                        _openUsersModal(showFollowers: true),
+                    onTap: () => _openUsersModal(showFollowers: true),
                     child: _buildFlagshipStat(
                       followersCount,
                       'Подписчики',
@@ -6586,8 +7087,7 @@ void initState() {
                 ),
                 Expanded(
                   child: GestureDetector(
-                    onTap: () =>
-                        _openUsersModal(showFollowers: false),
+                    onTap: () => _openUsersModal(showFollowers: false),
                     child: _buildFlagshipStat(
                       followingsCount,
                       'Подписки',
@@ -6606,28 +7106,20 @@ void initState() {
                 child: _buildFlagshipSmallButton(
                   label: isOwnProfile
                       ? 'Редактировать'
-                      : (isFollowing
-                          ? 'Отписаться'
-                          : 'Подписаться'),
+                      : (isFollowing ? 'Отписаться' : 'Подписаться'),
                   icon: Icons.person_add_alt_1_rounded,
-                  onTap: isOwnProfile
-                      ? _openProfileSettingsSheet
-                      : _toggleFollow,
-                  primary:
-                      !isOwnProfile && !isFollowing,
+                  onTap:
+                      isOwnProfile ? _openProfileSettingsSheet : _toggleFollow,
+                  primary: !isOwnProfile && !isFollowing,
                   compact: compactSocial,
                 ),
               ),
               SizedBox(width: compactSocial ? 6 : 7),
               Expanded(
                 child: _buildFlagshipSmallButton(
-                  label: isOwnProfile
-                      ? _primaryZoneTitle
-                      : 'Написать',
+                  label: isOwnProfile ? _primaryZoneTitle : 'Написать',
                   icon: Icons.chat_bubble_outline_rounded,
-                  onTap: isOwnProfile
-                      ? _openPrimaryArea
-                      : _openPrivateChat,
+                  onTap: isOwnProfile ? _openPrimaryArea : _openPrivateChat,
                   primary: isOwnProfile,
                   compact: compactSocial,
                 ),
@@ -6664,14 +7156,18 @@ void initState() {
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Center(
                       child: Text(
-                        fullName.isEmpty ? 'S' : fullName.characters.first.toUpperCase(),
+                        fullName.isEmpty
+                            ? 'S'
+                            : fullName.characters.first.toUpperCase(),
                         style: _flagshipTitle(size * .28),
                       ),
                     ),
                   )
                 : Center(
                     child: Text(
-                      fullName.isEmpty ? 'S' : fullName.characters.first.toUpperCase(),
+                      fullName.isEmpty
+                          ? 'S'
+                          : fullName.characters.first.toUpperCase(),
                       style: _flagshipTitle(size * .28),
                     ),
                   ),
@@ -6709,7 +7205,13 @@ void initState() {
   }
 
   Widget _buildRoleCapsule() {
-    final icon = isClubRole ? Icons.apartment_rounded : isCoachRole ? Icons.sports_soccer_rounded : isParentRole ? Icons.family_restroom_rounded : Icons.person_rounded;
+    final icon = isClubRole
+        ? Icons.apartment_rounded
+        : isCoachRole
+            ? Icons.sports_soccer_rounded
+            : isParentRole
+                ? Icons.family_restroom_rounded
+                : Icons.person_rounded;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
@@ -6721,7 +7223,9 @@ void initState() {
         children: [
           Icon(icon, size: 13, color: const Color(0xFF067A46)),
           const SizedBox(width: 5),
-          Text(_roleLabel.toUpperCase(), style: _flagshipText(9, color: const Color(0xFF067A46), weight: FontWeight.w900)),
+          Text(_roleLabel.toUpperCase(),
+              style: _flagshipText(9,
+                  color: const Color(0xFF067A46), weight: FontWeight.w900)),
         ],
       ),
     );
@@ -6765,8 +7269,7 @@ void initState() {
     bool primary = false,
     bool compact = false,
   }) {
-    final isFollowAction =
-        label == 'Подписаться' || label == 'Отписаться';
+    final isFollowAction = label == 'Подписаться' || label == 'Отписаться';
 
     final background = primary
         ? const Color(0xFF00A750)
@@ -6774,17 +7277,13 @@ void initState() {
             ? const Color(0xFFF1F3F2)
             : const Color(0xFFF5F6F5);
 
-    final foreground = primary
-        ? Colors.white
-        : const Color(0xFF111827);
+    final foreground = primary ? Colors.white : const Color(0xFF111827);
 
     return Material(
       color: background,
-      borderRadius:
-          BorderRadius.circular(compact ? 8 : 9),
+      borderRadius: BorderRadius.circular(compact ? 8 : 9),
       child: InkWell(
-        borderRadius:
-            BorderRadius.circular(compact ? 8 : 9),
+        borderRadius: BorderRadius.circular(compact ? 8 : 9),
         onTap: onTap,
         child: Container(
           height: compact ? 32 : 36,
@@ -6830,9 +7329,8 @@ void initState() {
   }
 
   Widget _buildFlagshipWorkspaceSummary() {
-    final name = _activeWorkspaceName.isEmpty
-        ? 'Sportoteka'
-        : _activeWorkspaceName;
+    final name =
+        _activeWorkspaceName.isEmpty ? 'Sportoteka' : _activeWorkspaceName;
 
     return Container(
       color: Colors.white,
@@ -6920,9 +7418,8 @@ void initState() {
               overflow: TextOverflow.ellipsis,
               style: _flagshipText(
                 9.5,
-                color: strong
-                    ? const Color(0xFF067A46)
-                    : const Color(0xFF98A2B3),
+                color:
+                    strong ? const Color(0xFF067A46) : const Color(0xFF98A2B3),
                 weight: FontWeight.w700,
               ),
             ),
@@ -6931,7 +7428,6 @@ void initState() {
       ),
     );
   }
-
 
   Widget _buildWorkspaceLaunchButton({bool dense = false}) {
     return InkWell(
@@ -6977,7 +7473,6 @@ void initState() {
     );
   }
 
-
   Widget _buildFlagshipRightDesk() {
     return CustomScrollView(
       physics: const BouncingScrollPhysics(),
@@ -6988,11 +7483,6 @@ void initState() {
     );
   }
 
-
-
-
-
-
   Widget _buildFlagshipSettingsPanel() {
     return Container(
       decoration: _flagshipPanel(radius: 20),
@@ -7002,17 +7492,26 @@ void initState() {
         children: [
           Text('Настройки', style: _flagshipTitle(13.6)),
           const SizedBox(height: 8),
-          _buildSettingsLine(Icons.verified_user_outlined, 'Роль аккаунта', _roleLabel.toUpperCase(), _openProfileSettingsSheet),
-          _buildSettingsLine(Icons.image_outlined, 'Фото и профиль', 'Редактировать', _pickAndUploadPhoto),
-          _buildSettingsLine(Icons.notifications_none_rounded, 'Уведомления', 'Открыть', _openProfileSettingsSheet),
-          _buildSettingsLine(Icons.security_rounded, isParentRole ? 'Доступ к детям' : (isPlayer ? 'Личный доступ' : 'Права клуба'), isParentRole ? 'Мои дети' : (isPlayer ? 'Dashboard' : 'Панель'), _openPrimaryArea),
+          _buildSettingsLine(Icons.verified_user_outlined, 'Роль аккаунта',
+              _roleLabel.toUpperCase(), _openProfileSettingsSheet),
+          _buildSettingsLine(Icons.image_outlined, 'Фото и профиль',
+              'Редактировать', _pickAndUploadPhoto),
+          _buildSettingsLine(Icons.notifications_none_rounded, 'Уведомления',
+              'Открыть', _openProfileSettingsSheet),
+          _buildSettingsLine(
+              Icons.security_rounded,
+              isParentRole
+                  ? 'Доступ к детям'
+                  : (isPlayer ? 'Личный доступ' : 'Права клуба'),
+              isParentRole ? 'Мои дети' : (isPlayer ? 'Dashboard' : 'Панель'),
+              _openPrimaryArea),
         ],
       ),
     );
   }
 
-
-  Widget _buildSettingsLine(IconData icon, String title, String value, VoidCallback onTap) {
+  Widget _buildSettingsLine(
+      IconData icon, String title, String value, VoidCallback onTap) {
     return InkWell(
       borderRadius: BorderRadius.circular(16),
       onTap: onTap,
@@ -7025,15 +7524,24 @@ void initState() {
           children: [
             Icon(icon, size: 16, color: const Color(0xFF111827)),
             const SizedBox(width: 9),
-            Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipText(10.8, color: const Color(0xFF111827), weight: FontWeight.w800))),
+            Expanded(
+                child: Text(title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _flagshipText(10.8,
+                        color: const Color(0xFF111827),
+                        weight: FontWeight.w800))),
             const SizedBox(width: 8),
-            Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _flagshipText(9.6, color: const Color(0xFF8A94A6), weight: FontWeight.w800)),
+            Text(value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _flagshipText(9.6,
+                    color: const Color(0xFF8A94A6), weight: FontWeight.w800)),
           ],
         ),
       ),
     );
   }
-
 
   String get _profileContentTitle {
     switch (_mode) {
@@ -7115,7 +7623,6 @@ void initState() {
     );
   }
 
-
   Widget _buildProfileContent() {
     final sortedBlocks = design.blocks
         .where((b) => b.enabled)
@@ -7191,12 +7698,7 @@ void initState() {
     );
   }
 
-
-
-
-
   Widget _buildMobilePersistentWindow() {
-
     // Мобильные разделы открываются на полный экран, но нижнее Instagram/CMR-меню
     // остаётся постоянной навигацией. Верхнюю панель с закрыть/свернуть/развернуть
     // убираем: назад в профиль, Reels, чат и меню доступны через нижний dock.
@@ -7221,7 +7723,10 @@ void initState() {
     );
   }
 
-  Widget _buildMobileWindowTitleBar({required String title, required IconData icon, required VoidCallback onClose}) {
+  Widget _buildMobileWindowTitleBar(
+      {required String title,
+      required IconData icon,
+      required VoidCallback onClose}) {
     return Container(
       height: 44,
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -7252,7 +7757,11 @@ void initState() {
               title.isEmpty ? 'Окно' : title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTypography.custom(size: 11.5, weight: FontWeight.w600, color: const Color(0xFF111827), height: 1.2),
+              style: AppTypography.custom(
+                  size: 11.5,
+                  weight: FontWeight.w600,
+                  color: const Color(0xFF111827),
+                  height: 1.2),
             ),
           ),
           InkWell(
@@ -7261,8 +7770,11 @@ void initState() {
             child: Container(
               width: 30,
               height: 30,
-              decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(999)),
-              child: const Icon(Icons.close_rounded, size: 16, color: Color(0xFF111827)),
+              decoration: BoxDecoration(
+                  color: const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(999)),
+              child: const Icon(Icons.close_rounded,
+                  size: 16, color: Color(0xFF111827)),
             ),
           ),
         ],
@@ -7275,9 +7787,7 @@ void initState() {
     final width = MediaQuery.of(context).size.width;
     final horizontal = width < 380 ? 10.0 : 14.0;
 
-   final bottomInset = bottom > 0
-    ? math.min(14.0, bottom * .40)
-    : 6.0;
+    final bottomInset = bottom > 0 ? math.min(14.0, bottom * .40) : 6.0;
 
     Widget dockItem({
       required String keyName,
@@ -7298,9 +7808,7 @@ void initState() {
               width: active ? 44 : 34,
               height: 36,
               decoration: BoxDecoration(
-                color: active
-                    ? const Color(0xB8EAF8F0)
-                    : Colors.transparent,
+                color: active ? const Color(0xB8EAF8F0) : Colors.transparent,
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Stack(
@@ -7422,7 +7930,7 @@ void initState() {
                   dockItem(
                     keyName: 'chat',
                     icon: Icons.forum_outlined,
-                    badge: 1,
+                    badge: _chatUnreadCount,
                     onTap: _openMainChat,
                   ),
                   dockItem(
@@ -7444,37 +7952,92 @@ void initState() {
     );
   }
 
-
   void _openProfileHomeMoreSheet() {
     final actions = <_ProfileFlagshipAction>[
       if (isOwnProfile)
-        _ProfileFlagshipAction('К выбору Workspace', 'выбрать личный или рабочий кабинет', Icons.account_tree_outlined, _goToWorkspaceHub, group: 'Навигация', primary: true),
-
+        _ProfileFlagshipAction(
+            'К выбору Workspace',
+            'выбрать личный или рабочий кабинет',
+            Icons.account_tree_outlined,
+            _goToWorkspaceHub,
+            group: 'Навигация',
+            primary: true),
       if (isOwnProfile)
-        _ProfileFlagshipAction('Новый пост', 'фото, текст и публикация в профиль', Icons.add_photo_alternate_outlined, _openCreatePostModal, group: 'Создать'),
+        _ProfileFlagshipAction(
+            'Новый пост',
+            'фото, текст и публикация в профиль',
+            Icons.add_photo_alternate_outlined,
+            _openCreatePostModal,
+            group: 'Создать'),
       if (isOwnProfile)
-        _ProfileFlagshipAction('Новый Reels', 'короткое спортивное видео', Icons.movie_creation_outlined, () { _openUploadReels(); }, group: 'Создать'),
-
-      _ProfileFlagshipAction('Лента', 'новости и публикации сообщества', Icons.dynamic_feed_rounded, _openCommunityFeedHome, group: 'Основное'),
-      _ProfileFlagshipAction('Поиск людей', 'игроки, тренеры и пользователи', Icons.person_search_outlined, _openPeopleSearchWindow, group: 'Основное'),
-      _ProfileFlagshipAction('Чаты', 'личные сообщения и группы', Icons.forum_rounded, _openMainChat, group: 'Основное'),
-      _ProfileFlagshipAction('Reels', 'короткие видео сообщества', Icons.play_circle_outline_rounded, _openGlobalReels, group: 'Основное'),
-
-      _ProfileFlagshipAction('Видеоуроки', 'обучение и спортивные материалы', Icons.school_rounded, _openVideoLessonsWindow, group: 'Обучение'),
-      _ProfileFlagshipAction('Сохранённое · скоро', 'ваши сохранённые материалы', Icons.bookmark_border_rounded, _openSavedWindow, group: 'Обучение'),
-
-      _ProfileFlagshipAction('Площадки', 'каталог доступен · раздел дополняется', Icons.stadium_rounded, _openVenuesWindow, group: 'Сервисы'),
-      _ProfileFlagshipAction('Игры рядом · скоро', 'открытые игры и поиск игроков', Icons.sports_soccer_rounded, _openNearbyGamesWindow, group: 'Сервисы'),
-      _ProfileFlagshipAction('Тренировки рядом · скоро', 'открытые занятия тренеров и клубов', Icons.directions_run_rounded, _openNearbyTrainingsWindow, group: 'Сервисы'),
-
+        _ProfileFlagshipAction('Новый Reels', 'короткое спортивное видео',
+            Icons.movie_creation_outlined, () {
+          _openUploadReels();
+        }, group: 'Создать'),
+      _ProfileFlagshipAction('Лента', 'новости и публикации сообщества',
+          Icons.dynamic_feed_rounded, _openCommunityFeedHome,
+          group: 'Основное'),
+      _ProfileFlagshipAction('Поиск людей', 'игроки, тренеры и пользователи',
+          Icons.person_search_outlined, _openPeopleSearchWindow,
+          group: 'Основное'),
+      _ProfileFlagshipAction('Чаты', 'личные сообщения и группы',
+          Icons.forum_rounded, _openMainChat,
+          group: 'Основное'),
+      _ProfileFlagshipAction('Reels', 'короткие видео сообщества',
+          Icons.play_circle_outline_rounded, _openGlobalReels,
+          group: 'Основное'),
+      _ProfileFlagshipAction('Видеоуроки', 'обучение и спортивные материалы',
+          Icons.school_rounded, _openVideoLessonsWindow,
+          group: 'Обучение'),
+      _ProfileFlagshipAction(
+          'Сохранённое · скоро',
+          'ваши сохранённые материалы',
+          Icons.bookmark_border_rounded,
+          _openSavedWindow,
+          group: 'Обучение'),
+      _ProfileFlagshipAction(
+          'Площадки',
+          'каталог доступен · раздел дополняется',
+          Icons.stadium_rounded,
+          _openVenuesWindow,
+          group: 'Сервисы'),
+      _ProfileFlagshipAction(
+          'Игры рядом · скоро',
+          'открытые игры и поиск игроков',
+          Icons.sports_soccer_rounded,
+          _openNearbyGamesWindow,
+          group: 'Сервисы'),
+      _ProfileFlagshipAction(
+          'Тренировки рядом · скоро',
+          'открытые занятия тренеров и клубов',
+          Icons.directions_run_rounded,
+          _openNearbyTrainingsWindow,
+          group: 'Сервисы'),
       if (isOwnProfile)
-        _ProfileFlagshipAction(isClubRole ? 'Логотип / аватар' : 'Аватарка', _profileMediaEditSubtitle, Icons.add_a_photo_outlined, _openProfileMediaPickerSheet, group: 'Аккаунт'),
-      _ProfileFlagshipAction('PRO подписка', 'расширенные возможности', Icons.workspace_premium_rounded, _openSubscriptionWindow, group: 'Аккаунт', pro: true),
-      _ProfileFlagshipAction('Настройки', 'профиль и доступ', Icons.settings_outlined, _openProfileSettingsSheet, group: 'Аккаунт'),
+        _ProfileFlagshipAction(
+            isClubRole ? 'Логотип / аватар' : 'Аватарка',
+            _profileMediaEditSubtitle,
+            Icons.add_a_photo_outlined,
+            _openProfileMediaPickerSheet,
+            group: 'Аккаунт'),
+      _ProfileFlagshipAction('PRO подписка', 'расширенные возможности',
+          Icons.workspace_premium_rounded, _openSubscriptionWindow,
+          group: 'Аккаунт', pro: true),
+      _ProfileFlagshipAction('Настройки', 'профиль и доступ',
+          Icons.settings_outlined, _openProfileSettingsSheet,
+          group: 'Аккаунт'),
       if (isOwnProfile)
-        _ProfileFlagshipAction('Выйти из профиля', 'завершить текущую сессию', Icons.logout_rounded, _logoutFromProfile, group: 'Аккаунт'),
+        _ProfileFlagshipAction('Выйти из профиля', 'завершить текущую сессию',
+            Icons.logout_rounded, _logoutFromProfile,
+            group: 'Аккаунт'),
       if (isOwnProfile)
-        _ProfileFlagshipAction('Удалить профиль', 'подтверждение кодовым словом', Icons.delete_forever_rounded, _deleteOwnProfileWithConfirmation, group: 'Аккаунт', danger: true),
+        _ProfileFlagshipAction(
+            'Удалить профиль',
+            'подтверждение кодовым словом',
+            Icons.delete_forever_rounded,
+            _deleteOwnProfileWithConfirmation,
+            group: 'Аккаунт',
+            danger: true),
     ];
 
     final width = MediaQuery.sizeOf(context).width;
@@ -7509,7 +8072,8 @@ void initState() {
           actions: actions,
           onSelect: (action) {
             Navigator.of(dialogContext).pop();
-            Future<void>.delayed(const Duration(milliseconds: 80), action.onTap);
+            Future<void>.delayed(
+                const Duration(milliseconds: 80), action.onTap);
           },
         );
       },
@@ -7533,7 +8097,6 @@ void initState() {
       },
     );
   }
-
 
   Widget _buildProfileMobileMoreSheet(
     BuildContext sheetContext,
@@ -7844,14 +8407,15 @@ void initState() {
     );
   }
 
-
   Widget _buildProfileHomeMoreWindowContent(
     List<_ProfileFlagshipAction> actions, {
     void Function(_ProfileFlagshipAction action)? onActionTap,
   }) {
     final grouped = <String, List<_ProfileFlagshipAction>>{};
     for (final action in actions) {
-      grouped.putIfAbsent(action.group, () => <_ProfileFlagshipAction>[]).add(action);
+      grouped
+          .putIfAbsent(action.group, () => <_ProfileFlagshipAction>[])
+          .add(action);
     }
 
     Widget compactTile(_ProfileFlagshipAction action) {
@@ -7890,9 +8454,13 @@ void initState() {
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: action.primary ? Colors.white.withOpacity(.14) : Colors.white,
+                  color: action.primary
+                      ? Colors.white.withOpacity(.14)
+                      : Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  border: action.primary ? null : Border.all(color: const Color(0xFFE9EEF3)),
+                  border: action.primary
+                      ? null
+                      : Border.all(color: const Color(0xFFE9EEF3)),
                 ),
                 child: Icon(action.icon, size: 18, color: iconColor),
               ),
@@ -7919,8 +8487,11 @@ void initState() {
                         ),
                         if (action.pro)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                            decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(999)),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 3),
+                            decoration: BoxDecoration(
+                                color: const Color(0xFFFFF7ED),
+                                borderRadius: BorderRadius.circular(999)),
                             child: Text(
                               'PRO',
                               style: AppTypography.custom(
@@ -7942,7 +8513,9 @@ void initState() {
                       style: AppTypography.custom(
                         size: 9.7,
                         weight: FontWeight.w400,
-                        color: action.primary ? Colors.white.withOpacity(.72) : const Color(0xFF667085),
+                        color: action.primary
+                            ? Colors.white.withOpacity(.72)
+                            : const Color(0xFF667085),
                         height: 1.2,
                         letterSpacing: 0,
                       ),
@@ -7950,7 +8523,11 @@ void initState() {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right_rounded, size: 18, color: action.primary ? Colors.white.withOpacity(.72) : const Color(0xFF98A2B3)),
+              Icon(Icons.chevron_right_rounded,
+                  size: 18,
+                  color: action.primary
+                      ? Colors.white.withOpacity(.72)
+                      : const Color(0xFF98A2B3)),
             ],
           ),
         ),
@@ -7976,13 +8553,23 @@ void initState() {
                 ),
               ),
             ),
-            ...items.map((a) => Padding(padding: const EdgeInsets.only(bottom: 8), child: compactTile(a))),
+            ...items.map((a) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: compactTile(a))),
           ],
         ),
       );
     }
 
-    final orderedGroups = ['Навигация', 'Создать', 'Основное', 'Обучение', 'Сервисы', 'Профиль', 'Аккаунт'];
+    final orderedGroups = [
+      'Навигация',
+      'Создать',
+      'Основное',
+      'Обучение',
+      'Сервисы',
+      'Профиль',
+      'Аккаунт'
+    ];
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
@@ -8033,8 +8620,11 @@ void initState() {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                  decoration: BoxDecoration(color: const Color(0xFFECFDF3), borderRadius: BorderRadius.circular(999)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                  decoration: BoxDecoration(
+                      color: const Color(0xFFECFDF3),
+                      borderRadius: BorderRadius.circular(999)),
                   child: Text(
                     _roleLabel.toUpperCase(),
                     style: AppTypography.custom(
@@ -8056,7 +8646,8 @@ void initState() {
               child: Column(
                 children: [
                   for (final group in orderedGroups)
-                    if ((grouped[group] ?? const <_ProfileFlagshipAction>[]).isNotEmpty)
+                    if ((grouped[group] ?? const <_ProfileFlagshipAction>[])
+                        .isNotEmpty)
                       section(group, grouped[group]!),
                 ],
               ),
@@ -8067,46 +8658,47 @@ void initState() {
     );
   }
 
-
   Future<void> _logoutFromProfile() async {
     await _clearLocalProfileSession();
     if (!mounted) return;
     Get.offAllNamed(AppRoutes.loginScreen);
   }
 
- Future<void> _clearLocalProfileSession() async {
-  try {
-    await PrefUtils.setIsSignIn(false);
-  } catch (_) {}
+  Future<void> _clearLocalProfileSession() async {
+    try {
+      await PrefUtils.setIsSignIn(false);
+    } catch (_) {}
 
-  try {
-    await PrefUtils.setUserId(0);
-  } catch (_) {}
+    try {
+      await PrefUtils.setUserId(0);
+    } catch (_) {}
 
-  try {
-    await PrefUtils.setUserFirstName('');
-  } catch (_) {}
+    try {
+      await PrefUtils.setUserFirstName('');
+    } catch (_) {}
 
-  try {
-    await PrefUtils.setUserLastName('');
-  } catch (_) {}
+    try {
+      await PrefUtils.setUserLastName('');
+    } catch (_) {}
 
-  try {
-    await PrefUtils.setUserEmail('');
-  } catch (_) {}
+    try {
+      await PrefUtils.setUserEmail('');
+    } catch (_) {}
 
-  try {
-    await PrefUtils.setRole('');
-  } catch (_) {}
+    try {
+      await PrefUtils.setRole('');
+    } catch (_) {}
 
-  try {
-    await PrefUtils.setUserPhoto('');
-  } catch (_) {}
-}
+    try {
+      await PrefUtils.setUserPhoto('');
+    } catch (_) {}
+  }
+
   Future<void> _deleteOwnProfileWithConfirmation() async {
     final userId = await PrefUtils.getUserId();
     if (userId == null || userId <= 0) {
-      Get.snackbar('Профиль', 'Не найден user_id для удаления профиля', snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar('Профиль', 'Не найден user_id для удаления профиля',
+          snackPosition: SnackPosition.BOTTOM);
       return;
     }
 
@@ -8122,7 +8714,9 @@ void initState() {
       );
 
       if (resp.statusCode != 200) {
-        Get.snackbar('Удаление профиля', 'Сервер вернул ошибку: ${resp.statusCode}', snackPosition: SnackPosition.BOTTOM);
+        Get.snackbar(
+            'Удаление профиля', 'Сервер вернул ошибку: ${resp.statusCode}',
+            snackPosition: SnackPosition.BOTTOM);
         return;
       }
 
@@ -8140,9 +8734,11 @@ void initState() {
 
       if (!success) {
         final message = data is Map
-            ? (data['error'] ?? data['message'] ?? 'Не удалось удалить профиль').toString()
+            ? (data['error'] ?? data['message'] ?? 'Не удалось удалить профиль')
+                .toString()
             : 'Не удалось удалить профиль';
-        Get.snackbar('Удаление профиля', message, snackPosition: SnackPosition.BOTTOM);
+        Get.snackbar('Удаление профиля', message,
+            snackPosition: SnackPosition.BOTTOM);
         return;
       }
 
@@ -8150,7 +8746,8 @@ void initState() {
       if (!mounted) return;
       Get.offAllNamed(AppRoutes.loginScreen);
     } catch (e) {
-      Get.snackbar('Ошибка сети', e.toString(), snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar('Ошибка сети', e.toString(),
+          snackPosition: SnackPosition.BOTTOM);
     }
   }
 
@@ -8164,7 +8761,8 @@ void initState() {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) {
-        final bottom = MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom;
+        final bottom = MediaQuery.of(context).viewInsets.bottom +
+            MediaQuery.of(context).padding.bottom;
         return StatefulBuilder(
           builder: (context, setSheetState) {
             void onTextChanged(String value) {
@@ -8213,7 +8811,8 @@ void initState() {
                               color: Colors.white.withOpacity(.9),
                               borderRadius: BorderRadius.circular(16),
                             ),
-                            child: const Icon(Icons.warning_amber_rounded, color: Color(0xFFE11D48), size: 25),
+                            child: const Icon(Icons.warning_amber_rounded,
+                                color: Color(0xFFE11D48), size: 25),
                           ),
                           const SizedBox(width: 12),
                           const Expanded(
@@ -8222,12 +8821,19 @@ void initState() {
                               children: [
                                 Text(
                                   'Удалить профиль?',
-                                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF111827)),
+                                  style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFF111827)),
                                 ),
                                 SizedBox(height: 4),
                                 Text(
                                   'Это действие удалит аккаунт и завершит текущую сессию. Отменить удаление после подтверждения нельзя.',
-                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, height: 1.25, color: Color(0xFF667085)),
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      height: 1.25,
+                                      color: Color(0xFF667085)),
                                 ),
                               ],
                             ),
@@ -8242,10 +8848,20 @@ void initState() {
                         children: [
                           RichText(
                             text: const TextSpan(
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF667085), height: 1.25),
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF667085),
+                                  height: 1.25),
                               children: [
-                                TextSpan(text: 'Для подтверждения введите кодовое слово: '),
-                                TextSpan(text: codeWord, style: TextStyle(color: Color(0xFFE11D48), fontWeight: FontWeight.w900)),
+                                TextSpan(
+                                    text:
+                                        'Для подтверждения введите кодовое слово: '),
+                                TextSpan(
+                                    text: codeWord,
+                                    style: TextStyle(
+                                        color: Color(0xFFE11D48),
+                                        fontWeight: FontWeight.w900)),
                               ],
                             ),
                           ),
@@ -8258,10 +8874,23 @@ void initState() {
                               hintText: codeWord,
                               filled: true,
                               fillColor: const Color(0xFFF8FAFC),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-                              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-                              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: canDelete ? const Color(0xFFE11D48) : const Color(0xFF00A750), width: 1.4)),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 13),
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: const BorderSide(
+                                      color: Color(0xFFE5E7EB))),
+                              enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: const BorderSide(
+                                      color: Color(0xFFE5E7EB))),
+                              focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide(
+                                      color: canDelete
+                                          ? const Color(0xFFE11D48)
+                                          : const Color(0xFF00A750),
+                                      width: 1.4)),
                             ),
                           ),
                           const SizedBox(height: 14),
@@ -8271,12 +8900,19 @@ void initState() {
                                 child: OutlinedButton(
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: const Color(0xFF111827),
-                                    side: const BorderSide(color: Color(0xFFE5E7EB)),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                    padding: const EdgeInsets.symmetric(vertical: 13),
+                                    side: const BorderSide(
+                                        color: Color(0xFFE5E7EB)),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(16)),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 13),
                                   ),
-                                  onPressed: () => Navigator.pop(context, false),
-                                  child: const Text('Отмена', style: TextStyle(fontWeight: FontWeight.w900)),
+                                  onPressed: () =>
+                                      Navigator.pop(context, false),
+                                  child: const Text('Отмена',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.w900)),
                                 ),
                               ),
                               const SizedBox(width: 10),
@@ -8284,13 +8920,24 @@ void initState() {
                                 child: ElevatedButton(
                                   style: ElevatedButton.styleFrom(
                                     elevation: 0,
-                                    backgroundColor: canDelete ? const Color(0xFFE11D48) : const Color(0xFFE5E7EB),
-                                    foregroundColor: canDelete ? Colors.white : const Color(0xFF98A2B3),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                    padding: const EdgeInsets.symmetric(vertical: 13),
+                                    backgroundColor: canDelete
+                                        ? const Color(0xFFE11D48)
+                                        : const Color(0xFFE5E7EB),
+                                    foregroundColor: canDelete
+                                        ? Colors.white
+                                        : const Color(0xFF98A2B3),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(16)),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 13),
                                   ),
-                                  onPressed: canDelete ? () => Navigator.pop(context, true) : null,
-                                  child: const Text('Удалить профиль', style: TextStyle(fontWeight: FontWeight.w900)),
+                                  onPressed: canDelete
+                                      ? () => Navigator.pop(context, true)
+                                      : null,
+                                  child: const Text('Удалить профиль',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.w900)),
                                 ),
                               ),
                             ],
@@ -8311,7 +8958,6 @@ void initState() {
     return result;
   }
 
-
   void _openCreateMenuSheet() {
     final width = MediaQuery.sizeOf(context).width;
     if (width >= 720) {
@@ -8323,7 +8969,8 @@ void initState() {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) {
         return SafeArea(
           top: false,
@@ -8332,19 +8979,30 @@ void initState() {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(width: 42, height: 4, decoration: BoxDecoration(color: const Color(0xFFE5E7EB), borderRadius: BorderRadius.circular(999))),
+                Container(
+                    width: 42,
+                    height: 4,
+                    decoration: BoxDecoration(
+                        color: const Color(0xFFE5E7EB),
+                        borderRadius: BorderRadius.circular(999))),
                 const SizedBox(height: 16),
                 _buildSettingsRow(
                   icon: Icons.add_photo_alternate_outlined,
                   title: 'Новый пост',
                   subtitle: 'Фото, текст и публикация в профиль',
-                  onTap: () { Navigator.pop(context); _openCreatePostModal(); },
+                  onTap: () {
+                    Navigator.pop(context);
+                    _openCreatePostModal();
+                  },
                 ),
                 _buildSettingsRow(
                   icon: Icons.movie_creation_outlined,
                   title: 'Новый Reels',
                   subtitle: 'Короткое спортивное видео',
-                  onTap: () { Navigator.pop(context); _openUploadReels(); },
+                  onTap: () {
+                    Navigator.pop(context);
+                    _openUploadReels();
+                  },
                 ),
               ],
             ),
@@ -8417,7 +9075,8 @@ void initState() {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF3FAF6),
                     borderRadius: BorderRadius.circular(999),
@@ -8519,7 +9178,6 @@ void initState() {
     );
   }
 
-
   Widget _buildSmallAvatarForSheet() {
     final hasAvatar = (photo ?? '').trim().isNotEmpty;
     final avatar = Stack(
@@ -8528,11 +9186,20 @@ void initState() {
         Container(
           width: 42,
           height: 42,
-          decoration: BoxDecoration(color: const Color(0xFFF7F8FA), shape: BoxShape.circle, border: Border.all(color: const Color(0xFFE5E7EB))),
+          decoration: BoxDecoration(
+              color: const Color(0xFFF7F8FA),
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFE5E7EB))),
           child: ClipOval(
             child: hasAvatar
-                ? Image.network(photo!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded, color: Color(0xFF667085), size: 20))
-                : const Icon(Icons.person_rounded, color: Color(0xFF667085), size: 20),
+                ? Image.network(photo!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const Icon(
+                        Icons.person_rounded,
+                        color: Color(0xFF667085),
+                        size: 20))
+                : const Icon(Icons.person_rounded,
+                    color: Color(0xFF667085), size: 20),
           ),
         ),
         if (isOwnProfile)
@@ -8550,9 +9217,11 @@ void initState() {
               child: _uploadingProfilePhoto
                   ? const Padding(
                       padding: EdgeInsets.all(3),
-                      child: CircularProgressIndicator(strokeWidth: 1.6, color: Colors.white),
+                      child: CircularProgressIndicator(
+                          strokeWidth: 1.6, color: Colors.white),
                     )
-                  : const Icon(Icons.photo_camera_rounded, color: Colors.white, size: 10),
+                  : const Icon(Icons.photo_camera_rounded,
+                      color: Colors.white, size: 10),
             ),
           ),
       ],
@@ -8575,12 +9244,10 @@ void initState() {
     bool strong = false,
     bool danger = false,
   }) {
-    final titleColor = danger
-        ? const Color(0xFFE11D48)
-        : const Color(0xFF111827);
-    final subtitleColor = danger
-        ? const Color(0xFFBE123C)
-        : const Color(0xFF667085);
+    final titleColor =
+        danger ? const Color(0xFFE11D48) : const Color(0xFF111827);
+    final subtitleColor =
+        danger ? const Color(0xFFBE123C) : const Color(0xFF667085);
 
     return InkWell(
       onTap: onTap,
@@ -8646,13 +9313,13 @@ void initState() {
     );
   }
 
-
-
   Widget _buildHeaderSection() {
     final hasAvatar = (photo ?? '').trim().isNotEmpty;
     final infoLine = [
-      if ((playerClubName ?? '').trim().isNotEmpty) (playerClubName ?? '').trim(),
-      if ((playerTeamName ?? '').trim().isNotEmpty) (playerTeamName ?? '').trim(),
+      if ((playerClubName ?? '').trim().isNotEmpty)
+        (playerClubName ?? '').trim(),
+      if ((playerTeamName ?? '').trim().isNotEmpty)
+        (playerTeamName ?? '').trim(),
       if ((location ?? '').trim().isNotEmpty) (location ?? '').trim(),
     ].join(' • ');
 
@@ -8692,16 +9359,27 @@ void initState() {
             fullName,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 13.2, fontWeight: FontWeight.w900, color: Color(0xFF111827), height: 1.1),
+            style: const TextStyle(
+                fontSize: 13.2,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF111827),
+                height: 1.1),
           ),
           const SizedBox(height: 4),
           Wrap(
             spacing: 6,
             runSpacing: 6,
             children: [
-              _buildProfileBadge(_roleLabel, isClubRole || isCoachRole || isParentRole ? const Color(0xFF00A750) : const Color(0xFF111827)),
-              if (age != null) _buildProfileBadge('$age лет', const Color(0xFF667085)),
-              if ((playerTeamName ?? '').trim().isNotEmpty) _buildProfileBadge((playerTeamName ?? '').trim(), const Color(0xFF2563EB)),
+              _buildProfileBadge(
+                  _roleLabel,
+                  isClubRole || isCoachRole || isParentRole
+                      ? const Color(0xFF00A750)
+                      : const Color(0xFF111827)),
+              if (age != null)
+                _buildProfileBadge('$age лет', const Color(0xFF667085)),
+              if ((playerTeamName ?? '').trim().isNotEmpty)
+                _buildProfileBadge(
+                    (playerTeamName ?? '').trim(), const Color(0xFF2563EB)),
             ],
           ),
           if ((bio ?? '').trim().isNotEmpty) ...[
@@ -8710,21 +9388,29 @@ void initState() {
               (bio ?? '').trim(),
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11.7, fontWeight: FontWeight.w500, color: Color(0xFF1F2937), height: 1.25),
+              style: const TextStyle(
+                  fontSize: 11.7,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF1F2937),
+                  height: 1.25),
             ),
           ],
           if (infoLine.isNotEmpty) ...[
             const SizedBox(height: 7),
             Row(
               children: [
-                const Icon(Icons.location_on_outlined, size: 14, color: Color(0xFF8A94A6)),
+                const Icon(Icons.location_on_outlined,
+                    size: 14, color: Color(0xFF8A94A6)),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
                     infoLine,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 11.2, fontWeight: FontWeight.w700, color: Color(0xFF667085)),
+                    style: const TextStyle(
+                        fontSize: 11.2,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF667085)),
                   ),
                 ),
               ],
@@ -8735,16 +9421,23 @@ void initState() {
             children: [
               Expanded(
                 child: _buildSlimProfileButton(
-                  label: isOwnProfile ? 'Редактировать профиль' : (isFollowing ? 'Вы подписаны' : 'Подписаться'),
-                  icon: isOwnProfile ? Icons.edit_note_rounded : Icons.person_add_alt_1_rounded,
-                  onTap: isOwnProfile ? _openProfileSettingsSheet : _toggleFollow,
+                  label: isOwnProfile
+                      ? 'Редактировать профиль'
+                      : (isFollowing ? 'Вы подписаны' : 'Подписаться'),
+                  icon: isOwnProfile
+                      ? Icons.edit_note_rounded
+                      : Icons.person_add_alt_1_rounded,
+                  onTap:
+                      isOwnProfile ? _openProfileSettingsSheet : _toggleFollow,
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: _buildSlimProfileButton(
                   label: isOwnProfile ? _primaryZoneTitle : 'Написать',
-                  icon: isOwnProfile ? _primaryZoneIcon : Icons.chat_bubble_outline_rounded,
+                  icon: isOwnProfile
+                      ? _primaryZoneIcon
+                      : Icons.chat_bubble_outline_rounded,
                   onTap: isOwnProfile ? _openPrimaryArea : _openPrivateChat,
                 ),
               ),
@@ -8761,14 +9454,22 @@ void initState() {
       children: [
         Text(
           value.toString(),
-          style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w900, color: Color(0xFF111827), height: 1.05),
+          style: const TextStyle(
+              fontSize: 14.5,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF111827),
+              height: 1.05),
         ),
         const SizedBox(height: 3),
         Text(
           label,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 10.2, fontWeight: FontWeight.w600, color: Color(0xFF667085), height: 1),
+          style: const TextStyle(
+              fontSize: 10.2,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF667085),
+              height: 1),
         ),
       ],
     );
@@ -8785,7 +9486,11 @@ void initState() {
         text,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: TextStyle(fontSize: 10.2, fontWeight: FontWeight.w900, color: color, height: 1),
+        style: TextStyle(
+            fontSize: 10.2,
+            fontWeight: FontWeight.w900,
+            color: color,
+            height: 1),
       ),
     );
   }
@@ -8830,17 +9535,28 @@ void initState() {
             height: design.avatarSize,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: design.avatarBorderColor, width: design.avatarBorderWidth),
-              boxShadow: design.avatarShadowEnabled ? [BoxShadow(
-                color: Color(design.avatarShadowColorValue).withOpacity(design.avatarShadowOpacity),
-                blurRadius: design.avatarShadowBlurRadius,
-                spreadRadius: design.avatarShadowSpreadRadius,
-                offset: Offset(design.avatarShadowOffsetX, design.avatarShadowOffsetY),
-              )] : null,
+              border: Border.all(
+                  color: design.avatarBorderColor,
+                  width: design.avatarBorderWidth),
+              boxShadow: design.avatarShadowEnabled
+                  ? [
+                      BoxShadow(
+                        color: Color(design.avatarShadowColorValue)
+                            .withOpacity(design.avatarShadowOpacity),
+                        blurRadius: design.avatarShadowBlurRadius,
+                        spreadRadius: design.avatarShadowSpreadRadius,
+                        offset: Offset(design.avatarShadowOffsetX,
+                            design.avatarShadowOffsetY),
+                      )
+                    ]
+                  : null,
             ),
             child: ClipOval(
               child: hasAvatar
-                  ? Image.network(photo!, width: design.avatarSize, height: design.avatarSize, fit: BoxFit.cover,
+                  ? Image.network(photo!,
+                      width: design.avatarSize,
+                      height: design.avatarSize,
+                      fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => _buildDefaultAvatar())
                   : _buildDefaultAvatar(),
             ),
@@ -8856,7 +9572,9 @@ void initState() {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: design.primaryColor.withOpacity(design.avatarGlowOpacity * _pulseController.value),
+                            color: design.primaryColor.withOpacity(
+                                design.avatarGlowOpacity *
+                                    _pulseController.value),
                             blurRadius: design.avatarGlowRadius,
                             spreadRadius: 2,
                           ),
@@ -8882,9 +9600,11 @@ void initState() {
                 child: _uploadingProfilePhoto
                     ? const Padding(
                         padding: EdgeInsets.all(7),
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
                       )
-                    : const Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white),
+                    : const Icon(Icons.camera_alt_rounded,
+                        size: 16, color: Colors.white),
               ),
             ),
         ],
@@ -8898,25 +9618,45 @@ void initState() {
       decoration: BoxDecoration(
         color: design.cardColor,
         borderRadius: BorderRadius.circular(design.cardRadius),
-        boxShadow: design.cardShadowEnabled ? [BoxShadow(
-          color: Color(design.cardShadowColorValue).withOpacity(design.cardShadowOpacity),
-          blurRadius: design.cardShadowBlurRadius,
-          spreadRadius: design.cardShadowSpreadRadius,
-          offset: Offset(design.cardShadowOffsetX, design.cardShadowOffsetY),
-        )] : null,
+        boxShadow: design.cardShadowEnabled
+            ? [
+                BoxShadow(
+                  color: Color(design.cardShadowColorValue)
+                      .withOpacity(design.cardShadowOpacity),
+                  blurRadius: design.cardShadowBlurRadius,
+                  spreadRadius: design.cardShadowSpreadRadius,
+                  offset: Offset(
+                      design.cardShadowOffsetX, design.cardShadowOffsetY),
+                )
+              ]
+            : null,
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildStatItem(count: userPosts.length, label: design.statsShowLabels ? 'Посты' : null, icon: design.statsShowIcons ? Icons.grid_on_rounded : null),
-          _buildStatItem(count: userReels.length, label: design.statsShowLabels ? 'Reels' : null, icon: design.statsShowIcons ? Icons.play_circle_fill_rounded : null),
+          _buildStatItem(
+              count: userPosts.length,
+              label: design.statsShowLabels ? 'Посты' : null,
+              icon: design.statsShowIcons ? Icons.grid_on_rounded : null),
+          _buildStatItem(
+              count: userReels.length,
+              label: design.statsShowLabels ? 'Reels' : null,
+              icon: design.statsShowIcons
+                  ? Icons.play_circle_fill_rounded
+                  : null),
           GestureDetector(
             onTap: () => _openUsersModal(showFollowers: false),
-            child: _buildStatItem(count: followingsCount, label: design.statsShowLabels ? 'Подписки' : null, icon: design.statsShowIcons ? Icons.person_add_rounded : null),
+            child: _buildStatItem(
+                count: followingsCount,
+                label: design.statsShowLabels ? 'Подписки' : null,
+                icon: design.statsShowIcons ? Icons.person_add_rounded : null),
           ),
           GestureDetector(
             onTap: () => _openUsersModal(showFollowers: true),
-            child: _buildStatItem(count: followersCount, label: design.statsShowLabels ? 'Подписчики' : null, icon: design.statsShowIcons ? Icons.people_rounded : null),
+            child: _buildStatItem(
+                count: followersCount,
+                label: design.statsShowLabels ? 'Подписчики' : null,
+                icon: design.statsShowIcons ? Icons.people_rounded : null),
           ),
         ],
       ),
@@ -8927,16 +9667,21 @@ void initState() {
     if (design.statsCompactMode) {
       return Column(
         children: [
-          if (icon != null) Icon(icon, size: 20, color: design.textSecondaryColor),
+          if (icon != null)
+            Icon(icon, size: 20, color: design.textSecondaryColor),
           const SizedBox(height: 4),
-          Text(count.toString(), style: _headingStyle.copyWith(color: design.textPrimaryColor)),
+          Text(count.toString(),
+              style: _headingStyle.copyWith(color: design.textPrimaryColor)),
         ],
       );
     }
 
     return Column(
       children: [
-        Text(count.toString(), style: _headingStyle.copyWith(fontSize: design.headingFontSize * 1.2, color: design.primaryColor)),
+        Text(count.toString(),
+            style: _headingStyle.copyWith(
+                fontSize: design.headingFontSize * 1.2,
+                color: design.primaryColor)),
         const SizedBox(height: 4),
         if (label != null) Text(label, style: _smallStyle),
       ],
@@ -8946,14 +9691,18 @@ void initState() {
   Widget _buildActionsSection() {
     return Row(
       children: [
-        Expanded(child: _buildActionButton(
+        Expanded(
+            child: _buildActionButton(
           label: isFollowing ? 'Отписаться' : 'Подписаться',
-          icon: isFollowing ? Icons.person_remove_rounded : Icons.person_add_rounded,
+          icon: isFollowing
+              ? Icons.person_remove_rounded
+              : Icons.person_add_rounded,
           onTap: _toggleFollow,
           primary: !isFollowing,
         )),
         const SizedBox(width: 8),
-        Expanded(child: _buildActionButton(
+        Expanded(
+            child: _buildActionButton(
           label: 'Написать',
           icon: Icons.chat_rounded,
           onTap: _openPrivateChat,
@@ -8963,11 +9712,17 @@ void initState() {
     );
   }
 
-  Widget _buildActionButton({required String label, required IconData icon, required VoidCallback onTap, bool primary = true}) {
+  Widget _buildActionButton(
+      {required String label,
+      required IconData icon,
+      required VoidCallback onTap,
+      bool primary = true}) {
     final button = ElevatedButton.icon(
       onPressed: onTap,
       icon: Icon(icon, size: 18),
-      label: Text(label, style: TextStyle(fontWeight: FontWeight.w700, fontSize: design.bodyFontSize)),
+      label: Text(label,
+          style: TextStyle(
+              fontWeight: FontWeight.w700, fontSize: design.bodyFontSize)),
       style: ElevatedButton.styleFrom(
         backgroundColor: primary ? design.primaryColor : design.cardColor,
         foregroundColor: primary ? Colors.white : design.textPrimaryColor,
@@ -8975,7 +9730,9 @@ void initState() {
         padding: EdgeInsets.symmetric(vertical: 12),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(design.buttonRadius),
-          side: primary ? BorderSide.none : BorderSide(color: design.textTertiaryColor),
+          side: primary
+              ? BorderSide.none
+              : BorderSide(color: design.textTertiaryColor),
         ),
       ),
     );
@@ -8992,8 +9749,8 @@ void initState() {
       case 'team':
         return _buildTeamCard();
       case 'ai':
-  if (!isPlayer || !_enableSportotekaAi) return const SizedBox();
-  return _buildAiSection();
+        if (!isPlayer || !_enableSportotekaAi) return const SizedBox();
+        return _buildAiSection();
       case 'skills':
         if (!isPlayer) return const SizedBox();
         return _buildSkillsSection();
@@ -9020,12 +9777,18 @@ void initState() {
       decoration: BoxDecoration(
         color: design.cardColor,
         borderRadius: BorderRadius.circular(design.cardRadius),
-        boxShadow: design.cardShadowEnabled ? [BoxShadow(
-          color: Color(design.cardShadowColorValue).withOpacity(design.cardShadowOpacity),
-          blurRadius: design.cardShadowBlurRadius,
-          spreadRadius: design.cardShadowSpreadRadius,
-          offset: Offset(design.cardShadowOffsetX, design.cardShadowOffsetY),
-        )] : null,
+        boxShadow: design.cardShadowEnabled
+            ? [
+                BoxShadow(
+                  color: Color(design.cardShadowColorValue)
+                      .withOpacity(design.cardShadowOpacity),
+                  blurRadius: design.cardShadowBlurRadius,
+                  spreadRadius: design.cardShadowSpreadRadius,
+                  offset: Offset(
+                      design.cardShadowOffsetX, design.cardShadowOffsetY),
+                )
+              ]
+            : null,
       ),
       child: Row(
         children: [
@@ -9040,7 +9803,8 @@ void initState() {
             child: ClipOval(
               child: logo.isNotEmpty
                   ? Image.network(logo, fit: BoxFit.cover)
-                  : Icon(Icons.shield_outlined, color: design.primaryColor, size: 26),
+                  : Icon(Icons.shield_outlined,
+                      color: design.primaryColor, size: 26),
             ),
           ),
           const SizedBox(width: 12),
@@ -9050,14 +9814,19 @@ void initState() {
               children: [
                 Text(team.isNotEmpty ? team : "Команда", style: _headingStyle),
                 const SizedBox(height: 4),
-                Text(club.isNotEmpty ? "Клуб: $club" : "Клуб: —", style: _bodyStyle),
+                Text(club.isNotEmpty ? "Клуб: $club" : "Клуб: —",
+                    style: _bodyStyle),
               ],
             ),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(color: design.primaryColor, borderRadius: BorderRadius.circular(12)),
-            child: Text("Профи", style: _smallStyle.copyWith(color: Colors.white, fontWeight: FontWeight.w800)),
+            decoration: BoxDecoration(
+                color: design.primaryColor,
+                borderRadius: BorderRadius.circular(12)),
+            child: Text("Профи",
+                style: _smallStyle.copyWith(
+                    color: Colors.white, fontWeight: FontWeight.w800)),
           ),
         ],
       ),
@@ -9065,33 +9834,45 @@ void initState() {
   }
 
   Widget _buildAiSection() {
-  // ===== НОВЫЙ КОД =====
-  if (!_enableSportotekaAi) return const SizedBox();
-  
-  return _buildExpandableCard(
-    title: "Спортотека AI",
-    icon: Icons.auto_awesome_rounded,
-    expanded: _aiExpanded,
-    onToggle: () => setState(() => _aiExpanded = !_aiExpanded),
-    badge: const Text("BETA"),
-    child: Column(
-      children: [
-        Row(
-          children: [
-            Expanded(child: Text("Персонально для: $fullName", style: _smallStyle.copyWith(color: design.textSecondaryColor, fontWeight: FontWeight.w700))),
-            IconButton(onPressed: () => setState(() => _aiCardSeed = _rnd.nextInt(999999)), icon: Icon(Icons.refresh_rounded, color: design.textSecondaryColor)),
-          ],
-        ),
-        const SizedBox(height: 10),
-        _AiMatchIqCard(seed: _aiCardSeed, playerName: fullName, position: "ST", design: design),
-        const SizedBox(height: 10),
-        _AiTrainingScanCard(seed: _aiCardSeed, design: design),
-        const SizedBox(height: 10),
-        _AiWeeklyChallengeCard(seed: _aiCardSeed, design: design),
-      ],
-    ),
-  );
-}
+    // ===== НОВЫЙ КОД =====
+    if (!_enableSportotekaAi) return const SizedBox();
+
+    return _buildExpandableCard(
+      title: "Спортотека AI",
+      icon: Icons.auto_awesome_rounded,
+      expanded: _aiExpanded,
+      onToggle: () => setState(() => _aiExpanded = !_aiExpanded),
+      badge: const Text("BETA"),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                  child: Text("Персонально для: $fullName",
+                      style: _smallStyle.copyWith(
+                          color: design.textSecondaryColor,
+                          fontWeight: FontWeight.w700))),
+              IconButton(
+                  onPressed: () =>
+                      setState(() => _aiCardSeed = _rnd.nextInt(999999)),
+                  icon: Icon(Icons.refresh_rounded,
+                      color: design.textSecondaryColor)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _AiMatchIqCard(
+              seed: _aiCardSeed,
+              playerName: fullName,
+              position: "ST",
+              design: design),
+          const SizedBox(height: 10),
+          _AiTrainingScanCard(seed: _aiCardSeed, design: design),
+          const SizedBox(height: 10),
+          _AiWeeklyChallengeCard(seed: _aiCardSeed, design: design),
+        ],
+      ),
+    );
+  }
 
   Widget _buildSkillsSection() {
     return _buildExpandableCard(
@@ -9122,12 +9903,18 @@ void initState() {
       decoration: BoxDecoration(
         color: design.cardColor,
         borderRadius: BorderRadius.circular(design.cardRadius),
-        boxShadow: design.cardShadowEnabled ? [BoxShadow(
-          color: Color(design.cardShadowColorValue).withOpacity(design.cardShadowOpacity),
-          blurRadius: design.cardShadowBlurRadius,
-          spreadRadius: design.cardShadowSpreadRadius,
-          offset: Offset(design.cardShadowOffsetX, design.cardShadowOffsetY),
-        )] : null,
+        boxShadow: design.cardShadowEnabled
+            ? [
+                BoxShadow(
+                  color: Color(design.cardShadowColorValue)
+                      .withOpacity(design.cardShadowOpacity),
+                  blurRadius: design.cardShadowBlurRadius,
+                  spreadRadius: design.cardShadowSpreadRadius,
+                  offset: Offset(
+                      design.cardShadowOffsetX, design.cardShadowOffsetY),
+                )
+              ]
+            : null,
       ),
       child: Column(
         children: [
@@ -9141,7 +9928,9 @@ void initState() {
                   Container(
                     width: 44,
                     height: 44,
-                    decoration: BoxDecoration(color: design.primaryColor.withOpacity(0.10), borderRadius: BorderRadius.circular(14)),
+                    decoration: BoxDecoration(
+                        color: design.primaryColor.withOpacity(0.10),
+                        borderRadius: BorderRadius.circular(14)),
                     child: Icon(icon, color: design.primaryColor),
                   ),
                   const SizedBox(width: 12),
@@ -9165,7 +9954,8 @@ void initState() {
                   AnimatedRotation(
                     turns: expanded ? 0.5 : 0.0,
                     duration: const Duration(milliseconds: 220),
-                    child: Icon(Icons.keyboard_arrow_down_rounded, color: design.textSecondaryColor),
+                    child: Icon(Icons.keyboard_arrow_down_rounded,
+                        color: design.textSecondaryColor),
                   ),
                 ],
               ),
@@ -9174,10 +9964,12 @@ void initState() {
           AnimatedCrossFade(
             firstChild: const SizedBox(height: 0),
             secondChild: Padding(
-              padding: EdgeInsets.fromLTRB(design.contentPadding, 0, design.contentPadding, design.contentPadding),
+              padding: EdgeInsets.fromLTRB(design.contentPadding, 0,
+                  design.contentPadding, design.contentPadding),
               child: child,
             ),
-            crossFadeState: expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            crossFadeState:
+                expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
             duration: const Duration(milliseconds: 220),
           ),
         ],
@@ -9191,19 +9983,26 @@ void initState() {
       decoration: BoxDecoration(
         color: design.cardColor,
         borderRadius: BorderRadius.circular(design.cardRadius),
-        boxShadow: design.cardShadowEnabled ? [BoxShadow(
-          color: Color(design.cardShadowColorValue).withOpacity(design.cardShadowOpacity),
-          blurRadius: design.cardShadowBlurRadius,
-          spreadRadius: design.cardShadowSpreadRadius,
-          offset: Offset(design.cardShadowOffsetX, design.cardShadowOffsetY),
-        )] : null,
+        boxShadow: design.cardShadowEnabled
+            ? [
+                BoxShadow(
+                  color: Color(design.cardShadowColorValue)
+                      .withOpacity(design.cardShadowOpacity),
+                  blurRadius: design.cardShadowBlurRadius,
+                  spreadRadius: design.cardShadowSpreadRadius,
+                  offset: Offset(
+                      design.cardShadowOffsetX, design.cardShadowOffsetY),
+                )
+              ]
+            : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.info_outline_rounded, size: 18, color: design.primaryColor),
+              Icon(Icons.info_outline_rounded,
+                  size: 18, color: design.primaryColor),
               const SizedBox(width: 8),
               Text('О себе', style: _headingStyle),
             ],
@@ -9221,12 +10020,18 @@ void initState() {
       decoration: BoxDecoration(
         color: design.cardColor,
         borderRadius: BorderRadius.circular(design.cardRadius),
-        boxShadow: design.cardShadowEnabled ? [BoxShadow(
-          color: Color(design.cardShadowColorValue).withOpacity(design.cardShadowOpacity),
-          blurRadius: design.cardShadowBlurRadius,
-          spreadRadius: design.cardShadowSpreadRadius,
-          offset: Offset(design.cardShadowOffsetX, design.cardShadowOffsetY),
-        )] : null,
+        boxShadow: design.cardShadowEnabled
+            ? [
+                BoxShadow(
+                  color: Color(design.cardShadowColorValue)
+                      .withOpacity(design.cardShadowOpacity),
+                  blurRadius: design.cardShadowBlurRadius,
+                  spreadRadius: design.cardShadowSpreadRadius,
+                  offset: Offset(
+                      design.cardShadowOffsetX, design.cardShadowOffsetY),
+                )
+              ]
+            : null,
       ),
       child: Row(
         children: [
@@ -9287,9 +10092,7 @@ void initState() {
           decoration: BoxDecoration(
             border: Border(
               bottom: BorderSide(
-                color: active
-                    ? const Color(0xFF00A750)
-                    : Colors.transparent,
+                color: active ? const Color(0xFF00A750) : Colors.transparent,
                 width: 2.2,
               ),
             ),
@@ -9298,9 +10101,7 @@ void initState() {
             label,
             style: _flagshipText(
               10.9,
-              color: active
-                  ? const Color(0xFF111827)
-                  : const Color(0xFF98A2B3),
+              color: active ? const Color(0xFF111827) : const Color(0xFF98A2B3),
               weight: active ? FontWeight.w700 : FontWeight.w500,
             ),
           ),
@@ -9330,11 +10131,13 @@ void initState() {
 
   Widget _buildPostsGrid() {
     if (isLoadingPosts) {
-      return Center(child: CircularProgressIndicator(color: design.primaryColor));
+      return Center(
+          child: CircularProgressIndicator(color: design.primaryColor));
     }
 
     if (userPosts.isEmpty) {
-      return _buildEmptyState(icon: Icons.add_photo_alternate_outlined, message: 'Пока нет постов');
+      return _buildEmptyState(
+          icon: Icons.add_photo_alternate_outlined, message: 'Пока нет постов');
     }
 
     return GridView.builder(
@@ -9364,14 +10167,19 @@ void initState() {
                 else
                   Container(
                     color: design.surfaceColor,
-                    child: Center(child: Icon(Icons.article_outlined, size: 40, color: design.textTertiaryColor)),
+                    child: Center(
+                        child: Icon(Icons.article_outlined,
+                            size: 40, color: design.textTertiaryColor)),
                   ),
                 Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.bottomCenter,
                       end: Alignment.topCenter,
-                      colors: [Colors.black.withOpacity(0.30), Colors.transparent],
+                      colors: [
+                        Colors.black.withOpacity(0.30),
+                        Colors.transparent
+                      ],
                     ),
                   ),
                 ),
@@ -9380,8 +10188,11 @@ void initState() {
                   right: 8,
                   child: Container(
                     padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(color: Colors.black.withOpacity(0.50), borderRadius: BorderRadius.circular(6)),
-                    child: Icon(hasImage ? Icons.photo : Icons.article, size: 16, color: Colors.white),
+                    decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.50),
+                        borderRadius: BorderRadius.circular(6)),
+                    child: Icon(hasImage ? Icons.photo : Icons.article,
+                        size: 16, color: Colors.white),
                   ),
                 ),
                 if (isOwnProfile)
@@ -9390,7 +10201,9 @@ void initState() {
                     left: 8,
                     child: _buildDeleteMenuButton(onTap: () {
                       final postId = _toInt(post['id']);
-                      _openItemActionsSheet(title: "Пост", onDelete: () => _deletePostById(postId));
+                      _openItemActionsSheet(
+                          title: "Пост",
+                          onDelete: () => _deletePostById(postId));
                     }),
                   ),
               ],
@@ -9403,11 +10216,13 @@ void initState() {
 
   Widget _buildReelsGrid() {
     if (isLoadingReels) {
-      return Center(child: CircularProgressIndicator(color: design.primaryColor));
+      return Center(
+          child: CircularProgressIndicator(color: design.primaryColor));
     }
 
     if (userReels.isEmpty) {
-      return _buildEmptyState(icon: Icons.play_circle_outline, message: 'Пока нет Reels');
+      return _buildEmptyState(
+          icon: Icons.play_circle_outline, message: 'Пока нет Reels');
     }
 
     return GridView.builder(
@@ -9425,7 +10240,8 @@ void initState() {
 
         return GestureDetector(
           onTap: () async {
-            final viewedUserId = widget.userId ?? await PrefUtils.getUserId() ?? 0;
+            final viewedUserId =
+                widget.userId ?? await PrefUtils.getUserId() ?? 0;
             if (!mounted || viewedUserId <= 0) return;
 
             Navigator.push(
@@ -9458,7 +10274,10 @@ void initState() {
                   gradient: LinearGradient(
                     begin: Alignment.bottomCenter,
                     end: Alignment.topCenter,
-                    colors: [Colors.black.withOpacity(0.25), Colors.transparent],
+                    colors: [
+                      Colors.black.withOpacity(0.25),
+                      Colors.transparent
+                    ],
                   ),
                 ),
               ),
@@ -9467,8 +10286,11 @@ void initState() {
                 top: 8,
                 child: Container(
                   padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(color: Colors.black.withOpacity(0.55), borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 18),
+                  decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.55),
+                      borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(Icons.play_circle_fill_rounded,
+                      color: Colors.white, size: 18),
                 ),
               ),
               if (isOwnProfile)
@@ -9477,7 +10299,9 @@ void initState() {
                   top: 8,
                   child: _buildDeleteMenuButton(onTap: () {
                     final reelId = _toInt(reel['id']);
-                    _openItemActionsSheet(title: "Reels", onDelete: () => _deleteReelById(reelId));
+                    _openItemActionsSheet(
+                        title: "Reels",
+                        onDelete: () => _deleteReelById(reelId));
                   }),
                 ),
               Positioned(
@@ -9502,12 +10326,15 @@ void initState() {
     if (isLoadingFeed) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 28),
-        child: Center(child: CircularProgressIndicator(color: design.primaryColor)),
+        child: Center(
+            child: CircularProgressIndicator(color: design.primaryColor)),
       );
     }
 
     if (feedPosts.isEmpty) {
-      return _buildEmptyState(icon: Icons.public_rounded, message: 'В ленте профиля пока нет публикаций');
+      return _buildEmptyState(
+          icon: Icons.public_rounded,
+          message: 'В ленте профиля пока нет публикаций');
     }
 
     return Center(
@@ -9527,7 +10354,8 @@ void initState() {
                       color: const Color(0xFFF3F7F5),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.public_rounded, size: 17, color: Color(0xFF667085)),
+                    child: const Icon(Icons.public_rounded,
+                        size: 17, color: Color(0xFF667085)),
                   ),
                   const SizedBox(width: 10),
                   const Expanded(
@@ -9536,12 +10364,18 @@ void initState() {
                       children: [
                         Text(
                           'Лента профиля',
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Color(0xFF101828)),
+                          style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF101828)),
                         ),
                         SizedBox(height: 2),
                         Text(
                           'Публикации, которые добавил этот пользователь',
-                          style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: Color(0xFF98A2B3)),
+                          style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF98A2B3)),
                         ),
                       ],
                     ),
@@ -9550,7 +10384,8 @@ void initState() {
                     onPressed: () => _selectProfileWorkspaceSection('posts'),
                     style: TextButton.styleFrom(
                       foregroundColor: const Color(0xFF101828),
-                      textStyle: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800),
+                      textStyle: const TextStyle(
+                          fontSize: 10.5, fontWeight: FontWeight.w800),
                     ),
                     child: const Text('Сетка'),
                   ),
@@ -9572,8 +10407,11 @@ void initState() {
     final category = _safeStr(post['category']).trim();
     final title = _safeStr(post['title']).trim();
     final text = _safeStr(post['text']).trim();
-    final author = _safeStr(post['authorName']).trim().isNotEmpty ? _safeStr(post['authorName']).trim() : 'Сообщество';
-    final date = post['date'] is DateTime ? post['date'] as DateTime : DateTime.now();
+    final author = _safeStr(post['authorName']).trim().isNotEmpty
+        ? _safeStr(post['authorName']).trim()
+        : 'Сообщество';
+    final date =
+        post['date'] is DateTime ? post['date'] as DateTime : DateTime.now();
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
@@ -9587,7 +10425,8 @@ void initState() {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xFFE9ECEA).withOpacity(.55), width: .7),
+              border: Border.all(
+                  color: const Color(0xFFE9ECEA).withOpacity(.55), width: .7),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -9599,9 +10438,11 @@ void initState() {
                       CircleAvatar(
                         radius: 16,
                         backgroundColor: const Color(0xFFF3F7F5),
-                        backgroundImage: avatar.isNotEmpty ? NetworkImage(avatar) : null,
+                        backgroundImage:
+                            avatar.isNotEmpty ? NetworkImage(avatar) : null,
                         child: avatar.isEmpty
-                            ? const Icon(Icons.groups_2_outlined, size: 16, color: Color(0xFF667085))
+                            ? const Icon(Icons.groups_2_outlined,
+                                size: 16, color: Color(0xFF667085))
                             : null,
                       ),
                       const SizedBox(width: 9),
@@ -9613,19 +10454,28 @@ void initState() {
                               author,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: AppTypography.custom(size: 11.5, weight: FontWeight.w600, color: const Color(0xFF0B0F14), height: 1.18),
+                              style: AppTypography.custom(
+                                  size: 11.5,
+                                  weight: FontWeight.w600,
+                                  color: const Color(0xFF0B0F14),
+                                  height: 1.18),
                             ),
                             const SizedBox(height: 1),
                             Text(
                               '${category.isNotEmpty ? '$category • ' : ''}${_formatFeedDate(date)}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: AppTypography.custom(size: 10, weight: FontWeight.w400, color: const Color(0xFF8A9099), height: 1.30),
+                              style: AppTypography.custom(
+                                  size: 10,
+                                  weight: FontWeight.w400,
+                                  color: const Color(0xFF8A9099),
+                                  height: 1.30),
                             ),
                           ],
                         ),
                       ),
-                      const Icon(Icons.more_horiz_rounded, size: 18, color: Color(0xFF98A2B3)),
+                      const Icon(Icons.more_horiz_rounded,
+                          size: 18, color: Color(0xFF98A2B3)),
                     ],
                   ),
                 ),
@@ -9640,7 +10490,8 @@ void initState() {
                         errorBuilder: (_, __, ___) => Container(
                           color: const Color(0xFFF3F7F5),
                           alignment: Alignment.center,
-                          child: const Icon(Icons.image_not_supported_outlined, color: Color(0xFF98A2B3)),
+                          child: const Icon(Icons.image_not_supported_outlined,
+                              color: Color(0xFF98A2B3)),
                         ),
                       ),
                     ),
@@ -9655,7 +10506,11 @@ void initState() {
                           title,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: AppTypography.custom(size: 12.5, weight: FontWeight.w600, color: const Color(0xFF0B0F14), height: 1.25),
+                          style: AppTypography.custom(
+                              size: 12.5,
+                              weight: FontWeight.w600,
+                              color: const Color(0xFF0B0F14),
+                              height: 1.25),
                         ),
                       if (text.isNotEmpty) ...[
                         const SizedBox(height: 5),
@@ -9663,22 +10518,33 @@ void initState() {
                           text,
                           maxLines: 3,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 11, height: 1.35, fontWeight: FontWeight.w500, color: Color(0xFF475467)),
+                          style: const TextStyle(
+                              fontSize: 11,
+                              height: 1.35,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF475467)),
                         ),
                       ],
                       const SizedBox(height: 10),
                       Row(
                         children: [
-                          _buildCommunityNewsMeta(Icons.favorite_border_rounded, '${_safeInt(post['likes'])}'),
+                          _buildCommunityNewsMeta(Icons.favorite_border_rounded,
+                              '${_safeInt(post['likes'])}'),
                           const SizedBox(width: 12),
-                          _buildCommunityNewsMeta(Icons.chat_bubble_outline_rounded, '${_safeInt(post['comments'])}'),
+                          _buildCommunityNewsMeta(
+                              Icons.chat_bubble_outline_rounded,
+                              '${_safeInt(post['comments'])}'),
                           const Spacer(),
                           const Text(
                             'Открыть',
-                            style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900, color: Color(0xFF101828)),
+                            style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF101828)),
                           ),
                           const SizedBox(width: 4),
-                          const Icon(Icons.arrow_forward_ios_rounded, size: 10, color: Color(0xFF101828)),
+                          const Icon(Icons.arrow_forward_ios_rounded,
+                              size: 10, color: Color(0xFF101828)),
                         ],
                       ),
                     ],
@@ -9700,7 +10566,10 @@ void initState() {
         const SizedBox(width: 4),
         Text(
           value,
-          style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF667085)),
+          style: const TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF667085)),
         ),
       ],
     );
@@ -9723,7 +10592,9 @@ void initState() {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(color: Colors.black.withOpacity(0.50), borderRadius: BorderRadius.circular(10)),
+        decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.50),
+            borderRadius: BorderRadius.circular(10)),
         child: const Icon(Icons.more_horiz, size: 18, color: Colors.white),
       ),
     );
@@ -9732,8 +10603,12 @@ void initState() {
   Widget _buildMiniBadge(String text) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(color: Colors.black.withOpacity(0.55), borderRadius: BorderRadius.circular(999)),
-      child: Text(text, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 11)),
+      decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.55),
+          borderRadius: BorderRadius.circular(999)),
+      child: Text(text,
+          style: const TextStyle(
+              color: Colors.white, fontWeight: FontWeight.w800, fontSize: 11)),
     );
   }
 
@@ -9744,7 +10619,8 @@ void initState() {
         children: [
           Icon(icon, size: 64, color: design.textTertiaryColor),
           const SizedBox(height: 16),
-          Text(message, style: _bodyStyle.copyWith(color: design.textSecondaryColor)),
+          Text(message,
+              style: _bodyStyle.copyWith(color: design.textSecondaryColor)),
         ],
       ),
     );
@@ -9753,7 +10629,9 @@ void initState() {
   Widget _buildDefaultAvatar() {
     return Container(
       color: design.surfaceColor,
-      child: Center(child: Icon(Icons.person, size: design.avatarSize * 0.5, color: design.primaryColor)),
+      child: Center(
+          child: Icon(Icons.person,
+              size: design.avatarSize * 0.5, color: design.primaryColor)),
     );
   }
 }
@@ -9820,17 +10698,21 @@ class _ProfileFullModulesMenuOverlay extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Padding(
-                      padding: EdgeInsets.fromLTRB(compact ? 14 : 18, compact ? 13 : 16, compact ? 10 : 14, 10),
+                      padding: EdgeInsets.fromLTRB(compact ? 14 : 18,
+                          compact ? 13 : 16, compact ? 10 : 14, 10),
                       child: Row(
                         children: [
-                          _ProfileMenuAvatar(photoUrl: photoUrl, size: compact ? 38 : 44),
+                          _ProfileMenuAvatar(
+                              photoUrl: photoUrl, size: compact ? 38 : 44),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  title.trim().isEmpty ? 'Мой профиль' : title.trim(),
+                                  title.trim().isEmpty
+                                      ? 'Мой профиль'
+                                      : title.trim(),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: AppTypography.custom(
@@ -9843,7 +10725,9 @@ class _ProfileFullModulesMenuOverlay extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 5),
                                 Text(
-                                  subtitle.trim().isEmpty ? 'Sportoteka Workspace' : subtitle.trim(),
+                                  subtitle.trim().isEmpty
+                                      ? 'Sportoteka Workspace'
+                                      : subtitle.trim(),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: AppTypography.custom(
@@ -9858,16 +10742,20 @@ class _ProfileFullModulesMenuOverlay extends StatelessWidget {
                             ),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 7),
                             decoration: BoxDecoration(
                               color: const Color(0xFFF7F9F8),
                               borderRadius: BorderRadius.circular(999),
-                              border: Border.all(color: const Color(0xFFEFF2F5)),
+                              border:
+                                  Border.all(color: const Color(0xFFEFF2F5)),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.apps_rounded, color: const Color(0xFF344054), size: compact ? 16 : 17),
+                                Icon(Icons.apps_rounded,
+                                    color: const Color(0xFF344054),
+                                    size: compact ? 16 : 17),
                                 const SizedBox(width: 4),
                                 Text(
                                   '${actions.length} разделов',
@@ -9885,24 +10773,29 @@ class _ProfileFullModulesMenuOverlay extends StatelessWidget {
                           const SizedBox(width: 4),
                           IconButton(
                             onPressed: () => Navigator.of(context).pop(),
-                            icon: const Icon(Icons.close_rounded, color: Color(0xFF344054)),
+                            icon: const Icon(Icons.close_rounded,
+                                color: Color(0xFF344054)),
                             tooltip: 'Закрыть',
                           ),
                         ],
                       ),
                     ),
                     Padding(
-                      padding: EdgeInsets.symmetric(horizontal: compact ? 14 : 18),
-                      child: Container(height: 1, color: const Color(0xFFEFF2F5)),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: compact ? 14 : 18),
+                      child:
+                          Container(height: 1, color: const Color(0xFFEFF2F5)),
                     ),
                     Flexible(
                       child: Padding(
-                        padding: EdgeInsets.fromLTRB(compact ? 12 : 16, 14, compact ? 12 : 16, compact ? 12 : 16),
+                        padding: EdgeInsets.fromLTRB(compact ? 12 : 16, 14,
+                            compact ? 12 : 16, compact ? 12 : 16),
                         child: GridView.builder(
                           shrinkWrap: true,
                           physics: const BouncingScrollPhysics(),
                           itemCount: actions.length,
-                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: columns,
                             mainAxisSpacing: compact ? 8 : 10,
                             crossAxisSpacing: compact ? 6 : 8,
@@ -9920,9 +10813,11 @@ class _ProfileFullModulesMenuOverlay extends StatelessWidget {
                       ),
                     ),
                     Padding(
-                      padding: EdgeInsets.fromLTRB(compact ? 14 : 18, 0, compact ? 14 : 18, compact ? 12 : 14),
+                      padding: EdgeInsets.fromLTRB(compact ? 14 : 18, 0,
+                          compact ? 14 : 18, compact ? 12 : 14),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 9),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF7F9F8),
                           borderRadius: BorderRadius.circular(18),
@@ -9930,7 +10825,8 @@ class _ProfileFullModulesMenuOverlay extends StatelessWidget {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.search_rounded, color: Color(0xFF667085), size: 18),
+                            const Icon(Icons.search_rounded,
+                                color: Color(0xFF667085), size: 18),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
@@ -9983,7 +10879,8 @@ class _ProfileMenuAvatar extends StatelessWidget {
           : Image.network(
               image,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded, color: Color(0xFF344054), size: 21),
+              errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded,
+                  color: Color(0xFF344054), size: 21),
             ),
     );
   }
@@ -10044,7 +10941,9 @@ class _ProfileModuleMenuTile extends StatelessWidget {
                     child: Icon(
                       action.icon,
                       size: selected ? 25 : 23,
-                      color: danger ? const Color(0xFFD92D20) : const Color(0xFF344054),
+                      color: danger
+                          ? const Color(0xFFD92D20)
+                          : const Color(0xFF344054),
                     ),
                   ),
                   if (action.pro)
@@ -10059,7 +10958,8 @@ class _ProfileModuleMenuTile extends StatelessWidget {
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 1.5),
                         ),
-                        child: const Icon(Icons.lock_rounded, size: 9, color: Color(0xFFF05A18)),
+                        child: const Icon(Icons.lock_rounded,
+                            size: 9, color: Color(0xFFF05A18)),
                       ),
                     ),
                 ],
@@ -10074,7 +10974,9 @@ class _ProfileModuleMenuTile extends StatelessWidget {
                   style: AppTypography.custom(
                     size: 10.7,
                     weight: FontWeight.w500,
-                    color: danger ? const Color(0xFFD92D20) : const Color(0xFF172033),
+                    color: danger
+                        ? const Color(0xFFD92D20)
+                        : const Color(0xFF172033),
                     height: 1.08,
                     letterSpacing: 0,
                   ),
@@ -10099,7 +11001,6 @@ class _ProfileModuleMenuTile extends StatelessWidget {
   }
 }
 
-
 class _ProfilePeopleSearchPanel extends StatefulWidget {
   const _ProfilePeopleSearchPanel({
     required this.apiBase,
@@ -10112,7 +11013,8 @@ class _ProfilePeopleSearchPanel extends StatefulWidget {
   final ValueChanged<int> onOpenUser;
 
   @override
-  State<_ProfilePeopleSearchPanel> createState() => _ProfilePeopleSearchPanelState();
+  State<_ProfilePeopleSearchPanel> createState() =>
+      _ProfilePeopleSearchPanelState();
 }
 
 class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
@@ -10161,7 +11063,8 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
         },
       );
 
-      http.Response response = await http.get(uri).timeout(const Duration(seconds: 12));
+      http.Response response =
+          await http.get(uri).timeout(const Duration(seconds: 12));
       if (response.statusCode == 405) {
         response = await http.post(
           Uri.parse('${widget.apiBase}/search_users.php'),
@@ -10179,7 +11082,11 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
 
       final decoded = jsonDecode(utf8.decode(response.bodyBytes));
       final raw = _extractUsers(decoded);
-      final parsed = raw.map(_normalizeUser).where((e) => (e['id'] as int) > 0).where(_matchesFilter).toList();
+      final parsed = raw
+          .map(_normalizeUser)
+          .where((e) => (e['id'] as int) > 0)
+          .where(_matchesFilter)
+          .toList();
 
       if (!mounted) return;
       setState(() => _results = parsed);
@@ -10196,21 +11103,36 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
 
   List<Map<String, dynamic>> _extractUsers(dynamic data) {
     if (data is List) {
-      return data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      return data
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
     }
     if (data is Map) {
       final map = Map<String, dynamic>.from(data);
       for (final key in const ['users', 'data', 'results', 'items', 'list']) {
         final value = map[key];
         if (value is List) {
-          return value.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+          return value
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
         }
         if (value is Map) {
           final nested = Map<String, dynamic>.from(value);
-          for (final nestedKey in const ['users', 'data', 'results', 'items', 'list']) {
+          for (final nestedKey in const [
+            'users',
+            'data',
+            'results',
+            'items',
+            'list'
+          ]) {
             final nestedValue = nested[nestedKey];
             if (nestedValue is List) {
-              return nestedValue.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+              return nestedValue
+                  .whereType<Map>()
+                  .map((e) => Map<String, dynamic>.from(e))
+                  .toList();
             }
           }
         }
@@ -10220,19 +11142,30 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
   }
 
   Map<String, dynamic> _normalizeUser(Map<String, dynamic> raw) {
-    int asInt(dynamic value) => value is num ? value.toInt() : int.tryParse('${value ?? ''}') ?? 0;
+    int asInt(dynamic value) =>
+        value is num ? value.toInt() : int.tryParse('${value ?? ''}') ?? 0;
     String clean(dynamic value) {
       final v = '${value ?? ''}'.trim();
       return v.toLowerCase() == 'null' ? '' : v;
     }
 
-    final first = clean(raw['first_name'] ?? raw['firstname'] ?? raw['firstName']);
+    final first =
+        clean(raw['first_name'] ?? raw['firstname'] ?? raw['firstName']);
     final last = clean(raw['last_name'] ?? raw['lastname'] ?? raw['lastName']);
-    final fallbackName = clean(raw['full_name'] ?? raw['fullName'] ?? raw['name']);
-    final fullName = '$first $last'.trim().isNotEmpty ? '$first $last'.trim() : fallbackName;
-    var photo = clean(raw['photo_url'] ?? raw['avatar_url'] ?? raw['photoUrl'] ?? raw['photo'] ?? raw['avatar']);
-    if (photo.isNotEmpty && !photo.startsWith('http://') && !photo.startsWith('https://')) {
-      photo = 'https://sportotekaapp.ru/uploads/${photo.replaceFirst(RegExp(r'^/+'), '')}';
+    final fallbackName =
+        clean(raw['full_name'] ?? raw['fullName'] ?? raw['name']);
+    final fullName =
+        '$first $last'.trim().isNotEmpty ? '$first $last'.trim() : fallbackName;
+    var photo = clean(raw['photo_url'] ??
+        raw['avatar_url'] ??
+        raw['photoUrl'] ??
+        raw['photo'] ??
+        raw['avatar']);
+    if (photo.isNotEmpty &&
+        !photo.startsWith('http://') &&
+        !photo.startsWith('https://')) {
+      photo =
+          'https://sportotekaapp.ru/uploads/${photo.replaceFirst(RegExp(r'^/+'), '')}';
     }
 
     return <String, dynamic>{
@@ -10249,19 +11182,25 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
     if (_filter == 'all') return true;
     final role = '${user['role'] ?? ''}'.toLowerCase();
     if (role.trim().isEmpty) return true;
-    if (_filter == 'player') return role.contains('player') || role.contains('игрок');
+    if (_filter == 'player')
+      return role.contains('player') || role.contains('игрок');
     if (_filter == 'coach') {
-      return role.contains('coach') || role.contains('trainer') || role.contains('тренер');
+      return role.contains('coach') ||
+          role.contains('trainer') ||
+          role.contains('тренер');
     }
     return true;
   }
 
   String _roleLabel(String role) {
     final value = role.toLowerCase();
-    if (value.contains('coach') || value.contains('trainer') || value.contains('тренер')) return 'Тренер';
+    if (value.contains('coach') ||
+        value.contains('trainer') ||
+        value.contains('тренер')) return 'Тренер';
     if (value.contains('player') || value.contains('игрок')) return 'Игрок';
     if (value.contains('club') || value.contains('клуб')) return 'Клуб';
-    if (value.contains('parent') || value.contains('родител')) return 'Родитель';
+    if (value.contains('parent') || value.contains('родител'))
+      return 'Родитель';
     return role.trim().isEmpty ? 'Пользователь' : role.trim();
   }
 
@@ -10282,7 +11221,8 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.search_rounded, size: 20, color: Color(0xFF667085)),
+                const Icon(Icons.search_rounded,
+                    size: 20, color: Color(0xFF667085)),
                 const SizedBox(width: 8),
                 Expanded(
                   child: TextField(
@@ -10294,9 +11234,15 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
                       isDense: true,
                       border: InputBorder.none,
                       hintText: 'Имя игрока, тренера или пользователя',
-                      hintStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF98A2B3)),
+                      hintStyle: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF98A2B3)),
                     ),
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF111827)),
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF111827)),
                   ),
                 ),
                 if (_controller.text.isNotEmpty)
@@ -10359,10 +11305,13 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
 
   Widget _buildBody() {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator(color: Color(0xFF00A750), strokeWidth: 2.2));
+      return const Center(
+          child: CircularProgressIndicator(
+              color: Color(0xFF00A750), strokeWidth: 2.2));
     }
     if (_error != null) {
-      return _emptyState(Icons.cloud_off_outlined, 'Поиск временно недоступен', _error!);
+      return _emptyState(
+          Icons.cloud_off_outlined, 'Поиск временно недоступен', _error!);
     }
     if (_controller.text.trim().length < 2) {
       return _emptyState(
@@ -10372,7 +11321,8 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
       );
     }
     if (_results.isEmpty) {
-      return _emptyState(Icons.search_off_rounded, 'Ничего не найдено', 'Попробуйте другое имя или переключите категорию.');
+      return _emptyState(Icons.search_off_rounded, 'Ничего не найдено',
+          'Попробуйте другое имя или переключите категорию.');
     }
 
     return ListView.separated(
@@ -10384,7 +11334,8 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
         final photo = '${user['photo'] ?? ''}'.trim();
         final team = '${user['team'] ?? ''}'.trim();
         final club = '${user['club'] ?? ''}'.trim();
-        final contextLine = [if (club.isNotEmpty) club, if (team.isNotEmpty) team].join(' · ');
+        final contextLine =
+            [if (club.isNotEmpty) club, if (team.isNotEmpty) team].join(' · ');
         return Material(
           color: const Color(0xFFF8F9FA),
           borderRadius: BorderRadius.circular(14),
@@ -10398,11 +11349,16 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
                   CircleAvatar(
                     radius: 22,
                     backgroundColor: const Color(0xFFF1FBF6),
-                    backgroundImage: photo.isNotEmpty ? NetworkImage(photo) : null,
+                    backgroundImage:
+                        photo.isNotEmpty ? NetworkImage(photo) : null,
                     child: photo.isEmpty
                         ? Text(
-                            '${user['name'] ?? 'П'}'.substring(0, 1).toUpperCase(),
-                            style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF067A46)),
+                            '${user['name'] ?? 'П'}'
+                                .substring(0, 1)
+                                .toUpperCase(),
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF067A46)),
                           )
                         : null,
                   ),
@@ -10415,19 +11371,29 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
                           '${user['name']}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
+                          style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF111827)),
                         ),
                         const SizedBox(height: 3),
                         Text(
-                          [_roleLabel('${user['role'] ?? ''}'), if (contextLine.isNotEmpty) contextLine].join(' · '),
+                          [
+                            _roleLabel('${user['role'] ?? ''}'),
+                            if (contextLine.isNotEmpty) contextLine
+                          ].join(' · '),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 10.3, fontWeight: FontWeight.w500, color: Color(0xFF667085)),
+                          style: const TextStyle(
+                              fontSize: 10.3,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF667085)),
                         ),
                       ],
                     ),
                   ),
-                  const Icon(Icons.chevron_right_rounded, color: Color(0xFF98A2B3), size: 20),
+                  const Icon(Icons.chevron_right_rounded,
+                      color: Color(0xFF98A2B3), size: 20),
                 ],
               ),
             ),
@@ -10454,9 +11420,20 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
               child: Icon(icon, color: const Color(0xFF067A46), size: 29),
             ),
             const SizedBox(height: 14),
-            Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+            Text(title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF111827))),
             const SizedBox(height: 6),
-            Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11.3, height: 1.4, fontWeight: FontWeight.w500, color: Color(0xFF667085))),
+            Text(subtitle,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontSize: 11.3,
+                    height: 1.4,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF667085))),
           ],
         ),
       ),
@@ -10504,12 +11481,25 @@ class _ProfileComingSoonPanel extends StatelessWidget {
               const SizedBox(height: 16),
               const Text(
                 'РАЗДЕЛ ДОПОЛНЯЕТСЯ',
-                style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, letterSpacing: .65, color: Color(0xFF00A750)),
+                style: TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: .65,
+                    color: Color(0xFF00A750)),
               ),
               const SizedBox(height: 7),
-              Text(title, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+              Text(title,
+                  style: const TextStyle(
+                      fontSize: 21,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF111827))),
               const SizedBox(height: 8),
-              Text(description, style: const TextStyle(fontSize: 12, height: 1.48, fontWeight: FontWeight.w500, color: Color(0xFF667085))),
+              Text(description,
+                  style: const TextStyle(
+                      fontSize: 12,
+                      height: 1.48,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF667085))),
               const SizedBox(height: 18),
               ...features.map(
                 (feature) => Padding(
@@ -10519,11 +11509,18 @@ class _ProfileComingSoonPanel extends StatelessWidget {
                       Container(
                         width: 22,
                         height: 22,
-                        decoration: const BoxDecoration(color: Color(0xFFF3FAF6), shape: BoxShape.circle),
-                        child: const Icon(Icons.check_rounded, size: 13, color: Color(0xFF067A46)),
+                        decoration: const BoxDecoration(
+                            color: Color(0xFFF3FAF6), shape: BoxShape.circle),
+                        child: const Icon(Icons.check_rounded,
+                            size: 13, color: Color(0xFF067A46)),
                       ),
                       const SizedBox(width: 9),
-                      Expanded(child: Text(feature, style: const TextStyle(fontSize: 11.3, fontWeight: FontWeight.w600, color: Color(0xFF344054)))),
+                      Expanded(
+                          child: Text(feature,
+                              style: const TextStyle(
+                                  fontSize: 11.3,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF344054)))),
                     ],
                   ),
                 ),
@@ -10684,10 +11681,8 @@ class _UserShort {
   factory _UserShort.fromJson(dynamic json) {
     final m = (json as Map).cast<String, dynamic>();
 
-    final first =
-        (m['first_name'] ?? m['firstName'] ?? '').toString().trim();
-    final last =
-        (m['last_name'] ?? m['lastName'] ?? '').toString().trim();
+    final first = (m['first_name'] ?? m['firstName'] ?? '').toString().trim();
+    final last = (m['last_name'] ?? m['lastName'] ?? '').toString().trim();
 
     String? normalize(dynamic raw) {
       if (raw == null) return null;
@@ -10707,8 +11702,7 @@ class _UserShort {
       return value;
     }
 
-    final photo =
-        normalize(m['photo_url']) ??
+    final photo = normalize(m['photo_url']) ??
         normalize(m['photo_urls']) ??
         normalize(m['photo']);
 
@@ -10720,26 +11714,18 @@ class _UserShort {
           : int.tryParse(
               (m['id'] ?? m['user_id'] ?? '').toString(),
             ),
-      fullName: name.isEmpty
-          ? optional(m['full_name']) ?? 'Пользователь'
-          : name,
+      fullName:
+          name.isEmpty ? optional(m['full_name']) ?? 'Пользователь' : name,
       username: optional(
-        m['username'] ??
-            m['user_name'] ??
-            m['nickname'] ??
-            m['login'],
+        m['username'] ?? m['user_name'] ?? m['nickname'] ?? m['login'],
       ),
       role: optional(m['role']),
       photoUrl: photo,
       teamName: optional(
-        m['team_name'] ??
-            m['player_team_name'] ??
-            m['team'],
+        m['team_name'] ?? m['player_team_name'] ?? m['team'],
       ),
       clubName: optional(
-        m['club_name'] ??
-            m['player_club_name'] ??
-            m['club'],
+        m['club_name'] ?? m['player_club_name'] ?? m['club'],
       ),
     );
   }
@@ -10749,7 +11735,8 @@ class _AiBullet {
   final IconData icon;
   final String title;
   final String text;
-  const _AiBullet({required this.icon, required this.title, required this.text});
+  const _AiBullet(
+      {required this.icon, required this.title, required this.text});
 }
 
 class _AiBulletTile extends StatelessWidget {
@@ -10774,7 +11761,8 @@ class _AiBulletTile extends StatelessWidget {
             decoration: BoxDecoration(
               color: ProfilePalette.primaryGreen.withOpacity(0.10),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: ProfilePalette.primaryGreen.withOpacity(0.22)),
+              border: Border.all(
+                  color: ProfilePalette.primaryGreen.withOpacity(0.22)),
             ),
             child: Icon(bullet.icon, color: ProfilePalette.primaryGreen),
           ),
@@ -10783,9 +11771,18 @@ class _AiBulletTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(bullet.title, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w900, color: Colors.black)),
+                Text(bullet.title,
+                    style: const TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.black)),
                 const SizedBox(height: 4),
-                Text(bullet.text, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black.withOpacity(0.62), height: 1.15)),
+                Text(bullet.text,
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black.withOpacity(0.62),
+                        height: 1.15)),
               ],
             ),
           ),
@@ -10801,7 +11798,11 @@ class _AiMatchIqCard extends StatelessWidget {
   final String position;
   final ProfileDesign design;
 
-  const _AiMatchIqCard({required this.seed, required this.playerName, required this.position, required this.design});
+  const _AiMatchIqCard(
+      {required this.seed,
+      required this.playerName,
+      required this.position,
+      required this.design});
 
   @override
   Widget build(BuildContext context) {
@@ -10819,24 +11820,37 @@ class _AiMatchIqCard extends StatelessWidget {
               Container(
                 width: 44,
                 height: 44,
-                decoration: BoxDecoration(color: design.primaryColor.withOpacity(0.10), borderRadius: BorderRadius.circular(12)),
-                child: Icon(Icons.psychology_alt_rounded, color: design.primaryColor),
+                decoration: BoxDecoration(
+                    color: design.primaryColor.withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(12)),
+                child: Icon(Icons.psychology_alt_rounded,
+                    color: design.primaryColor),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("Match IQ • Совет на сегодня", style: TextStyle(fontSize: design.bodyFontSize, fontWeight: FontWeight.w900, color: design.textPrimaryColor)),
+                    Text("Match IQ • Совет на сегодня",
+                        style: TextStyle(
+                            fontSize: design.bodyFontSize,
+                            fontWeight: FontWeight.w900,
+                            color: design.textPrimaryColor)),
                     const SizedBox(height: 2),
-                    Text("Персонально для позиции: $position", style: TextStyle(fontSize: design.smallFontSize, color: design.textSecondaryColor)),
+                    Text("Персонально для позиции: $position",
+                        style: TextStyle(
+                            fontSize: design.smallFontSize,
+                            color: design.textSecondaryColor)),
                   ],
                 ),
               ),
             ],
           ),
           const SizedBox(height: 10),
-          Text("Играй в 2 касания и чаще открывайся в полуфланг.", style: TextStyle(fontSize: design.bodyFontSize, color: design.textPrimaryColor)),
+          Text("Играй в 2 касания и чаще открывайся в полуфланг.",
+              style: TextStyle(
+                  fontSize: design.bodyFontSize,
+                  color: design.textPrimaryColor)),
         ],
       ),
     );
@@ -10853,15 +11867,18 @@ class _AiTrainingScanCard extends StatefulWidget {
   State<_AiTrainingScanCard> createState() => _AiTrainingScanCardState();
 }
 
-class _AiTrainingScanCardState extends State<_AiTrainingScanCard> with SingleTickerProviderStateMixin {
+class _AiTrainingScanCardState extends State<_AiTrainingScanCard>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _progress;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1900));
-    _progress = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
+    _controller = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1900));
+    _progress =
+        CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
     _controller.forward(from: 0);
   }
 
@@ -10883,7 +11900,8 @@ class _AiTrainingScanCardState extends State<_AiTrainingScanCard> with SingleTic
           decoration: BoxDecoration(
             color: widget.design.cardColor,
             borderRadius: BorderRadius.circular(widget.design.cardRadius),
-            border: Border.all(color: widget.design.primaryColor.withOpacity(0.1)),
+            border:
+                Border.all(color: widget.design.primaryColor.withOpacity(0.1)),
           ),
           child: Column(
             children: [
@@ -10892,19 +11910,30 @@ class _AiTrainingScanCardState extends State<_AiTrainingScanCard> with SingleTic
                   Container(
                     width: 44,
                     height: 44,
-                    decoration: BoxDecoration(color: widget.design.primaryColor.withOpacity(0.10), borderRadius: BorderRadius.circular(12)),
-                    child: Icon(Icons.auto_awesome_rounded, color: widget.design.primaryColor),
+                    decoration: BoxDecoration(
+                        color: widget.design.primaryColor.withOpacity(0.10),
+                        borderRadius: BorderRadius.circular(12)),
+                    child: Icon(Icons.auto_awesome_rounded,
+                        color: widget.design.primaryColor),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("AI-анализ тренировки", style: TextStyle(fontSize: widget.design.bodyFontSize, fontWeight: FontWeight.w900, color: widget.design.textPrimaryColor)),
+                        Text("AI-анализ тренировки",
+                            style: TextStyle(
+                                fontSize: widget.design.bodyFontSize,
+                                fontWeight: FontWeight.w900,
+                                color: widget.design.textPrimaryColor)),
                         const SizedBox(height: 2),
                         Text(
-                          p < 0.999 ? "Сканируем упражнения… ${(p * 100).clamp(0, 100).toInt()}%" : "Готово • Отчёт сформирован",
-                          style: TextStyle(fontSize: widget.design.smallFontSize, color: widget.design.textSecondaryColor),
+                          p < 0.999
+                              ? "Сканируем упражнения… ${(p * 100).clamp(0, 100).toInt()}%"
+                              : "Готово • Отчёт сформирован",
+                          style: TextStyle(
+                              fontSize: widget.design.smallFontSize,
+                              color: widget.design.textSecondaryColor),
                         ),
                       ],
                     ),
@@ -10918,7 +11947,8 @@ class _AiTrainingScanCardState extends State<_AiTrainingScanCard> with SingleTic
                   value: p.clamp(0, 1),
                   minHeight: 8,
                   backgroundColor: widget.design.surfaceColor,
-                  valueColor: AlwaysStoppedAnimation(widget.design.primaryColor),
+                  valueColor:
+                      AlwaysStoppedAnimation(widget.design.primaryColor),
                 ),
               ),
             ],
@@ -10949,7 +11979,9 @@ class _AiWeeklyChallengeCard extends StatelessWidget {
           Container(
             width: 44,
             height: 44,
-            decoration: BoxDecoration(color: design.accentColor.withOpacity(0.10), borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(
+                color: design.accentColor.withOpacity(0.10),
+                borderRadius: BorderRadius.circular(12)),
             child: Icon(Icons.emoji_events_rounded, color: design.accentColor),
           ),
           const SizedBox(width: 12),
@@ -10957,9 +11989,17 @@ class _AiWeeklyChallengeCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text("Челлендж недели", style: TextStyle(fontSize: design.bodyFontSize, fontWeight: FontWeight.w900, color: design.textPrimaryColor)),
+                Text("Челлендж недели",
+                    style: TextStyle(
+                        fontSize: design.bodyFontSize,
+                        fontWeight: FontWeight.w900,
+                        color: design.textPrimaryColor)),
                 const SizedBox(height: 4),
-                Text("20 точных передач", style: TextStyle(fontSize: design.smallFontSize, color: design.accentColor, fontWeight: FontWeight.w700)),
+                Text("20 точных передач",
+                    style: TextStyle(
+                        fontSize: design.smallFontSize,
+                        color: design.accentColor,
+                        fontWeight: FontWeight.w700)),
               ],
             ),
           ),
@@ -10978,14 +12018,16 @@ class _HoverAnimation extends StatefulWidget {
   State<_HoverAnimation> createState() => _HoverAnimationState();
 }
 
-class _HoverAnimationState extends State<_HoverAnimation> with SingleTickerProviderStateMixin {
+class _HoverAnimationState extends State<_HoverAnimation>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   bool _isHovered = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
+    _controller = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 200));
   }
 
   @override
@@ -11008,7 +12050,8 @@ class _HoverAnimationState extends State<_HoverAnimation> with SingleTickerProvi
       child: AnimatedBuilder(
         animation: _controller,
         builder: (context, child) {
-          return Transform.scale(scale: 1.0 + (_controller.value * 0.05), child: child);
+          return Transform.scale(
+              scale: 1.0 + (_controller.value * 0.05), child: child);
         },
         child: widget.child,
       ),
@@ -11029,52 +12072,56 @@ class _DesignEditorModal extends StatefulWidget {
 class _DesignEditorModalState extends State<_DesignEditorModal> {
   late ProfileDesign design;
   int _selectedTab = 0;
-  
-  
 
   final List<Color> colorPresets = [
-  // Яркие спортивные
-  const Color(0xFF00A750),
-  const Color(0xFF008C40),
-  const Color(0xFF2563EB),
-  const Color(0xFF1D4ED8),
-  const Color(0xFF7C3AED),
-  const Color(0xFF9333EA),
-  const Color(0xFFDC2626),
-  const Color(0xFFEF4444),
-  const Color(0xFFF59E0B),
-  const Color(0xFFEAB308),
+    // Яркие спортивные
+    const Color(0xFF00A750),
+    const Color(0xFF008C40),
+    const Color(0xFF2563EB),
+    const Color(0xFF1D4ED8),
+    const Color(0xFF7C3AED),
+    const Color(0xFF9333EA),
+    const Color(0xFFDC2626),
+    const Color(0xFFEF4444),
+    const Color(0xFFF59E0B),
+    const Color(0xFFEAB308),
 
-  // Мягкие пастельные
-  const Color(0xFFB8E1DD),
-  const Color(0xFFC7D2FE),
-  const Color(0xFFD8B4FE),
-  const Color(0xFFFBCFE8),
-  const Color(0xFFFDE68A),
-  const Color(0xFFBFDBFE),
-  const Color(0xFFA7F3D0),
-  const Color(0xFFF5D0FE),
-  const Color(0xFFFFE4E6),
-  const Color(0xFFE2E8F0),
+    // Мягкие пастельные
+    const Color(0xFFB8E1DD),
+    const Color(0xFFC7D2FE),
+    const Color(0xFFD8B4FE),
+    const Color(0xFFFBCFE8),
+    const Color(0xFFFDE68A),
+    const Color(0xFFBFDBFE),
+    const Color(0xFFA7F3D0),
+    const Color(0xFFF5D0FE),
+    const Color(0xFFFFE4E6),
+    const Color(0xFFE2E8F0),
 
-  // Премиум тёмные
-  const Color(0xFF0F172A),
-  const Color(0xFF1E293B),
-  const Color(0xFF334155),
-  const Color(0xFF475569),
-  const Color(0xFF64748B),
-  const Color(0xFF94A3B8),
+    // Премиум тёмные
+    const Color(0xFF0F172A),
+    const Color(0xFF1E293B),
+    const Color(0xFF334155),
+    const Color(0xFF475569),
+    const Color(0xFF64748B),
+    const Color(0xFF94A3B8),
 
-  // Светлые фоны
-  const Color(0xFFF8F9FA),
-  const Color(0xFFF1F5F9),
-  const Color(0xFFFAFAF9),
-  const Color(0xFFFDF2F8),
-  const Color(0xFFECFDF5),
-  const Color(0xFFEFF6FF),
-  const Color(0xFFFFFFFF),
-];
-  final List<String> fontFamilies = ['default', 'inter', 'montserrat', 'roboto', 'poppins'];
+    // Светлые фоны
+    const Color(0xFFF8F9FA),
+    const Color(0xFFF1F5F9),
+    const Color(0xFFFAFAF9),
+    const Color(0xFFFDF2F8),
+    const Color(0xFFECFDF5),
+    const Color(0xFFEFF6FF),
+    const Color(0xFFFFFFFF),
+  ];
+  final List<String> fontFamilies = [
+    'default',
+    'inter',
+    'montserrat',
+    'roboto',
+    'poppins'
+  ];
 
   @override
   void initState() {
@@ -11096,62 +12143,69 @@ class _DesignEditorModalState extends State<_DesignEditorModal> {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                Expanded(child: Text('Настройка профиля', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: design.textPrimaryColor))),
-                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                Expanded(
+                    child: Text('Настройка профиля',
+                        style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                            color: design.textPrimaryColor))),
+                IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context)),
               ],
             ),
           ),
           Container(
-  height: 50,
-  padding: const EdgeInsets.symmetric(horizontal: 16),
-  child: ListView(
-    scrollDirection: Axis.horizontal,
-    children: [
-      _buildTab('Цвета', 0),
-      _buildTab('Текст', 1),
-      _buildTab('Размеры', 2),
-      _buildTab('Тени', 3),
-      _buildTab('Блоки', 4),
-    ],
-  ),
-),
-
-Container(
-  margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-  padding: const EdgeInsets.all(16),
-  decoration: BoxDecoration(
-    color: design.backgroundColor,
-    borderRadius: BorderRadius.circular(20),
-    border: Border.all(color: Colors.grey.shade200),
-  ),
-  child: _buildLivePreview(),
-),
-
-const Divider(height: 1),
-
-Expanded(
-  child: ListView(
-    padding: const EdgeInsets.all(16),
-    children: [
-      if (_selectedTab == 0) _buildColorsTab(),
-      if (_selectedTab == 1) _buildTextTab(),
-      if (_selectedTab == 2) _buildSizesTab(),
-      if (_selectedTab == 3) _buildShadowsTab(),
-      if (_selectedTab == 4) _buildBlocksTab(),
-    ],
-  ),
-),
+            height: 50,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                _buildTab('Цвета', 0),
+                _buildTab('Текст', 1),
+                _buildTab('Размеры', 2),
+                _buildTab('Тени', 3),
+                _buildTab('Блоки', 4),
+              ],
+            ),
+          ),
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: design.backgroundColor,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: _buildLivePreview(),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                if (_selectedTab == 0) _buildColorsTab(),
+                if (_selectedTab == 1) _buildTextTab(),
+                if (_selectedTab == 2) _buildSizesTab(),
+                if (_selectedTab == 3) _buildShadowsTab(),
+                if (_selectedTab == 4) _buildBlocksTab(),
+              ],
+            ),
+          ),
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.grey.shade200))),
+            decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: Colors.grey.shade200))),
             child: Row(
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => setState(() => design = ProfileDesign.defaults()),
+                    onPressed: () =>
+                        setState(() => design = ProfileDesign.defaults()),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
                     ),
                     child: const Text('Сбросить'),
                   ),
@@ -11166,9 +12220,11 @@ Expanded(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: design.primaryColor,
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: const Text('Сохранить', style: TextStyle(color: Colors.white)),
+                    child: const Text('Сохранить',
+                        style: TextStyle(color: Colors.white)),
                   ),
                 ),
               ],
@@ -11178,139 +12234,155 @@ Expanded(
       ),
     );
   }
-Widget _buildLivePreview() {
-  return Container(
-    padding: EdgeInsets.all(design.contentPadding),
-    decoration: BoxDecoration(
-      color: design.cardColor,
-      borderRadius: BorderRadius.circular(design.cardRadius),
-      boxShadow: design.cardShadowEnabled
-          ? [
-              BoxShadow(
-                color: Color(design.cardShadowColorValue)
-                    .withOpacity(design.cardShadowOpacity),
-                blurRadius: design.cardShadowBlurRadius,
-                spreadRadius: design.cardShadowSpreadRadius,
-                offset: Offset(
-                  design.cardShadowOffsetX,
-                  design.cardShadowOffsetY,
-                ),
-              ),
-            ]
-          : null,
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: design.avatarSize * 0.55,
-              height: design.avatarSize * 0.55,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: design.surfaceColor,
-                border: Border.all(
-                  color: Color(design.avatarBorderColorValue),
-                  width: design.avatarBorderWidth,
-                ),
-                boxShadow: design.avatarShadowEnabled
-                    ? [
-                        BoxShadow(
-                          color: Color(design.avatarShadowColorValue)
-                              .withOpacity(design.avatarShadowOpacity),
-                          blurRadius: design.avatarShadowBlurRadius,
-                          spreadRadius: design.avatarShadowSpreadRadius,
-                          offset: Offset(
-                            design.avatarShadowOffsetX,
-                            design.avatarShadowOffsetY,
-                          ),
-                        ),
-                      ]
-                    : null,
-              ),
-              child: Icon(
-                Icons.person,
-                color: design.primaryColor,
-                size: design.avatarSize * 0.25,
-              ),
-            ),
-            SizedBox(width: design.spacing),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Спортотека',
-                    style: TextStyle(
-                      fontSize: design.titleFontSize,
-                      fontWeight: design.titleWeight,
-                      color: design.textPrimaryColor,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+
+  Widget _buildLivePreview() {
+    return Container(
+      padding: EdgeInsets.all(design.contentPadding),
+      decoration: BoxDecoration(
+        color: design.cardColor,
+        borderRadius: BorderRadius.circular(design.cardRadius),
+        boxShadow: design.cardShadowEnabled
+            ? [
+                BoxShadow(
+                  color: Color(design.cardShadowColorValue)
+                      .withOpacity(design.cardShadowOpacity),
+                  blurRadius: design.cardShadowBlurRadius,
+                  spreadRadius: design.cardShadowSpreadRadius,
+                  offset: Offset(
+                    design.cardShadowOffsetX,
+                    design.cardShadowOffsetY,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Игрок • Центральный полузащитник',
-                    style: TextStyle(
-                      fontSize: design.smallFontSize,
-                      fontWeight: design.bodyWeight,
-                      color: design.textSecondaryColor,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: design.spacing),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _previewStat('24', 'Посты'),
-            _previewStat('8', 'Reels'),
-            _previewStat('153', 'Подписчики'),
-          ],
-        ),
-        SizedBox(height: design.spacing),
-        Container(
-          width: double.infinity,
-          padding: EdgeInsets.all(design.contentPadding),
-          decoration: BoxDecoration(
-            color: design.surfaceColor,
-            borderRadius: BorderRadius.circular(design.cardRadius),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+                ),
+              ]
+            : null,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Text(
-                'О себе',
-                style: TextStyle(
-                  fontSize: design.headingFontSize,
-                  fontWeight: design.headingWeight,
-                  color: design.textPrimaryColor,
+              Container(
+                width: design.avatarSize * 0.55,
+                height: design.avatarSize * 0.55,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: design.surfaceColor,
+                  border: Border.all(
+                    color: Color(design.avatarBorderColorValue),
+                    width: design.avatarBorderWidth,
+                  ),
+                  boxShadow: design.avatarShadowEnabled
+                      ? [
+                          BoxShadow(
+                            color: Color(design.avatarShadowColorValue)
+                                .withOpacity(design.avatarShadowOpacity),
+                            blurRadius: design.avatarShadowBlurRadius,
+                            spreadRadius: design.avatarShadowSpreadRadius,
+                            offset: Offset(
+                              design.avatarShadowOffsetX,
+                              design.avatarShadowOffsetY,
+                            ),
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Icon(
+                  Icons.person,
+                  color: design.primaryColor,
+                  size: design.avatarSize * 0.25,
                 ),
               ),
-              const SizedBox(height: 6),
-              Text(
-                'Футболист, тренируюсь каждый день и развиваю свой профиль в Спортотеке.',
-                style: TextStyle(
-                  fontSize: design.bodyFontSize,
-                  fontWeight: design.bodyWeight,
-                  color: design.textSecondaryColor,
-                  height: 1.35,
+              SizedBox(width: design.spacing),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Спортотека',
+                      style: TextStyle(
+                        fontSize: design.titleFontSize,
+                        fontWeight: design.titleWeight,
+                        color: design.textPrimaryColor,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Игрок • Центральный полузащитник',
+                      style: TextStyle(
+                        fontSize: design.smallFontSize,
+                        fontWeight: design.bodyWeight,
+                        color: design.textSecondaryColor,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-        ),
-      ],
-    ),
-  );
-}
-Widget _previewStat(String value, String label) {
-  if (design.statsCompactMode) {
+          SizedBox(height: design.spacing),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _previewStat('24', 'Посты'),
+              _previewStat('8', 'Reels'),
+              _previewStat('153', 'Подписчики'),
+            ],
+          ),
+          SizedBox(height: design.spacing),
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(design.contentPadding),
+            decoration: BoxDecoration(
+              color: design.surfaceColor,
+              borderRadius: BorderRadius.circular(design.cardRadius),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'О себе',
+                  style: TextStyle(
+                    fontSize: design.headingFontSize,
+                    fontWeight: design.headingWeight,
+                    color: design.textPrimaryColor,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Футболист, тренируюсь каждый день и развиваю свой профиль в Спортотеке.',
+                  style: TextStyle(
+                    fontSize: design.bodyFontSize,
+                    fontWeight: design.bodyWeight,
+                    color: design.textSecondaryColor,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _previewStat(String value, String label) {
+    if (design.statsCompactMode) {
+      return Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: design.headingFontSize,
+              fontWeight: design.headingWeight,
+              color: design.primaryColor,
+            ),
+          ),
+        ],
+      );
+    }
+
     return Column(
       children: [
         Text(
@@ -11321,32 +12393,19 @@ Widget _previewStat(String value, String label) {
             color: design.primaryColor,
           ),
         ),
+        const SizedBox(height: 4),
+        if (design.statsShowLabels)
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: design.smallFontSize,
+              color: design.textSecondaryColor,
+            ),
+          ),
       ],
     );
   }
 
-  return Column(
-    children: [
-      Text(
-        value,
-        style: TextStyle(
-          fontSize: design.headingFontSize,
-          fontWeight: design.headingWeight,
-          color: design.primaryColor,
-        ),
-      ),
-      const SizedBox(height: 4),
-      if (design.statsShowLabels)
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: design.smallFontSize,
-            color: design.textSecondaryColor,
-          ),
-        ),
-    ],
-  );
-}
   Widget _buildTab(String label, int index) {
     final active = _selectedTab == index;
     return GestureDetector(
@@ -11355,11 +12414,17 @@ Widget _previewStat(String value, String label) {
         margin: const EdgeInsets.only(right: 8),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: active ? design.primaryColor.withOpacity(0.1) : Colors.transparent,
+          color: active
+              ? design.primaryColor.withOpacity(0.1)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: active ? design.primaryColor : Colors.grey.shade300),
+          border: Border.all(
+              color: active ? design.primaryColor : Colors.grey.shade300),
         ),
-        child: Text(label, style: TextStyle(color: active ? design.primaryColor : design.textSecondaryColor, fontWeight: active ? FontWeight.w700 : FontWeight.normal)),
+        child: Text(label,
+            style: TextStyle(
+                color: active ? design.primaryColor : design.textSecondaryColor,
+                fontWeight: active ? FontWeight.w700 : FontWeight.normal)),
       ),
     );
   }
@@ -11368,26 +12433,59 @@ Widget _previewStat(String value, String label) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildColorSection('Основной цвет', design.primaryColorValue, (c) => setState(() => design = design.copyWith(primaryColorValue: c.value))),
+        _buildColorSection(
+            'Основной цвет',
+            design.primaryColorValue,
+            (c) => setState(
+                () => design = design.copyWith(primaryColorValue: c.value))),
         const SizedBox(height: 16),
-        _buildColorSection('Второй цвет', design.secondaryColorValue, (c) => setState(() => design = design.copyWith(secondaryColorValue: c.value))),
+        _buildColorSection(
+            'Второй цвет',
+            design.secondaryColorValue,
+            (c) => setState(
+                () => design = design.copyWith(secondaryColorValue: c.value))),
         const SizedBox(height: 16),
-        _buildColorSection('Акцентный цвет', design.accentColorValue, (c) => setState(() => design = design.copyWith(accentColorValue: c.value))),
+        _buildColorSection(
+            'Акцентный цвет',
+            design.accentColorValue,
+            (c) => setState(
+                () => design = design.copyWith(accentColorValue: c.value))),
         const SizedBox(height: 16),
-        _buildColorSection('Фон', design.backgroundColorValue, (c) => setState(() => design = design.copyWith(backgroundColorValue: c.value))),
+        _buildColorSection(
+            'Фон',
+            design.backgroundColorValue,
+            (c) => setState(
+                () => design = design.copyWith(backgroundColorValue: c.value))),
         const SizedBox(height: 16),
-        _buildColorSection('Карточки', design.cardColorValue, (c) => setState(() => design = design.copyWith(cardColorValue: c.value))),
+        _buildColorSection(
+            'Карточки',
+            design.cardColorValue,
+            (c) => setState(
+                () => design = design.copyWith(cardColorValue: c.value))),
         const SizedBox(height: 16),
-        _buildColorSection('Текст основной', design.textPrimaryColorValue, (c) => setState(() => design = design.copyWith(textPrimaryColorValue: c.value))),
+        _buildColorSection(
+            'Текст основной',
+            design.textPrimaryColorValue,
+            (c) => setState(() =>
+                design = design.copyWith(textPrimaryColorValue: c.value))),
         const SizedBox(height: 16),
-        _buildColorSection('Текст второстепенный', design.textSecondaryColorValue, (c) => setState(() => design = design.copyWith(textSecondaryColorValue: c.value))),
+        _buildColorSection(
+            'Текст второстепенный',
+            design.textSecondaryColorValue,
+            (c) => setState(() =>
+                design = design.copyWith(textSecondaryColorValue: c.value))),
         const SizedBox(height: 16),
-        _buildColorSection('Граница аватара', design.avatarBorderColorValue, (c) => setState(() => design = design.copyWith(avatarBorderColorValue: c.value))),
+        _buildColorSection(
+            'Граница аватара',
+            design.avatarBorderColorValue,
+            (c) => setState(() =>
+                design = design.copyWith(avatarBorderColorValue: c.value))),
         const SizedBox(height: 16),
         SwitchListTile(
           title: const Text('Градиент в шапке'),
           value: design.headerGradientEnabled,
-          onChanged: (v) => setState(() => design = design.copyWith(headerGradientEnabled: v)),
+          onChanged: (v) => setState(
+              () => design = design.copyWith(headerGradientEnabled: v)),
         ),
         if (design.headerGradientEnabled) ...[
           const SizedBox(height: 8),
@@ -11412,7 +12510,8 @@ Widget _previewStat(String value, String label) {
     );
   }
 
-  Widget _buildColorSection(String label, int value, Function(Color) onChanged) {
+  Widget _buildColorSection(
+      String label, int value, Function(Color) onChanged) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -11430,9 +12529,13 @@ Widget _previewStat(String value, String label) {
                 decoration: BoxDecoration(
                   color: preset,
                   shape: BoxShape.circle,
-                  border: Border.all(color: active ? Colors.black : Colors.transparent, width: 2),
+                  border: Border.all(
+                      color: active ? Colors.black : Colors.transparent,
+                      width: 2),
                 ),
-                child: active ? const Icon(Icons.check, color: Colors.white, size: 20) : null,
+                child: active
+                    ? const Icon(Icons.check, color: Colors.white, size: 20)
+                    : null,
               ),
             );
           }).toList(),
@@ -11441,448 +12544,475 @@ Widget _previewStat(String value, String label) {
     );
   }
 
- Widget _buildTextTab() {
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      DropdownButtonFormField<String>(
-        value: design.fontFamily,
-        decoration: const InputDecoration(
-          labelText: 'Шрифт',
-          border: OutlineInputBorder(),
-        ),
-        items: fontFamilies
-            .map((f) => DropdownMenuItem(value: f, child: Text(f)))
-            .toList(),
-        onChanged: (v) {
-          if (v == null) return;
-          setState(() {
-            design = design.copyWith(fontFamily: v);
-          });
-        },
-      ),
-      const SizedBox(height: 16),
-      _buildSliderTile(
-        label: 'Заголовок',
-        value: design.titleFontSize,
-        min: 16,
-        max: 32,
-        onChanged: (v) {
-          setState(() {
-            design = design.copyWith(titleFontSize: v);
-          });
-        },
-      ),
-      const SizedBox(height: 16),
-      _buildSliderTile(
-        label: 'Подзаголовок',
-        value: design.headingFontSize,
-        min: 14,
-        max: 24,
-        onChanged: (v) {
-          setState(() {
-            design = design.copyWith(headingFontSize: v);
-          });
-        },
-      ),
-      const SizedBox(height: 16),
-      _buildSliderTile(
-        label: 'Основной текст',
-        value: design.bodyFontSize,
-        min: 12,
-        max: 18,
-        onChanged: (v) {
-          setState(() {
-            design = design.copyWith(bodyFontSize: v);
-          });
-        },
-      ),
-      const SizedBox(height: 16),
-      _buildSliderTile(
-        label: 'Мелкий текст',
-        value: design.smallFontSize,
-        min: 10,
-        max: 14,
-        onChanged: (v) {
-          setState(() {
-            design = design.copyWith(smallFontSize: v);
-          });
-        },
-      ),
-      const SizedBox(height: 16),
-      _buildWeightSelector(
-        label: 'Жирность заголовка',
-        value: design.titleWeight,
-        onChanged: (w) {
-          setState(() {
-            design = design.copyWith(titleWeight: w);
-          });
-        },
-      ),
-      const SizedBox(height: 16),
-      _buildWeightSelector(
-        label: 'Жирность подзаголовка',
-        value: design.headingWeight,
-        onChanged: (w) {
-          setState(() {
-            design = design.copyWith(headingWeight: w);
-          });
-        },
-      ),
-      const SizedBox(height: 16),
-      _buildWeightSelector(
-        label: 'Жирность текста',
-        value: design.bodyWeight,
-        onChanged: (w) {
-          setState(() {
-            design = design.copyWith(bodyWeight: w);
-          });
-        },
-      ),
-    ],
-  );
-}
-
-  Widget _buildSizesTab() {
-  return Column(
-    children: [
-      _buildSliderTile(
-        label: 'Размер аватара',
-        value: design.avatarSize,
-        min: 60,
-        max: 120,
-        onChanged: (v) => setState(() {
-          design = design.copyWith(avatarSize: v);
-        }),
-      ),
-      const SizedBox(height: 16),
-      _buildSliderTile(
-        label: 'Толщина рамки аватара',
-        value: design.avatarBorderWidth,
-        min: 1,
-        max: 5,
-        onChanged: (v) => setState(() {
-          design = design.copyWith(avatarBorderWidth: v);
-        }),
-      ),
-      const SizedBox(height: 16),
-      _buildSliderTile(
-        label: 'Скругление карточек',
-        value: design.cardRadius,
-        min: 8,
-        max: 32,
-        onChanged: (v) => setState(() {
-          design = design.copyWith(cardRadius: v);
-        }),
-      ),
-      const SizedBox(height: 16),
-      _buildSliderTile(
-        label: 'Скругление кнопок',
-        value: design.buttonRadius,
-        min: 4,
-        max: 24,
-        onChanged: (v) => setState(() {
-          design = design.copyWith(buttonRadius: v);
-        }),
-      ),
-      const SizedBox(height: 16),
-      _buildSliderTile(
-        label: 'Отступы',
-        value: design.spacing,
-        min: 8,
-        max: 24,
-        onChanged: (v) => setState(() {
-          design = design.copyWith(spacing: v);
-        }),
-      ),
-      const SizedBox(height: 16),
-      SwitchListTile(
-        title: const Text('Компактная статистика'),
-        value: design.statsCompactMode,
-        onChanged: (v) => setState(() {
-          design = design.copyWith(statsCompactMode: v);
-        }),
-      ),
-      SwitchListTile(
-        title: const Text('Показывать подписи в статистике'),
-        value: design.statsShowLabels,
-        onChanged: (v) => setState(() {
-          design = design.copyWith(statsShowLabels: v);
-        }),
-      ),
-      SwitchListTile(
-        title: const Text('Показывать иконки в статистике'),
-        value: design.statsShowIcons,
-        onChanged: (v) => setState(() {
-          design = design.copyWith(statsShowIcons: v);
-        }),
-      ),
-    ],
-  );
-}
-
- Widget _buildShadowsTab() {
-  return Column(
-    children: [
-      SwitchListTile(
-        title: const Text('Тень карточек'),
-        value: design.cardShadowEnabled,
-        onChanged: (v) {
-          setState(() {
-            design = design.copyWith(cardShadowEnabled: v);
-          });
-        },
-      ),
-      if (design.cardShadowEnabled) ...[
-        const SizedBox(height: 16),
-        _buildSliderTile(
-          label: 'Размытие',
-          value: design.cardShadowBlurRadius,
-          min: 0,
-          max: 20,
-          onChanged: (v) {
-            setState(() {
-              design = design.copyWith(cardShadowBlurRadius: v);
-            });
-          },
-        ),
-        _buildSliderTile(
-          label: 'Смещение по X',
-          value: design.cardShadowOffsetX,
-          min: -10,
-          max: 10,
-          onChanged: (v) {
-            setState(() {
-              design = design.copyWith(cardShadowOffsetX: v);
-            });
-          },
-        ),
-        _buildSliderTile(
-          label: 'Смещение по Y',
-          value: design.cardShadowOffsetY,
-          min: -10,
-          max: 10,
-          onChanged: (v) {
-            setState(() {
-              design = design.copyWith(cardShadowOffsetY: v);
-            });
-          },
-        ),
-        _buildSliderTile(
-          label: 'Прозрачность',
-          value: design.cardShadowOpacity,
-          min: 0,
-          max: 1,
-          divisions: 20,
-          onChanged: (v) {
-            setState(() {
-              design = design.copyWith(cardShadowOpacity: v);
-            });
-          },
-        ),
-      ],
-      const Divider(height: 32),
-      SwitchListTile(
-        title: const Text('Тень аватара'),
-        value: design.avatarShadowEnabled,
-        onChanged: (v) {
-          setState(() {
-            design = design.copyWith(avatarShadowEnabled: v);
-          });
-        },
-      ),
-      if (design.avatarShadowEnabled) ...[
-        const SizedBox(height: 16),
-        _buildSliderTile(
-          label: 'Размытие',
-          value: design.avatarShadowBlurRadius,
-          min: 0,
-          max: 20,
-          onChanged: (v) {
-            setState(() {
-              design = design.copyWith(avatarShadowBlurRadius: v);
-            });
-          },
-        ),
-        _buildSliderTile(
-          label: 'Прозрачность',
-          value: design.avatarShadowOpacity,
-          min: 0,
-          max: 1,
-          divisions: 20,
-          onChanged: (v) {
-            setState(() {
-              design = design.copyWith(avatarShadowOpacity: v);
-            });
-          },
-        ),
-      ],
-      const Divider(height: 32),
-      SwitchListTile(
-        title: const Text('Свечение аватара'),
-        value: design.avatarGlowEnabled,
-        onChanged: (v) {
-          setState(() {
-            design = design.copyWith(avatarGlowEnabled: v);
-          });
-        },
-      ),
-      if (design.avatarGlowEnabled) ...[
-        const SizedBox(height: 16),
-        _buildSliderTile(
-          label: 'Радиус свечения',
-          value: design.avatarGlowRadius,
-          min: 0,
-          max: 40,
-          onChanged: (v) {
-            setState(() {
-              design = design.copyWith(avatarGlowRadius: v);
-            });
-          },
-        ),
-        _buildSliderTile(
-          label: 'Интенсивность',
-          value: design.avatarGlowOpacity,
-          min: 0,
-          max: 1,
-          divisions: 20,
-          onChanged: (v) {
-            setState(() {
-              design = design.copyWith(avatarGlowOpacity: v);
-            });
-          },
-        ),
-      ],
-    ],
-  );
-}
-
-  Widget _buildBlocksTab() {
-  return Column(
-    children: [
-      ...design.blocks.map((block) {
-        return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: design.surfaceColor,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.drag_handle_rounded, color: design.textTertiaryColor),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  block.title,
-                  style: TextStyle(
-                    fontWeight:
-                        block.enabled ? FontWeight.w700 : FontWeight.normal,
-                    color: block.enabled
-                        ? design.textPrimaryColor
-                        : design.textTertiaryColor,
-                  ),
-                ),
-              ),
-              Switch(
-                value: block.enabled,
-                onChanged: (v) {
-                  setState(() {
-                    final newBlocks = design.blocks.map((b) {
-                      if (b.id == block.id) {
-                        return b.copyWith(enabled: v);
-                      }
-                      return b;
-                    }).toList();
-
-                    design = design.copyWith(blocks: newBlocks);
-                  });
-                },
-              ),
-            ],
-          ),
-        );
-      }).toList(),
-      const SizedBox(height: 16),
-      SwitchListTile(
-        title: const Text('Показывать шапку'),
-        value: design.sectionVisibility['header'] ?? true,
-        onChanged: (v) {
-          setState(() {
-            final newVisibility = Map<String, bool>.from(design.sectionVisibility);
-            newVisibility['header'] = v;
-            design = design.copyWith(sectionVisibility: newVisibility);
-          });
-        },
-      ),
-      SwitchListTile(
-        title: const Text('Показывать статистику'),
-        value: design.sectionVisibility['stats'] ?? true,
-        onChanged: (v) {
-          setState(() {
-            final newVisibility = Map<String, bool>.from(design.sectionVisibility);
-            newVisibility['stats'] = v;
-            design = design.copyWith(sectionVisibility: newVisibility);
-          });
-        },
-      ),
-      SwitchListTile(
-        title: const Text('Показывать кнопки действий'),
-        value: design.sectionVisibility['actions'] ?? true,
-        onChanged: (v) {
-          setState(() {
-            final newVisibility = Map<String, bool>.from(design.sectionVisibility);
-            newVisibility['actions'] = v;
-            design = design.copyWith(sectionVisibility: newVisibility);
-          });
-        },
-      ),
-      SwitchListTile(
-        title: const Text('Показывать переключатель'),
-        value: design.sectionVisibility['switcher'] ?? true,
-        onChanged: (v) {
-          setState(() {
-            final newVisibility = Map<String, bool>.from(design.sectionVisibility);
-            newVisibility['switcher'] = v;
-            design = design.copyWith(sectionVisibility: newVisibility);
-          });
-        },
-      ),
-      const SizedBox(height: 16),
-      SwitchListTile(
-        title: const Text('Эффекты при наведении'),
-        value: design.enableHoverEffects,
-        onChanged: (v) {
-          setState(() {
-            design = design.copyWith(enableHoverEffects: v);
-          });
-        },
-      ),
-      SwitchListTile(
-        title: const Text('Пульсирующие эффекты'),
-        value: design.enablePulseEffects,
-        onChanged: (v) {
-          setState(() {
-            design = design.copyWith(enablePulseEffects: v);
-          });
-        },
-      ),
-    ],
-  );
-}
-
-  Widget _buildSliderTile({required String label, required double value, required double min, required double max, int? divisions, required ValueChanged<double> onChanged}) {
+  Widget _buildTextTab() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('$label: ${value.toStringAsFixed(1)}'),
-        Slider(value: value, min: min, max: max, divisions: divisions, activeColor: design.primaryColor, onChanged: onChanged),
+        DropdownButtonFormField<String>(
+          value: design.fontFamily,
+          decoration: const InputDecoration(
+            labelText: 'Шрифт',
+            border: OutlineInputBorder(),
+          ),
+          items: fontFamilies
+              .map((f) => DropdownMenuItem(value: f, child: Text(f)))
+              .toList(),
+          onChanged: (v) {
+            if (v == null) return;
+            setState(() {
+              design = design.copyWith(fontFamily: v);
+            });
+          },
+        ),
+        const SizedBox(height: 16),
+        _buildSliderTile(
+          label: 'Заголовок',
+          value: design.titleFontSize,
+          min: 16,
+          max: 32,
+          onChanged: (v) {
+            setState(() {
+              design = design.copyWith(titleFontSize: v);
+            });
+          },
+        ),
+        const SizedBox(height: 16),
+        _buildSliderTile(
+          label: 'Подзаголовок',
+          value: design.headingFontSize,
+          min: 14,
+          max: 24,
+          onChanged: (v) {
+            setState(() {
+              design = design.copyWith(headingFontSize: v);
+            });
+          },
+        ),
+        const SizedBox(height: 16),
+        _buildSliderTile(
+          label: 'Основной текст',
+          value: design.bodyFontSize,
+          min: 12,
+          max: 18,
+          onChanged: (v) {
+            setState(() {
+              design = design.copyWith(bodyFontSize: v);
+            });
+          },
+        ),
+        const SizedBox(height: 16),
+        _buildSliderTile(
+          label: 'Мелкий текст',
+          value: design.smallFontSize,
+          min: 10,
+          max: 14,
+          onChanged: (v) {
+            setState(() {
+              design = design.copyWith(smallFontSize: v);
+            });
+          },
+        ),
+        const SizedBox(height: 16),
+        _buildWeightSelector(
+          label: 'Жирность заголовка',
+          value: design.titleWeight,
+          onChanged: (w) {
+            setState(() {
+              design = design.copyWith(titleWeight: w);
+            });
+          },
+        ),
+        const SizedBox(height: 16),
+        _buildWeightSelector(
+          label: 'Жирность подзаголовка',
+          value: design.headingWeight,
+          onChanged: (w) {
+            setState(() {
+              design = design.copyWith(headingWeight: w);
+            });
+          },
+        ),
+        const SizedBox(height: 16),
+        _buildWeightSelector(
+          label: 'Жирность текста',
+          value: design.bodyWeight,
+          onChanged: (w) {
+            setState(() {
+              design = design.copyWith(bodyWeight: w);
+            });
+          },
+        ),
       ],
     );
   }
 
-  Widget _buildWeightSelector({required String label, required FontWeight value, required ValueChanged<FontWeight> onChanged}) {
-    final weights = [FontWeight.w400, FontWeight.w500, FontWeight.w600, FontWeight.w700, FontWeight.w800, FontWeight.w900];
+  Widget _buildSizesTab() {
+    return Column(
+      children: [
+        _buildSliderTile(
+          label: 'Размер аватара',
+          value: design.avatarSize,
+          min: 60,
+          max: 120,
+          onChanged: (v) => setState(() {
+            design = design.copyWith(avatarSize: v);
+          }),
+        ),
+        const SizedBox(height: 16),
+        _buildSliderTile(
+          label: 'Толщина рамки аватара',
+          value: design.avatarBorderWidth,
+          min: 1,
+          max: 5,
+          onChanged: (v) => setState(() {
+            design = design.copyWith(avatarBorderWidth: v);
+          }),
+        ),
+        const SizedBox(height: 16),
+        _buildSliderTile(
+          label: 'Скругление карточек',
+          value: design.cardRadius,
+          min: 8,
+          max: 32,
+          onChanged: (v) => setState(() {
+            design = design.copyWith(cardRadius: v);
+          }),
+        ),
+        const SizedBox(height: 16),
+        _buildSliderTile(
+          label: 'Скругление кнопок',
+          value: design.buttonRadius,
+          min: 4,
+          max: 24,
+          onChanged: (v) => setState(() {
+            design = design.copyWith(buttonRadius: v);
+          }),
+        ),
+        const SizedBox(height: 16),
+        _buildSliderTile(
+          label: 'Отступы',
+          value: design.spacing,
+          min: 8,
+          max: 24,
+          onChanged: (v) => setState(() {
+            design = design.copyWith(spacing: v);
+          }),
+        ),
+        const SizedBox(height: 16),
+        SwitchListTile(
+          title: const Text('Компактная статистика'),
+          value: design.statsCompactMode,
+          onChanged: (v) => setState(() {
+            design = design.copyWith(statsCompactMode: v);
+          }),
+        ),
+        SwitchListTile(
+          title: const Text('Показывать подписи в статистике'),
+          value: design.statsShowLabels,
+          onChanged: (v) => setState(() {
+            design = design.copyWith(statsShowLabels: v);
+          }),
+        ),
+        SwitchListTile(
+          title: const Text('Показывать иконки в статистике'),
+          value: design.statsShowIcons,
+          onChanged: (v) => setState(() {
+            design = design.copyWith(statsShowIcons: v);
+          }),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildShadowsTab() {
+    return Column(
+      children: [
+        SwitchListTile(
+          title: const Text('Тень карточек'),
+          value: design.cardShadowEnabled,
+          onChanged: (v) {
+            setState(() {
+              design = design.copyWith(cardShadowEnabled: v);
+            });
+          },
+        ),
+        if (design.cardShadowEnabled) ...[
+          const SizedBox(height: 16),
+          _buildSliderTile(
+            label: 'Размытие',
+            value: design.cardShadowBlurRadius,
+            min: 0,
+            max: 20,
+            onChanged: (v) {
+              setState(() {
+                design = design.copyWith(cardShadowBlurRadius: v);
+              });
+            },
+          ),
+          _buildSliderTile(
+            label: 'Смещение по X',
+            value: design.cardShadowOffsetX,
+            min: -10,
+            max: 10,
+            onChanged: (v) {
+              setState(() {
+                design = design.copyWith(cardShadowOffsetX: v);
+              });
+            },
+          ),
+          _buildSliderTile(
+            label: 'Смещение по Y',
+            value: design.cardShadowOffsetY,
+            min: -10,
+            max: 10,
+            onChanged: (v) {
+              setState(() {
+                design = design.copyWith(cardShadowOffsetY: v);
+              });
+            },
+          ),
+          _buildSliderTile(
+            label: 'Прозрачность',
+            value: design.cardShadowOpacity,
+            min: 0,
+            max: 1,
+            divisions: 20,
+            onChanged: (v) {
+              setState(() {
+                design = design.copyWith(cardShadowOpacity: v);
+              });
+            },
+          ),
+        ],
+        const Divider(height: 32),
+        SwitchListTile(
+          title: const Text('Тень аватара'),
+          value: design.avatarShadowEnabled,
+          onChanged: (v) {
+            setState(() {
+              design = design.copyWith(avatarShadowEnabled: v);
+            });
+          },
+        ),
+        if (design.avatarShadowEnabled) ...[
+          const SizedBox(height: 16),
+          _buildSliderTile(
+            label: 'Размытие',
+            value: design.avatarShadowBlurRadius,
+            min: 0,
+            max: 20,
+            onChanged: (v) {
+              setState(() {
+                design = design.copyWith(avatarShadowBlurRadius: v);
+              });
+            },
+          ),
+          _buildSliderTile(
+            label: 'Прозрачность',
+            value: design.avatarShadowOpacity,
+            min: 0,
+            max: 1,
+            divisions: 20,
+            onChanged: (v) {
+              setState(() {
+                design = design.copyWith(avatarShadowOpacity: v);
+              });
+            },
+          ),
+        ],
+        const Divider(height: 32),
+        SwitchListTile(
+          title: const Text('Свечение аватара'),
+          value: design.avatarGlowEnabled,
+          onChanged: (v) {
+            setState(() {
+              design = design.copyWith(avatarGlowEnabled: v);
+            });
+          },
+        ),
+        if (design.avatarGlowEnabled) ...[
+          const SizedBox(height: 16),
+          _buildSliderTile(
+            label: 'Радиус свечения',
+            value: design.avatarGlowRadius,
+            min: 0,
+            max: 40,
+            onChanged: (v) {
+              setState(() {
+                design = design.copyWith(avatarGlowRadius: v);
+              });
+            },
+          ),
+          _buildSliderTile(
+            label: 'Интенсивность',
+            value: design.avatarGlowOpacity,
+            min: 0,
+            max: 1,
+            divisions: 20,
+            onChanged: (v) {
+              setState(() {
+                design = design.copyWith(avatarGlowOpacity: v);
+              });
+            },
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildBlocksTab() {
+    return Column(
+      children: [
+        ...design.blocks.map((block) {
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: design.surfaceColor,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.drag_handle_rounded,
+                    color: design.textTertiaryColor),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    block.title,
+                    style: TextStyle(
+                      fontWeight:
+                          block.enabled ? FontWeight.w700 : FontWeight.normal,
+                      color: block.enabled
+                          ? design.textPrimaryColor
+                          : design.textTertiaryColor,
+                    ),
+                  ),
+                ),
+                Switch(
+                  value: block.enabled,
+                  onChanged: (v) {
+                    setState(() {
+                      final newBlocks = design.blocks.map((b) {
+                        if (b.id == block.id) {
+                          return b.copyWith(enabled: v);
+                        }
+                        return b;
+                      }).toList();
+
+                      design = design.copyWith(blocks: newBlocks);
+                    });
+                  },
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+        const SizedBox(height: 16),
+        SwitchListTile(
+          title: const Text('Показывать шапку'),
+          value: design.sectionVisibility['header'] ?? true,
+          onChanged: (v) {
+            setState(() {
+              final newVisibility =
+                  Map<String, bool>.from(design.sectionVisibility);
+              newVisibility['header'] = v;
+              design = design.copyWith(sectionVisibility: newVisibility);
+            });
+          },
+        ),
+        SwitchListTile(
+          title: const Text('Показывать статистику'),
+          value: design.sectionVisibility['stats'] ?? true,
+          onChanged: (v) {
+            setState(() {
+              final newVisibility =
+                  Map<String, bool>.from(design.sectionVisibility);
+              newVisibility['stats'] = v;
+              design = design.copyWith(sectionVisibility: newVisibility);
+            });
+          },
+        ),
+        SwitchListTile(
+          title: const Text('Показывать кнопки действий'),
+          value: design.sectionVisibility['actions'] ?? true,
+          onChanged: (v) {
+            setState(() {
+              final newVisibility =
+                  Map<String, bool>.from(design.sectionVisibility);
+              newVisibility['actions'] = v;
+              design = design.copyWith(sectionVisibility: newVisibility);
+            });
+          },
+        ),
+        SwitchListTile(
+          title: const Text('Показывать переключатель'),
+          value: design.sectionVisibility['switcher'] ?? true,
+          onChanged: (v) {
+            setState(() {
+              final newVisibility =
+                  Map<String, bool>.from(design.sectionVisibility);
+              newVisibility['switcher'] = v;
+              design = design.copyWith(sectionVisibility: newVisibility);
+            });
+          },
+        ),
+        const SizedBox(height: 16),
+        SwitchListTile(
+          title: const Text('Эффекты при наведении'),
+          value: design.enableHoverEffects,
+          onChanged: (v) {
+            setState(() {
+              design = design.copyWith(enableHoverEffects: v);
+            });
+          },
+        ),
+        SwitchListTile(
+          title: const Text('Пульсирующие эффекты'),
+          value: design.enablePulseEffects,
+          onChanged: (v) {
+            setState(() {
+              design = design.copyWith(enablePulseEffects: v);
+            });
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSliderTile(
+      {required String label,
+      required double value,
+      required double min,
+      required double max,
+      int? divisions,
+      required ValueChanged<double> onChanged}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('$label: ${value.toStringAsFixed(1)}'),
+        Slider(
+            value: value,
+            min: min,
+            max: max,
+            divisions: divisions,
+            activeColor: design.primaryColor,
+            onChanged: onChanged),
+      ],
+    );
+  }
+
+  Widget _buildWeightSelector(
+      {required String label,
+      required FontWeight value,
+      required ValueChanged<FontWeight> onChanged}) {
+    final weights = [
+      FontWeight.w400,
+      FontWeight.w500,
+      FontWeight.w600,
+      FontWeight.w700,
+      FontWeight.w800,
+      FontWeight.w900
+    ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

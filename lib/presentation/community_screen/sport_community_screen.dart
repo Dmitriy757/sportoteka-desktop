@@ -458,23 +458,33 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
   }
 
   TextStyle _title(double size, {FontWeight weight = FontWeight.w600, Color color = FeedPalette.text}) {
-    return AppTypography.custom(
-      size: size,
-      weight: weight,
-      color: color,
-      height: 1.18,
-      letterSpacing: 0,
-    );
+    final TextStyle base;
+    if (size >= 15.5) {
+      base = AppTypography.screenTitle(color: color);
+    } else if (size >= 14) {
+      base = AppTypography.sectionTitle(color: color);
+    } else if (size >= 13) {
+      base = AppTypography.subsectionTitle(color: color);
+    } else if (size >= 11.5) {
+      base = AppTypography.itemTitle(color: color);
+    } else {
+      base = AppTypography.captionMedium(color: color);
+    }
+    return base.copyWith(fontWeight: weight);
   }
 
   TextStyle _text(double size, {FontWeight weight = FontWeight.w400, Color color = FeedPalette.secondary}) {
-    return AppTypography.custom(
-      size: size,
-      weight: weight,
-      color: color,
-      height: 1.30,
-      letterSpacing: 0,
-    );
+    final TextStyle base;
+    if (size >= 12.5) {
+      base = AppTypography.body(color: color);
+    } else if (size >= 11.2) {
+      base = AppTypography.secondary(color: color);
+    } else if (size >= 10) {
+      base = AppTypography.caption(color: color);
+    } else {
+      base = AppTypography.commentMeta(color: color);
+    }
+    return base.copyWith(fontWeight: weight);
   }
 
   Widget _statusDot({
@@ -1576,9 +1586,8 @@ class _AvatarCircle extends StatelessWidget {
           ? null
           : Text(
               initial,
-              style: const TextStyle(
+              style: AppTypography.captionMedium(
                 color: FeedPalette.primaryGreen,
-                fontWeight: FontWeight.w600,
               ),
             ),
     );

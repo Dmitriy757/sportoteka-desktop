@@ -9,9 +9,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/chat_screen/chat_room_screen.dart';
+import 'package:sportoteka/presentation/chat_screen/call_history_panel.dart';
+import 'package:sportoteka/presentation/chat_screen/cmr_notifications_panel.dart';
 import 'package:sportoteka/presentation/chat_screen/create_group_chat_screen.dart';
-
-
+import 'package:sportoteka/presentation/chat_screen/sportoteka_news_screen.dart';
 
 class _ChatStyle {
   static const Color bg = Colors.white;
@@ -39,25 +40,37 @@ class _ChatText {
     double size, {
     Color color = _ChatStyle.text,
     FontWeight weight = FontWeight.w600,
-  }) =>
-      AppTypography.custom(
-        size: size,
-        weight: weight,
-        color: color,
-        height: 1.12,
-      );
+  }) {
+    final TextStyle base;
+    if (size >= 15) {
+      base = AppTypography.screenTitle(color: color);
+    } else if (size >= 13.5) {
+      base = AppTypography.sectionTitle(color: color);
+    } else if (size >= 11.5) {
+      base = AppTypography.itemTitle(color: color);
+    } else {
+      base = AppTypography.captionMedium(color: color);
+    }
+    return base.copyWith(fontWeight: weight);
+  }
 
   static TextStyle body(
     double size, {
     Color color = _ChatStyle.muted,
     FontWeight weight = FontWeight.w400,
-  }) =>
-      AppTypography.custom(
-        size: size,
-        weight: weight,
-        color: color,
-        height: 1.25,
-      );
+  }) {
+    final TextStyle base;
+    if (size >= 12.2) {
+      base = AppTypography.body(color: color);
+    } else if (size >= 11) {
+      base = AppTypography.secondary(color: color);
+    } else if (size >= 10) {
+      base = AppTypography.caption(color: color);
+    } else {
+      base = AppTypography.commentMeta(color: color);
+    }
+    return base.copyWith(fontWeight: weight);
+  }
 }
 
 class _ChatDot extends StatelessWidget {
@@ -130,8 +143,6 @@ class _ChatDots extends StatelessWidget {
   }
 }
 
-
-
 class ChatScreen extends StatefulWidget {
   final int userId;
 
@@ -148,7 +159,7 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-enum _ChatTab { privateChats, groups }
+enum _ChatTab { notifications, privateChats, groups, calls }
 
 class _ChatScreenState extends State<ChatScreen> {
   static const _apiBase = 'https://sportotekaapp.ru/api';
@@ -179,7 +190,11 @@ class _ChatScreenState extends State<ChatScreen> {
   bool isSearching = false;
 
   Timer? _unreadTimer;
-  int _unreadTotal = 0; // ✅ держим, но не рисуем наверху
+  int _unreadTotal = 0; // ✅ сообщения
+  int _notificationUnread = 0; // ✅ системные уведомления
+  int _newsUnread = 0;
+  bool _newsVisible = false;
+  Map<String, dynamic>? _newsLatest;
 
   _ChatTab _tab = _ChatTab.privateChats;
 
@@ -203,6 +218,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _bootstrap() async {
     await _loadLocalState();
     await _reloadCurrentTab();
+    await _fetchUnreadTotal();
   }
 
   @override
@@ -213,28 +229,29 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // ===== LOCAL mark read (list + total + PrefUtils + callback) =====
-Future<void> _markChatReadLocal(int chatId, int unread) async {
-  void patch(List<Map<String, dynamic>> list) {
-    final i = list.indexWhere((e) => _asInt(e['id']) == chatId);
-    if (i >= 0) list[i]['unread_count'] = 0;
+  Future<void> _markChatReadLocal(int chatId, int unread) async {
+    void patch(List<Map<String, dynamic>> list) {
+      final i = list.indexWhere((e) => _asInt(e['id']) == chatId);
+      if (i >= 0) list[i]['unread_count'] = 0;
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      patch(_privateChats);
+      patch(_groups);
+      patch(_filtered);
+
+      if (unread > 0) {
+        _unreadTotal = (_unreadTotal - unread).clamp(0, 999999);
+      }
+    });
+
+    // ✅ ВАЖНО: синхронизируем то, что рисует bottom bar
+    await PrefUtils.setUnreadChatsCount(_unreadTotal);
+    widget.onUnreadChanged?.call(_unreadTotal);
   }
 
-  if (!mounted) return;
-
-  setState(() {
-    patch(_privateChats);
-    patch(_groups);
-    patch(_filtered);
-
-    if (unread > 0) {
-      _unreadTotal = (_unreadTotal - unread).clamp(0, 999999);
-    }
-  });
-
-  // ✅ ВАЖНО: синхронизируем то, что рисует bottom bar
-  await PrefUtils.setUnreadChatsCount(_unreadTotal);
-  widget.onUnreadChanged?.call(_unreadTotal);
-}
   // ===== LOCAL STATE =====
   Future<void> _loadLocalState() async {
     final prefs = await SharedPreferences.getInstance();
@@ -268,20 +285,17 @@ Future<void> _markChatReadLocal(int chatId, int unread) async {
   // ===== HELPERS =====
   int _asInt(dynamic v) => int.tryParse(v.toString()) ?? 0;
 
-  bool _isPrivate(Map<String, dynamic> chat) =>
-      (chat['is_private'] == 1 ||
-          chat['is_private'] == "1" ||
-          chat['is_private'] == true);
+  bool _isPrivate(Map<String, dynamic> chat) => (chat['is_private'] == 1 ||
+      chat['is_private'] == "1" ||
+      chat['is_private'] == true);
 
-  bool _isPublicGroup(Map<String, dynamic> chat) =>
-      (chat['is_public'] == 1 ||
-          chat['is_public'] == "1" ||
-          chat['is_public'] == true);
+  bool _isPublicGroup(Map<String, dynamic> chat) => (chat['is_public'] == 1 ||
+      chat['is_public'] == "1" ||
+      chat['is_public'] == true);
 
-  bool _iAmMember(Map<String, dynamic> chat) =>
-      (chat['i_am_member'] == 1 ||
-          chat['i_am_member'] == "1" ||
-          chat['i_am_member'] == true);
+  bool _iAmMember(Map<String, dynamic> chat) => (chat['i_am_member'] == 1 ||
+      chat['i_am_member'] == "1" ||
+      chat['i_am_member'] == true);
 
   bool _iAmOwner(Map<String, dynamic> chat) =>
       _asInt(chat['owner_id']) == widget.userId;
@@ -359,8 +373,11 @@ Future<void> _markChatReadLocal(int chatId, int unread) async {
   Future<void> _reloadCurrentTab() async {
     if (_tab == _ChatTab.privateChats) {
       await _loadPrivateChats();
-    } else {
+    } else if (_tab == _ChatTab.groups) {
       await _loadGroups();
+    } else {
+      if (mounted) setState(() => isLoading = false);
+      return;
     }
     _applyFiltersAndSorting();
   }
@@ -412,38 +429,381 @@ Future<void> _markChatReadLocal(int chatId, int unread) async {
     }
   }
 
+  Future<int> _snapshotNewsUnread() async {
+    try {
+      final uri = Uri.parse(
+        '$_apiBase/sportoteka_news/summary.php?user_id=${widget.userId}',
+      );
+      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return 0;
+
+      final decoded = json.decode(res.body);
+      if (decoded is! Map || decoded['success'] != true) return 0;
+
+      final visible = decoded['visible'] == true ||
+          decoded['visible'] == 1 ||
+          decoded['visible'] == '1';
+      final unread =
+          int.tryParse('${decoded['unread_count'] ?? 0}') ?? 0;
+      final latest = decoded['latest'] is Map
+          ? Map<String, dynamic>.from(decoded['latest'] as Map)
+          : null;
+
+      if (mounted) {
+        final changed = visible != _newsVisible ||
+            unread != _newsUnread ||
+            '${latest?['id'] ?? ''}' != '${_newsLatest?['id'] ?? ''}';
+
+        if (changed) {
+          setState(() {
+            _newsVisible = visible;
+            _newsUnread = visible ? unread : 0;
+            _newsLatest = latest;
+          });
+        }
+      }
+
+      return visible ? unread : 0;
+    } catch (_) {
+      return _newsVisible ? _newsUnread : 0;
+    }
+  }
+
+  Future<void> _openSportotekaNews() async {
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => SportotekaNewsScreen(
+          userId: widget.userId,
+          onUnreadChanged: (_) {
+            if (!mounted) return;
+            setState(() => _newsUnread = 0);
+          },
+          onHidden: () {
+            if (!mounted) return;
+            setState(() {
+              _newsVisible = false;
+              _newsUnread = 0;
+            });
+          },
+        ),
+      ),
+    );
+
+    await _fetchUnreadTotal();
+  }
+
+  Future<void> _hideSportotekaNews() async {
+    try {
+      final res = await http.post(
+        Uri.parse('$_apiBase/sportoteka_news/hide.php'),
+        body: <String, String>{
+          'user_id': widget.userId.toString(),
+        },
+      ).timeout(const Duration(seconds: 8));
+
+      final decoded = json.decode(res.body);
+      if (res.statusCode == 200 &&
+          decoded is Map &&
+          decoded['success'] == true &&
+          mounted) {
+        setState(() {
+          _newsVisible = false;
+          _newsUnread = 0;
+        });
+        await _fetchUnreadTotal();
+      }
+    } catch (_) {}
+  }
+
+  Future<bool> _confirmHideSportotekaNews() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: Text(
+          'Удалить SPORTOTEKA Новости?',
+          style: _ChatText.title(13.5),
+        ),
+        content: Text(
+          'Канал исчезнет из списка. После следующего сообщения '
+          'SPORTOTEKA он появится снова автоматически.',
+          style: _ChatText.body(11.0),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: _ChatStyle.red,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+
+    return result == true;
+  }
+
+  Widget _sportotekaNewsEntry() {
+    final latestTitle =
+        '${_newsLatest?['title'] ?? 'SPORTOTEKA Новости'}'.trim();
+    final latestBody = '${_newsLatest?['body'] ?? ''}'.trim();
+
+    final preview = latestBody.isNotEmpty
+        ? latestBody
+        : (latestTitle.isNotEmpty
+            ? latestTitle
+            : 'Официальный канал SPORTOTEKA');
+
+    return Dismissible(
+      key: const ValueKey<String>('sportoteka-news-channel'),
+      direction: DismissDirection.endToStart,
+      confirmDismiss: (_) => _confirmHideSportotekaNews(),
+      onDismissed: (_) => unawaited(_hideSportotekaNews()),
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF6F5),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Icon(
+          Icons.delete_outline_rounded,
+          color: _ChatStyle.red,
+          size: 18,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: _openSportotekaNews,
+          onLongPress: () async {
+            final hide = await _confirmHideSportotekaNews();
+            if (hide) await _hideSportotekaNews();
+          },
+          child: Container(
+            height: 58,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: <Widget>[
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: _ChatStyle.greenSoft,
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  alignment: Alignment.center,
+                  child: const _ChatDots(compact: true),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Row(
+                        children: <Widget>[
+                          Flexible(
+                            child: Text(
+                              'SPORTOTEKA Новости',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _ChatText.title(
+                                11.8,
+                                color: _ChatStyle.text,
+                                weight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(
+                            Icons.verified_rounded,
+                            size: 13,
+                            color: _ChatStyle.green,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        preview,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _ChatText.body(
+                          9.7,
+                          color: _ChatStyle.muted,
+                          weight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (_newsUnread > 0)
+                  Container(
+                    constraints: const BoxConstraints(
+                      minWidth: 24,
+                      minHeight: 20,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF1F0),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(
+                            color: _ChatStyle.red,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          _newsUnread > 99 ? '99+' : '$_newsUnread',
+                          style: _ChatText.body(
+                            9.2,
+                            color: _ChatStyle.red,
+                            weight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 17,
+                    color: _ChatStyle.muted2,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _startUnreadPolling() {
     _unreadTimer?.cancel();
-    _fetchUnreadTotal();
+    unawaited(_fetchUnreadTotal());
+    unawaited(_fetchNotificationUnread());
     _unreadTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      _fetchUnreadTotal();
+      unawaited(_fetchUnreadTotal());
+      unawaited(_fetchNotificationUnread());
     });
   }
 
-  Future<void> _fetchUnreadTotal() async {
+  int _sumUnread(List<Map<String, dynamic>> items) {
+    var total = 0;
+    for (final item in items) {
+      final value = int.tryParse((item['unread_count'] ?? '0').toString()) ?? 0;
+      if (value > 0) total += value;
+    }
+    return total;
+  }
+
+  Future<int> _snapshotPrivateUnread() async {
     try {
-      final uri = Uri.parse('$_unreadTotalUrl?user_id=${widget.userId}');
-      final res = await http.get(uri);
+      final uri = Uri.parse('$_privateChatsUrl?user_id=${widget.userId}');
+      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return 0;
 
-      if (res.statusCode != 200) return;
+      final decoded = json.decode(res.body);
+      if (decoded is! List) return 0;
 
-      final data = json.decode(res.body);
-      if (data is! Map || data['success'] != true) return;
+      final items = decoded
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .where(_isPrivate)
+          .toList();
 
-      final total = int.tryParse((data['unread_total'] ?? '0').toString()) ?? 0;
+      return _sumUnread(items);
+    } catch (_) {
+      return 0;
+    }
+  }
 
-          if (!mounted) return;
+  Future<int> _snapshotGroupUnread() async {
+    try {
+      final uri = Uri.parse('$_groupsFeedUrl?user_id=${widget.userId}');
+      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return 0;
 
-if (total != _unreadTotal) {
-  setState(() => _unreadTotal = total);
+      final decoded = json.decode(res.body);
+      if (decoded is! Map || decoded['success'] != true) return 0;
 
-  // ✅ обновим кеш для bottom bar
-  await PrefUtils.setUnreadChatsCount(total);
+      final raw = decoded['groups'];
+      if (raw is! List) return 0;
 
-  // ✅ сообщим вниз (bottom bar) сразу
-  widget.onUnreadChanged?.call(total);
-}
-    } catch (_) {}
+      final items = raw
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .where((e) => _iAmMember(e))
+          .toList();
+
+      return _sumUnread(items);
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  Future<void> _fetchUnreadTotal() async {
+    final values = await Future.wait<int>([
+      _snapshotPrivateUnread(),
+      _snapshotGroupUnread(),
+      _snapshotNewsUnread(),
+    ]);
+
+    final total = (values[0] + values[1] + values[2]).clamp(0, 9999);
+
+    if (!mounted) return;
+
+    if (total != _unreadTotal) {
+      setState(() => _unreadTotal = total);
+    }
+
+    await PrefUtils.setUnreadChatsCount(total);
+    widget.onUnreadChanged?.call(total);
+  }
+
+  Future<void> _fetchNotificationUnread() async {
+    var value = 0;
+    try {
+      final uri = Uri.parse(
+        '$_apiBase/notifications/unread_count.php?user_id=${widget.userId}',
+      );
+      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200) {
+        final decoded = json.decode(res.body);
+        if (decoded is Map && decoded['success'] == true) {
+          value =
+              int.tryParse((decoded['unread_count'] ?? '0').toString()) ?? 0;
+        }
+      }
+    } catch (_) {
+      value = 0;
+    }
+
+    value = value.clamp(0, 9999);
+    if (!mounted || value == _notificationUnread) return;
+    setState(() => _notificationUnread = value);
   }
 
   Future<void> _markChatReadServer(int chatId) async {
@@ -461,6 +821,13 @@ if (total != _unreadTotal) {
 
   // ===== FILTER / SORT =====
   void _applyFiltersAndSorting() {
+    if (_tab == _ChatTab.calls || _tab == _ChatTab.notifications) {
+      if (mounted && _filtered.isNotEmpty) {
+        setState(() => _filtered = <Map<String, dynamic>>[]);
+      }
+      return;
+    }
+
     final q = _searchController.text.toLowerCase().trim();
     final baseSrc = (_tab == _ChatTab.privateChats) ? _privateChats : _groups;
 
@@ -504,8 +871,8 @@ if (total != _unreadTotal) {
       // ✅ 2) Серверный mark_read в фоне (не тормозим открытие)
       _markChatReadServer(chatId);
       final newTotal = _unreadTotal;
-unawaited(PrefUtils.setUnreadChatsCount(newTotal));
-widget.onUnreadChanged?.call(newTotal);
+      unawaited(PrefUtils.setUnreadChatsCount(newTotal));
+      widget.onUnreadChanged?.call(newTotal);
     }
 
     if (!mounted) return;
@@ -549,7 +916,8 @@ widget.onUnreadChanged?.call(newTotal);
         data = null;
       }
 
-      final ok = res.statusCode == 200 && data is Map && data['success'] == true;
+      final ok =
+          res.statusCode == 200 && data is Map && data['success'] == true;
       if (!ok) {
         final err = (data is Map && data['error'] != null)
             ? data['error'].toString()
@@ -604,7 +972,8 @@ widget.onUnreadChanged?.call(newTotal);
         data = null;
       }
 
-      final ok = res.statusCode == 200 && data is Map && data['success'] == true;
+      final ok =
+          res.statusCode == 200 && data is Map && data['success'] == true;
 
       if (!ok) {
         final err = (data is Map && data['error'] != null)
@@ -676,12 +1045,14 @@ widget.onUnreadChanged?.call(newTotal);
         data = null;
       }
 
-      final ok = res.statusCode == 200 && data is Map && data['success'] == true;
+      final ok =
+          res.statusCode == 200 && data is Map && data['success'] == true;
       if (!ok) {
         final err = (data is Map && data['error'] != null)
             ? data['error'].toString()
             : 'HTTP ${res.statusCode}';
-        messenger.showSnackBar(SnackBar(content: Text("Не удалось выйти: $err")));
+        messenger
+            .showSnackBar(SnackBar(content: Text("Не удалось выйти: $err")));
         return;
       }
 
@@ -697,7 +1068,8 @@ widget.onUnreadChanged?.call(newTotal);
       messenger.showSnackBar(
         SnackBar(
           content: const Text("Вы вышли из личного чата"),
-          action: SnackBarAction(label: "Обновить", onPressed: _reloadCurrentTab),
+          action:
+              SnackBarAction(label: "Обновить", onPressed: _reloadCurrentTab),
         ),
       );
 
@@ -757,12 +1129,14 @@ widget.onUnreadChanged?.call(newTotal);
         data = null;
       }
 
-      final ok = res.statusCode == 200 && data is Map && data['success'] == true;
+      final ok =
+          res.statusCode == 200 && data is Map && data['success'] == true;
       if (!ok) {
         final err = (data is Map && data['error'] != null)
             ? data['error'].toString()
             : 'HTTP ${res.statusCode}';
-        messenger.showSnackBar(SnackBar(content: Text("Не удалось выйти: $err")));
+        messenger
+            .showSnackBar(SnackBar(content: Text("Не удалось выйти: $err")));
         return;
       }
 
@@ -774,7 +1148,8 @@ widget.onUnreadChanged?.call(newTotal);
       messenger.showSnackBar(
         SnackBar(
           content: const Text("Вы вышли из группы"),
-          action: SnackBarAction(label: "Обновить", onPressed: _reloadCurrentTab),
+          action:
+              SnackBarAction(label: "Обновить", onPressed: _reloadCurrentTab),
         ),
       );
 
@@ -834,7 +1209,8 @@ widget.onUnreadChanged?.call(newTotal);
         data = null;
       }
 
-      final ok = res.statusCode == 200 && data is Map && data['success'] == true;
+      final ok =
+          res.statusCode == 200 && data is Map && data['success'] == true;
       if (!ok) {
         final err = (data is Map && data['error'] != null)
             ? data['error'].toString()
@@ -851,7 +1227,8 @@ widget.onUnreadChanged?.call(newTotal);
       messenger.showSnackBar(
         SnackBar(
           content: const Text("Группа удалена"),
-          action: SnackBarAction(label: "Обновить", onPressed: _reloadCurrentTab),
+          action:
+              SnackBarAction(label: "Обновить", onPressed: _reloadCurrentTab),
         ),
       );
 
@@ -955,7 +1332,8 @@ widget.onUnreadChanged?.call(newTotal);
         data = null;
       }
 
-      final ok = res.statusCode == 200 && data is Map && data['success'] == true;
+      final ok =
+          res.statusCode == 200 && data is Map && data['success'] == true;
       if (!ok) {
         final err = (data is Map && data['error'] != null)
             ? data['error'].toString()
@@ -976,7 +1354,8 @@ widget.onUnreadChanged?.call(newTotal);
       messenger.showSnackBar(
         SnackBar(
           content: const Text("Чат удалён"),
-          action: SnackBarAction(label: "Обновить", onPressed: _reloadCurrentTab),
+          action:
+              SnackBarAction(label: "Обновить", onPressed: _reloadCurrentTab),
         ),
       );
 
@@ -1042,8 +1421,9 @@ widget.onUnreadChanged?.call(newTotal);
                   },
                 ),
                 ListTile(
-                  leading: Icon(
-                      pinned ? Icons.push_pin_outlined : Icons.push_pin_rounded),
+                  leading: Icon(pinned
+                      ? Icons.push_pin_outlined
+                      : Icons.push_pin_rounded),
                   title: Text(pinned ? "Открепить" : "Закрепить"),
                   onTap: () async {
                     Navigator.pop(context);
@@ -1259,10 +1639,14 @@ widget.onUnreadChanged?.call(newTotal);
   // ===== UI =====
   @override
   Widget build(BuildContext context) {
-    final subtitle =
-        _tab == _ChatTab.privateChats
-            ? '${_filtered.length} диалогов'
-            : '${_filtered.length} групп';
+    final subtitle = switch (_tab) {
+      _ChatTab.notifications => _notificationUnread > 0
+          ? '$_notificationUnread непрочитанных'
+          : 'Всё прочитано',
+      _ChatTab.privateChats => '${_filtered.length} диалогов',
+      _ChatTab.groups => '${_filtered.length} групп',
+      _ChatTab.calls => 'История звонков',
+    };
 
     return Scaffold(
       extendBody: true,
@@ -1281,10 +1665,8 @@ widget.onUnreadChanged?.call(newTotal);
             const SizedBox(width: 10),
             Expanded(
               child: Column(
-                mainAxisAlignment:
-                    MainAxisAlignment.center,
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
                     'Чаты',
@@ -1305,14 +1687,20 @@ widget.onUnreadChanged?.call(newTotal);
           ],
         ),
         actions: <Widget>[
-          Padding(
+Padding(
             padding: const EdgeInsets.only(right: 5),
             child: _ChatHeaderAction(
               label: isSearching ? 'Закрыть' : 'Поиск',
               active: isSearching,
               onTap: () {
                 setState(() {
-                  isSearching = !isSearching;
+                  if (_tab == _ChatTab.calls ||
+                      _tab == _ChatTab.notifications) {
+                    _tab = _ChatTab.privateChats;
+                    isSearching = true;
+                  } else {
+                    isSearching = !isSearching;
+                  }
                   if (!isSearching) {
                     _searchController.clear();
                   }
@@ -1324,9 +1712,7 @@ widget.onUnreadChanged?.call(newTotal);
           Padding(
             padding: const EdgeInsets.only(right: 10),
             child: _ChatHeaderAction(
-              label: _tab == _ChatTab.groups
-                  ? 'Новая группа'
-                  : 'Новый чат',
+              label: _tab == _ChatTab.groups ? 'Новая группа' : 'Новый чат',
               emphasized: true,
               onTap: () async {
                 if (_tab == _ChatTab.groups) {
@@ -1360,18 +1746,35 @@ widget.onUnreadChanged?.call(newTotal);
       ),
       body: Column(
         children: <Widget>[
+          if (_newsVisible)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 2),
+              child: _sportotekaNewsEntry(),
+            ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(10, 8, 10, 7),
+            padding: EdgeInsets.fromLTRB(
+              10,
+              _newsVisible ? 4 : 8,
+              10,
+              2,
+            ),
+            child: _notificationsEntry(),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 6, 10, 7),
             child: Row(
               children: <Widget>[
                 Expanded(
                   child: _tabChip(
                     label: 'Личные',
-                    selected:
-                        _tab == _ChatTab.privateChats,
+                    selected: _tab == _ChatTab.privateChats,
                     onTap: () async {
                       if (_tab == _ChatTab.privateChats) return;
-                      setState(() => _tab = _ChatTab.privateChats);
+                      setState(() {
+                        _tab = _ChatTab.privateChats;
+                        isSearching = false;
+                        _searchController.clear();
+                      });
                       await _reloadCurrentTab();
                     },
                   ),
@@ -1383,15 +1786,36 @@ widget.onUnreadChanged?.call(newTotal);
                     selected: _tab == _ChatTab.groups,
                     onTap: () async {
                       if (_tab == _ChatTab.groups) return;
-                      setState(() => _tab = _ChatTab.groups);
+                      setState(() {
+                        _tab = _ChatTab.groups;
+                        isSearching = false;
+                        _searchController.clear();
+                      });
                       await _reloadCurrentTab();
+                    },
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _tabChip(
+                    label: 'Звонки',
+                    selected: _tab == _ChatTab.calls,
+                    onTap: () {
+                      if (_tab == _ChatTab.calls) return;
+                      setState(() {
+                        _tab = _ChatTab.calls;
+                        isSearching = false;
+                        _searchController.clear();
+                        isLoading = false;
+                      });
                     },
                   ),
                 ),
               ],
             ),
           ),
-          if (isSearching)
+          if (isSearching &&
+              (_tab == _ChatTab.privateChats || _tab == _ChatTab.groups))
             Padding(
               padding: const EdgeInsets.fromLTRB(10, 0, 10, 7),
               child: Container(
@@ -1418,10 +1842,9 @@ widget.onUnreadChanged?.call(newTotal);
                           weight: FontWeight.w500,
                         ),
                         decoration: InputDecoration(
-                          hintText:
-                              _tab == _ChatTab.privateChats
-                                  ? 'Поиск диалогов'
-                                  : 'Поиск групп',
+                          hintText: _tab == _ChatTab.privateChats
+                              ? 'Поиск диалогов'
+                              : 'Поиск групп',
                           hintStyle: _ChatText.body(
                             10.8,
                             color: _ChatStyle.muted2,
@@ -1437,25 +1860,35 @@ widget.onUnreadChanged?.call(newTotal);
               ),
             ),
           Expanded(
-            child: isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: _ChatStyle.green,
-                    ),
+            child: _tab == _ChatTab.notifications
+                ? CmrNotificationsPanel(
+                    userId: widget.userId,
+                    onUnreadChanged: (value) {
+                      if (!mounted) return;
+                      setState(() => _notificationUnread = value);
+                    },
                   )
-                : _filtered.isEmpty
-                    ? _emptyState()
-                    : RefreshIndicator(
-                        color: _ChatStyle.green,
-                        onRefresh: _reloadCurrentTab,
-                        child: _TelegramList(
-                          children: List<Widget>.generate(
-                            _filtered.length,
-                            (i) => _buildDismissibleCard(_filtered[i]),
-                          ),
-                        ),
-                      ),
+                : _tab == _ChatTab.calls
+                    ? CallHistoryPanel(userId: widget.userId)
+                    : isLoading
+                        ? const Center(
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: _ChatStyle.green,
+                            ),
+                          )
+                        : _filtered.isEmpty
+                            ? _emptyState()
+                            : RefreshIndicator(
+                                color: _ChatStyle.green,
+                                onRefresh: _reloadCurrentTab,
+                                child: _TelegramList(
+                                  children: List<Widget>.generate(
+                                    _filtered.length,
+                                    (i) => _buildDismissibleCard(_filtered[i]),
+                                  ),
+                                ),
+                              ),
           ),
         ],
       ),
@@ -1474,9 +1907,7 @@ widget.onUnreadChanged?.call(newTotal);
             ),
             const SizedBox(height: 12),
             Text(
-              isSearching
-                  ? 'Ничего не найдено'
-                  : 'Пока пусто',
+              isSearching ? 'Ничего не найдено' : 'Пока пусто',
               style: _ChatText.title(12.3),
             ),
             const SizedBox(height: 4),
@@ -1511,13 +1942,10 @@ widget.onUnreadChanged?.call(newTotal);
     final id = _asInt(chat['id']);
     final pinned = _pinned.contains(id);
 
-    final isPublic =
-        isGroup ? _isPublicGroup(chat) : false;
-    final iAmMember =
-        isGroup ? _iAmMember(chat) : true;
+    final isPublic = isGroup ? _isPublicGroup(chat) : false;
+    final iAmMember = isGroup ? _iAmMember(chat) : true;
 
-    final rawLast =
-        (chat['last_message'] ?? '').toString().trim();
+    final rawLast = (chat['last_message'] ?? '').toString().trim();
 
     final secondLine = rawLast.isNotEmpty
         ? rawLast
@@ -1537,9 +1965,7 @@ widget.onUnreadChanged?.call(newTotal);
         .join();
 
     return Material(
-      color: unread > 0
-          ? _ChatStyle.greenSoft
-          : Colors.white,
+      color: unread > 0 ? _ChatStyle.greenSoft : Colors.white,
       borderRadius: BorderRadius.circular(10),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
@@ -1550,8 +1976,7 @@ widget.onUnreadChanged?.call(newTotal);
           }
           _openChat(chat);
         },
-        onLongPress:
-            isPrivate ? () => _showPrivateActions(chat) : null,
+        onLongPress: isPrivate ? () => _showPrivateActions(chat) : null,
         child: Container(
           constraints: const BoxConstraints(minHeight: 62),
           padding: const EdgeInsets.symmetric(
@@ -1637,9 +2062,7 @@ widget.onUnreadChanged?.call(newTotal);
                           const SizedBox(width: 7),
                           _MiniChip(
                             text: isPublic ? 'Открытая' : 'Закрытая',
-                            tone: isPublic
-                                ? _ChipTone.blue
-                                : _ChipTone.orange,
+                            tone: isPublic ? _ChipTone.blue : _ChipTone.orange,
                           ),
                         ],
                       ],
@@ -1704,6 +2127,110 @@ widget.onUnreadChanged?.call(newTotal);
     );
   }
 
+  Widget _notificationsEntry() {
+    final selected = _tab == _ChatTab.notifications;
+    final hasUnread = _notificationUnread > 0;
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(13),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(13),
+        onTap: () {
+          if (_tab == _ChatTab.notifications) return;
+          setState(() {
+            _tab = _ChatTab.notifications;
+            isSearching = false;
+            _searchController.clear();
+            isLoading = false;
+          });
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          height: 50,
+          padding: const EdgeInsets.symmetric(horizontal: 11),
+          decoration: BoxDecoration(
+            color: selected ? _ChatStyle.greenSoft : _ChatStyle.soft,
+            borderRadius: BorderRadius.circular(13),
+          ),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: selected ? Colors.white : _ChatStyle.greenSoft,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.notifications_none_rounded,
+                  size: 18,
+                  color: _ChatStyle.greenDark,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Уведомления',
+                      style: _ChatText.title(
+                        11.8,
+                        color:
+                            selected ? _ChatStyle.greenDark : _ChatStyle.text,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      hasUnread
+                          ? '$_notificationUnread новых событий'
+                          : 'Важные события · всё прочитано',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _ChatText.body(
+                        9.6,
+                        color: _ChatStyle.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (hasUnread)
+                Container(
+                  constraints: const BoxConstraints(
+                    minWidth: 20,
+                    minHeight: 20,
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: _ChatStyle.red,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    _notificationUnread > 99 ? '99+' : '$_notificationUnread',
+                    style: AppTypography.custom(
+                      size: 8.8,
+                      weight: FontWeight.w700,
+                      color: Colors.white,
+                      height: 1,
+                    ),
+                  ),
+                )
+              else
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: _ChatStyle.muted2,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _tabChip({
     required String label,
@@ -1712,9 +2239,7 @@ widget.onUnreadChanged?.call(newTotal);
     int badge = 0,
   }) {
     return Material(
-      color: selected
-          ? _ChatStyle.greenSoft
-          : _ChatStyle.soft,
+      color: selected ? _ChatStyle.greenSoft : _ChatStyle.soft,
       borderRadius: BorderRadius.circular(10),
       child: InkWell(
         onTap: onTap,
@@ -1725,9 +2250,7 @@ widget.onUnreadChanged?.call(newTotal);
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
               _ChatDot(
-                color: selected
-                    ? _ChatStyle.green
-                    : _ChatStyle.muted2,
+                color: selected ? _ChatStyle.green : _ChatStyle.muted2,
                 size: selected ? 5.5 : 4.5,
               ),
               const SizedBox(width: 7),
@@ -1735,9 +2258,7 @@ widget.onUnreadChanged?.call(newTotal);
                 label,
                 style: _ChatText.body(
                   10.5,
-                  color: selected
-                      ? _ChatStyle.greenDark
-                      : _ChatStyle.muted,
+                  color: selected ? _ChatStyle.greenDark : _ChatStyle.muted,
                   weight: FontWeight.w600,
                 ),
               ),
@@ -1747,9 +2268,7 @@ widget.onUnreadChanged?.call(newTotal);
                   badge > 99 ? '99+' : '$badge',
                   style: _ChatText.body(
                     8.7,
-                    color: selected
-                        ? _ChatStyle.greenDark
-                        : _ChatStyle.muted2,
+                    color: selected ? _ChatStyle.greenDark : _ChatStyle.muted2,
                     weight: FontWeight.w600,
                   ),
                 ),
@@ -1760,9 +2279,7 @@ widget.onUnreadChanged?.call(newTotal);
       ),
     );
   }
-
 } // ✅ _ChatScreenState
-
 
 class _ChatHeaderAction extends StatelessWidget {
   final String label;
@@ -1817,7 +2334,6 @@ class _ChatHeaderAction extends StatelessWidget {
     );
   }
 }
-
 
 /// ====== New private chat sheet ======
 class _NewPrivateChatSheet extends StatefulWidget {
@@ -1910,8 +2426,7 @@ class _NewPrivateChatSheetState extends State<_NewPrivateChatSheet> {
 
         final first =
             (x['first_name'] ?? x['firstname'] ?? '').toString().trim();
-        final last =
-            (x['last_name'] ?? x['lastname'] ?? '').toString().trim();
+        final last = (x['last_name'] ?? x['lastname'] ?? '').toString().trim();
         final email = (x['email'] ?? '').toString().trim();
 
         final full = ("$first $last").trim();
@@ -1943,7 +2458,7 @@ class _NewPrivateChatSheetState extends State<_NewPrivateChatSheet> {
     }
   }
 
-    @override
+  @override
   Widget build(BuildContext context) {
     final viewInsets = MediaQuery.of(context).viewInsets.bottom;
 
@@ -1963,37 +2478,31 @@ class _NewPrivateChatSheetState extends State<_NewPrivateChatSheet> {
                     decoration: BoxDecoration(
                       color: _ChatStyle.greenSoft,
                       borderRadius: BorderRadius.circular(12),
-                      
                     ),
-                    child: const Center(child: _ChatDots(color: _ChatStyle.greenDark, compact: true)),
+                    child: const Center(
+                        child: _ChatDots(
+                            color: _ChatStyle.greenDark, compact: true)),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
+                      children: [
                         Text(
                           'Новый чат',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: _ChatStyle.text,
-                            fontSize: 15.2,
-                            fontWeight: FontWeight.w700,
-                            height: 1.05,
-                            letterSpacing: -.22,
-                          ),
+                          style:
+                              AppTypography.screenTitle(color: _ChatStyle.text),
                         ),
                         SizedBox(height: 3),
                         Text(
                           'Выберите пользователя для диалога',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: _ChatStyle.muted,
-                            fontSize: 11.0,
-                            fontWeight: FontWeight.w500,
-                          ),
+                          style:
+                              AppTypography.secondary(color: _ChatStyle.muted)
+                                  .copyWith(fontWeight: FontWeight.w500),
                         ),
                       ],
                     ),
@@ -2010,44 +2519,48 @@ class _NewPrivateChatSheetState extends State<_NewPrivateChatSheet> {
                   controller: _q,
                   decoration: const InputDecoration(
                     border: InputBorder.none,
-                    prefixIcon: Icon(Icons.search_rounded, size: 18, color: _ChatStyle.muted),
+                    prefixIcon: Icon(Icons.search_rounded,
+                        size: 18, color: _ChatStyle.muted),
                     hintText: 'Поиск: имя, фамилия или email',
                     isDense: true,
                   ),
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                  style: AppTypography.formText(color: _ChatStyle.text)
+                      .copyWith(fontWeight: FontWeight.w500),
                   autofocus: true,
                 ),
               ),
             ),
             Expanded(
               child: _loading
-                  ? const Center(child: CircularProgressIndicator(color: _ChatStyle.green))
+                  ? const Center(
+                      child: CircularProgressIndicator(color: _ChatStyle.green))
                   : _error != null
                       ? Center(
                           child: Padding(
                             padding: const EdgeInsets.all(18),
                             child: Text(
                               _error!,
-                              style: const TextStyle(
-                                color: Color(0xFFEF4444),
-                                fontWeight: FontWeight.w600,
-                                fontSize: 12.5,
+                              style: AppTypography.secondaryMedium(
+                                color: const Color(0xFFEF4444),
                               ),
                               textAlign: TextAlign.center,
                             ),
                           ),
                         )
                       : _items.isEmpty
-                          ? const Center(
+                          ? Center(
                               child: Text(
                                 'Никого не нашли',
-                                style: TextStyle(color: _ChatStyle.muted, fontSize: 12.2, fontWeight: FontWeight.w500),
+                                style: AppTypography.secondary(
+                                        color: _ChatStyle.muted)
+                                    .copyWith(fontWeight: FontWeight.w500),
                               ),
                             )
                           : ListView.separated(
                               padding: const EdgeInsets.fromLTRB(14, 0, 14, 18),
                               itemCount: _items.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 4),
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 4),
                               itemBuilder: (_, i) {
                                 final u = _items[i];
                                 return Material(
@@ -2057,43 +2570,60 @@ class _NewPrivateChatSheetState extends State<_NewPrivateChatSheet> {
                                     borderRadius: BorderRadius.circular(14),
                                     onTap: () => Navigator.pop(context, u),
                                     child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 8),
                                       child: Row(
                                         children: [
-                                          _UserAvatar(photo: u.photo, title: u.title),
+                                          _UserAvatar(
+                                              photo: u.photo, title: u.title),
                                           const SizedBox(width: 9),
                                           Expanded(
                                             child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
                                               children: [
                                                 Text(
                                                   u.title,
                                                   maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                  style: const TextStyle(
-                                                    fontSize: 13.0,
-                                                    fontWeight: FontWeight.w700,
-                                                    color: _ChatStyle.text,
-                                                    height: 1.1,
-                                                  ),
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style:
+                                                      AppTypography.itemTitle(
+                                                              color: _ChatStyle
+                                                                  .text)
+                                                          .copyWith(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w700),
                                                 ),
-                                                if (u.subtitle?.trim().isNotEmpty ?? false) ...[
+                                                if (u.subtitle
+                                                        ?.trim()
+                                                        .isNotEmpty ??
+                                                    false) ...[
                                                   const SizedBox(height: 3),
                                                   Text(
                                                     u.subtitle!,
                                                     maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
-                                                    style: const TextStyle(
-                                                      fontSize: 11.0,
-                                                      color: _ChatStyle.muted,
-                                                      fontWeight: FontWeight.w500,
-                                                    ),
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style:
+                                                        AppTypography.secondary(
+                                                                color:
+                                                                    _ChatStyle
+                                                                        .muted)
+                                                            .copyWith(
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w500),
                                                   ),
                                                 ],
                                               ],
                                             ),
                                           ),
-                                          const Icon(Icons.chevron_right_rounded, size: 18, color: _ChatStyle.muted),
+                                          const Icon(
+                                              Icons.chevron_right_rounded,
+                                              size: 18,
+                                              color: _ChatStyle.muted),
                                         ],
                                       ),
                                     ),
@@ -2107,7 +2637,6 @@ class _NewPrivateChatSheetState extends State<_NewPrivateChatSheet> {
       ),
     );
   }
-
 }
 
 class _UserPick {
@@ -2150,7 +2679,6 @@ class _UserAvatar extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
         color: _ChatStyle.greenSoft,
-        
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
@@ -2162,8 +2690,7 @@ class _UserAvatar extends StatelessWidget {
                   child: Text(
                     initials,
                     style: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                        color: _ChatStyle.green),
+                        fontWeight: FontWeight.w900, color: _ChatStyle.green),
                   ),
                 ),
               )
@@ -2187,8 +2714,10 @@ class _TelegramList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView.separated(
-      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-      padding: EdgeInsets.fromLTRB(8, 3, 8, MediaQuery.paddingOf(context).bottom + 100),
+      physics:
+          const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      padding: EdgeInsets.fromLTRB(
+          8, 3, 8, MediaQuery.paddingOf(context).bottom + 100),
       itemCount: children.length,
       separatorBuilder: (_, __) => const SizedBox(height: 1),
       itemBuilder: (_, i) => children[i],
@@ -2215,16 +2744,14 @@ class _MiniChip extends StatelessWidget {
     final bg = tone == _ChipTone.blue
         ? const Color(0xFFE3F2FD)
         : const Color(0xFFFFF3E0);
-    final fg = tone == _ChipTone.blue
-        ? _ChatStyle.green
-        : const Color(0xFFB45309);
+    final fg =
+        tone == _ChipTone.blue ? _ChatStyle.green : const Color(0xFFB45309);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(999),
-        
       ),
       child: Text(
         text,
@@ -2374,17 +2901,16 @@ class _DangerActionButtonState extends State<_DangerActionButton>
                       children: [
                         Text(
                           widget.title,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 15,
-                            color: Color(0xFF991B1B),
-                          ),
+                          style: AppTypography.sectionTitle(
+                            color: const Color(0xFF991B1B),
+                          ).copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           widget.subtitle,
-                          style: const TextStyle(
-                              fontSize: 12, color: Color(0xFF7F1D1D)),
+                          style: AppTypography.secondary(
+                            color: const Color(0xFF7F1D1D),
+                          ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),

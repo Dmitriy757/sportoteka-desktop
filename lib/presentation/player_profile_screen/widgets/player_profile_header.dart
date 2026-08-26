@@ -8,6 +8,7 @@ class PlayerProfileHeader extends StatelessWidget {
   final VoidCallback? onClose;
   final VoidCallback? onPhotoEdit;
   final VoidCallback? onMessage;
+  final VoidCallback? onCall;
   final VoidCallback? onAi;
   final bool embedded;
 
@@ -17,6 +18,7 @@ class PlayerProfileHeader extends StatelessWidget {
     this.onClose,
     this.onPhotoEdit,
     this.onMessage,
+    this.onCall,
     this.onAi,
     required this.embedded,
   });
@@ -48,10 +50,8 @@ class PlayerProfileHeader extends StatelessWidget {
   }
 
   String get initials {
-    final parts = name
-        .split(RegExp(r'\s+'))
-        .where((item) => item.isNotEmpty)
-        .toList();
+    final parts =
+        name.split(RegExp(r'\s+')).where((item) => item.isNotEmpty).toList();
     if (parts.isEmpty) return 'И';
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
     return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
@@ -62,6 +62,7 @@ class PlayerProfileHeader extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 700;
+        final mobile = constraints.maxWidth < 640;
         final veryCompact = constraints.maxWidth < 520;
         final avatarSize = veryCompact ? 48.0 : 58.0;
 
@@ -126,6 +127,8 @@ class PlayerProfileHeader extends StatelessWidget {
                           style: PpText.caption(
                             size: 9.5,
                             color: PpColors.greenDark,
+                          ).copyWith(
+                            fontSize: mobile ? 10.5 : null,
                           ),
                         ),
                       ),
@@ -143,7 +146,9 @@ class PlayerProfileHeader extends StatelessWidget {
                       name,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: PpText.title(compact ? 16 : 18),
+                      style: PpText.title(compact ? 16 : 18).copyWith(
+                        fontSize: mobile ? 17 : null,
+                      ),
                     ),
                     if (!veryCompact && subtitle.isNotEmpty) ...[
                       const SizedBox(height: 4),
@@ -151,7 +156,7 @@ class PlayerProfileHeader extends StatelessWidget {
                         subtitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: PpText.body(11),
+                        style: PpText.body(mobile ? 12 : 11),
                       ),
                     ],
                     const SizedBox(height: 7),
@@ -171,12 +176,23 @@ class PlayerProfileHeader extends StatelessWidget {
                       dotColor: PpColors.greenDark,
                       onTap: onAi,
                       emphasized: true,
+                      mobile: mobile,
+                    ),
+                  if (onCall != null)
+                    _HeaderAction(
+                      label: compact ? 'Звонок' : 'Позвонить',
+                      dotColor: PpColors.green,
+                      icon: Icons.call_outlined,
+                      onTap: onCall,
+                      mobile: mobile,
                     ),
                   if (onMessage != null)
                     _HeaderAction(
                       label: compact ? 'Чат' : 'Сообщение',
                       dotColor: PpColors.green,
+                      icon: Icons.chat_bubble_outline_rounded,
                       onTap: onMessage,
+                      mobile: mobile,
                     ),
                   if (onClose != null)
                     _HeaderAction(
@@ -184,6 +200,7 @@ class PlayerProfileHeader extends StatelessWidget {
                       dotColor: PpColors.muted2,
                       onTap: onClose,
                       compact: true,
+                      mobile: mobile,
                     ),
                 ],
               ),
@@ -199,15 +216,19 @@ class _HeaderAction extends StatelessWidget {
   final String label;
   final Color dotColor;
   final VoidCallback? onTap;
+  final IconData? icon;
   final bool emphasized;
   final bool compact;
+  final bool mobile;
 
   const _HeaderAction({
     required this.label,
     required this.dotColor,
     this.onTap,
+    this.icon,
     this.emphasized = false,
     this.compact = false,
+    this.mobile = false,
   });
 
   @override
@@ -225,24 +246,33 @@ class _HeaderAction extends StatelessWidget {
           child: compact
               ? Text(
                   label,
-                  style: PpText.title(14),
+                  style: PpText.title(14).copyWith(
+                    fontSize: mobile ? 15 : null,
+                  ),
                 )
               : Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    PpDot(
-                      color: dotColor,
-                      size: emphasized ? 6 : 5,
-                    ),
+                    if (icon != null)
+                      Icon(
+                        icon,
+                        size: mobile ? 15 : 14,
+                        color: emphasized ? PpColors.greenDark : PpColors.text,
+                      )
+                    else
+                      PpDot(
+                        color: dotColor,
+                        size: emphasized ? 6 : 5,
+                      ),
                     const SizedBox(width: 6),
                     Text(
                       label,
                       style: PpText.body(
                         10.2,
-                        color: emphasized
-                            ? PpColors.greenDark
-                            : PpColors.text,
+                        color: emphasized ? PpColors.greenDark : PpColors.text,
                         weight: FontWeight.w600,
+                      ).copyWith(
+                        fontSize: mobile ? 11.2 : null,
                       ),
                     ),
                   ],

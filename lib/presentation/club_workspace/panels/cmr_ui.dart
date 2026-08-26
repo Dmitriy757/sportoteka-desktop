@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 
 class CmrColors {
   static const bg = Color(0xFFF4F7FB);
@@ -75,12 +76,7 @@ class CmrSectionTitle extends StatelessWidget {
                 title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: CmrColors.text,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  height: 1.05,
-                ),
+                style: AppTypography.screenTitle(color: CmrColors.text),
               ),
               if (subtitle != null) ...[
                 const SizedBox(height: 6),
@@ -88,11 +84,7 @@ class CmrSectionTitle extends StatelessWidget {
                   subtitle!,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: CmrColors.muted,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: AppTypography.secondaryMedium(color: CmrColors.muted),
                 ),
               ],
             ],
@@ -130,7 +122,7 @@ class CmrPrimaryButton extends StatelessWidget {
         elevation: 0,
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        textStyle: const TextStyle(fontWeight: FontWeight.w700),
+        textStyle: AppTypography.actionStrong(color: Colors.white),
       ),
     );
   }
@@ -159,7 +151,7 @@ class CmrGhostButton extends StatelessWidget {
         side: const BorderSide(color: CmrColors.border),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        textStyle: const TextStyle(fontWeight: FontWeight.w600),
+        textStyle: AppTypography.action(color: CmrColors.text),
       ),
     );
   }
@@ -202,22 +194,13 @@ class CmrEmptyState extends StatelessWidget {
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: CmrColors.text,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                ),
+                style: AppTypography.emptyTitle(color: CmrColors.text),
               ),
               const SizedBox(height: 8),
               Text(
                 subtitle,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: CmrColors.muted,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  height: 1.35,
-                ),
+                style: AppTypography.emptyText(color: CmrColors.muted),
               ),
               if (action != null) ...[
                 const SizedBox(height: 18),

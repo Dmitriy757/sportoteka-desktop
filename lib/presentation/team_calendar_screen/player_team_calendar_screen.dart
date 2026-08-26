@@ -648,29 +648,25 @@ class _CalColors {
 class _CalText {
   static TextStyle title(
     double size, {
-    Color color =
-        _CalColors.text,
-  }) =>
-      AppTypography.custom(
-        size: size,
-        weight: FontWeight.w600,
-        color: color,
-        height: 1.12,
-      );
+    Color color = _CalColors.text,
+  }) {
+    if (size >= 15) return AppTypography.screenTitle(color: color).copyWith(fontWeight: FontWeight.w600);
+    if (size >= 13) return AppTypography.sectionTitle(color: color);
+    return AppTypography.subsectionTitle(color: color);
+  }
 
   static TextStyle body(
     double size, {
-    Color color =
-        _CalColors.muted,
-    FontWeight weight =
-        FontWeight.w400,
-  }) =>
-      AppTypography.custom(
-        size: size,
-        weight: weight,
-        color: color,
-        height: 1.22,
-      );
+    Color color = _CalColors.muted,
+    FontWeight weight = FontWeight.w400,
+  }) {
+    final style = size >= 12
+        ? AppTypography.body(color: color)
+        : size >= 11
+            ? AppTypography.secondary(color: color)
+            : AppTypography.caption(color: color);
+    return style.copyWith(fontWeight: weight);
+  }
 }
 
 class _CalDot extends StatelessWidget {

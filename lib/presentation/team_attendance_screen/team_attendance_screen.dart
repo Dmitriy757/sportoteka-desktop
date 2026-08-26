@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 
 class TeamAttendanceScreen extends StatefulWidget {
@@ -198,12 +199,14 @@ class _TeamAttendanceScreenState extends State<TeamAttendanceScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text("Комментарий"),
+        title: Text("Комментарий", style: AppTypography.sectionTitle()),
         content: TextField(
           controller: c,
           maxLines: 3,
-          decoration: const InputDecoration(
+          style: AppTypography.commentText(),
+          decoration: InputDecoration(
             hintText: "Например: заболел, семейные причины…",
+            hintStyle: AppTypography.formHint(),
           ),
         ),
         actions: [
@@ -490,11 +493,9 @@ class _TeamAttendanceScreenState extends State<TeamAttendanceScreen> {
                         widget.eventTitle,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFF111827),
-                          fontWeight: FontWeight.w900,
-                          fontSize: 14,
-                        ),
+                        style: AppTypography.sectionTitle(
+                          color: const Color(0xFF111827),
+                        ).copyWith(fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 10),
                       _StatsBar(
@@ -522,10 +523,8 @@ class _TeamAttendanceScreenState extends State<TeamAttendanceScreen> {
                       const SizedBox(height: 10),
                       Text(
                         "Показано: ${filtered.length} / ${players.length}",
-                        style: const TextStyle(
-                          color: Color(0xFF6B7280),
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12
+                        style: AppTypography.secondaryMedium(
+                          color: const Color(0xFF6B7280),
                         ),
                       ),
                     ],
@@ -679,7 +678,7 @@ class _FilterButton extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 _label(value),
-                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900),
+                style: AppTypography.chip(active: true).copyWith(fontWeight: FontWeight.w700),
                 maxLines: 1,
               ),
             ],
@@ -742,7 +741,7 @@ class _StatsBar extends StatelessWidget {
                 const SizedBox(width: 6),
                 Text(
                   text,
-                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                  style: AppTypography.actionStrong(),
                 ),
               ],
             ),
@@ -894,9 +893,8 @@ class _PlayerAttendanceCard extends StatelessWidget {
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 14
+                      style: AppTypography.itemTitle().copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -904,10 +902,8 @@ class _PlayerAttendanceCard extends StatelessWidget {
                       subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF6B7280),
-                        fontWeight: FontWeight.w700
+                      style: AppTypography.secondaryMedium(
+                        color: const Color(0xFF6B7280),
                       ),
                     ),
                   ],
@@ -948,11 +944,8 @@ class _PlayerAttendanceCard extends StatelessWidget {
               ),
               child: Text(
                 note,
-                style: const TextStyle(
-                  fontSize: 12,
-                  height: 1.25,
-                  color: Color(0xFF374151),
-                  fontWeight: FontWeight.w600
+                style: AppTypography.commentText(
+                  color: const Color(0xFF374151),
                 ),
               ),
             ),
@@ -1075,12 +1068,10 @@ class _StatusChip extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 text,
-                style: TextStyle(
+                style: AppTypography.chip(
                   color: fg,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 12,
-                  letterSpacing: 0.2,
-                ),
+                  active: true,
+                ).copyWith(fontWeight: FontWeight.w700),
               ),
             ],
           ),

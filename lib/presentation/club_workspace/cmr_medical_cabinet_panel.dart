@@ -560,20 +560,20 @@ class _CmrMedicalCabinetPanelState extends State<CmrMedicalCabinetPanel> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Медкабинет', style: _T.title(17)),
+                Text('Медкабинет', style: AppTypography.screenTitle(color: _C.text)),
                 const SizedBox(height: 3),
                 Text(
                   '${widget.teamName} · ${_players.length} игроков',
-                  style: _T.muted(10.8),
+                  style: AppTypography.secondary(color: _C.muted2),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: _search,
-                  style: _T.value(12),
+                  style: AppTypography.formText(color: _C.text),
                   decoration: InputDecoration(
                     isDense: true,
                     hintText: 'Найти игрока',
-                    hintStyle: _T.muted(11.5),
+                    hintStyle: AppTypography.formHint(color: _C.muted2),
                     prefixIcon: const Icon(Icons.search_rounded, size: 18),
                     filled: true,
                     fillColor: _C.soft,
@@ -625,14 +625,14 @@ class _CmrMedicalCabinetPanelState extends State<CmrMedicalCabinetPanel> {
                                     _playerName(p),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: _T.value(11.8),
+                                    style: AppTypography.formText(color: _C.text),
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
                                     _playerSubtitle(p),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: _T.muted(9.8),
+                                    style: AppTypography.caption(color: _C.muted2),
                                   ),
                                 ],
                               ),
@@ -687,7 +687,7 @@ class _CmrMedicalCabinetPanelState extends State<CmrMedicalCabinetPanel> {
                     const SizedBox(height: 2),
                     Text(
                       'Медицинские документы · ${_records.length}',
-                      style: _T.muted(10.5),
+                      style: AppTypography.documentMeta(color: _C.muted2),
                     ),
                   ],
                 ),
@@ -761,9 +761,9 @@ class _CmrMedicalCabinetPanelState extends State<CmrMedicalCabinetPanel> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(edit ? 'Редактировать документ' : 'Новый документ', style: _T.title(16)),
+                    Text(edit ? 'Редактировать документ' : 'Новый документ', style: AppTypography.screenTitle(color: _C.text)),
                     const SizedBox(height: 2),
-                    Text(_playerName(player), style: _T.muted(10.5)),
+                    Text(_playerName(player), style: AppTypography.secondary(color: _C.muted2)),
                   ],
                 ),
               ),
@@ -800,7 +800,7 @@ class _CmrMedicalCabinetPanelState extends State<CmrMedicalCabinetPanel> {
                         'Документ',
                       ])
                         ChoiceChip(
-                          label: Text(type, style: _T.value(10.7)),
+                          label: Text(type, style: AppTypography.chip(color: _C.text)),
                           selected: _type.text.trim() == type,
                           selectedColor: _C.greenSoft,
                           side: BorderSide(
@@ -835,7 +835,7 @@ class _CmrMedicalCabinetPanelState extends State<CmrMedicalCabinetPanel> {
                               children: [
                                 const Icon(Icons.calendar_today_outlined, size: 16, color: _C.green),
                                 const SizedBox(width: 8),
-                                Text(_dateIso(_recordDate), style: _T.value(11.8)),
+                                Text(_dateIso(_recordDate), style: AppTypography.formText(color: _C.text)),
                               ],
                             ),
                           ),
@@ -887,7 +887,7 @@ class _CmrMedicalCabinetPanelState extends State<CmrMedicalCabinetPanel> {
                                     : 'Файл не выбран'),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: _T.muted(11.2),
+                            style: AppTypography.documentMeta(color: _C.muted2),
                           ),
                         ),
                         _TinyButton(
@@ -914,7 +914,7 @@ class _CmrMedicalCabinetPanelState extends State<CmrMedicalCabinetPanel> {
                         Expanded(
                           child: Text(
                             'Медицинские документы доступны сотрудникам клуба. Родительский доступ к ним не выдаётся автоматически.',
-                            style: _T.muted(10.6).copyWith(color: _C.greenDark),
+                            style: AppTypography.caption(color: _C.greenDark),
                           ),
                         ),
                       ],
@@ -931,7 +931,7 @@ class _CmrMedicalCabinetPanelState extends State<CmrMedicalCabinetPanel> {
 
   InputDecoration _inputDecoration(String label) => InputDecoration(
         labelText: label,
-        labelStyle: _T.muted(10.8),
+        labelStyle: AppTypography.formLabel(color: _C.muted2),
         isDense: true,
         filled: true,
         fillColor: Colors.white,
@@ -1069,7 +1069,7 @@ class _TinyButton extends StatelessWidget {
               const SizedBox(width: 5),
               Text(
                 label,
-                style: _T.value(10.6).copyWith(
+                style: AppTypography.action(color: _C.text).copyWith(
                   color: enabled
                       ? (primary ? _C.greenDark : _C.text)
                       : _C.muted2.withOpacity(.55),
@@ -1089,7 +1089,7 @@ class _SectionTitle extends StatelessWidget {
   const _SectionTitle(this.text);
 
   @override
-  Widget build(BuildContext context) => Text(text, style: _T.value(11.5));
+  Widget build(BuildContext context) => Text(text, style: AppTypography.subsectionTitle(color: _C.text));
 }
 
 class _Input extends StatelessWidget {
@@ -1110,12 +1110,12 @@ class _Input extends StatelessWidget {
     return TextField(
       controller: controller,
       maxLines: maxLines,
-      style: _T.value(11.8),
+      style: AppTypography.formText(color: _C.text),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        labelStyle: _T.muted(10.8),
-        hintStyle: _T.muted(11.2),
+        labelStyle: AppTypography.formLabel(color: _C.muted2),
+        hintStyle: AppTypography.formHint(color: _C.muted2),
         isDense: true,
         filled: true,
         fillColor: Colors.white,
@@ -1203,21 +1203,21 @@ class _MedicalRecordCard extends StatelessWidget {
                         color: _C.soft,
                         borderRadius: BorderRadius.circular(6),
                       ),
-                      child: Text(type, style: _T.muted(9.3)),
+                      child: Text(type, style: AppTypography.badge(color: _C.muted2)),
                     ),
                     const SizedBox(width: 6),
-                    if (date.isNotEmpty) Text(date, style: _T.muted(9.5)),
+                    if (date.isNotEmpty) Text(date, style: AppTypography.documentMeta(color: _C.muted2)),
                   ],
                 ),
                 const SizedBox(height: 5),
-                Text(title, style: _T.value(12.2)),
+                Text(title, style: AppTypography.documentTitle(color: _C.text)),
                 if (value.isNotEmpty) ...[
                   const SizedBox(height: 3),
-                  Text(value, style: _T.muted(10.7)),
+                  Text(value, style: AppTypography.secondary(color: _C.muted2)),
                 ],
                 if (comment.isNotEmpty) ...[
                   const SizedBox(height: 3),
-                  Text(comment, style: _T.muted(10.3)),
+                  Text(comment, style: AppTypography.commentText(color: _C.text)),
                 ],
               ],
             ),
@@ -1279,9 +1279,9 @@ class _EmptyMedical extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 10),
-                Text(title, textAlign: TextAlign.center, style: _T.title(15)),
+                Text(title, textAlign: TextAlign.center, style: AppTypography.emptyTitle(color: _C.text)),
                 const SizedBox(height: 4),
-                Text(subtitle, textAlign: TextAlign.center, style: _T.muted(11.2)),
+                Text(subtitle, textAlign: TextAlign.center, style: AppTypography.emptyText(color: _C.muted2)),
               ],
             ),
           ),
@@ -1305,7 +1305,7 @@ class _ErrorPane extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(message, textAlign: TextAlign.center, style: _T.muted(11.5)),
+              Text(message, textAlign: TextAlign.center, style: AppTypography.emptyText(color: _C.muted2)),
               const SizedBox(height: 10),
               _TinyButton(
                 icon: Icons.refresh_rounded,

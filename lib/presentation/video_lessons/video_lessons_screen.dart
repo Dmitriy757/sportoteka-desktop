@@ -461,7 +461,7 @@ class _FolderTile extends StatelessWidget {
                     Text('${folder.lessonsCount} видео · ${folder.subfoldersCount} подпапок', style: _T.body(12)),
                     if (selected) ...[
                       const SizedBox(height: 4),
-                      Text('ВЫБРАННАЯ ПАПКА', style: _T.action(color: _C.greenDark).copyWith(fontSize: 10.5)),
+                      Text('ВЫБРАННАЯ ПАПКА', style: _T.action(color: _C.greenDark)),
                     ],
                   ],
                 ),

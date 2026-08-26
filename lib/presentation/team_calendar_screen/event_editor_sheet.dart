@@ -122,11 +122,8 @@ class _EventEditorRightPane extends StatelessWidget {
                                 title,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: AppTypography.custom(
-                                  size: 13.4,
-                                  weight: FontWeight.w600,
+                                style: AppTypography.subsectionTitle(
                                   color: const Color(0xFF0B0F14),
-                                  height: 1.05,
                                 ),
                               ),
                               const SizedBox(height: 3),
@@ -134,11 +131,8 @@ class _EventEditorRightPane extends StatelessWidget {
                                 subtitle,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: AppTypography.custom(
-                                  size: 10.2,
-                                  weight: FontWeight.w400,
+                                style: AppTypography.caption(
                                   color: const Color(0xFF667085),
-                                  height: 1.05,
                                 ),
                               ),
                             ],
@@ -640,13 +634,9 @@ class _EventEditorSheetState extends State<EventEditorSheet> {
     );
   }
 
-  TextStyle get _fieldTextStyle => AppTypography.custom(
-        size: 12.0,
-        weight: FontWeight.w600,
+  TextStyle get _fieldTextStyle => AppTypography.formText(
         color: const Color(0xFF111827),
-        height: 1.15,
-        letterSpacing: 0,
-      );
+      ).copyWith(fontWeight: FontWeight.w500);
 
   InputDecoration _fieldDecoration(String label, String hint) {
     return InputDecoration(
@@ -655,15 +645,10 @@ class _EventEditorSheetState extends State<EventEditorSheet> {
       contentPadding: EdgeInsets.zero,
       labelText: label,
       hintText: hint,
-      labelStyle: AppTypography.custom(
-        size: 10.8,
-        weight: FontWeight.w600,
+      labelStyle: AppTypography.formLabel(
         color: const Color(0xFF6B7280),
-        height: 1.05,
       ),
-      hintStyle: AppTypography.custom(
-        size: 10.6,
-        weight: FontWeight.w400,
+      hintStyle: AppTypography.formHint(
         color: const Color(0xFF9CA3AF),
       ),
     );
@@ -692,10 +677,8 @@ class _EventEditorSheetState extends State<EventEditorSheet> {
                 Expanded(
                   child: Text(
                     widget.initial == null ? "Добавить событие" : "Редактировать",
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 18,
-                      color: Color(0xFF111827),
+                    style: AppTypography.screenTitle(
+                      color: const Color(0xFF111827),
                     ),
                   ),
                 ),
@@ -962,10 +945,8 @@ class _EventEditorSheetState extends State<EventEditorSheet> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.left,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 10.4,
-                    height: 1.15,
+                  style: AppTypography.captionMedium(
+                    color: const Color(0xFF111827),
                   ),
                 ),
               ),
@@ -1022,21 +1003,15 @@ class _EventEditorSheetState extends State<EventEditorSheet> {
                   children: [
                     Text(
                       title,
-                      style: AppTypography.custom(
-                        size: 11.9,
-                        weight: FontWeight.w600,
+                      style: AppTypography.formLabel(
                         color: const Color(0xFF0B0F14),
-                        height: 1.05,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
-                      style: AppTypography.custom(
-                        size: 9.9,
-                        weight: FontWeight.w400,
+                      style: AppTypography.formHint(
                         color: const Color(0xFF667085),
-                        height: 1.1,
                       ),
                     ),
                   ],
@@ -1064,7 +1039,7 @@ class _EventEditorSheetState extends State<EventEditorSheet> {
             color: const Color(0xFFF3FAF6),
             borderRadius: BorderRadius.circular(9),
           ),
-          child: Text(text, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: Color(0xFF067A46))),
+          child: Text(text, style: AppTypography.chip(color: const Color(0xFF067A46), active: true)),
         ),
       ),
     );
@@ -1097,10 +1072,8 @@ class _EventEditorSheetState extends State<EventEditorSheet> {
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(
-                        fontSize: 10.2,
-                        color: Color(0xFF6B7280),
-                        fontWeight: FontWeight.w600,
+                      style: AppTypography.captionMedium(
+                        color: const Color(0xFF6B7280),
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -1108,7 +1081,7 @@ class _EventEditorSheetState extends State<EventEditorSheet> {
                       value,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11.4),
+                      style: AppTypography.secondaryMedium(color: const Color(0xFF111827)),
                     ),
                   ],
                 ),
@@ -1559,12 +1532,8 @@ class _CmrWindowFrame extends StatelessWidget {
                             title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 12.8,
-                              height: 1.05,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF111827),
-                              letterSpacing: -.15,
+                            style: AppTypography.subsectionTitle(
+                              color: const Color(0xFF111827),
                             ),
                           ),
                           const SizedBox(height: 2),
@@ -1572,12 +1541,8 @@ class _CmrWindowFrame extends StatelessWidget {
                             subtitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 10.4,
-                              height: 1.1,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF6B7280),
-                              letterSpacing: -.05,
+                            style: AppTypography.captionMedium(
+                              color: const Color(0xFF6B7280),
                             ),
                           ),
                         ],
@@ -1962,15 +1927,12 @@ class _CompactTimeHeader extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 2),
-                const Text(
+                Text(
                   'Компактный выбор времени',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 9.8,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF6B7280),
-                    height: 1.05,
+                  style: AppTypography.badge(
+                    color: const Color(0xFF6B7280),
                   ),
                 ),
               ],
@@ -2033,10 +1995,8 @@ class _CompactTimeLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: const TextStyle(
-        fontSize: 10.2,
-        fontWeight: FontWeight.w600,
-        color: Color(0xFF111827),
+      style: AppTypography.captionMedium(
+        color: const Color(0xFF111827),
       ),
     );
   }
