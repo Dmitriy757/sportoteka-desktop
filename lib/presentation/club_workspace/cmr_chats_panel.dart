@@ -24,6 +24,7 @@ enum _CmrChatMode { privateChats, groups, users }
 
 class CmrChatsPanel extends StatefulWidget {
   final int userId;
+
   /// Нужен для ИИ-клуба: поиск отчетов, игроков и сессий внутри клуба.
   /// Оставлен nullable, чтобы старые вызовы CmrChatsPanel не сломались.
   final int? clubId;
@@ -31,8 +32,11 @@ class CmrChatsPanel extends StatefulWidget {
   final int? teamId;
   final String? teamName;
   final ValueChanged<int>? onUnreadChanged;
+
   /// Переходы из карточек ИИ: player_profile / tracker / report / calendar / match / testing / plans / attendance.
-  final void Function(String target, Map<String, dynamic> payload)? onAiNavigate;
+  final void Function(String target, Map<String, dynamic> payload)?
+      onAiNavigate;
+
   /// Открытие PDF из карточки ИИ. Можно подключить url_launcher или свой PDF-viewer.
   final void Function(String url)? onAiOpenPdf;
 
@@ -61,7 +65,6 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
   static const String _createChatUrl = '$_apiBase/create_chat.php';
   static const String _joinGroupUrl = '$_apiBase/join_group.php';
   static const String _markReadUrl = '$_apiBase/mark_chat_read.php';
-  static const String _unreadTotalUrl = '$_apiBase/get_unread_total.php';
 
   final TextEditingController _search = TextEditingController();
 
@@ -123,7 +126,8 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
       return s.substring(0, 1).toUpperCase();
     }
 
-    final parts = title.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
+    final parts =
+        title.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
     if (parts.isEmpty) return 'Ч';
     if (parts.length == 1) return firstLetter(parts.first);
     return '${firstLetter(parts[0])}${firstLetter(parts[1])}';
@@ -151,7 +155,12 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
     final list = raw is List
         ? raw
         : raw is Map
-            ? (raw['data'] ?? raw['items'] ?? raw['chats'] ?? raw['groups'] ?? raw['users'] ?? <dynamic>[])
+            ? (raw['data'] ??
+                raw['items'] ??
+                raw['chats'] ??
+                raw['groups'] ??
+                raw['users'] ??
+                <dynamic>[])
             : <dynamic>[];
     if (list is! List) return <Map<String, dynamic>>[];
     return list
@@ -179,7 +188,8 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
 
   Future<void> _loadPrivateChats() async {
     try {
-      final res = await http.get(Uri.parse('$_privateChatsUrl?user_id=${widget.userId}'));
+      final res = await http
+          .get(Uri.parse('$_privateChatsUrl?user_id=${widget.userId}'));
       if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
       final data = _decodeJson(res.body);
       final list = _asMapList(data).where(_isPrivate).toList();
@@ -193,7 +203,8 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
 
   Future<void> _loadGroups() async {
     try {
-      final res = await http.get(Uri.parse('$_groupsFeedUrl?user_id=${widget.userId}'));
+      final res =
+          await http.get(Uri.parse('$_groupsFeedUrl?user_id=${widget.userId}'));
       if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
       final data = _decodeJson(res.body);
       final list = _asMapList(data);
@@ -242,21 +253,71 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
   void _startUnreadPolling() {
     _unreadTimer?.cancel();
     _fetchUnreadTotal();
-    _unreadTimer = Timer.periodic(const Duration(seconds: 6), (_) => _fetchUnreadTotal());
+    _unreadTimer =
+        Timer.periodic(const Duration(seconds: 6), (_) => _fetchUnreadTotal());
+  }
+
+  int _sumUnreadRows(dynamic raw) {
+    if (raw is! List) return 0;
+
+    var total = 0;
+    for (final entry in raw.whereType<Map>()) {
+      final value = _asInt(entry['unread_count']);
+      if (value > 0) total += value;
+    }
+    return total;
+  }
+
+  Future<int> _snapshotPrivateUnread() async {
+    try {
+      final res = await http
+          .get(Uri.parse('$_privateChatsUrl?user_id=${widget.userId}'))
+          .timeout(const Duration(seconds: 8));
+
+      if (res.statusCode != 200) return 0;
+
+      final data = _decodeJson(res.body);
+      final rows = _asMapList(data).where(_isPrivate).toList();
+      return _sumUnreadRows(rows);
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  Future<int> _snapshotGroupUnread() async {
+    try {
+      final res = await http
+          .get(Uri.parse('$_groupsFeedUrl?user_id=${widget.userId}'))
+          .timeout(const Duration(seconds: 8));
+
+      if (res.statusCode != 200) return 0;
+
+      final data = _decodeJson(res.body);
+      final rows = _asMapList(data).where(_iAmMember).toList();
+      return _sumUnreadRows(rows);
+    } catch (_) {
+      return 0;
+    }
   }
 
   Future<void> _fetchUnreadTotal() async {
-    try {
-      final res = await http.get(Uri.parse('$_unreadTotalUrl?user_id=${widget.userId}'));
-      if (res.statusCode != 200) return;
-      final data = _decodeJson(res.body);
-      if (data is! Map || data['success'] != true) return;
-      final total = _asInt(data['unread_total']);
-      if (!mounted) return;
+    final values = await Future.wait<int>(<Future<int>>[
+      _snapshotPrivateUnread(),
+      _snapshotGroupUnread(),
+    ]);
+
+    final total = (values[0] + values[1]).clamp(0, 9999).toInt();
+
+    if (!mounted) return;
+
+    if (_unreadTotal != total) {
       setState(() => _unreadTotal = total);
-      await PrefUtils.setUnreadChatsCount(total);
-      widget.onUnreadChanged?.call(total);
-    } catch (_) {}
+    }
+
+    // Только реальное число из unread_count самих диалогов.
+    // Старый get_unread_total.php больше не может вернуть фантомные 15.
+    await PrefUtils.setUnreadChatsCount(total);
+    widget.onUnreadChanged?.call(total);
   }
 
   void _autoSelectFirstChat() {
@@ -342,7 +403,8 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
       );
       if (!_isBadChatName(email)) return email;
 
-      final phone = _clean(chat['peer_phone'] ?? chat['opponent_phone'] ?? chat['phone']);
+      final phone =
+          _clean(chat['peer_phone'] ?? chat['opponent_phone'] ?? chat['phone']);
       if (!_isBadChatName(phone)) return phone;
 
       return 'Личный чат';
@@ -386,7 +448,9 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
 
     if (last.isNotEmpty) return last;
 
-    final type = _clean(chat['last_message_type'] ?? chat['message_type'] ?? chat['type']).toLowerCase();
+    final type = _clean(
+            chat['last_message_type'] ?? chat['message_type'] ?? chat['type'])
+        .toLowerCase();
     final file = _clean(
       chat['last_file_url'] ??
           chat['file_url'] ??
@@ -395,10 +459,17 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
     ).toLowerCase();
 
     if (file.isNotEmpty) {
-      if (type == 'image' || file.endsWith('.jpg') || file.endsWith('.jpeg') || file.endsWith('.png') || file.endsWith('.webp')) {
+      if (type == 'image' ||
+          file.endsWith('.jpg') ||
+          file.endsWith('.jpeg') ||
+          file.endsWith('.png') ||
+          file.endsWith('.webp')) {
         return 'Фото';
       }
-      if (type == 'video' || file.endsWith('.mp4') || file.endsWith('.mov') || file.endsWith('.avi')) {
+      if (type == 'video' ||
+          file.endsWith('.mp4') ||
+          file.endsWith('.mov') ||
+          file.endsWith('.avi')) {
         return 'Видео';
       }
       return 'Файл';
@@ -406,8 +477,10 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
 
     if (_isPrivate(chat)) return 'Нет сообщений';
 
-    final members = _asInt(chat['members_count'] ?? chat['member_count'] ?? chat['members']);
-    final publicText = _truthy(chat['is_public']) ? 'Открытая группа' : 'Закрытая группа';
+    final members = _asInt(
+        chat['members_count'] ?? chat['member_count'] ?? chat['members']);
+    final publicText =
+        _truthy(chat['is_public']) ? 'Открытая группа' : 'Закрытая группа';
     return members > 0 ? '$publicText · $members участников' : publicText;
   }
 
@@ -495,7 +568,6 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
     }).toList();
   }
 
-
   bool get _phoneMessengerLayout {
     final media = MediaQuery.maybeOf(context);
     final w = media?.size.width ?? 9999;
@@ -577,22 +649,29 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
     // Без внешнего роутера не показываем тренеру технический payload.
     // Для полноценного открытия экранов передайте onAiNavigate из ClubWorkspaceScreen.
     if (target == 'report') {
-      final url = (payload['open_url'] ?? payload['pdf_url'] ?? '').toString().trim();
+      final url =
+          (payload['open_url'] ?? payload['pdf_url'] ?? '').toString().trim();
       if (url.isNotEmpty) {
         Clipboard.setData(ClipboardData(text: url));
-        _toast('Отчет найден: ссылка скопирована. Подключите onAiNavigate, чтобы открывать экран отчета сразу.');
+        _toast(
+            'Отчет найден: ссылка скопирована. Подключите onAiNavigate, чтобы открывать экран отчета сразу.');
         return;
       }
       final sessionId = _asInt(payload['session_id']);
-      _toast(sessionId > 0 ? 'Отчет найден: сессия #$sessionId. Подключите переход в экран отчета.' : 'Отчет найден. Подключите переход в экран отчета.');
+      _toast(sessionId > 0
+          ? 'Отчет найден: сессия #$sessionId. Подключите переход в экран отчета.'
+          : 'Отчет найден. Подключите переход в экран отчета.');
       return;
     }
     if (target == 'player_profile') {
       final playerId = _asInt(payload['player_id']);
-      _toast(playerId > 0 ? 'Игрок найден: #$playerId. Подключите переход в профиль игрока.' : 'Игрок найден. Подключите переход в профиль.');
+      _toast(playerId > 0
+          ? 'Игрок найден: #$playerId. Подключите переход в профиль игрока.'
+          : 'Игрок найден. Подключите переход в профиль.');
       return;
     }
-    _toast('Результат найден. Подключите onAiNavigate, чтобы открывать нужный экран из ИИ.');
+    _toast(
+        'Результат найден. Подключите onAiNavigate, чтобы открывать нужный экран из ИИ.');
   }
 
   Future<void> _openChatFullscreen({
@@ -676,10 +755,10 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
           if (!mounted) return;
           if (_phoneMessengerLayout) {
             setState(() {
-            _notificationsSelected = false;
-            _aiSelected = false;
-            _mode = _CmrChatMode.privateChats;
-          });
+              _notificationsSelected = false;
+              _aiSelected = false;
+              _mode = _CmrChatMode.privateChats;
+            });
             unawaited(_openChatFullscreen(
               chatId: chatId,
               title: title,
@@ -723,7 +802,8 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
         'user_id': widget.userId.toString(),
       });
       final data = _decodeJson(res.body);
-      final ok = res.statusCode == 200 && data is Map && data['success'] == true;
+      final ok =
+          res.statusCode == 200 && data is Map && data['success'] == true;
       if (!ok) {
         _toast('Не удалось вступить в группу');
         return;
@@ -746,7 +826,7 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
       await _loadGroups();
       if (!mounted) return;
       setState(() => _mode = _CmrChatMode.groups);
-      }
+    }
   }
 
   void _openFullChat() {
@@ -769,12 +849,13 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
         final width = constraints.maxWidth.isFinite && constraints.maxWidth > 0
             ? constraints.maxWidth
             : media.width;
-        final safeHeight = constraints.maxHeight.isFinite && constraints.maxHeight > 120
-            ? constraints.maxHeight
-            : math.max(
-                620.0,
-                media.height - MediaQuery.paddingOf(context).vertical - 18,
-              );
+        final safeHeight =
+            constraints.maxHeight.isFinite && constraints.maxHeight > 120
+                ? constraints.maxHeight
+                : math.max(
+                    620.0,
+                    media.height - MediaQuery.paddingOf(context).vertical - 18,
+                  );
 
         if (widget.userId <= 0) {
           return SizedBox(
@@ -790,7 +871,8 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
                   child: const _CmrChatEmpty(
                     icon: Icons.forum_rounded,
                     title: 'Чаты недоступны',
-                    subtitle: 'Не удалось определить пользователя для загрузки сообщений.',
+                    subtitle:
+                        'Не удалось определить пользователя для загрузки сообщений.',
                   ),
                 ),
               ),
@@ -841,27 +923,44 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(tablet ? 16 : 18),
               child: Container(
-                decoration: _CmrChatDecor.unifiedWindow(radius: tablet ? 16 : 18),
+                decoration:
+                    _CmrChatDecor.unifiedWindow(radius: tablet ? 16 : 18),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    SizedBox(width: listWidth, child: _buildLeft(items, mobile: false, compact: compact)),
-                    Container(width: 1, color: _CmrChatColors.line.withOpacity(.90)),
+                    SizedBox(
+                        width: listWidth,
+                        child:
+                            _buildLeft(items, mobile: false, compact: compact)),
+                    Container(
+                        width: 1, color: _CmrChatColors.line.withOpacity(.90)),
                     Expanded(child: _buildRight()),
                     if (showInfoRail) ...[
-                      Container(width: 1, color: _CmrChatColors.line.withOpacity(.90)),
-                      SizedBox(width: 250, child: _ChatInfoRail(
-                        title: _selectedChatName.isEmpty ? 'Чат' : _selectedChatName,
-                        subtitle: _selectedChat == null
-                            ? 'Рабочая переписка'
-                            : (_isPrivate(_selectedChat!) ? 'Личный диалог' : _subtitle(_selectedChat!)),
-                        avatarUrl: _selectedChat == null ? '' : _photo(_selectedChat!),
-                        initials: _initials(_selectedChatName),
-                        isGroup: _selectedChat == null ? false : !_isPrivate(_selectedChat!),
-                        unreadTotal: _unreadTotal,
-                        onOpenFull: _openFullChat,
-                        onRefresh: _refresh,
-                      )),
+                      Container(
+                          width: 1,
+                          color: _CmrChatColors.line.withOpacity(.90)),
+                      SizedBox(
+                          width: 250,
+                          child: _ChatInfoRail(
+                            title: _selectedChatName.isEmpty
+                                ? 'Чат'
+                                : _selectedChatName,
+                            subtitle: _selectedChat == null
+                                ? 'Рабочая переписка'
+                                : (_isPrivate(_selectedChat!)
+                                    ? 'Личный диалог'
+                                    : _subtitle(_selectedChat!)),
+                            avatarUrl: _selectedChat == null
+                                ? ''
+                                : _photo(_selectedChat!),
+                            initials: _initials(_selectedChatName),
+                            isGroup: _selectedChat == null
+                                ? false
+                                : !_isPrivate(_selectedChat!),
+                            unreadTotal: _unreadTotal,
+                            onOpenFull: _openFullChat,
+                            onRefresh: _refresh,
+                          )),
                     ],
                   ],
                 ),
@@ -891,11 +990,17 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
       // встраиваем его под нижний dock, а открываем полноценным экраном.
       if (!_openingAiRoute) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted || !_aiSelected || !_phoneMessengerLayout || _openingAiRoute) return;
+          if (!mounted ||
+              !_aiSelected ||
+              !_phoneMessengerLayout ||
+              _openingAiRoute) return;
           _openAiFullscreen();
         });
       }
-      return _buildLeft(items, mobile: true, compact: true, key: const ValueKey('chat-list-phone-ai-bg'));
+      return _buildLeft(items,
+          mobile: true,
+          compact: true,
+          key: const ValueKey('chat-list-phone-ai-bg'));
     }
     if (_selectedChatId != null) {
       return _buildRight(
@@ -903,7 +1008,8 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
         key: ValueKey('chat-room-phone-${_selectedChatId ?? 0}'),
       );
     }
-    return _buildLeft(items, mobile: true, compact: true, key: const ValueKey('chat-list-phone'));
+    return _buildLeft(items,
+        mobile: true, compact: true, key: const ValueKey('chat-list-phone'));
   }
 
   Widget _buildLeft(
@@ -950,7 +1056,9 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
           SizedBox(height: mobile ? 9 : 10),
           _ChatSearch(
             controller: _search,
-            hintText: _mode == _CmrChatMode.users ? 'Найти пользователя...' : 'Поиск по чатам...',
+            hintText: _mode == _CmrChatMode.users
+                ? 'Найти пользователя...'
+                : 'Поиск по чатам...',
             mobile: mobile,
           ),
           const SizedBox(height: 8),
@@ -961,7 +1069,8 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
             usersCount: _users.length,
             onChanged: (mode) {
               setState(() => _mode = mode);
-              if (mode == _CmrChatMode.privateChats && _privateChats.isEmpty) _loadPrivateChats();
+              if (mode == _CmrChatMode.privateChats && _privateChats.isEmpty)
+                _loadPrivateChats();
               if (mode == _CmrChatMode.groups && _groups.isEmpty) _loadGroups();
               if (mode == _CmrChatMode.users && _users.isEmpty) _loadUsers();
             },
@@ -988,7 +1097,9 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
                             if (_mode == _CmrChatMode.users) {
                               return _UserRow(
                                 title: _userTitle(item),
-                                subtitle: (item['email'] ?? 'Нажмите, чтобы начать диалог').toString(),
+                                subtitle: (item['email'] ??
+                                        'Нажмите, чтобы начать диалог')
+                                    .toString(),
                                 avatarUrl: _photo(item),
                                 initials: _initials(_userTitle(item)),
                                 onTap: () => _createPrivateWithUser(item),
@@ -1013,11 +1124,14 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
                               isGroup: isGroup,
                               isPublic: _truthy(item['is_public']),
                               canOpen: canOpen,
-                              onTap: () => canOpen ? _selectChat(item) : _joinGroup(item),
+                              onTap: () => canOpen
+                                  ? _selectChat(item)
+                                  : _joinGroup(item),
                               mobile: mobile,
                             );
                           },
-                          separatorBuilder: (_, __) => SizedBox(height: mobile ? 6 : 7),
+                          separatorBuilder: (_, __) =>
+                              SizedBox(height: mobile ? 6 : 7),
                           itemCount: items.length,
                         ),
                       ),
@@ -1122,7 +1236,8 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
         child: const _CmrChatEmpty(
           icon: Icons.forum_rounded,
           title: 'Выберите чат',
-          subtitle: 'Слева выберите личный диалог, группу или пользователя. На планшете и ПК переписка откроется здесь, на телефоне — отдельным полноэкранным окном.',
+          subtitle:
+              'Слева выберите личный диалог, группу или пользователя. На планшете и ПК переписка откроется здесь, на телефоне — отдельным полноэкранным окном.',
         ),
       );
     }
@@ -1167,10 +1282,7 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
       ),
     );
   }
-
 }
-
-
 
 class _NotificationsPinnedRow extends StatelessWidget {
   final bool selected;
@@ -1210,9 +1322,7 @@ class _NotificationsPinnedRow extends StatelessWidget {
                 width: 3,
                 height: mobile ? 42 : 44,
                 decoration: BoxDecoration(
-                  color: selected
-                      ? _CmrChatColors.green
-                      : Colors.transparent,
+                  color: selected ? _CmrChatColors.green : Colors.transparent,
                   borderRadius: BorderRadius.circular(99),
                 ),
               ),
@@ -1295,7 +1405,6 @@ class _NotificationsPinnedRow extends StatelessWidget {
   }
 }
 
-
 class _CallsPinnedRow extends StatelessWidget {
   final bool selected;
   final bool mobile;
@@ -1332,9 +1441,7 @@ class _CallsPinnedRow extends StatelessWidget {
                 width: 3,
                 height: mobile ? 42 : 44,
                 decoration: BoxDecoration(
-                  color: selected
-                      ? _CmrChatColors.green
-                      : Colors.transparent,
+                  color: selected ? _CmrChatColors.green : Colors.transparent,
                   borderRadius: BorderRadius.circular(99),
                 ),
               ),
@@ -1387,13 +1494,13 @@ class _CallsPinnedRow extends StatelessWidget {
   }
 }
 
-
 class _AiPinnedChatRow extends StatelessWidget {
   final bool selected;
   final bool mobile;
   final VoidCallback onTap;
 
-  const _AiPinnedChatRow({required this.selected, required this.mobile, required this.onTap});
+  const _AiPinnedChatRow(
+      {required this.selected, required this.mobile, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1405,7 +1512,8 @@ class _AiPinnedChatRow extends StatelessWidget {
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 170),
-          padding: EdgeInsets.symmetric(horizontal: mobile ? 9 : 10, vertical: mobile ? 8 : 9),
+          padding: EdgeInsets.symmetric(
+              horizontal: mobile ? 9 : 10, vertical: mobile ? 8 : 9),
           decoration: BoxDecoration(
             color: selected ? const Color(0xFFE2F7EA) : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
@@ -1433,7 +1541,8 @@ class _AiPinnedChatRow extends StatelessWidget {
                   ),
                   borderRadius: BorderRadius.all(Radius.circular(12)),
                 ),
-                child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 19),
+                child: const Icon(Icons.auto_awesome_rounded,
+                    color: Colors.white, size: 19),
               ),
               SizedBox(width: mobile ? 9 : 10),
               Expanded(
@@ -1442,16 +1551,32 @@ class _AiPinnedChatRow extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Expanded(child: Text('ИИ клуба', maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrChatText.title(mobile ? 13.2 : 13.8))),
+                        Expanded(
+                            child: Text('ИИ клуба',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style:
+                                    _CmrChatText.title(mobile ? 13.2 : 13.8))),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                          decoration: BoxDecoration(color: _CmrChatColors.graphite, borderRadius: BorderRadius.circular(8)),
-                          child: const Text('beta', style: TextStyle(color: Colors.white, fontSize: 9.6, fontWeight: FontWeight.w600, height: 1)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                              color: _CmrChatColors.graphite,
+                              borderRadius: BorderRadius.circular(8)),
+                          child: const Text('beta',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9.6,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1)),
                         ),
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text('Найду отчет, игрока, тренировку, PDF и аналитику', maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrChatText.muted(mobile ? 10.8 : 11.2)),
+                    Text('Найду отчет, игрока, тренировку, PDF и аналитику',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _CmrChatText.muted(mobile ? 10.8 : 11.2)),
                   ],
                 ),
               ),
@@ -1459,8 +1584,12 @@ class _AiPinnedChatRow extends StatelessWidget {
               Container(
                 width: 30,
                 height: 30,
-                decoration: BoxDecoration(color: _CmrChatColors.greenSoft, borderRadius: BorderRadius.circular(9), border: Border.all(color: _CmrChatColors.greenBorder)),
-                child: const Icon(Icons.arrow_forward_rounded, color: _CmrChatColors.greenDark, size: 16),
+                decoration: BoxDecoration(
+                    color: _CmrChatColors.greenSoft,
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(color: _CmrChatColors.greenBorder)),
+                child: const Icon(Icons.arrow_forward_rounded,
+                    color: _CmrChatColors.greenDark, size: 16),
               ),
             ],
           ),
@@ -1508,19 +1637,41 @@ class _ChatInfoRail extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          Text(title, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis, style: _CmrChatText.title(14.4)),
+          Text(title,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: _CmrChatText.title(14.4)),
           const SizedBox(height: 5),
-          Text(subtitle, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis, style: _CmrChatText.muted(11.0)),
+          Text(subtitle,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: _CmrChatText.muted(11.0)),
           const SizedBox(height: 14),
-          _InfoRailTile(icon: Icons.notifications_rounded, title: 'Непрочитанные', value: unreadTotal > 0 ? unreadTotal.toString() : 'нет'),
+          _InfoRailTile(
+              icon: Icons.notifications_rounded,
+              title: 'Непрочитанные',
+              value: unreadTotal > 0 ? unreadTotal.toString() : 'нет'),
           const SizedBox(height: 8),
-          _InfoRailTile(icon: isGroup ? Icons.groups_rounded : Icons.lock_outline_rounded, title: isGroup ? 'Тип чата' : 'Диалог', value: isGroup ? 'группа' : 'личный'),
+          _InfoRailTile(
+              icon: isGroup ? Icons.groups_rounded : Icons.lock_outline_rounded,
+              title: isGroup ? 'Тип чата' : 'Диалог',
+              value: isGroup ? 'группа' : 'личный'),
           const Spacer(),
           Row(
             children: [
-              Expanded(child: _InfoRailButton(icon: Icons.refresh_rounded, text: 'Обновить', onTap: onRefresh)),
+              Expanded(
+                  child: _InfoRailButton(
+                      icon: Icons.refresh_rounded,
+                      text: 'Обновить',
+                      onTap: onRefresh)),
               const SizedBox(width: 8),
-              Expanded(child: _InfoRailButton(icon: Icons.open_in_new_rounded, text: 'Открыть', onTap: onOpenFull)),
+              Expanded(
+                  child: _InfoRailButton(
+                      icon: Icons.open_in_new_rounded,
+                      text: 'Открыть',
+                      onTap: onOpenFull)),
             ],
           ),
         ],
@@ -1534,7 +1685,8 @@ class _InfoRailTile extends StatelessWidget {
   final String title;
   final String value;
 
-  const _InfoRailTile({required this.icon, required this.title, required this.value});
+  const _InfoRailTile(
+      {required this.icon, required this.title, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -1548,12 +1700,21 @@ class _InfoRailTile extends StatelessWidget {
         Container(
           width: 30,
           height: 30,
-          decoration: BoxDecoration(color: _CmrChatColors.greenSoft, borderRadius: BorderRadius.circular(9)),
+          decoration: BoxDecoration(
+              color: _CmrChatColors.greenSoft,
+              borderRadius: BorderRadius.circular(9)),
           child: Icon(icon, color: _CmrChatColors.greenDark, size: 15),
         ),
         const SizedBox(width: 9),
-        Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrChatText.muted(10.8))),
-        Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrChatText.value(11.2)),
+        Expanded(
+            child: Text(title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _CmrChatText.muted(10.8))),
+        Text(value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: _CmrChatText.value(11.2)),
       ]),
     );
   }
@@ -1564,7 +1725,8 @@ class _InfoRailButton extends StatelessWidget {
   final String text;
   final VoidCallback onTap;
 
-  const _InfoRailButton({required this.icon, required this.text, required this.onTap});
+  const _InfoRailButton(
+      {required this.icon, required this.text, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1583,7 +1745,9 @@ class _InfoRailButton extends StatelessWidget {
           child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             Icon(icon, size: 14, color: _CmrChatColors.greenDark),
             const SizedBox(width: 5),
-            Text(text, style: _CmrChatText.action(color: _CmrChatColors.text2).copyWith(fontSize: 10.8)),
+            Text(text,
+                style: _CmrChatText.action(color: _CmrChatColors.text2)
+                    .copyWith(fontSize: 10.8)),
           ]),
         ),
       ),
@@ -1634,7 +1798,8 @@ class _ChatsToolbar extends StatelessWidget {
               ),
             ],
           ),
-          child: Icon(Icons.forum_rounded, color: _CmrChatColors.greenDark, size: mobile ? 18 : 19),
+          child: Icon(Icons.forum_rounded,
+              color: _CmrChatColors.greenDark, size: mobile ? 18 : 19),
         ),
         SizedBox(width: mobile ? 9 : 10),
         Expanded(
@@ -1654,7 +1819,8 @@ class _ChatsToolbar extends StatelessWidget {
                   if (unreadTotal > 0) ...[
                     const SizedBox(width: 7),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 7, vertical: 3),
                       decoration: BoxDecoration(
                         color: _CmrChatColors.graphite,
                         borderRadius: BorderRadius.circular(8),
@@ -1683,9 +1849,15 @@ class _ChatsToolbar extends StatelessWidget {
           ),
         ),
         if (!mobile) ...[
-          _CircleAction(icon: Icons.refresh_rounded, onTap: onRefresh, tooltip: 'Обновить'),
+          _CircleAction(
+              icon: Icons.refresh_rounded,
+              onTap: onRefresh,
+              tooltip: 'Обновить'),
           const SizedBox(width: 7),
-          _CircleAction(icon: Icons.open_in_new_rounded, onTap: onOpenFull, tooltip: 'Открыть полный экран'),
+          _CircleAction(
+              icon: Icons.open_in_new_rounded,
+              onTap: onOpenFull,
+              tooltip: 'Открыть полный экран'),
           const SizedBox(width: 7),
         ],
         _CircleAction(
@@ -1704,7 +1876,8 @@ class _ChatSearch extends StatelessWidget {
   final String hintText;
   final bool mobile;
 
-  const _ChatSearch({required this.controller, required this.hintText, required this.mobile});
+  const _ChatSearch(
+      {required this.controller, required this.hintText, required this.mobile});
 
   @override
   Widget build(BuildContext context) {
@@ -1717,7 +1890,8 @@ class _ChatSearch extends StatelessWidget {
       padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 12),
       child: Row(
         children: [
-          const Icon(Icons.search_rounded, color: _CmrChatColors.muted, size: 18),
+          const Icon(Icons.search_rounded,
+              color: _CmrChatColors.muted, size: 18),
           const SizedBox(width: 8),
           Expanded(
             child: TextField(
@@ -1736,7 +1910,8 @@ class _ChatSearch extends StatelessWidget {
               onTap: controller.clear,
               child: const Padding(
                 padding: EdgeInsets.all(4),
-                child: Icon(Icons.close_rounded, color: _CmrChatColors.muted, size: 16),
+                child: Icon(Icons.close_rounded,
+                    color: _CmrChatColors.muted, size: 16),
               ),
             ),
         ],
@@ -1765,9 +1940,12 @@ class _ChatModeBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = <_CmrChatMode, _ChatModeData>{
-      _CmrChatMode.privateChats: _ChatModeData('Личные', Icons.chat_bubble_rounded, privateCount),
-      _CmrChatMode.groups: _ChatModeData('Группы', Icons.groups_2_rounded, groupsCount),
-      _CmrChatMode.users: _ChatModeData('Люди', Icons.person_search_rounded, usersCount),
+      _CmrChatMode.privateChats:
+          _ChatModeData('Личные', Icons.chat_bubble_rounded, privateCount),
+      _CmrChatMode.groups:
+          _ChatModeData('Группы', Icons.groups_2_rounded, groupsCount),
+      _CmrChatMode.users:
+          _ChatModeData('Люди', Icons.person_search_rounded, usersCount),
     };
 
     return SizedBox(
@@ -1871,7 +2049,8 @@ class _ChatModePill extends StatelessWidget {
                 count.toString(),
                 style: _CmrChatText.chip(
                   size: dense ? 10.2 : 10.8,
-                  color: active ? _CmrChatColors.greenDark : _CmrChatColors.muted2,
+                  color:
+                      active ? _CmrChatColors.greenDark : _CmrChatColors.muted2,
                 ),
               ),
             ],
@@ -1909,7 +2088,10 @@ class _EmbeddedChatHeader extends StatelessWidget {
       child: Row(
         children: [
           if (onBack != null) ...[
-            _CircleAction(icon: Icons.arrow_back_rounded, onTap: onBack!, tooltip: 'К списку чатов'),
+            _CircleAction(
+                icon: Icons.arrow_back_rounded,
+                onTap: onBack!,
+                tooltip: 'К списку чатов'),
             const SizedBox(width: 8),
           ],
           _Avatar(
@@ -1924,9 +2106,15 @@ class _EmbeddedChatHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrChatText.title(14.4)),
+                Text(title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _CmrChatText.title(14.4)),
                 const SizedBox(height: 3),
-                Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrChatText.subtle(10.6)),
+                Text(subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _CmrChatText.subtle(10.6)),
               ],
             ),
           ),
@@ -1988,7 +2176,8 @@ class _ChatRow extends StatelessWidget {
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 170),
-          padding: EdgeInsets.symmetric(horizontal: mobile ? 8 : 9, vertical: mobile ? 7 : 7),
+          padding: EdgeInsets.symmetric(
+              horizontal: mobile ? 8 : 9, vertical: mobile ? 7 : 7),
           decoration: BoxDecoration(
             color: active ? const Color(0xFFE2F7EA) : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
@@ -2011,7 +2200,8 @@ class _ChatRow extends StatelessWidget {
                   _Avatar(
                     url: avatarUrl,
                     initials: initials,
-                    icon: isGroup ? Icons.groups_2_rounded : Icons.person_rounded,
+                    icon:
+                        isGroup ? Icons.groups_2_rounded : Icons.person_rounded,
                     size: mobile ? 36 : 38,
                   ),
                   Positioned(
@@ -2046,7 +2236,9 @@ class _ChatRow extends StatelessWidget {
                             lastTime,
                             maxLines: 1,
                             style: _CmrChatText.caption().copyWith(
-                              color: unread > 0 ? _CmrChatColors.greenDark : _CmrChatColors.muted2,
+                              color: unread > 0
+                                  ? _CmrChatColors.greenDark
+                                  : _CmrChatColors.muted2,
                             ),
                           ),
                         ],
@@ -2063,7 +2255,8 @@ class _ChatRow extends StatelessWidget {
                                 ? _CmrChatColors.text2
                                 : _CmrChatColors.muted
                             : _CmrChatColors.blue,
-                        fontWeight: unread > 0 ? FontWeight.w500 : FontWeight.w500,
+                        fontWeight:
+                            unread > 0 ? FontWeight.w500 : FontWeight.w500,
                       ),
                     ),
                     if (isGroup && !mobile) ...[
@@ -2094,7 +2287,8 @@ class _ChatStatusBadge extends StatelessWidget {
   final int unread;
   final bool active;
 
-  const _ChatStatusBadge({required this.isGroup, required this.unread, required this.active});
+  const _ChatStatusBadge(
+      {required this.isGroup, required this.unread, required this.active});
 
   @override
   Widget build(BuildContext context) {
@@ -2103,7 +2297,9 @@ class _ChatStatusBadge extends StatelessWidget {
       width: hasUnread ? 23 : 19,
       height: 19,
       decoration: BoxDecoration(
-        color: hasUnread || active ? _CmrChatColors.graphite : _CmrChatColors.panel,
+        color: hasUnread || active
+            ? _CmrChatColors.graphite
+            : _CmrChatColors.panel,
         borderRadius: BorderRadius.circular(6),
       ),
       alignment: Alignment.center,
@@ -2154,7 +2350,8 @@ class _UserRow extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(11),
         child: Container(
-          padding: EdgeInsets.symmetric(horizontal: mobile ? 8 : 9, vertical: mobile ? 7 : 7),
+          padding: EdgeInsets.symmetric(
+              horizontal: mobile ? 8 : 9, vertical: mobile ? 7 : 7),
           decoration: BoxDecoration(
             color: Colors.transparent,
             borderRadius: BorderRadius.circular(12),
@@ -2171,15 +2368,25 @@ class _UserRow extends StatelessWidget {
                 ),
               ),
               SizedBox(width: mobile ? 6 : 6),
-              _Avatar(url: avatarUrl, initials: initials, icon: Icons.person_rounded, size: mobile ? 36 : 38),
+              _Avatar(
+                  url: avatarUrl,
+                  initials: initials,
+                  icon: Icons.person_rounded,
+                  size: mobile ? 36 : 38),
               SizedBox(width: mobile ? 9 : 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrChatText.title(mobile ? 12.8 : 13.2)),
+                    Text(title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _CmrChatText.title(mobile ? 12.8 : 13.2)),
                     const SizedBox(height: 4),
-                    Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrChatText.muted(mobile ? 10.8 : 11.2)),
+                    Text(subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _CmrChatText.muted(mobile ? 10.8 : 11.2)),
                   ],
                 ),
               ),
@@ -2191,7 +2398,8 @@ class _UserRow extends StatelessWidget {
                   color: _CmrChatColors.greenSoft,
                   borderRadius: BorderRadius.circular(9),
                 ),
-                child: const Icon(Icons.arrow_forward_rounded, size: 16, color: _CmrChatColors.greenDark),
+                child: const Icon(Icons.arrow_forward_rounded,
+                    size: 16, color: _CmrChatColors.greenDark),
               ),
             ],
           ),
@@ -2242,7 +2450,9 @@ class _Avatar extends StatelessWidget {
       ),
       child: Center(
         child: initials.isNotEmpty
-            ? Text(initials, style: _CmrChatText.title(size <= 40 ? 12.5 : 13.5).copyWith(color: _CmrChatColors.greenDark))
+            ? Text(initials,
+                style: _CmrChatText.title(size <= 40 ? 12.5 : 13.5)
+                    .copyWith(color: _CmrChatColors.greenDark))
             : Icon(icon, color: _CmrChatColors.greenDark, size: size * .45),
       ),
     );
@@ -2280,7 +2490,8 @@ class _HeaderButton extends StatelessWidget {
   final String text;
   final VoidCallback onTap;
 
-  const _HeaderButton({required this.icon, required this.text, required this.onTap});
+  const _HeaderButton(
+      {required this.icon, required this.text, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -2297,14 +2508,22 @@ class _HeaderButton extends StatelessWidget {
             color: _CmrChatColors.green,
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
-              BoxShadow(color: _CmrChatColors.green.withOpacity(.18), blurRadius: 18, spreadRadius: -10, offset: const Offset(0, 9)),
+              BoxShadow(
+                  color: _CmrChatColors.green.withOpacity(.18),
+                  blurRadius: 18,
+                  spreadRadius: -10,
+                  offset: const Offset(0, 9)),
             ],
           ),
           child: Row(
             children: [
               Icon(icon, size: 16, color: Colors.white),
               const SizedBox(width: 7),
-              Text(text, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 11.55)),
+              Text(text,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                      fontSize: 11.55)),
             ],
           ),
         ),
@@ -2349,7 +2568,8 @@ class _CircleAction extends StatelessWidget {
             ),
             child: Icon(
               icon,
-              color: emphasized ? _CmrChatColors.greenDark : _CmrChatColors.blue,
+              color:
+                  emphasized ? _CmrChatColors.greenDark : _CmrChatColors.blue,
               size: 16,
             ),
           ),
@@ -2375,17 +2595,22 @@ class _InlineError extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.info_outline_rounded, color: _CmrChatColors.orange, size: 16),
+          const Icon(Icons.info_outline_rounded,
+              color: _CmrChatColors.orange, size: 16),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               text,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: _CmrChatText.muted(11).copyWith(color: const Color(0xFF9A3412), fontWeight: FontWeight.w500),
+              style: _CmrChatText.muted(11).copyWith(
+                  color: const Color(0xFF9A3412), fontWeight: FontWeight.w500),
             ),
           ),
-          TextButton(onPressed: onRefresh, child: Text('Повторить', style: _CmrChatText.action(color: _CmrChatColors.orange))),
+          TextButton(
+              onPressed: onRefresh,
+              child: Text('Повторить',
+                  style: _CmrChatText.action(color: _CmrChatColors.orange))),
         ],
       ),
     );
@@ -2427,12 +2652,17 @@ class _CmrChatEmpty extends StatelessWidget {
                 child: Icon(icon, color: _CmrChatColors.green, size: 25),
               ),
               const SizedBox(height: 14),
-              Text(title, textAlign: TextAlign.center, style: _CmrChatText.title(16)),
+              Text(title,
+                  textAlign: TextAlign.center, style: _CmrChatText.title(16)),
               const SizedBox(height: 7),
-              Text(subtitle, textAlign: TextAlign.center, style: _CmrChatText.muted(12)),
+              Text(subtitle,
+                  textAlign: TextAlign.center, style: _CmrChatText.muted(12)),
               if (actionText != null && onAction != null) ...[
                 const SizedBox(height: 14),
-                _HeaderButton(icon: Icons.add_rounded, text: actionText!, onTap: onAction!),
+                _HeaderButton(
+                    icon: Icons.add_rounded,
+                    text: actionText!,
+                    onTap: onAction!),
               ],
             ],
           ),
@@ -2541,9 +2771,7 @@ class _CmrChatText {
       _base(
         size: dense ? 11.0 : 11.4,
         weight: active ? FontWeight.w700 : FontWeight.w500,
-        color: active
-            ? _CmrChatColors.greenDark
-            : _CmrChatColors.muted,
+        color: active ? _CmrChatColors.greenDark : _CmrChatColors.muted,
         height: 1.12,
       );
 
@@ -2594,7 +2822,6 @@ class _CmrChatColors {
   static const Color line = Color(0xFFE7EBE8);
 }
 
-
 Color _chatAccent(int index) => _CmrChatColors.green;
 
 Color _chatAccentSoft(int index) => _CmrChatColors.greenSoft;
@@ -2604,7 +2831,8 @@ class _CmrChatDecor {
         color: Color(0xFFF6F7F6),
       );
 
-  static BoxDecoration panel({double radius = 22, bool elevated = true}) => BoxDecoration(
+  static BoxDecoration panel({double radius = 22, bool elevated = true}) =>
+      BoxDecoration(
         color: _CmrChatColors.panel,
         borderRadius: BorderRadius.circular(radius),
         boxShadow: elevated
@@ -2625,7 +2853,8 @@ class _CmrChatDecor {
             : null,
       );
 
-  static BoxDecoration softCard({double radius = 18, bool active = false}) => BoxDecoration(
+  static BoxDecoration softCard({double radius = 18, bool active = false}) =>
+      BoxDecoration(
         color: active ? _CmrChatColors.panel : _CmrChatColors.soft,
         borderRadius: BorderRadius.circular(radius),
         boxShadow: active
@@ -2675,4 +2904,3 @@ class _CmrChatDecor {
         ],
       );
 }
-

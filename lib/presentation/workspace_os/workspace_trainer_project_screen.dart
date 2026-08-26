@@ -141,9 +141,10 @@ class _SportotekaTrainerProjectScreenState extends State<SportotekaTrainerProjec
       localStorageKey: '',
       clubId: widget.clubId,
       serverParentKey: 'trainer:${_trainerId}:${file.section.name}',
-      attachmentEntityType: '',
-      attachmentEntityId: file.section == _TrainerSection.documents ? _trainerId : 0,
-      attachmentSectionKey: 'documents',
+      allowCreateDocuments: true,
+      attachmentEntityType: 'trainer',
+      attachmentEntityId: _trainerId,
+      attachmentSectionKey: file.section.name,
       externalUploadPaths: file.section == _TrainerSection.documents
           ? (paths) => _bridge.uploadTrainerDocuments(
                 trainerId: _trainerId,
